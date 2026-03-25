@@ -28,76 +28,88 @@ include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
 ?>
 
-<div class="row">
-    <div class="col-12 mb-4">
-        <h2>Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h2>
-        <p class="text-muted">Here's what's happening with your system today.</p>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-4 mb-4">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title">Technologies/Services</h6>
-                        <h2 class="mb-0"><?php echo $techCount; ?></h2>
-                    </div>
-                    <i class="fas fa-microchip fa-3x opacity-50"></i>
-                </div>
+<div class="row g-4">
+    <div class="col-12">
+        <div class="dashboard-hero">
+            <div>
+                <span class="hero-badge">Administration Overview</span>
+                <h1 class="dashboard-title">Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h1>
+                <p class="dashboard-subtitle">Track technologies, user activity, and governance signals from one clean control center.</p>
             </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4 mb-4">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title">Total Users</h6>
-                        <h2 class="mb-0"><?php echo $userCount; ?></h2>
-                    </div>
-                    <i class="fas fa-users fa-3x opacity-50"></i>
+            <div class="hero-mini-grid">
+                <div class="hero-mini-card">
+                    <span>Platform Health</span>
+                    <strong><?php echo $securityReports === 0 ? 'Stable' : 'Attention Needed'; ?></strong>
                 </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-4 mb-4">
-        <div class="card bg-warning text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title">Security Reports</h6>
-                        <h2 class="mb-0"><?php echo $securityReports; ?></h2>
-                    </div>
-                    <i class="fas fa-shield-alt fa-3x opacity-50"></i>
+                <div class="hero-mini-card">
+                    <span>Active Services</span>
+                    <strong><?php echo $techCount; ?></strong>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-md-6 mb-4">
-        <div class="card">
+<div class="row g-4 mb-1">
+    <div class="col-xl-4 col-md-6">
+        <div class="stat-card stat-card-tech">
+            <div>
+                <div class="stat-label">Technologies / Services</div>
+                <div class="stat-value"><?php echo $techCount; ?></div>
+                <small>Azure-style catalog and renewals</small>
+            </div>
+            <div class="stat-icon">
+                <i class="fas fa-microchip"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-4 col-md-6">
+        <div class="stat-card stat-card-users">
+            <div>
+                <div class="stat-label">Total Users</div>
+                <div class="stat-value"><?php echo $userCount; ?></div>
+                <small>Role-based access across six departments</small>
+            </div>
+            <div class="stat-icon">
+                <i class="fas fa-users"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-4 col-md-6">
+        <div class="stat-card stat-card-security">
+            <div>
+                <div class="stat-label">Security Reports</div>
+                <div class="stat-value"><?php echo $securityReports; ?></div>
+                <small>Audit-backed monitoring and recovery</small>
+            </div>
+            <div class="stat-icon">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-6">
+        <div class="card chart-card">
             <div class="card-header">
                 <h5>Technology Status</h5>
             </div>
             <div class="card-body">
-                <canvas id="techStatusChart"></canvas>
+                <canvas id="techStatusChart" height="260"></canvas>
             </div>
         </div>
     </div>
     
-    <div class="col-md-6 mb-4">
-        <div class="card">
+    <div class="col-xl-6">
+        <div class="card chart-card">
             <div class="card-header">
                 <h5>User Roles Distribution</h5>
             </div>
             <div class="card-body">
-                <canvas id="userRolesChart"></canvas>
+                <canvas id="userRolesChart" height="260"></canvas>
             </div>
         </div>
     </div>
@@ -112,8 +124,20 @@ new Chart(techCtx, {
         labels: <?php echo json_encode(array_keys($techStatusData)); ?>,
         datasets: [{
             data: <?php echo json_encode(array_values($techStatusData)); ?>,
-            backgroundColor: ['#28a745', '#ffc107', '#dc3545']
+            backgroundColor: ['#2f80ed', '#56ccf2', '#93c5fd', '#1f4a7c', '#dbeafe'],
+            borderWidth: 0
         }]
+    },
+    options: {
+        plugins: {
+            legend: {
+                position: 'top',
+                labels: {
+                    usePointStyle: true,
+                    padding: 18
+                }
+            }
+        }
     }
 });
 
@@ -126,14 +150,29 @@ new Chart(rolesCtx, {
         datasets: [{
             label: 'Number of Users',
             data: <?php echo json_encode(array_values($userRolesData)); ?>,
-            backgroundColor: '#0d6efd'
+            backgroundColor: ['#0f4c81', '#1d70b8', '#3aa0db', '#86c5f4', '#5b88c4', '#224c78'],
+            borderRadius: 12,
+            borderSkipped: false
         }]
     },
     options: {
         responsive: true,
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
         scales: {
             y: {
-                beginAtZero: true
+                beginAtZero: true,
+                grid: {
+                    color: 'rgba(15, 76, 129, 0.08)'
+                }
+            },
+            x: {
+                grid: {
+                    display: false
+                }
             }
         }
     }

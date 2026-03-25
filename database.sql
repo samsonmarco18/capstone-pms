@@ -19,6 +19,10 @@ CREATE TABLE users (
     phone VARCHAR(20),
     address TEXT,
     designation VARCHAR(100),
+    last_login DATETIME NULL,
+    email_notifications BOOLEAN DEFAULT TRUE,
+    task_reminders BOOLEAN DEFAULT TRUE,
+    project_updates BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_role (role),
@@ -78,7 +82,7 @@ CREATE TABLE projects (
     client_id INT NOT NULL,
     name VARCHAR(150) NOT NULL,
     description TEXT,
-    status ENUM('pending', 'requirements_gathering', 'architectural_review', 'tech_recommendation', 'developer_allocation', 'arch_documentation', 'in_development', 'completed', 'cancelled') DEFAULT 'pending',
+    status ENUM('pending', 'requirements_gathering', 'architectural_review', 'tech_recommendation', 'developer_allocation', 'arch_documentation', 'in_development', 'review', 'in_progress', 'completed', 'cancelled') DEFAULT 'pending',
     timeline_start DATE,
     timeline_end DATE,
     meeting_notes TEXT,
@@ -186,7 +190,7 @@ CREATE TABLE tasks (
     task_type ENUM('feature', 'bug_fix', 'enhancement', 'documentation') DEFAULT 'feature',
     assigned_to INT,
     assigned_by INT,
-    status ENUM('todo', 'in_progress', 'in_review', 'completed', 'overdue', 'blocked') DEFAULT 'todo',
+    status ENUM('todo', 'in_progress', 'in_review', 'review', 'completed', 'overdue', 'blocked') DEFAULT 'todo',
     priority ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
     estimated_days_min INT,
     estimated_days_likely INT,
@@ -253,6 +257,8 @@ CREATE TABLE cost_estimations (
     project_id INT NOT NULL,
     component VARCHAR(150) NOT NULL,
     azure_service VARCHAR(150),
+    monthly_cost DECIMAL(12, 2),
+    annual_cost DECIMAL(12, 2),
     estimated_monthly_cost DECIMAL(12, 2),
     estimated_annual_cost DECIMAL(12, 2),
     notes TEXT,
@@ -320,7 +326,7 @@ CREATE TABLE notifications (
     user_id INT NOT NULL,
     title VARCHAR(255) NOT NULL,
     message TEXT,
-    notification_type ENUM('task', 'project', 'deadline', 'system', 'approval', 'message') DEFAULT 'system',
+    notification_type ENUM('task', 'project', 'deadline', 'system', 'approval', 'message', 'group') DEFAULT 'system',
     related_table VARCHAR(50),
     related_id INT,
     is_read BOOLEAN DEFAULT FALSE,
@@ -526,20 +532,36 @@ CREATE TABLE performance_metrics (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- TASK COMMENTS TABLE
+-- =====================================================
+CREATE TABLE task_comments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    task_id INT NOT NULL,
+    user_id INT NOT NULL,
+    comment TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_task_id (task_id),
+    INDEX idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- INSERT SAMPLE DATA FOR TESTING
 -- =====================================================
 
--- Insert default admin user (password: test123)
+-- Insert default admin user (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('admin', 'admin@erni-pms.com', '$2y$10$8RJ0p5vLZzVhJGWpNiuLg.U5X4P0K6J5K9H5F8D7C6B9A8L0M2qlmK', 'System Administrator', 'Administration', 'admin', 'active', 'Admin');
+('admin', 'admin@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', 'Administration', 'admin', 'active', 'Admin');
 
--- Insert Sample Users for Each Role (password: test123)
+-- Insert Sample Users for Each Role (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('sales_user', 'sales@erni-pms.com', '$2y$10$8RJ0p5vLZzVhJGWpNiuLg.U5X4P0K6J5K9H5F8D7C6B9A8L0M2qlmK', 'John Sales Manager', 'Sales', 'sales', 'active', 'Sales Manager'),
-('architect', 'architect@erni-pms.com', '$2y$10$8RJ0p5vLZzVhJGWpNiuLg.U5X4P0K6J5K9H5F8D7C6B9A8L0M2qlmK', 'Maria Architect', 'Architecture', 'architect', 'active', 'System Architect'),
-('sul_user', 'sul@erni-pms.com', '$2y$10$8RJ0p5vLZzVhJGWpNiuLg.U5X4P0K6J5K9H5F8D7C6B9A8L0M2qlmK', 'Robert SUL', 'Service Unit', 'sul', 'active', 'Service Unit Leader'),
-('expert', 'expert@erni-pms.com', '$2y$10$8RJ0p5vLZzVhJGWpNiuLg.U5X4P0K6J5K9H5F8D7C6B9A8L0M2qlmK', 'Dr. Expert Senior', 'Development', 'expert', 'active', 'Senior Expert'),
-('developer', 'developer@erni-pms.com', '$2y$10$8RJ0p5vLZzVhJGWpNiuLg.U5X4P0K6J5K9H5F8D7C6B9A8L0M2qlmK', 'David Developer', 'Development', 'developer', 'active', 'Software Developer');
+('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', 'Sales', 'sales', 'active', 'Sales Manager'),
+('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', 'Architecture', 'architect', 'active', 'System Architect'),
+('sul_user', 'sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Robert SUL', 'Service Unit', 'sul', 'active', 'Service Unit Leader'),
+('expert', 'expert@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Dr. Expert Senior', 'Development', 'expert', 'active', 'Senior Expert'),
+('developer', 'developer@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'David Developer', 'Development', 'developer', 'active', 'Software Developer');
 
 -- Insert Technologies
 INSERT INTO technologies (name, category, price, status, expiry_date, renewal_cost, description, created_by) VALUES

@@ -1,6 +1,8 @@
 <?php
-require_once '../../config/database.php';
-require_once '../../includes/auth.php';
+header('Content-Type: application/json');
+
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/auth.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -26,5 +28,8 @@ while($row = $result->fetch_assoc()) {
     $users[] = $row;
 }
 
-echo json_encode($users);
+echo json_encode([
+    'success' => true,
+    'users' => $users,
+]);
 ?>

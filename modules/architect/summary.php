@@ -49,10 +49,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Get all SUL users
     $sulUsers = $conn->query("SELECT id FROM users WHERE role = 'sul'");
     while($sul = $sulUsers->fetch_assoc()) {
-        $stmt = $conn->prepare("INSERT INTO notifications (user_id, title, message, type, link) VALUES (?, ?, ?, 'project', ?)");
-        $link = "/modules/sul/task-allocation.php?project_id=" . $projectId;
-        $stmt->bind_param("isss", $sul['id'], $title, $message, $link);
-        $stmt->execute();
+        createNotification(
+            (int) $sul['id'],
+            $title,
+            $message,
+            'project',
+            'projects',
+            (int) $projectId,
+            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId
+        );
     }
     
     logActivity($user['id'], 'submit_architecture', 'projects', $projectId);

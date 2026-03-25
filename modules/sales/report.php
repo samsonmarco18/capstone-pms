@@ -20,6 +20,10 @@ $developerCost = null;
 $resources = null;
 $otherFees = [];
 
+function toMoney($value): float {
+    return is_numeric($value) ? (float) $value : 0.0;
+}
+
 if ($selectedClient) {
     // Get project for this client
     $project = $conn->query("
@@ -68,20 +72,32 @@ if ($selectedClient) {
 
 // Save report
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_report'])) {
-    $projectId = $_POST['project_id'];
-    $clientId = $_POST['client_id'];
-    $technologyCost = $_POST['technology_cost'];
-    $developerCost = $_POST['developer_cost'];
-    $resourceCost = $_POST['resource_cost'];
-    $otherFees = isset($_POST['other_fees']) ? json_encode($_POST['other_fees']) : '[]';
+    $projectId = (int) ($_POST['project_id'] ?? 0);
+    $clientId = (int) ($_POST['client_id'] ?? 0);
+    $technologyCost = toMoney($_POST['technology_cost'] ?? 0);
+    $developerCost = toMoney($_POST['developer_cost'] ?? 0);
+    $resourceCost = toMoney($_POST['resource_cost'] ?? 0);
     $totalCost = $technologyCost + $developerCost + $resourceCost;
-    
-    // Add other fees to total
-    if(isset($_POST['other_fees_list'])) {
-        foreach($_POST['other_fees_list'] as $fee) {
-            $totalCost += $fee['cost'];
+    $cleanOtherFees = [];
+
+    if (isset($_POST['other_fees_list']) && is_array($_POST['other_fees_list'])) {
+        foreach ($_POST['other_fees_list'] as $fee) {
+            $feeName = trim((string) ($fee['name'] ?? ''));
+            $feeCost = toMoney($fee['cost'] ?? 0);
+
+            if ($feeName === '' && $feeCost <= 0) {
+                continue;
+            }
+
+            $cleanOtherFees[] = [
+                'name' => $feeName,
+                'cost' => $feeCost,
+            ];
+            $totalCost += $feeCost;
         }
     }
+
+    $otherFees = json_encode($cleanOtherFees);
     
     $stmt = $conn->prepare("
         INSERT INTO sales_reports (project_id, client_id, technology_cost, developer_cost, resource_cost, other_fees, total_cost, created_by) 
@@ -91,9 +107,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_report'])) {
     
     if ($stmt->execute()) {
         $reportId = $stmt->insert_id;
+
+        $clientStmt = $conn->prepare("SELECT name, email FROM clients WHERE id = ? LIMIT 1");
+        $clientStmt->bind_param("i", $clientId);
+        $clientStmt->execute();
+        $clientData = $clientStmt->get_result()->fetch_assoc();
+        $clientStmt->close();
+
+        $receiptNumber = 'ERNI-' . date('Ymd') . '-' . str_pad((string) $reportId, 5, '0', STR_PAD_LEFT);
+        $amountDue = $technologyCost + $developerCost + $resourceCost;
+        $dueDate = date('Y-m-d', strtotime('+30 days'));
+
+        $receiptStmt = $conn->prepare("
+            INSERT INTO receipts (report_id, receipt_number, client_name, client_email, amount_due, due_date, status, generated_by)
+            VALUES (?, ?, ?, ?, ?, ?, 'draft', ?)
+        ");
+        $clientName = $clientData['name'] ?? '';
+        $clientEmail = $clientData['email'] ?? '';
+        $receiptStmt->bind_param("isssdsi", $reportId, $receiptNumber, $clientName, $clientEmail, $amountDue, $dueDate, $user['id']);
+        $receiptStmt->execute();
+        $receiptId = $receiptStmt->insert_id;
+        $receiptStmt->close();
+
         logActivity($user['id'], 'create_report', 'sales_reports', $reportId, null, $_POST);
-        $_SESSION['success'] = "Report saved successfully";
-        header('Location: receipt.php?report_id=' . $reportId);
+        logActivity($user['id'], 'create_receipt', 'receipts', $receiptId, null, [
+            'report_id' => $reportId,
+            'receipt_number' => $receiptNumber,
+        ]);
+
+        $_SESSION['success'] = "Report saved and receipt generated successfully";
+        header('Location: receipt.php?receipt_id=' . $receiptId . '&report_id=' . $reportId);
         exit();
     }
 }
@@ -193,7 +236,8 @@ include '../../includes/navbar.php';
                     <div class="table-responsive">
                         <table class="table">
                             <thead>
-                                32<th>Role</th>
+                                <tr>
+                                    <th>Role</th>
                                     <th>Number of Developers</th>
                                     <th>Monthly Cost</th>
                                 </tr>

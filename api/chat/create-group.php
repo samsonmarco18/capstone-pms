@@ -1,6 +1,8 @@
 <?php
-require_once '../../config/database.php';
-require_once '../../includes/auth.php';
+header('Content-Type: application/json');
+
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/auth.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -9,46 +11,56 @@ if (!isLoggedIn()) {
 }
 
 $user = getCurrentUser();
-$data = json_decode(file_get_contents('php://input'), true);
+$data = json_decode(file_get_contents('php://input'), true) ?: $_POST;
+$name = trim((string) ($data['name'] ?? ''));
+$description = trim((string) ($data['description'] ?? ''));
+$members = array_values(array_unique(array_map('intval', $data['members'] ?? [])));
 
-if (!$data || !isset($data['name']) || !isset($data['members'])) {
+if ($name === '') {
     http_response_code(400);
-    echo json_encode(['error' => 'Invalid data']);
+    echo json_encode(['error' => 'Group name is required.']);
     exit();
 }
 
 $conn = getConnection();
-
-// Create group
-$stmt = $conn->prepare("INSERT INTO chat_groups (name, created_by) VALUES (?, ?)");
-$stmt->bind_param("si", $data['name'], $user['id']);
+$stmt = $conn->prepare('INSERT INTO chat_groups (name, description, created_by) VALUES (?, ?, ?)');
+$stmt->bind_param('ssi', $name, $description, $user['id']);
 
 if (!$stmt->execute()) {
     http_response_code(500);
-    echo json_encode(['error' => 'Failed to create group']);
+    echo json_encode(['error' => 'Failed to create group.']);
     exit();
 }
 
 $groupId = $stmt->insert_id;
+$stmt->close();
 
-// Add creator to group
-$stmt = $conn->prepare("INSERT INTO chat_group_members (group_id, user_id) VALUES (?, ?)");
-$stmt->bind_param("ii", $groupId, $user['id']);
-$stmt->execute();
+$memberIds = array_values(array_unique(array_merge([$user['id']], $members)));
+$insertMemberStmt = $conn->prepare('INSERT IGNORE INTO chat_group_members (group_id, user_id) VALUES (?, ?)');
 
-// Add members to group
-foreach ($data['members'] as $memberId) {
-    $stmt = $conn->prepare("INSERT INTO chat_group_members (group_id, user_id) VALUES (?, ?)");
-    $stmt->bind_param("ii", $groupId, $memberId);
-    $stmt->execute();
-    
-    // Notify member
-    $title = "Added to group: " . $data['name'];
-    $message = $user['full_name'] . " added you to group: " . $data['name'];
-    $notifStmt = $conn->prepare("INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, 'group')");
-    $notifStmt->bind_param("iss", $memberId, $title, $message);
-    $notifStmt->execute();
+foreach ($memberIds as $memberId) {
+    $insertMemberStmt->bind_param('ii', $groupId, $memberId);
+    $insertMemberStmt->execute();
+
+    if ($memberId !== (int) $user['id']) {
+        createNotification(
+            $memberId,
+            'Added to chat group',
+            $user['full_name'] . ' added you to "' . $name . '".',
+            'group',
+            'chat_groups',
+            $groupId,
+            BASE_URL . 'profile.php'
+        );
+    }
 }
 
-echo json_encode(['success' => true, 'group_id' => $groupId]);
+$insertMemberStmt->close();
+
+logActivity((int) $user['id'], 'create_chat_group', 'chat_groups', $groupId, null, $data);
+
+echo json_encode([
+    'success' => true,
+    'group_id' => $groupId,
+]);
 ?>

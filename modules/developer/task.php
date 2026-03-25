@@ -16,13 +16,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $taskId = $_POST['task_id'];
     $newStatus = $_POST['new_status'];
     
-    $updateData = ['status' => $newStatus];
-    if($newStatus == 'completed') {
-        $updateData['completed_at'] = date('Y-m-d H:i:s');
-    }
-    
-    $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = NOW() WHERE id = ?");
-    $stmt->bind_param("si", $newStatus, $taskId);
+    $completedAt = $newStatus === 'completed' ? date('Y-m-d H:i:s') : null;
+    $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = ? WHERE id = ?");
+    $stmt->bind_param("ssi", $newStatus, $completedAt, $taskId);
     $stmt->execute();
     
     logActivity($user['id'], 'update_task_status', 'tasks', $taskId, null, ['status' => $newStatus]);
@@ -84,7 +80,7 @@ include '../../includes/navbar.php';
             </div>
             <div class="p-3" id="todo-column">
                 <?php while($task = $todoTasks->fetch_assoc()): ?>
-                <div class="kanban-card card mb-3" data-task-id="<?php echo $task['id']; ?>">
+                <div class="kanban-card card mb-3" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                     <div class="card-body">
                         <div class="task-priority priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="card-title"><?php echo htmlspecialchars($task['title']); ?></h6>
@@ -118,7 +114,7 @@ include '../../includes/navbar.php';
             </div>
             <div class="p-3" id="progress-column">
                 <?php while($task = $inProgressTasks->fetch_assoc()): ?>
-                <div class="kanban-card card mb-3" data-task-id="<?php echo $task['id']; ?>">
+                <div class="kanban-card card mb-3" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                     <div class="card-body">
                         <div class="task-priority priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="card-title"><?php echo htmlspecialchars($task['title']); ?></h6>
@@ -155,7 +151,7 @@ include '../../includes/navbar.php';
             </div>
             <div class="p-3" id="review-column">
                 <?php while($task = $reviewTasks->fetch_assoc()): ?>
-                <div class="kanban-card card mb-3" data-task-id="<?php echo $task['id']; ?>">
+                <div class="kanban-card card mb-3" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                     <div class="card-body">
                         <div class="task-priority priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="card-title"><?php echo htmlspecialchars($task['title']); ?></h6>

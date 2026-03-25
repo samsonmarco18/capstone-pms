@@ -1,65 +1,64 @@
 <?php
-require_once '../../config/database.php';
-require_once '../../includes/auth.php';
+header('Content-Type: application/json');
+
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/auth.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
-    exit('Unauthorized');
+    echo json_encode(['error' => 'Unauthorized']);
+    exit();
 }
 
 $user = getCurrentUser();
 $conn = getConnection();
 
-$receiverId = isset($_GET['receiver_id']) ? $_GET['receiver_id'] : null;
-$groupId = isset($_GET['group_id']) ? $_GET['group_id'] : null;
-$limit = isset($_GET['limit']) ? intval($_GET['limit']) : 50;
+$receiverId = isset($_GET['receiver_id']) ? (int) $_GET['receiver_id'] : 0;
+$groupId = isset($_GET['group_id']) ? (int) $_GET['group_id'] : 0;
+$limit = isset($_GET['limit']) ? max(1, (int) $_GET['limit']) : 50;
 
-if ($groupId) {
-    // Get group messages
-    $stmt = $conn->prepare("
-        SELECT m.*, u.full_name as sender_name 
-        FROM messages m
-        JOIN users u ON m.sender_id = u.id
-        WHERE m.group_id = ?
-        ORDER BY m.created_at DESC
-        LIMIT ?
-    ");
-    $stmt->bind_param("ii", $groupId, $limit);
+if ($groupId > 0) {
+    $stmt = $conn->prepare(
+        'SELECT m.id, m.sender_id, m.message, m.created_at, u.full_name AS sender_name
+         FROM messages m
+         INNER JOIN users u ON u.id = m.sender_id
+         WHERE m.group_id = ?
+         ORDER BY m.created_at ASC
+         LIMIT ?'
+    );
+    $stmt->bind_param('ii', $groupId, $limit);
 } else {
-    // Get private messages between current user and receiver
-    $stmt = $conn->prepare("
-        SELECT m.*, u.full_name as sender_name 
-        FROM messages m
-        JOIN users u ON m.sender_id = u.id
-        WHERE (m.sender_id = ? AND m.receiver_id = ?) 
-           OR (m.sender_id = ? AND m.receiver_id = ?)
-        ORDER BY m.created_at DESC
-        LIMIT ?
-    ");
-    $stmt->bind_param("iiiii", $user['id'], $receiverId, $receiverId, $user['id'], $limit);
+    $stmt = $conn->prepare(
+        'SELECT m.id, m.sender_id, m.message, m.created_at, u.full_name AS sender_name
+         FROM messages m
+         INNER JOIN users u ON u.id = m.sender_id
+         WHERE ((m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?))
+         ORDER BY m.created_at ASC
+         LIMIT ?'
+    );
+    $stmt->bind_param('iiiii', $user['id'], $receiverId, $receiverId, $user['id'], $limit);
 }
 
 $stmt->execute();
 $result = $stmt->get_result();
 $messages = [];
 
-while($row = $result->fetch_assoc()) {
-    $messages[] = [
-        'id' => $row['id'],
-        'sender_id' => $row['sender_id'],
-        'sender_name' => $row['sender_name'],
-        'message' => $row['message'],
-        'is_mine' => $row['sender_id'] == $user['id'],
-        'created_at' => $row['created_at']
-    ];
+while ($row = $result->fetch_assoc()) {
+    $row['is_mine'] = (int) $row['sender_id'] === (int) $user['id'];
+    $messages[] = $row;
 }
 
-// Mark messages as read
-if ($receiverId && !$groupId) {
-    $stmt = $conn->prepare("UPDATE messages SET is_read = 1 WHERE sender_id = ? AND receiver_id = ?");
-    $stmt->bind_param("ii", $receiverId, $user['id']);
-    $stmt->execute();
+$stmt->close();
+
+if ($receiverId > 0 && $groupId === 0) {
+    $markReadStmt = $conn->prepare('UPDATE messages SET is_read = 1, read_at = NOW() WHERE sender_id = ? AND receiver_id = ?');
+    $markReadStmt->bind_param('ii', $receiverId, $user['id']);
+    $markReadStmt->execute();
+    $markReadStmt->close();
 }
 
-echo json_encode(array_reverse($messages));
+echo json_encode([
+    'success' => true,
+    'messages' => $messages,
+]);
 ?>

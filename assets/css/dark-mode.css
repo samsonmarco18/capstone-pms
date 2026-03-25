@@ -149,3 +149,50 @@ body.dark-mode .message.received {
     background-color: #0f3460;
     border-color: #1a1a2e;
 }
+
+html[data-theme="dark"] body {
+    background:
+        radial-gradient(circle at top left, rgba(77, 168, 218, 0.14), transparent 28%),
+        linear-gradient(180deg, #071421 0%, #0c1f31 100%);
+    color: #d8e6f3;
+}
+
+html[data-theme="dark"] #sidebar-wrapper {
+    background: linear-gradient(180deg, #071421 0%, #0e2d49 52%, #13476f 100%);
+    box-shadow: 16px 0 44px rgba(0, 0, 0, 0.32);
+}
+
+html[data-theme="dark"] .navbar,
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .dropdown-menu,
+html[data-theme="dark"] .modal-content {
+    background: rgba(10, 22, 35, 0.88) !important;
+    color: #d8e6f3;
+    border-color: rgba(138, 210, 255, 0.08);
+}
+
+html[data-theme="dark"] .card-header {
+    border-bottom-color: rgba(138, 210, 255, 0.08);
+}
+
+html[data-theme="dark"] .text-muted,
+html[data-theme="dark"] .card-header h5,
+html[data-theme="dark"] .card-header h6 {
+    color: #90aeca !important;
+}
+
+html[data-theme="dark"] .form-control,
+html[data-theme="dark"] .form-select,
+html[data-theme="dark"] .chat-input,
+html[data-theme="dark"] .chat-messages {
+    background: #0c1f31;
+    border-color: rgba(138, 210, 255, 0.1);
+    color: #d8e6f3;
+}
+
+html[data-theme="dark"] .message.received,
+html[data-theme="dark"] .hero-mini-card,
+html[data-theme="dark"] .dashboard-hero {
+    background: rgba(12, 31, 49, 0.88);
+    border-color: rgba(138, 210, 255, 0.08);
+}

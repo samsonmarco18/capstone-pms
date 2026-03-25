@@ -1,14 +1,15 @@
 <?php
-require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/auth.php';
 
 $user = getCurrentUser();
-$unreadCount = getUnreadNotificationsCount($user['id']);
 $notifications = [];
+$unreadCount = 0;
 
 if ($user) {
+    $unreadCount = getUnreadNotificationsCount((int) $user['id']);
     $conn = getConnection();
-    $stmt = $conn->prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 10");
-    $stmt->bind_param("i", $user['id']);
+    $stmt = $conn->prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 8');
+    $stmt->bind_param('i', $user['id']);
     $stmt->execute();
     $result = $stmt->get_result();
     while ($row = $result->fetch_assoc()) {
@@ -18,133 +19,88 @@ if ($user) {
 }
 ?>
 
-<!-- Page Content -->
 <div id="page-content-wrapper">
-    <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
+    <nav class="navbar app-navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
         <div class="container-fluid">
-            <!-- Menu Toggle Button -->
-            <button class="btn btn-link btn-sm me-3" id="menu-toggle" style="color: var(--primary-color);">
-                <i class="fas fa-bars fa-lg"></i>
-            </button>
+            <div class="d-flex align-items-center gap-3">
+                <button class="btn btn-link btn-sm app-toggle" id="menu-toggle" type="button" aria-label="Toggle sidebar">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="nav-context">
+                    <div class="nav-context-title">ERNI PMS</div>
+                    <small>Decision-Driven Project Management Support System</small>
+                </div>
+            </div>
 
-            <!-- Brand -->
-            <a class="navbar-brand" href="<?php echo BASE_URL; ?>/index.php">
-                <i class="fas fa-shield-alt" style="color: var(--primary-color);"></i>
-                <span style="color: var(--primary-color); font-weight: 600;">ERNI</span>
-            </a>
-
-            <!-- Toggler for mobile -->
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
-            <!-- Navbar Items -->
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto gap-2">
-                    <!-- Notifications Dropdown -->
-                    <li class="nav-item dropdown">
-                        <a class="nav-link position-relative" href="#" id="navbarNotifications" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <ul class="navbar-nav ms-auto align-items-lg-center gap-2">
+                    <li class="nav-item dropdown" id="notificationsDropdown">
+                        <a class="nav-link position-relative nav-icon-link" href="#" id="navbarNotifications" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-bell"></i>
-                            <?php if ($unreadCount > 0): ?>
-                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" 
-                                      style="font-size: 10px; padding: 2px 5px;">
-                                    <?php echo $unreadCount; ?>
-                                </span>
-                            <?php endif; ?>
+                            <span id="notificationBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger <?php echo $unreadCount > 0 ? '' : 'd-none'; ?>">
+                                <?php echo $unreadCount; ?>
+                            </span>
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end shadow" style="min-width: 380px;" aria-labelledby="navbarNotifications">
-                            <li><h6 class="dropdown-header">
-                                <i class="fas fa-bell me-2"></i>Notifications
-                            </h6></li>
+                        <ul class="dropdown-menu dropdown-menu-end shadow" style="min-width: 360px;">
+                            <li><h6 class="dropdown-header">Notifications</h6></li>
                             <li><hr class="dropdown-divider m-0"></li>
-                            
-                            <?php if (count($notifications) > 0): ?>
-                                <div style="max-height: 350px; overflow-y: auto;">
-                                    <?php foreach ($notifications as $notif): ?>
+                            <div id="notificationsList">
+                                <?php if ($notifications): ?>
+                                    <?php foreach ($notifications as $notification): ?>
                                         <li>
-                                            <a class="dropdown-item py-2 border-bottom text-decoration-none" href="<?php echo $notif['action_url'] ?? '#'; ?>" 
-                                               onclick="markNotificationRead(<?php echo $notif['id']; ?>); return false;">
-                                                <div class="d-flex justify-content-between align-items-start">
-                                                    <div>
-                                                        <p class="mb-1 fw-bold small"><?php echo htmlspecialchars(substr($notif['title'], 0, 50)); ?></p>
-                                                        <small class="text-muted"><?php echo htmlspecialchars(substr($notif['message'], 0, 70)); ?></small>
-                                                    </div>
-                                                    <?php if (!$notif['is_read']): ?>
-                                                        <span class="badge bg-primary rounded-circle ms-2" style="width: 8px; height: 8px; flex-shrink: 0; margin-top: 6px;"></span>
-                                                    <?php endif; ?>
-                                                </div>
-                                                <small class="text-muted d-block" style="font-size: 10px; margin-top: 5px;">
-                                                    <?php echo date('M d, H:i', strtotime($notif['created_at'])); ?>
-                                                </small>
+                                            <a class="dropdown-item py-2 <?php echo !$notification['is_read'] ? 'bg-light' : ''; ?>"
+                                               href="<?php echo htmlspecialchars($notification['action_url'] ?: BASE_URL . 'notifications.php'); ?>"
+                                               onclick="markNotificationRead(<?php echo (int) $notification['id']; ?>)">
+                                                <div class="fw-semibold small"><?php echo htmlspecialchars($notification['title']); ?></div>
+                                                <div class="text-muted small"><?php echo htmlspecialchars($notification['message']); ?></div>
                                             </a>
                                         </li>
                                     <?php endforeach; ?>
-                                </div>
-                            <?php else: ?>
-                                <li><p class="dropdown-item text-center text-muted py-3 mb-0">No notifications</p></li>
-                            <?php endif; ?>
-                            
+                                <?php else: ?>
+                                    <li><span class="dropdown-item text-muted">No notifications yet.</span></li>
+                                <?php endif; ?>
+                            </div>
                             <li><hr class="dropdown-divider m-0"></li>
-                            <li>
-                                <a class="dropdown-item text-center small py-2" href="<?php echo BASE_URL; ?>/notifications.php">
-                                    View All
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item text-center small py-2" href="<?php echo BASE_URL; ?>notifications.php">View All</a></li>
                         </ul>
                     </li>
 
-                    <!-- Dark Mode Toggle -->
                     <li class="nav-item">
-                        <button class="btn btn-link nav-link" id="darkModeToggle" title="Toggle Dark Mode" style="color: inherit;">
+                        <a class="nav-link nav-icon-link" href="<?php echo BASE_URL; ?>folders.php" title="Folders">
+                            <i class="fas fa-folder-tree"></i>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <button class="btn btn-link nav-link nav-icon-link" id="darkModeToggle" title="Dark mode">
                             <i class="fas fa-moon"></i>
                         </button>
                     </li>
 
-                    <!-- Files/Folders -->
-                    <li class="nav-item">
-<a class="nav-link" href="<?php echo BASE_URL; ?>folders.php" title="Project Folders & Files" data-bs-toggle="tooltip">
-                            <i class="fas fa-folder-tree text-info"></i>
-                            <span class="d-none d-md-inline ms-1 small">Folders</span>
-                        </a>
-                    </li>
-
-                    <!-- User Profile Dropdown -->
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 text-decoration-none" href="#" id="navbarUserMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <div class="user-profile-pic" style="width: 32px; height: 32px; border-radius: 50%; background: var(--primary-color); 
-                                                                 display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; font-weight: 600; flex-shrink: 0;">
-                                <?php echo htmlspecialchars(strtoupper(substr($user['full_name'], 0, 1))); ?>
+                        <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 nav-user-link" href="#" id="navbarUserMenu" role="button" data-bs-toggle="dropdown">
+                            <div class="user-profile-pic d-flex align-items-center justify-content-center text-white">
+                                <?php echo htmlspecialchars(strtoupper(substr($user['full_name'] ?? 'U', 0, 1))); ?>
                             </div>
-                            <span class="d-none d-md-inline small text-dark"><?php echo htmlspecialchars(substr($user['full_name'], 0, 20)); ?></span>
+                            <div class="d-none d-md-flex flex-column text-start">
+                                <span class="nav-user-name"><?php echo htmlspecialchars($user['full_name'] ?? 'User'); ?></span>
+                                <small class="nav-user-role"><?php echo htmlspecialchars(getRoleDisplayName($user['role'] ?? '')); ?></small>
+                            </div>
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="navbarUserMenu">
-                            <li>
-                                <h6 class="dropdown-header">
-                                    <small class="text-muted"><?php echo getRoleDisplayName($user['role']); ?></small>
-                                </h6>
-                            </li>
+                        <ul class="dropdown-menu dropdown-menu-end shadow">
+                            <li><h6 class="dropdown-header"><?php echo htmlspecialchars(getRoleDisplayName($user['role'] ?? '')); ?></h6></li>
                             <li><hr class="dropdown-divider m-0"></li>
-                            <li>
-                                <a class="dropdown-item" href="<?php echo BASE_URL; ?>/profile.php">
-                                    <i class="fas fa-user me-2"></i>My Profile
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="<?php echo BASE_URL; ?>/settings.php">
-                                    <i class="fas fa-cog me-2"></i>Settings
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>profile.php"><i class="fas fa-user me-2"></i>Profile</a></li>
+                            <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>settings.php"><i class="fas fa-cog me-2"></i>Settings</a></li>
                             <li><hr class="dropdown-divider m-0"></li>
-                            <li>
-                                <a class="dropdown-item text-danger" href="<?php echo BASE_URL; ?>/logout.php">
-                                    <i class="fas fa-sign-out-alt me-2"></i>Logout
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item text-danger" href="<?php echo BASE_URL; ?>logout.php"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
                         </ul>
                     </li>
                 </ul>
             </div>
         </div>
     </nav>
-    

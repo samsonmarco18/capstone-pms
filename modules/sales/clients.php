@@ -8,20 +8,84 @@ $user = getCurrentUser();
 // Handle client operations
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['add_client'])) {
-        $name = $_POST['name'];
-        $contact_person = $_POST['contact_person'];
-        $email = $_POST['email'];
-        $phone = $_POST['phone'];
-        $address = $_POST['address'];
-        $deadline = $_POST['deadline'];
-        
-        $stmt = $conn->prepare("INSERT INTO clients (name, contact_person, email, phone, address, deadline, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssssssi", $name, $contact_person, $email, $phone, $address, $deadline, $user['id']);
-        
-        if ($stmt->execute()) {
-            $clientId = $stmt->insert_id;
-            logActivity($user['id'], 'add_client', 'clients', $clientId, null, $_POST);
-            $_SESSION['success'] = "Client added successfully";
+        $name = trim((string) ($_POST['name'] ?? ''));
+        $contactPerson = trim((string) ($_POST['contact_person'] ?? ''));
+        $email = trim((string) ($_POST['email'] ?? ''));
+        $phone = trim((string) ($_POST['phone'] ?? ''));
+        $address = trim((string) ($_POST['address'] ?? ''));
+        $deadline = $_POST['deadline'] ?: null;
+
+        $projectName = trim((string) ($_POST['project_name'] ?? ''));
+        $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
+        $meetingNotes = trim((string) ($_POST['meeting_notes'] ?? ''));
+        $mom = trim((string) ($_POST['mom'] ?? ''));
+        $requestedFeatures = trim((string) ($_POST['requested_features'] ?? ''));
+        $additionalRequirements = trim((string) ($_POST['additional_requirements'] ?? ''));
+        $timelineStart = $_POST['timeline_start'] ?: null;
+        $timelineEnd = $_POST['timeline_end'] ?: ($deadline ?: null);
+
+        $requirementsSummary = $requestedFeatures;
+        if ($additionalRequirements !== '') {
+            $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Additional Requirements:' . "\n" . $additionalRequirements;
+        }
+
+        if ($projectName === '') {
+            $_SESSION['error'] = 'Project name is required for requirement gathering.';
+        } elseif ($requirementsSummary === '' && $meetingNotes === '' && $mom === '') {
+            $_SESSION['error'] = 'Please provide at least one project requirement, meeting note, or MOM entry.';
+        } else {
+            $conn->begin_transaction();
+
+            try {
+                $stmt = $conn->prepare("INSERT INTO clients (name, contact_person, email, phone, address, deadline, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("ssssssi", $name, $contactPerson, $email, $phone, $address, $deadline, $user['id']);
+                $stmt->execute();
+                $clientId = $stmt->insert_id;
+                $stmt->close();
+
+                $projectStmt = $conn->prepare("
+                    INSERT INTO projects (
+                        client_id, name, description, status, timeline_start, timeline_end,
+                        meeting_notes, mom, requested_features, created_by, architect_id
+                    ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL)
+                ");
+                $projectStmt->bind_param(
+                    "isssssssi",
+                    $clientId,
+                    $projectName,
+                    $projectDescription,
+                    $timelineStart,
+                    $timelineEnd,
+                    $meetingNotes,
+                    $mom,
+                    $requirementsSummary,
+                    $user['id']
+                );
+                $projectStmt->execute();
+                $projectId = $projectStmt->insert_id;
+                $projectStmt->close();
+
+                $architects = $conn->query("SELECT id FROM users WHERE role = 'architect' AND status = 'active'");
+                while ($architect = $architects->fetch_assoc()) {
+                    createNotification(
+                        (int) $architect['id'],
+                        'New Project Requirements Ready',
+                        'Sales submitted a new project for architectural review: ' . $projectName,
+                        'project',
+                        'projects',
+                        $projectId,
+                        BASE_URL . 'modules/architect/project-review.php?id=' . $projectId
+                    );
+                }
+
+                $conn->commit();
+                logActivity($user['id'], 'add_client', 'clients', $clientId, null, $_POST);
+                logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);
+                $_SESSION['success'] = "Client added and requirements automatically sent to Architect for review.";
+            } catch (Throwable $e) {
+                $conn->rollback();
+                $_SESSION['error'] = 'Unable to save client and requirements. Please try again.';
+            }
         }
     } elseif (isset($_POST['update_client'])) {
         $id = $_POST['id'];
@@ -211,6 +275,41 @@ include '../../includes/navbar.php';
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Project Deadline</label>
                             <input type="date" name="deadline" class="form-control">
+                        </div>
+                        <div class="col-12">
+                            <hr>
+                            <h6 class="mb-3 text-primary">Requirement Gathering for Architect Review</h6>
+                        </div>
+                        <div class="col-md-8 mb-3">
+                            <label class="form-label">Project Name</label>
+                            <input type="text" name="project_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Requested Timeline Start</label>
+                            <input type="date" name="timeline_start" class="form-control">
+                        </div>
+                        <div class="col-12 mb-3">
+                            <label class="form-label">Project Description</label>
+                            <textarea name="project_description" class="form-control" rows="2" placeholder="Short overview of the requested system or solution"></textarea>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Meeting Notes</label>
+                            <textarea name="meeting_notes" class="form-control" rows="4" placeholder="Important notes from discovery meetings"></textarea>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Minutes of the Meeting (MOM)</label>
+                            <textarea name="mom" class="form-control" rows="4" placeholder="Formal MOM summary for the architect"></textarea>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Requested System Features</label>
+                            <textarea name="requested_features" class="form-control" rows="5" placeholder="List requested features, one per line"></textarea>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Additional Requirements</label>
+                            <textarea name="additional_requirements" class="form-control" rows="5" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <small class="text-muted">Once saved, this client intake will automatically create a project and place it in the Architect review queue.</small>
                         </div>
                     </div>
                 </div>

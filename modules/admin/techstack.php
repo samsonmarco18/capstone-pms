@@ -288,7 +288,7 @@ function renewTechnology(id) {
     if (confirm('Renew this technology/service? This will extend the expiry date by 1 year.')) {
         // AJAX call to renew technology
         $.ajax({
-            url: 'api/renew-technology.php',
+            url: '../../api/renew-technology.php',
             method: 'POST',
             data: { id: id },
             success: function(response) {

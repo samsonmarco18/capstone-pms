@@ -5,11 +5,21 @@ requireRole('sales');
 $conn = getConnection();
 $user = getCurrentUser();
 
-$reportId = $_GET['report_id'] ?? 0;
-$clientId = $_GET['client_id'] ?? 0;
+$reportId = (int) ($_GET['report_id'] ?? 0);
+$receiptId = (int) ($_GET['receipt_id'] ?? 0);
+$clientId = (int) ($_GET['client_id'] ?? 0);
 
 // Get receipts for client or specific report
-if ($reportId) {
+if ($receiptId) {
+    $receipts = $conn->query("
+        SELECT r.*, sr.total_cost, c.name as client_name 
+        FROM receipts r 
+        JOIN sales_reports sr ON r.report_id = sr.id 
+        JOIN clients c ON sr.client_id = c.id 
+        WHERE r.id = $receiptId
+        ORDER BY r.created_at DESC
+    ");
+} elseif ($reportId) {
     $receipts = $conn->query("
         SELECT r.*, sr.total_cost, c.name as client_name 
         FROM receipts r 
@@ -38,14 +48,18 @@ if ($reportId) {
 }
 
 // Handle PDF generation
-if (isset($_GET['download']) && $reportId) {
+if (isset($_GET['download']) && ($receiptId || $reportId)) {
+    $receiptFilter = $receiptId
+        ? "r.id = $receiptId"
+        : "sr.id = $reportId";
+
     $receipt = $conn->query("
         SELECT r.*, sr.*, p.name as project_name, c.name as client_name, c.email, c.contact_person, c.phone, c.address 
         FROM receipts r 
         JOIN sales_reports sr ON r.report_id = sr.id 
         JOIN projects p ON sr.project_id = p.id 
         JOIN clients c ON sr.client_id = c.id 
-        WHERE r.id = $reportId OR sr.id = $reportId
+        WHERE $receiptFilter
     ")->fetch_assoc();
 
     if ($receipt) {
@@ -159,7 +173,7 @@ include '../../includes/navbar.php';
                                         </span>
                                     </td>
                                     <td>
-                                        <a href="?download=1&report_id=<?php echo $receipt['report_id']; ?>" class="btn btn-sm btn-success" target="_blank">
+                                        <a href="?download=1&receipt_id=<?php echo (int) $receipt['id']; ?>" class="btn btn-sm btn-success" target="_blank">
                                             <i class="fas fa-download"></i> Download PDF
                                         </a>
                                         <button class="btn btn-sm btn-info" onclick="viewReceipt(<?php echo $receipt['id']; ?>)">
@@ -186,16 +200,7 @@ include '../../includes/navbar.php';
 
 <script>
 function viewReceipt(id) {
-    $.ajax({
-        url: 'api/get-receipt-details.php',
-        method: 'GET',
-        data: { id: id },
-        success: function(response) {
-            $('#receiptContent').html(response);
-            $('#downloadReceiptBtn').attr('href', '?download=1&report_id=' + id);
-            new bootstrap.Modal(document.getElementById('viewReceiptModal')).show();
-        }
-    });
+    window.open(`../../api/get-receipt-details.php?id=${id}`, '_blank');
 }
 </script>
 

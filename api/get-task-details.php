@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: application/json');
-require_once '../config/database.php';
-require_once '../includes/auth.php';
+require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/auth.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -40,11 +40,10 @@ $result = $stmt->get_result();
 
 if ($task = $result->fetch_assoc()) {
     // Calculate days left
-    $deadline = new DateTime($task['deadline']);
-    $today = new DateTime();
-    $daysLeft = max(0, $deadline->diff($today)->days);
+    $deadlineTimestamp = $task['deadline'] ? strtotime($task['deadline']) : false;
+    $daysLeft = $deadlineTimestamp ? (int) floor(($deadlineTimestamp - time()) / 86400) : null;
     $task['days_left'] = $daysLeft;
-    $task['is_overdue'] = $daysLeft < 0;
+    $task['is_overdue'] = $daysLeft !== null && $daysLeft < 0;
     
     // Priority color
     $priorityColors = ['low' => 'success', 'medium' => 'warning', 'high' => 'danger', 'critical' => 'dark'];

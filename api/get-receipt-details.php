@@ -161,7 +161,5 @@ echo '
     </script>
 </body>
 </html>';
-
-die($html);
 ?>
 

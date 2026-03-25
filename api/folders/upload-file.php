@@ -1,48 +1,64 @@
 <?php
-require_once '../../config/database.php';
-require_once '../../includes/auth.php';
+header('Content-Type: application/json');
+
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/auth.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
-    exit('Unauthorized');
+    echo json_encode(['error' => 'Unauthorized']);
+    exit();
 }
 
 $user = getCurrentUser();
 $conn = getConnection();
+$folderId = (int) ($_POST['folder_id'] ?? 0);
+$file = $_FILES['file'] ?? null;
 
-$folderId = $_POST['folder_id'];
-$file = $_FILES['file'];
-
-if ($file['error'] !== UPLOAD_ERR_OK) {
+if ($folderId <= 0 || !$file || $file['error'] !== UPLOAD_ERR_OK) {
     http_response_code(400);
-    exit('Upload failed');
+    echo json_encode(['error' => 'Invalid upload request.']);
+    exit();
 }
 
-// Create upload directory if not exists
-$uploadDir = '../../uploads/' . date('Y/m/d');
-if (!file_exists($uploadDir)) {
-    mkdir($uploadDir, 0777, true);
+$uploadRoot = dirname(__DIR__, 2) . '/uploads';
+$dailyDirectory = $uploadRoot . '/' . date('Y/m/d');
+if (!is_dir($dailyDirectory)) {
+    mkdir($dailyDirectory, 0777, true);
 }
 
-$fileName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $file['name']);
-$filePath = $uploadDir . '/' . $fileName;
-$relativePath = str_replace('../../', '', $filePath);
+$originalName = basename($file['name']);
+$storedName = uniqid('file_', true) . '_' . preg_replace('/[^A-Za-z0-9._-]/', '', $originalName);
+$absolutePath = $dailyDirectory . '/' . $storedName;
+$relativePath = 'uploads/' . date('Y/m/d') . '/' . $storedName;
 
-if (move_uploaded_file($file['tmp_name'], $filePath)) {
-    $stmt = $conn->prepare("
-        INSERT INTO files (folder_id, name, file_path, file_type, file_size, uploaded_by) 
-        VALUES (?, ?, ?, ?, ?, ?)
-    ");
-    $stmt->bind_param("isssii", $folderId, $file['name'], $relativePath, $file['type'], $file['size'], $user['id']);
-    
-    if ($stmt->execute()) {
-        echo json_encode(['success' => true, 'file_id' => $stmt->insert_id]);
-    } else {
-        http_response_code(500);
-        echo json_encode(['error' => 'Database error']);
-    }
-} else {
+if (!move_uploaded_file($file['tmp_name'], $absolutePath)) {
     http_response_code(500);
-    echo json_encode(['error' => 'File move failed']);
+    echo json_encode(['error' => 'Unable to save uploaded file.']);
+    exit();
 }
+
+$extension = pathinfo($originalName, PATHINFO_EXTENSION);
+$stmt = $conn->prepare(
+    'INSERT INTO files (folder_id, original_file_name, stored_file_name, file_type, file_size, file_path, uploaded_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?)'
+);
+$stmt->bind_param('isssisi', $folderId, $originalName, $storedName, $extension, $file['size'], $relativePath, $user['id']);
+
+if (!$stmt->execute()) {
+    @unlink($absolutePath);
+    http_response_code(500);
+    echo json_encode(['error' => 'Database error while saving file metadata.']);
+    exit();
+}
+
+$fileId = $stmt->insert_id;
+$stmt->close();
+
+logActivity((int) $user['id'], 'upload_file', 'files', $fileId, null, ['folder_id' => $folderId, 'file' => $originalName]);
+
+echo json_encode([
+    'success' => true,
+    'file_id' => $fileId,
+]);
 ?>

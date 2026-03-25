@@ -21,12 +21,18 @@ if (!$project) {
 
 // Update project status if form submitted
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $notes = $_POST['notes'];
-    $mom = $_POST['mom'];
-    $features = $_POST['features'];
+    $notes = trim((string) ($_POST['notes'] ?? ''));
+    $mom = trim((string) ($_POST['mom'] ?? ''));
+    $features = trim((string) ($_POST['features'] ?? ''));
+    $timelineStart = $_POST['timeline_start'] ?: null;
+    $timelineEnd = $_POST['timeline_end'] ?: null;
     
-    $stmt = $conn->prepare("UPDATE projects SET meeting_notes=?, mom=?, requested_features=?, status='review' WHERE id=?");
-    $stmt->bind_param("sssi", $notes, $mom, $features, $projectId);
+    $stmt = $conn->prepare("
+        UPDATE projects
+        SET meeting_notes = ?, mom = ?, requested_features = ?, timeline_start = ?, timeline_end = ?, status = 'review', architect_id = COALESCE(architect_id, ?)
+        WHERE id = ?
+    ");
+    $stmt->bind_param("sssssii", $notes, $mom, $features, $timelineStart, $timelineEnd, $user['id'], $projectId);
     $stmt->execute();
     
     logActivity($user['id'], 'review_project', 'projects', $projectId, null, $_POST);

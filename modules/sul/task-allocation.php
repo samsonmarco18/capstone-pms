@@ -102,16 +102,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Create notification for all team members
             $title = "New Task Created: $title";
             $message = "A new task has been created and needs to be assigned.";
-            
-            $notifStmt = $conn->prepare("
-                INSERT INTO notifications (user_id, title, message, type, link) 
-                SELECT id, ?, ?, 'task', ? 
-                FROM users 
-                WHERE role IN ('sul', 'expert', 'developer') AND status = 'active'
-            ");
             $link = "/modules/sul/task-allocation.php?task_id=$newTaskId";
-            $notifStmt->bind_param("sss", $title, $message, $link);
-            $notifStmt->execute();
+            $notificationUsers = $conn->query("SELECT id FROM users WHERE role IN ('sul', 'expert', 'developer') AND status = 'active'");
+            while ($notificationUser = $notificationUsers->fetch_assoc()) {
+                createNotification(
+                    (int) $notificationUser['id'],
+                    $title,
+                    $message,
+                    'task',
+                    'tasks',
+                    (int) $newTaskId,
+                    BASE_URL . ltrim($link, '/')
+                );
+            }
             
             $_SESSION['success'] = "Task created successfully! You can now assign it to a team member.";
             header("Location: task-allocation.php?project_id=$projectId");
@@ -143,11 +146,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Create notification for assigned user
             $title = "New Task Assigned: " . $taskDetails['title'];
             $message = "You have been assigned a new task. Deadline: " . date('M d, Y', strtotime($taskDetails['deadline']));
-            $link = "/modules/developer/task.php?id=$taskId";
-            
-            $notifStmt = $conn->prepare("INSERT INTO notifications (user_id, title, message, type, link) VALUES (?, ?, ?, 'task', ?)");
-            $notifStmt->bind_param("isss", $userId, $title, $message, $link);
-            $notifStmt->execute();
+            createNotification(
+                (int) $userId,
+                $title,
+                $message,
+                'task',
+                'tasks',
+                (int) $taskId,
+                BASE_URL . 'modules/developer/task.php?id=' . $taskId
+            );
             
             // Send email if enabled
             if($sendEmail) {

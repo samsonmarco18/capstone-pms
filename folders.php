@@ -42,9 +42,8 @@ $conn = getConnection();
         <div class="col-md-8">
             <!-- Breadcrumbs -->
             <nav aria-label="breadcrumb">
-                <ol class="breadcrumb bg-light rounded p-3 mb-4">
-                    <li class="breadcrumb-item"><a href="#" onclick="loadRootFolders()"><i class="fas fa-home"></i> All Clients</a></li>
-                    <li class="breadcrumb-item active" aria-current="page" id="currentFolderCrumb">Folders</li>
+                <ol class="breadcrumb bg-light rounded p-3 mb-4" id="folderBreadcrumbs">
+                    <li class="breadcrumb-item active" aria-current="page">All Clients</li>
                 </ol>
             </nav>
 
@@ -121,38 +120,38 @@ $conn = getConnection();
     </div>
 </div>
 
-<?php include 'includes/footer.php'; ?>
-
 <script>
 // Global variables
 let currentFolderId = 0;
 let selectedFiles = [];
 let folderStructure = {};
+let currentBreadcrumb = [];
 
 // Initialize folders page
 $(document).ready(function() {
     loadRootFolders();
-    initFileTable();
     initBulkActions();
 });
 
 // Load root folders (clients)
 function loadRootFolders() {
     currentFolderId = 0;
-    updateBreadcrumbs('All Clients');
+    currentBreadcrumb = [];
+    renderBreadcrumbs([]);
     $('#currentFolderTitle').text('All Clients');
     
     $.ajax({
         url: `<?php echo BASE_URL; ?>api/folders/get-tree.php?folder_id=0&role=<?php echo $user['role']; ?>`,
+        dataType: 'json',
         success: function(data) {
             renderFolderTree(data.folders);
-            loadFolderContents(0);
+            renderEntries(data.folders || [], []);
         }
     });
 }
 
 // Load folder tree
-function renderFolderTree(folders, parentId = 0) {
+function renderFolderTree(folders, parentId = 0, renderToDom = true) {
     folderStructure[parentId] = folders;
     
     let html = '';
@@ -172,13 +171,17 @@ function renderFolderTree(folders, parentId = 0) {
         `;
         
         // Render children recursively
-        if (folder.children) {
-            html += `<div class="folder-children ms-4" style="display: none;">${renderFolderTree(folder.children, folder.id)}</div>`;
+        if (folder.children && folder.children.length) {
+            html += `<div class="folder-children ms-4" style="display: none;">${renderFolderTree(folder.children, folder.id, false)}</div>`;
         }
     });
     
-    $('#folderTree').html(html);
-    initTreeEvents();
+    if (renderToDom) {
+        $('#folderTree').html(html);
+        initTreeEvents();
+    }
+
+    return html;
 }
 
 function initTreeEvents() {
@@ -190,9 +193,9 @@ function initTreeEvents() {
         if (children.length) {
             children.slideToggle();
             $(this).find('.folder-expand').toggleClass('fa-chevron-down fa-chevron-right');
-        } else {
-            loadFolderContents(folderId);
         }
+
+        loadFolderContents(folderId);
     });
 }
 
@@ -203,13 +206,14 @@ function loadFolderContents(folderId) {
     currentFolderId = folderId;
     $.ajax({
         url: `<?php echo BASE_URL; ?>api/folders/get-files.php?folder_id=${folderId}`,
+        dataType: 'json',
         success: function(data) {
             hideLoading();
-            renderFiles(data.files || []);
-            updateBreadcrumbs(folderId);
+            renderEntries(data.folders || [], data.files || []);
+            currentBreadcrumb = Array.isArray(data.breadcrumb) ? data.breadcrumb : [];
+            renderBreadcrumbs(currentBreadcrumb);
             
-            // Get folder name for title
-            const folder = findFolderById(folderId);
+            const folder = data.current_folder || findFolderById(folderId);
             $('#currentFolderTitle').text(folder ? folder.name : 'Files');
         },
         error: function() {
@@ -219,14 +223,37 @@ function loadFolderContents(folderId) {
     });
 }
 
-function renderFiles(files) {
+function renderEntries(folders, files) {
     const tbody = $('#fileTableBody');
     tbody.empty();
     
-    if (files.length === 0) {
-        tbody.html('<tr><td colspan="7" class="text-center text-muted py-5">No files in this folder</td></tr>');
+    if (folders.length === 0 && files.length === 0) {
+        tbody.html('<tr><td colspan="7" class="text-center text-muted py-5">No files or folders here yet</td></tr>');
         return;
     }
+
+    folders.forEach(folder => {
+        tbody.append(`
+            <tr class="folder-row" data-folder-id="${folder.id}">
+                <td></td>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-folder text-warning me-2" style="font-size: 18px; width: 24px;"></i>
+                        <a href="#" onclick="loadFolderContents(${folder.id}); return false;" class="file-link">${escapeHtml(folder.name)}</a>
+                    </div>
+                </td>
+                <td>-</td>
+                <td>${folder.updated_at ? new Date(folder.updated_at).toLocaleDateString() : '-'}</td>
+                <td>${escapeHtml(folder.owner_name || 'System')}</td>
+                <td><span class="badge bg-info text-dark">Folder</span></td>
+                <td>
+                    <button class="btn btn-outline-primary btn-sm" onclick="loadFolderContents(${folder.id})">
+                        <i class="fas fa-folder-open"></i>
+                    </button>
+                </td>
+            </tr>
+        `);
+    });
     
     files.forEach(file => {
         const icon = getFileIcon(file.file_type);
@@ -268,24 +295,26 @@ function renderFiles(files) {
     updateBulkSelection();
 }
 
-function updateBreadcrumbs(folderId) {
-    const path = [];
-    let current = folderId;
-    
-    while (current > 0) {
-        const folder = findFolderById(current);
-        if (folder) {
-            path.unshift(folder);
-            current = folder.parent_id;
-        } else break;
+function renderBreadcrumbs(path) {
+    const container = $('#folderBreadcrumbs');
+    let html = '<li class="breadcrumb-item"><a href="#" onclick="loadRootFolders(); return false;"><i class="fas fa-home me-1"></i>All Clients</a></li>';
+
+    if (!Array.isArray(path) || path.length === 0) {
+        html = '<li class="breadcrumb-item active" aria-current="page"><i class="fas fa-home me-1"></i>All Clients</li>';
+        container.html(html);
+        return;
     }
-    
-    const crumbs = ['<a href="#" onclick="loadRootFolders()">All Clients</a>'];
+
     path.forEach((folder, index) => {
-        crumbs.push(`<a href="#" onclick="loadFolderContents(${folder.id})">${escapeHtml(folder.name)}</a>`);
+        const isLast = index === path.length - 1;
+        if (isLast) {
+            html += `<li class="breadcrumb-item active" aria-current="page">${escapeHtml(folder.name)}</li>`;
+        } else {
+            html += `<li class="breadcrumb-item"><a href="#" onclick="loadFolderContents(${folder.id}); return false;">${escapeHtml(folder.name)}</a></li>`;
+        }
     });
-    
-    $('#currentFolderCrumb').html(crumbs.join(' / '));
+
+    container.html(html);
 }
 
 // Helper functions
@@ -298,6 +327,10 @@ function findFolderById(id) {
 }
 
 function getFileIcon(type) {
+    if (!type) {
+        return 'fas fa-file text-muted';
+    }
+
     const icons = {
         'pdf': 'fas fa-file-pdf text-danger',
         'doc': 'fas fa-file-word text-blue',
@@ -357,8 +390,8 @@ function bulkDelete() {
             method: 'POST',
             data: { file_ids: selectedFiles },
             success: function() {
-                $('#bulkActionsModal').modal('hide');
-                loadFolderContents(currentFolderId);
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('bulkActionsModal')).hide();
+                currentFolderId > 0 ? loadFolderContents(currentFolderId) : loadRootFolders();
                 showToast('Success', `${selectedFiles.length} files deleted`);
             }
         });
@@ -369,7 +402,7 @@ function bulkDownload() {
     selectedFiles.forEach(id => {
         window.open(`<?php echo BASE_URL; ?>api/folders/download.php?id=${id}`, '_blank');
     });
-    $('#bulkActionsModal').modal('hide');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('bulkActionsModal')).hide();
 }
 
 function bulkMove() {
@@ -380,8 +413,17 @@ function bulkMove() {
     }
 }
 
+function exportCurrentFolder() {
+    showToast('Folders', 'ZIP export can be added next. The current folder browser, uploads, and downloads are now active.', 'info');
+}
+
 function refreshFolder() {
-    loadFolderContents(currentFolderId);
+    if (currentFolderId > 0) {
+        loadFolderContents(currentFolderId);
+        return;
+    }
+
+    loadRootFolders();
 }
 
 function createFolderInCurrent() {
@@ -391,12 +433,17 @@ function createFolderInCurrent() {
             url: `<?php echo BASE_URL; ?>api/folders/create.php`,
             method: 'POST',
             data: { name: name, parent_id: currentFolderId },
-            success: () => loadFolderContents(currentFolderId)
+            success: () => currentFolderId > 0 ? loadFolderContents(currentFolderId) : loadRootFolders()
         });
     }
 }
 
 function uploadToCurrentFolder() {
+    if (currentFolderId <= 0) {
+        showToast('Folder', 'Please open a folder before uploading files.', 'warning');
+        return;
+    }
+
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;

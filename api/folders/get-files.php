@@ -1,54 +1,103 @@
 <?php
-require_once '../../config/database.php';
-require_once '../../includes/auth.php';
+header('Content-Type: application/json');
+
+require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/../../includes/auth.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
-    exit('Unauthorized');
+    echo json_encode(['error' => 'Unauthorized']);
+    exit();
 }
 
-$user = getCurrentUser();
 $conn = getConnection();
+$folderId = isset($_GET['folder_id']) ? (int) $_GET['folder_id'] : 0;
 
-$folderId = isset($_GET['folder_id']) ? $_GET['folder_id'] : null;
-$clientId = isset($_GET['client_id']) ? $_GET['client_id'] : null;
-
-if ($folderId) {
-    // Get folder contents
-    $stmt = $conn->prepare("
-        SELECT * FROM folders 
-        WHERE parent_id = ? 
-        ORDER BY name
-    ");
-    $stmt->bind_param("i", $folderId);
-    $stmt->execute();
-    $folders = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    
-    // Get files in folder
-    $stmt = $conn->prepare("
-        SELECT * FROM files 
-        WHERE folder_id = ? 
-        ORDER BY created_at DESC
-    ");
-    $stmt->bind_param("i", $folderId);
-    $stmt->execute();
-    $files = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    
+if ($folderId <= 0) {
     echo json_encode([
-        'folders' => $folders,
-        'files' => $files
+        'folders' => [],
+        'files' => [],
+        'current_folder' => null,
+        'breadcrumb' => [],
     ]);
-} elseif ($clientId) {
-    // Get client folders structure
-    $stmt = $conn->prepare("
-        SELECT * FROM folders 
-        WHERE client_id = ? AND parent_id IS NULL
-        ORDER BY name
-    ");
-    $stmt->bind_param("i", $clientId);
-    $stmt->execute();
-    $folders = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    
-    echo json_encode(['folders' => $folders]);
+    exit();
 }
+
+function getFolderBreadcrumb(mysqli $conn, int $folderId): array
+{
+    $path = [];
+    $currentId = $folderId;
+    $stmt = $conn->prepare('SELECT id, parent_id, name, folder_type FROM folders WHERE id = ? LIMIT 1');
+
+    while ($currentId > 0) {
+        $stmt->bind_param('i', $currentId);
+        $stmt->execute();
+        $folder = $stmt->get_result()->fetch_assoc();
+
+        if (!$folder) {
+            break;
+        }
+
+        array_unshift($path, [
+            'id' => (int) $folder['id'],
+            'name' => $folder['name'],
+            'folder_type' => $folder['folder_type'],
+        ]);
+
+        $currentId = (int) ($folder['parent_id'] ?? 0);
+    }
+
+    $stmt->close();
+
+    return $path;
+}
+
+$currentFolderStmt = $conn->prepare(
+    'SELECT f.*, u.full_name AS owner_name
+     FROM folders f
+     LEFT JOIN users u ON u.id = f.created_by
+     WHERE f.id = ?
+     LIMIT 1'
+);
+$currentFolderStmt->bind_param('i', $folderId);
+$currentFolderStmt->execute();
+$currentFolder = $currentFolderStmt->get_result()->fetch_assoc();
+$currentFolderStmt->close();
+
+if (!$currentFolder) {
+    http_response_code(404);
+    echo json_encode(['error' => 'Folder not found']);
+    exit();
+}
+
+$folderStmt = $conn->prepare(
+    'SELECT f.*, u.full_name AS owner_name
+     FROM folders f
+     LEFT JOIN users u ON u.id = f.created_by
+     WHERE f.parent_id = ?
+     ORDER BY f.name'
+);
+$folderStmt->bind_param('i', $folderId);
+$folderStmt->execute();
+$folders = $folderStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$folderStmt->close();
+
+$fileStmt = $conn->prepare(
+    'SELECT f.*, u.full_name AS owner_name
+     FROM files f
+     LEFT JOIN users u ON u.id = f.uploaded_by
+     WHERE f.folder_id = ?
+     ORDER BY f.created_at DESC'
+);
+$fileStmt->bind_param('i', $folderId);
+$fileStmt->execute();
+$files = $fileStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$fileStmt->close();
+
+echo json_encode([
+    'folders' => $folders,
+    'files' => $files,
+    'current_folder' => $currentFolder,
+    'breadcrumb' => getFolderBreadcrumb($conn, $folderId),
+]);
 ?>
