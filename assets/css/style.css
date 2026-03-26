@@ -1366,15 +1366,23 @@ body {
 }
 
 .brand-mark {
-    width: 54px;
-    height: 54px;
+    width: 75px;
+    height: 75px;
     border-radius: 18px;
-    background: linear-gradient(135deg, #17a0d7 0%, #0f4c81 100%);
+    background: transparent;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #fff;
-    box-shadow: 0 12px 26px rgba(23, 160, 215, 0.22);
+    box-shadow: none;
+}
+
+.brand-mark img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 12px;
+    padding: 6px;
 }
 
 .brand-mark span {
@@ -1484,9 +1492,14 @@ body {
 }
 
 #sidebar-wrapper.collapsed .brand-mark {
-    width: 46px;
-    height: 46px;
-    border-radius: 14px;
+    width: 38px;
+    height: 38px;
+    border-radius: 0;
+}
+
+#sidebar-wrapper.collapsed .brand-mark img {
+    padding: 4px;
+    border-radius: 10px;
 }
 
 #sidebar-wrapper.collapsed .sidebar-role,
@@ -1964,7 +1977,6 @@ body {
     min-width: 44px;
     border-radius: 12px;
 }
-
 @media (max-width: 992px) {
     .chat-widget {
         width: calc(100vw - 24px);
@@ -1972,4 +1984,82 @@ body {
         right: 12px;
         bottom: 12px;
     }
+}
+
+/* Developer dashboard layout refinements */
+.dev-dashboard h2 {
+    font-size: 1.6rem;
+    margin-bottom: 4px;
+}
+
+.dev-dashboard .stat-card {
+    padding: 18px 20px;
+    border-radius: 14px;
+    box-shadow: 0 10px 22px rgba(12, 87, 118, 0.16);
+}
+
+.dev-dashboard .stat-card h3 {
+    font-size: 1.6rem;
+    margin: 6px 0 4px;
+}
+
+.dev-dashboard .stat-card p {
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+}
+
+.dev-dashboard .stat-card small {
+    font-size: 0.75rem;
+}
+
+.dev-dashboard .card {
+    border: 0;
+    border-radius: 16px;
+    box-shadow: 0 12px 26px rgba(10, 56, 80, 0.12);
+}
+
+.dev-dashboard .card-header {
+    background: #f7fafc;
+    border-bottom: 1px solid rgba(12, 87, 118, 0.08);
+    padding: 14px 18px;
+}
+
+.dev-dashboard .card-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0c5776;
+}
+
+.dev-dashboard .card-body {
+    padding: 18px;
+}
+
+.dev-dashboard .list-group-item {
+    border: 0;
+    border-bottom: 1px solid rgba(12, 87, 118, 0.08);
+    padding: 14px 16px;
+}
+
+.dev-dashboard .list-group-item:last-child {
+    border-bottom: 0;
+}
+
+.dev-dashboard .timeline-item {
+    padding: 10px 0;
+    border-bottom: 1px dashed rgba(12, 87, 118, 0.12);
+}
+
+.dev-dashboard .timeline-item:last-child {
+    border-bottom: 0;
+}
+
+.dev-dashboard .table th,
+.dev-dashboard .table td {
+    font-size: 0.88rem;
+    vertical-align: middle;
+}
+
+.dev-dashboard .badge {
+    font-size: 0.7rem;
 }

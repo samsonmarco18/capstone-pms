@@ -102,6 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In | ERNI PMS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
@@ -122,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         body {
             margin: 0;
             min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Source Sans 3', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #0b617b;
         }
 
@@ -130,12 +131,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             position: relative;
             min-height: 100vh;
             display: grid;
-            grid-template-columns: 56% 44%;
+            grid-template-columns: 58% 42%;
             overflow: hidden;
             background:
-                linear-gradient(rgba(8, 94, 121, 0.92), rgba(8, 94, 121, 0.92)),
-                radial-gradient(circle at 22% 32%, rgba(255, 255, 255, 0.06) 0, rgba(255, 255, 255, 0.06) 13%, transparent 13%),
-                linear-gradient(135deg, #084c62 0%, #0d6786 100%);
+                linear-gradient(120deg, rgba(7, 70, 90, 0.9), rgba(12, 108, 136, 0.88)),
+                url('assets/img/loginBackground.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
 
         .login-shell::before {
@@ -143,18 +146,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             position: absolute;
             inset: 0;
             background:
-                linear-gradient(90deg, transparent 0 34%, rgba(255, 255, 255, 0.02) 34% 35%, transparent 35%),
-                linear-gradient(0deg, transparent 0 62%, rgba(255, 255, 255, 0.025) 62% 63%, transparent 63%),
-                radial-gradient(circle at 72% 40%, rgba(255, 255, 255, 0.05), transparent 24%);
+                linear-gradient(90deg, transparent 0 40%, rgba(255, 255, 255, 0.03) 40% 41%, transparent 41%),
+                linear-gradient(0deg, transparent 0 58%, rgba(255, 255, 255, 0.035) 58% 59%, transparent 59%),
+                radial-gradient(circle at 75% 35%, rgba(255, 255, 255, 0.08), transparent 28%);
+            pointer-events: none;
+        }
+
+        .login-shell::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(8, 88, 114, 0.25) 0%, rgba(7, 62, 80, 0.55) 100%);
+            mix-blend-mode: multiply;
             pointer-events: none;
         }
 
         .login-brand {
             position: relative;
             display: flex;
-            align-items: center;
-            justify-content: flex-start;
-            padding: 64px 48px 64px 94px;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 90px 64px 64px;
+            margin-top: 20;
+            text-align: left;
         }
 
         .brand-panel {
@@ -162,24 +176,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             z-index: 1;
             max-width: 520px;
             color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
         }
 
         .brand-logo {
-            width: 190px;
+            width: 350px;
             height: auto;
             display: block;
-            margin-bottom: 24px;
+            margin-bottom: 30px;
+            margin-left: 120px;
+            filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.18));
         }
 
         .brand-lockup {
             display: flex;
+            flex-direction: row;
             align-items: flex-end;
-            gap: 18px;
-            margin-bottom: 8px;
+            font-size: 1rem;
+            gap: 16px;
+            margin-bottom: 0;
+            margin-left: 150px;
         }
 
         .brand-name {
-            font-size: 3.15rem;
+            font-family: 'Montserrat', 'Source Sans 3', sans-serif;
+            font-size: 3.1rem;
             line-height: 1;
             letter-spacing: 0.1em;
             font-weight: 300;
@@ -195,13 +218,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             line-height: 1.45;
             color: rgba(255, 255, 255, 0.92);
             margin-bottom: 2px;
+            text-align: left;
         }
 
         .brand-system {
             color: var(--login-text-soft);
-            font-size: 0.94rem;
+            font-size: 0.875rem;
             letter-spacing: 0.02em;
-            margin-top: 18px;
+            margin-top: 6px;
+            margin-bottom: 0;
+            text-align: left;
+            margin-left: 150px;
         }
 
         .login-form-wrap {
@@ -210,16 +237,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 40px 56px 40px 20px;
+            padding: 44px 72px 44px -20px;
+            margin-right: 150px;
         }
 
         .login-card {
             width: 100%;
-            max-width: 300px;
+            max-width: 360px;
             background: #fff;
-            border-radius: 18px;
-            box-shadow: 0 24px 54px rgba(0, 0, 0, 0.2);
-            padding: 34px 38px 30px;
+            border-radius: 20px;
+            box-shadow: 0 26px 60px rgba(0, 0, 0, 0.22);
+            padding: 36px 40px 32px;
+            margin-left: -30px;
         }
 
         .login-card-header {
@@ -229,7 +258,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         .login-card h1 {
             margin: 0;
-            font-size: 1.12rem;
+            font-family: 'Montserrat', 'Source Sans 3', sans-serif;
+            font-size: 1.2rem;
             font-weight: 700;
             color: var(--login-card-text);
         }
@@ -286,10 +316,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         .login-row {
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-end;
             align-items: center;
-            gap: 12px;
-            margin: -6px 0 12px;
+            gap: 8px;
+            margin: 6px 0 12px;
         }
 
         .forgot-password {
@@ -297,6 +327,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-weight: 600;
             color: #0f83be;
             text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            line-height: 1;
         }
 
         .forgot-password:hover {
@@ -343,7 +376,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .role-select {
-            width: 116px;
+            width: 140px;
             padding-right: 26px;
             color: #42738b;
             font-size: 0.78rem;
@@ -365,7 +398,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             .login-form-wrap {
-                padding: 8px 20px 28px;
+                padding: 12px 20px 28px;
             }
         }
 
@@ -387,11 +420,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="login-shell">
         <section class="login-brand">
             <div class="brand-panel">
-                <svg class="brand-logo" viewBox="0 0 220 230" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <path d="M110 8C78 8 46 16 20 28v81c0 56 36 91 90 113 54-22 90-57 90-113V28C174 16 142 8 110 8Z" fill="#ffffff"/>
-                    <text x="110" y="138" text-anchor="middle" font-size="118" font-style="italic" font-weight="700" fill="#0c607d" font-family="Segoe UI, Arial, sans-serif">e</text>
-                    <circle cx="54" cy="155" r="8" fill="#0c607d"/>
-                </svg>
+                <img class="brand-logo" src="assets/img/erniLogo_white.png" alt="ERNI logo">
                 <div class="brand-lockup">
                     <div class="brand-name"><strong>ERNI</strong></div>
                     <div class="brand-subtitle">Development<br>Center&nbsp;&nbsp;Philippines, Inc.</div>

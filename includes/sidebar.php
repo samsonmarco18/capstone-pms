@@ -47,7 +47,7 @@ $currentMenu = $menuItems[$role] ?? [];
 <aside class="sidebar-wrapper" id="sidebar-wrapper">
     <div class="sidebar-brand">
         <div class="brand-mark">
-            <span>e</span>
+            <img src="<?php echo BASE_URL; ?>assets/img/logoInside.png" alt="ERNI logo">
         </div>
         <div class="brand-copy sidebar-label">
             <div class="brand-title">ERNI</div>
