@@ -47,117 +47,507 @@ include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
 ?>
 
-<div class="row">
-    <div class="col-12 mb-4">
-        <h2>Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h2>
-        <p class="text-muted">Sales Dashboard - Track clients, projects, and performance</p>
-    </div>
-</div>
+<style>
+:root {
+    --theme-primary: #1f6392;
+    --theme-primary-dark: #0f4a6e;
+    --theme-primary-light: #3a7ca3;
+    --gray-50: #f8f9fa;
+    --gray-100: #f1f3f5;
+    --gray-200: #e9ecef;
+    --gray-300: #dee2e6;
+    --gray-600: #6c757d;
+    --gray-900: #212529;
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.02);
+}
 
-<div class="row">
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);">
-            <p>Total Clients</p>
-            <h3><?php echo $totalClients; ?></h3>
-            <small><?php echo $activeClients; ?> active</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);">
-            <p>Total Projects</p>
-            <h3><?php echo $totalProjects; ?></h3>
-            <small><?php echo $completedProjects; ?> completed</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);">
-            <p>Active Projects</p>
-            <h3><?php echo $activeProjects; ?></h3>
-            <small>Currently ongoing</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
-            <p>Completion Rate</p>
-            <h3><?php echo $totalProjects > 0 ? round(($completedProjects / $totalProjects) * 100) : 0; ?>%</h3>
-            <small>Project success rate</small>
-        </div>
-    </div>
-</div>
+/* Page Header */
+.page-header-modern {
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--gray-200);
+}
 
-<div class="row">
-    <div class="col-md-8 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Project Trends</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="projectTrendsChart" height="300"></canvas>
-            </div>
-        </div>
-    </div>
+.page-header-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(31, 99, 146, 0.06));
+    pointer-events: none;
+}
+
+.page-header-modern h2 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--gray-900);
+}
+
+.page-header-modern h2 i {
+    color: var(--theme-primary);
+}
+
+.page-header-modern p {
+    opacity: 0.9;
+    margin-bottom: 0;
+    font-size: 0.9rem;
+    color: var(--gray-600);
+}
+
+/* Stats Cards */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card-modern {
+    background: white;
+    border-radius: 20px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-200);
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.stat-card-modern .stat-icon {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    opacity: 0.7;
+    font-size: 1.6rem;
+    color: var(--theme-primary);
+}
+
+.stat-card-modern .stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--gray-600);
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.stat-card-modern .stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--theme-primary);
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.stat-card-modern .stat-sub {
+    font-size: 0.7rem;
+    color: var(--gray-600);
+}
+
+/* Chart Cards */
+.chart-card {
+    background: white;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    height: 100%;
+}
+
+.chart-card .card-header {
+    padding: 1.25rem 1.5rem;
+    background: white;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.chart-card .card-header h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.chart-card .card-header h5 i {
+    color: var(--theme-primary);
+}
+
+.chart-card .card-body {
+    padding: 1.5rem;
+}
+
+/* List Cards */
+.list-card {
+    background: white;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    height: 100%;
+}
+
+.list-card .card-header {
+    padding: 1.25rem 1.5rem;
+    background: white;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.list-card .card-header h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.list-card .card-header h5 i {
+    color: var(--theme-primary);
+}
+
+.list-card .card-body {
+    padding: 0;
+}
+
+/* List Items */
+.list-item-modern {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--gray-200);
+    transition: all 0.2s ease;
+}
+
+.list-item-modern:last-child {
+    border-bottom: none;
+}
+
+.list-item-modern:hover {
+    background: var(--gray-50);
+}
+
+.client-info h6 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin-bottom: 0.25rem;
+}
+
+.client-info .client-details {
+    font-size: 0.75rem;
+    color: var(--gray-600);
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.client-info .client-details i {
+    margin-right: 0.25rem;
+    color: var(--theme-primary);
+}
+
+/* Timeline Items */
+.timeline-item-modern {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--gray-200);
+    position: relative;
+    padding-left: 3rem;
+}
+
+.timeline-item-modern:last-child {
+    border-bottom: none;
+}
+
+.timeline-item-modern::before {
+    content: '';
+    position: absolute;
+    left: 1.5rem;
+    top: 1.5rem;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--theme-primary);
+}
+
+.timeline-item-modern::after {
+    content: '';
+    position: absolute;
+    left: 1.5rem;
+    top: 2rem;
+    width: 2px;
+    height: calc(100% - 1rem);
+    background: var(--gray-200);
+}
+
+.timeline-item-modern:last-child::after {
+    display: none;
+}
+
+.timeline-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin-bottom: 0.25rem;
+}
+
+.timeline-time {
+    font-size: 0.7rem;
+    color: var(--gray-600);
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.timeline-time i {
+    font-size: 0.65rem;
+}
+
+.timeline-desc {
+    font-size: 0.8rem;
+    color: var(--gray-600);
+    margin-top: 0.25rem;
+}
+
+/* Badge */
+.badge-modern {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-weight: 600;
+}
+
+.badge-modern.active {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.badge-modern.inactive {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+/* View Button */
+.btn-view {
+    background: transparent;
+    border: 1px solid var(--theme-primary);
+    color: var(--theme-primary);
+    padding: 0.3rem 0.8rem;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    transition: all 0.2s;
+}
+
+.btn-view:hover {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    color: white;
+    transform: translateY(-1px);
+}
+
+/* Empty State */
+.empty-state-modern {
+    text-align: center;
+    padding: 2rem 1.5rem;
+}
+
+.empty-state-modern i {
+    font-size: 2.5rem;
+    color: var(--gray-300);
+    margin-bottom: 0.5rem;
+}
+
+.empty-state-modern p {
+    color: var(--gray-600);
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .page-header-modern {
+        padding: 1.5rem;
+    }
     
-    <div class="col-md-4 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Project Status Distribution</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="statusChart" height="250"></canvas>
-            </div>
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .stat-card-modern .stat-number {
+        font-size: 2rem;
+    }
+}
+</style>
+
+<div class="container-fluid px-4 py-4">
+    <!-- Page Header -->
+    <div class="page-header-modern">
+        <div>
+            <h2>
+                <i class="fas fa-chart-line me-2"></i> 
+                Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!
+            </h2>
+            <p>Sales Dashboard - Track clients, projects, and performance metrics</p>
         </div>
     </div>
-</div>
 
-<div class="row">
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Recent Clients</h5>
+    <!-- Statistics Cards -->
+    <div class="stats-grid">
+        <div class="stat-card-modern stat-clients">
+            <i class="fas fa-users stat-icon"></i>
+            <div class="stat-label">Total Clients</div>
+            <div class="stat-number"><?php echo $totalClients; ?></div>
+            <div class="stat-sub"><?php echo $activeClients; ?> active clients</div>
+        </div>
+        
+        <div class="stat-card-modern stat-projects">
+            <i class="fas fa-project-diagram stat-icon"></i>
+            <div class="stat-label">Total Projects</div>
+            <div class="stat-number"><?php echo $totalProjects; ?></div>
+            <div class="stat-sub"><?php echo $completedProjects; ?> completed</div>
+        </div>
+        
+        <div class="stat-card-modern stat-active">
+            <i class="fas fa-play-circle stat-icon"></i>
+            <div class="stat-label">Active Projects</div>
+            <div class="stat-number"><?php echo $activeProjects; ?></div>
+            <div class="stat-sub">Currently ongoing</div>
+        </div>
+        
+        <div class="stat-card-modern stat-completion">
+            <i class="fas fa-trophy stat-icon"></i>
+            <div class="stat-label">Completion Rate</div>
+            <div class="stat-number"><?php echo $totalProjects > 0 ? round(($completedProjects / $totalProjects) * 100) : 0; ?>%</div>
+            <div class="stat-sub">Project success rate</div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-8">
+            <div class="chart-card">
+                <div class="card-header">
+                    <h5>
+                        <i class="fas fa-chart-line"></i>
+                        Project Trends (Last 6 Months)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="projectTrendsChart" style="height: 300px; width: 100%;"></canvas>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="list-group">
-                    <?php while($client = $recentClients->fetch_assoc()): ?>
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-1"><?php echo htmlspecialchars($client['name']); ?></h6>
-                                <small class="text-muted">
-                                    <?php echo htmlspecialchars($client['email']); ?> | 
-                                    Status: <span class="badge bg-<?php echo $client['status'] == 'active' ? 'success' : 'secondary'; ?>">
-                                        <?php echo ucfirst($client['status']); ?>
-                                    </span>
-                                </small>
-                            </div>
-                            <a href="clients.php?id=<?php echo $client['id']; ?>" class="btn btn-sm btn-primary">
-                                <i class="fas fa-eye"></i> View
-                            </a>
-                        </div>
-                    </div>
-                    <?php endwhile; ?>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="chart-card">
+                <div class="card-header">
+                    <h5>
+                        <i class="fas fa-chart-pie"></i>
+                        Project Status Distribution
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="statusChart" style="height: 280px; width: 100%;"></canvas>
                 </div>
             </div>
         </div>
     </div>
-    
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Upcoming Schedule</h5>
+
+    <!-- Lists Row -->
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="list-card">
+                <div class="card-header">
+                    <h5>
+                        <i class="fas fa-user-plus"></i>
+                        Recent Clients
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <?php if($recentClients->num_rows > 0): ?>
+                        <?php while($client = $recentClients->fetch_assoc()): ?>
+                        <div class="list-item-modern">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="client-info">
+                                    <h6><?php echo htmlspecialchars($client['name']); ?></h6>
+                                    <div class="client-details">
+                                        <span><i class="fas fa-envelope"></i> <?php echo htmlspecialchars($client['email']); ?></span>
+                                        <span>
+                                            <i class="fas fa-circle"></i> 
+                                            <span class="badge-modern <?php echo $client['status']; ?>">
+                                                <?php echo ucfirst($client['status']); ?>
+                                            </span>
+                                        </span>
+                                    </div>
+                                </div>
+                                <a href="clients.php?id=<?php echo $client['id']; ?>" class="btn-view">
+                                    <i class="fas fa-eye"></i> View
+                                </a>
+                            </div>
+                        </div>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <div class="empty-state-modern">
+                            <i class="fas fa-user-friends"></i>
+                            <p>No clients found</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="timeline">
-                    <?php while($schedule = $schedules->fetch_assoc()): ?>
-                    <div class="timeline-item">
-                        <h6><?php echo htmlspecialchars($schedule['title']); ?></h6>
-                        <small class="text-muted">
-                            <?php echo date('M d, Y h:i A', strtotime($schedule['start_time'])); ?>
-                        </small>
-                        <p class="mb-0"><?php echo htmlspecialchars($schedule['description']); ?></p>
-                    </div>
-                    <?php endwhile; ?>
-                    <?php if($schedules->num_rows == 0): ?>
-                        <p class="text-muted">No upcoming schedules</p>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="list-card">
+                <div class="card-header">
+                    <h5>
+                        <i class="fas fa-calendar-alt"></i>
+                        Upcoming Schedule
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <?php if($schedules->num_rows > 0): ?>
+                        <?php while($schedule = $schedules->fetch_assoc()): ?>
+                        <div class="timeline-item-modern">
+                            <div class="timeline-title"><?php echo htmlspecialchars($schedule['title']); ?></div>
+                            <div class="timeline-time">
+                                <i class="far fa-clock"></i>
+                                <?php echo date('M d, Y h:i A', strtotime($schedule['start_time'])); ?>
+                            </div>
+                            <?php if(!empty($schedule['description'])): ?>
+                            <div class="timeline-desc">
+                                <i class="fas fa-info-circle"></i>
+                                <?php echo htmlspecialchars($schedule['description']); ?>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <div class="empty-state-modern">
+                            <i class="fas fa-calendar-week"></i>
+                            <p>No upcoming schedules</p>
+                        </div>
                     <?php endif; ?>
                 </div>
             </div>
@@ -165,6 +555,7 @@ include '../../includes/navbar.php';
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // Project Trends Chart
 const trendsData = <?php 
@@ -188,18 +579,26 @@ new Chart(trendsCtx, {
             {
                 label: 'Total Projects',
                 data: trendsData.counts,
-                borderColor: '#0d6efd',
-                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                borderColor: '#1f6392',
+                backgroundColor: 'rgba(31, 99, 146, 0.1)',
                 fill: true,
-                tension: 0.4
+                tension: 0.4,
+                pointBackgroundColor: '#1f6392',
+                pointBorderColor: '#fff',
+                pointRadius: 4,
+                pointHoverRadius: 6
             },
             {
                 label: 'Completed Projects',
                 data: trendsData.completed,
-                borderColor: '#28a745',
-                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
                 fill: true,
-                tension: 0.4
+                tension: 0.4,
+                pointBackgroundColor: '#10b981',
+                pointBorderColor: '#fff',
+                pointRadius: 4,
+                pointHoverRadius: 6
             }
         ]
     },
@@ -208,7 +607,42 @@ new Chart(trendsCtx, {
         maintainAspectRatio: true,
         plugins: {
             legend: {
-                position: 'top'
+                position: 'top',
+                labels: {
+                    usePointStyle: true,
+                    boxWidth: 8,
+                    font: {
+                        size: 11
+                    }
+                }
+            },
+            tooltip: {
+                mode: 'index',
+                intersect: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.05)'
+                },
+                ticks: {
+                    stepSize: 1,
+                    font: {
+                        size: 11
+                    }
+                }
+            },
+            x: {
+                grid: {
+                    display: false
+                },
+                ticks: {
+                    font: {
+                        size: 11
+                    }
+                }
             }
         }
     }
@@ -218,11 +652,32 @@ new Chart(trendsCtx, {
 const statusData = <?php 
     $statuses = [];
     $statusCounts = [];
+    $statusColors = [];
     while($row = $projectStatus->fetch_assoc()) {
         $statuses[] = ucfirst($row['status']);
         $statusCounts[] = $row['count'];
+        // Color mapping
+        switch($row['status']) {
+            case 'planning':
+                $statusColors[] = '#f59e0b';
+                break;
+            case 'in_progress':
+                $statusColors[] = '#1f6392';
+                break;
+            case 'review':
+                $statusColors[] = '#8b5cf6';
+                break;
+            case 'completed':
+                $statusColors[] = '#10b981';
+                break;
+            case 'cancelled':
+                $statusColors[] = '#ef4444';
+                break;
+            default:
+                $statusColors[] = '#6c757d';
+        }
     }
-    echo json_encode(['labels' => $statuses, 'data' => $statusCounts]);
+    echo json_encode(['labels' => $statuses, 'data' => $statusCounts, 'colors' => $statusColors]);
 ?>;
 
 const statusCtx = document.getElementById('statusChart').getContext('2d');
@@ -232,17 +687,36 @@ new Chart(statusCtx, {
         labels: statusData.labels,
         datasets: [{
             data: statusData.data,
-            backgroundColor: ['#ffc107', '#17a2b8', '#28a745', '#dc3545', '#6c757d'],
-            borderWidth: 2,
-            borderColor: '#fff'
+            backgroundColor: statusData.colors,
+            borderWidth: 0,
+            hoverOffset: 10
         }]
     },
     options: {
         responsive: true,
         maintainAspectRatio: true,
+        cutout: '60%',
         plugins: {
             legend: {
-                position: 'bottom'
+                position: 'bottom',
+                labels: {
+                    usePointStyle: true,
+                    boxWidth: 8,
+                    font: {
+                        size: 11
+                    }
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const label = context.label || '';
+                        const value = context.raw || 0;
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return `${label}: ${value} (${percentage}%)`;
+                    }
+                }
             }
         }
     }

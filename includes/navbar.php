@@ -84,7 +84,7 @@ if ($user) {
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 nav-user-link" href="#" id="navbarUserMenu" role="button" data-bs-toggle="dropdown">
                             <div class="user-profile-pic d-flex align-items-center justify-content-center text-white">
-                                <?php echo htmlspecialchars(strtoupper(substr($user['full_name'] ?? 'U', 0, 1))); ?>
+                                <i class="fas fa-user"></i>
                             </div>
                             <div class="d-none d-md-flex flex-column text-start">
                                 <span class="nav-user-name"><?php echo htmlspecialchars($user['full_name'] ?? 'User'); ?></span>

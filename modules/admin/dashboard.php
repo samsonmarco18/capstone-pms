@@ -28,154 +28,345 @@ include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
 ?>
 
-<div class="row g-4">
-    <div class="col-12">
-        <div class="dashboard-hero">
-            <div>
-                <span class="hero-badge">Administration Overview</span>
-                <h1 class="dashboard-title">Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h1>
-                <p class="dashboard-subtitle">Track technologies, user activity, and governance signals from one clean control center.</p>
-            </div>
-            <div class="hero-mini-grid">
-                <div class="hero-mini-card">
-                    <span>Platform Health</span>
-                    <strong><?php echo $securityReports === 0 ? 'Stable' : 'Attention Needed'; ?></strong>
+<style>
+:root {
+    --theme-primary: #1f6392;
+    --theme-dark: #184f73;
+    --theme-light: #3a7ca3;
+}
+
+.card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08) !important;
+}
+
+.bg-opacity-10 {
+    --bs-bg-opacity: 0.1;
+}
+
+.text-primary-custom {
+    color: var(--theme-primary) !important;
+}
+
+.bg-primary-custom {
+    background-color: var(--theme-primary) !important;
+}
+
+.btn-primary-custom {
+    background-color: var(--theme-primary);
+    border-color: var(--theme-primary);
+}
+
+.btn-primary-custom:hover {
+    background-color: var(--theme-dark);
+    border-color: var(--theme-dark);
+}
+
+.admin-overview-badge {
+    background-color: var(--theme-primary) !important;
+    color: #fff !important;
+}
+</style>
+
+<div class="container-fluid px-4 py-3">
+    <!-- Welcome Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-md-7 mb-3 mb-md-0">
+                            <span class="badge admin-overview-badge mb-2 px-3 py-2">Administration Overview</span>
+                            <h1 class="h3 mb-1">Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h1>
+                            <p class="text-muted mb-0 small">Track technologies, user activity, and governance signals from one clean control center.</p>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="d-flex gap-2 justify-content-md-end">
+                                <div class="card bg-white" style="flex: 1; border: 1px solid #1f6392 !important;">
+                                    <div class="card-body p-3">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div class="text-muted small text-uppercase fw-semibold">Platform Health</div>
+                                            <i class="fas fa-heartbeat" style="font-size: 20px; color: var(--theme-primary); opacity: 0.65;"></i>
+                                        </div>
+                                        <div class="fw-bold <?php echo $securityReports === 0 ? 'text-success' : 'text-warning'; ?> fs-5">
+                                            <?php echo $securityReports === 0 ? 'Stable' : 'Attention Needed'; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card bg-white" style="flex: 1; border: 1px solid #1f6392 !important;">
+                                    <div class="card-body p-3">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <div class="text-muted small text-uppercase fw-semibold">Active Services</div>
+                                            <i class="fas fa-microchip" style="font-size: 20px; color: var(--theme-primary); opacity: 0.65;"></i>
+                                        </div>
+                                        <div class="fw-bold fs-4" style="color: #1f6392;"><?php echo $techCount; ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="hero-mini-card">
-                    <span>Active Services</span>
-                    <strong><?php echo $techCount; ?></strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-4 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="text-muted text-uppercase small fw-semibold mb-2">Technologies / Services</div>
+                            <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $techCount; ?></div>
+                            <small class="text-muted">Azure-style catalog and renewals</small>
+                        </div>
+                        <div class="ms-3">
+                            <i class="fas fa-microchip" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-4 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="text-muted text-uppercase small fw-semibold mb-2">Total Users</div>
+                            <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $userCount; ?></div>
+                            <small class="text-muted">Role-based access across six departments</small>
+                        </div>
+                        <div class="ms-3">
+                            <i class="fas fa-users" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-4 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="text-muted text-uppercase small fw-semibold mb-2">Security Reports</div>
+                            <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $securityReports; ?></div>
+                            <small class="text-muted">Audit-backed monitoring and recovery</small>
+                        </div>
+                        <div class="ms-3">
+                            <i class="fas fa-shield-alt" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="row g-3">
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 pt-4 px-4">
+                    <h5 class="mb-0 fw-semibold" style="color: #1f6392;">Technology Status</h5>
+                </div>
+                <div class="card-body p-4 pt-2">
+                    <canvas id="techStatusChart" style="max-height: 300px; width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 pt-4 px-4">
+                    <h5 class="mb-0 fw-semibold" style="color: #1f6392;">User Roles Distribution</h5>
+                </div>
+                <div class="card-body p-4 pt-2">
+                    <canvas id="userRolesChart" style="max-height: 300px; width: 100%;"></canvas>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row g-4 mb-1">
-    <div class="col-xl-4 col-md-6">
-        <div class="stat-card stat-card-tech">
-            <div>
-                <div class="stat-label">Technologies / Services</div>
-                <div class="stat-value"><?php echo $techCount; ?></div>
-                <small>Azure-style catalog and renewals</small>
-            </div>
-            <div class="stat-icon">
-                <i class="fas fa-microchip"></i>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-xl-4 col-md-6">
-        <div class="stat-card stat-card-users">
-            <div>
-                <div class="stat-label">Total Users</div>
-                <div class="stat-value"><?php echo $userCount; ?></div>
-                <small>Role-based access across six departments</small>
-            </div>
-            <div class="stat-icon">
-                <i class="fas fa-users"></i>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-xl-4 col-md-6">
-        <div class="stat-card stat-card-security">
-            <div>
-                <div class="stat-label">Security Reports</div>
-                <div class="stat-value"><?php echo $securityReports; ?></div>
-                <small>Audit-backed monitoring and recovery</small>
-            </div>
-            <div class="stat-icon">
-                <i class="fas fa-shield-alt"></i>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-4">
-    <div class="col-xl-6">
-        <div class="card chart-card">
-            <div class="card-header">
-                <h5>Technology Status</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="techStatusChart" height="260"></canvas>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-xl-6">
-        <div class="card chart-card">
-            <div class="card-header">
-                <h5>User Roles Distribution</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="userRolesChart" height="260"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Technology Status Chart
-const techCtx = document.getElementById('techStatusChart').getContext('2d');
-new Chart(techCtx, {
-    type: 'pie',
-    data: {
-        labels: <?php echo json_encode(array_keys($techStatusData)); ?>,
-        datasets: [{
-            data: <?php echo json_encode(array_values($techStatusData)); ?>,
-            backgroundColor: ['#2f80ed', '#56ccf2', '#93c5fd', '#1f4a7c', '#dbeafe'],
-            borderWidth: 0
-        }]
-    },
-    options: {
-        plugins: {
-            legend: {
-                position: 'top',
-                labels: {
-                    usePointStyle: true,
-                    padding: 18
+document.addEventListener('DOMContentLoaded', function() {
+    // Technology Status Chart with #1f6392 theme
+    const techCtx = document.getElementById('techStatusChart').getContext('2d');
+    
+    // Color palette based on #1f6392
+    const themePalette = [
+        '#1f6392',  // Primary theme color
+        '#3a7ca3',  // Lighter shade
+        '#0f4a6e',  // Darker shade
+        '#5b8fb2',  // Even lighter
+        '#0a3a55',  // Even darker
+        '#74a0c0',  // Very light
+        '#06273a',  // Very dark
+        '#8db1cd'   // Lightest
+    ];
+    
+    // Get status labels and values
+    const statusLabels = <?php echo json_encode(array_keys($techStatusData)); ?>;
+    const statusValues = <?php echo json_encode(array_values($techStatusData)); ?>;
+    
+    // Generate shades based on number of statuses
+    const chartColors = statusLabels.map((label, index) => {
+        return themePalette[index % themePalette.length];
+    });
+    
+    new Chart(techCtx, {
+        type: 'pie',
+        data: {
+            labels: statusLabels,
+            datasets: [{
+                data: statusValues,
+                backgroundColor: chartColors,
+                borderWidth: 0,
+                hoverOffset: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 15,
+                        font: {
+                            size: 12,
+                            weight: '500'
+                        },
+                        generateLabels: function(chart) {
+                            const data = chart.data;
+                            if (data.labels.length && data.datasets.length) {
+                                return data.labels.map((label, i) => {
+                                    const value = data.datasets[0].data[i];
+                                    const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return {
+                                        text: `${label} (${percentage}%)`,
+                                        fillStyle: data.datasets[0].backgroundColor[i],
+                                        hidden: false,
+                                        index: i
+                                    };
+                                });
+                            }
+                            return [];
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
                 }
             }
         }
-    }
-});
+    });
 
-// User Roles Chart
-const rolesCtx = document.getElementById('userRolesChart').getContext('2d');
-new Chart(rolesCtx, {
-    type: 'bar',
-    data: {
-        labels: <?php echo json_encode(array_keys($userRolesData)); ?>,
-        datasets: [{
-            label: 'Number of Users',
-            data: <?php echo json_encode(array_values($userRolesData)); ?>,
-            backgroundColor: ['#0f4c81', '#1d70b8', '#3aa0db', '#86c5f4', '#5b88c4', '#224c78'],
-            borderRadius: 12,
-            borderSkipped: false
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: {
-                display: false
-            }
+    // User Roles Chart with #1f6392 theme
+    const rolesCtx = document.getElementById('userRolesChart').getContext('2d');
+    const roleThemeColors = [
+        '#1f6392', '#3a7ca3', '#0f4a6e', '#5b8fb2', '#0a3a55', '#74a0c0'
+    ];
+    
+    new Chart(rolesCtx, {
+        type: 'bar',
+        data: {
+            labels: <?php echo json_encode(array_keys($userRolesData)); ?>,
+            datasets: [{
+                label: 'Number of Users',
+                data: <?php echo json_encode(array_values($userRolesData)); ?>,
+                backgroundColor: roleThemeColors.slice(0, <?php echo count($userRolesData); ?>),
+                borderRadius: 8,
+                barPercentage: 0.65,
+                categoryPercentage: 0.8,
+                hoverBackgroundColor: function(context) {
+                    return context.dataset.backgroundColor[context.dataIndex];
+                }
+            }]
         },
-        scales: {
-            y: {
-                beginAtZero: true,
-                grid: {
-                    color: 'rgba(15, 76, 129, 0.08)'
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Users: ${context.raw}`;
+                        }
+                    }
                 }
             },
-            x: {
-                grid: {
-                    display: false
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        stepSize: 1,
+                        font: {
+                            size: 11,
+                            color: '#1f6392'
+                        },
+                        callback: function(value) {
+                            return value;
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Number of Users',
+                        font: {
+                            size: 12,
+                            weight: '500',
+                            color: '#1f6392'
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        font: {
+                            size: 12,
+                            weight: '500',
+                            color: '#1f6392'
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'User Roles',
+                        font: {
+                            size: 12,
+                            weight: '500',
+                            color: '#1f6392'
+                        }
+                    }
                 }
             }
         }
-    }
+    });
 });
 </script>
 

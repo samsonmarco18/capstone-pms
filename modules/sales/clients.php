@@ -5,7 +5,7 @@ requireRole('sales');
 $conn = getConnection();
 $user = getCurrentUser();
 
-// Handle client operations
+// Handle client operations (same logic as before)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['add_client'])) {
         $name = trim((string) ($_POST['name'] ?? ''));
@@ -138,115 +138,719 @@ $query .= " ORDER BY created_at DESC";
 
 $clients = $conn->query($query);
 
+// Get statistics
+$totalClients = $conn->query("SELECT COUNT(*) as count FROM clients")->fetch_assoc()['count'];
+$activeClients = $conn->query("SELECT COUNT(*) as count FROM clients WHERE status = 'active'")->fetch_assoc()['count'];
+$pendingClients = $conn->query("SELECT COUNT(*) as count FROM clients WHERE status = 'pending'")->fetch_assoc()['count'];
+
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
 ?>
 
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5>Client Management</h5>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addClientModal">
-                    <i class="fas fa-plus"></i> Add New Client
+<style>
+:root {
+    --theme-primary: #1f6392;
+    --theme-primary-dark: #0f4a6e;
+    --theme-primary-light: #3a7ca3;
+    --gray-50: #f8f9fa;
+    --gray-100: #f1f3f5;
+    --gray-200: #e9ecef;
+    --gray-300: #dee2e6;
+    --gray-600: #6c757d;
+    --gray-900: #212529;
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+}
+
+/* Page Header */
+.page-header-modern {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.page-header-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1));
+    pointer-events: none;
+}
+
+.page-header-modern h2 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: white;
+}
+
+.page-header-modern h2 i {
+    color: white;
+}
+
+.page-header-modern p {
+    opacity: 0.9;
+    margin-bottom: 0;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Stats Row */
+.stats-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.stat-card-modern {
+    background: white;
+    border-radius: 20px;
+    padding: 1.25rem 1.5rem;
+    flex: 1;
+    min-width: 180px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-200);
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.stat-card-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.stat-card-modern .stat-icon {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    opacity: 0.65;
+    font-size: 1.6rem;
+    color: var(--theme-primary);
+}
+
+.stat-card-modern .stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--gray-600);
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.stat-card-modern .stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--theme-primary);
+    line-height: 1;
+}
+
+/* Main Card */
+.main-card {
+    background: white;
+    border-radius: 24px;
+    border: 1px solid var(--gray-200);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.card-header-modern {
+    padding: 1.5rem 2rem;
+    background: #ffffff;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.card-header-modern h5 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin: 0;
+}
+
+.card-header-modern h5 i {
+    color: var(--theme-primary);
+}
+
+.card-header-modern .text-muted {
+    color: var(--gray-600) !important;
+}
+
+/* Filter Section */
+.filter-section {
+    padding: 1.5rem 2rem;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.filter-group {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.filter-input {
+    flex: 1;
+    min-width: 200px;
+}
+
+.filter-input label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--gray-600);
+    letter-spacing: 0.5px;
+    margin-bottom: 0.25rem;
+    display: block;
+}
+
+.filter-input input,
+.filter-input select {
+    width: 100%;
+    padding: 0.6rem 1rem;
+    border: 1px solid var(--gray-300);
+    border-radius: 12px;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.filter-input input:focus,
+.filter-input select:focus {
+    outline: none;
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
+}
+
+.btn-apply {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.5rem;
+    border-radius: 12px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-apply:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
+}
+
+/* Table Styles */
+.table-container {
+    padding: 0;
+    overflow-x: auto;
+}
+
+.client-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.client-table thead {
+    background: var(--gray-50);
+}
+
+.client-table th {
+    padding: 1rem 1.5rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--gray-600);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.client-table td {
+    padding: 1rem 1.5rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.client-table tr:hover {
+    background: var(--gray-50);
+}
+
+.client-name {
+    font-weight: 600;
+    color: var(--gray-900);
+    margin-bottom: 0.25rem;
+}
+
+.client-email {
+    font-size: 0.75rem;
+    color: var(--gray-600);
+}
+
+/* Badges */
+.badge-status {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.badge-status.active {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.badge-status.inactive {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.badge-status.pending {
+    background: #fef9c3;
+    color: #854d0e;
+}
+
+/* Progress Bar */
+.progress-wrapper {
+    min-width: 100px;
+}
+
+.progress {
+    height: 6px;
+    background: var(--gray-200);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, var(--theme-primary) 0%, var(--theme-primary-light) 100%);
+    border-radius: 10px;
+}
+
+.progress-text {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--theme-primary);
+    margin-top: 0.25rem;
+    display: block;
+}
+
+/* Deadline */
+.deadline-info {
+    font-size: 0.75rem;
+}
+
+.deadline-date {
+    font-weight: 500;
+    color: var(--gray-900);
+}
+
+.deadline-days {
+    font-size: 0.65rem;
+    display: inline-block;
+    padding: 0.15rem 0.4rem;
+    border-radius: 12px;
+    margin-top: 0.25rem;
+}
+
+.deadline-days.urgent {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.deadline-days.warning {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.deadline-days.normal {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+/* Action Buttons */
+.action-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    cursor: pointer;
+    border: none;
+}
+
+.btn-icon.view {
+    background: #e9ecef;
+    color: #6c757d;
+}
+
+.btn-icon.view:hover {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    color: white;
+}
+
+.btn-icon.edit {
+    background: #e9ecef;
+    color: var(--theme-primary);
+}
+
+.btn-icon.edit:hover {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    color: white;
+}
+
+.btn-icon.delete {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.btn-icon.delete:hover {
+    background: #dc2626;
+    color: white;
+}
+
+/* Add Button */
+.btn-add-modern {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white !important;
+    padding: 0.7rem 1.5rem;
+    border-radius: 40px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(10px);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-add-modern:hover {
+    background: white;
+    color: var(--theme-primary) !important;
+    transform: translateY(-2px);
+    border-color: white;
+}
+
+.btn-add-modern i {
+    color: white !important;
+}
+
+.btn-add-modern:hover i {
+    color: var(--theme-primary) !important;
+}
+
+/* Empty State */
+.empty-state-modern {
+    text-align: center;
+    padding: 4rem 2rem;
+}
+
+.empty-state-modern i {
+    font-size: 4rem;
+    color: var(--gray-300);
+    margin-bottom: 1rem;
+}
+
+.empty-state-modern h4 {
+    color: var(--gray-900);
+    margin-bottom: 0.5rem;
+}
+
+.empty-state-modern p {
+    color: var(--gray-600);
+}
+
+/* Modal Styling */
+.modal-modern .modal-content {
+    border-radius: 24px;
+    border: none;
+    overflow: hidden;
+}
+
+.modal-modern .modal-header {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    color: white;
+    padding: 1.5rem;
+    border: none;
+}
+
+.modal-modern .modal-header .modal-title {
+    color: white;
+}
+
+.modal-modern .modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+.modal-modern .modal-body {
+    padding: 2rem;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.modal-modern .modal-footer {
+    padding: 1rem 2rem 2rem;
+    border-top: 1px solid var(--gray-200);
+}
+
+.modal-modern .form-label {
+    font-weight: 500;
+    color: var(--theme-primary);
+    margin-bottom: 0.5rem;
+}
+
+.modal-modern .form-control,
+.modal-modern .form-select,
+.modal-modern textarea {
+    border-radius: 12px;
+    border: 1px solid var(--gray-300);
+    padding: 0.6rem 1rem;
+}
+
+.modal-modern .form-control:focus,
+.modal-modern .form-select:focus,
+.modal-modern textarea:focus {
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
+}
+
+.modal-modern .btn-add-modern {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    border: none;
+    color: white !important;
+}
+
+.modal-modern .btn-add-modern:hover {
+    background: var(--theme-primary-dark);
+    color: white !important;
+    transform: translateY(-1px);
+}
+
+.modal-modern .btn-add-modern i {
+    color: white !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .page-header-modern {
+        padding: 1.5rem;
+    }
+    
+    .stats-row {
+        flex-direction: column;
+    }
+    
+    .stat-card-modern {
+        min-width: auto;
+    }
+    
+    .card-header-modern {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .filter-group {
+        flex-direction: column;
+    }
+    
+    .filter-input {
+        width: 100%;
+    }
+    
+    .btn-apply {
+        width: 100%;
+    }
+    
+    .client-table th,
+    .client-table td {
+        padding: 0.75rem 1rem;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+}
+</style>
+
+<div class="container-fluid px-4 py-4">
+    <!-- Page Header -->
+    <div class="page-header-modern">
+        <div class="d-flex flex-wrap justify-content-between align-items-center">
+            <div>
+                <h2>
+                    <i class="fas fa-building me-2"></i> 
+                    Client Management
+                </h2>
+                <p>Manage client relationships, track progress, and monitor project deadlines</p>
+            </div>
+            <div class="mt-3 mt-md-0">
+                <button class="btn-add-modern" data-bs-toggle="modal" data-bs-target="#addClientModal">
+                    <i class="fas fa-plus me-2"></i> Add New Client
                 </button>
             </div>
-            <div class="card-body">
-                <!-- Search and Filter -->
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <input type="text" id="searchInput" class="form-control" placeholder="Search clients..." value="<?php echo htmlspecialchars($search); ?>">
-                    </div>
-                    <div class="col-md-4">
-                        <select id="statusFilter" class="form-select">
-                            <option value="">All Status</option>
-                            <option value="active" <?php echo $statusFilter == 'active' ? 'selected' : ''; ?>>Active</option>
-                            <option value="inactive" <?php echo $statusFilter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                            <option value="pending" <?php echo $statusFilter == 'pending' ? 'selected' : ''; ?>>Pending</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <button class="btn btn-primary w-100" onclick="applyFilters()">Apply Filters</button>
-                    </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-row">
+        <div class="stat-card-modern">
+            <i class="fas fa-users stat-icon"></i>
+            <div class="stat-label">Total Clients</div>
+            <div class="stat-number"><?php echo $totalClients; ?></div>
+        </div>
+        <div class="stat-card-modern">
+            <i class="fas fa-user-check stat-icon"></i>
+            <div class="stat-label">Active Clients</div>
+            <div class="stat-number"><?php echo $activeClients; ?></div>
+        </div>
+        <div class="stat-card-modern">
+            <i class="fas fa-hourglass-half stat-icon"></i>
+            <div class="stat-label">Pending</div>
+            <div class="stat-number"><?php echo $pendingClients; ?></div>
+        </div>
+    </div>
+
+    <!-- Main Content Card -->
+    <div class="main-card">
+        <div class="card-header-modern">
+            <h5>
+                <i class="fas fa-list me-2"></i>
+                Client Directory
+            </h5>
+            <div>
+                <span class="text-muted small">Showing <?php echo $clients->num_rows; ?> clients</span>
+            </div>
+        </div>
+        
+        <!-- Filter Section -->
+        <div class="filter-section">
+            <div class="filter-group">
+                <div class="filter-input">
+                    <label>Search</label>
+                    <input type="text" id="searchInput" placeholder="Name, email, or contact person..." value="<?php echo htmlspecialchars($search); ?>">
                 </div>
-                
-                <!-- Clients Table -->
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Client Name</th>
-                                <th>Contact Person</th>
-                                <th>Email</th>
-                                <th>Status</th>
-                                <th>Progress</th>
-                                <th>Deadline</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php while($client = $clients->fetch_assoc()): ?>
-                            <tr>
-                                <td>
-                                    <strong><?php echo htmlspecialchars($client['name']); ?></strong>
-                                </td>
-                                <td><?php echo htmlspecialchars($client['contact_person']); ?></td>
-                                <td><?php echo htmlspecialchars($client['email']); ?></td>
-                                <td>
-                                    <span class="badge bg-<?php 
-                                        echo $client['status'] == 'active' ? 'success' : 
-                                            ($client['status'] == 'inactive' ? 'secondary' : 'warning');
-                                    ?>">
-                                        <?php echo ucfirst($client['status']); ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="progress" style="height: 20px;">
-                                        <div class="progress-bar bg-info" style="width: <?php echo $client['progress']; ?>%">
-                                            <?php echo $client['progress']; ?>%
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <?php 
-                                    if($client['deadline']) {
-                                        $daysLeft = ceil((strtotime($client['deadline']) - time()) / (60 * 60 * 24));
-                                        $badgeClass = $daysLeft <= 7 ? 'danger' : ($daysLeft <= 30 ? 'warning' : 'info');
-                                        echo date('M d, Y', strtotime($client['deadline']));
-                                        echo "<br><small class='text-{$badgeClass}'>{$daysLeft} days left</small>";
-                                    } else {
-                                        echo 'Not set';
-                                    }
-                                    ?>
-                                </td>
-                                <td>
-                                    <button class="btn btn-sm btn-info" onclick="viewClient(<?php echo $client['id']; ?>)">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-primary" onclick="editClient(<?php echo htmlspecialchars(json_encode($client)); ?>)">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteClient(<?php echo $client['id']; ?>, '<?php echo htmlspecialchars($client['name']); ?>')">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
+                <div class="filter-input">
+                    <label>Status</label>
+                    <select id="statusFilter">
+                        <option value="">All Status</option>
+                        <option value="active" <?php echo $statusFilter == 'active' ? 'selected' : ''; ?>>Active</option>
+                        <option value="inactive" <?php echo $statusFilter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                        <option value="pending" <?php echo $statusFilter == 'pending' ? 'selected' : ''; ?>>Pending</option>
+                    </select>
+                </div>
+                <div>
+                    <button class="btn-apply" onclick="applyFilters()">Apply Filters</button>
                 </div>
             </div>
+        </div>
+        
+        <!-- Clients Table -->
+        <div class="table-container">
+            <?php if($clients->num_rows > 0): ?>
+            <table class="client-table">
+                <thead>
+                    <tr>
+                        <th>Client</th>
+                        <th>Contact Person</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Deadline</th>
+                        <th>Actions</th>
+                    </thead>
+                <tbody>
+    <?php while($client = $clients->fetch_assoc()): ?>
+    <?php 
+    $daysLeft = $client['deadline'] ? ceil((strtotime($client['deadline']) - time()) / (60 * 60 * 24)) : null;
+    $deadlineClass = $daysLeft <= 7 ? 'urgent' : ($daysLeft <= 30 ? 'warning' : 'normal');
+    ?>
+    <tr>
+        <td>
+            <div class="client-name"><?php echo htmlspecialchars($client['name']); ?></div>
+            <div class="client-email"><?php echo htmlspecialchars($client['email']); ?></div>
+        </td>
+        <td><?php echo htmlspecialchars($client['contact_person'] ?: '—'); ?></td>
+        <td>
+            <span class="badge-status <?php echo $client['status']; ?>">
+                <?php echo ucfirst($client['status']); ?>
+            </span>
+        </td>
+        <td>
+            <div class="progress-wrapper">
+                <div class="progress">
+                    <div class="progress-bar" style="width: <?php echo $client['progress']; ?>%"></div>
+                </div>
+                <span class="progress-text"><?php echo $client['progress']; ?>% Complete</span>
+            </div>
+        </td>
+        <td>
+            <?php if($client['deadline']): ?>
+            <div class="deadline-info">
+                <div class="deadline-date"><?php echo date('M d, Y', strtotime($client['deadline'])); ?></div>
+                <span class="deadline-days <?php echo $deadlineClass; ?>">
+                    <?php echo $daysLeft; ?> days left
+                </span>
+            </div>
+            <?php else: ?>
+            <span class="text-muted">Not set</span>
+            <?php endif; ?>
+        </td>
+        <td>
+            <div class="action-buttons">
+                <button class="btn-icon view" onclick="viewClient(<?php echo $client['id']; ?>)">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn-icon edit" onclick="editClient(<?php echo htmlspecialchars(json_encode($client)); ?>)">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon delete" onclick="deleteClient(<?php echo $client['id']; ?>, '<?php echo htmlspecialchars($client['name']); ?>')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </td>
+    </tr>
+    <?php endwhile; ?>
+</tbody>
+            </table>
+            <?php else: ?>
+            <div class="empty-state-modern">
+                <i class="fas fa-building"></i>
+                <h4>No Clients Found</h4>
+                <p>Try adjusting your filters or add a new client</p>
+                <button class="btn-add-modern mt-2" data-bs-toggle="modal" data-bs-target="#addClientModal">
+                    <i class="fas fa-plus me-2"></i> Add Your First Client
+                </button>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
 
-<!-- Add Client Modal -->
-<div class="modal fade" id="addClientModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+<!-- Add Client Modal (same content as before) -->
+<div class="modal fade modal-modern" id="addClientModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Add New Client</h5>
+                <h5 class="modal-title">
+                    <i class="fas fa-user-plus me-2"></i> Add New Client
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST">
@@ -278,7 +882,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-12">
                             <hr>
-                            <h6 class="mb-3 text-primary">Requirement Gathering for Architect Review</h6>
+                            <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-clipboard-list me-2"></i>Requirement Gathering for Architect Review</h6>
                         </div>
                         <div class="col-md-8 mb-3">
                             <label class="form-label">Project Name</label>
@@ -309,13 +913,13 @@ include '../../includes/navbar.php';
                             <textarea name="additional_requirements" class="form-control" rows="5" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
                         </div>
                         <div class="col-12">
-                            <small class="text-muted">Once saved, this client intake will automatically create a project and place it in the Architect review queue.</small>
+                            <small class="text-muted"><i class="fas fa-info-circle me-1"></i>Once saved, this client intake will automatically create a project and place it in the Architect review queue.</small>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="add_client" class="btn btn-primary">Add Client</button>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="add_client" class="btn-add-modern">Add Client</button>
                 </div>
             </form>
         </div>
@@ -323,11 +927,13 @@ include '../../includes/navbar.php';
 </div>
 
 <!-- Edit Client Modal -->
-<div class="modal fade" id="editClientModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade modal-modern" id="editClientModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Edit Client</h5>
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i> Edit Client
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST">
@@ -373,8 +979,8 @@ include '../../includes/navbar.php';
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="update_client" class="btn btn-primary">Update Client</button>
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="update_client" class="btn-add-modern">Update Client</button>
                 </div>
             </form>
         </div>
@@ -382,15 +988,22 @@ include '../../includes/navbar.php';
 </div>
 
 <!-- View Client Modal -->
-<div class="modal fade" id="viewClientModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade modal-modern" id="viewClientModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Client Details</h5>
+                <h5 class="modal-title">
+                    <i class="fas fa-building me-2"></i> Client Details
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="viewClientContent">
-                <!-- Content loaded via AJAX -->
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Loading client details...</p>
+                </div>
             </div>
         </div>
     </div>
@@ -430,47 +1043,64 @@ function viewClient(id) {
         success: function(response) {
             const client = JSON.parse(response);
             let html = `
-                <div class="row">
+                <div class="row g-4">
                     <div class="col-md-6">
-                        <p><strong>Company Name:</strong> ${client.name}</p>
-                        <p><strong>Contact Person:</strong> ${client.contact_person}</p>
-                        <p><strong>Email:</strong> ${client.email}</p>
-                        <p><strong>Phone:</strong> ${client.phone}</p>
+                        <div class="p-3 bg-light rounded-3">
+                            <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-info-circle me-2"></i>Contact Information</h6>
+                            <p><strong>Company Name:</strong> ${client.name}</p>
+                            <p><strong>Contact Person:</strong> ${client.contact_person}</p>
+                            <p><strong>Email:</strong> ${client.email}</p>
+                            <p><strong>Phone:</strong> ${client.phone}</p>
+                            <p><strong>Address:</strong> ${client.address || '—'}</p>
+                        </div>
                     </div>
                     <div class="col-md-6">
-                        <p><strong>Status:</strong> <span class="badge bg-${client.status == 'active' ? 'success' : 'secondary'}">${client.status}</span></p>
-                        <p><strong>Progress:</strong> ${client.progress}%</p>
-                        <p><strong>Deadline:</strong> ${client.deadline ? new Date(client.deadline).toLocaleDateString() : 'Not set'}</p>
-                        <p><strong>Address:</strong> ${client.address}</p>
+                        <div class="p-3 bg-light rounded-3">
+                            <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-chart-line me-2"></i>Project Status</h6>
+                            <p><strong>Status:</strong> <span class="badge-status ${client.status}">${client.status}</span></p>
+                            <p><strong>Progress:</strong> ${client.progress}%</p>
+                            <div class="progress mb-2">
+                                <div class="progress-bar" style="width: ${client.progress}%"></div>
+                            </div>
+                            <p><strong>Deadline:</strong> ${client.deadline ? new Date(client.deadline).toLocaleDateString() : 'Not set'}</p>
+                        </div>
                     </div>
                 </div>
                 <hr>
-                <h6>Associated Projects</h6>
-                <div id="clientProjects"></div>
+                <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-project-diagram me-2"></i>Associated Projects</h6>
+                <div id="clientProjects" class="text-center py-3">
+                    <div class="spinner-border text-primary spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted small">Loading projects...</p>
+                </div>
             `;
             $('#viewClientContent').html(html);
             
-            // Load projects for this client
             $.ajax({
                 url: '../../api/get-client-projects.php',
                 method: 'GET',
                 data: { client_id: id },
                 success: function(projectsResponse) {
                     const projects = JSON.parse(projectsResponse);
-                    let projectsHtml = '<div class="list-group">';
-                    projects.forEach(project => {
-                        projectsHtml += `
-                            <div class="list-group-item">
-                                <div class="d-flex justify-content-between">
-                                    <strong>${project.name}</strong>
-                                    <span class="badge bg-${project.status == 'completed' ? 'success' : 'warning'}">${project.status}</span>
+                    if(projects.length > 0) {
+                        let projectsHtml = '<div class="list-group">';
+                        projects.forEach(project => {
+                            projectsHtml += `
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>${project.name}</strong><br>
+                                        <small class="text-muted">Created: ${new Date(project.created_at).toLocaleDateString()}</small>
+                                    </div>
+                                    <span class="badge-status ${project.status === 'completed' ? 'active' : 'pending'}">${project.status}</span>
                                 </div>
-                                <small>Created: ${new Date(project.created_at).toLocaleDateString()}</small>
-                            </div>
-                        `;
-                    });
-                    projectsHtml += '</div>';
-                    $('#clientProjects').html(projectsHtml || '<p class="text-muted">No projects yet</p>');
+                            `;
+                        });
+                        projectsHtml += '</div>';
+                        $('#clientProjects').html(projectsHtml);
+                    } else {
+                        $('#clientProjects').html('<p class="text-muted text-center">No projects yet</p>');
+                    }
                 }
             });
             

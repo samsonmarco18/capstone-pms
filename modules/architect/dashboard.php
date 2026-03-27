@@ -46,173 +46,399 @@ include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
 ?>
 
-<div class="row">
-    <div class="col-12 mb-4">
-        <h2>Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h2>
-        <p class="text-muted">Architect Dashboard - Monitor and manage projects for technical evaluation</p>
-    </div>
-</div>
+<style>
+:root {
+    --theme-primary: #1f6392;
+    --theme-dark: #184f73;
+    --theme-light: #3a7ca3;
+}
 
-<div class="row">
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);">
-            <p>Total Projects</p>
-            <h3><?php echo $totalProjects; ?></h3>
-            <small>Assigned for evaluation</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);">
-            <p>Pending Review</p>
-            <h3><?php echo $pendingProjects; ?></h3>
-            <small>Awaiting analysis</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
-            <p>In Progress</p>
-            <h3><?php echo $inProgressProjects; ?></h3>
-            <small>Currently evaluating</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);">
-            <p>Completed</p>
-            <h3><?php echo $completedProjects; ?></h3>
-            <small>Architecture finalized</small>
-        </div>
-    </div>
-</div>
+.card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
 
-<div class="row">
-    <div class="col-md-8 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Projects Overview</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="projectsChart" height="300"></canvas>
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08) !important;
+}
+
+.architect-overview-badge {
+    background-color: var(--theme-primary) !important;
+    color: #fff !important;
+}
+
+.timeline-item {
+    position: relative;
+    padding-left: 2rem;
+    padding-bottom: 1rem;
+    border-left: 2px solid #e9ecef;
+}
+
+.timeline-item:last-child {
+    border-left: 2px solid transparent;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--theme-primary);
+}
+
+.timeline-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 0.25rem;
+}
+
+.timeline-time {
+    font-size: 0.7rem;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.timeline-desc {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+.activity-item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.25rem;
+}
+
+.activity-user {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #212529;
+}
+
+.activity-time {
+    font-size: 0.65rem;
+    color: #6c757d;
+}
+
+.activity-action {
+    font-size: 0.8rem;
+    color: #495057;
+    margin-bottom: 0.25rem;
+}
+
+.activity-date {
+    font-size: 0.65rem;
+    color: #6c757d;
+}
+
+.btn-review {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: white;
+    border: none;
+    padding: 0.4rem 1rem;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-review:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
+    color: white;
+}
+
+.empty-state-mini {
+    text-align: center;
+    padding: 2rem 1.5rem;
+}
+
+.empty-state-mini i {
+    font-size: 2rem;
+    color: #dee2e6;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state-mini p {
+    color: #6c757d;
+    font-size: 0.8rem;
+    margin: 0;
+}
+</style>
+
+<div class="container-fluid px-4 py-3">
+    <!-- Welcome Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-12">
+                            <span class="badge architect-overview-badge mb-2 px-3 py-2">Architect Overview</span>
+                            <h1 class="h3 mb-1">Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h1>
+                            <p class="text-muted mb-0 small">Monitor and manage projects for technical evaluation and architecture design.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    
-    <div class="col-md-4 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Upcoming Schedule</h5>
+
+    <!-- Statistics Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="text-muted text-uppercase small fw-semibold mb-2">Total Projects</div>
+                            <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $totalProjects; ?></div>
+                            <small class="text-muted">Assigned for evaluation</small>
+                        </div>
+                        <div class="ms-3">
+                            <i class="fas fa-project-diagram" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="timeline">
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="text-muted text-uppercase small fw-semibold mb-2">Pending Review</div>
+                            <div class="h1 fw-bold mb-2" style="color: #f59e0b;"><?php echo $pendingProjects; ?></div>
+                            <small class="text-muted">Awaiting analysis</small>
+                        </div>
+                        <div class="ms-3">
+                            <i class="fas fa-clock" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="text-muted text-uppercase small fw-semibold mb-2">In Progress</div>
+                            <div class="h1 fw-bold mb-2" style="color: #3b82f6;"><?php echo $inProgressProjects; ?></div>
+                            <small class="text-muted">Currently evaluating</small>
+                        </div>
+                        <div class="ms-3">
+                            <i class="fas fa-spinner" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <div class="text-muted text-uppercase small fw-semibold mb-2">Completed</div>
+                            <div class="h1 fw-bold mb-2" style="color: #10b981;"><?php echo $completedProjects; ?></div>
+                            <small class="text-muted">Architecture finalized</small>
+                        </div>
+                        <div class="ms-3">
+                            <i class="fas fa-check-circle" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 pt-4 px-4">
+                    <h5 class="mb-0 fw-semibold" style="color: #1f6392;">Projects Overview</h5>
+                </div>
+                <div class="card-body p-4 pt-2">
+                    <canvas id="projectsChart" style="max-height: 300px; width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 pt-4 px-4">
+                    <h5 class="mb-0 fw-semibold" style="color: #1f6392;">Upcoming Schedule</h5>
+                </div>
+                <div class="card-body p-4">
                     <?php if($schedules->num_rows > 0): ?>
                         <?php while($schedule = $schedules->fetch_assoc()): ?>
-                        <div class="timeline-item">
-                            <h6><?php echo htmlspecialchars($schedule['title']); ?></h6>
-                            <small class="text-muted">
+                        <div class="timeline-item mb-3">
+                            <div class="timeline-title"><?php echo htmlspecialchars($schedule['title']); ?></div>
+                            <div class="timeline-time">
+                                <i class="far fa-clock"></i>
                                 <?php echo date('M d, Y h:i A', strtotime($schedule['start_time'])); ?>
-                            </small>
-                            <p class="mb-0"><?php echo htmlspecialchars($schedule['description']); ?></p>
+                            </div>
+                            <?php if(!empty($schedule['description'])): ?>
+                            <div class="timeline-desc">
+                                <?php echo htmlspecialchars($schedule['description']); ?>
+                            </div>
+                            <?php endif; ?>
                         </div>
                         <?php endwhile; ?>
                     <?php else: ?>
-                        <p class="text-muted">No upcoming schedules</p>
+                        <div class="empty-state-mini">
+                            <i class="fas fa-calendar-week"></i>
+                            <p>No upcoming schedules</p>
+                        </div>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<div class="row">
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Projects Ready for Review</h5>
-            </div>
-            <div class="card-body">
-                <div class="list-group">
-                    <?php while($project = $reviewProjects->fetch_assoc()): ?>
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-center">
+    <div class="row g-3">
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 pt-4 px-4">
+                    <h5 class="mb-0 fw-semibold" style="color: #1f6392;">Projects Ready for Review</h5>
+                </div>
+                <div class="card-body p-4">
+                    <?php if($reviewProjects->num_rows > 0): ?>
+                        <?php while($project = $reviewProjects->fetch_assoc()): ?>
+                        <div class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom">
                             <div>
-                                <h6 class="mb-1"><?php echo htmlspecialchars($project['name']); ?></h6>
-                                <small class="text-muted">Client: <?php echo htmlspecialchars($project['client_name']); ?></small>
+                                <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($project['name']); ?></h6>
+                                <small class="text-muted">
+                                    <i class="fas fa-building me-1"></i>
+                                    <?php echo htmlspecialchars($project['client_name']); ?>
+                                </small>
+                                <div class="mt-1">
+                                    <small class="text-muted">
+                                        <i class="far fa-calendar-alt me-1"></i>
+                                        Created: <?php echo date('M d, Y', strtotime($project['created_at'])); ?>
+                                    </small>
+                                </div>
                             </div>
-                            <a href="project-review.php?id=<?php echo $project['id']; ?>" class="btn btn-sm btn-primary">
+                            <a href="project-review.php?id=<?php echo $project['id']; ?>" class="btn-review">
                                 <i class="fas fa-eye"></i> Review
                             </a>
                         </div>
-                        <div class="mt-2">
-                            <small class="text-muted">
-                                Created: <?php echo date('M d, Y', strtotime($project['created_at'])); ?>
-                            </small>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <div class="empty-state-mini">
+                            <i class="fas fa-check-circle"></i>
+                            <p>No projects ready for review</p>
                         </div>
-                    </div>
-                    <?php endwhile; ?>
-                    <?php if($reviewProjects->num_rows == 0): ?>
-                        <p class="text-muted text-center">No projects ready for review</p>
                     <?php endif; ?>
                 </div>
             </div>
         </div>
-    </div>
-    
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Recent Activities</h5>
-            </div>
-            <div class="card-body">
-                <div class="list-group">
-                    <?php while($activity = $activities->fetch_assoc()): ?>
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between">
-                            <strong><?php echo htmlspecialchars($activity['full_name']); ?></strong>
-                            <small class="text-muted"><?php echo date('H:i', strtotime($activity['created_at'])); ?></small>
+        
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-0 pt-4 px-4">
+                    <h5 class="mb-0 fw-semibold" style="color: #1f6392;">Recent Activities</h5>
+                </div>
+                <div class="card-body p-4">
+                    <?php if($activities->num_rows > 0): ?>
+                        <?php while($activity = $activities->fetch_assoc()): ?>
+                        <div class="activity-item">
+                            <div class="activity-header">
+                                <span class="activity-user">
+                                    <i class="fas fa-user-circle me-1"></i>
+                                    <?php echo htmlspecialchars($activity['full_name']); ?>
+                                </span>
+                                <span class="activity-time"><?php echo date('h:i A', strtotime($activity['created_at'])); ?></span>
+                            </div>
+                            <div class="activity-action">
+                                <?php echo ucfirst(str_replace('_', ' ', $activity['action'])); ?>
+                            </div>
+                            <div class="activity-date">
+                                <i class="far fa-calendar-alt me-1"></i>
+                                <?php echo date('M d, Y', strtotime($activity['created_at'])); ?>
+                            </div>
                         </div>
-                        <p class="mb-0"><?php echo htmlspecialchars($activity['action']); ?></p>
-                        <small class="text-muted"><?php echo date('M d, Y', strtotime($activity['created_at'])); ?></small>
-                    </div>
-                    <?php endwhile; ?>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <div class="empty-state-mini">
+                            <i class="fas fa-inbox"></i>
+                            <p>No recent activities</p>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Projects Chart
-const ctx = document.getElementById('projectsChart').getContext('2d');
-new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-        labels: ['Pending Review', 'In Progress', 'Completed'],
-        datasets: [{
-            data: [<?php echo $pendingProjects; ?>, <?php echo $inProgressProjects; ?>, <?php echo $completedProjects; ?>],
-            backgroundColor: ['#ffc107', '#17a2b8', '#28a745'],
-            borderWidth: 2,
-            borderColor: '#fff'
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: {
-                position: 'bottom'
-            },
-            tooltip: {
-                callbacks: {
-                    label: function(context) {
-                        const label = context.label || '';
-                        const value = context.parsed;
-                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                        const percentage = ((value / total) * 100).toFixed(1);
-                        return `${label}: ${value} (${percentage}%)`;
+document.addEventListener('DOMContentLoaded', function() {
+    // Projects Chart
+    const ctx = document.getElementById('projectsChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Pending Review', 'In Progress', 'Completed'],
+            datasets: [{
+                data: [<?php echo $pendingProjects; ?>, <?php echo $inProgressProjects; ?>, <?php echo $completedProjects; ?>],
+                backgroundColor: ['#f59e0b', '#3b82f6', '#10b981'],
+                borderWidth: 0,
+                hoverOffset: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '60%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        boxWidth: 8,
+                        font: {
+                            size: 12,
+                            weight: '500'
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
                     }
                 }
             }
         }
-    }
+    });
 });
 </script>
 

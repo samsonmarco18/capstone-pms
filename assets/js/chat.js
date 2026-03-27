@@ -68,13 +68,29 @@ function initChatWidget() {
 }
 
 function applyChatVisibility() {
-    const isOpen = localStorage.getItem(chatStateKey) !== 'false';
+    const stored = localStorage.getItem(chatStateKey);
+    const sessionKey = 'erni.chat.seen';
+
+    if (stored === null) {
+        localStorage.setItem(chatStateKey, 'false');
+        setChatVisibility(false, false);
+        return;
+    }
+
+    if (stored === 'true' && sessionStorage.getItem(sessionKey) !== 'true') {
+        sessionStorage.setItem(sessionKey, 'true');
+        localStorage.setItem(chatStateKey, 'false');
+        setChatVisibility(false, false);
+        return;
+    }
+
+    const isOpen = stored === 'true';
     setChatVisibility(isOpen, false);
 }
 
 function setChatVisibility(isOpen, persist = true) {
-    $('#chat-widget').toggle(isOpen);
-    $('#chat-widget-minimized').toggle(!isOpen);
+    $('#chat-widget').css('display', isOpen ? 'flex' : 'none');
+    $('#chat-widget-minimized').css('display', isOpen ? 'none' : 'block');
 
     if (persist) {
         localStorage.setItem(chatStateKey, String(isOpen));

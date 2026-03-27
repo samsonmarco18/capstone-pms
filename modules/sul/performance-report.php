@@ -106,293 +106,513 @@ include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
 ?>
 
-<div class="row">
-    <div class="col-12 mb-4">
-        <h2>Performance Report</h2>
-        <p class="text-muted">Monitor team performance, task completion rates, and productivity metrics</p>
-    </div>
-</div>
+<style>
+:root {
+    --theme-primary: #1f6392;
+    --theme-dark: #184f73;
+    --theme-light: #3a7ca3;
+    --gray-50: #f8f9fa;
+    --gray-100: #f1f3f5;
+    --gray-200: #e9ecef;
+    --gray-300: #dee2e6;
+    --gray-600: #6c757d;
+    --gray-900: #212529;
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.02);
+}
 
-<!-- Date Filter -->
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="card">
-            <div class="card-body">
-                <form method="GET" class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label">Date From</label>
-                        <input type="date" name="date_from" class="form-control" value="<?php echo $dateFrom; ?>">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Date To</label>
-                        <input type="date" name="date_to" class="form-control" value="<?php echo $dateTo; ?>">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Report Type</label>
-                        <select name="report_type" class="form-select">
-                            <option value="team" <?php echo $reportType == 'team' ? 'selected' : ''; ?>>Team Performance</option>
-                            <option value="individual" <?php echo $reportType == 'individual' ? 'selected' : ''; ?>>Individual Performance</option>
-                            <option value="project" <?php echo $reportType == 'project' ? 'selected' : ''; ?>>Project Performance</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">&nbsp;</label>
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-chart-line"></i> Generate Report
-                        </button>
-                    </div>
-                </form>
-            </div>
+.page-header-modern {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.page-header-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1));
+    pointer-events: none;
+}
+
+.page-header-modern h2 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: white;
+}
+
+.page-header-modern h2 i {
+    color: white;
+}
+
+.page-header-modern p {
+    opacity: 0.9;
+    margin-bottom: 0;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Stats Cards */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card-modern {
+    background: white;
+    border-radius: 20px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-200);
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.stat-card-modern .stat-icon {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    opacity: 0.65;
+    font-size: 1.6rem;
+    color: var(--theme-primary);
+}
+
+.stat-card-modern .stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--gray-600);
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.stat-card-modern .stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--theme-primary);
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.stat-card-modern .stat-sub {
+    font-size: 0.7rem;
+    color: var(--gray-600);
+}
+
+/* Cards */
+.card {
+    background: white;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.card-header {
+    padding: 1.25rem 1.5rem;
+    background: white;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.card-header h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.card-header h5 i {
+    color: var(--theme-primary);
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+/* Filter Card */
+.filter-card {
+    background: white;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
+    overflow: hidden;
+    margin-bottom: 2rem;
+}
+
+.filter-card .card-body {
+    padding: 1.5rem;
+}
+
+/* Table Styles */
+.table-container {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table thead {
+    background: var(--gray-50);
+}
+
+.data-table th {
+    padding: 1rem 1.25rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--gray-600);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.data-table td {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--gray-200);
+    vertical-align: middle;
+}
+
+.data-table tr:hover {
+    background: var(--gray-50);
+}
+
+/* Progress Bar */
+.progress-modern {
+    height: 8px;
+    background: var(--gray-200);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar-modern {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+/* Badges */
+.badge-priority-critical, .badge-priority-high, .badge-priority-medium, .badge-priority-low {
+    padding: 0.25rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.badge-priority-critical { background: #fee2e2; color: #dc2626; }
+.badge-priority-high { background: #fef3c7; color: #f59e0b; }
+.badge-priority-medium { background: #dbeafe; color: #2563eb; }
+.badge-priority-low { background: #d1fae5; color: #059669; }
+
+/* Buttons */
+.btn-primary-modern {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.btn-primary-modern:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
+    color: white;
+}
+
+.btn-secondary-modern {
+    background: #e9ecef;
+    color: var(--gray-700);
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.btn-secondary-modern:hover {
+    background: var(--gray-300);
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .page-header-modern {
+        padding: 1.5rem;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+    
+    .stat-card-modern .stat-number {
+        font-size: 2rem;
+    }
+}
+</style>
+
+<div class="container-fluid px-4 py-4">
+    <!-- Page Header -->
+    <div class="page-header-modern">
+        <div>
+            <h2>
+                <i class="fas fa-chart-line me-2"></i> 
+                Performance Report
+            </h2>
+            <p>Monitor team performance, task completion rates, and productivity metrics</p>
         </div>
     </div>
-</div>
 
-<!-- Key Metrics Cards -->
-<div class="row">
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);">
-            <p>Completion Rate</p>
-            <h3><?php 
+    <!-- Date Filter -->
+    <div class="filter-card">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Date From</label>
+                    <input type="date" name="date_from" class="form-control" value="<?php echo $dateFrom; ?>">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Date To</label>
+                    <input type="date" name="date_to" class="form-control" value="<?php echo $dateTo; ?>">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Report Type</label>
+                    <select name="report_type" class="form-select">
+                        <option value="team" <?php echo $reportType == 'team' ? 'selected' : ''; ?>>Team Performance</option>
+                        <option value="individual" <?php echo $reportType == 'individual' ? 'selected' : ''; ?>>Individual Performance</option>
+                        <option value="project" <?php echo $reportType == 'project' ? 'selected' : ''; ?>>Project Performance</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn-primary-modern w-100">
+                        <i class="fas fa-chart-line"></i> Generate Report
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Key Metrics Cards -->
+    <div class="stats-grid">
+        <div class="stat-card-modern">
+            <i class="fas fa-percent stat-icon"></i>
+            <div class="stat-label">Completion Rate</div>
+            <div class="stat-number"><?php 
                 $completionRate = $metrics['total_tasks'] > 0 ? round(($metrics['completed_tasks'] / $metrics['total_tasks']) * 100) : 0;
                 echo $completionRate; 
-            ?>%</h3>
-            <small><?php echo $metrics['completed_tasks']; ?> / <?php echo $metrics['total_tasks']; ?> tasks completed</small>
+            ?>%</div>
+            <div class="stat-sub"><?php echo $metrics['completed_tasks']; ?> / <?php echo $metrics['total_tasks']; ?> tasks</div>
+        </div>
+        <div class="stat-card-modern">
+            <i class="fas fa-clock stat-icon"></i>
+            <div class="stat-label">Avg Completion Time</div>
+            <div class="stat-number"><?php echo round($metrics['avg_completion_days'] ?? 0, 1); ?></div>
+            <div class="stat-sub">days per task</div>
+        </div>
+        <div class="stat-card-modern">
+            <i class="fas fa-tasks stat-icon"></i>
+            <div class="stat-label">Active Tasks</div>
+            <div class="stat-number"><?php echo $metrics['active_tasks']; ?></div>
+            <div class="stat-sub"><?php echo $metrics['high_priority_active']; ?> high priority</div>
+        </div>
+        <div class="stat-card-modern">
+            <i class="fas fa-exclamation-triangle stat-icon"></i>
+            <div class="stat-label">Overdue Tasks</div>
+            <div class="stat-number" style="color: #dc2626;"><?php echo $metrics['overdue_tasks']; ?></div>
+            <div class="stat-sub"><?php echo $metrics['critical_active']; ?> critical</div>
         </div>
     </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);">
-            <p>Avg Completion Time</p>
-            <h3><?php echo round($metrics['avg_completion_days'] ?? 0, 1); ?></h3>
-            <small>days per task</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);">
-            <p>Active Tasks</p>
-            <h3><?php echo $metrics['active_tasks']; ?></h3>
-            <small><?php echo $metrics['high_priority_active']; ?> high priority</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #dc3545 0%, #bb2d3b 100%);">
-            <p>Overdue Tasks</p>
-            <h3><?php echo $metrics['overdue_tasks']; ?></h3>
-            <small><?php echo $metrics['critical_active']; ?> critical</small>
-        </div>
-    </div>
-</div>
 
-<div class="row">
-    <div class="col-md-8 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Weekly Performance Trends</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="trendsChart" height="300"></canvas>
+    <div class="row g-4 mb-4">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-line me-2"></i>Weekly Performance Trends</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="trendsChart" style="height: 300px; width: 100%;"></canvas>
+                </div>
             </div>
         </div>
-    </div>
-    
-    <div class="col-md-4 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Performance by Priority</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="priorityChart" height="250"></canvas>
-                <div class="mt-3">
-                    <?php 
-                    $priorityPerformance->data_seek(0);
-                    while($priority = $priorityPerformance->fetch_assoc()): 
-                    ?>
-                    <div class="mb-2">
-                        <div class="d-flex justify-content-between">
-                            <span><strong><?php echo ucfirst($priority['priority']); ?></strong></span>
-                            <span><?php echo $priority['completed']; ?>/<?php echo $priority['total_tasks']; ?></span>
-                        </div>
-                        <div class="progress">
-                            <div class="progress-bar bg-<?php 
-                                echo $priority['priority'] == 'critical' ? 'danger' : 
-                                    ($priority['priority'] == 'high' ? 'warning' : 
-                                    ($priority['priority'] == 'medium' ? 'info' : 'success'));
-                            ?>" style="width: <?php echo $priority['total_tasks'] > 0 ? ($priority['completed'] / $priority['total_tasks']) * 100 : 0; ?>%">
+        
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar me-2"></i>Performance by Priority</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="priorityChart" style="height: 200px; width: 100%;"></canvas>
+                    <div class="mt-3">
+                        <?php 
+                        $priorityPerformance->data_seek(0);
+                        while($priority = $priorityPerformance->fetch_assoc()): 
+                            $priorityColor = $priority['priority'] == 'critical' ? 'danger' : ($priority['priority'] == 'high' ? 'warning' : ($priority['priority'] == 'medium' ? 'info' : 'success'));
+                        ?>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span><strong><?php echo ucfirst($priority['priority']); ?></strong></span>
+                                <span><?php echo $priority['completed']; ?>/<?php echo $priority['total_tasks']; ?></span>
                             </div>
+                            <div class="progress-modern">
+                                <div class="progress-bar-modern" style="width: <?php echo $priority['total_tasks'] > 0 ? ($priority['completed'] / $priority['total_tasks']) * 100 : 0; ?>%; background: <?php echo $priorityColor == 'danger' ? '#dc2626' : ($priorityColor == 'warning' ? '#f59e0b' : ($priorityColor == 'info' ? '#2563eb' : '#10b981')); ?>;"></div>
+                            </div>
+                            <small class="text-muted">Avg: <?php echo $priority['avg_completion_days'] ?? 'N/A'; ?> days</small>
                         </div>
-                        <small>Avg: <?php echo $priority['avg_completion_days'] ?? 'N/A'; ?> days</small>
+                        <?php endwhile; ?>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Individual Performance Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5><i class="fas fa-users me-2"></i>Individual Performance Report</h5>
+            <div class="mt-2">
+                <button class="btn-secondary-modern btn-sm" onclick="exportReport()">
+                    <i class="fas fa-download"></i> Export to CSV
+                </button>
+                <button class="btn-secondary-modern btn-sm ms-2" onclick="printReport()">
+                    <i class="fas fa-print"></i> Print Report
+                </button>
+            </div>
+        </div>
+        <div class="table-container">
+            <table class="data-table" id="performanceTable">
+                <thead>
+                    <th>Resource</th>
+                    <th>Role</th>
+                    <th>Total Tasks</th>
+                    <th>Completed</th>
+                    <th>Completion Rate</th>
+                    <th>Active</th>
+                    <th>Overdue</th>
+                    <th>Avg Days</th>
+                    <th>High Priority</th>
+                    <th>Critical</th>
+                </thead>
+                <tbody>
+                    <?php while($member = $individualPerformance->fetch_assoc()): ?>
+                    <tr>
+                        <td><div class="fw-semibold"><?php echo htmlspecialchars($member['full_name']); ?></div></td>
+                        <td><span class="badge-role-<?php echo $member['role']; ?>"><?php echo strtoupper($member['role']); ?></span></td>
+                        <td><?php echo $member['total_tasks']; ?></td>
+                        <td><?php echo $member['completed_tasks']; ?></td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="progress-modern flex-grow-1" style="width: 80px;">
+                                    <div class="progress-bar-modern" style="width: <?php echo $member['completion_rate']; ?>%; background: <?php echo $member['completion_rate'] >= 80 ? '#10b981' : ($member['completion_rate'] >= 50 ? '#f59e0b' : '#dc2626'); ?>;"></div>
+                                </div>
+                                <span><?php echo $member['completion_rate']; ?>%</span>
+                            </div>
+                        </td>
+                        <td><?php echo $member['active_tasks']; ?></td>
+                        <td><?php if($member['overdue_tasks'] > 0): ?><span class="badge-priority-critical"><?php echo $member['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
+                        <td><?php echo $member['avg_completion_days'] ?? 'N/A'; ?></td>
+                        <td><?php echo $member['high_priority_completed']; ?></td>
+                        <td><?php echo $member['critical_completed']; ?></td>
+                    </tr>
                     <?php endwhile; ?>
-                </div>
-            </div>
+                </tbody>
+            </table>
         </div>
     </div>
-</div>
 
-<!-- Individual Performance Table -->
-<div class="row">
-    <div class="col-12 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Individual Performance Report</h5>
-                <div class="mt-2">
-                    <button class="btn btn-sm btn-success" onclick="exportReport()">
-                        <i class="fas fa-download"></i> Export to CSV
-                    </button>
-                    <button class="btn btn-sm btn-info" onclick="printReport()">
-                        <i class="fas fa-print"></i> Print Report
-                    </button>
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover" id="performanceTable">
-                        <thead>
-                            32
-                                <th>Resource</th>
-                                <th>Role</th>
-                                <th>Total Tasks</th>
-                                <th>Completed</th>
-                                <th>Completion Rate</th>
-                                <th>Active</th>
-                                <th>Overdue</th>
-                                <th>Avg Days</th>
-                                <th>High Priority</th>
-                                <th>Critical</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php while($member = $individualPerformance->fetch_assoc()): ?>
-                            <tr>
-                                <td>
-                                    <strong><?php echo htmlspecialchars($member['full_name']); ?></strong>
-                                </td>
-                                <td>
-                                    <span class="badge bg-<?php echo $member['role'] == 'expert' ? 'warning' : 'info'; ?>">
-                                        <?php echo strtoupper($member['role']); ?>
-                                    </span>
-                                </td>
-                                <td><?php echo $member['total_tasks']; ?></td>
-                                <td><?php echo $member['completed_tasks']; ?></td>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <div class="progress flex-grow-1 me-2" style="height: 20px;">
-                                            <div class="progress-bar bg-<?php 
-                                                echo $member['completion_rate'] >= 80 ? 'success' : 
-                                                    ($member['completion_rate'] >= 50 ? 'warning' : 'danger');
-                                            ?>" style="width: <?php echo $member['completion_rate']; ?>%">
-                                                <?php echo $member['completion_rate']; ?>%
-                                            </div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td><?php echo $member['active_tasks']; ?></td>
-                                <td>
-                                    <?php if($member['overdue_tasks'] > 0): ?>
-                                        <span class="badge bg-danger"><?php echo $member['overdue_tasks']; ?></span>
-                                    <?php else: ?>
-                                        <span class="text-muted">0</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?php echo $member['avg_completion_days'] ?? 'N/A'; ?></td>
-                                <td><?php echo $member['high_priority_completed']; ?></td>
-                                <td><?php echo $member['critical_completed']; ?></td>
-                            </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+    <!-- Project Performance (if report type is project) -->
+    <?php if($reportType == 'project' && $projectPerformance->num_rows > 0): ?>
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5><i class="fas fa-project-diagram me-2"></i>Project Performance - At Risk Projects</h5>
+        </div>
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <th>Project</th>
+                    <th>Status</th>
+                    <th>Total Tasks</th>
+                    <th>Completed</th>
+                    <th>Completion Rate</th>
+                    <th>Days Remaining</th>
+                    <th>Risk Level</th>
+                </thead>
+                <tbody>
+                    <?php while($project = $projectPerformance->fetch_assoc()): 
+                        $riskColor = $project['completion_rate'] < 30 && $project['days_remaining'] < 30 ? 'danger' : ($project['completion_rate'] < 60 && $project['days_remaining'] < 60 ? 'warning' : ($project['completion_rate'] < 80 ? 'info' : 'success'));
+                        $riskLevel = $riskColor == 'danger' ? 'Critical' : ($riskColor == 'warning' ? 'High' : ($riskColor == 'info' ? 'Medium' : 'Low'));
+                    ?>
+                    <tr>
+                        <td><div class="fw-semibold"><?php echo htmlspecialchars($project['name']); ?></div></td>
+                        <td><span class="badge-status-<?php echo $project['status']; ?>"><?php echo ucfirst($project['status']); ?></span></td>
+                        <td><?php echo $project['total_tasks']; ?></td>
+                        <td><?php echo $project['completed_tasks']; ?></td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="progress-modern flex-grow-1" style="width: 80px;">
+                                    <div class="progress-bar-modern" style="width: <?php echo $project['completion_rate']; ?>%; background: <?php echo $riskColor == 'danger' ? '#dc2626' : ($riskColor == 'warning' ? '#f59e0b' : ($riskColor == 'info' ? '#2563eb' : '#10b981')); ?>;"></div>
+                                </div>
+                                <span><?php echo $project['completion_rate']; ?>%</span>
+                            </div>
+                        </td>
+                        <td><?php echo max(0, $project['days_remaining']); ?> days</td>
+                        <td><span class="badge-status-<?php echo $riskColor; ?>"><?php echo $riskLevel; ?> Risk</span></td>
+                    </tr>
+                    <?php endwhile; ?>
+                </tbody>
+            </table>
         </div>
     </div>
+    <?php endif; ?>
 </div>
 
-<!-- Project Performance (if report type is project) -->
-<?php if($reportType == 'project'): ?>
-<div class="row">
-    <div class="col-12 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Project Performance - At Risk Projects</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Project</th>
-                                <th>Status</th>
-                                <th>Total Tasks</th>
-                                <th>Completed</th>
-                                <th>Completion Rate</th>
-                                <th>Days Remaining</th>
-                                <th>Risk Level</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php while($project = $projectPerformance->fetch_assoc()): 
-                                $riskLevel = '';
-                                $riskColor = '';
-                                if($project['completion_rate'] < 30 && $project['days_remaining'] < 30) {
-                                    $riskLevel = 'Critical';
-                                    $riskColor = 'danger';
-                                } elseif($project['completion_rate'] < 60 && $project['days_remaining'] < 60) {
-                                    $riskLevel = 'High';
-                                    $riskColor = 'warning';
-                                } elseif($project['completion_rate'] < 80) {
-                                    $riskLevel = 'Medium';
-                                    $riskColor = 'info';
-                                } else {
-                                    $riskLevel = 'Low';
-                                    $riskColor = 'success';
-                                }
-                            ?>
-                            <tr>
-                                <td><strong><?php echo htmlspecialchars($project['name']); ?></strong></td>
-                                <td>
-                                    <span class="badge bg-<?php echo $project['status'] == 'in_progress' ? 'info' : 'warning'; ?>">
-                                        <?php echo ucfirst($project['status']); ?>
-                                    </span>
-                                </td>
-                                <td><?php echo $project['total_tasks']; ?></td>
-                                <td><?php echo $project['completed_tasks']; ?></td>
-                                <td>
-                                    <div class="progress" style="height: 20px;">
-                                        <div class="progress-bar bg-<?php echo $riskColor; ?>" style="width: <?php echo $project['completion_rate']; ?>%">
-                                            <?php echo $project['completion_rate']; ?>%
-                                        </div>
-                                    </div>
-                                </td>
-                                <td><?php echo max(0, $project['days_remaining']); ?> days</td>
-                                <td>
-                                    <span class="badge bg-<?php echo $riskColor; ?>">
-                                        <?php echo $riskLevel; ?> Risk
-                                    </span>
-                                </td>
-                            </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
-
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // Trends Chart Data
 const trendsData = <?php 
     $dates = [];
     $created = [];
     $completed = [];
-    $avgDays = [];
     while($row = $weeklyTrends->fetch_assoc()) {
         $dates[] = date('M d', strtotime($row['date']));
         $created[] = $row['tasks_created'];
         $completed[] = $row['tasks_completed'];
-        $avgDays[] = $row['avg_completion_days'] ?? 0;
     }
-    echo json_encode(['dates' => $dates, 'created' => $created, 'completed' => $completed, 'avgDays' => $avgDays]);
+    echo json_encode(['dates' => $dates, 'created' => $created, 'completed' => $completed]);
 ?>;
 
 const trendsCtx = document.getElementById('trendsChart').getContext('2d');
@@ -401,42 +621,15 @@ new Chart(trendsCtx, {
     data: {
         labels: trendsData.dates,
         datasets: [
-            {
-                label: 'Tasks Created',
-                data: trendsData.created,
-                borderColor: '#0d6efd',
-                backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                fill: true,
-                tension: 0.4
-            },
-            {
-                label: 'Tasks Completed',
-                data: trendsData.completed,
-                borderColor: '#28a745',
-                backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                fill: true,
-                tension: 0.4
-            }
+            { label: 'Tasks Created', data: trendsData.created, borderColor: '#1f6392', backgroundColor: 'rgba(31, 99, 146, 0.1)', fill: true, tension: 0.4 },
+            { label: 'Tasks Completed', data: trendsData.completed, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, tension: 0.4 }
         ]
     },
     options: {
         responsive: true,
         maintainAspectRatio: true,
-        plugins: {
-            tooltip: {
-                mode: 'index',
-                intersect: false
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                title: {
-                    display: true,
-                    text: 'Number of Tasks'
-                }
-            }
-        }
+        scales: { y: { beginAtZero: true, title: { display: true, text: 'Number of Tasks' } } },
+        plugins: { legend: { position: 'top' } }
     }
 });
 
@@ -457,65 +650,27 @@ new Chart(priorityCtx, {
     type: 'bar',
     data: {
         labels: priorityData.priorities,
-        datasets: [{
-            label: 'Completion Rate (%)',
-            data: priorityData.rates,
-            backgroundColor: ['#dc3545', '#ffc107', '#0d6efd', '#28a745'],
-            borderRadius: 4
-        }]
+        datasets: [{ label: 'Completion Rate (%)', data: priorityData.rates, backgroundColor: ['#dc2626', '#f59e0b', '#2563eb', '#10b981'], borderRadius: 8 }]
     },
     options: {
         responsive: true,
         maintainAspectRatio: true,
-        scales: {
-            y: {
-                min: 0,
-                max: 100,
-                title: {
-                    display: true,
-                    text: 'Completion Rate (%)'
-                }
-            }
-        },
-        plugins: {
-            tooltip: {
-                callbacks: {
-                    label: function(context) {
-                        return `Completion Rate: ${context.raw}%`;
-                    }
-                }
-            }
-        }
+        scales: { y: { min: 0, max: 100, title: { display: true, text: 'Completion Rate (%)' } } },
+        plugins: { legend: { display: false } }
     }
 });
 
 function exportReport() {
     const table = document.getElementById('performanceTable');
     let csv = [];
-    
-    // Get headers
     let headers = [];
-    table.querySelectorAll('thead th').forEach(th => {
-        headers.push(th.textContent.trim());
-    });
+    table.querySelectorAll('thead th').forEach(th => headers.push(th.textContent.trim()));
     csv.push(headers.join(','));
-    
-    // Get rows
     table.querySelectorAll('tbody tr').forEach(row => {
         let rowData = [];
-        row.querySelectorAll('td').forEach(td => {
-            // Handle progress bar content
-            const progressText = td.querySelector('.progress-bar');
-            if(progressText) {
-                rowData.push('"' + progressText.textContent.trim() + '"');
-            } else {
-                rowData.push('"' + td.textContent.trim().replace(/"/g, '""') + '"');
-            }
-        });
+        row.querySelectorAll('td').forEach(td => rowData.push('"' + td.textContent.trim().replace(/"/g, '""') + '"'));
         csv.push(rowData.join(','));
     });
-    
-    // Download
     const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -528,14 +683,7 @@ function exportReport() {
 function printReport() {
     const printContent = document.getElementById('performanceTable').outerHTML;
     const originalContents = document.body.innerHTML;
-    document.body.innerHTML = `
-        <div class="container mt-4">
-            <h2>Performance Report</h2>
-            <p>Generated on: ${new Date().toLocaleString()}</p>
-            <p>Period: ${document.querySelector('input[name="date_from"]').value} to ${document.querySelector('input[name="date_to"]').value}</p>
-            ${printContent}
-        </div>
-    `;
+    document.body.innerHTML = `<div class="container mt-4"><h2>Performance Report</h2><p>Generated on: ${new Date().toLocaleString()}</p><p>Period: ${document.querySelector('input[name="date_from"]').value} to ${document.querySelector('input[name="date_to"]').value}</p>${printContent}</div>`;
     window.print();
     document.body.innerHTML = originalContents;
     location.reload();

@@ -32,12 +32,12 @@ $menuItems = [
     'expert' => [
         ['label' => 'Dashboard', 'url' => '/modules/expert/dashboard.php', 'icon' => 'clipboard-list'],
         ['label' => 'Feature Estimation', 'url' => '/modules/expert/feature-estimation.php', 'icon' => 'calculator'],
-        ['label' => 'Team Composition', 'url' => '/modules/expert/team-composition.php', 'icon' => 'people-group'],
+        ['label' => 'Team Composition', 'url' => '/modules/expert/team-composition.php', 'icon' => 'users'],
         ['label' => 'Cost Estimation', 'url' => '/modules/expert/cost-estimation.php', 'icon' => 'cloud'],
     ],
     'developer' => [
         ['label' => 'Dashboard', 'url' => '/modules/developer/dashboard.php', 'icon' => 'code'],
-        ['label' => 'Task', 'url' => '/modules/developer/task.php', 'icon' => 'kanban'],
+        ['label' => 'Task', 'url' => '/modules/developer/task.php', 'icon' => 'tasks'],
     ],
 ];
 

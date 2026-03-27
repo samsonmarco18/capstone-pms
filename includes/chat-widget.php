@@ -18,7 +18,7 @@ if (!$user) {
             <button type="button" class="btn btn-link btn-sm text-white p-0 chat-icon-btn" data-bs-toggle="modal" data-bs-target="#createGroupModal" title="Create group">
                 <i class="fas fa-user-plus"></i>
             </button>
-            <button type="button" class="btn btn-link btn-sm text-white p-0 chat-icon-btn" id="toggleChatMinimize" title="Minimize chat">
+            <button type="button" class="btn btn-link btn-sm text-white p-0 chat-icon-btn" id="toggleChatMinimize" title="Minimize chat" onclick="document.getElementById('chat-widget').style.display='none'; document.getElementById('chat-widget-minimized').style.display='block';">
                 <i class="fas fa-minus"></i>
             </button>
         </div>
@@ -74,6 +74,28 @@ if (!$user) {
     </div>
 </div>
 
-<button id="chat-widget-minimized" class="chat-widget-minimized" type="button" title="Open chat">
+<button id="chat-widget-minimized" class="chat-widget-minimized" type="button" title="Open chat" style="display: block;" onclick="document.getElementById('chat-widget').style.display='flex'; this.style.display='none';">
     <i class="fas fa-comments"></i>
 </button>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const widget = document.getElementById('chat-widget');
+    const minimized = document.getElementById('chat-widget-minimized');
+    const minimizeBtn = document.getElementById('toggleChatMinimize');
+
+    if (!widget || !minimized) return;
+
+    minimized.addEventListener('click', function () {
+        widget.style.display = 'flex';
+        minimized.style.display = 'none';
+    });
+
+    if (minimizeBtn) {
+        minimizeBtn.addEventListener('click', function () {
+            widget.style.display = 'none';
+            minimized.style.display = 'block';
+        });
+    }
+});
+</script>

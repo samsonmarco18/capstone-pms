@@ -34,176 +34,376 @@ include '../../includes/navbar.php';
 ?>
 
 <style>
-.kanban-column {
-    background: #f8f9fa;
-    border-radius: 10px;
-    min-height: 500px;
+:root {
+    --theme-primary: #1f6392;
+    --theme-dark: #184f73;
+    --theme-light: #3a7ca3;
+    --gray-50: #f8f9fa;
+    --gray-100: #f1f3f5;
+    --gray-200: #e9ecef;
+    --gray-300: #dee2e6;
+    --gray-400: #ced4da;
+    --gray-500: #adb5bd;
+    --gray-600: #6c757d;
+    --gray-700: #495057;
+    --gray-800: #343a40;
+    --gray-900: #212529;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
 }
 
+/* Page Header */
+.page-header-modern {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.page-header-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1));
+    pointer-events: none;
+}
+
+.page-header-modern h2 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: white;
+}
+
+.page-header-modern h2 i {
+    color: white;
+}
+
+.page-header-modern p {
+    opacity: 0.9;
+    margin-bottom: 0;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Kanban Columns */
+.kanban-column {
+    background: var(--gray-50);
+    border-radius: 20px;
+    min-height: 500px;
+    border: 1px solid var(--gray-200);
+}
+
+.kanban-header {
+    padding: 1rem 1.25rem;
+    background: white;
+    border-bottom: 1px solid var(--gray-200);
+    border-radius: 20px 20px 0 0;
+}
+
+.kanban-header h5 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.kanban-body {
+    padding: 1rem;
+    min-height: 450px;
+}
+
+/* Kanban Cards */
 .kanban-card {
-    cursor: move;
-    transition: all 0.3s;
+    background: white;
+    border-radius: 12px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    cursor: grab;
+    transition: all 0.2s;
+    border: 1px solid var(--gray-200);
+    position: relative;
 }
 
 .kanban-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    box-shadow: var(--shadow-md);
+    border-color: var(--theme-primary);
 }
 
-.task-priority {
+.kanban-card:active {
+    cursor: grabbing;
+}
+
+.task-priority-dot {
     position: absolute;
-    top: 10px;
-    right: 10px;
-    width: 10px;
-    height: 10px;
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
 }
 
-.priority-high { background-color: #dc3545; }
-.priority-medium { background-color: #ffc107; }
-.priority-low { background-color: #28a745; }
+.priority-high { background-color: #dc2626; }
+.priority-medium { background-color: #f59e0b; }
+.priority-low { background-color: #10b981; }
+
+/* Buttons */
+.btn-action {
+    background: white;
+    border: 1px solid var(--gray-200);
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.btn-action:hover {
+    background: var(--theme-primary);
+    border-color: var(--theme-primary);
+    color: white;
+}
+
+.btn-action-view {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: white;
+    border: none;
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.btn-action-view:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(31, 99, 146, 0.3);
+    color: white;
+}
+
+/* Empty State */
+.empty-state-mini {
+    text-align: center;
+    padding: 2rem 1rem;
+}
+
+.empty-state-mini i {
+    font-size: 1.5rem;
+    color: var(--gray-300);
+    margin-bottom: 0.5rem;
+}
+
+.empty-state-mini p {
+    color: var(--gray-500);
+    font-size: 0.75rem;
+    margin: 0;
+}
+
+/* Completed Card */
+.completed-card {
+    background: var(--gray-50);
+    border-radius: 10px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.completed-card small {
+    font-size: 0.7rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .page-header-modern {
+        padding: 1.5rem;
+    }
+    
+    .page-header-modern h2 {
+        font-size: 1.5rem;
+    }
+    
+    .kanban-column {
+        margin-bottom: 1rem;
+    }
+}
 </style>
 
-<div class="row mb-4">
-    <div class="col-12">
-        <h2>My Tasks</h2>
-        <p class="text-muted">Drag and drop tasks to update status, or use the buttons below</p>
+<div class="container-fluid px-4 py-4">
+    <!-- Page Header -->
+    <div class="page-header-modern">
+        <div>
+            <h2>
+                <i class="fas fa-tasks me-2"></i> 
+                My Tasks
+            </h2>
+            <p>Drag and drop tasks to update status, or use the buttons below</p>
+        </div>
     </div>
-</div>
 
-<div class="row">
-    <div class="col-md-3 mb-4">
-        <div class="kanban-column">
-            <div class="p-3 bg-light border-bottom">
-                <h5 class="mb-0">To Do</h5>
-                <small class="text-muted"><?php echo $todoTasks->num_rows; ?> tasks</small>
-            </div>
-            <div class="p-3" id="todo-column">
-                <?php while($task = $todoTasks->fetch_assoc()): ?>
-                <div class="kanban-card card mb-3" data-task-id="<?php echo $task['id']; ?>" draggable="true">
-                    <div class="card-body">
-                        <div class="task-priority priority-<?php echo $task['priority']; ?>"></div>
-                        <h6 class="card-title"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="card-text small"><?php echo htmlspecialchars(substr($task['description'], 0, 100)); ?></p>
+    <div class="row g-4">
+        <!-- To Do Column -->
+        <div class="col-md-3">
+            <div class="kanban-column">
+                <div class="kanban-header">
+                    <h5>
+                        <span><i class="fas fa-clock text-secondary me-2"></i>To Do</span>
+                        <span class="badge bg-secondary"><?php echo $todoTasks->num_rows; ?></span>
+                    </h5>
+                </div>
+                <div class="kanban-body" id="todo-column">
+                    <?php while($task = $todoTasks->fetch_assoc()): ?>
+                    <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
+                        <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
+                        <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
+                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
                         <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted">
-                                <i class="fas fa-calendar"></i> 
-                                Due: <?php echo date('M d', strtotime($task['deadline'])); ?>
-                            </small>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-primary" onclick="startTask(<?php echo $task['id']; ?>)">
+                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
+                            <div>
+                                <button class="btn-action me-1" onclick="startTask(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-play"></i> Start
                                 </button>
-                                <button class="btn btn-sm btn-info" onclick="viewTask(<?php echo $task['id']; ?>)">
+                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
                         </div>
                     </div>
+                    <?php endwhile; ?>
+                    <?php if($todoTasks->num_rows == 0): ?>
+                    <div class="empty-state-mini">
+                        <i class="fas fa-check-circle"></i>
+                        <p>No tasks in To Do</p>
+                    </div>
+                    <?php endif; ?>
                 </div>
-                <?php endwhile; ?>
             </div>
         </div>
-    </div>
-    
-    <div class="col-md-3 mb-4">
-        <div class="kanban-column">
-            <div class="p-3 bg-light border-bottom">
-                <h5 class="mb-0">In Progress</h5>
-                <small class="text-muted"><?php echo $inProgressTasks->num_rows; ?> tasks</small>
-            </div>
-            <div class="p-3" id="progress-column">
-                <?php while($task = $inProgressTasks->fetch_assoc()): ?>
-                <div class="kanban-card card mb-3" data-task-id="<?php echo $task['id']; ?>" draggable="true">
-                    <div class="card-body">
-                        <div class="task-priority priority-<?php echo $task['priority']; ?>"></div>
-                        <h6 class="card-title"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="card-text small"><?php echo htmlspecialchars(substr($task['description'], 0, 100)); ?></p>
+        
+        <!-- In Progress Column -->
+        <div class="col-md-3">
+            <div class="kanban-column">
+                <div class="kanban-header">
+                    <h5>
+                        <span><i class="fas fa-spinner text-primary me-2"></i>In Progress</span>
+                        <span class="badge bg-primary"><?php echo $inProgressTasks->num_rows; ?></span>
+                    </h5>
+                </div>
+                <div class="kanban-body" id="progress-column">
+                    <?php while($task = $inProgressTasks->fetch_assoc()): ?>
+                    <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
+                        <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
+                        <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
+                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
                         <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted">
-                                <i class="fas fa-calendar"></i> 
-                                Due: <?php echo date('M d', strtotime($task['deadline'])); ?>
-                            </small>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-success" onclick="completeTask(<?php echo $task['id']; ?>)">
+                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
+                            <div>
+                                <button class="btn-action me-1" onclick="completeTask(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-check"></i> Complete
                                 </button>
-                                <button class="btn btn-sm btn-warning" onclick="reviewTask(<?php echo $task['id']; ?>)">
+                                <button class="btn-action me-1" onclick="reviewTask(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-undo"></i> Back
                                 </button>
-                                <button class="btn btn-sm btn-info" onclick="viewTask(<?php echo $task['id']; ?>)">
+                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
                         </div>
                     </div>
+                    <?php endwhile; ?>
+                    <?php if($inProgressTasks->num_rows == 0): ?>
+                    <div class="empty-state-mini">
+                        <i class="fas fa-play-circle"></i>
+                        <p>No tasks in progress</p>
+                    </div>
+                    <?php endif; ?>
                 </div>
-                <?php endwhile; ?>
             </div>
         </div>
-    </div>
-    
-    <div class="col-md-3 mb-4">
-        <div class="kanban-column">
-            <div class="p-3 bg-light border-bottom">
-                <h5 class="mb-0">Review</h5>
-                <small class="text-muted"><?php echo $reviewTasks->num_rows; ?> tasks</small>
-            </div>
-            <div class="p-3" id="review-column">
-                <?php while($task = $reviewTasks->fetch_assoc()): ?>
-                <div class="kanban-card card mb-3" data-task-id="<?php echo $task['id']; ?>" draggable="true">
-                    <div class="card-body">
-                        <div class="task-priority priority-<?php echo $task['priority']; ?>"></div>
-                        <h6 class="card-title"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="card-text small"><?php echo htmlspecialchars(substr($task['description'], 0, 100)); ?></p>
+        
+        <!-- Review Column -->
+        <div class="col-md-3">
+            <div class="kanban-column">
+                <div class="kanban-header">
+                    <h5>
+                        <span><i class="fas fa-check-circle text-warning me-2"></i>Review</span>
+                        <span class="badge bg-warning"><?php echo $reviewTasks->num_rows; ?></span>
+                    </h5>
+                </div>
+                <div class="kanban-body" id="review-column">
+                    <?php while($task = $reviewTasks->fetch_assoc()): ?>
+                    <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
+                        <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
+                        <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
+                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
                         <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted">
-                                <i class="fas fa-calendar"></i> 
-                                Due: <?php echo date('M d', strtotime($task['deadline'])); ?>
-                            </small>
-                            <button class="btn btn-sm btn-info" onclick="viewTask(<?php echo $task['id']; ?>)">
-                                <i class="fas fa-eye"></i>
+                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
+                            <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)">
+                                <i class="fas fa-eye"></i> View
                             </button>
                         </div>
                     </div>
+                    <?php endwhile; ?>
+                    <?php if($reviewTasks->num_rows == 0): ?>
+                    <div class="empty-state-mini">
+                        <i class="fas fa-check-double"></i>
+                        <p>No tasks in review</p>
+                    </div>
+                    <?php endif; ?>
                 </div>
-                <?php endwhile; ?>
             </div>
         </div>
-    </div>
-    
-    <div class="col-md-3 mb-4">
-        <div class="kanban-column">
-            <div class="p-3 bg-light border-bottom">
-                <h5 class="mb-0">Completed</h5>
-                <small class="text-muted"><?php echo $completedTasks->num_rows; ?> recent tasks</small>
-            </div>
-            <div class="p-3">
-                <?php while($task = $completedTasks->fetch_assoc()): ?>
-                <div class="card mb-2 bg-light">
-                    <div class="card-body p-2">
-                        <small><s><?php echo htmlspecialchars($task['title']); ?></s></small><br>
-                        <small class="text-muted">
-                            Completed: <?php echo date('M d', strtotime($task['completed_at'])); ?>
-                        </small>
-                    </div>
+        
+        <!-- Completed Column -->
+        <div class="col-md-3">
+            <div class="kanban-column">
+                <div class="kanban-header">
+                    <h5>
+                        <span><i class="fas fa-check-double text-success me-2"></i>Completed</span>
+                        <span class="badge bg-success"><?php echo $completedTasks->num_rows; ?></span>
+                    </h5>
                 </div>
-                <?php endwhile; ?>
+                <div class="kanban-body">
+                    <?php while($task = $completedTasks->fetch_assoc()): ?>
+                    <div class="completed-card">
+                        <div class="d-flex justify-content-between">
+                            <small><s><?php echo htmlspecialchars($task['title']); ?></s></small>
+                            <small class="text-muted"><?php echo date('M d', strtotime($task['completed_at'])); ?></small>
+                        </div>
+                    </div>
+                    <?php endwhile; ?>
+                    <?php if($completedTasks->num_rows == 0): ?>
+                    <div class="empty-state-mini">
+                        <i class="fas fa-trophy"></i>
+                        <p>No completed tasks yet</p>
+                    </div>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Task Detail Modal -->
-<div class="modal fade" id="taskModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade modal-modern" id="taskModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Task Details</h5>
+                <h5 class="modal-title"><i class="fas fa-info-circle me-2"></i>Task Details</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="taskDetails">
-                <!-- Task details will be loaded here -->
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -244,19 +444,40 @@ function viewTask(taskId) {
         success: function(response) {
             const task = JSON.parse(response);
             let html = `
-                <h6>${task.title}</h6>
-                <p><strong>Description:</strong><br>${task.description}</p>
-                <p><strong>Priority:</strong> <span class="badge bg-${task.priority == 'high' ? 'danger' : (task.priority == 'medium' ? 'warning' : 'success')}">${task.priority}</span></p>
-                <p><strong>Deadline:</strong> ${new Date(task.deadline).toLocaleDateString()}</p>
-                <p><strong>Estimated Days:</strong> Min: ${task.estimated_days_min}, Likely: ${task.estimated_days_likely}, Max: ${task.estimated_days_max}</p>
-                <div class="mt-3">
-                    <label class="form-label">Add Comment</label>
-                    <textarea id="taskComment" class="form-control" rows="2"></textarea>
-                    <button class="btn btn-sm btn-primary mt-2" onclick="addComment(${taskId})">Add Comment</button>
-                </div>
-                <div id="commentsSection" class="mt-3">
-                    <h6>Comments</h6>
-                    <div id="commentsList"></div>
+                <div class="row g-4">
+                    <div class="col-md-8">
+                        <h5 class="mb-3">${escapeHtml(task.title)}</h5>
+                        <div class="mb-3">
+                            <strong>Description:</strong>
+                            <p class="mt-2">${escapeHtml(task.description)}</p>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Priority:</strong> 
+                            <span class="badge-priority-${task.priority}">${task.priority}</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>Deadline:</strong> ${new Date(task.deadline).toLocaleDateString()}
+                        </div>
+                        <div class="mb-2">
+                            <strong>Estimated Days:</strong> 
+                            Min: ${task.estimated_days_min}, Likely: ${task.estimated_days_likely}, Max: ${task.estimated_days_max}
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-light rounded-3">
+                            <div class="mb-3">
+                                <label class="form-label">Add Comment</label>
+                                <textarea id="taskComment" class="form-control" rows="3"></textarea>
+                            </div>
+                            <button class="btn-primary-modern w-100" onclick="addComment(${taskId})">
+                                <i class="fas fa-paper-plane"></i> Add Comment
+                            </button>
+                        </div>
+                        <div class="mt-3">
+                            <h6 class="mb-2">Comments</h6>
+                            <div id="commentsList" class="small"></div>
+                        </div>
+                    </div>
                 </div>
             `;
             $('#taskDetails').html(html);
@@ -277,8 +498,9 @@ function loadComments(taskId) {
             comments.forEach(comment => {
                 html += `
                     <div class="border-bottom mb-2 pb-2">
-                        <strong>${comment.user_name}</strong> <small class="text-muted">${new Date(comment.created_at).toLocaleString()}</small>
-                        <p class="mb-0">${comment.comment}</p>
+                        <strong>${escapeHtml(comment.user_name)}</strong> 
+                        <small class="text-muted">${new Date(comment.created_at).toLocaleString()}</small>
+                        <p class="mb-0 small">${escapeHtml(comment.comment)}</p>
                     </div>
                 `;
             });
@@ -294,16 +516,19 @@ function addComment(taskId) {
     $.ajax({
         url: '../../api/add-task-comment.php',
         method: 'POST',
-        data: {
-            task_id: taskId,
-            comment: comment
-        },
+        data: { task_id: taskId, comment: comment },
         success: function() {
             $('#taskComment').val('');
             loadComments(taskId);
-            showToast('Success', 'Comment added successfully');
+            alert('✓ Comment added successfully');
         }
     });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // Drag and drop functionality
@@ -314,7 +539,7 @@ document.querySelectorAll('.kanban-card').forEach(card => {
     card.addEventListener('dragend', handleDragEnd);
 });
 
-document.querySelectorAll('.kanban-column .p-3').forEach(column => {
+document.querySelectorAll('.kanban-body').forEach(column => {
     column.addEventListener('dragover', handleDragOver);
     column.addEventListener('drop', handleDrop);
 });
@@ -336,13 +561,13 @@ function handleDrop(e) {
     e.preventDefault();
     const taskId = e.dataTransfer.getData('text/plain');
     const targetColumn = this.closest('.kanban-column');
-    const columnId = targetColumn.querySelector('h5').textContent.trim();
+    const columnTitle = targetColumn.querySelector('.kanban-header h5 span:first-child').textContent.trim();
     
     let newStatus = '';
-    if(columnId === 'To Do') newStatus = 'todo';
-    else if(columnId === 'In Progress') newStatus = 'in_progress';
-    else if(columnId === 'Review') newStatus = 'review';
-    else if(columnId === 'Completed') newStatus = 'completed';
+    if(columnTitle === 'To Do') newStatus = 'todo';
+    else if(columnTitle === 'In Progress') newStatus = 'in_progress';
+    else if(columnTitle === 'Review') newStatus = 'review';
+    else if(columnTitle === 'Completed') newStatus = 'completed';
     
     if(newStatus) {
         updateTaskStatus(taskId, newStatus);

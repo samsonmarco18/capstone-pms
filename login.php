@@ -104,8 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Sign In | ERNI PMS</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
+       <style>
         :root {
             --login-primary: #0d6786;
             --login-primary-dark: #0a5570;
@@ -167,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             align-items: flex-start;
             justify-content: center;
             padding: 90px 64px 64px;
-            margin-top: 20;
+            margin-top: 20px;
             text-align: left;
         }
 
@@ -179,6 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: flex;
             flex-direction: column;
             align-items: flex-start;
+            padding-left: 150px;
         }
 
         .brand-logo {
@@ -186,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             height: auto;
             display: block;
             margin-bottom: 30px;
-            margin-left: 120px;
+            transform: translateX(-30px);
             filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.18));
         }
 
@@ -197,7 +197,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size: 1rem;
             gap: 16px;
             margin-bottom: 0;
-            margin-left: 150px;
         }
 
         .brand-name {
@@ -228,7 +227,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-top: 6px;
             margin-bottom: 0;
             text-align: left;
-            margin-left: 150px;
         }
 
         .login-form-wrap {
@@ -237,8 +235,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 44px 72px 44px -20px;
-            margin-right: 150px;
+            padding: 44px 150px 44px 72px;
         }
 
         .login-card {
@@ -248,7 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 20px;
             box-shadow: 0 26px 60px rgba(0, 0, 0, 0.22);
             padding: 36px 40px 32px;
-            margin-left: -30px;
+            transform: translateX(-30px);
         }
 
         .login-card-header {
@@ -380,6 +377,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             padding-right: 26px;
             color: #42738b;
             font-size: 0.78rem;
+            border: 0 !important;
+            border-top: 0 !important;
+            border-right: 0 !important;
+            border-left: 0 !important;
+            border-bottom: 1.5px solid var(--login-line) !important;
+            border-radius: 0;
+            background-color: transparent;
+            box-shadow: none !important;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: linear-gradient(45deg, transparent 50%, #0f83be 50%),
+                linear-gradient(135deg, #0f83be 50%, transparent 50%);
+            background-position: calc(100% - 12px) 55%, calc(100% - 7px) 55%;
+            background-size: 6px 6px, 6px 6px;
+            background-repeat: no-repeat;
+        }
+
+        .role-select:focus {
+            border-top: 0 !important;
+            border-right: 0 !important;
+            border-left: 0 !important;
+            border-bottom: 1.5px solid var(--login-accent) !important;
+            box-shadow: none !important;
         }
 
         .login-actions {
@@ -395,6 +416,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 justify-content: center;
                 min-height: 44vh;
                 padding: 36px 28px 12px;
+            }
+
+            .brand-panel {
+                padding-left: 0;
+                align-items: center;
+                text-align: center;
+            }
+
+            .brand-logo {
+                transform: translateX(0);
             }
 
             .login-form-wrap {
@@ -417,6 +448,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="login-page">
     <div class="login-shell">
         <section class="login-brand">
             <div class="brand-panel">
@@ -456,7 +490,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             name="email"
                             class="form-control"
                             value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>"
-                            placeholder=""
+                            placeholder="Enter your email"
                             autocomplete="email"
                             required
                         >
@@ -470,7 +504,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 name="password"
                                 id="password"
                                 class="form-control"
-                                placeholder=""
+                                placeholder="Enter your password"
                                 autocomplete="current-password"
                                 required
                             >
@@ -485,7 +519,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="form-group">
                         <select name="role" class="form-select role-select">
-                            <option value="">Select role</option>
+                            <option value="" disabled <?php echo empty($_POST['role']) ? 'selected' : ''; ?>>Select role</option>
                             <option value="admin" <?php echo ($_POST['role'] ?? '') === 'admin' ? 'selected' : ''; ?>>Admin</option>
                             <option value="sales" <?php echo ($_POST['role'] ?? '') === 'sales' ? 'selected' : ''; ?>>Sales</option>
                             <option value="architect" <?php echo ($_POST['role'] ?? '') === 'architect' ? 'selected' : ''; ?>>Architect</option>
