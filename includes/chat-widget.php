@@ -76,6 +76,7 @@ if (!$user) {
 
 <button id="chat-widget-minimized" class="chat-widget-minimized" type="button" title="Open chat" style="display: block;" onclick="document.getElementById('chat-widget').style.display='flex'; this.style.display='none';">
     <i class="fas fa-comments"></i>
+    <span id="chatUnreadBadge" class="chat-unread-badge d-none" aria-live="polite">0</span>
 </button>
 
 <script>

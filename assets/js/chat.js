@@ -101,8 +101,10 @@ function loadConversationData() {
     $.getJSON(`${BASE_URL}api/chat/get-conversations.php`, function (payload) {
         chatData.conversations = Array.isArray(payload.conversations) ? payload.conversations : [];
         chatData.groups = Array.isArray(payload.groups) ? payload.groups : [];
+        updateChatUnreadBadge();
         renderConversationList();
     }).fail(function () {
+        updateChatUnreadBadge(0);
         $('#chatConversationList').html(`
             <div class="chat-list-empty">
                 <i class="fas fa-triangle-exclamation"></i>
@@ -175,6 +177,22 @@ function renderConversationList() {
     });
 
     container.html(html);
+}
+
+function updateChatUnreadBadge(countOverride = null) {
+    const badge = $('#chatUnreadBadge');
+    if (!badge.length) {
+        return;
+    }
+
+    const totalUnread = countOverride !== null
+        ? Number(countOverride) || 0
+        : [...chatData.conversations, ...chatData.groups].reduce(function (total, item) {
+            return total + (Number(item.unread_count) || 0);
+        }, 0);
+
+    badge.text(totalUnread > 99 ? '99+' : totalUnread);
+    badge.toggleClass('d-none', totalUnread <= 0);
 }
 
 function openConversation(type, id) {

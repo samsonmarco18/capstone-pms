@@ -1,0 +1,2231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BACLARAN — Missing Person & Legal Complaint System</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Epilogue:wght@300;400;500&display=swap" rel="stylesheet"/>
+
+  <style>
+    :root {
+      --sidebar-w: 270px;
+      --bg: #0a0c10;
+      --surface: #111318;
+      --surface2: #181c24;
+      --surface3: #1e2330;
+      --border: #252a38;
+      --accent: #4f8ef7;       /* blue - active cases */
+      --accent2: #38e2a0;      /* green - resolved */
+      --accent3: #f7794f;      /* orange - urgent */
+      --accent4: #c46ef7;      /* purple - legal */
+      --accent5: #f7c84f;      /* amber - pending */
+      --danger: #f75f5f;
+      --text: #e8eaf0;
+      --muted: #7a8099;
+      --font-head: 'Syne', sans-serif;
+      --font-body: 'Epilogue', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; overflow-x: hidden; }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(1200px 800px at -10% -10%, rgba(79,142,247,0.22), transparent 55%),
+        radial-gradient(900px 600px at 110% 10%, rgba(196,110,247,0.18), transparent 60%),
+        radial-gradient(700px 500px at 50% 120%, rgba(56,226,160,0.12), transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(transparent 0, transparent 24px, rgba(255,255,255,0.025) 25px),
+        linear-gradient(90deg, transparent 0, transparent 24px, rgba(255,255,255,0.02) 25px);
+      background-size: 25px 25px;
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    ::selection { background: rgba(79,142,247,0.35); color: #fff; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+    ::-webkit-scrollbar { height: 10px; width: 10px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(79,142,247,0.45), rgba(196,110,247,0.45)); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(79,142,247,0.7), rgba(196,110,247,0.7)); }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    }
+
+    /* Decorative glow behind main */
+    .main-wrap::before {
+      content: "";
+      position: fixed;
+      top: 18vh;
+      left: calc(var(--sidebar-w) + 10vw);
+      width: 55vw;
+      height: 55vw;
+      background: radial-gradient(circle at 30% 30%, rgba(79,142,247,0.12), transparent 55%);
+      filter: blur(18px);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ═══════════════════════════════
+       SIDEBAR
+    ═══════════════════════════════ */
+    .sidebar {
+      width: var(--sidebar-w);
+      min-height: 100vh;
+      background: linear-gradient(180deg, rgba(17,19,24,0.98), rgba(17,19,24,0.9) 60%, rgba(10,12,16,0.98));
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      position: fixed; top: 0; left: 0; z-index: 200;
+      transition: transform 0.25s;
+      box-shadow: 12px 0 30px rgba(0,0,0,0.25);
+      backdrop-filter: blur(6px);
+    }
+    .sidebar::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(255,255,255,0.04), transparent 25%);
+      pointer-events: none;
+    }
+    .sidebar-brand {
+      padding: 1.6rem 1.5rem 1.4rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 0.7rem;
+    }
+    .brand-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent4));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; color: #fff; flex-shrink: 0;
+      box-shadow: 0 0 18px rgba(79,142,247,0.3);
+      position: relative;
+      overflow: hidden;
+      animation: pulseGlow 6s ease-in-out infinite;
+    }
+    .brand-icon::after {
+      content: "";
+      position: absolute;
+      inset: -40%;
+      background: conic-gradient(from 120deg, rgba(255,255,255,0.45), transparent 40%, rgba(255,255,255,0.15));
+      opacity: 0.35;
+      animation: spinSlow 10s linear infinite;
+    }
+    .brand-text { font-family: var(--font-head); font-weight: 800; font-size: 1.25rem; letter-spacing: -0.03em; }
+    .brand-sub { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; line-height: 1.1; margin-top: 2px; }
+
+    .sidebar-section-label {
+      font-size: 0.62rem; font-weight: 600; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--muted);
+      padding: 1.3rem 1.5rem 0.4rem;
+    }
+    .nav-item-c { padding: 0 0.65rem; margin-bottom: 2px; }
+    .nav-link-c {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.6rem 0.85rem; border-radius: 8px;
+      color: var(--muted); text-decoration: none;
+      font-size: 0.85rem; font-weight: 400;
+      transition: all 0.15s; cursor: pointer;
+      border: none; background: none; width: 100%; text-align: left;
+    }
+    .nav-link-c:hover { background: var(--surface2); color: var(--text); }
+    .nav-link-c.active { background: rgba(79,142,247,0.12); color: var(--accent); font-weight: 500; box-shadow: inset 0 0 0 1px rgba(79,142,247,0.25); }
+    .nav-link-c .bi { font-size: 1rem; width: 20px; text-align: center; }
+    .nav-badge {
+      margin-left: auto; font-size: 0.62rem; font-weight: 700;
+      padding: 2px 7px; border-radius: 20px;
+    }
+    .badge-blue { background: rgba(79,142,247,0.18); color: var(--accent); }
+    .badge-red { background: rgba(247,95,95,0.18); color: var(--danger); }
+    .badge-orange { background: rgba(247,121,79,0.18); color: var(--accent3); }
+
+    .sidebar-footer {
+      margin-top: auto; padding: 1.1rem 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+    .user-card { display: flex; align-items: center; gap: 0.75rem; }
+    .user-avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent4));
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-head); font-weight: 700; font-size: 0.8rem; color: #fff;
+    }
+    .user-name { font-size: 0.82rem; font-weight: 500; color: var(--text); }
+    .user-role { font-size: 0.7rem; color: var(--muted); }
+    .online-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent2); margin-left: auto;
+      box-shadow: 0 0 6px var(--accent2);
+    }
+
+    /* ═══════════════════════════════
+       MAIN LAYOUT
+    ═══════════════════════════════ */
+    .main-wrap { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; position: relative; z-index: 1; }
+
+    /* ═══════════════════════════════
+       TOPBAR
+    ═══════════════════════════════ */
+    .topbar {
+      background: linear-gradient(180deg, rgba(17,19,24,0.95), rgba(17,19,24,0.85));
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem; height: 62px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    }
+    .topbar-left { display: flex; align-items: center; gap: 1rem; }
+    .topbar-title { font-family: var(--font-head); font-weight: 700; font-size: 1.05rem; letter-spacing: -0.02em; }
+    .breadcrumb-sep { color: var(--border); font-size: 1rem; }
+    .topbar-sub { font-size: 0.8rem; color: var(--muted); }
+    .topbar-actions { display: flex; align-items: center; gap: 0.75rem; }
+    .tb-btn {
+      height: 34px; padding: 0 0.85rem;
+      border-radius: 7px; background: var(--surface2); border: 1px solid var(--border);
+      color: var(--muted); cursor: pointer; font-size: 0.8rem; font-family: var(--font-body);
+      display: flex; align-items: center; gap: 0.4rem; text-decoration: none;
+      transition: all 0.15s; position: relative; overflow: hidden;
+    }
+    .tb-btn:hover { color: var(--text); border-color: var(--accent); }
+    .tb-btn-primary {
+      background: var(--accent); border-color: var(--accent); color: #fff;
+    }
+    .tb-btn-primary:hover { background: #3d7de8; color: #fff; }
+    .tb-icon-btn {
+      width: 34px; height: 34px; border-radius: 7px;
+      background: var(--surface2); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted); cursor: pointer; transition: all 0.15s; position: relative;
+    }
+    .tb-icon-btn:hover { color: var(--text); border-color: var(--accent); box-shadow: 0 8px 14px rgba(79,142,247,0.18); }
+    .notif-dot {
+      position: absolute; top: 6px; right: 6px;
+      width: 7px; height: 7px; background: var(--danger);
+      border-radius: 50%; border: 1.5px solid var(--surface);
+      animation: urgentPulse 2.6s ease-in-out infinite;
+    }
+    .search-bar {
+      height: 34px; width: 220px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 7px;
+      display: flex; align-items: center; gap: 0.5rem; padding: 0 0.85rem;
+      color: var(--muted); font-size: 0.82rem;
+    }
+    .search-bar:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(79,142,247,0.15);
+    }
+    .search-bar input {
+      background: none; border: none; outline: none;
+      color: var(--text); font-family: var(--font-body); font-size: 0.82rem; width: 100%;
+    }
+    .search-bar input::placeholder { color: var(--muted); }
+
+    /* ═══════════════════════════════
+       CONTENT AREA
+    ═══════════════════════════════ */
+    .content { padding: 1.75rem 2rem; flex: 1; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ═══════════════════════════════
+       CARDS
+    ═══════════════════════════════ */
+    .stat-card {
+      background: linear-gradient(180deg, rgba(17,19,24,0.92), rgba(17,19,24,0.75));
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.4rem 1.5rem;
+      position: relative; overflow: hidden; transition: all 0.2s;
+      backdrop-filter: blur(6px);
+      animation: fadeSlide 0.5s ease both;
+    }
+    .stat-card::after {
+      content: "";
+      position: absolute;
+      inset: -40% 0 auto;
+      height: 120%;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.06), transparent 55%);
+      opacity: 0.9;
+      pointer-events: none;
+    }
+    .stat-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 18px 30px rgba(0,0,0,0.35); }
+    .stat-card-accent { position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+    .stat-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 0.6rem; }
+    .stat-value { font-family: var(--font-head); font-size: 2rem; font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+    .stat-change { font-size: 0.76rem; margin-top: 0.5rem; color: var(--muted); }
+    .stat-change .up { color: var(--accent2); }
+    .stat-change .down { color: var(--danger); }
+    .stat-icon {
+      position: absolute; right: 1.3rem; top: 50%;
+      transform: translateY(-50%); font-size: 1.8rem; opacity: 0.1;
+    }
+
+    .dash-card {
+      background: linear-gradient(180deg, rgba(17,19,24,0.95), rgba(24,28,36,0.85));
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.4rem;
+      backdrop-filter: blur(6px);
+      animation: fadeSlide 0.6s ease both;
+      position: relative;
+      overflow: hidden;
+    }
+    .dash-card::after {
+      content: "";
+      position: absolute;
+      top: -40%;
+      right: -10%;
+      width: 45%;
+      height: 120%;
+      pointer-events: none;
+    }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.2rem;
+    }
+    .section-title { font-family: var(--font-head); font-weight: 700; font-size: 0.95rem; }
+    .section-action { font-size: 0.76rem; color: var(--accent); text-decoration: none; }
+    .section-action:hover { text-decoration: underline; }
+
+    /* ═══════════════════════════════
+       TABLES
+    ═══════════════════════════════ */
+    .dash-table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    .dash-table thead tr { border-bottom: 1px solid var(--border); }
+    .dash-table th {
+      text-align: left; padding: 0 0.85rem 0.85rem;
+      font-size: 0.68rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted);
+    }
+    .dash-table td { padding: 0.85rem; vertical-align: middle; color: var(--text); }
+    .dash-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.12s; cursor: pointer; }
+    .dash-table tbody tr:last-child { border-bottom: none; }
+    .dash-table tbody tr:hover { background: linear-gradient(90deg, rgba(79,142,247,0.08), rgba(24,28,36,0.6)); }
+
+    /* ═══════════════════════════════
+       STATUS BADGES
+    ═══════════════════════════════ */
+    .badge-status {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      padding: 3px 9px; border-radius: 20px;
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.04em; white-space: nowrap;
+    }
+    .badge-status::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .bs-active { background: rgba(79,142,247,0.12); color: var(--accent); }
+    .bs-resolved { background: rgba(56,226,160,0.12); color: var(--accent2); }
+    .bs-urgent { background: rgba(247,95,95,0.14); color: var(--danger); animation: urgentPulse 2.6s ease-in-out infinite; }
+    .bs-pending { background: rgba(247,200,79,0.12); color: var(--accent5); }
+    .bs-closed { background: rgba(122,128,153,0.14); color: var(--muted); }
+    .bs-filed { background: rgba(196,110,247,0.12); color: var(--accent4); }
+    .bs-investigating { background: rgba(247,121,79,0.12); color: var(--accent3); }
+
+    /* ═══════════════════════════════
+       PRIORITY DOTS
+    ═══════════════════════════════ */
+    .priority { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; }
+    .p-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .p-high { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+    .p-med { background: var(--accent5); }
+    .p-low { background: var(--accent2); }
+
+    /* ═══════════════════════════════
+       PERSON CARD
+    ═══════════════════════════════ */
+    .person-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+    .person-card {
+      background: linear-gradient(180deg, rgba(17,19,24,0.95), rgba(24,28,36,0.85));
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.25rem; cursor: pointer;
+      transition: all 0.15s; position: relative; overflow: hidden;
+      animation: fadeSlide 0.6s ease both;
+    }
+    .person-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 16px 26px rgba(0,0,0,0.35); }
+    .person-card-urgent { border-left: 3px solid var(--danger) !important; animation: fadeSlide 0.6s ease both, urgentPulse 2.6s ease-in-out infinite; }
+    .person-card-active { border-left: 3px solid var(--accent) !important; }
+    .person-photo {
+      width: 52px; height: 52px; border-radius: 10px;
+      background: var(--surface2); display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-head); font-weight: 700; font-size: 1.1rem;
+      border: 1px solid var(--border); flex-shrink: 0;
+    }
+    .person-name { font-family: var(--font-head); font-weight: 700; font-size: 0.95rem; margin-bottom: 2px; }
+    .person-meta { font-size: 0.76rem; color: var(--muted); }
+    .person-id { font-size: 0.68rem; color: var(--muted); font-family: monospace; }
+    .case-chip {
+      font-size: 0.66rem; padding: 2px 8px; border-radius: 20px;
+      background: var(--surface3); border: 1px solid var(--border); color: var(--muted);
+    }
+
+    /* ═══════════════════════════════
+       DETAIL PANEL
+    ═══════════════════════════════ */
+    .detail-panel {
+      background: linear-gradient(180deg, rgba(17,19,24,0.95), rgba(24,28,36,0.85));
+      border: 1px solid var(--border);
+      border-radius: 14px; overflow: hidden;
+      backdrop-filter: blur(6px);
+      animation: fadeSlide 0.6s ease both;
+    }
+    .detail-header {
+      background: var(--surface2); padding: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: flex-start; gap: 1.25rem;
+    }
+    .detail-avatar {
+      width: 64px; height: 64px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--surface3), var(--surface2));
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-head); font-weight: 800; font-size: 1.4rem;
+      border: 1px solid var(--border); flex-shrink: 0;
+    }
+    .detail-name { font-family: var(--font-head); font-weight: 800; font-size: 1.3rem; letter-spacing: -0.02em; }
+    .detail-case-no { font-size: 0.72rem; color: var(--muted); font-family: monospace; margin-top: 2px; }
+    .detail-body { padding: 1.5rem; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .info-item label { font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); display: block; margin-bottom: 4px; }
+    .info-item span { font-size: 0.87rem; color: var(--text); }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
+    .timeline { position: relative; }
+    .timeline-item { display: flex; gap: 1rem; padding-bottom: 1.2rem; position: relative; }
+    .timeline-item:last-child { padding-bottom: 0; }
+    .tl-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--accent); border: 2px solid var(--bg); flex-shrink: 0; margin-top: 4px;
+      position: relative; z-index: 1;
+    }
+    .tl-line {
+      position: absolute; left: 4px; top: 12px; bottom: 0;
+      width: 1px; background: var(--border);
+    }
+    .tl-title { font-size: 0.83rem; font-weight: 500; }
+    .tl-meta { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+    /* ═══════════════════════════════
+       FORM ELEMENTS
+    ═══════════════════════════════ */
+    .form-group { margin-bottom: 1.1rem; }
+    .form-group label { font-size: 0.73rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); display: block; margin-bottom: 6px; }
+    .form-control-c {
+      width: 100%; height: 38px; padding: 0 0.9rem;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 7px;
+      color: var(--text); font-family: var(--font-body); font-size: 0.85rem;
+      outline: none; transition: border-color 0.15s;
+    }
+    .form-control-c:focus { border-color: var(--accent); }
+    .form-control-c::placeholder { color: var(--muted); }
+    textarea.form-control-c { height: auto; padding: 0.7rem 0.9rem; resize: vertical; }
+    select.form-control-c { appearance: none; cursor: pointer; }
+    .btn-c {
+      height: 38px; padding: 0 1.1rem; border-radius: 7px;
+      font-family: var(--font-body); font-size: 0.85rem; font-weight: 500;
+      cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 0.45rem;
+      transition: all 0.15s; position: relative; overflow: hidden;
+    }
+    .btn-c::after {
+      content: "";
+      position: absolute;
+      top: -50%;
+      left: -120%;
+      width: 60%;
+      height: 200%;
+      background: linear-gradient(120deg, transparent, rgba(255,255,255,0.25), transparent);
+      transform: translateX(0);
+      opacity: 0;
+    }
+    .btn-c:hover::after { animation: shimmer 1.2s ease; opacity: 0.7; }
+    .btn-primary-c { background: var(--accent); color: #fff; }
+    .btn-primary-c:hover { background: #3d7de8; }
+    .btn-secondary-c { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary-c:hover { border-color: var(--accent); }
+    .btn-danger-c { background: rgba(247,95,95,0.12); color: var(--danger); border: 1px solid rgba(247,95,95,0.2); }
+    .btn-danger-c:hover { background: rgba(247,95,95,0.2); }
+
+    /* ═══════════════════════════════
+       ACTIVITY FEED
+    ═══════════════════════════════ */
+    .activity-item { display: flex; gap: 0.9rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border); transition: background 0.15s; border-radius: 8px; }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-item:hover { background: rgba(255,255,255,0.03); }
+    .activity-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; flex-shrink: 0;
+    }
+    .activity-text { font-size: 0.82rem; line-height: 1.4; }
+    .activity-time { font-size: 0.7rem; color: var(--muted); margin-top: 3px; }
+
+    /* ═══════════════════════════════
+       MAP PLACEHOLDER
+    ═══════════════════════════════ */
+    .map-placeholder {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; height: 220px; position: relative;
+      overflow: hidden; display: flex; align-items: center; justify-content: center;
+    }
+    .map-placeholder::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent, rgba(79,142,247,0.12), transparent);
+      transform: translateY(-120%);
+      animation: scan 6s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .map-grid {
+      position: absolute; inset: 0;
+      background-image: linear-gradient(var(--border) 1px, transparent 1px),
+                        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 30px 30px; opacity: 0.5;
+    }
+    .map-pin { position: absolute; font-size: 1.4rem; }
+    .map-pin-pulse {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(79,142,247,0.12); border: 1px solid rgba(79,142,247,0.3);
+      position: absolute; animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.3);opacity:0.5} }
+    .map-label { position: absolute; bottom: 0.75rem; left: 0.75rem; font-size: 0.72rem; color: var(--muted); }
+
+    /* ═══════════════════════════════
+       PROGRESS
+    ═══════════════════════════════ */
+    .progress-item { margin-bottom: 1rem; }
+    .progress-item:last-child { margin-bottom: 0; }
+    .progress-meta { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 6px; }
+    .progress-track { height: 5px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 99px; transition: width 1s ease; }
+
+    /* ═══════════════════════════════
+       FILTER BAR
+    ═══════════════════════════════ */
+    .filter-bar {
+      display: flex; align-items: center; gap: 0.6rem;
+      margin-bottom: 1.25rem; flex-wrap: wrap;
+    }
+    .filter-btn {
+      height: 30px; padding: 0 0.85rem; border-radius: 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--muted); font-size: 0.76rem; cursor: pointer;
+      font-family: var(--font-body); transition: all 0.15s;
+    }
+    .filter-btn:hover, .filter-btn.active { background: rgba(79,142,247,0.1); border-color: var(--accent); color: var(--accent); }
+
+    /* ═══════════════════════════════
+       TABS
+    ═══════════════════════════════ */
+    .tab-bar { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; }
+    .tab-btn {
+      padding: 0.65rem 1.2rem; font-size: 0.82rem; color: var(--muted);
+      cursor: pointer; border: none; background: none; font-family: var(--font-body);
+      border-bottom: 2px solid transparent; transition: all 0.15s; margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* ═══════════════════════════════
+       MODAL
+    ═══════════════════════════════ */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+      z-index: 1000; display: none; align-items: center; justify-content: center; padding: 1.5rem;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal-box {
+      background: linear-gradient(180deg, rgba(17,19,24,0.98), rgba(24,28,36,0.92));
+      border: 1px solid var(--border);
+      border-radius: 14px; width: 100%; max-width: 620px;
+      max-height: 90vh; overflow-y: auto;
+      backdrop-filter: blur(8px);
+      animation: fadeSlide 0.35s ease both;
+    }
+    .modal-head {
+      padding: 1.4rem 1.5rem; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title { font-family: var(--font-head); font-weight: 700; font-size: 1.05rem; }
+    .modal-body { padding: 1.5rem; }
+    .modal-foot {
+      padding: 1.1rem 1.5rem; border-top: 1px solid var(--border);
+      display: flex; justify-content: flex-end; gap: 0.6rem;
+    }
+    .close-btn { background: none; border: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; }
+    .close-btn:hover { color: var(--text); }
+
+    /* ═══════════════════════════════
+       REPORT CARDS
+    ═══════════════════════════════ */
+    .report-card {
+      background: linear-gradient(180deg, rgba(17,19,24,0.95), rgba(24,28,36,0.85));
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.25rem; cursor: pointer;
+      transition: all 0.15s; display: flex; gap: 1rem; align-items: flex-start;
+      animation: fadeSlide 0.6s ease both;
+    }
+    .report-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 16px 24px rgba(0,0,0,0.35); }
+    .report-icon {
+      width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+    }
+    .report-title { font-family: var(--font-head); font-weight: 600; font-size: 0.9rem; margin-bottom: 3px; }
+    .report-meta { font-size: 0.76rem; color: var(--muted); }
+
+    /* ═══════════════════════════════
+       ANIMATIONS
+    ═══════════════════════════════ */
+    @keyframes fadeSlide { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    .screen.active { animation: fadeSlide 0.2s ease; }
+    .pulse-urgent { animation: pulseUrgent 2s infinite; }
+    @keyframes pulseUrgent { 0%,100%{box-shadow:0 0 0 0 rgba(247,95,95,0.4)} 50%{box-shadow:0 0 0 6px rgba(247,95,95,0)} }
+
+    /* ═══════════════════════════════
+       SCROLLBAR
+    ═══════════════════════════════ */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* ═══════════════════════════════
+       EMERGENCY ALERT BAR
+    ═══════════════════════════════ */
+    .alert-bar {
+      background: rgba(247,95,95,0.08); border: 1px solid rgba(247,95,95,0.2);
+      border-radius: 8px; padding: 0.7rem 1rem; margin-bottom: 1.25rem;
+      display: flex; align-items: center; gap: 0.75rem; font-size: 0.82rem;
+    }
+    .alert-bar .bi { color: var(--danger); font-size: 1rem; }
+
+    /* toggle sidebar mobile */
+    @media (max-width: 900px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .main-wrap { margin-left: 0; }
+    }
+    /* ===== Effects & Motion ===== */
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 18px rgba(79,142,247,0.3), 0 0 0 rgba(79,142,247,0.2); }
+      50% { box-shadow: 0 0 26px rgba(79,142,247,0.45), 0 0 22px rgba(196,110,247,0.18); }
+    }
+    @keyframes spinSlow {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes floatUp {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+    @keyframes shimmer {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(140%); }
+    }
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes scan {
+      0% { transform: translateY(-120%); opacity: 0; }
+      20% { opacity: 0.7; }
+      50% { transform: translateY(120%); opacity: 0.2; }
+      100% { transform: translateY(120%); opacity: 0; }
+    }
+    @keyframes urgentPulse {
+      0%, 100% { box-shadow: 0 0 0 rgba(247,95,95,0); }
+      50% { box-shadow: 0 0 18px rgba(247,95,95,0.35); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════
+     SIDEBAR
+══════════════════════════════════════════ -->
+<nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSQnXOYLs7V9PLb3oebjvqhSi-6iKQoCL7qpA&s" alt="Barangay Logo" width="40">
+      </div>
+      <div>
+        <div class="brand-text">Barangay Baclaran</div>
+        <div class="brand-sub">Case Management</div>
+      </div>
+    </div>
+  
+
+  <div class="sidebar-section-label">Overview</div>
+  <div class="nav-item-c">
+    <button class="nav-link-c active" onclick="showScreen('dashboard', this)">
+      <i class="bi bi-grid-1x2-fill"></i> Dashboard
+    </button>
+  </div>
+  <div class="nav-item-c">
+    <button class="nav-link-c" onclick="showScreen('alerts', this)">
+      <i class="bi bi-bell-fill"></i> Alerts & Notifications
+      <span class="nav-badge badge-red">3</span>
+    </button>
+  </div>
+
+  <div class="sidebar-section-label">Missing Persons</div>
+  <div class="nav-item-c">
+    <button class="nav-link-c" onclick="showScreen('missing-list', this)">
+      <i class="bi bi-person-exclamation"></i> All Cases
+      <span class="nav-badge badge-blue">24</span>
+    </button>
+  </div>
+  <div class="nav-item-c">
+    <button class="nav-link-c" onclick="showScreen('missing-urgent', this)">
+      <i class="bi bi-exclamation-triangle-fill"></i> Urgent / Active
+      <span class="nav-badge badge-red">7</span>
+    </button>
+  </div>
+  <div class="nav-item-c">
+    <button class="nav-link-c" onclick="showScreen('add-missing', this)">
+      <i class="bi bi-person-plus"></i> File New Report
+    </button>
+  </div>
+  <div class="nav-item-c">
+    <button class="nav-link-c" onclick="showScreen('missing-detail', this)">
+      <i class="bi bi-person-vcard"></i> Case Detail View
+    </button>
+  </div>
+
+  <div class="sidebar-section-label">Legal Complaints</div>
+  <div class="nav-item-c">
+    <button class="nav-link-c" onclick="showScreen('complaints-list', this)">
+      <i class="bi bi-file-earmark-text"></i> All Complaints
+      <span class="nav-badge badge-blue">41</span>
+    </button>
+  </div>
+  <div class="nav-item-c">
+    <button class="nav-link-c" onclick="showScreen('add-complaint', this)">
+      <i class="bi bi-file-earmark-plus"></i> File Complaint
+    </button>
+  </div>
+  <div class="nav-item-c">
+    <button class="nav-link-c" onclick="showScreen('complaint-detail', this)">
+      <i class="bi bi-file-earmark-check"></i> Complaint Detail
+    </button>
+  </div>
+
+  <div class="sidebar-section-label">Management</div>
+  <div class="nav-item-c">
+    <button class="nav-link-c" onclick="showScreen('reports', this)">
+      <i class="bi bi-bar-chart-fill"></i> Reports & Analytics
+    </button>
+  </div>
+  <div class="nav-item-c">
+    <button class="nav-link-c" onclick="showScreen('personnel', this)">
+      <i class="bi bi-people-fill"></i> Assigned Personnel
+    </button>
+  </div>
+  <div class="nav-item-c">
+    <button class="nav-link-c" onclick="showScreen('settings', this)">
+      <i class="bi bi-gear-fill"></i> Settings
+    </button>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="user-card">
+      <div class="user-avatar">RC</div>
+      <div>
+        <div class="user-name">Reyes, Carlo</div>
+        <div class="user-role">Senior Investigator</div>
+      </div>
+      <div class="online-dot"></div>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════════
+     MAIN WRAP
+══════════════════════════════════════════ -->
+<div class="main-wrap">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+    </div>
+    <div class="topbar-actions">
+      <div class="search-bar">
+        <i class="bi bi-search"></i>
+        <input type="text" placeholder="Search cases, complaints…">
+      </div>
+      <div class="tb-icon-btn" onclick="showModal('notif-modal')">
+        <i class="bi bi-bell"></i>
+        <span class="notif-dot"></span>
+      </div>
+      <div class="tb-icon-btn"><i class="bi bi-question-circle"></i></div>
+      <button class="tb-btn tb-btn-primary" onclick="showModal('quick-modal')">
+        <i class="bi bi-plus-lg"></i> New Case
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <main class="content">
+
+    <!-- ════════════════════════════
+         SCREEN: DASHBOARD
+    ════════════════════════════ -->
+    <div class="screen active" id="screen-dashboard">
+      <!-- Emergency Alert -->
+      <div class="alert-bar pulse-urgent">
+        <i class="bi bi-exclamation-octagon-fill"></i>
+        <div><strong>URGENT:</strong> 2 new missing person cases filed today — immediate attention required. <a href="#" style="color:var(--danger)" onclick="showScreen('missing-urgent', null)">View Cases →</a></div>
+        <div style="margin-left:auto; font-size:0.72rem; color:var(--muted)">Mar 7, 2026 · 09:14</div>
+      </div>
+
+      <!-- Stat Cards -->
+      <div class="row g-3 mb-3">
+        <div class="col-6 col-xl-3">
+          <div class="stat-card">
+            <div class="stat-card-accent" style="background: var(--accent)"></div>
+            <div class="stat-label">Active Missing Cases</div>
+            <div class="stat-value" style="color:var(--accent)">24</div>
+            <div class="stat-change"><span class="down">↑ 3</span> since last week</div>
+            <div class="stat-icon"><i class="bi bi-person-exclamation" style="color:var(--accent)"></i></div>
+          </div>
+        </div>
+        <div class="col-6 col-xl-3">
+          <div class="stat-card">
+            <div class="stat-card-accent" style="background: var(--danger)"></div>
+            <div class="stat-label">Urgent / Critical</div>
+            <div class="stat-value" style="color:var(--danger)">7</div>
+            <div class="stat-change"><span class="down">↑ 2</span> since yesterday</div>
+            <div class="stat-icon"><i class="bi bi-exclamation-triangle-fill" style="color:var(--danger)"></i></div>
+          </div>
+        </div>
+        <div class="col-6 col-xl-3">
+          <div class="stat-card">
+            <div class="stat-card-accent" style="background: var(--accent4)"></div>
+            <div class="stat-label">Open Complaints</div>
+            <div class="stat-value" style="color:var(--accent4)">41</div>
+            <div class="stat-change"><span class="up">↓ 5</span> resolved this week</div>
+            <div class="stat-icon"><i class="bi bi-file-earmark-text" style="color:var(--accent4)"></i></div>
+          </div>
+        </div>
+        <div class="col-6 col-xl-3">
+          <div class="stat-card">
+            <div class="stat-card-accent" style="background: var(--accent2)"></div>
+            <div class="stat-label">Resolved This Month</div>
+            <div class="stat-value" style="color:var(--accent2)">38</div>
+            <div class="stat-change"><span class="up">↑ 12%</span> vs last month</div>
+            <div class="stat-icon"><i class="bi bi-check-circle-fill" style="color:var(--accent2)"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-3">
+        <!-- Recent Missing Persons -->
+        <div class="col-12 col-lg-7">
+          <div class="dash-card">
+            <div class="section-header">
+              <span class="section-title">Recent Missing Person Cases</span>
+              <a class="section-action" href="#" onclick="showScreen('missing-list', null)">View All</a>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="dash-table">
+                <thead>
+                  <tr>
+                    <th>Case ID</th><th>Name</th><th>Age</th><th>Last Seen</th><th>Status</th><th>Priority</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr onclick="showScreen('missing-detail', null)">
+                    <td style="font-family:monospace;color:var(--muted);font-size:0.78rem">#MP-2026-0091</td>
+                    <td><strong>Maria Santos</strong></td><td>16</td>
+                    <td style="font-size:0.8rem;color:var(--muted)">Quiapo, Manila · Mar 6</td>
+                    <td><span class="badge-status bs-urgent">Urgent</span></td>
+                    <td><div class="priority"><div class="p-dot p-high"></div>High</div></td>
+                  </tr>
+                  <tr>
+                    <td style="font-family:monospace;color:var(--muted);font-size:0.78rem">#MP-2026-0090</td>
+                    <td><strong>Ricardo Dela Cruz</strong></td><td>34</td>
+                    <td style="font-size:0.8rem;color:var(--muted)">Tondo, Manila · Mar 5</td>
+                    <td><span class="badge-status bs-active">Active</span></td>
+                    <td><div class="priority"><div class="p-dot p-med"></div>Medium</div></td>
+                  </tr>
+                  <tr>
+                    <td style="font-family:monospace;color:var(--muted);font-size:0.78rem">#MP-2026-0089</td>
+                    <td><strong>Ana Lim</strong></td><td>8</td>
+                    <td style="font-size:0.8rem;color:var(--muted)">Pasig City · Mar 4</td>
+                    <td><span class="badge-status bs-urgent">Urgent</span></td>
+                    <td><div class="priority"><div class="p-dot p-high"></div>High</div></td>
+                  </tr>
+                  <tr>
+                    <td style="font-family:monospace;color:var(--muted);font-size:0.78rem">#MP-2026-0088</td>
+                    <td><strong>Jose Ramos</strong></td><td>67</td>
+                    <td style="font-size:0.8rem;color:var(--muted)">Caloocan · Mar 2</td>
+                    <td><span class="badge-status bs-pending">Pending</span></td>
+                    <td><div class="priority"><div class="p-dot p-low"></div>Low</div></td>
+                  </tr>
+                  <tr>
+                    <td style="font-family:monospace;color:var(--muted);font-size:0.78rem">#MP-2026-0087</td>
+                    <td><strong>Elena Buenaventura</strong></td><td>22</td>
+                    <td style="font-size:0.8rem;color:var(--muted)">Makati CBD · Mar 1</td>
+                    <td><span class="badge-status bs-resolved">Found</span></td>
+                    <td><div class="priority"><div class="p-dot p-low"></div>Low</div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="col-12 col-lg-5">
+          <div class="dash-card h-100">
+            <div class="section-header">
+              <span class="section-title">Recent Activity</span>
+              <a class="section-action" href="#">Clear All</a>
+            </div>
+            <div class="activity-item">
+              <div class="activity-icon" style="background:rgba(247,95,95,0.12);color:var(--danger)"><i class="bi bi-person-exclamation"></i></div>
+              <div>
+                <div class="activity-text"><strong>New urgent case</strong> filed — Maria Santos (16F) missing in Quiapo</div>
+                <div class="activity-time">14 minutes ago · Filed by Ofc. Reyes</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="activity-icon" style="background:rgba(56,226,160,0.12);color:var(--accent2)"><i class="bi bi-check2-circle"></i></div>
+              <div>
+                <div class="activity-text">Case <strong>#MP-2026-0087</strong> closed — subject found safe</div>
+                <div class="activity-time">1 hour ago · Closed by Det. Mendoza</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="activity-icon" style="background:rgba(196,110,247,0.12);color:var(--accent4)"><i class="bi bi-file-earmark-text"></i></div>
+              <div>
+                <div class="activity-text">Legal complaint <strong>#LC-2026-0215</strong> filed — assault case</div>
+                <div class="activity-time">2 hours ago · Filed by Atty. Cruz</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="activity-icon" style="background:rgba(79,142,247,0.12);color:var(--accent)"><i class="bi bi-person-badge"></i></div>
+              <div>
+                <div class="activity-text">Det. Santos assigned to cases <strong>#MP-0090</strong> and <strong>#MP-0089</strong></div>
+                <div class="activity-time">3 hours ago · Auto-assigned</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="activity-icon" style="background:rgba(247,200,79,0.12);color:var(--accent5)"><i class="bi bi-camera-fill"></i></div>
+              <div>
+                <div class="activity-text">CCTV footage reviewed for case <strong>#MP-2026-0089</strong></div>
+                <div class="activity-time">5 hours ago · By Inves. Bautista</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <!-- Case Status Distribution -->
+        <div class="col-12 col-lg-5">
+          <div class="dash-card h-100">
+            <div class="section-header">
+              <span class="section-title">Case Status Distribution</span>
+              <a class="section-action">This Month</a>
+            </div>
+            <div style="display:flex; align-items:center; gap:1.5rem; margin-bottom:1rem">
+              <svg width="110" height="110" viewBox="0 0 110 110">
+                <circle cx="55" cy="55" r="42" fill="none" stroke="var(--surface2)" stroke-width="14"/>
+                <circle cx="55" cy="55" r="42" fill="none" stroke="var(--danger)" stroke-width="14" stroke-dasharray="52 212" stroke-dashoffset="0" stroke-linecap="round"/>
+                <circle cx="55" cy="55" r="42" fill="none" stroke="var(--accent)" stroke-width="14" stroke-dasharray="118 212" stroke-dashoffset="-52" stroke-linecap="round"/>
+                <circle cx="55" cy="55" r="42" fill="none" stroke="var(--accent2)" stroke-width="14" stroke-dasharray="42 212" stroke-dashoffset="-170" stroke-linecap="round"/>
+                <text x="55" y="51" text-anchor="middle" fill="var(--text)" font-family="Syne" font-weight="800" font-size="16">65</text>
+                <text x="55" y="66" text-anchor="middle" fill="var(--muted)" font-family="Epilogue" font-size="9">Total</text>
+              </svg>
+              <div style="flex:1">
+                <div class="progress-item">
+                  <div class="progress-meta"><span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;background:var(--accent);border-radius:50%;display:inline-block"></span>Active</span><span>24</span></div>
+                  <div class="progress-track"><div class="progress-fill" style="width:74%;background:var(--accent)"></div></div>
+                </div>
+                <div class="progress-item">
+                  <div class="progress-meta"><span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;background:var(--danger);border-radius:50%;display:inline-block"></span>Urgent</span><span>7</span></div>
+                  <div class="progress-track"><div class="progress-fill" style="width:25%;background:var(--danger)"></div></div>
+                </div>
+                <div class="progress-item">
+                  <div class="progress-meta"><span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;background:var(--accent2);border-radius:50%;display:inline-block"></span>Resolved</span><span>34</span></div>
+                  <div class="progress-track"><div class="progress-fill" style="width:100%;background:var(--accent2)"></div></div>
+                </div>
+              </div>
+            </div>
+            <hr class="divider">
+            <div class="section-title" style="font-size:0.85rem;margin-bottom:0.85rem">Legal Complaints Breakdown</div>
+            <div class="progress-item">
+              <div class="progress-meta"><span>Filed / Under Review</span><span style="color:var(--accent4)">18</span></div>
+              <div class="progress-track"><div class="progress-fill" style="width:44%;background:var(--accent4)"></div></div>
+            </div>
+            <div class="progress-item">
+              <div class="progress-meta"><span>Investigating</span><span style="color:var(--accent3)">14</span></div>
+              <div class="progress-track"><div class="progress-fill" style="width:34%;background:var(--accent3)"></div></div>
+            </div>
+            <div class="progress-item">
+              <div class="progress-meta"><span>Resolved / Closed</span><span style="color:var(--accent2)">9</span></div>
+              <div class="progress-track"><div class="progress-fill" style="width:22%;background:var(--accent2)"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Complaints -->
+        <div class="col-12 col-lg-7">
+          <div class="dash-card">
+            <div class="section-header">
+              <span class="section-title">Recent Legal Complaints</span>
+              <a class="section-action" onclick="showScreen('complaints-list', null)">View All</a>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="dash-table">
+                <thead>
+                  <tr><th>Case ID</th><th>Complainant</th><th>Type</th><th>Filed</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  <tr onclick="showScreen('complaint-detail', null)">
+                    <td style="font-family:monospace;color:var(--muted);font-size:0.78rem">#LC-2026-0215</td>
+                    <td><strong>Benjamin Torres</strong></td>
+                    <td><span class="badge-status bs-investigating" style="font-size:0.7rem">Assault</span></td>
+                    <td style="font-size:0.8rem;color:var(--muted)">Mar 7, 2026</td>
+                    <td><span class="badge-status bs-filed">Filed</span></td>
+                  </tr>
+                  <tr>
+                    <td style="font-family:monospace;color:var(--muted);font-size:0.78rem">#LC-2026-0214</td>
+                    <td><strong>Gloria Reyes</strong></td>
+                    <td><span class="badge-status bs-active" style="font-size:0.7rem">Theft</span></td>
+                    <td style="font-size:0.8rem;color:var(--muted)">Mar 6, 2026</td>
+                    <td><span class="badge-status bs-investigating">Investigating</span></td>
+                  </tr>
+                  <tr>
+                    <td style="font-family:monospace;color:var(--muted);font-size:0.78rem">#LC-2026-0213</td>
+                    <td><strong>Henry Lim</strong></td>
+                    <td><span class="badge-status bs-filed" style="font-size:0.7rem">Cyber Crime</span></td>
+                    <td style="font-size:0.8rem;color:var(--muted)">Mar 5, 2026</td>
+                    <td><span class="badge-status bs-pending">Pending</span></td>
+                  </tr>
+                  <tr>
+                    <td style="font-family:monospace;color:var(--muted);font-size:0.78rem">#LC-2026-0212</td>
+                    <td><strong>Cynthia Puno</strong></td>
+                    <td><span class="badge-status bs-urgent" style="font-size:0.7rem">Harassment</span></td>
+                    <td style="font-size:0.8rem;color:var(--muted)">Mar 4, 2026</td>
+                    <td><span class="badge-status bs-resolved">Resolved</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════
+         SCREEN: MISSING PERSON LIST
+    ════════════════════════════ -->
+    <div class="screen" id="screen-missing-list">
+      <div class="filter-bar">
+        <button class="filter-btn active" onclick="toggleFilter(this)">All Cases</button>
+        <button class="filter-btn" onclick="toggleFilter(this)">Active</button>
+        <button class="filter-btn" onclick="toggleFilter(this)">Urgent</button>
+        <button class="filter-btn" onclick="toggleFilter(this)">Pending</button>
+        <button class="filter-btn" onclick="toggleFilter(this)">Resolved</button>
+        <div style="margin-left:auto;display:flex;gap:0.5rem">
+          <button class="tb-btn"><i class="bi bi-funnel"></i> Filter</button>
+          <button class="tb-btn"><i class="bi bi-arrow-down-up"></i> Sort</button>
+          <button class="tb-btn tb-btn-primary" onclick="showModal('add-missing-modal')"><i class="bi bi-plus"></i> New Report</button>
+        </div>
+      </div>
+
+      <div class="person-grid">
+        <!-- Cards -->
+        <div class="person-card person-card-urgent" onclick="showScreen('missing-detail', null)">
+          <div style="display:flex;gap:0.85rem;align-items:flex-start;margin-bottom:0.85rem">
+            <div class="person-photo" style="color:var(--accent3)">MS</div>
+            <div style="flex:1">
+              <div class="person-name">Maria Santos</div>
+              <div class="person-meta">Female · 16 years old</div>
+              <div class="person-id">#MP-2026-0091</div>
+            </div>
+            <span class="badge-status bs-urgent">Urgent</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.77rem;color:var(--muted);margin-bottom:0.85rem">
+            <div><i class="bi bi-geo-alt" style="margin-right:4px"></i>Quiapo, Manila</div>
+            <div><i class="bi bi-calendar3" style="margin-right:4px"></i>Mar 6, 2026</div>
+            <div><i class="bi bi-person-badge" style="margin-right:4px"></i>Det. Santos</div>
+            <div><i class="bi bi-clock" style="margin-right:4px"></i>28 hrs missing</div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <span class="case-chip">Last seen: 8:30 PM</span>
+            <span class="case-chip">School uniform</span>
+            <span class="case-chip">Minor</span>
+          </div>
+        </div>
+
+        <div class="person-card person-card-active">
+          <div style="display:flex;gap:0.85rem;align-items:flex-start;margin-bottom:0.85rem">
+            <div class="person-photo" style="color:var(--accent)">RD</div>
+            <div style="flex:1">
+              <div class="person-name">Ricardo Dela Cruz</div>
+              <div class="person-meta">Male · 34 years old</div>
+              <div class="person-id">#MP-2026-0090</div>
+            </div>
+            <span class="badge-status bs-active">Active</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.77rem;color:var(--muted);margin-bottom:0.85rem">
+            <div><i class="bi bi-geo-alt" style="margin-right:4px"></i>Tondo, Manila</div>
+            <div><i class="bi bi-calendar3" style="margin-right:4px"></i>Mar 5, 2026</div>
+            <div><i class="bi bi-person-badge" style="margin-right:4px"></i>Det. Reyes</div>
+            <div><i class="bi bi-clock" style="margin-right:4px"></i>52 hrs missing</div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <span class="case-chip">Blue jacket</span>
+            <span class="case-chip">Motorcycle</span>
+          </div>
+        </div>
+
+        <div class="person-card person-card-urgent">
+          <div style="display:flex;gap:0.85rem;align-items:flex-start;margin-bottom:0.85rem">
+            <div class="person-photo" style="color:var(--danger)">AL</div>
+            <div style="flex:1">
+              <div class="person-name">Ana Lim</div>
+              <div class="person-meta">Female · 8 years old</div>
+              <div class="person-id">#MP-2026-0089</div>
+            </div>
+            <span class="badge-status bs-urgent">Urgent</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.77rem;color:var(--muted);margin-bottom:0.85rem">
+            <div><i class="bi bi-geo-alt" style="margin-right:4px"></i>Pasig City</div>
+            <div><i class="bi bi-calendar3" style="margin-right:4px"></i>Mar 4, 2026</div>
+            <div><i class="bi bi-person-badge" style="margin-right:4px"></i>Det. Cruz</div>
+            <div><i class="bi bi-clock" style="margin-right:4px"></i>76 hrs missing</div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <span class="case-chip">Pink dress</span>
+            <span class="case-chip">Minor · Child</span>
+            <span class="case-chip">CCTV Tracked</span>
+          </div>
+        </div>
+
+        <div class="person-card">
+          <div style="display:flex;gap:0.85rem;align-items:flex-start;margin-bottom:0.85rem">
+            <div class="person-photo" style="color:var(--muted)">JR</div>
+            <div style="flex:1">
+              <div class="person-name">Jose Ramos</div>
+              <div class="person-meta">Male · 67 years old</div>
+              <div class="person-id">#MP-2026-0088</div>
+            </div>
+            <span class="badge-status bs-pending">Pending</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.77rem;color:var(--muted);margin-bottom:0.85rem">
+            <div><i class="bi bi-geo-alt" style="margin-right:4px"></i>Caloocan</div>
+            <div><i class="bi bi-calendar3" style="margin-right:4px"></i>Mar 2, 2026</div>
+            <div><i class="bi bi-person-badge" style="margin-right:4px"></i>Unassigned</div>
+            <div><i class="bi bi-clock" style="margin-right:4px"></i>5 days missing</div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <span class="case-chip">Senior citizen</span>
+            <span class="case-chip">Dementia</span>
+          </div>
+        </div>
+
+        <div class="person-card">
+          <div style="display:flex;gap:0.85rem;align-items:flex-start;margin-bottom:0.85rem">
+            <div class="person-photo" style="color:var(--accent2)">EB</div>
+            <div style="flex:1">
+              <div class="person-name">Elena Buenaventura</div>
+              <div class="person-meta">Female · 22 years old</div>
+              <div class="person-id">#MP-2026-0087</div>
+            </div>
+            <span class="badge-status bs-resolved">Found</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.77rem;color:var(--muted);margin-bottom:0.85rem">
+            <div><i class="bi bi-geo-alt" style="margin-right:4px"></i>Makati CBD</div>
+            <div><i class="bi bi-calendar3" style="margin-right:4px"></i>Mar 1, 2026</div>
+            <div><i class="bi bi-person-badge" style="margin-right:4px"></i>Det. Mendoza</div>
+            <div><i class="bi bi-check-circle" style="margin-right:4px;color:var(--accent2)"></i>Closed</div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <span class="case-chip">Returned home</span>
+            <span class="case-chip">2 days search</span>
+          </div>
+        </div>
+
+        <div class="person-card person-card-active">
+          <div style="display:flex;gap:0.85rem;align-items:flex-start;margin-bottom:0.85rem">
+            <div class="person-photo" style="color:var(--accent5)">PG</div>
+            <div style="flex:1">
+              <div class="person-name">Pedro Garcia</div>
+              <div class="person-meta">Male · 45 years old</div>
+              <div class="person-id">#MP-2026-0086</div>
+            </div>
+            <span class="badge-status bs-active">Active</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.77rem;color:var(--muted);margin-bottom:0.85rem">
+            <div><i class="bi bi-geo-alt" style="margin-right:4px"></i>Quezon City</div>
+            <div><i class="bi bi-calendar3" style="margin-right:4px"></i>Feb 28, 2026</div>
+            <div><i class="bi bi-person-badge" style="margin-right:4px"></i>Det. Villanueva</div>
+            <div><i class="bi bi-clock" style="margin-right:4px"></i>7 days missing</div>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <span class="case-chip">Last seen market</span>
+            <span class="case-chip">Foul play suspected</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════
+         SCREEN: MISSING PERSON DETAIL
+    ════════════════════════════ -->
+    <div class="screen" id="screen-missing-detail">
+      <div class="row g-3">
+        <div class="col-12 col-lg-8">
+          <div class="detail-panel">
+            <div class="detail-header">
+              <div class="detail-avatar" style="color:var(--accent3);font-size:1.5rem">MS</div>
+              <div style="flex:1">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem">
+                  <div>
+                    <div class="detail-name">Maria Santos</div>
+                    <div class="detail-case-no">#MP-2026-0091 · Filed Mar 6, 2026 at 22:14</div>
+                    <div style="display:flex;gap:0.5rem;margin-top:0.5rem;flex-wrap:wrap">
+                      <span class="badge-status bs-urgent">Urgent</span>
+                      <span class="badge-status bs-investigating">Active Investigation</span>
+                      <span class="case-chip">Minor (16F)</span>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:0.5rem">
+                    <button class="btn-c btn-secondary-c"><i class="bi bi-pencil"></i> Edit</button>
+                    <button class="btn-c btn-primary-c"><i class="bi bi-check2"></i> Mark Found</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="detail-body">
+              <div class="tab-bar">
+                <button class="tab-btn active" onclick="switchTab(this,'mp-info')">Information</button>
+                <button class="tab-btn" onclick="switchTab(this,'mp-timeline')">Timeline</button>
+                <button class="tab-btn" onclick="switchTab(this,'mp-evidence')">Evidence</button>
+                <button class="tab-btn" onclick="switchTab(this,'mp-witness')">Witnesses</button>
+              </div>
+
+              <div class="tab-pane active" id="tab-mp-info">
+                <div style="font-family:var(--font-head);font-weight:700;font-size:0.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.85rem">Personal Information</div>
+                <div class="info-grid">
+                  <div class="info-item"><label>Full Name</label><span>Maria Santos</span></div>
+                  <div class="info-item"><label>Date of Birth</label><span>March 14, 2010 (16 y/o)</span></div>
+                  <div class="info-item"><label>Sex</label><span>Female</span></div>
+                  <div class="info-item"><label>Nationality</label><span>Filipino</span></div>
+                  <div class="info-item"><label>Height</label><span>5'2" (157 cm)</span></div>
+                  <div class="info-item"><label>Weight</label><span>48 kg</span></div>
+                  <div class="info-item"><label>Hair Color</label><span>Black, shoulder-length</span></div>
+                  <div class="info-item"><label>Eye Color</label><span>Brown</span></div>
+                  <div class="info-item"><label>Last Clothing</label><span>White school blouse, plaid skirt</span></div>
+                  <div class="info-item"><label>Distinguishing Marks</label><span>Mole above left lip, small scar on right knee</span></div>
+                </div>
+                <hr class="divider">
+                <div style="font-family:var(--font-head);font-weight:700;font-size:0.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.85rem">Last Known Location</div>
+                <div class="map-placeholder" style="margin-bottom:1rem">
+                  <div class="map-grid"></div>
+                  <div class="map-pin-pulse" style="top:45%;left:48%"></div>
+                  <div class="map-pin" style="top:38%;left:46%">📍</div>
+                  <div class="map-label"><i class="bi bi-geo-alt-fill"></i> Quiapo, Manila · Carriedo St. near Sta. Cruz Church</div>
+                </div>
+                <div class="info-grid">
+                  <div class="info-item"><label>Location</label><span>Quiapo, Manila</span></div>
+                  <div class="info-item"><label>Last Seen Time</label><span>March 6, 2026 · 8:30 PM</span></div>
+                  <div class="info-item"><label>Context</label><span>Walking home from school tutoring</span></div>
+                  <div class="info-item"><label>CCTV Available</label><span style="color:var(--accent2)">Yes — 2 cameras</span></div>
+                </div>
+                <hr class="divider">
+                <div style="font-family:var(--font-head);font-weight:700;font-size:0.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.85rem">Reporter / Contact</div>
+                <div class="info-grid">
+                  <div class="info-item"><label>Reporter</label><span>Luisa Santos (Mother)</span></div>
+                  <div class="info-item"><label>Contact</label><span>+63 912 345 6789</span></div>
+                  <div class="info-item"><label>Relation</label><span>Parent</span></div>
+                  <div class="info-item"><label>Address</label><span>123 Antipolo St., Quiapo, Manila</span></div>
+                </div>
+              </div>
+
+              <div class="tab-pane" id="tab-mp-timeline">
+                <div class="timeline">
+                  <div class="timeline-item">
+                    <div style="position:relative">
+                      <div class="tl-dot" style="background:var(--danger)"></div>
+                      <div class="tl-line"></div>
+                    </div>
+                    <div>
+                      <div class="tl-title">Case Opened — URGENT Priority Assigned</div>
+                      <div class="tl-meta">Mar 6, 2026 · 10:35 PM · By Ofc. Reyes, Carlo</div>
+                    </div>
+                  </div>
+                  <div class="timeline-item">
+                    <div style="position:relative">
+                      <div class="tl-dot"></div>
+                      <div class="tl-line"></div>
+                    </div>
+                    <div>
+                      <div class="tl-title">Initial Report Filed by Luisa Santos (Mother)</div>
+                      <div class="tl-meta">Mar 6, 2026 · 10:14 PM · Station 1, Quiapo</div>
+                    </div>
+                  </div>
+                  <div class="timeline-item">
+                    <div style="position:relative">
+                      <div class="tl-dot" style="background:var(--accent5)"></div>
+                      <div class="tl-line"></div>
+                    </div>
+                    <div>
+                      <div class="tl-title">Detective Santos Assigned as Lead Investigator</div>
+                      <div class="tl-meta">Mar 7, 2026 · 12:00 AM · System auto-assignment</div>
+                    </div>
+                  </div>
+                  <div class="timeline-item">
+                    <div style="position:relative">
+                      <div class="tl-dot" style="background:var(--accent)"></div>
+                      <div class="tl-line"></div>
+                    </div>
+                    <div>
+                      <div class="tl-title">CCTV Footage Requested from Barangay Quiapo</div>
+                      <div class="tl-meta">Mar 7, 2026 · 8:00 AM · By Det. Santos</div>
+                    </div>
+                  </div>
+                  <div class="timeline-item">
+                    <div style="position:relative">
+                      <div class="tl-dot" style="background:var(--accent2)"></div>
+                    </div>
+                    <div>
+                      <div class="tl-title">CCTV Footage Received — Subject Identified on Camera at 8:45 PM</div>
+                      <div class="tl-meta">Mar 7, 2026 · 2:00 PM · Footage from Carriedo St.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tab-pane" id="tab-mp-evidence">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1rem">
+                    <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem;display:flex;align-items:center;gap:0.4rem"><i class="bi bi-camera-video"></i> CCTV Footage</div>
+                    <div style="font-size:0.85rem;font-weight:500">Carriedo_St_CCTV_Mar6.mp4</div>
+                    <div style="font-size:0.72rem;color:var(--muted);margin-top:3px">Captured at 8:45 PM · 23 min footage</div>
+                    <button class="btn-c btn-secondary-c" style="margin-top:0.75rem;height:30px;font-size:0.75rem"><i class="bi bi-play-fill"></i> Review</button>
+                  </div>
+                  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1rem">
+                    <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem;display:flex;align-items:center;gap:0.4rem"><i class="bi bi-image"></i> Photo</div>
+                    <div style="font-size:0.85rem;font-weight:500">Maria_Santos_Photo_ID.jpg</div>
+                    <div style="font-size:0.72rem;color:var(--muted);margin-top:3px">Provided by family · School ID photo</div>
+                    <button class="btn-c btn-secondary-c" style="margin-top:0.75rem;height:30px;font-size:0.75rem"><i class="bi bi-eye"></i> View</button>
+                  </div>
+                  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1rem">
+                    <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem;display:flex;align-items:center;gap:0.4rem"><i class="bi bi-file-text"></i> Statement</div>
+                    <div style="font-size:0.85rem;font-weight:500">Luisa_Santos_Statement.pdf</div>
+                    <div style="font-size:0.72rem;color:var(--muted);margin-top:3px">Sworn statement from mother</div>
+                    <button class="btn-c btn-secondary-c" style="margin-top:0.75rem;height:30px;font-size:0.75rem"><i class="bi bi-download"></i> Download</button>
+                  </div>
+                  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1rem;border-style:dashed;cursor:pointer" onclick="showModal('upload-modal')">
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:70px;color:var(--muted)">
+                      <i class="bi bi-plus-circle" style="font-size:1.5rem;margin-bottom:0.4rem"></i>
+                      <div style="font-size:0.78rem">Upload Evidence</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tab-pane" id="tab-mp-witness">
+                <table class="dash-table">
+                  <thead><tr><th>Name</th><th>Contact</th><th>Statement</th><th>Date</th><th>Actions</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>Roberto Sy</strong><div style="font-size:0.72rem;color:var(--muted)">Street vendor</div></td>
+                      <td style="font-size:0.8rem">+63 917 222 3333</td>
+                      <td><span class="badge-status bs-resolved" style="font-size:0.7rem">Recorded</span></td>
+                      <td style="font-size:0.78rem;color:var(--muted)">Mar 7, 09:00 AM</td>
+                      <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.72rem;padding:0 0.7rem">View</button></td>
+                    </tr>
+                    <tr>
+                      <td><strong>Marta Cruz</strong><div style="font-size:0.72rem;color:var(--muted)">Passerby</div></td>
+                      <td style="font-size:0.8rem">+63 919 444 5555</td>
+                      <td><span class="badge-status bs-pending" style="font-size:0.7rem">Pending</span></td>
+                      <td style="font-size:0.78rem;color:var(--muted)">Scheduled Mar 8</td>
+                      <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.72rem;padding:0 0.7rem">View</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <button class="btn-c btn-primary-c" style="margin-top:1rem"><i class="bi bi-plus"></i> Add Witness</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-12 col-lg-4">
+          <div class="dash-card mb-3">
+            <div class="section-header"><span class="section-title">Assigned Team</span></div>
+            <div style="display:flex;flex-direction:column;gap:0.75rem">
+              <div style="display:flex;align-items:center;gap:0.75rem">
+                <div class="user-avatar" style="background:linear-gradient(135deg,var(--accent),#3a5bd4)">JS</div>
+                <div><div style="font-size:0.85rem;font-weight:500">Det. Jose Santos</div><div style="font-size:0.72rem;color:var(--muted)">Lead Investigator</div></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.75rem">
+                <div class="user-avatar" style="background:linear-gradient(135deg,var(--accent4),#9a2fc0)">AM</div>
+                <div><div style="font-size:0.85rem;font-weight:500">Ofc. Ana Mendoza</div><div style="font-size:0.72rem;color:var(--muted)">Field Officer</div></div>
+              </div>
+              <button class="btn-c btn-secondary-c" style="margin-top:0.25rem;width:100%;justify-content:center"><i class="bi bi-person-plus"></i> Assign Officer</button>
+            </div>
+          </div>
+
+          <div class="dash-card mb-3">
+            <div class="section-header"><span class="section-title">Quick Actions</span></div>
+            <div style="display:flex;flex-direction:column;gap:0.5rem">
+              <button class="btn-c btn-secondary-c" style="justify-content:flex-start"><i class="bi bi-broadcast"></i> Issue Public Alert</button>
+              <button class="btn-c btn-secondary-c" style="justify-content:flex-start"><i class="bi bi-file-earmark-text"></i> Generate Report</button>
+              <button class="btn-c btn-secondary-c" style="justify-content:flex-start"><i class="bi bi-telephone"></i> Contact Family</button>
+              <button class="btn-c btn-secondary-c" style="justify-content:flex-start"><i class="bi bi-link-45deg"></i> Link to Complaint</button>
+              <button class="btn-c btn-danger-c" style="justify-content:flex-start"><i class="bi bi-x-circle"></i> Close Case</button>
+            </div>
+          </div>
+
+          <div class="dash-card">
+            <div class="section-header"><span class="section-title">Notes</span></div>
+            <textarea class="form-control-c" rows="4" placeholder="Add investigation notes…"></textarea>
+            <button class="btn-c btn-primary-c" style="margin-top:0.75rem;width:100%;justify-content:center"><i class="bi bi-save"></i> Save Note</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════
+         SCREEN: URGENT MISSING
+    ════════════════════════════ -->
+    <div class="screen" id="screen-missing-urgent">
+      <div class="alert-bar" style="margin-bottom:1.25rem">
+        <i class="bi bi-exclamation-octagon-fill"></i>
+        <div><strong>7 URGENT CASES</strong> require immediate attention. Cases marked in red have been open for over 48 hours.</div>
+      </div>
+      <div class="dash-card">
+        <div class="section-header"><span class="section-title">Urgent / Active Cases — Requires Immediate Action</span></div>
+        <div style="overflow-x:auto">
+          <table class="dash-table">
+            <thead>
+              <tr><th>Case ID</th><th>Name</th><th>Age / Sex</th><th>Location</th><th>Missing Since</th><th>Hours</th><th>Investigator</th><th>Status</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr onclick="showScreen('missing-detail', null)">
+                <td style="font-family:monospace;font-size:0.78rem;color:var(--muted)">#MP-2026-0091</td>
+                <td><strong>Maria Santos</strong></td><td style="white-space:nowrap">16, F</td>
+                <td style="font-size:0.8rem">Quiapo, Manila</td><td style="font-size:0.8rem;color:var(--muted)">Mar 6 · 8:30 PM</td>
+                <td style="color:var(--danger);font-weight:700">28h</td>
+                <td style="font-size:0.8rem">Det. Santos</td>
+                <td><span class="badge-status bs-urgent">Urgent</span></td>
+                <td><button class="btn-c btn-primary-c" style="height:28px;font-size:0.75rem;padding:0 0.75rem">View</button></td>
+              </tr>
+              <tr>
+                <td style="font-family:monospace;font-size:0.78rem;color:var(--muted)">#MP-2026-0089</td>
+                <td><strong>Ana Lim</strong></td><td style="white-space:nowrap">8, F</td>
+                <td style="font-size:0.8rem">Pasig City</td><td style="font-size:0.8rem;color:var(--muted)">Mar 4 · 3:00 PM</td>
+                <td style="color:var(--danger);font-weight:700">76h</td>
+                <td style="font-size:0.8rem">Det. Cruz</td>
+                <td><span class="badge-status bs-urgent">Urgent</span></td>
+                <td><button class="btn-c btn-primary-c" style="height:28px;font-size:0.75rem;padding:0 0.75rem">View</button></td>
+              </tr>
+              <tr>
+                <td style="font-family:monospace;font-size:0.78rem;color:var(--muted)">#MP-2026-0086</td>
+                <td><strong>Pedro Garcia</strong></td><td style="white-space:nowrap">45, M</td>
+                <td style="font-size:0.8rem">Quezon City</td><td style="font-size:0.8rem;color:var(--muted)">Feb 28</td>
+                <td style="color:var(--danger);font-weight:700">168h</td>
+                <td style="font-size:0.8rem">Det. Villanueva</td>
+                <td><span class="badge-status bs-active">Active</span></td>
+                <td><button class="btn-c btn-primary-c" style="height:28px;font-size:0.75rem;padding:0 0.75rem">View</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════
+         SCREEN: FILE NEW MISSING REPORT
+    ════════════════════════════ -->
+    <div class="screen" id="screen-add-missing">
+      <div class="row g-3">
+        <div class="col-12 col-lg-8">
+          <div class="dash-card">
+            <div class="section-header">
+              <span class="section-title">File Missing Person Report</span>
+              <span style="font-size:0.76rem;color:var(--muted)">All fields marked * are required</span>
+            </div>
+
+            <div style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem">Section 1: Personal Information</div>
+            <div class="row g-2">
+              <div class="col-md-6"><div class="form-group"><label>Full Name *</label><input class="form-control-c" type="text" placeholder="Last, First Middle"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Date of Birth *</label><input class="form-control-c" type="date"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Sex *</label><select class="form-control-c"><option>Male</option><option>Female</option><option>Other</option></select></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Height</label><input class="form-control-c" type="text" placeholder="e.g. 5'6&quot;"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Weight</label><input class="form-control-c" type="text" placeholder="e.g. 60 kg"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Hair Color</label><input class="form-control-c" type="text" placeholder="Black, Brown…"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Eye Color</label><input class="form-control-c" type="text" placeholder="Brown, Black…"></div></div>
+              <div class="col-12"><div class="form-group"><label>Distinguishing Marks</label><input class="form-control-c" type="text" placeholder="Tattoos, scars, birthmarks…"></div></div>
+              <div class="col-12"><div class="form-group"><label>Last Clothing Worn *</label><input class="form-control-c" type="text" placeholder="Describe outfit in detail"></div></div>
+            </div>
+
+            <hr class="divider">
+            <div style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem">Section 2: Disappearance Details</div>
+            <div class="row g-2">
+              <div class="col-md-6"><div class="form-group"><label>Last Known Location *</label><input class="form-control-c" type="text" placeholder="Street address, landmark"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Date Last Seen *</label><input class="form-control-c" type="date"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Time Last Seen *</label><input class="form-control-c" type="time"></div></div>
+              <div class="col-12"><div class="form-group"><label>Circumstances of Disappearance *</label><textarea class="form-control-c" rows="3" placeholder="Describe the situation in detail…"></textarea></div></div>
+              <div class="col-md-6"><div class="form-group"><label>Possible Destinations</label><input class="form-control-c" type="text" placeholder="Friends, relatives, usual places"></div></div>
+              <div class="col-md-6"><div class="form-group"><label>Vehicle (if any)</label><input class="form-control-c" type="text" placeholder="Make, model, plate number"></div></div>
+            </div>
+
+            <hr class="divider">
+            <div style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem">Section 3: Reporter / Contact Information</div>
+            <div class="row g-2">
+              <div class="col-md-6"><div class="form-group"><label>Reporter's Full Name *</label><input class="form-control-c" type="text"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Relationship *</label><select class="form-control-c"><option>Parent</option><option>Sibling</option><option>Spouse</option><option>Relative</option><option>Friend</option><option>Other</option></select></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Contact Number *</label><input class="form-control-c" type="tel" placeholder="+63 9XX XXX XXXX"></div></div>
+              <div class="col-12"><div class="form-group"><label>Address</label><input class="form-control-c" type="text"></div></div>
+            </div>
+
+            <hr class="divider">
+            <div style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem">Section 4: Case Classification</div>
+            <div class="row g-2">
+              <div class="col-md-4"><div class="form-group"><label>Priority *</label><select class="form-control-c"><option>High (Urgent)</option><option>Medium (Active)</option><option>Low</option></select></div></div>
+              <div class="col-md-4"><div class="form-group"><label>Case Type *</label><select class="form-control-c"><option>Minor</option><option>Senior Citizen</option><option>Adult</option><option>PWD</option></select></div></div>
+              <div class="col-md-4"><div class="form-group"><label>Assign To</label><select class="form-control-c"><option>Auto-Assign</option><option>Det. Santos</option><option>Det. Cruz</option><option>Det. Reyes</option></select></div></div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:0.5rem">
+              <button class="btn-c btn-secondary-c">Save Draft</button>
+              <button class="btn-c btn-primary-c"><i class="bi bi-send-fill"></i> Submit Report</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+          <div class="dash-card mb-3">
+            <div class="section-header"><span class="section-title">Upload Photo / Documents</span></div>
+            <div style="background:var(--surface2);border:1px dashed var(--border);border-radius:10px;padding:2rem;text-align:center;cursor:pointer" onclick="showModal('upload-modal')">
+              <i class="bi bi-cloud-upload" style="font-size:2rem;color:var(--muted);display:block;margin-bottom:0.5rem"></i>
+              <div style="font-size:0.82rem;color:var(--muted)">Click to upload or drag & drop</div>
+              <div style="font-size:0.72rem;color:var(--muted);margin-top:4px">JPG, PNG, PDF up to 10MB</div>
+            </div>
+          </div>
+          <div class="dash-card">
+            <div class="section-header"><span class="section-title">Report Checklist</span></div>
+            <div style="display:flex;flex-direction:column;gap:0.6rem;font-size:0.82rem">
+              <div style="display:flex;align-items:center;gap:0.5rem;color:var(--accent2)"><i class="bi bi-check-circle-fill"></i> Personal information</div>
+              <div style="display:flex;align-items:center;gap:0.5rem;color:var(--accent2)"><i class="bi bi-check-circle-fill"></i> Last known location</div>
+              <div style="display:flex;align-items:center;gap:0.5rem;color:var(--muted)"><i class="bi bi-circle"></i> Recent photo attached</div>
+              <div style="display:flex;align-items:center;gap:0.5rem;color:var(--muted)"><i class="bi bi-circle"></i> Reporter contact info</div>
+              <div style="display:flex;align-items:center;gap:0.5rem;color:var(--muted)"><i class="bi bi-circle"></i> Case priority set</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════
+         SCREEN: COMPLAINTS LIST
+    ════════════════════════════ -->
+    <div class="screen" id="screen-complaints-list">
+      <div class="filter-bar">
+        <button class="filter-btn active" onclick="toggleFilter(this)">All</button>
+        <button class="filter-btn" onclick="toggleFilter(this)">Filed</button>
+        <button class="filter-btn" onclick="toggleFilter(this)">Investigating</button>
+        <button class="filter-btn" onclick="toggleFilter(this)">Pending</button>
+        <button class="filter-btn" onclick="toggleFilter(this)">Resolved</button>
+        <div style="margin-left:auto;display:flex;gap:0.5rem">
+          <button class="tb-btn"><i class="bi bi-funnel"></i> Filter</button>
+          <button class="tb-btn tb-btn-primary" onclick="showScreen('add-complaint', null)"><i class="bi bi-plus"></i> File Complaint</button>
+        </div>
+      </div>
+      <div class="dash-card">
+        <div style="overflow-x:auto">
+          <table class="dash-table">
+            <thead>
+              <tr><th>Case ID</th><th>Complainant</th><th>Respondent</th><th>Type</th><th>Filed Date</th><th>Assigned</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              <tr onclick="showScreen('complaint-detail', null)">
+                <td style="font-family:monospace;font-size:0.78rem;color:var(--muted)">#LC-2026-0215</td>
+                <td><strong>Benjamin Torres</strong></td>
+                <td style="color:var(--muted)">Ernesto Luna</td>
+                <td><span class="badge-status bs-investigating" style="font-size:0.7rem">Assault</span></td>
+                <td style="font-size:0.8rem;color:var(--muted)">Mar 7, 2026</td>
+                <td style="font-size:0.8rem">Inves. Bautista</td>
+                <td><span class="badge-status bs-filed">Filed</span></td>
+                <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.73rem;padding:0 0.7rem">View</button></td>
+              </tr>
+              <tr>
+                <td style="font-family:monospace;font-size:0.78rem;color:var(--muted)">#LC-2026-0214</td>
+                <td><strong>Gloria Reyes</strong></td>
+                <td style="color:var(--muted)">Unknown</td>
+                <td><span class="badge-status bs-active" style="font-size:0.7rem">Theft</span></td>
+                <td style="font-size:0.8rem;color:var(--muted)">Mar 6, 2026</td>
+                <td style="font-size:0.8rem">Det. Santos</td>
+                <td><span class="badge-status bs-investigating">Investigating</span></td>
+                <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.73rem;padding:0 0.7rem">View</button></td>
+              </tr>
+              <tr>
+                <td style="font-family:monospace;font-size:0.78rem;color:var(--muted)">#LC-2026-0213</td>
+                <td><strong>Henry Lim</strong></td>
+                <td style="color:var(--muted)">Petra Ocampo</td>
+                <td><span class="badge-status bs-filed" style="font-size:0.7rem">Cyber Crime</span></td>
+                <td style="font-size:0.8rem;color:var(--muted)">Mar 5, 2026</td>
+                <td style="font-size:0.8rem">Det. Cruz</td>
+                <td><span class="badge-status bs-pending">Pending</span></td>
+                <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.73rem;padding:0 0.7rem">View</button></td>
+              </tr>
+              <tr>
+                <td style="font-family:monospace;font-size:0.78rem;color:var(--muted)">#LC-2026-0212</td>
+                <td><strong>Cynthia Puno</strong></td>
+                <td style="color:var(--muted)">Ramon dela Vega</td>
+                <td><span class="badge-status bs-urgent" style="font-size:0.7rem">Harassment</span></td>
+                <td style="font-size:0.8rem;color:var(--muted)">Mar 4, 2026</td>
+                <td style="font-size:0.8rem">Det. Mendoza</td>
+                <td><span class="badge-status bs-resolved">Resolved</span></td>
+                <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.73rem;padding:0 0.7rem">View</button></td>
+              </tr>
+              <tr>
+                <td style="font-family:monospace;font-size:0.78rem;color:var(--muted)">#LC-2026-0211</td>
+                <td><strong>Alicia Navarro</strong></td>
+                <td style="color:var(--muted)">Rodrigo Pascual</td>
+                <td><span class="badge-status bs-active" style="font-size:0.7rem">Estafa</span></td>
+                <td style="font-size:0.8rem;color:var(--muted)">Mar 3, 2026</td>
+                <td style="font-size:0.8rem">Det. Reyes</td>
+                <td><span class="badge-status bs-investigating">Investigating</span></td>
+                <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.73rem;padding:0 0.7rem">View</button></td>
+              </tr>
+              <tr>
+                <td style="font-family:monospace;font-size:0.78rem;color:var(--muted)">#LC-2026-0210</td>
+                <td><strong>Frederico Abad</strong></td>
+                <td style="color:var(--muted)">Josefina Tan</td>
+                <td><span class="badge-status bs-filed" style="font-size:0.7rem">Libel</span></td>
+                <td style="font-size:0.8rem;color:var(--muted)">Mar 2, 2026</td>
+                <td style="font-size:0.8rem">Atty. Garcia</td>
+                <td><span class="badge-status bs-pending">Pending</span></td>
+                <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.73rem;padding:0 0.7rem">View</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════
+         SCREEN: FILE COMPLAINT
+    ════════════════════════════ -->
+    <div class="screen" id="screen-add-complaint">
+      <div class="row g-3">
+        <div class="col-12 col-lg-8">
+          <div class="dash-card">
+            <div class="section-header">
+              <span class="section-title">File Legal Complaint</span>
+              <span style="font-size:0.76rem;color:var(--muted)">All fields marked * are required</span>
+            </div>
+
+            <div style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--accent4);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem">Section 1: Complainant Information</div>
+            <div class="row g-2">
+              <div class="col-md-6"><div class="form-group"><label>Complainant Full Name *</label><input class="form-control-c" type="text" placeholder="Last, First Middle"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Date of Birth</label><input class="form-control-c" type="date"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Sex</label><select class="form-control-c"><option>Male</option><option>Female</option><option>Other</option></select></div></div>
+              <div class="col-md-6"><div class="form-group"><label>Address *</label><input class="form-control-c" type="text"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Contact Number *</label><input class="form-control-c" type="tel" placeholder="+63 9XX"></div></div>
+              <div class="col-md-3"><div class="form-group"><label>Email</label><input class="form-control-c" type="email"></div></div>
+            </div>
+
+            <hr class="divider">
+            <div style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--accent4);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem">Section 2: Respondent Information</div>
+            <div class="row g-2">
+              <div class="col-md-6"><div class="form-group"><label>Respondent Full Name *</label><input class="form-control-c" type="text" placeholder="If unknown, write 'Unknown'"></div></div>
+              <div class="col-md-6"><div class="form-group"><label>Respondent Address (if known)</label><input class="form-control-c" type="text"></div></div>
+              <div class="col-md-6"><div class="form-group"><label>Relationship to Complainant</label><select class="form-control-c"><option>Stranger</option><option>Acquaintance</option><option>Neighbor</option><option>Colleague</option><option>Family</option><option>Unknown</option></select></div></div>
+              <div class="col-md-6"><div class="form-group"><label>Respondent Contact (if known)</label><input class="form-control-c" type="text"></div></div>
+            </div>
+
+            <hr class="divider">
+            <div style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--accent4);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem">Section 3: Complaint Details</div>
+            <div class="row g-2">
+              <div class="col-md-4"><div class="form-group"><label>Complaint Type *</label><select class="form-control-c"><option>Assault / Physical Violence</option><option>Theft / Robbery</option><option>Harassment</option><option>Cyber Crime</option><option>Estafa / Fraud</option><option>Libel / Slander</option><option>Domestic Violence</option><option>Drug-Related</option><option>Other</option></select></div></div>
+              <div class="col-md-4"><div class="form-group"><label>Date of Incident *</label><input class="form-control-c" type="date"></div></div>
+              <div class="col-md-4"><div class="form-group"><label>Time of Incident</label><input class="form-control-c" type="time"></div></div>
+              <div class="col-12"><div class="form-group"><label>Location of Incident *</label><input class="form-control-c" type="text" placeholder="Street address, landmark, barangay"></div></div>
+              <div class="col-12"><div class="form-group"><label>Narrative of Events *</label><textarea class="form-control-c" rows="5" placeholder="Provide a detailed, chronological account of what happened…"></textarea></div></div>
+              <div class="col-12"><div class="form-group"><label>Reliefs Sought</label><textarea class="form-control-c" rows="2" placeholder="What action or remedy are you requesting?"></textarea></div></div>
+            </div>
+
+            <hr class="divider">
+            <div style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--accent4);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem">Section 4: Assignment & Priority</div>
+            <div class="row g-2">
+              <div class="col-md-4"><div class="form-group"><label>Priority Level *</label><select class="form-control-c"><option>High</option><option selected>Medium</option><option>Low</option></select></div></div>
+              <div class="col-md-4"><div class="form-group"><label>Assign Investigator</label><select class="form-control-c"><option>Auto-Assign</option><option>Inves. Bautista</option><option>Det. Santos</option><option>Det. Cruz</option><option>Atty. Garcia</option></select></div></div>
+              <div class="col-md-4"><div class="form-group"><label>Filing Station *</label><select class="form-control-c"><option>Station 1 — Manila</option><option>Station 2 — Quiapo</option><option>Station 3 — Tondo</option></select></div></div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:0.5rem">
+              <button class="btn-c btn-secondary-c">Save Draft</button>
+              <button class="btn-c btn-primary-c"><i class="bi bi-send-fill"></i> Submit Complaint</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+          <div class="dash-card mb-3">
+            <div class="section-header"><span class="section-title">Upload Evidence</span></div>
+            <div style="background:var(--surface2);border:1px dashed var(--border);border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer">
+              <i class="bi bi-cloud-upload" style="font-size:2rem;color:var(--muted);display:block;margin-bottom:0.5rem"></i>
+              <div style="font-size:0.82rem;color:var(--muted)">Upload photos, videos, documents</div>
+              <div style="font-size:0.72rem;color:var(--muted);margin-top:4px">Max 50MB per file</div>
+            </div>
+          </div>
+          <div class="dash-card mb-3">
+            <div class="section-header"><span class="section-title">Submission Checklist</span></div>
+            <div style="display:flex;flex-direction:column;gap:0.6rem;font-size:0.82rem">
+              <div style="display:flex;align-items:center;gap:0.5rem;color:var(--muted)"><i class="bi bi-circle"></i> Complainant info complete</div>
+              <div style="display:flex;align-items:center;gap:0.5rem;color:var(--muted)"><i class="bi bi-circle"></i> Respondent identified</div>
+              <div style="display:flex;align-items:center;gap:0.5rem;color:var(--muted)"><i class="bi bi-circle"></i> Incident narrative provided</div>
+              <div style="display:flex;align-items:center;gap:0.5rem;color:var(--muted)"><i class="bi bi-circle"></i> Evidence attached</div>
+              <div style="display:flex;align-items:center;gap:0.5rem;color:var(--muted)"><i class="bi bi-circle"></i> Signature / consent obtained</div>
+            </div>
+          </div>
+          <div class="dash-card">
+            <div class="section-header"><span class="section-title">Note</span></div>
+            <div style="font-size:0.8rem;color:var(--muted);line-height:1.6">Filing a false complaint is punishable under the Revised Penal Code. All information provided will be treated with strict confidentiality per RA 10173 (Data Privacy Act).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════
+         SCREEN: COMPLAINT DETAIL
+    ════════════════════════════ -->
+    <div class="screen" id="screen-complaint-detail">
+      <div class="row g-3">
+        <div class="col-12 col-lg-8">
+          <div class="detail-panel">
+            <div class="detail-header">
+              <div class="detail-avatar" style="background:linear-gradient(135deg,rgba(196,110,247,0.15),rgba(196,110,247,0.05));color:var(--accent4);font-size:1.3rem"><i class="bi bi-file-earmark-text"></i></div>
+              <div style="flex:1">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem">
+                  <div>
+                    <div class="detail-name">Assault Complaint — #LC-2026-0215</div>
+                    <div class="detail-case-no">Filed: March 7, 2026 · Station 1, Manila · Ofc. Reyes</div>
+                    <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+                      <span class="badge-status bs-filed">Filed</span>
+                      <span class="badge-status bs-investigating">Physical Assault</span>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:0.5rem">
+                    <button class="btn-c btn-secondary-c"><i class="bi bi-pencil"></i> Edit</button>
+                    <button class="btn-c btn-primary-c"><i class="bi bi-check2"></i> Close Case</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="detail-body">
+              <div class="tab-bar">
+                <button class="tab-btn active" onclick="switchTab(this,'lc-info')">Details</button>
+                <button class="tab-btn" onclick="switchTab(this,'lc-timeline')">Progress</button>
+                <button class="tab-btn" onclick="switchTab(this,'lc-evidence')">Evidence</button>
+              </div>
+
+              <div class="tab-pane active" id="tab-lc-info">
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <div style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem">Complainant</div>
+                    <div class="info-grid" style="grid-template-columns:1fr">
+                      <div class="info-item"><label>Name</label><span>Benjamin Torres</span></div>
+                      <div class="info-item"><label>Age / Sex</label><span>38, Male</span></div>
+                      <div class="info-item"><label>Address</label><span>45 Rizal Ave., Manila</span></div>
+                      <div class="info-item"><label>Contact</label><span>+63 915 888 9999</span></div>
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem">Respondent</div>
+                    <div class="info-grid" style="grid-template-columns:1fr">
+                      <div class="info-item"><label>Name</label><span>Ernesto Luna</span></div>
+                      <div class="info-item"><label>Age / Sex</label><span>42, Male</span></div>
+                      <div class="info-item"><label>Address</label><span>12 Tondo St., Manila</span></div>
+                      <div class="info-item"><label>Relationship</label><span>Neighbor</span></div>
+                    </div>
+                  </div>
+                </div>
+                <hr class="divider">
+                <div style="font-family:var(--font-head);font-weight:700;font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem">Incident Details</div>
+                <div class="info-grid">
+                  <div class="info-item"><label>Date</label><span>March 6, 2026 · 7:45 PM</span></div>
+                  <div class="info-item"><label>Location</label><span>Rizal Ave. cor. Quiapo, Manila</span></div>
+                  <div class="info-item"><label>Type</label><span>Physical Assault</span></div>
+                  <div class="info-item"><label>Priority</label><span><div class="priority"><div class="p-dot p-high"></div>High</div></span></div>
+                </div>
+                <div style="margin-top:1rem">
+                  <div style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:0.5rem">Narrative</div>
+                  <div style="font-size:0.85rem;line-height:1.7;color:var(--text);background:var(--surface2);padding:1rem;border-radius:8px;border:1px solid var(--border)">
+                    On the evening of March 6, 2026, at approximately 7:45 PM, the complainant Benjamin Torres was walking along Rizal Avenue when he was confronted by the respondent Ernesto Luna regarding an earlier dispute over property boundaries. The respondent allegedly punched the complainant multiple times resulting in a broken nose and bruising. Two witnesses were present at the scene.
+                  </div>
+                </div>
+              </div>
+
+              <div class="tab-pane" id="tab-lc-timeline">
+                <div class="timeline">
+                  <div class="timeline-item">
+                    <div style="position:relative"><div class="tl-dot" style="background:var(--accent4)"></div><div class="tl-line"></div></div>
+                    <div><div class="tl-title">Complaint Filed at Station 1</div><div class="tl-meta">Mar 7, 2026 · 9:00 AM · Received by Ofc. Reyes</div></div>
+                  </div>
+                  <div class="timeline-item">
+                    <div style="position:relative"><div class="tl-dot" style="background:var(--accent5)"></div><div class="tl-line"></div></div>
+                    <div><div class="tl-title">Case Assessed — Priority: High</div><div class="tl-meta">Mar 7, 2026 · 10:30 AM · By Supervisor Bautista</div></div>
+                  </div>
+                  <div class="timeline-item">
+                    <div style="position:relative"><div class="tl-dot"></div></div>
+                    <div><div class="tl-title">Inves. Bautista Assigned as Lead</div><div class="tl-meta">Mar 7, 2026 · 11:00 AM · Auto-assignment</div></div>
+                  </div>
+                </div>
+                <button class="btn-c btn-secondary-c" style="margin-top:1rem"><i class="bi bi-plus"></i> Add Progress Note</button>
+              </div>
+
+              <div class="tab-pane" id="tab-lc-evidence">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+                  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1rem">
+                    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.4rem"><i class="bi bi-image"></i> Photo Evidence</div>
+                    <div style="font-size:0.85rem;font-weight:500">Torres_Injury_Photos.zip</div>
+                    <div style="font-size:0.72rem;color:var(--muted);margin-top:3px">3 photos · 4.2 MB</div>
+                    <button class="btn-c btn-secondary-c" style="margin-top:0.6rem;height:28px;font-size:0.73rem"><i class="bi bi-eye"></i> View</button>
+                  </div>
+                  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1rem">
+                    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.4rem"><i class="bi bi-file-text"></i> Medical Certificate</div>
+                    <div style="font-size:0.85rem;font-weight:500">MedCert_Torres.pdf</div>
+                    <div style="font-size:0.72rem;color:var(--muted);margin-top:3px">Philippine General Hospital</div>
+                    <button class="btn-c btn-secondary-c" style="margin-top:0.6rem;height:28px;font-size:0.73rem"><i class="bi bi-download"></i> Download</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+          <div class="dash-card mb-3">
+            <div class="section-header"><span class="section-title">Case Status</span></div>
+            <select class="form-control-c" style="margin-bottom:0.75rem"><option>Filed</option><option>Under Investigation</option><option>Pending Hearing</option><option>Resolved</option><option>Dismissed</option></select>
+            <button class="btn-c btn-primary-c" style="width:100%;justify-content:center"><i class="bi bi-arrow-right-circle"></i> Update Status</button>
+          </div>
+          <div class="dash-card mb-3">
+            <div class="section-header"><span class="section-title">Assigned Investigator</span></div>
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem">
+              <div class="user-avatar" style="background:linear-gradient(135deg,var(--accent3),#d4500a)">IB</div>
+              <div><div style="font-size:0.85rem;font-weight:500">Inves. Bautista</div><div style="font-size:0.72rem;color:var(--muted)">Lead Investigator</div></div>
+            </div>
+            <button class="btn-c btn-secondary-c" style="width:100%;justify-content:center"><i class="bi bi-arrow-repeat"></i> Reassign</button>
+          </div>
+          <div class="dash-card">
+            <div class="section-header"><span class="section-title">Internal Notes</span></div>
+            <textarea class="form-control-c" rows="4" placeholder="Confidential case notes…"></textarea>
+            <button class="btn-c btn-primary-c" style="margin-top:0.75rem;width:100%;justify-content:center"><i class="bi bi-save"></i> Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════
+         SCREEN: REPORTS & ANALYTICS
+    ════════════════════════════ -->
+    <div class="screen" id="screen-reports">
+      <div class="row g-3 mb-3">
+        <div class="col-6 col-xl-3">
+          <div class="stat-card"><div class="stat-card-accent" style="background:var(--accent)"></div><div class="stat-label">Cases This Month</div><div class="stat-value" style="color:var(--accent)">65</div><div class="stat-change"><span class="up">↑ 8%</span> vs last month</div></div>
+        </div>
+        <div class="col-6 col-xl-3">
+          <div class="stat-card"><div class="stat-card-accent" style="background:var(--accent2)"></div><div class="stat-label">Resolution Rate</div><div class="stat-value" style="color:var(--accent2)">72%</div><div class="stat-change"><span class="up">↑ 4%</span> improvement</div></div>
+        </div>
+        <div class="col-6 col-xl-3">
+          <div class="stat-card"><div class="stat-card-accent" style="background:var(--accent5)"></div><div class="stat-label">Avg. Resolution Time</div><div class="stat-value" style="color:var(--accent5)">4.2d</div><div class="stat-change"><span class="up">↓ 0.8 days</span> faster</div></div>
+        </div>
+        <div class="col-6 col-xl-3">
+          <div class="stat-card"><div class="stat-card-accent" style="background:var(--accent4)"></div><div class="stat-label">Active Investigators</div><div class="stat-value" style="color:var(--accent4)">12</div><div class="stat-change">All units operational</div></div>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-12 col-lg-8">
+          <div class="dash-card mb-3">
+            <div class="section-header"><span class="section-title">Case Volume — Jan to Mar 2026</span></div>
+            <svg width="100%" height="160" viewBox="0 0 500 160" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4f8ef7" stop-opacity="0.25"/><stop offset="100%" stop-color="#4f8ef7" stop-opacity="0"/></linearGradient>
+                <linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c46ef7" stop-opacity="0.2"/><stop offset="100%" stop-color="#c46ef7" stop-opacity="0"/></linearGradient>
+              </defs>
+              <path d="M0,140 L55,120 L110,100 L165,115 L220,85 L275,70 L330,90 L385,55 L440,45 L500,35 L500,160 L0,160Z" fill="url(#ga)"/>
+              <path d="M0,140 L55,120 L110,100 L165,115 L220,85 L275,70 L330,90 L385,55 L440,45 L500,35" fill="none" stroke="#4f8ef7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M0,155 L55,145 L110,130 L165,138 L220,120 L275,108 L330,118 L385,95 L440,88 L500,75 L500,160 L0,160Z" fill="url(#gb)"/>
+              <path d="M0,155 L55,145 L110,130 L165,138 L220,120 L275,108 L330,118 L385,95 L440,88 L500,75" fill="none" stroke="#c46ef7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 3"/>
+              <circle cx="500" cy="35" r="4" fill="#4f8ef7"/>
+              <circle cx="500" cy="75" r="4" fill="#c46ef7"/>
+              <text x="5" y="155" fill="#7a8099" font-size="10" font-family="Epilogue">Jan</text>
+              <text x="105" y="155" fill="#7a8099" font-size="10" font-family="Epilogue">Feb</text>
+              <text x="470" y="155" fill="#7a8099" font-size="10" font-family="Epilogue">Mar</text>
+            </svg>
+            <div style="display:flex;gap:1.5rem;margin-top:0.5rem">
+              <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;color:var(--muted)"><span style="width:16px;height:2px;background:var(--accent);display:inline-block;border-radius:2px"></span>Missing Persons</div>
+              <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.75rem;color:var(--muted)"><span style="width:16px;height:2px;background:var(--accent4);display:inline-block;border-radius:2px;border-top:2px dashed var(--accent4)"></span>Legal Complaints</div>
+            </div>
+          </div>
+
+          <!-- Downloadable Reports -->
+          <div class="dash-card">
+            <div class="section-header"><span class="section-title">Generate Reports</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.85rem">
+              <div class="report-card">
+                <div class="report-icon" style="background:rgba(79,142,247,0.1);color:var(--accent)"><i class="bi bi-person-exclamation"></i></div>
+                <div><div class="report-title">Missing Persons Summary</div><div class="report-meta">All cases · Mar 2026</div></div>
+              </div>
+              <div class="report-card">
+                <div class="report-icon" style="background:rgba(196,110,247,0.1);color:var(--accent4)"><i class="bi bi-file-earmark-text"></i></div>
+                <div><div class="report-title">Legal Complaints Log</div><div class="report-meta">Monthly report · Mar 2026</div></div>
+              </div>
+              <div class="report-card">
+                <div class="report-icon" style="background:rgba(56,226,160,0.1);color:var(--accent2)"><i class="bi bi-check2-circle"></i></div>
+                <div><div class="report-title">Resolution Report</div><div class="report-meta">Cases closed this month</div></div>
+              </div>
+              <div class="report-card">
+                <div class="report-icon" style="background:rgba(247,200,79,0.1);color:var(--accent5)"><i class="bi bi-people"></i></div>
+                <div><div class="report-title">Personnel Performance</div><div class="report-meta">Investigator workloads</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12 col-lg-4">
+          <div class="dash-card mb-3">
+            <div class="section-header"><span class="section-title">Cases by Type</span></div>
+            <div class="progress-item"><div class="progress-meta"><span>Assault</span><span style="color:var(--accent3)">14</span></div><div class="progress-track"><div class="progress-fill" style="width:65%;background:var(--accent3)"></div></div></div>
+            <div class="progress-item"><div class="progress-meta"><span>Theft</span><span style="color:var(--accent)">11</span></div><div class="progress-track"><div class="progress-fill" style="width:52%;background:var(--accent)"></div></div></div>
+            <div class="progress-item"><div class="progress-meta"><span>Cyber Crime</span><span style="color:var(--accent4)">8</span></div><div class="progress-track"><div class="progress-fill" style="width:38%;background:var(--accent4)"></div></div></div>
+            <div class="progress-item"><div class="progress-meta"><span>Harassment</span><span style="color:var(--danger)">6</span></div><div class="progress-track"><div class="progress-fill" style="width:28%;background:var(--danger)"></div></div></div>
+            <div class="progress-item"><div class="progress-meta"><span>Estafa / Fraud</span><span style="color:var(--accent5)">5</span></div><div class="progress-track"><div class="progress-fill" style="width:23%;background:var(--accent5)"></div></div></div>
+          </div>
+          <div class="dash-card">
+            <div class="section-header"><span class="section-title">Top Investigators</span></div>
+            <div style="display:flex;flex-direction:column;gap:0.85rem">
+              <div style="display:flex;align-items:center;gap:0.75rem">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:0.75rem;background:linear-gradient(135deg,var(--accent),#3a5bd4)">JS</div>
+                <div style="flex:1"><div style="font-size:0.83rem;font-weight:500">Det. Jose Santos</div><div class="progress-track" style="margin-top:4px"><div class="progress-fill" style="width:88%;background:var(--accent)"></div></div></div>
+                <div style="font-size:0.82rem;color:var(--accent);font-weight:600">22</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.75rem">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:0.75rem;background:linear-gradient(135deg,var(--accent4),#9a2fc0)">AM</div>
+                <div style="flex:1"><div style="font-size:0.83rem;font-weight:500">Inves. Bautista</div><div class="progress-track" style="margin-top:4px"><div class="progress-fill" style="width:72%;background:var(--accent4)"></div></div></div>
+                <div style="font-size:0.82rem;color:var(--accent4);font-weight:600">18</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.75rem">
+                <div class="user-avatar" style="width:32px;height:32px;font-size:0.75rem;background:linear-gradient(135deg,var(--accent2),#0eaa7a)">AC</div>
+                <div style="flex:1"><div style="font-size:0.83rem;font-weight:500">Det. Cruz</div><div class="progress-track" style="margin-top:4px"><div class="progress-fill" style="width:58%;background:var(--accent2)"></div></div></div>
+                <div style="font-size:0.82rem;color:var(--accent2);font-weight:600">14</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════
+         SCREEN: PERSONNEL
+    ════════════════════════════ -->
+    <div class="screen" id="screen-personnel">
+      <div class="dash-card">
+        <div class="section-header">
+          <span class="section-title">Assigned Personnel</span>
+          <button class="btn-c btn-primary-c" style="height:30px;font-size:0.78rem;padding:0 0.85rem"><i class="bi bi-person-plus"></i> Add Officer</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="dash-table">
+            <thead><tr><th>Officer</th><th>Rank / Role</th><th>Station</th><th>Active Cases</th><th>Resolved</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><div style="display:flex;align-items:center;gap:0.65rem"><div class="user-avatar" style="width:30px;height:30px;font-size:0.72rem;background:linear-gradient(135deg,var(--accent),#3a5bd4)">JS</div><div><div style="font-size:0.85rem;font-weight:500">Jose Santos</div><div style="font-size:0.7rem;color:var(--muted)">Badge #1042</div></div></div></td>
+                <td style="font-size:0.82rem">Detective II</td>
+                <td style="font-size:0.82rem;color:var(--muted)">Station 1</td>
+                <td><span style="color:var(--accent);font-weight:600">7</span></td>
+                <td><span style="color:var(--accent2);font-weight:600">22</span></td>
+                <td><span class="badge-status bs-active">On Duty</span></td>
+                <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.72rem;padding:0 0.7rem">Manage</button></td>
+              </tr>
+              <tr>
+                <td><div style="display:flex;align-items:center;gap:0.65rem"><div class="user-avatar" style="width:30px;height:30px;font-size:0.72rem;background:linear-gradient(135deg,var(--accent4),#9a2fc0)">IB</div><div><div style="font-size:0.85rem;font-weight:500">Bautista, Ignacio</div><div style="font-size:0.7rem;color:var(--muted)">Badge #0887</div></div></div></td>
+                <td style="font-size:0.82rem">Investigator</td>
+                <td style="font-size:0.82rem;color:var(--muted)">Station 1</td>
+                <td><span style="color:var(--accent);font-weight:600">5</span></td>
+                <td><span style="color:var(--accent2);font-weight:600">18</span></td>
+                <td><span class="badge-status bs-active">On Duty</span></td>
+                <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.72rem;padding:0 0.7rem">Manage</button></td>
+              </tr>
+              <tr>
+                <td><div style="display:flex;align-items:center;gap:0.65rem"><div class="user-avatar" style="width:30px;height:30px;font-size:0.72rem;background:linear-gradient(135deg,var(--accent2),#0eaa7a)">AC</div><div><div style="font-size:0.85rem;font-weight:500">Cruz, Amanda</div><div style="font-size:0.7rem;color:var(--muted)">Badge #0934</div></div></div></td>
+                <td style="font-size:0.82rem">Detective I</td>
+                <td style="font-size:0.82rem;color:var(--muted)">Station 2</td>
+                <td><span style="color:var(--accent);font-weight:600">4</span></td>
+                <td><span style="color:var(--accent2);font-weight:600">14</span></td>
+                <td><span class="badge-status bs-active">On Duty</span></td>
+                <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.72rem;padding:0 0.7rem">Manage</button></td>
+              </tr>
+              <tr>
+                <td><div style="display:flex;align-items:center;gap:0.65rem"><div class="user-avatar" style="width:30px;height:30px;font-size:0.72rem;background:linear-gradient(135deg,var(--accent5),#c0940a)">VM</div><div><div style="font-size:0.85rem;font-weight:500">Villanueva, Marco</div><div style="font-size:0.7rem;color:var(--muted)">Badge #1103</div></div></div></td>
+                <td style="font-size:0.82rem">Detective II</td>
+                <td style="font-size:0.82rem;color:var(--muted)">Station 3</td>
+                <td><span style="color:var(--accent);font-weight:600">3</span></td>
+                <td><span style="color:var(--accent2);font-weight:600">9</span></td>
+                <td><span class="badge-status bs-pending">Off Duty</span></td>
+                <td><button class="btn-c btn-secondary-c" style="height:26px;font-size:0.72rem;padding:0 0.7rem">Manage</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════
+         SCREEN: ALERTS
+    ════════════════════════════ -->
+    <div class="screen" id="screen-alerts">
+      <div class="dash-card">
+        <div class="section-header"><span class="section-title">System Alerts & Notifications</span><button class="btn-c btn-secondary-c" style="height:28px;font-size:0.75rem;padding:0 0.75rem">Mark All Read</button></div>
+        <div class="activity-item" style="background:rgba(247,95,95,0.04);padding:0.85rem;border-radius:8px;margin-bottom:0.5rem">
+          <div class="activity-icon" style="background:rgba(247,95,95,0.15);color:var(--danger)"><i class="bi bi-exclamation-octagon-fill"></i></div>
+          <div style="flex:1"><div class="activity-text"><strong>[URGENT]</strong> Case #MP-2026-0089 (Ana Lim, 8F) — over 72 hours without progress update</div><div class="activity-time">Today · 9:00 AM</div></div>
+          <button class="btn-c btn-danger-c" style="height:28px;font-size:0.73rem;padding:0 0.75rem;flex-shrink:0">Act Now</button>
+        </div>
+        <div class="activity-item" style="background:rgba(247,95,95,0.04);padding:0.85rem;border-radius:8px;margin-bottom:0.5rem">
+          <div class="activity-icon" style="background:rgba(247,95,95,0.15);color:var(--danger)"><i class="bi bi-person-exclamation"></i></div>
+          <div style="flex:1"><div class="activity-text"><strong>[NEW]</strong> Missing person report filed — Maria Santos (16F), Quiapo, Manila</div><div class="activity-time">Today · 12:14 AM</div></div>
+          <button class="btn-c btn-primary-c" style="height:28px;font-size:0.73rem;padding:0 0.75rem;flex-shrink:0">Review</button>
+        </div>
+        <div class="activity-item" style="padding:0.85rem;border-radius:8px;margin-bottom:0.5rem">
+          <div class="activity-icon" style="background:rgba(247,200,79,0.12);color:var(--accent5)"><i class="bi bi-clock-history"></i></div>
+          <div style="flex:1"><div class="activity-text"><strong>[REMINDER]</strong> 3 complaints pending assignment for over 24 hours</div><div class="activity-time">Yesterday · 6:00 PM</div></div>
+          <button class="btn-c btn-secondary-c" style="height:28px;font-size:0.73rem;padding:0 0.75rem;flex-shrink:0">View</button>
+        </div>
+        <div class="activity-item" style="padding:0.85rem;border-radius:8px">
+          <div class="activity-icon" style="background:rgba(56,226,160,0.1);color:var(--accent2)"><i class="bi bi-check-circle-fill"></i></div>
+          <div style="flex:1"><div class="activity-text"><strong>[CLOSED]</strong> Case #MP-2026-0087 (Elena Buenaventura) — marked as resolved by Det. Mendoza</div><div class="activity-time">Yesterday · 1:30 PM</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════
+         SCREEN: SETTINGS
+    ════════════════════════════ -->
+    <div class="screen" id="screen-settings">
+      <div class="row g-3">
+        <div class="col-12 col-lg-8">
+          <div class="dash-card mb-3">
+            <div class="section-header"><span class="section-title">System Configuration</span></div>
+            <div class="row g-2">
+              <div class="col-md-6"><div class="form-group"><label>Station Name</label><input class="form-control-c" type="text" value="Manila Police District — Station 1"></div></div>
+              <div class="col-md-6"><div class="form-group"><label>Station Address</label><input class="form-control-c" type="text" value="UN Ave., Ermita, Manila"></div></div>
+              <div class="col-md-4"><div class="form-group"><label>Chief of Station</label><input class="form-control-c" type="text" value="Col. Fernando Dela Torre"></div></div>
+              <div class="col-md-4"><div class="form-group"><label>System Email</label><input class="form-control-c" type="email" value="station1@mpd.gov.ph"></div></div>
+              <div class="col-md-4"><div class="form-group"><label>Emergency Hotline</label><input class="form-control-c" type="tel" value="(02) 8523-0401"></div></div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:0.5rem">
+              <button class="btn-c btn-primary-c"><i class="bi bi-save"></i> Save Changes</button>
+            </div>
+          </div>
+
+          <div class="dash-card">
+            <div class="section-header"><span class="section-title">Notification Settings</span></div>
+            <div style="display:flex;flex-direction:column;gap:1rem">
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+                <div><div style="font-size:0.85rem;font-weight:500">Urgent Case Alerts</div><div style="font-size:0.75rem;color:var(--muted)">Email + SMS when an urgent case is filed</div></div>
+                <div style="width:40px;height:22px;background:var(--accent);border-radius:11px;cursor:pointer;position:relative"><div style="position:absolute;right:3px;top:3px;width:16px;height:16px;background:#fff;border-radius:50%"></div></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+                <div><div style="font-size:0.85rem;font-weight:500">Case Timeout Reminders</div><div style="font-size:0.75rem;color:var(--muted)">Alert when cases have no update for 24h</div></div>
+                <div style="width:40px;height:22px;background:var(--accent);border-radius:11px;cursor:pointer;position:relative"><div style="position:absolute;right:3px;top:3px;width:16px;height:16px;background:#fff;border-radius:50%"></div></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:0.75rem;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+                <div><div style="font-size:0.85rem;font-weight:500">Daily Summary Report</div><div style="font-size:0.75rem;color:var(--muted)">Auto-generate daily case summary at 6 AM</div></div>
+                <div style="width:40px;height:22px;background:var(--surface3);border:1px solid var(--border);border-radius:11px;cursor:pointer;position:relative"><div style="position:absolute;left:3px;top:3px;width:14px;height:14px;background:var(--muted);border-radius:50%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-4">
+          <div class="dash-card mb-3">
+            <div class="section-header"><span class="section-title">My Profile</span></div>
+            <div style="text-align:center;margin-bottom:1rem">
+              <div class="user-avatar" style="width:60px;height:60px;font-size:1.1rem;margin:0 auto 0.75rem;background:linear-gradient(135deg,var(--accent),var(--accent4))">RC</div>
+              <div style="font-weight:600">Reyes, Carlo</div>
+              <div style="font-size:0.75rem;color:var(--muted)">Senior Investigator · Badge #0771</div>
+            </div>
+            <div class="row g-2">
+              <div class="col-12"><div class="form-group"><label>Display Name</label><input class="form-control-c" type="text" value="Reyes, Carlo"></div></div>
+              <div class="col-12"><div class="form-group"><label>Email</label><input class="form-control-c" type="email" value="c.reyes@mpd.gov.ph"></div></div>
+              <div class="col-12"><div class="form-group"><label>Change Password</label><input class="form-control-c" type="password" placeholder="New password"></div></div>
+            </div>
+            <button class="btn-c btn-primary-c" style="width:100%;justify-content:center;margin-top:0.5rem"><i class="bi bi-save"></i> Update Profile</button>
+          </div>
+          <div class="dash-card">
+            <div class="section-header"><span class="section-title">System Info</span></div>
+            <div style="font-size:0.8rem;display:flex;flex-direction:column;gap:0.5rem;color:var(--muted)">
+              <div style="display:flex;justify-content:space-between"><span>System Version</span><span style="color:var(--text)">NEXUS v3.1.0</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Last Backup</span><span style="color:var(--text)">Mar 7, 2026 · 6:00 AM</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Database Status</span><span style="color:var(--accent2)">● Online</span></div>
+              <div style="display:flex;justify-content:space-between"><span>Total Records</span><span style="color:var(--text)">14,842</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════ MODALS ═══════════ -->
+
+<!-- Quick New Case Modal -->
+<div class="modal-overlay" id="quick-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span class="modal-title">Quick — New Case</span>
+      <button class="close-btn" onclick="closeModal('quick-modal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1.25rem">What type of case would you like to file?</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1.25rem;cursor:pointer;text-align:center;transition:all 0.15s" onclick="closeModal('quick-modal');showScreen('add-missing', null)" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          <i class="bi bi-person-exclamation" style="font-size:2rem;color:var(--accent);display:block;margin-bottom:0.6rem"></i>
+          <div style="font-family:var(--font-head);font-weight:700;font-size:0.95rem">Missing Person</div>
+          <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">File a missing person report</div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1.25rem;cursor:pointer;text-align:center;transition:all 0.15s" onclick="closeModal('quick-modal');showScreen('add-complaint', null)" onmouseover="this.style.borderColor='var(--accent4)'" onmouseout="this.style.borderColor='var(--border)'">
+          <i class="bi bi-file-earmark-text" style="font-size:2rem;color:var(--accent4);display:block;margin-bottom:0.6rem"></i>
+          <div style="font-family:var(--font-head);font-weight:700;font-size:0.95rem">Legal Complaint</div>
+          <div style="font-size:0.76rem;color:var(--muted);margin-top:4px">File a legal complaint or blotter</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Notifications Modal -->
+<div class="modal-overlay" id="notif-modal">
+  <div class="modal-box" style="max-width:400px">
+    <div class="modal-head">
+      <span class="modal-title">Notifications</span>
+      <button class="close-btn" onclick="closeModal('notif-modal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body" style="padding:0.75rem">
+      <div class="activity-item" style="padding:0.85rem">
+        <div class="activity-icon" style="background:rgba(247,95,95,0.15);color:var(--danger)"><i class="bi bi-exclamation-octagon-fill"></i></div>
+        <div><div class="activity-text"><strong>[URGENT]</strong> Case #MP-0089 over 72hrs without update</div><div class="activity-time">Today · 9:00 AM</div></div>
+      </div>
+      <div class="activity-item" style="padding:0.85rem">
+        <div class="activity-icon" style="background:rgba(247,95,95,0.12);color:var(--danger)"><i class="bi bi-person-exclamation"></i></div>
+        <div><div class="activity-text">New urgent case: Maria Santos (16F), Quiapo</div><div class="activity-time">Today · 12:14 AM</div></div>
+      </div>
+      <div class="activity-item" style="padding:0.85rem">
+        <div class="activity-icon" style="background:rgba(247,200,79,0.12);color:var(--accent5)"><i class="bi bi-clock-history"></i></div>
+        <div><div class="activity-text">3 complaints unassigned for over 24 hours</div><div class="activity-time">Yesterday · 6:00 PM</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal-overlay" id="upload-modal">
+  <div class="modal-box" style="max-width:440px">
+    <div class="modal-head">
+      <span class="modal-title">Upload Evidence / Document</span>
+      <button class="close-btn" onclick="closeModal('upload-modal')"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--surface2);border:2px dashed var(--border);border-radius:10px;padding:2.5rem;text-align:center;margin-bottom:1rem">
+        <i class="bi bi-cloud-upload" style="font-size:2.5rem;color:var(--muted);display:block;margin-bottom:0.75rem"></i>
+        <div style="font-size:0.88rem;font-weight:500;margin-bottom:4px">Drag and drop files here</div>
+        <div style="font-size:0.78rem;color:var(--muted)">or click to browse</div>
+      </div>
+      <div class="form-group"><label>Document Type</label><select class="form-control-c"><option>Photo Evidence</option><option>CCTV Footage</option><option>Witness Statement</option><option>Medical Certificate</option><option>Police Blotter</option><option>Other</option></select></div>
+      <div class="form-group"><label>Description</label><input class="form-control-c" type="text" placeholder="Brief description of the file"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-c btn-secondary-c" onclick="closeModal('upload-modal')">Cancel</button>
+      <button class="btn-c btn-primary-c"><i class="bi bi-upload"></i> Upload</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── SCREEN NAVIGATION ──
+  const topbarTitles = {
+    'dashboard': 'Dashboard',
+    'missing-list': 'Missing Persons — All Cases',
+    'missing-urgent': 'Urgent / Active Cases',
+    'add-missing': 'File Missing Person Report',
+    'missing-detail': 'Case #MP-2026-0091 — Maria Santos',
+    'complaints-list': 'Legal Complaints — All',
+    'add-complaint': 'File Legal Complaint',
+    'complaint-detail': 'Complaint #LC-2026-0215',
+    'reports': 'Reports & Analytics',
+    'personnel': 'Assigned Personnel',
+    'alerts': 'Alerts & Notifications',
+    'settings': 'Settings'
+  };
+
+  function showScreen(id, triggerEl) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const target = document.getElementById('screen-' + id);
+    if (target) target.classList.add('active');
+    document.getElementById('topbar-title').textContent = topbarTitles[id] || id;
+
+    if (triggerEl) {
+      document.querySelectorAll('.nav-link-c').forEach(l => l.classList.remove('active'));
+      triggerEl.classList.add('active');
+    }
+  }
+
+  // ── MODALS ──
+  function showModal(id) {
+    document.getElementById(id).classList.add('show');
+  }
+  function closeModal(id) {
+    document.getElementById(id).classList.remove('show');
+  }
+  document.querySelectorAll('.modal-overlay').forEach(m => {
+    m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
+  });
+
+  // ── TABS ──
+  function switchTab(btn, paneId) {
+    const container = btn.closest('.detail-body') || btn.closest('.dash-card');
+    if (!container) return;
+    container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    container.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    const pane = document.getElementById('tab-' + paneId);
+    if (pane) pane.classList.add('active');
+  }
+
+  // ── FILTER TOGGLE ──
+  function toggleFilter(btn) {
+    btn.closest('.filter-bar').querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
