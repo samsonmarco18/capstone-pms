@@ -104,7 +104,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Sign In | ERNI PMS</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-       <style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
         :root {
             --login-primary: #0d6786;
             --login-primary-dark: #0a5570;
@@ -282,12 +284,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             position: relative;
         }
 
-        .form-control,
-        .form-select {
+        .login-card .form-control,
+        .login-card .form-select {
             border: 0;
             border-bottom: 1.5px solid var(--login-line);
             border-radius: 0;
-            padding: 8px 34px 8px 0;
+            padding: 8px 0;
             background: transparent;
             box-shadow: none !important;
             min-height: 0;
@@ -295,20 +297,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             color: #17324d;
         }
 
-        .form-control:focus,
-        .form-select:focus {
+        .login-card .form-control:focus,
+        .login-card .form-select:focus {
             border-bottom-color: var(--login-accent);
             background: transparent;
         }
 
+        .input-wrap .form-control {
+            padding-right: 38px;
+        }
+
         .password-toggle {
             position: absolute;
-            right: 0;
+            right: 2px;
             top: 50%;
             transform: translateY(-50%);
             border: 0;
             background: transparent;
             color: #0f83be;
+            padding: 0;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.92rem;
+            line-height: 1;
+        }
+
+        .password-toggle:hover,
+        .password-toggle:focus-visible {
+            color: #0a557b;
+        }
+
+        .password-toggle:focus-visible {
+            outline: 2px solid rgba(26, 158, 224, 0.3);
+            outline-offset: 4px;
         }
 
         .login-row {
@@ -446,10 +470,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     </style>
-</head>
-<body>
-    <link rel="stylesheet" href="assets/css/style.css">
-</head>
 <body class="login-page">
     <div class="login-shell">
         <section class="login-brand">
@@ -508,8 +528,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 autocomplete="current-password"
                                 required
                             >
-                            <button type="button" class="password-toggle" onclick="togglePassword()">
-                                <i class="fas fa-eye" id="toggleIcon"></i>
+                            <button
+                                type="button"
+                                class="password-toggle"
+                                id="passwordToggle"
+                                onclick="togglePassword()"
+                                aria-controls="password"
+                                aria-label="Show password"
+                            >
+                                <i class="fa-solid fa-eye" id="toggleIcon" aria-hidden="true"></i>
                             </button>
                         </div>
                         <div class="login-row justify-content-end">
@@ -560,13 +587,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script>
         function togglePassword() {
             const input = document.getElementById('password');
+            const toggle = document.getElementById('passwordToggle');
             const icon = document.getElementById('toggleIcon');
             if (input.type === 'password') {
                 input.type = 'text';
-                icon.classList.replace('fa-eye', 'fa-eye-slash');
+                toggle.setAttribute('aria-label', 'Hide password');
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
             } else {
                 input.type = 'password';
-                icon.classList.replace('fa-eye-slash', 'fa-eye');
+                toggle.setAttribute('aria-label', 'Show password');
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
             }
         }
 
