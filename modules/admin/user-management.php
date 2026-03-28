@@ -478,6 +478,28 @@ include '../../includes/navbar.php';
     color: var(--theme-primary) !important;
 }
 
+/* Primary Button (Solid) */
+.btn-primary-modern {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    color: white;
+    border: none;
+    padding: 0.6rem 1.4rem;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.btn-primary-modern:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
+    color: white;
+}
+
 /* Empty State */
 .empty-state-modern {
     text-align: center;
@@ -535,6 +557,7 @@ include '../../includes/navbar.php';
     color: var(--theme-primary);
     margin-bottom: 0.5rem;
 }
+
 
 .modal-modern .form-control,
 .modal-modern .form-select {
@@ -738,7 +761,7 @@ include '../../includes/navbar.php';
 
 <!-- Create User Modal -->
 <div class="modal fade modal-modern" id="createUserModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -749,49 +772,51 @@ include '../../includes/navbar.php';
             <form method="POST">
                 <div class="modal-body">
                     <input type="hidden" name="action" value="create">
-                    <div class="mb-3">
-                        <label class="form-label">Username</label>
-                        <input type="text" name="username" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Password</label>
-                        <input type="password" name="password" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Full Name</label>
-                        <input type="text" name="full_name" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Department</label>
-                        <select name="department" class="form-select">
-                            <option value="">Select Department</option>
-                            <option value="Frontend Developer">Frontend Developer</option>
-                            <option value="Backend Developer">Backend Developer</option>
-                            <option value="Full Stack Developer">Full Stack Developer</option>
-                            <option value="QA Engineer">QA Engineer</option>
-                            <option value="UI/UX Designer">UI/UX Designer</option>
-                            <option value="DevOps Engineer">DevOps Engineer</option>
-                            <option value="Database Administrator">Database Administrator</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Role</label>
-                        <select name="role" class="form-select" required>
-                            <option value="sales">Sales</option>
-                            <option value="architect">Architect</option>
-                            <option value="sul">Service Unit Leader</option>
-                            <option value="expert">Expert/Senior</option>
-                            <option value="developer">Developer</option>
-                        </select>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Username</label>
+                            <input type="text" name="username" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Password</label>
+                            <input type="password" name="password" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Full Name</label>
+                            <input type="text" name="full_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Department</label>
+                            <select name="department" class="form-select">
+                                <option value="">Select Department</option>
+                                <option value="Frontend Developer">Frontend Developer</option>
+                                <option value="Backend Developer">Backend Developer</option>
+                                <option value="Full Stack Developer">Full Stack Developer</option>
+                                <option value="QA Engineer">QA Engineer</option>
+                                <option value="UI/UX Designer">UI/UX Designer</option>
+                                <option value="DevOps Engineer">DevOps Engineer</option>
+                                <option value="Database Administrator">Database Administrator</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Role</label>
+                            <select name="role" class="form-select" required>
+                                <option value="sales">Sales</option>
+                                <option value="architect">Architect</option>
+                                <option value="sul">Service Unit Leader</option>
+                                <option value="expert">Expert/Senior</option>
+                                <option value="developer">Developer</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-add-modern">Create User</button>
+                    <button type="submit" class="btn-primary-modern">Create User</button>
                 </div>
             </form>
         </div>

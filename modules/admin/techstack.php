@@ -413,6 +413,14 @@ include '../../includes/navbar.php';
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
     color: white;
     border: none;
+    padding: 0.6rem 1.2rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
 }
 
 .btn-primary-modern:hover {
