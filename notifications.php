@@ -4,6 +4,19 @@ requireLogin();
 
 $user = getCurrentUser();
 $conn = getConnection();
+
+// Handle delete request
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_notification'])) {
+    $notificationId = (int)$_POST['notification_id'];
+    $stmt = $conn->prepare('DELETE FROM notifications WHERE id = ? AND user_id = ?');
+    $stmt->bind_param('ii', $notificationId, $user['id']);
+    $stmt->execute();
+    $stmt->close();
+    
+    header('Location: notifications.php');
+    exit();
+}
+
 $stmt = $conn->prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC');
 $stmt->bind_param('i', $user['id']);
 $stmt->execute();
@@ -102,7 +115,6 @@ include 'includes/navbar.php';
     padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--gray-200);
     transition: background 0.2s;
-    cursor: pointer;
 }
 
 .notification-item:last-child {
@@ -168,6 +180,29 @@ include 'includes/navbar.php';
     margin-right: 0.5rem;
 }
 
+/* Delete Button */
+.btn-delete-notification {
+    background: transparent;
+    border: none;
+    color: var(--gray-400);
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 0.25rem;
+    transition: all 0.2s;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.btn-delete-notification:hover {
+    background: var(--gray-200);
+    color: #dc2626;
+}
+
 /* Empty State */
 .empty-state {
     text-align: center;
@@ -231,6 +266,11 @@ include 'includes/navbar.php';
     .notification-title {
         font-size: 0.85rem;
     }
+    
+    .btn-delete-notification {
+        width: 24px;
+        height: 24px;
+    }
 }
 </style>
 
@@ -256,12 +296,11 @@ include 'includes/navbar.php';
             <?php if (!empty($notifications)): ?>
                 <?php foreach ($notifications as $notification): ?>
                     <div class="notification-item <?php echo !$notification['is_read'] ? 'unread' : ''; ?>" 
-                         data-id="<?php echo $notification['id']; ?>"
-                         onclick="markAsRead(<?php echo $notification['id']; ?>)">
+                         data-id="<?php echo $notification['id']; ?>">
                         <div class="notification-icon">
                             <i class="fas fa-bell"></i>
                         </div>
-                        <div class="notification-content">
+                        <div class="notification-content" onclick="markAsRead(<?php echo $notification['id']; ?>)">
                             <div class="notification-title">
                                 <?php if (!$notification['is_read']): ?>
                                     <span class="unread-dot"></span>
@@ -276,6 +315,9 @@ include 'includes/navbar.php';
                                 <?php echo date('M d, Y h:i A', strtotime($notification['created_at'])); ?>
                             </div>
                         </div>
+                        <button class="btn-delete-notification" onclick="deleteNotification(<?php echo $notification['id']; ?>, event)">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -310,6 +352,20 @@ function markAllAsRead() {
                 location.reload();
             }
         });
+    }
+}
+
+function deleteNotification(notificationId, event) {
+    event.stopPropagation();
+    if (confirm('Delete this notification?')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.innerHTML = `
+            <input type="hidden" name="delete_notification" value="1">
+            <input type="hidden" name="notification_id" value="${notificationId}">
+        `;
+        document.body.appendChild(form);
+        form.submit();
     }
 }
 </script>
