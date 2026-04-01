@@ -119,16 +119,6 @@ function renderConversationList() {
     const search = ($('#chatSearchInput').val() || '').trim().toLowerCase();
     let items = currentChatTab === 'groups' ? chatData.groups : chatData.conversations;
 
-    if (currentChatTab === 'calls') {
-        container.html(`
-            <div class="chat-list-empty">
-                <i class="fas fa-phone-slash"></i>
-                <div>Calls are not available yet.</div>
-            </div>
-        `);
-        return;
-    }
-
     if (search) {
         items = items.filter(function (item) {
             return [item.name, item.subtitle, item.last_message]

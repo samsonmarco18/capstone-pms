@@ -33,7 +33,6 @@ if (!$user) {
             <div class="chat-tabs">
                 <button type="button" class="chat-tab active" data-chat-tab="chat">Chat</button>
                 <button type="button" class="chat-tab" data-chat-tab="groups">Groups</button>
-                <button type="button" class="chat-tab" data-chat-tab="calls" disabled>Calls</button>
             </div>
             <div id="chatConversationList" class="chat-conversation-list">
                 <div class="chat-list-empty">
