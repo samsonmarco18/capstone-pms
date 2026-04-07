@@ -83,13 +83,14 @@ if ($projectId && $project) {
                         'start' => $phase['start_date'],
                         'end' => $phase['end_date'],
                         'progress' => 0,
-                        'custom_class' => 'gantt-phase'
+                        'custom_class' => 'gantt-phase',
+                        'is_phase' => true
                     ];
                 }
             }
         }
 
-        $taskRows = $conn->query("SELECT id, title, started_at, deadline, estimated_days_min, estimated_days_likely, estimated_days_max, sales_estimate_days FROM tasks WHERE project_id = $projectId");
+        $taskRows = $conn->query("SELECT id, title, started_at, deadline, estimated_days_min, estimated_days_likely, estimated_days_max, sales_estimate_choice, sales_estimate_days FROM tasks WHERE project_id = $projectId");
         while ($task = $taskRows->fetch_assoc()) {
             $startRaw = $task['started_at'] ?? null;
             $endRaw = $task['deadline'] ?? null;
@@ -126,7 +127,13 @@ if ($projectId && $project) {
                 'start' => $start,
                 'end' => $end,
                 'progress' => 0,
-                'custom_class' => 'gantt-task'
+                'custom_class' => 'gantt-task',
+                'min_days' => (int) ($task['estimated_days_min'] ?? 0),
+                'likely_days' => (int) ($task['estimated_days_likely'] ?? 0),
+                'max_days' => (int) ($task['estimated_days_max'] ?? 0),
+                'sales_estimate_choice' => $task['sales_estimate_choice'] ?? null,
+                'sales_estimate_days' => (int) ($task['sales_estimate_days'] ?? 0),
+                'is_phase' => false
             ];
         }
 
@@ -1011,6 +1018,9 @@ include '../../includes/navbar.php';
                                 <span><i class="fas fa-user-check"></i> Estimated by: <?php echo htmlspecialchars($task['expert_name']); ?></span>
                                 <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
                                 <span class="estimation-badge"><i class="fas fa-chart-line"></i> PERT: <?php echo $pertEstimate; ?> days</span>
+                                <?php if (!empty($task['sales_estimate_choice']) && !empty($task['sales_estimate_days'])): ?>
+                                    <span class="estimation-badge"><i class="fas fa-flag-checkered"></i> Sales picked <?php echo ucfirst($task['sales_estimate_choice']); ?>: <?php echo (int) $task['sales_estimate_days']; ?> days</span>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <button class="btn-primary-modern" onclick="openAssignDeveloperModal(<?php echo $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
@@ -1365,58 +1375,176 @@ function escapeHtml(text) {
 }
 
 const sulGanttProject = <?php echo json_encode($ganttProjectData, JSON_UNESCAPED_UNICODE); ?>;
-if (sulGanttProject && Array.isArray(sulGanttProject.tasks) && sulGanttProject.tasks.length > 0) {
-    if (typeof Gantt !== 'undefined') {
-        new Gantt("#sulGanttChart", sulGanttProject.tasks, {
-            view_mode: 'Month',
-            language: 'en'
-        });
-    } else if (typeof Chart !== 'undefined') {
-        const container = document.getElementById('sulGanttChart');
-        if (container) {
-            container.innerHTML = '';
-            const canvas = document.createElement('canvas');
-            canvas.height = 240;
-            container.appendChild(canvas);
-            const ctx = canvas.getContext('2d');
-            const labels = sulGanttProject.tasks.map(t => t.name);
-            const starts = sulGanttProject.tasks.map(t => new Date(t.start + 'T00:00:00'));
-            const ends = sulGanttProject.tasks.map(t => new Date(t.end + 'T00:00:00'));
-            const minStart = new Date(Math.min(...starts.map(d => d.getTime())));
-            const offsets = starts.map(start => Math.max(0, Math.round((start - minStart) / (1000 * 60 * 60 * 24))));
-            const durations = starts.map((start, idx) => {
-                const end = ends[idx];
-                return Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)));
-            });
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Offset',
-                        data: offsets,
-                        backgroundColor: 'rgba(0,0,0,0)',
-                        borderWidth: 0,
-                        stack: 'gantt'
-                    }, {
-                        label: 'Duration (days)',
-                        data: durations,
-                        backgroundColor: '#1f6392',
-                        stack: 'gantt'
-                    }]
+
+function diffDays(startDate, endDate) {
+    return Math.max(1, Math.round((endDate - startDate) / 86400000));
+}
+
+function normalizeSulGanttRows(tasks) {
+    const rows = (tasks || []).map(task => {
+        const startDate = new Date(`${task.start}T00:00:00`);
+        const endDate = new Date(`${task.end}T00:00:00`);
+        if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+            return null;
+        }
+
+        const dateDuration = diffDays(startDate, endDate);
+        const isPhase = Boolean(task.is_phase);
+        const minDays = Math.max(0, parseInt(task.min_days || '0', 10));
+        const likelyDays = Math.max(minDays, parseInt(task.likely_days || '0', 10));
+        const maxDays = Math.max(likelyDays, parseInt(task.max_days || '0', 10));
+        const committedDays = Math.max(0, parseInt(task.sales_estimate_days || '0', 10));
+        const totalDays = isPhase ? dateDuration : Math.max(maxDays, committedDays, dateDuration, 1);
+
+        return {
+            name: task.name,
+            startDate,
+            isPhase,
+            phaseDuration: isPhase ? totalDays : 0,
+            minSegment: isPhase ? 0 : Math.min(minDays, totalDays),
+            likelySegment: isPhase ? 0 : Math.max(Math.min(likelyDays, totalDays) - Math.min(minDays, totalDays), 0),
+            maxSegment: isPhase ? 0 : Math.max(totalDays - Math.max(Math.min(likelyDays, totalDays), Math.min(minDays, totalDays)), 0),
+            tooltip: {
+                minDays,
+                likelyDays,
+                maxDays,
+                committedDays,
+                committedChoice: task.sales_estimate_choice || ''
+            }
+        };
+    }).filter(Boolean);
+
+    if (!rows.length) {
+        return rows;
+    }
+
+    const earliestStart = new Date(Math.min(...rows.map(task => task.startDate.getTime())));
+    rows.forEach(task => {
+        task.offset = Math.max(0, diffDays(earliestStart, task.startDate) - 1);
+    });
+
+    return rows;
+}
+
+function renderSulThreePointGantt(target, tasks) {
+    if (!target) {
+        return;
+    }
+
+    if (typeof Chart === 'undefined') {
+        target.innerHTML = '<div class="text-danger small">Chart.js failed to load. Please check your internet connection.</div>';
+        return;
+    }
+
+    const rows = normalizeSulGanttRows(tasks);
+    if (!rows.length) {
+        target.innerHTML = '<div class="text-muted small">No timeline data yet.</div>';
+        return;
+    }
+
+    target.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    canvas.height = Math.max(240, rows.length * 44);
+    target.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+
+    if (window.sulGanttChartInstance) {
+        window.sulGanttChartInstance.destroy();
+    }
+
+    window.sulGanttChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: rows.map(task => task.name),
+            datasets: [{
+                label: 'Offset',
+                data: rows.map(task => task.offset),
+                backgroundColor: 'rgba(0,0,0,0)',
+                borderWidth: 0,
+                stack: 'gantt'
+            }, {
+                label: 'Project Phase',
+                data: rows.map(task => task.phaseDuration),
+                backgroundColor: '#94a3b8',
+                stack: 'gantt'
+            }, {
+                label: 'Minimum',
+                data: rows.map(task => task.minSegment),
+                backgroundColor: '#60a5fa',
+                stack: 'gantt'
+            }, {
+                label: 'Most Likely',
+                data: rows.map(task => task.likelySegment),
+                backgroundColor: '#34d399',
+                stack: 'gantt'
+            }, {
+                label: 'Maximum',
+                data: rows.map(task => task.maxSegment),
+                backgroundColor: '#f97316',
+                stack: 'gantt'
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        filter: (legendItem) => legendItem.text !== 'Offset'
+                    }
                 },
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { beginAtZero: true, stacked: true },
-                        y: { stacked: true }
+                tooltip: {
+                    callbacks: {
+                        label: (context) => {
+                            if (context.dataset.label === 'Offset') {
+                                return null;
+                            }
+                            const value = Number(context.raw || 0);
+                            if (value <= 0) {
+                                return null;
+                            }
+                            return `${context.dataset.label}: ${value} day${value === 1 ? '' : 's'}`;
+                        },
+                        footer: (items) => {
+                            if (!items.length) {
+                                return '';
+                            }
+                            const row = rows[items[0].dataIndex];
+                            if (!row || row.isPhase) {
+                                return '';
+                            }
+                            const details = [
+                                `Min: ${row.tooltip.minDays} day${row.tooltip.minDays === 1 ? '' : 's'}`,
+                                `Likely: ${row.tooltip.likelyDays} day${row.tooltip.likelyDays === 1 ? '' : 's'}`,
+                                `Max: ${row.tooltip.maxDays} day${row.tooltip.maxDays === 1 ? '' : 's'}`
+                            ];
+                            if (row.tooltip.committedChoice && row.tooltip.committedDays > 0) {
+                                details.push(`Committed: ${row.tooltip.committedChoice} (${row.tooltip.committedDays} days)`);
+                            }
+                            return details;
+                        }
                     }
                 }
-            });
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    stacked: true,
+                    title: { display: true, text: 'Days From Earliest Start' }
+                },
+                y: {
+                    stacked: true
+                }
+            }
         }
+    });
+}
+
+if (sulGanttProject && Array.isArray(sulGanttProject.tasks) && sulGanttProject.tasks.length > 0) {
+    const container = document.getElementById('sulGanttChart');
+    if (container) {
+        renderSulThreePointGantt(container, sulGanttProject.tasks);
     }
 }
 </script>

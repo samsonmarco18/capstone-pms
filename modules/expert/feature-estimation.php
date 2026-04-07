@@ -216,13 +216,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['project_setup'])) {
 // Handle task estimation save (draft)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($_POST['submit_all'])) {
     $taskId = $_POST['task_id'];
-    $minDays = $_POST['min_days'];
-    $likelyDays = $_POST['likely_days'];
-    $maxDays = $_POST['max_days'];
-    $expectation = $_POST['expectation'];
+    $minDays = (int) ($_POST['min_days'] ?? 0);
+    $likelyDays = (int) ($_POST['likely_days'] ?? 0);
+    $maxDays = (int) ($_POST['max_days'] ?? 0);
+    $expectation = trim((string) ($_POST['expectation'] ?? ''));
     $phaseName = $_POST['phase_name'] ?? null;
     $plannedStart = !empty($_POST['planned_start']) ? $_POST['planned_start'] : null;
     $plannedEnd = !empty($_POST['planned_end']) ? $_POST['planned_end'] : null;
+
+    if ($minDays <= 0 || $likelyDays <= 0 || $maxDays <= 0) {
+        $_SESSION['error'] = "Minimum, most likely, and maximum days must all be greater than zero.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($minDays > $likelyDays || $likelyDays > $maxDays) {
+        $_SESSION['error'] = "Please keep the estimate order as Minimum <= Most Likely <= Maximum.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($expectation === '') {
+        $_SESSION['error'] = "Please add an expectation description for the feature.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
     
     // Get the project_id for this task
     $taskInfo = $conn->query("SELECT project_id FROM tasks WHERE id = $taskId")->fetch_assoc();
@@ -929,20 +947,20 @@ textarea.form-control-custom {
                     <div class="row g-3 mb-4">
                         <div class="col-md-4">
                             <label class="form-label">Minimum Days (Best)</label>
-                            <input type="number" name="min_days" class="form-control-custom estimate-input" step="0.5" <?php echo $isReadonly ? 'disabled' : ''; ?>
-                                   value="<?php echo $estimation['min_days'] ?? ''; ?>" required placeholder="0.5">
+                            <input type="number" name="min_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                                   value="<?php echo $estimation['min_days'] ?? ''; ?>" required placeholder="1">
                             <small class="text-muted d-block mt-1">Optimistic estimate</small>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Most Likely Days</label>
-                            <input type="number" name="likely_days" class="form-control-custom estimate-input" step="0.5" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                            <input type="number" name="likely_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
                                    value="<?php echo $estimation['likely_days'] ?? ''; ?>" required placeholder="1">
                             <small class="text-muted d-block mt-1">Realistic estimate</small>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Maximum Days (Worst)</label>
-                            <input type="number" name="max_days" class="form-control-custom estimate-input" step="0.5" <?php echo $isReadonly ? 'disabled' : ''; ?>
-                                   value="<?php echo $estimation['max_days'] ?? ''; ?>" required placeholder="2">
+                            <input type="number" name="max_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                                   value="<?php echo $estimation['max_days'] ?? ''; ?>" required placeholder="3">
                             <small class="text-muted d-block mt-1">Pessimistic estimate</small>
                         </div>
                     </div>
@@ -1362,9 +1380,9 @@ function escapeHtml(text) {
 
 function updateGanttPreview(card) {
     if (!card) return;
-    const minVal = parseFloat(card.querySelector('input[name="min_days"]')?.value) || 0;
-    const likelyVal = parseFloat(card.querySelector('input[name="likely_days"]')?.value) || 0;
-    const maxVal = parseFloat(card.querySelector('input[name="max_days"]')?.value) || 0;
+    const minVal = Math.max(0, parseInt(card.querySelector('input[name="min_days"]')?.value || '0', 10));
+    const likelyVal = Math.max(minVal, parseInt(card.querySelector('input[name="likely_days"]')?.value || '0', 10));
+    const maxVal = Math.max(likelyVal, parseInt(card.querySelector('input[name="max_days"]')?.value || '0', 10));
     const maxScale = Math.max(minVal, likelyVal, maxVal, 1);
 
     const minBar = card.querySelector('.min-bar');
@@ -1378,6 +1396,40 @@ function updateGanttPreview(card) {
     if (minBar) minBar.style.width = `${minWidth}%`;
     if (likelyBar) likelyBar.style.width = `${likelyWidth}%`;
     if (maxBar) maxBar.style.width = `${maxWidth}%`;
+}
+
+function validateEstimateCard(card) {
+    if (!card) return true;
+    const minInput = card.querySelector('input[name="min_days"]');
+    const likelyInput = card.querySelector('input[name="likely_days"]');
+    const maxInput = card.querySelector('input[name="max_days"]');
+    if (!minInput || !likelyInput || !maxInput) return true;
+
+    const minVal = parseInt(minInput.value || '0', 10);
+    const likelyVal = parseInt(likelyInput.value || '0', 10);
+    const maxVal = parseInt(maxInput.value || '0', 10);
+
+    minInput.setCustomValidity('');
+    likelyInput.setCustomValidity('');
+    maxInput.setCustomValidity('');
+
+    if ((minInput.value || likelyInput.value || maxInput.value) && (minVal <= 0 || likelyVal <= 0 || maxVal <= 0)) {
+        const message = 'All day estimates must be greater than zero.';
+        minInput.setCustomValidity(message);
+        likelyInput.setCustomValidity(message);
+        maxInput.setCustomValidity(message);
+        return false;
+    }
+
+    if (minVal > likelyVal || likelyVal > maxVal) {
+        const message = 'Use Minimum <= Most Likely <= Maximum.';
+        minInput.setCustomValidity(message);
+        likelyInput.setCustomValidity(message);
+        maxInput.setCustomValidity(message);
+        return false;
+    }
+
+    return true;
 }
 
 function bindPreviewHandlers() {
@@ -1402,23 +1454,23 @@ function buildGanttTasks() {
         const taskId = row.querySelector('input[name="task_id"]')?.value || title;
         const startInput = row.querySelector('input[name="planned_start"]')?.value;
         const endInput = row.querySelector('input[name="planned_end"]')?.value;
-        const likelyDays = parseFloat(row.querySelector('input[name="likely_days"]')?.value || '0');
-        const minDays = parseFloat(row.querySelector('input[name="min_days"]')?.value || '0');
-        const maxDays = parseFloat(row.querySelector('input[name="max_days"]')?.value || '0');
+        const minDays = Math.max(0, parseInt(row.querySelector('input[name="min_days"]')?.value || '0', 10));
+        const likelyDays = Math.max(minDays, parseInt(row.querySelector('input[name="likely_days"]')?.value || '0', 10));
+        const maxDays = Math.max(likelyDays, parseInt(row.querySelector('input[name="max_days"]')?.value || '0', 10));
 
         let startDate = startInput || projectStartFallback;
         let endDate = endInput;
 
-        if (startDate && !endDate && likelyDays > 0) {
+        if (startDate && !endDate && maxDays > 0) {
             const start = new Date(startDate + 'T00:00:00');
-            start.setDate(start.getDate() + Math.max(1, Math.round(likelyDays)));
+            start.setDate(start.getDate() + Math.max(1, maxDays));
             endDate = start.toISOString().slice(0, 10);
         }
 
         if (!endDate) {
-            const duration = likelyDays || minDays || maxDays || 1;
+            const duration = maxDays || likelyDays || minDays || 1;
             const start = new Date(startDate + 'T00:00:00');
-            start.setDate(start.getDate() + Math.max(1, Math.round(duration)));
+            start.setDate(start.getDate() + Math.max(1, duration));
             endDate = start.toISOString().slice(0, 10);
         }
 
@@ -1428,10 +1480,50 @@ function buildGanttTasks() {
             start: startDate,
             end: endDate,
             progress: 0,
-            custom_class: 'gantt-task'
+            custom_class: 'gantt-task',
+            min_days: minDays,
+            likely_days: likelyDays,
+            max_days: maxDays,
+            is_phase: false
         });
     });
     return tasks;
+}
+
+function diffDays(startDate, endDate) {
+    return Math.max(1, Math.round((endDate - startDate) / 86400000));
+}
+
+function buildThreePointChartRows(tasks) {
+    const rows = tasks.map(task => {
+        const startDate = new Date(`${task.start}T00:00:00`);
+        const endDate = new Date(`${task.end}T00:00:00`);
+        const dateDuration = Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())
+            ? 1
+            : diffDays(startDate, endDate);
+        const minDays = Math.max(0, parseInt(task.min_days || '0', 10));
+        const likelyDays = Math.max(minDays, parseInt(task.likely_days || '0', 10));
+        const maxDays = Math.max(likelyDays, parseInt(task.max_days || '0', 10), dateDuration);
+
+        return {
+            name: task.name,
+            startDate,
+            minDays,
+            likelyDays: Math.max(likelyDays - minDays, 0),
+            maxDays: Math.max(maxDays - likelyDays, 0)
+        };
+    }).filter(task => !Number.isNaN(task.startDate.getTime()));
+
+    if (!rows.length) {
+        return rows;
+    }
+
+    const earliestStart = new Date(Math.min(...rows.map(task => task.startDate.getTime())));
+    rows.forEach(task => {
+        task.offset = Math.max(0, diffDays(earliestStart, task.startDate) - 1);
+    });
+
+    return rows;
 }
 
 function renderExpertGantt() {
@@ -1449,17 +1541,16 @@ function renderExpertGantt() {
 
     container.innerHTML = '<canvas id="expertGanttCanvas" height="240"></canvas>';
     const ctx = document.getElementById('expertGanttCanvas').getContext('2d');
-
-    const labels = tasks.map(t => t.name);
-    const starts = tasks.map(t => new Date(t.start + 'T00:00:00'));
-    const ends = tasks.map(t => new Date(t.end + 'T00:00:00'));
-    const minStart = new Date(Math.min(...starts.map(d => d.getTime())));
-    const offsets = starts.map(start => Math.max(0, Math.round((start - minStart) / (1000 * 60 * 60 * 24))));
-    const durations = starts.map((start, idx) => {
-        const end = ends[idx];
-        const diff = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)));
-        return diff;
-    });
+    const chartRows = buildThreePointChartRows(tasks);
+    if (!chartRows.length) {
+        container.innerHTML = '<div class="text-muted small">Add start dates and day estimates to build the timeline.</div>';
+        return;
+    }
+    const labels = chartRows.map(task => task.name);
+    const offsets = chartRows.map(task => task.offset);
+    const minSegments = chartRows.map(task => task.minDays);
+    const likelySegments = chartRows.map(task => task.likelyDays);
+    const maxSegments = chartRows.map(task => task.maxDays);
 
     if (window.expertGanttChart) {
         window.expertGanttChart.destroy();
@@ -1476,9 +1567,19 @@ function renderExpertGantt() {
                 borderWidth: 0,
                 stack: 'gantt'
             }, {
-                label: 'Duration (days)',
-                data: durations,
-                backgroundColor: '#1f6392',
+                label: 'Minimum',
+                data: minSegments,
+                backgroundColor: '#60a5fa',
+                stack: 'gantt'
+            }, {
+                label: 'Most Likely',
+                data: likelySegments,
+                backgroundColor: '#34d399',
+                stack: 'gantt'
+            }, {
+                label: 'Maximum',
+                data: maxSegments,
+                backgroundColor: '#f97316',
                 stack: 'gantt'
             }]
         },
@@ -1490,14 +1591,29 @@ function renderExpertGantt() {
                 x: {
                     beginAtZero: true,
                     stacked: true,
-                    title: { display: true, text: 'Days' }
+                    title: { display: true, text: 'Days From Earliest Start' }
                 },
                 y: {
                     stacked: true
                 }
             },
             plugins: {
-                legend: { display: false }
+                legend: {
+                    labels: {
+                        filter: (legendItem) => legendItem.text !== 'Offset'
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => {
+                            if (context.dataset.label === 'Offset') {
+                                return null;
+                            }
+                            const value = Number(context.raw || 0);
+                            return `${context.dataset.label}: ${value} day${value === 1 ? '' : 's'}`;
+                        }
+                    }
+                }
             }
         }
     });
@@ -1506,13 +1622,16 @@ function renderExpertGantt() {
 function bindGanttHandlers() {
     document.addEventListener('input', (e) => {
         if (e.target.matches('input[name="planned_start"], input[name="planned_end"], input[name="likely_days"], input[name="min_days"], input[name="max_days"]')) {
-            renderExpertGantt();
             const row = e.target.closest('.feature-row');
             if (row) {
-                const minVal = parseFloat(row.querySelector('input[name="min_days"]')?.value) || 0;
-                const likelyVal = parseFloat(row.querySelector('input[name="likely_days"]')?.value) || 0;
-                const maxVal = parseFloat(row.querySelector('input[name="max_days"]')?.value) || 0;
-                const isDone = (minVal > 0 && likelyVal > 0 && maxVal > 0);
+                validateEstimateCard(row);
+            }
+            renderExpertGantt();
+            if (row) {
+                const minVal = parseInt(row.querySelector('input[name="min_days"]')?.value || '0', 10) || 0;
+                const likelyVal = parseInt(row.querySelector('input[name="likely_days"]')?.value || '0', 10) || 0;
+                const maxVal = parseInt(row.querySelector('input[name="max_days"]')?.value || '0', 10) || 0;
+                const isDone = (minVal > 0 && likelyVal > 0 && maxVal > 0 && minVal <= likelyVal && likelyVal <= maxVal);
                 row.setAttribute('data-estimated', isDone ? '1' : '0');
                 row.classList.toggle('complete', isDone);
                 row.classList.toggle('incomplete', !isDone);
@@ -1520,6 +1639,19 @@ function bindGanttHandlers() {
             }
         }
     });
+
+    document.addEventListener('submit', (e) => {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement) || !form.closest('.estimation-card')) {
+            return;
+        }
+        const card = form.closest('.estimation-card');
+        if (!validateEstimateCard(card)) {
+            e.preventDefault();
+            form.reportValidity();
+        }
+    });
+
     renderExpertGantt();
 }
 

@@ -35,10 +35,31 @@ $hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phase
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['approve_estimation'])) {
         $taskId = (int) ($_POST['task_id'] ?? 0);
-        $estimateDays = (int) ($_POST['estimate_days'] ?? 0);
+        $estimateChoice = trim((string) ($_POST['estimate_choice'] ?? ''));
+        $allowedChoices = ['min', 'likely', 'max'];
+        $estimateDays = 0;
+
         if ($taskId > 0) {
+            if (!in_array($estimateChoice, $allowedChoices, true)) {
+                $_SESSION['error'] = "Please choose Minimum, Most Likely, or Maximum before approving.";
+                header('Location: estimation-approval.php');
+                exit();
+            }
+
+            $estimateSource = $conn->query("
+                SELECT fe.min_days, fe.likely_days, fe.max_days
+                FROM feature_estimations fe
+                WHERE fe.task_id = $taskId AND fe.status = 'completed'
+                ORDER BY fe.submitted_at DESC, fe.id DESC
+                LIMIT 1
+            ")->fetch_assoc();
+
+            if ($estimateSource) {
+                $estimateDays = (int) ($estimateSource[$estimateChoice . '_days'] ?? 0);
+            }
+
             if ($estimateDays <= 0) {
-                $_SESSION['error'] = "Please enter the number of days to finalize the timeline.";
+                $_SESSION['error'] = "The selected timeline option does not have a valid number of days.";
                 header('Location: estimation-approval.php');
                 exit();
             }
@@ -52,9 +73,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if ($hasSalesApproval) {
-                $choiceSql = $hasSalesChoice ? ", sales_estimate_choice = NULL, sales_estimate_days = " . (int) $estimateDays : "";
-                $stmt = $conn->prepare("UPDATE tasks SET status = 'review', sales_approved = 1, sales_approved_by = ?, sales_approved_at = NOW(){$choiceSql}{$deadlineSql} WHERE id = ?");
-                $stmt->bind_param("ii", $user['id'], $taskId);
+                if ($hasSalesChoice) {
+                    $stmt = $conn->prepare("UPDATE tasks SET status = 'review', sales_approved = 1, sales_approved_by = ?, sales_approved_at = NOW(), sales_estimate_choice = ?, sales_estimate_days = ?{$deadlineSql} WHERE id = ?");
+                    $stmt->bind_param("isii", $user['id'], $estimateChoice, $estimateDays, $taskId);
+                } else {
+                    $stmt = $conn->prepare("UPDATE tasks SET status = 'review', sales_approved = 1, sales_approved_by = ?, sales_approved_at = NOW(){$deadlineSql} WHERE id = ?");
+                    $stmt->bind_param("ii", $user['id'], $taskId);
+                }
             } else {
                 $stmt = $conn->prepare("UPDATE tasks SET status = 'review' WHERE id = ?");
                 $stmt->bind_param("i", $taskId);
@@ -160,7 +185,8 @@ foreach ($tasksByProject as $pid => $tasks) {
                     'start' => $phase['start_date'],
                     'end' => $phase['end_date'],
                     'progress' => 0,
-                    'custom_class' => 'gantt-phase'
+                    'custom_class' => 'gantt-phase',
+                    'is_phase' => true
                 ];
             }
         }
@@ -179,12 +205,12 @@ foreach ($tasksByProject as $pid => $tasks) {
         }
 
         if (empty($end)) {
-            $duration = (int) ($task['likely_days'] ?? 0);
+            $duration = (int) ($task['max_days'] ?? 0);
             if ($duration <= 0) {
-                $duration = (int) ($task['min_days'] ?? 0);
+                $duration = (int) ($task['likely_days'] ?? 0);
             }
             if ($duration <= 0) {
-                $duration = (int) ($task['max_days'] ?? 0);
+                $duration = (int) ($task['min_days'] ?? 0);
             }
             if ($duration <= 0) {
                 $duration = 1;
@@ -200,7 +226,13 @@ foreach ($tasksByProject as $pid => $tasks) {
             'start' => $start,
             'end' => $end,
             'progress' => 0,
-            'custom_class' => 'gantt-task'
+            'custom_class' => 'gantt-task',
+            'min_days' => (int) ($task['min_days'] ?? 0),
+            'likely_days' => (int) ($task['likely_days'] ?? 0),
+            'max_days' => (int) ($task['max_days'] ?? 0),
+            'sales_estimate_choice' => $task['sales_estimate_choice'] ?? null,
+            'sales_estimate_days' => (int) ($task['sales_estimate_days'] ?? 0),
+            'is_phase' => false
         ];
     }
 
@@ -338,11 +370,60 @@ include '../../includes/navbar.php';
 .max-bar { background: #f97316; }
 
 .choice-group {
-    display: flex;
-    align-items: center;
+    display: grid;
     gap: 0.75rem;
-    flex-wrap: wrap;
     margin-top: 0.75rem;
+}
+
+.estimate-choice-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+    width: 100%;
+}
+
+.estimate-choice-card {
+    position: relative;
+    display: block;
+    margin: 0;
+    cursor: pointer;
+}
+
+.estimate-choice-card input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.estimate-choice-body {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.estimate-choice-card input:checked + .estimate-choice-body {
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+    transform: translateY(-1px);
+}
+
+.estimate-choice-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--gray-800);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.estimate-choice-days {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--theme-primary);
 }
 
 .empty-state {
@@ -376,7 +457,7 @@ include '../../includes/navbar.php';
                     <span class="text-muted small">Gantt Chart</span>
                 </div>
                 <div class="gantt-modal-body">
-                    <svg id="salesGantt_<?php echo (int) $pid; ?>"></svg>
+                    <div id="salesGantt_<?php echo (int) $pid; ?>"></div>
                 </div>
             </div>
         <?php endforeach; ?>
@@ -412,11 +493,31 @@ include '../../includes/navbar.php';
                             </div>
                         </div>
                         <div class="choice-group">
-                            <label class="form-label mb-0">Finalize Days</label>
-                            <input type="number" class="form-control" style="max-width: 140px;" min="1" step="1"
-                                   name="estimate_days_<?php echo (int) $task['id']; ?>"
-                                   value="<?php echo (int) ($likelyDays > 0 ? $likelyDays : $maxDays); ?>">
-                            <small class="text-muted">Min: <?php echo (int) $minDays; ?>, Likely: <?php echo (int) $likelyDays; ?>, Max: <?php echo (int) $maxDays; ?></small>
+                            <label class="form-label mb-0">Finalize Timeline Scenario</label>
+                            <div class="estimate-choice-list">
+                                <label class="estimate-choice-card">
+                                    <input type="radio" name="estimate_choice_<?php echo (int) $task['id']; ?>" value="min" data-days="<?php echo (int) $minDays; ?>">
+                                    <span class="estimate-choice-body">
+                                        <span class="estimate-choice-title">Minimum</span>
+                                        <span class="estimate-choice-days"><?php echo (int) $minDays; ?> days</span>
+                                    </span>
+                                </label>
+                                <label class="estimate-choice-card">
+                                    <input type="radio" name="estimate_choice_<?php echo (int) $task['id']; ?>" value="likely" data-days="<?php echo (int) $likelyDays; ?>" checked>
+                                    <span class="estimate-choice-body">
+                                        <span class="estimate-choice-title">Most Likely</span>
+                                        <span class="estimate-choice-days"><?php echo (int) $likelyDays; ?> days</span>
+                                    </span>
+                                </label>
+                                <label class="estimate-choice-card">
+                                    <input type="radio" name="estimate_choice_<?php echo (int) $task['id']; ?>" value="max" data-days="<?php echo (int) $maxDays; ?>">
+                                    <span class="estimate-choice-body">
+                                        <span class="estimate-choice-title">Maximum</span>
+                                        <span class="estimate-choice-days"><?php echo (int) $maxDays; ?> days</span>
+                                    </span>
+                                </label>
+                            </div>
+                            <small class="text-muted">Min: <?php echo (int) $minDays; ?>, Likely: <?php echo (int) $likelyDays; ?>, Max: <?php echo (int) $maxDays; ?>. Choose which one Sales will commit to.</small>
                         </div>
                     </div>
                     <div class="d-flex gap-2">
@@ -484,40 +585,110 @@ include '../../includes/navbar.php';
 <script>
 const ganttProjects = <?php echo json_encode($ganttProjects, JSON_UNESCAPED_UNICODE); ?>;
 
-function renderFallbackGantt(targetSelector, tasks) {
+function diffDays(startDate, endDate) {
+    return Math.max(1, Math.round((endDate - startDate) / 86400000));
+}
+
+function normalizeGanttRows(tasks) {
+    const rows = (tasks || []).map(task => {
+        const startDate = new Date(`${task.start}T00:00:00`);
+        const endDate = new Date(`${task.end}T00:00:00`);
+        if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+            return null;
+        }
+
+        const dateDuration = diffDays(startDate, endDate);
+        const isPhase = Boolean(task.is_phase);
+        const minDays = Math.max(0, parseInt(task.min_days || '0', 10));
+        const likelyDays = Math.max(minDays, parseInt(task.likely_days || '0', 10));
+        const maxDays = Math.max(likelyDays, parseInt(task.max_days || '0', 10));
+        const committedDays = Math.max(0, parseInt(task.sales_estimate_days || '0', 10));
+        const totalDays = isPhase ? dateDuration : Math.max(maxDays, committedDays, dateDuration, 1);
+
+        return {
+            name: task.name,
+            startDate,
+            isPhase,
+            phaseDuration: isPhase ? totalDays : 0,
+            minSegment: isPhase ? 0 : Math.min(minDays, totalDays),
+            likelySegment: isPhase ? 0 : Math.max(Math.min(likelyDays, totalDays) - Math.min(minDays, totalDays), 0),
+            maxSegment: isPhase ? 0 : Math.max(totalDays - Math.max(Math.min(likelyDays, totalDays), Math.min(minDays, totalDays)), 0),
+            tooltip: {
+                minDays,
+                likelyDays,
+                maxDays,
+                committedDays,
+                committedChoice: task.sales_estimate_choice || ''
+            }
+        };
+    }).filter(Boolean);
+
+    if (!rows.length) {
+        return rows;
+    }
+
+    const earliestStart = new Date(Math.min(...rows.map(task => task.startDate.getTime())));
+    rows.forEach(task => {
+        task.offset = Math.max(0, diffDays(earliestStart, task.startDate) - 1);
+    });
+
+    return rows;
+}
+
+function renderThreePointGantt(targetSelector, tasks, chartKey) {
+    const target = typeof targetSelector === 'string' ? document.querySelector(targetSelector) : targetSelector;
+    if (!target) return;
     if (typeof Chart === 'undefined') {
+        target.innerHTML = '<div class="text-danger small">Chart.js failed to load. Please check your internet connection.</div>';
         return;
     }
-    const target = document.querySelector(targetSelector);
-    if (!target) return;
+
+    const rows = normalizeGanttRows(tasks);
+    if (!rows.length) {
+        target.innerHTML = '<p class="text-muted mb-0">No Gantt data available for this project.</p>';
+        return;
+    }
+
     target.innerHTML = '';
     const canvas = document.createElement('canvas');
-    canvas.height = 240;
+    canvas.height = Math.max(240, rows.length * 44);
     target.appendChild(canvas);
     const ctx = canvas.getContext('2d');
-    const labels = tasks.map(t => t.name);
-    const starts = tasks.map(t => new Date(t.start + 'T00:00:00'));
-    const ends = tasks.map(t => new Date(t.end + 'T00:00:00'));
-    const minStart = new Date(Math.min(...starts.map(d => d.getTime())));
-    const offsets = starts.map(start => Math.max(0, Math.round((start - minStart) / (1000 * 60 * 60 * 24))));
-    const durations = starts.map((start, idx) => {
-        const end = ends[idx];
-        return Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)));
-    });
-    new Chart(ctx, {
+    const labels = rows.map(task => task.name);
+
+    if (window[chartKey]) {
+        window[chartKey].destroy();
+    }
+
+    window[chartKey] = new Chart(ctx, {
         type: 'bar',
         data: {
             labels,
             datasets: [{
                 label: 'Offset',
-                data: offsets,
+                data: rows.map(task => task.offset),
                 backgroundColor: 'rgba(0,0,0,0)',
                 borderWidth: 0,
                 stack: 'gantt'
             }, {
-                label: 'Duration (days)',
-                data: durations,
-                backgroundColor: '#1f6392',
+                label: 'Project Phase',
+                data: rows.map(task => task.phaseDuration),
+                backgroundColor: '#94a3b8',
+                stack: 'gantt'
+            }, {
+                label: 'Minimum',
+                data: rows.map(task => task.minSegment),
+                backgroundColor: '#60a5fa',
+                stack: 'gantt'
+            }, {
+                label: 'Most Likely',
+                data: rows.map(task => task.likelySegment),
+                backgroundColor: '#34d399',
+                stack: 'gantt'
+            }, {
+                label: 'Maximum',
+                data: rows.map(task => task.maxSegment),
+                backgroundColor: '#f97316',
                 stack: 'gantt'
             }]
         },
@@ -525,9 +696,51 @@ function renderFallbackGantt(targetSelector, tasks) {
             indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: {
+                    labels: {
+                        filter: (legendItem) => legendItem.text !== 'Offset'
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => {
+                            if (context.dataset.label === 'Offset') {
+                                return null;
+                            }
+                            const value = Number(context.raw || 0);
+                            if (value <= 0) {
+                                return null;
+                            }
+                            return `${context.dataset.label}: ${value} day${value === 1 ? '' : 's'}`;
+                        },
+                        footer: (items) => {
+                            if (!items.length) {
+                                return '';
+                            }
+                            const row = rows[items[0].dataIndex];
+                            if (!row || row.isPhase) {
+                                return '';
+                            }
+                            const details = [
+                                `Min: ${row.tooltip.minDays} day${row.tooltip.minDays === 1 ? '' : 's'}`,
+                                `Likely: ${row.tooltip.likelyDays} day${row.tooltip.likelyDays === 1 ? '' : 's'}`,
+                                `Max: ${row.tooltip.maxDays} day${row.tooltip.maxDays === 1 ? '' : 's'}`
+                            ];
+                            if (row.tooltip.committedChoice && row.tooltip.committedDays > 0) {
+                                details.push(`Committed: ${row.tooltip.committedChoice} (${row.tooltip.committedDays} days)`);
+                            }
+                            return details;
+                        }
+                    }
+                }
+            },
             scales: {
-                x: { beginAtZero: true, stacked: true },
+                x: {
+                    beginAtZero: true,
+                    stacked: true,
+                    title: { display: true, text: 'Days From Earliest Start' }
+                },
                 y: { stacked: true }
             }
         }
@@ -536,15 +749,16 @@ function renderFallbackGantt(targetSelector, tasks) {
 
 function approveEstimation(taskId) {
     if (!confirm('Approve this estimation and send to SUL?')) return;
-    const daysInput = document.querySelector(`input[name="estimate_days_${taskId}"]`);
-    const daysValue = parseInt(daysInput?.value || '0', 10);
-    if (!daysValue || daysValue <= 0) {
-        alert('Please enter the number of days.');
+    const choiceInput = document.querySelector(`input[name="estimate_choice_${taskId}"]:checked`);
+    const estimateChoice = choiceInput?.value || '';
+    const daysValue = parseInt(choiceInput?.dataset?.days || '0', 10);
+    if (!estimateChoice || !daysValue || daysValue <= 0) {
+        alert('Please choose Minimum, Most Likely, or Maximum before approving.');
         return;
     }
     const form = document.createElement('form');
     form.method = 'POST';
-    form.innerHTML = `<input type="hidden" name="approve_estimation" value="1"><input type="hidden" name="task_id" value="${taskId}"><input type="hidden" name="estimate_days" value="${daysValue}">`;
+    form.innerHTML = `<input type="hidden" name="approve_estimation" value="1"><input type="hidden" name="task_id" value="${taskId}"><input type="hidden" name="estimate_choice" value="${estimateChoice}"><input type="hidden" name="estimate_days" value="${daysValue}">`;
     document.body.appendChild(form);
     form.submit();
 }
@@ -557,19 +771,7 @@ function openRejectModal(taskId, taskTitle) {
 function openGanttModal(projectId) {
     const project = ganttProjects[projectId];
     const container = document.getElementById('ganttChartContainer');
-    if (!project || !project.tasks || project.tasks.length === 0) {
-        container.innerHTML = '<p class="text-muted">No Gantt data available for this project.</p>';
-    } else {
-        if (typeof Gantt !== 'undefined') {
-            container.innerHTML = '<svg id="ganttChart"></svg>';
-            new Gantt("#ganttChart", project.tasks, {
-                view_mode: 'Month',
-                language: 'en'
-            });
-        } else {
-            renderFallbackGantt('#ganttChartContainer', project.tasks);
-        }
-    }
+    renderThreePointGantt(container, project?.tasks || [], 'salesGanttModalChart');
     document.getElementById('ganttProjectTitle').textContent = project ? project.project_name : 'Project Timeline';
     new bootstrap.Modal(document.getElementById('ganttModal')).show();
 }
@@ -577,16 +779,9 @@ function openGanttModal(projectId) {
 Object.keys(ganttProjects).forEach((projectId) => {
     const data = ganttProjects[projectId];
     if (!data || !data.tasks || data.tasks.length === 0) return;
-    const target = `#salesGantt_${projectId}`;
-    if (document.querySelector(target)) {
-        if (typeof Gantt !== 'undefined') {
-            new Gantt(target, data.tasks, {
-                view_mode: 'Month',
-                language: 'en'
-            });
-        } else {
-            renderFallbackGantt(target, data.tasks);
-        }
+    const target = document.getElementById(`salesGantt_${projectId}`);
+    if (target) {
+        renderThreePointGantt(target, data.tasks, `salesGanttInline_${projectId}`);
     }
 });
 </script>
