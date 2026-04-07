@@ -229,6 +229,8 @@ CREATE TABLE feature_estimations (
     likely_days INT,
     max_days INT,
     phase_name VARCHAR(150),
+    involvement_plan_json LONGTEXT,
+    component_plan_json LONGTEXT,
     expectation_description LONGTEXT,
     status ENUM('pending', 'in_progress', 'completed', 'submitted') DEFAULT 'pending',
     submitted_at DATETIME,

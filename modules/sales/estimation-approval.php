@@ -436,10 +436,21 @@ include '../../includes/navbar.php';
 
 .gantt-modal-body {
     padding: 1.5rem;
+    background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
+    border: 1px solid var(--gray-200);
+    border-radius: 18px;
 }
 
 .gantt-phase .bar {
     fill: #1f6392;
+}
+
+.sales-choice-status {
+    display: block;
+    margin-top: 0.45rem;
+    font-size: 0.78rem;
+    color: var(--theme-primary);
+    font-weight: 600;
 }
 </style>
 
@@ -503,7 +514,7 @@ include '../../includes/navbar.php';
                                     </span>
                                 </label>
                                 <label class="estimate-choice-card">
-                                    <input type="radio" name="estimate_choice_<?php echo (int) $task['id']; ?>" value="likely" data-days="<?php echo (int) $likelyDays; ?>" checked>
+                                    <input type="radio" name="estimate_choice_<?php echo (int) $task['id']; ?>" value="likely" data-days="<?php echo (int) $likelyDays; ?>">
                                     <span class="estimate-choice-body">
                                         <span class="estimate-choice-title">Most Likely</span>
                                         <span class="estimate-choice-days"><?php echo (int) $likelyDays; ?> days</span>
@@ -518,6 +529,7 @@ include '../../includes/navbar.php';
                                 </label>
                             </div>
                             <small class="text-muted">Min: <?php echo (int) $minDays; ?>, Likely: <?php echo (int) $likelyDays; ?>, Max: <?php echo (int) $maxDays; ?>. Choose which one Sales will commit to.</small>
+                            <span class="sales-choice-status" id="salesChoiceStatus_<?php echo (int) $task['id']; ?>">Showing all expert scenarios. Pick one to finalize the timeline.</span>
                         </div>
                     </div>
                     <div class="d-flex gap-2">
@@ -584,9 +596,26 @@ include '../../includes/navbar.php';
 
 <script>
 const ganttProjects = <?php echo json_encode($ganttProjects, JSON_UNESCAPED_UNICODE); ?>;
+const salesSelections = {};
 
 function diffDays(startDate, endDate) {
     return Math.max(1, Math.round((endDate - startDate) / 86400000));
+}
+
+function getTaskNumericId(task) {
+    return String(task?.id || '').replace(/^task-/, '');
+}
+
+function getSelectedChoiceForTask(task) {
+    const taskId = getTaskNumericId(task);
+    return salesSelections[taskId] || task.sales_estimate_choice || '';
+}
+
+function getSelectedDaysForTask(task, selectedChoice) {
+    if (selectedChoice === 'min') return Math.max(0, parseInt(task.min_days || '0', 10));
+    if (selectedChoice === 'likely') return Math.max(0, parseInt(task.likely_days || '0', 10));
+    if (selectedChoice === 'max') return Math.max(0, parseInt(task.max_days || '0', 10));
+    return Math.max(0, parseInt(task.sales_estimate_days || '0', 10));
 }
 
 function normalizeGanttRows(tasks) {
@@ -602,23 +631,37 @@ function normalizeGanttRows(tasks) {
         const minDays = Math.max(0, parseInt(task.min_days || '0', 10));
         const likelyDays = Math.max(minDays, parseInt(task.likely_days || '0', 10));
         const maxDays = Math.max(likelyDays, parseInt(task.max_days || '0', 10));
-        const committedDays = Math.max(0, parseInt(task.sales_estimate_days || '0', 10));
-        const totalDays = isPhase ? dateDuration : Math.max(maxDays, committedDays, dateDuration, 1);
+        const selectedChoice = getSelectedChoiceForTask(task);
+        const committedDays = getSelectedDaysForTask(task, selectedChoice);
+        const totalDays = isPhase
+            ? dateDuration
+            : Math.max(selectedChoice ? committedDays : maxDays, 1);
+
+        let minSegment = isPhase ? 0 : Math.min(minDays, totalDays);
+        let likelySegment = isPhase ? 0 : Math.max(Math.min(likelyDays, totalDays) - Math.min(minDays, totalDays), 0);
+        let maxSegment = isPhase ? 0 : Math.max(totalDays - Math.max(Math.min(likelyDays, totalDays), Math.min(minDays, totalDays)), 0);
+
+        if (!isPhase && selectedChoice) {
+            minSegment = selectedChoice === 'min' ? totalDays : 0;
+            likelySegment = selectedChoice === 'likely' ? totalDays : 0;
+            maxSegment = selectedChoice === 'max' ? totalDays : 0;
+        }
 
         return {
+            taskId: getTaskNumericId(task),
             name: task.name,
             startDate,
             isPhase,
             phaseDuration: isPhase ? totalDays : 0,
-            minSegment: isPhase ? 0 : Math.min(minDays, totalDays),
-            likelySegment: isPhase ? 0 : Math.max(Math.min(likelyDays, totalDays) - Math.min(minDays, totalDays), 0),
-            maxSegment: isPhase ? 0 : Math.max(totalDays - Math.max(Math.min(likelyDays, totalDays), Math.min(minDays, totalDays)), 0),
+            minSegment,
+            likelySegment,
+            maxSegment,
             tooltip: {
                 minDays,
                 likelyDays,
                 maxDays,
                 committedDays,
-                committedChoice: task.sales_estimate_choice || ''
+                committedChoice: selectedChoice || task.sales_estimate_choice || ''
             }
         };
     }).filter(Boolean);
@@ -673,22 +716,34 @@ function renderThreePointGantt(targetSelector, tasks, chartKey) {
             }, {
                 label: 'Project Phase',
                 data: rows.map(task => task.phaseDuration),
-                backgroundColor: '#94a3b8',
+                backgroundColor: '#e2e8f0',
+                borderRadius: 999,
+                borderSkipped: false,
+                barThickness: 12,
                 stack: 'gantt'
             }, {
                 label: 'Minimum',
                 data: rows.map(task => task.minSegment),
-                backgroundColor: '#60a5fa',
+                backgroundColor: '#bfdbfe',
+                borderRadius: 999,
+                borderSkipped: false,
+                barThickness: 12,
                 stack: 'gantt'
             }, {
                 label: 'Most Likely',
                 data: rows.map(task => task.likelySegment),
-                backgroundColor: '#34d399',
+                backgroundColor: '#86efac',
+                borderRadius: 999,
+                borderSkipped: false,
+                barThickness: 12,
                 stack: 'gantt'
             }, {
                 label: 'Maximum',
                 data: rows.map(task => task.maxSegment),
-                backgroundColor: '#f97316',
+                backgroundColor: '#fdba74',
+                borderRadius: 999,
+                borderSkipped: false,
+                barThickness: 12,
                 stack: 'gantt'
             }]
         },
@@ -696,13 +751,22 @@ function renderThreePointGantt(targetSelector, tasks, chartKey) {
             indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 8,
+                    right: 16,
+                    bottom: 4,
+                    left: 4
+                }
+            },
             plugins: {
-                legend: {
-                    labels: {
-                        filter: (legendItem) => legendItem.text !== 'Offset'
-                    }
-                },
+                legend: { display: false },
                 tooltip: {
+                    backgroundColor: '#0f172a',
+                    titleColor: '#f8fafc',
+                    bodyColor: '#e2e8f0',
+                    padding: 10,
+                    displayColors: false,
                     callbacks: {
                         label: (context) => {
                             if (context.dataset.label === 'Offset') {
@@ -739,10 +803,80 @@ function renderThreePointGantt(targetSelector, tasks, chartKey) {
                 x: {
                     beginAtZero: true,
                     stacked: true,
-                    title: { display: true, text: 'Days From Earliest Start' }
+                    title: { display: true, text: 'Days' },
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.18)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#64748b',
+                        padding: 8
+                    },
+                    border: { display: false }
                 },
-                y: { stacked: true }
+                y: {
+                    stacked: true,
+                    grid: { display: false, drawBorder: false },
+                    ticks: {
+                        color: '#334155',
+                        padding: 10
+                    },
+                    border: { display: false }
+                }
             }
+        }
+    });
+}
+
+function updateTaskChoiceStatus(taskId) {
+    const choiceInput = document.querySelector(`input[name="estimate_choice_${taskId}"]:checked`);
+    const status = document.getElementById(`salesChoiceStatus_${taskId}`);
+    const preview = document.querySelector(`.gantt-preview[data-task-id="${taskId}"]`);
+    if (!status || !preview) {
+        return;
+    }
+
+    const minBar = preview.querySelector('.min-bar');
+    const likelyBar = preview.querySelector('.likely-bar');
+    const maxBar = preview.querySelector('.max-bar');
+
+    if (!choiceInput) {
+        status.textContent = 'Showing all expert scenarios. Pick one to finalize the timeline.';
+        if (minBar) minBar.style.width = minBar.dataset.originalWidth || minBar.style.width;
+        if (likelyBar) likelyBar.style.width = likelyBar.dataset.originalWidth || likelyBar.style.width;
+        if (maxBar) maxBar.style.width = maxBar.dataset.originalWidth || maxBar.style.width;
+        return;
+    }
+
+    const choice = choiceInput.value;
+    const days = parseInt(choiceInput.dataset.days || '0', 10) || 0;
+    status.textContent = `Selected timeline: ${choice.charAt(0).toUpperCase() + choice.slice(1)} - ${days} day${days === 1 ? '' : 's'}`;
+
+    if (minBar) minBar.style.width = choice === 'min' ? '100%' : '0%';
+    if (likelyBar) likelyBar.style.width = choice === 'likely' ? '100%' : '0%';
+    if (maxBar) maxBar.style.width = choice === 'max' ? '100%' : '0%';
+}
+
+function syncSalesSelection(taskId) {
+    const choiceInput = document.querySelector(`input[name="estimate_choice_${taskId}"]:checked`);
+    if (choiceInput) {
+        salesSelections[String(taskId)] = choiceInput.value;
+    } else {
+        delete salesSelections[String(taskId)];
+    }
+    updateTaskChoiceStatus(taskId);
+    Object.keys(ganttProjects).forEach((projectId) => {
+        const data = ganttProjects[projectId];
+        if (!data || !data.tasks || !data.tasks.some(task => getTaskNumericId(task) === String(taskId))) {
+            return;
+        }
+        const target = document.getElementById(`salesGantt_${projectId}`);
+        if (target) {
+            renderThreePointGantt(target, data.tasks, `salesGanttInline_${projectId}`);
+        }
+        const modalTitle = document.getElementById('ganttProjectTitle');
+        if (modalTitle && modalTitle.textContent === data.project_name) {
+            renderThreePointGantt(document.getElementById('ganttChartContainer'), data.tasks, 'salesGanttModalChart');
         }
     });
 }
@@ -783,6 +917,19 @@ Object.keys(ganttProjects).forEach((projectId) => {
     if (target) {
         renderThreePointGantt(target, data.tasks, `salesGanttInline_${projectId}`);
     }
+});
+
+document.querySelectorAll('.gantt-preview .gantt-bar').forEach((bar) => {
+    bar.dataset.originalWidth = bar.style.width;
+});
+
+document.querySelectorAll('input[type="radio"][name^="estimate_choice_"]').forEach((input) => {
+    input.addEventListener('change', () => {
+        const match = input.name.match(/^estimate_choice_(\d+)$/);
+        if (match) {
+            syncSalesSelection(match[1]);
+        }
+    });
 });
 </script>
 
