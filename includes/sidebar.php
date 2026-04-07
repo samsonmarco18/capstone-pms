@@ -16,6 +16,7 @@ $menuItems = [
     'sales' => [
         ['label' => 'Dashboard', 'url' => '/modules/sales/dashboard.php', 'icon' => 'chart-line'],
         ['label' => 'Clients', 'url' => '/modules/sales/clients.php', 'icon' => 'building'],
+        ['label' => 'Estimation Approval', 'url' => '/modules/sales/estimation-approval.php', 'icon' => 'clipboard-check'],
         ['label' => 'Report', 'url' => '/modules/sales/report.php', 'icon' => 'file-invoice-dollar'],
         ['label' => 'Receipt', 'url' => '/modules/sales/receipt.php', 'icon' => 'receipt'],
     ],
@@ -32,8 +33,6 @@ $menuItems = [
     'expert' => [
         ['label' => 'Dashboard', 'url' => '/modules/expert/dashboard.php', 'icon' => 'clipboard-list'],
         ['label' => 'Feature Estimation', 'url' => '/modules/expert/feature-estimation.php', 'icon' => 'calculator'],
-        ['label' => 'Team Composition', 'url' => '/modules/expert/team-composition.php', 'icon' => 'users'],
-        ['label' => 'Cost Estimation', 'url' => '/modules/expert/cost-estimation.php', 'icon' => 'cloud'],
     ],
     'developer' => [
         ['label' => 'Dashboard', 'url' => '/modules/developer/dashboard.php', 'icon' => 'code'],
