@@ -130,8 +130,24 @@ include '../../includes/navbar.php';
     background: #fee2e2;
     color: #dc2626;
     border: none;
-    padding: 0.4rem 0.8rem;
-    border-radius: 10px;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.btn-remove:hover:not(:disabled) {
+    background: #fecaca;
+    color: #b91c1c;
+    transform: translateY(-1px);
+}
+
+.btn-remove i {
+    font-size: 0.95rem;
 }
 
 .btn-remove:disabled {
@@ -264,6 +280,11 @@ include '../../includes/navbar.php';
     <?php if (!$project): ?>
         <div class="alert alert-warning">Project not found.</div>
     <?php else: ?>
+    <div class="page-header-modern">
+        <h2><i class="fas fa-list-check me-2"></i> Define Features</h2>
+        <p class="mb-0">Project: <?php echo htmlspecialchars($project['name']); ?></p>
+    </div>
+
     <nav aria-label="breadcrumb" class="breadcrumb-modern">
         <ol class="breadcrumb-modern" style="display: flex; flex-wrap: wrap; align-items: center; margin: 0; padding: 0; list-style: none;">
             <li class="breadcrumb-item"><a href="projects.php"><i class="fas fa-folder-open"></i> Projects</a></li>
@@ -284,11 +305,6 @@ include '../../includes/navbar.php';
         <div class="progress-step"><div class="step-number">5</div><div class="step-label">Documents</div></div>
         <div class="progress-line"></div>
         <div class="progress-step"><div class="step-number">6</div><div class="step-label">Summary</div></div>
-    </div>
-
-    <div class="page-header-modern">
-        <h2><i class="fas fa-list-check me-2"></i> Define Features</h2>
-        <p class="mb-0">Project: <?php echo htmlspecialchars($project['name']); ?></p>
     </div>
 
     <form method="POST" class="card p-4">
@@ -316,7 +332,9 @@ include '../../includes/navbar.php';
                                 </select>
                             </div>
                             <div class="col-md-1">
-                                <button type="button" class="btn-remove w-100" onclick="removeFeature(this)">Remove</button>
+                                <button type="button" class="btn-remove" onclick="removeFeature(this)" aria-label="Remove feature">
+                                    <i class="fas fa-trash"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -342,7 +360,9 @@ include '../../includes/navbar.php';
                             </select>
                         </div>
                         <div class="col-md-1">
-                            <button type="button" class="btn-remove w-100" onclick="removeFeature(this)">Remove</button>
+                            <button type="button" class="btn-remove" onclick="removeFeature(this)" aria-label="Remove feature">
+                                <i class="fas fa-trash"></i>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -388,7 +408,9 @@ function addFeature() {
                 </select>
             </div>
             <div class="col-md-1">
-                <button type="button" class="btn-remove w-100" onclick="removeFeature(this)">Remove</button>
+                <button type="button" class="btn-remove" onclick="removeFeature(this)" aria-label="Remove feature">
+                    <i class="fas fa-trash"></i>
+                </button>
             </div>
         </div>
     `;
