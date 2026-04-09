@@ -421,7 +421,7 @@ include '../../includes/navbar.php';
                             <small class="text-muted">All time</small>
                         </div>
                         <div class="ms-3">
-                            <i class="fas fa-chart-line" style="font-size: 2.5rem; color: #1f6392;"></i>
+                            <i class="fas fa-chart-line" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
                         </div>
                     </div>
                 </div>
@@ -438,7 +438,7 @@ include '../../includes/navbar.php';
                             <small class="text-muted">Awaiting estimation</small>
                         </div>
                         <div class="ms-3">
-                            <i class="fas fa-clock" style="font-size: 2.5rem; color: #1f6392;"></i>
+                            <i class="fas fa-clock" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
                         </div>
                     </div>
                 </div>
@@ -455,7 +455,7 @@ include '../../includes/navbar.php';
                             <small class="text-muted">Submitted</small>
                         </div>
                         <div class="ms-3">
-                            <i class="fas fa-check-circle" style="font-size: 2.5rem; color: #1f6392;"></i>
+                            <i class="fas fa-check-circle" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
                         </div>
                     </div>
                 </div>
@@ -472,7 +472,7 @@ include '../../includes/navbar.php';
                             <small class="text-muted">Currently estimating</small>
                         </div>
                         <div class="ms-3">
-                            <i class="fas fa-project-diagram" style="font-size: 2.5rem; color: #1f6392;"></i>
+                            <i class="fas fa-project-diagram" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
                         </div>
                     </div>
                 </div>
