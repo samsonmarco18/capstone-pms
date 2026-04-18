@@ -177,31 +177,91 @@ include '../../includes/navbar.php';
 ?>
 
 <style>
-:root{--theme-primary:#1f6392;--theme-dark:#184f73;--gray-50:#f8f9fa;--gray-200:#e9ecef;--gray-600:#6c757d;--gray-900:#212529;}
-.vc-header,.vc-card{background:#fff;border:1px solid var(--gray-200);border-radius:24px;box-shadow:0 1px 3px rgba(0,0,0,.04);}
-.vc-header{padding:2rem;margin-bottom:1.5rem;background:linear-gradient(135deg,var(--theme-primary),var(--theme-dark));color:#fff;}
+:root{--theme-primary:#1f6392;--theme-dark:#184f73;--theme-soft:#eef6fb;--theme-line:rgba(31,99,146,.16);--gray-25:#fcfdff;--gray-50:#f8f9fa;--gray-100:#f1f5f9;--gray-200:#e9ecef;--gray-300:#d9e2ec;--gray-600:#6c757d;--gray-700:#475569;--gray-900:#212529;}
+body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
+.vc-shell{max-width:1440px;}
+.vc-header,.vc-card{background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:24px;box-shadow:0 14px 34px rgba(15,23,42,.05);}
+.vc-header{padding:2rem;margin-bottom:1.5rem;background:linear-gradient(135deg,#19567f 0%,#1f6392 55%,#2f83b9 100%);color:#fff;position:relative;overflow:hidden;}
+.vc-header:before,.vc-header:after{content:'';position:absolute;border-radius:999px;background:rgba(255,255,255,.09);}
+.vc-header:before{width:220px;height:220px;top:-90px;right:-40px;}
+.vc-header:after{width:160px;height:160px;bottom:-90px;right:160px;}
+.vc-header-content{position:relative;z-index:1;display:flex;justify-content:space-between;gap:1.5rem;align-items:flex-end;flex-wrap:wrap;}
+.vc-header-copy{max-width:760px;}
+.vc-header-title{font-size:2rem;font-weight:700;letter-spacing:-.02em;}
+.vc-header-subtitle{max-width:620px;color:rgba(255,255,255,.82);}
+.vc-header-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.55rem .9rem;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(4px);font-size:.85rem;}
 .vc-card+.vc-card{margin-top:1.5rem;}
-.vc-card .card-head{padding:1rem 1.25rem;border-bottom:1px solid var(--gray-200);font-weight:600;}
-.repo-tile{display:block;text-decoration:none;color:inherit;border:1px solid var(--gray-200);border-radius:18px;padding:1rem;background:#fff;height:100%;}
-.repo-tile.active,.repo-tile:hover{border-color:rgba(31,99,146,.35);box-shadow:0 8px 18px rgba(31,99,146,.08);transform:translateY(-1px);}
-.pill{display:inline-block;padding:.25rem .65rem;border-radius:999px;font-size:.72rem;font-weight:600;}
+.vc-card .card-head{padding:1.1rem 1.35rem;border-bottom:1px solid var(--gray-200);font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;}
+.section-kicker{font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-600);}
+.project-picker{padding:1.1rem 1.15rem;border:1px solid var(--gray-200);background:linear-gradient(180deg,#fff 0%,#f8fbfd 100%);border-radius:20px;margin-bottom:1.25rem;}
+.repo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;}
+.repo-tile{display:flex;flex-direction:column;gap:.9rem;text-decoration:none;color:inherit;border:1px solid var(--gray-200);border-radius:20px;padding:1.1rem;background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);height:100%;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;}
+.repo-tile.active,.repo-tile:hover{border-color:rgba(31,99,146,.35);box-shadow:0 14px 24px rgba(31,99,146,.10);transform:translateY(-2px);}
+.repo-tile-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;}
+.repo-title{font-weight:700;font-size:1rem;line-height:1.3;}
+.repo-slug{font-size:.8rem;color:var(--gray-600);margin-top:.15rem;word-break:break-word;}
+.repo-description{font-size:.86rem;color:var(--gray-700);min-height:2.5rem;}
+.repo-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem;}
+.repo-stat{background:var(--gray-25);border:1px solid var(--gray-200);border-radius:16px;padding:.7rem .8rem;}
+.repo-stat strong{display:block;font-size:1rem;color:var(--gray-900);line-height:1.1;}
+.repo-stat span{display:block;font-size:.72rem;color:var(--gray-600);margin-top:.2rem;}
+.repo-footnote{font-size:.78rem;color:var(--gray-600);padding-top:.2rem;border-top:1px dashed var(--gray-200);}
+.pill{display:inline-flex;align-items:center;padding:.3rem .7rem;border-radius:999px;font-size:.72rem;font-weight:700;line-height:1;}
 .pill.blue{background:#dbeafe;color:#1d4ed8;}.pill.green{background:#d1fae5;color:#047857;}.pill.gray{background:#e5e7eb;color:#4b5563;}
-.timeline-item{position:relative;padding-left:1.25rem;padding-bottom:1rem;border-left:2px solid var(--gray-200);}
-.timeline-item:last-child{border-left-color:transparent;padding-bottom:0;}
-.timeline-item:before{content:'';position:absolute;left:-6px;top:2px;width:10px;height:10px;border-radius:50%;background:var(--theme-primary);}
-.empty-box{border:1px dashed var(--gray-200);border-radius:18px;padding:2rem;text-align:center;color:var(--gray-600);}
-.repo-hero{border:1px solid var(--gray-200);border-radius:18px;padding:1rem 1.1rem;background:linear-gradient(180deg,#fff 0%,#f8fbfd 100%);margin-bottom:1rem;}
-.repo-meta{font-size:.85rem;color:var(--gray-600);}
+.repo-hero{border:1px solid var(--theme-line);border-radius:22px;padding:1.2rem;background:linear-gradient(180deg,#ffffff 0%,#f3f9fd 100%);margin-bottom:1.25rem;}
+.repo-hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;}
+.repo-hero-title{font-size:1.35rem;font-weight:700;line-height:1.25;}
+.repo-meta{font-size:.88rem;color:var(--gray-600);}
 .repo-meta code,.hook-box code{font-size:.8rem;}
-.hook-box{background:#0d1117;color:#c9d1d9;border-radius:16px;padding:1rem;overflow:auto;font-size:.78rem;line-height:1.45;}
-.setup-note{font-size:.8rem;color:var(--gray-600);}
-.setup-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .7rem;border-radius:999px;border:1px solid var(--gray-200);background:#fff;font-size:.75rem;margin:.15rem .2rem .15rem 0;}
+.repo-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem;margin-top:1rem;}
+.summary-tile{padding:.85rem .95rem;border-radius:18px;background:#fff;border:1px solid var(--gray-200);}
+.summary-tile strong{display:block;font-size:1rem;color:var(--gray-900);}
+.summary-tile span{display:block;font-size:.74rem;color:var(--gray-600);margin-top:.2rem;}
+.content-panel{border:1px solid var(--gray-200);border-radius:20px;padding:1rem;background:#fff;height:100%;}
+.content-panel h6{margin-bottom:1rem;}
+.table-shell{border:1px solid var(--gray-200);border-radius:18px;overflow:hidden;background:#fff;}
+.table-shell .table{margin-bottom:0;}
+.table-shell thead th{background:#f8fbfd;color:var(--gray-700);font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--gray-200);}
+.table-shell tbody tr:last-child td{border-bottom:none;}
+.timeline-list{display:flex;flex-direction:column;gap:.9rem;}
+.timeline-item{position:relative;padding:0 0 .2rem 1.35rem;border-left:2px solid var(--gray-200);}
+.timeline-item:last-child{padding-bottom:0;border-left-color:transparent;}
+.timeline-item:before{content:'';position:absolute;left:-6px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--theme-primary);box-shadow:0 0 0 4px rgba(31,99,146,.10);}
+.timeline-title{font-weight:700;color:var(--gray-900);}
+.merge-card{border:1px solid var(--gray-200);border-radius:18px;padding:1rem;background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);}
+.merge-card+.merge-card{margin-top:.9rem;}
+.empty-box{border:1px dashed var(--gray-300);border-radius:18px;padding:2rem;text-align:center;color:var(--gray-600);background:linear-gradient(180deg,#fff 0%,#fbfcfe 100%);}
+.setup-stack{display:flex;flex-direction:column;gap:1rem;}
+.setup-panel{border:1px solid var(--gray-200);border-radius:20px;padding:1rem;background:linear-gradient(180deg,#fff 0%,#f8fbfd 100%);}
+.setup-note{font-size:.82rem;color:var(--gray-600);line-height:1.5;}
+.setup-chip-row{display:flex;flex-wrap:wrap;gap:.45rem;}
+.setup-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.38rem .8rem;border-radius:999px;border:1px solid var(--gray-200);background:#fff;font-size:.76rem;font-weight:600;}
+.hook-box{background:#0d1117;color:#c9d1d9;border-radius:16px;padding:1rem;overflow:auto;font-size:.78rem;line-height:1.45;max-height:320px;}
+.vc-sidebar{position:sticky;top:1.25rem;}
+.vc-card .accordion-item{border:1px solid var(--gray-200);border-radius:18px;overflow:hidden;background:#fff;}
+.vc-card .accordion-item+.accordion-item{margin-top:.85rem;}
+.vc-card .accordion-button{font-weight:700;background:#fff;box-shadow:none;}
+.vc-card .accordion-button:not(.collapsed){background:var(--theme-soft);color:var(--theme-dark);}
+.vc-card .accordion-button:focus{box-shadow:none;border-color:transparent;}
+.vc-card .accordion-body{padding:1rem;}
+.vc-card .form-label{font-size:.78rem;font-weight:700;letter-spacing:.02em;color:var(--gray-700);text-transform:uppercase;}
+.vc-card .form-control,.vc-card .form-select{border-radius:14px;padding:.7rem .85rem;border-color:var(--gray-300);}
+.vc-card .form-control:focus,.vc-card .form-select:focus{border-color:rgba(31,99,146,.4);box-shadow:0 0 0 .2rem rgba(31,99,146,.12);}
+.vc-card .btn.btn-primary{border-radius:14px;padding:.72rem .95rem;font-weight:700;background:linear-gradient(135deg,var(--theme-primary),var(--theme-dark));border:none;}
+.vc-card .btn.btn-primary:hover{background:linear-gradient(135deg,var(--theme-dark),var(--theme-primary));}
+@media (max-width: 1199.98px){.vc-sidebar{position:static;}}
+@media (max-width: 767.98px){.vc-header{padding:1.5rem;}.vc-header-title{font-size:1.6rem;}.repo-stats,.repo-summary-grid{grid-template-columns:1fr;}}
 </style>
 
-<div class="container-fluid px-4 py-4">
+<div class="container-fluid px-4 py-4 vc-shell">
     <div class="vc-header">
-        <h2 class="mb-2"><i class="fas fa-code-branch me-2"></i>Project Version Control</h2>
-        <p class="mb-0">Manage repositories, branches, commits, pushes, pulls, merges, and forks for each project.</p>
+        <div class="vc-header-content">
+            <div class="vc-header-copy">
+                <div class="vc-header-title mb-2"><i class="fas fa-code-branch me-2"></i>Project Version Control</div>
+                <p class="vc-header-subtitle mb-0">Manage repositories, branches, commits, pushes, pulls, merges, and forks for each project in a cleaner workspace.</p>
+            </div>
+            <div class="vc-header-badge"><i class="fas fa-diagram-project"></i> Repository workspace</div>
+        </div>
     </div>
 
     <?php if ($flashSuccess): ?><div class="alert alert-success"><?php echo htmlspecialchars($flashSuccess); ?></div><?php endif; ?>
@@ -213,9 +273,14 @@ include '../../includes/navbar.php';
     <div class="row g-4">
         <div class="col-xl-8">
             <div class="vc-card">
-                <div class="card-head">Repositories</div>
+                <div class="card-head">
+                    <div>
+                        <div class="section-kicker">Overview</div>
+                        <div>Repositories</div>
+                    </div>
+                </div>
                 <div class="p-4">
-                    <form method="GET" class="row g-3 align-items-end mb-4">
+                    <form method="GET" class="row g-3 align-items-end project-picker">
                         <div class="col-md-8">
                             <label class="form-label">Project</label>
                             <select name="project_id" class="form-select">
@@ -232,28 +297,35 @@ include '../../includes/navbar.php';
                     <?php if (!$repositories): ?>
                     <div class="empty-box">No repositories yet for this project.</div>
                     <?php else: ?>
-                    <div class="row g-3">
+                    <div class="repo-grid">
                         <?php foreach ($repositories as $repo): ?>
-                        <div class="col-md-6">
-                            <a href="<?php echo htmlspecialchars(vcPageUrl($selectedProjectId, (int) $repo['id'])); ?>" class="repo-tile <?php echo (int) $repo['id'] === $selectedRepositoryId ? 'active' : ''; ?>">
-                                <div class="d-flex justify-content-between gap-2">
-                                    <div>
-                                        <div class="fw-semibold"><?php echo htmlspecialchars($repo['name']); ?></div>
-                                        <div class="small text-muted"><?php echo htmlspecialchars($repo['slug']); ?></div>
-                                    </div>
-                                    <span class="pill <?php echo $repo['repository_status'] === 'active' ? 'green' : 'gray'; ?>"><?php echo ucfirst($repo['repository_status']); ?></span>
+                        <a href="<?php echo htmlspecialchars(vcPageUrl($selectedProjectId, (int) $repo['id'])); ?>" class="repo-tile <?php echo (int) $repo['id'] === $selectedRepositoryId ? 'active' : ''; ?>">
+                            <div class="repo-tile-top">
+                                <div>
+                                    <div class="repo-title"><?php echo htmlspecialchars($repo['name']); ?></div>
+                                    <div class="repo-slug"><?php echo htmlspecialchars($repo['slug']); ?></div>
                                 </div>
-                                <div class="small text-muted mt-2"><?php echo htmlspecialchars($repo['description'] ?: 'No description'); ?></div>
-                                <div class="small mt-3">
-                                    <strong><?php echo (int) $repo['branch_count']; ?></strong> branches |
-                                    <strong><?php echo (int) $repo['commit_count']; ?></strong> commits |
-                                    <strong><?php echo htmlspecialchars($repo['default_branch_name']); ?></strong> default
+                                <span class="pill <?php echo $repo['repository_status'] === 'active' ? 'green' : 'gray'; ?>"><?php echo ucfirst($repo['repository_status']); ?></span>
+                            </div>
+                            <div class="repo-description"><?php echo htmlspecialchars($repo['description'] ?: 'No description provided for this repository yet.'); ?></div>
+                            <div class="repo-stats">
+                                <div class="repo-stat">
+                                    <strong><?php echo (int) $repo['branch_count']; ?></strong>
+                                    <span>Branches</span>
                                 </div>
-                                <?php if (!empty($repo['parent_repository_name'])): ?>
-                                <div class="small text-muted mt-2">Forked from <?php echo htmlspecialchars($repo['parent_repository_name']); ?></div>
-                                <?php endif; ?>
-                            </a>
-                        </div>
+                                <div class="repo-stat">
+                                    <strong><?php echo (int) $repo['commit_count']; ?></strong>
+                                    <span>Commits</span>
+                                </div>
+                                <div class="repo-stat">
+                                    <strong><?php echo htmlspecialchars($repo['default_branch_name']); ?></strong>
+                                    <span>Default</span>
+                                </div>
+                            </div>
+                            <?php if (!empty($repo['parent_repository_name'])): ?>
+                            <div class="repo-footnote">Forked from <?php echo htmlspecialchars($repo['parent_repository_name']); ?></div>
+                            <?php endif; ?>
+                        </a>
                         <?php endforeach; ?>
                     </div>
                     <?php endif; ?>
@@ -262,12 +334,17 @@ include '../../includes/navbar.php';
 
             <?php if ($selectedRepository): ?>
             <div class="vc-card">
-                <div class="card-head"><?php echo htmlspecialchars($selectedRepository['name']); ?> Snapshot</div>
+                <div class="card-head">
+                    <div>
+                        <div class="section-kicker">Selected Repository</div>
+                        <div><?php echo htmlspecialchars($selectedRepository['name']); ?> Snapshot</div>
+                    </div>
+                </div>
                 <div class="p-4">
                     <div class="repo-hero">
-                        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                        <div class="repo-hero-top">
                             <div>
-                                <div class="h5 mb-1"><?php echo htmlspecialchars($selectedRepository['project_name']); ?> / <span class="text-primary"><?php echo htmlspecialchars($selectedRepository['name']); ?></span></div>
+                                <div class="repo-hero-title mb-1"><?php echo htmlspecialchars($selectedRepository['project_name']); ?> / <span class="text-primary"><?php echo htmlspecialchars($selectedRepository['name']); ?></span></div>
                                 <div class="repo-meta">
                                     <?php echo htmlspecialchars($selectedRepository['description'] ?: 'No repository description yet.'); ?>
                                 </div>
@@ -283,78 +360,113 @@ include '../../includes/navbar.php';
                             | Remote: <code><?php echo htmlspecialchars((string) $selectedRepository['external_remote_url']); ?></code>
                             <?php endif; ?>
                         </div>
+                        <div class="repo-summary-grid">
+                            <div class="summary-tile">
+                                <strong><?php echo count($branches); ?></strong>
+                                <span>Tracked branches</span>
+                            </div>
+                            <div class="summary-tile">
+                                <strong><?php echo count($commits); ?></strong>
+                                <span>Recent commits shown</span>
+                            </div>
+                            <div class="summary-tile">
+                                <strong><?php echo count($operations); ?></strong>
+                                <span>Recent operations shown</span>
+                            </div>
+                            <div class="summary-tile">
+                                <strong><?php echo count($merges); ?></strong>
+                                <span>Recent merges shown</span>
+                            </div>
+                        </div>
                     </div>
                     <div class="row g-4">
                         <div class="col-lg-6">
-                            <h6 class="fw-semibold mb-3">Branches</h6>
-                            <?php if (!$branches): ?><div class="empty-box">No branches yet.</div><?php else: ?>
-                            <div class="table-responsive">
-                                <table class="table align-middle">
-                                    <thead><tr><th>Branch</th><th>Commits</th><th>Status</th></tr></thead>
-                                    <tbody>
-                                        <?php foreach ($branches as $branch): ?>
-                                        <tr>
-                                            <td>
-                                                <div class="fw-semibold"><?php echo htmlspecialchars($branch['name']); ?></div>
-                                                <div class="small text-muted"><?php echo htmlspecialchars($branch['source_branch_name'] ?: 'Root branch'); ?></div>
-                                                <div class="mt-1">
-                                                    <?php if ((int) $branch['is_default'] === 1): ?><span class="pill blue">Default</span><?php endif; ?>
-                                                    <?php if ((int) $branch['is_protected'] === 1): ?><span class="pill gray">Protected</span><?php endif; ?>
-                                                </div>
-                                            </td>
-                                            <td><?php echo (int) $branch['commit_count']; ?></td>
-                                            <td><span class="pill <?php echo $branch['branch_status'] === 'active' ? 'green' : 'gray'; ?>"><?php echo ucfirst($branch['branch_status']); ?></span></td>
-                                        </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
+                            <div class="content-panel">
+                                <h6 class="fw-semibold">Branches</h6>
+                                <?php if (!$branches): ?><div class="empty-box">No branches yet.</div><?php else: ?>
+                                <div class="table-shell table-responsive">
+                                    <table class="table align-middle">
+                                        <thead><tr><th>Branch</th><th>Commits</th><th>Status</th></tr></thead>
+                                        <tbody>
+                                            <?php foreach ($branches as $branch): ?>
+                                            <tr>
+                                                <td>
+                                                    <div class="fw-semibold"><?php echo htmlspecialchars($branch['name']); ?></div>
+                                                    <div class="small text-muted"><?php echo htmlspecialchars($branch['source_branch_name'] ?: 'Root branch'); ?></div>
+                                                    <div class="mt-2 d-flex flex-wrap gap-2">
+                                                        <?php if ((int) $branch['is_default'] === 1): ?><span class="pill blue">Default</span><?php endif; ?>
+                                                        <?php if ((int) $branch['is_protected'] === 1): ?><span class="pill gray">Protected</span><?php endif; ?>
+                                                    </div>
+                                                </td>
+                                                <td><?php echo (int) $branch['commit_count']; ?></td>
+                                                <td><span class="pill <?php echo $branch['branch_status'] === 'active' ? 'green' : 'gray'; ?>"><?php echo ucfirst($branch['branch_status']); ?></span></td>
+                                            </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <?php endif; ?>
                             </div>
-                            <?php endif; ?>
                         </div>
                         <div class="col-lg-6">
-                            <h6 class="fw-semibold mb-3">Recent Commits</h6>
-                            <?php if (!$commits): ?><div class="empty-box">No commits yet.</div><?php else: ?>
-                            <?php foreach ($commits as $commit): ?>
-                            <div class="timeline-item">
-                                <div class="fw-semibold"><?php echo htmlspecialchars($commit['commit_title']); ?></div>
-                                <div class="small text-muted"><code><?php echo htmlspecialchars(substr($commit['commit_hash'], 0, 7)); ?></code> on <?php echo htmlspecialchars($commit['branch_name']); ?></div>
-                                <div class="small text-muted mt-1"><?php echo htmlspecialchars($commit['author_name']); ?> | <?php echo date('M d, Y h:i A', strtotime($commit['created_at'])); ?></div>
+                            <div class="content-panel">
+                                <h6 class="fw-semibold">Recent Commits</h6>
+                                <?php if (!$commits): ?><div class="empty-box">No commits yet.</div><?php else: ?>
+                                <div class="timeline-list">
+                                    <?php foreach ($commits as $commit): ?>
+                                    <div class="timeline-item">
+                                        <div class="timeline-title"><?php echo htmlspecialchars($commit['commit_title']); ?></div>
+                                        <div class="small text-muted"><code><?php echo htmlspecialchars(substr($commit['commit_hash'], 0, 7)); ?></code> on <?php echo htmlspecialchars($commit['branch_name']); ?></div>
+                                        <div class="small text-muted mt-1"><?php echo htmlspecialchars($commit['author_name']); ?> | <?php echo date('M d, Y h:i A', strtotime($commit['created_at'])); ?></div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <?php endif; ?>
                             </div>
-                            <?php endforeach; ?>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="vc-card">
-                <div class="card-head">Operations and Merges</div>
+                <div class="card-head">
+                    <div>
+                        <div class="section-kicker">Activity</div>
+                        <div>Operations and Merges</div>
+                    </div>
+                </div>
                 <div class="p-4">
                     <div class="row g-4">
                         <div class="col-lg-7">
-                            <h6 class="fw-semibold mb-3">Recent Operations</h6>
-                            <?php if (!$operations): ?><div class="empty-box">No operations recorded yet.</div><?php else: ?>
-                            <?php foreach ($operations as $operation): $metadata = $operation['metadata'] ? json_decode($operation['metadata'], true) : []; ?>
-                            <div class="timeline-item">
-                                <div class="fw-semibold"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $operation['operation_type']))); ?></div>
-                                <div class="small text-muted"><?php echo htmlspecialchars($operation['user_name']); ?><?php if ($operation['branch_name']): ?> | <?php echo htmlspecialchars($operation['branch_name']); ?><?php endif; ?></div>
-                                <?php if (!empty($metadata['notes'])): ?><div class="small text-muted mt-1"><?php echo htmlspecialchars($metadata['notes']); ?></div><?php endif; ?>
-                                <div class="small text-muted mt-1"><?php echo date('M d, Y h:i A', strtotime($operation['created_at'])); ?></div>
+                            <div class="content-panel">
+                                <h6 class="fw-semibold">Recent Operations</h6>
+                                <?php if (!$operations): ?><div class="empty-box">No operations recorded yet.</div><?php else: ?>
+                                <div class="timeline-list">
+                                    <?php foreach ($operations as $operation): $metadata = $operation['metadata'] ? json_decode($operation['metadata'], true) : []; ?>
+                                    <div class="timeline-item">
+                                        <div class="timeline-title"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $operation['operation_type']))); ?></div>
+                                        <div class="small text-muted"><?php echo htmlspecialchars($operation['user_name']); ?><?php if ($operation['branch_name']): ?> | <?php echo htmlspecialchars($operation['branch_name']); ?><?php endif; ?></div>
+                                        <?php if (!empty($metadata['notes'])): ?><div class="small text-muted mt-1"><?php echo htmlspecialchars($metadata['notes']); ?></div><?php endif; ?>
+                                        <div class="small text-muted mt-1"><?php echo date('M d, Y h:i A', strtotime($operation['created_at'])); ?></div>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
+                                <?php endif; ?>
                             </div>
-                            <?php endforeach; ?>
-                            <?php endif; ?>
                         </div>
                         <div class="col-lg-5">
-                            <h6 class="fw-semibold mb-3">Merge History</h6>
-                            <?php if (!$merges): ?><div class="empty-box">No merge history yet.</div><?php else: ?>
-                            <?php foreach ($merges as $merge): ?>
-                            <div class="border rounded-4 p-3 mb-3">
-                                <div class="fw-semibold"><?php echo htmlspecialchars($merge['summary'] ?: ($merge['source_branch_name'] . ' -> ' . $merge['target_branch_name'])); ?></div>
-                                <div class="small text-muted mt-1"><?php echo htmlspecialchars($merge['source_branch_name']); ?> -> <?php echo htmlspecialchars($merge['target_branch_name']); ?></div>
-                                <div class="small text-muted mt-1"><?php echo htmlspecialchars($merge['merged_by_name']); ?> | <?php echo date('M d, Y h:i A', strtotime($merge['created_at'])); ?></div>
+                            <div class="content-panel">
+                                <h6 class="fw-semibold">Merge History</h6>
+                                <?php if (!$merges): ?><div class="empty-box">No merge history yet.</div><?php else: ?>
+                                <?php foreach ($merges as $merge): ?>
+                                <div class="merge-card">
+                                    <div class="fw-semibold"><?php echo htmlspecialchars($merge['summary'] ?: ($merge['source_branch_name'] . ' -> ' . $merge['target_branch_name'])); ?></div>
+                                    <div class="small text-muted mt-1"><?php echo htmlspecialchars($merge['source_branch_name']); ?> -> <?php echo htmlspecialchars($merge['target_branch_name']); ?></div>
+                                    <div class="small text-muted mt-1"><?php echo htmlspecialchars($merge['merged_by_name']); ?> | <?php echo date('M d, Y h:i A', strtotime($merge['created_at'])); ?></div>
+                                </div>
+                                <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
-                            <?php endforeach; ?>
-                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -363,35 +475,45 @@ include '../../includes/navbar.php';
         </div>
 
         <div class="col-xl-4">
+            <div class="vc-sidebar">
             <div class="vc-card">
-                <div class="card-head">Actions</div>
+                <div class="card-head">
+                    <div>
+                        <div class="section-kicker">Workspace Tools</div>
+                        <div>Actions</div>
+                    </div>
+                </div>
                 <div class="p-4">
                     <?php if ($selectedRepository): ?>
-                    <div class="mb-4">
-                        <h6 class="fw-semibold mb-3">Sync Setup</h6>
-                        <div class="setup-chip"><i class="fab fa-github"></i> GitHub webhook</div>
-                        <div class="setup-chip"><i class="fas fa-code"></i> VS Code Git</div>
-                        <div class="setup-chip"><i class="fab fa-android"></i> Android / Termux</div>
-                        <div class="setup-chip"><i class="fas fa-terminal"></i> Git Bash / CLI</div>
-                        <div class="mt-3 mb-2">
-                            <label class="form-label">Webhook / Hook Sync URL</label>
-                            <input class="form-control" readonly value="<?php echo htmlspecialchars($syncEndpointUrl); ?>">
+                    <div class="setup-stack mb-4">
+                        <div class="setup-panel">
+                            <h6 class="fw-semibold mb-3">Sync Setup</h6>
+                            <div class="setup-chip-row">
+                                <div class="setup-chip"><i class="fab fa-github"></i> GitHub webhook</div>
+                                <div class="setup-chip"><i class="fas fa-code"></i> VS Code Git</div>
+                                <div class="setup-chip"><i class="fab fa-android"></i> Android / Termux</div>
+                                <div class="setup-chip"><i class="fas fa-terminal"></i> Git Bash / CLI</div>
+                            </div>
+                            <div class="mt-3 mb-2">
+                                <label class="form-label">Webhook / Hook Sync URL</label>
+                                <input class="form-control" readonly value="<?php echo htmlspecialchars($syncEndpointUrl); ?>">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">Repository Token</label>
+                                <input class="form-control" readonly value="<?php echo htmlspecialchars((string) $selectedRepository['webhook_token']); ?>">
+                            </div>
+                            <div class="setup-note">
+                                For devices other than this XAMPP host, replace `localhost` in the URL with your server IP or domain so VS Code, Android, GitHub, GitLab, or Bitbucket can reach it.
+                            </div>
                         </div>
-                        <div class="mb-2">
-                            <label class="form-label">Repository Token</label>
-                            <input class="form-control" readonly value="<?php echo htmlspecialchars((string) $selectedRepository['webhook_token']); ?>">
-                        </div>
-                        <div class="setup-note mb-3">
-                            For devices other than this XAMPP host, replace `localhost` in the URL with your server IP or domain so VS Code, Android, GitHub, GitLab, or Bitbucket can reach it.
-                        </div>
-                        <div class="mb-3">
+                        <div class="setup-panel">
                             <label class="form-label">Universal Git Hook Script</label>
                             <div class="hook-box"><code><?php echo htmlspecialchars($gitHookScript); ?></code></div>
                             <div class="setup-note mt-2">
                                 Save this as `.git/hooks/post-commit`. Duplicate it for `pre-push` and change `event_type` to `push`. For pull sync, use `post-merge` and change `event_type` to `pull`.
                             </div>
                         </div>
-                        <div class="mb-3">
+                        <div class="setup-panel">
                             <label class="form-label">Provider Webhook Notes</label>
                             <div class="setup-note">
                                 GitHub, GitLab, and Bitbucket push webhooks are supported. Point the webhook to the sync URL above.
@@ -526,6 +648,7 @@ include '../../includes/navbar.php';
                         <?php endif; ?>
                     </div>
                 </div>
+            </div>
             </div>
         </div>
     </div>
