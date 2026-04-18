@@ -748,6 +748,46 @@ include '../../includes/navbar.php';
     font-size: 0.85rem;
 }
 
+/* Tab Navigation */
+#allocationTabs {
+    border-bottom: 2px solid var(--gray-200);
+}
+
+#allocationTabs .nav-link {
+    border: none;
+    padding: 0.75rem 1.5rem;
+    color: var(--gray-600);
+    font-weight: 500;
+    position: relative;
+    transition: all 0.2s;
+}
+
+#allocationTabs .nav-link:hover {
+    color: var(--theme-primary);
+    background: transparent;
+}
+
+#allocationTabs .nav-link.active {
+    color: var(--theme-primary);
+    background: transparent;
+    border: none;
+}
+
+#allocationTabs .nav-link.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--theme-primary);
+    border-radius: 3px 3px 0 0;
+}
+
+#allocationTabs .nav-link i {
+    margin-right: 0.25rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
@@ -761,6 +801,11 @@ include '../../includes/navbar.php';
     
     .task-meta {
         gap: 0.5rem;
+    }
+    
+    #allocationTabs .nav-link {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
     }
 }
 </style>
@@ -777,120 +822,142 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
-    <!-- Project Allocation to Expert -->
-    <div class="section-card">
-        <div class="section-header">
-            <h5>
-                <i class="fas fa-user-check"></i>
-                Assign Project to Expert
-            </h5>
-        </div>
-        <div class="p-3">
-            <?php if($projectsForAllocation->num_rows > 0): ?>
-                <form method="POST" class="row g-3 align-items-end">
-                    <div class="col-md-6">
-                        <label class="form-label">Project</label>
-                        <select name="project_id" class="form-select-custom" required>
-                            <option value="">Select project</option>
-                            <?php while($proj = $projectsForAllocation->fetch_assoc()): ?>
-                                <option value="<?php echo $proj['id']; ?>">
-                                    <?php echo htmlspecialchars($proj['name']); ?> (<?php echo $proj['unassigned_count']; ?> features)
-                                </option>
-                            <?php endwhile; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Expert</label>
-                        <select name="expert_id" class="form-select-custom" required>
-                            <option value="">Select expert</option>
-                            <?php $experts->data_seek(0); while($expert = $experts->fetch_assoc()): ?>
-                                <option value="<?php echo $expert['id']; ?>">
-                                    <?php echo htmlspecialchars($expert['full_name']); ?> (<?php echo $expert['assigned_tasks']; ?> tasks)
-                                </option>
-                            <?php endwhile; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <button type="submit" name="assign_project_to_expert" class="btn-primary-modern w-100">
-                            <i class="fas fa-share"></i> Assign
-                        </button>
-                    </div>
-                </form>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="fas fa-check-circle"></i>
-                    <p>No projects awaiting expert allocation</p>
-                </div>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <?php if ($projectId && $project): ?>
-    <div class="section-card">
-        <div class="section-header">
-            <h5>
-                <i class="fas fa-stream"></i>
-                Project Gantt Chart
-            </h5>
-        </div>
-        <div class="p-3">
-            <?php if (!$canShowGantt): ?>
-                <div class="empty-state">
-                    <i class="fas fa-lock"></i>
-                    <p>Gantt chart is available after Sales approval.</p>
-                </div>
-            <?php elseif (!$ganttProjectData || empty($ganttProjectData['tasks'])): ?>
-                <div class="empty-state">
-                    <i class="fas fa-stream"></i>
-                    <p>No Gantt data available for this project.</p>
-                </div>
-            <?php else: ?>
-                <div id="sulGanttChart"></div>
-            <?php endif; ?>
-        </div>
-    </div>
-    <?php endif; ?>
-
-    <!-- Section 1: Unassigned Tasks - Need Expert Assignment -->
-    <div class="section-card">
-        <div class="section-header">
-            <h5>
-                <i class="fas fa-user-plus"></i>
-                Unassigned Tasks
-                <span class="badge-count"><?php echo $unassignedTasks->num_rows; ?> tasks</span>
-            </h5>
-            <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#createTaskModal">
-                <i class="fas fa-plus"></i> Create New Task
+    <!-- Tab Navigation -->
+    <ul class="nav nav-tabs mb-4" id="allocationTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="expert-tab" data-bs-toggle="tab" data-bs-target="#expert-panel" type="button" role="tab">
+                <i class="fas fa-user-tie me-2"></i>Expert
+                <span class="badge bg-warning ms-2"><?php echo $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows; ?></span>
             </button>
-        </div>
-        <div class="p-3">
-            <?php if($unassignedTasks->num_rows > 0): ?>
-                <?php while($task = $unassignedTasks->fetch_assoc()): 
-                    $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
-                ?>
-                <div class="task-card">
-                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                        <div>
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
-                                <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="developer-tab" data-bs-toggle="tab" data-bs-target="#developer-panel" type="button" role="tab">
+                <i class="fas fa-code me-2"></i>Developer
+                <span class="badge bg-primary ms-2"><?php echo $readyForDevTasks->num_rows + $inProgressTasks->num_rows; ?></span>
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="allocationTabsContent">
+        
+        <!-- Expert Tab Panel -->
+        <div class="tab-pane fade show active" id="expert-panel" role="tabpanel">
+            
+            <!-- Project Allocation to Expert -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-user-check"></i>
+                        Assign Project to Expert
+                    </h5>
+                </div>
+                <div class="p-3">
+                    <?php if($projectsForAllocation->num_rows > 0): ?>
+                        <form method="POST" class="row g-3 align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label">Project</label>
+                                <select name="project_id" class="form-select-custom" required>
+                                    <option value="">Select project</option>
+                                    <?php while($proj = $projectsForAllocation->fetch_assoc()): ?>
+                                        <option value="<?php echo $proj['id']; ?>">
+                                            <?php echo htmlspecialchars($proj['name']); ?> (<?php echo $proj['unassigned_count']; ?> features)
+                                        </option>
+                                    <?php endwhile; ?>
+                                </select>
                             </div>
-                            <div class="task-meta">
-                                <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                                <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
-                                <span class="text-<?php echo $daysLeft <= 2 ? 'danger' : 'muted'; ?>"><?php echo $daysLeft; ?> days left</span>
+                            <div class="col-md-4">
+                                <label class="form-label">Expert</label>
+                                <select name="expert_id" class="form-select-custom" required>
+                                    <option value="">Select expert</option>
+                                    <?php $experts->data_seek(0); while($expert = $experts->fetch_assoc()): ?>
+                                        <option value="<?php echo $expert['id']; ?>">
+                                            <?php echo htmlspecialchars($expert['full_name']); ?> (<?php echo $expert['assigned_tasks']; ?> tasks)
+                                        </option>
+                                    <?php endwhile; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" name="assign_project_to_expert" class="btn-primary-modern w-100">
+                                    <i class="fas fa-share"></i> Assign
+                                </button>
+                            </div>
+                        </form>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="fas fa-check-circle"></i>
+                            <p>No projects awaiting expert allocation</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <?php if ($projectId && $project): ?>
+            <div class="section-card">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-stream"></i>
+                        Project Gantt Chart
+                    </h5>
+                </div>
+                <div class="p-3">
+                    <?php if (!$canShowGantt): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-lock"></i>
+                            <p>Gantt chart is available after Sales approval.</p>
+                        </div>
+                    <?php elseif (!$ganttProjectData || empty($ganttProjectData['tasks'])): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-stream"></i>
+                            <p>No Gantt data available for this project.</p>
+                        </div>
+                    <?php else: ?>
+                        <div id="sulGanttChart"></div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- Section 1: Unassigned Tasks - Need Expert Assignment -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-user-plus"></i>
+                        Unassigned Tasks
+                        <span class="badge-count"><?php echo $unassignedTasks->num_rows; ?> tasks</span>
+                    </h5>
+                    <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+                        <i class="fas fa-plus"></i> Create New Task
+                    </button>
+                </div>
+                <div class="p-3">
+                    <?php if($unassignedTasks->num_rows > 0): ?>
+                        <?php while($task = $unassignedTasks->fetch_assoc()): 
+                            $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
+                        ?>
+                        <div class="task-card">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                <div>
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
+                                        <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                    </div>
+                                    <div class="task-meta">
+                                        <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
+                                        <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
+                                        <span class="text-<?php echo $daysLeft <= 2 ? 'danger' : 'muted'; ?>"><?php echo $daysLeft; ?> days left</span>
+                                    </div>
+                                </div>
+                                <button class="btn-primary-modern" onclick="openAssignExpertModal(<?php echo $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
+                                    <i class="fas fa-user-plus"></i> Assign to Expert
+                                </button>
                             </div>
                         </div>
-                        <button class="btn-primary-modern" onclick="openAssignExpertModal(<?php echo $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
-                            <i class="fas fa-user-plus"></i> Assign to Expert
-                        </button>
-                    </div>
-                </div>
-                <?php endwhile; ?>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="fas fa-check-circle"></i>
-                    <p>No unassigned tasks</p>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="fas fa-check-circle"></i>
+                            <p>No unassigned tasks</p>
                 </div>
             <?php endif; ?>
         </div>
@@ -905,221 +972,231 @@ include '../../includes/navbar.php';
                 <span class="badge-count"><?php echo $pendingEstimationTasks->num_rows; ?> tasks</span>
             </h5>
         </div>
-        <div class="p-3">
-            <?php if($pendingEstimationTasks->num_rows > 0): ?>
-                <?php while($task = $pendingEstimationTasks->fetch_assoc()): 
-                    $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
-                ?>
-                <div class="task-card">
-                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                        <div>
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
-                                <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
-                            </div>
-                            <div class="task-meta">
-                                <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                                <span><i class="fas fa-user"></i> Expert: <?php echo htmlspecialchars($task['expert_name']); ?></span>
-                                <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
-                                <span class="estimation-badge"><i class="fas fa-hourglass-half"></i> Waiting for estimation</span>
+                <div class="p-3">
+                    <?php if($pendingEstimationTasks->num_rows > 0): ?>
+                        <?php while($task = $pendingEstimationTasks->fetch_assoc()): 
+                            $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
+                        ?>
+                        <div class="task-card">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                <div>
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
+                                        <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                    </div>
+                                    <div class="task-meta">
+                                        <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
+                                        <span><i class="fas fa-user"></i> Expert: <?php echo htmlspecialchars($task['expert_name']); ?></span>
+                                        <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
+                                        <span class="estimation-badge"><i class="fas fa-hourglass-half"></i> Waiting for estimation</span>
+                                    </div>
+                                </div>
+                                <div class="text-muted small">
+                                    <i class="fas fa-clock"></i> Pending Expert
+                                </div>
                             </div>
                         </div>
-                        <div class="text-muted small">
-                            <i class="fas fa-clock"></i> Pending Expert
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="fas fa-check-circle"></i>
+                            <p>No tasks pending expert estimation</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- Section 3: Ready for Review -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-clipboard-list"></i>
+                        Ready for Review
+                        <span class="badge-count"><?php echo $reviewTasks->num_rows; ?> tasks</span>
+                    </h5>
+                </div>
+                <div class="p-3">
+                    <?php if($reviewTasks->num_rows > 0): ?>
+                        <?php while($task = $reviewTasks->fetch_assoc()): 
+                            $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
+                            $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
+                        ?>
+                        <div class="task-card">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
+                                        <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                        </div>
+                                <div class="task-meta">
+                                    <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
+                                    <span><i class="fas fa-user"></i> Expert: <?php echo htmlspecialchars($task['expert_name']); ?></span>
+                                    <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
+                                    <span class="estimation-badge"><i class="fas fa-chart-line"></i> PERT: <?php echo $pertEstimate; ?> days</span>
+                                </div>
+                                <div class="mt-2 p-2 bg-light rounded-2">
+                                    <small class="text-muted"><i class="fas fa-info-circle"></i> Estimation: Min: <?php echo $task['min_days']; ?> | Likely: <?php echo $task['likely_days']; ?> | Max: <?php echo $task['max_days']; ?> days</small>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button class="btn-success-modern" onclick="approveEstimation(<?php echo $task['id']; ?>)">
+                                    <i class="fas fa-check"></i> Approve
+                                </button>
+                                <button class="btn-warning-modern" onclick="openRejectModal(<?php echo $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
+                                    <i class="fas fa-times"></i> Reject
+                                </button>
+                            </div>
                         </div>
                     </div>
+                    <?php endwhile; ?>
+                <?php else: ?>
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle"></i>
+                        <p>No tasks ready for review</p>
+                    </div>
+                <?php endif; ?>
                 </div>
-                <?php endwhile; ?>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="fas fa-check-circle"></i>
-                    <p>No tasks pending expert estimation</p>
+            </div>
+            </div>
+            <!-- End Expert Tab Panel -->
+            
+            <!-- Developer Tab Panel -->
+            <div class="tab-pane fade" id="developer-panel" role="tabpanel">
+            
+            <!-- Section 4: Ready for Developer Assignment -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-code"></i>
+                        Ready for Developer Assignment
+                        <span class="badge-count"><?php echo $readyForDevTasks->num_rows; ?> tasks</span>
+                    </h5>
                 </div>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <!-- Section 3: Ready for Review -->
-    <div class="section-card">
-        <div class="section-header">
-            <h5>
-                <i class="fas fa-clipboard-list"></i>
-                Ready for Review
-                <span class="badge-count"><?php echo $reviewTasks->num_rows; ?> tasks</span>
-            </h5>
-        </div>
-        <div class="p-3">
-            <?php if($reviewTasks->num_rows > 0): ?>
-                <?php while($task = $reviewTasks->fetch_assoc()): 
-                    $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
-                    $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
-                ?>
-                <div class="task-card">
-                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                        <div class="flex-grow-1">
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
-                                <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                <div class="p-3">
+                <?php if($readyForDevTasks->num_rows > 0): ?>
+                    <?php while($task = $readyForDevTasks->fetch_assoc()): 
+                        $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
+                        $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
+                    ?>
+                    <div class="task-card">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                            <div>
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
+                                    <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                </div>
+                                <div class="task-meta">
+                                    <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
+                                    <span><i class="fas fa-user-check"></i> Estimated by: <?php echo htmlspecialchars($task['expert_name']); ?></span>
+                                    <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
+                                    <span class="estimation-badge"><i class="fas fa-chart-line"></i> PERT: <?php echo $pertEstimate; ?> days</span>
+                                    <?php if (!empty($task['sales_estimate_choice']) && !empty($task['sales_estimate_days'])): ?>
+                                        <span class="estimation-badge"><i class="fas fa-flag-checkered"></i> Sales picked <?php echo ucfirst($task['sales_estimate_choice']); ?>: <?php echo (int) $task['sales_estimate_days']; ?> days</span>
+                                    <?php endif; ?>
+                                </div>
                             </div>
-                            <div class="task-meta">
-                                <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                                <span><i class="fas fa-user"></i> Expert: <?php echo htmlspecialchars($task['expert_name']); ?></span>
-                                <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
-                                <span class="estimation-badge"><i class="fas fa-chart-line"></i> PERT: <?php echo $pertEstimate; ?> days</span>
-                            </div>
-                            <div class="mt-2 p-2 bg-light rounded-2">
-                                <small class="text-muted"><i class="fas fa-info-circle"></i> Estimation: Min: <?php echo $task['min_days']; ?> | Likely: <?php echo $task['likely_days']; ?> | Max: <?php echo $task['max_days']; ?> days</small>
-                            </div>
-                        </div>
-                        <div class="d-flex gap-2">
-                            <button class="btn-success-modern" onclick="approveEstimation(<?php echo $task['id']; ?>)">
-                                <i class="fas fa-check"></i> Approve
+                            <button class="btn-primary-modern" onclick="openAssignDeveloperModal(<?php echo $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
+                                <i class="fas fa-user-plus"></i> Assign to Developer
                             </button>
-                            <button class="btn-warning-modern" onclick="openRejectModal(<?php echo $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
-                                <i class="fas fa-times"></i> Reject
+                        </div>
+                    </div>
+                    <?php endwhile; ?>
+                <?php else: ?>
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle"></i>
+                        <p>No tasks ready for developer assignment</p>
+                    </div>
+                <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- Section 5: In Progress -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-spinner fa-pulse"></i>
+                        In Progress
+                        <span class="badge-count"><?php echo $inProgressTasks->num_rows; ?> tasks</span>
+                    </h5>
+                </div>
+                <div class="p-3">
+                <?php if($inProgressTasks->num_rows > 0): ?>
+                    <?php while($task = $inProgressTasks->fetch_assoc()): 
+                        $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
+                    ?>
+                    <div class="task-card">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                            <div>
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
+                                    <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                </div>
+                                <div class="task-meta">
+                                    <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
+                                    <span><i class="fas fa-user"></i> Developer: <?php echo htmlspecialchars($task['developer_name']); ?></span>
+                                    <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
+                                    <span class="text-<?php echo $daysLeft <= 2 ? 'danger' : 'muted'; ?>"><?php echo $daysLeft; ?> days left</span>
+                                </div>
+                            </div>
+                            <button class="btn-outline-modern" onclick="viewTaskDetails(<?php echo $task['id']; ?>)">
+                                <i class="fas fa-eye"></i> View
                             </button>
                         </div>
                     </div>
-                </div>
-                <?php endwhile; ?>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="fas fa-check-circle"></i>
-                    <p>No tasks ready for review</p>
-                </div>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <!-- Section 4: Ready for Developer Assignment -->
-    <div class="section-card">
-        <div class="section-header">
-            <h5>
-                <i class="fas fa-code"></i>
-                Ready for Developer Assignment
-                <span class="badge-count"><?php echo $readyForDevTasks->num_rows; ?> tasks</span>
-            </h5>
-        </div>
-        <div class="p-3">
-            <?php if($readyForDevTasks->num_rows > 0): ?>
-                <?php while($task = $readyForDevTasks->fetch_assoc()): 
-                    $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
-                    $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
-                ?>
-                <div class="task-card">
-                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                        <div>
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
-                                <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
-                            </div>
-                            <div class="task-meta">
-                                <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                                <span><i class="fas fa-user-check"></i> Estimated by: <?php echo htmlspecialchars($task['expert_name']); ?></span>
-                                <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
-                                <span class="estimation-badge"><i class="fas fa-chart-line"></i> PERT: <?php echo $pertEstimate; ?> days</span>
-                                <?php if (!empty($task['sales_estimate_choice']) && !empty($task['sales_estimate_days'])): ?>
-                                    <span class="estimation-badge"><i class="fas fa-flag-checkered"></i> Sales picked <?php echo ucfirst($task['sales_estimate_choice']); ?>: <?php echo (int) $task['sales_estimate_days']; ?> days</span>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                        <button class="btn-primary-modern" onclick="openAssignDeveloperModal(<?php echo $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
-                            <i class="fas fa-user-plus"></i> Assign to Developer
-                        </button>
+                    <?php endwhile; ?>
+                <?php else: ?>
+                    <div class="empty-state">
+                        <i class="fas fa-play-circle"></i>
+                        <p>No tasks in progress</p>
                     </div>
+                <?php endif; ?>
                 </div>
-                <?php endwhile; ?>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="fas fa-check-circle"></i>
-                    <p>No tasks ready for developer assignment</p>
-                </div>
-            <?php endif; ?>
-        </div>
-    </div>
+            </div>
 
-    <!-- Section 5: In Progress -->
-    <div class="section-card">
-        <div class="section-header">
-            <h5>
-                <i class="fas fa-spinner fa-pulse"></i>
-                In Progress
-                <span class="badge-count"><?php echo $inProgressTasks->num_rows; ?> tasks</span>
-            </h5>
-        </div>
-        <div class="p-3">
-            <?php if($inProgressTasks->num_rows > 0): ?>
-                <?php while($task = $inProgressTasks->fetch_assoc()): 
-                    $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
-                ?>
-                <div class="task-card">
-                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                        <div>
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
-                                <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+            <!-- Section 6: Recently Completed -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-check-double"></i>
+                        Recently Completed
+                        <span class="badge-count"><?php echo $completedTasks->num_rows; ?> tasks</span>
+                    </h5>
+                </div>
+                <div class="p-3">
+                <?php if($completedTasks->num_rows > 0): ?>
+                    <?php while($task = $completedTasks->fetch_assoc()): ?>
+                    <div class="task-card bg-light">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <s class="task-title"><?php echo htmlspecialchars($task['title']); ?></s>
+                                </div>
+                                <div class="task-meta">
+                                    <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
+                                    <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($task['assigned_to_name']); ?></span>
+                                    <span><i class="fas fa-check-circle text-success"></i> Completed: <?php echo date('M d, Y', strtotime($task['completed_at'])); ?></span>
+                                </div>
                             </div>
-                            <div class="task-meta">
-                                <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                                <span><i class="fas fa-user"></i> Developer: <?php echo htmlspecialchars($task['developer_name']); ?></span>
-                                <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
-                                <span class="text-<?php echo $daysLeft <= 2 ? 'danger' : 'muted'; ?>"><?php echo $daysLeft; ?> days left</span>
-                            </div>
+                            <button class="btn-outline-modern" onclick="viewTaskDetails(<?php echo $task['id']; ?>)">
+                                <i class="fas fa-eye"></i> View
+                            </button>
                         </div>
-                        <button class="btn-outline-modern" onclick="viewTaskDetails(<?php echo $task['id']; ?>)">
-                            <i class="fas fa-eye"></i> View
-                        </button>
                     </div>
-                </div>
-                <?php endwhile; ?>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="fas fa-play-circle"></i>
-                    <p>No tasks in progress</p>
-                </div>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <!-- Section 6: Recently Completed -->
-    <div class="section-card">
-        <div class="section-header">
-            <h5>
-                <i class="fas fa-check-double"></i>
-                Recently Completed
-                <span class="badge-count"><?php echo $completedTasks->num_rows; ?> tasks</span>
-            </h5>
-        </div>
-        <div class="p-3">
-            <?php if($completedTasks->num_rows > 0): ?>
-                <?php while($task = $completedTasks->fetch_assoc()): ?>
-                <div class="task-card bg-light">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                        <div>
-                            <div class="d-flex align-items-center gap-2">
-                                <s class="task-title"><?php echo htmlspecialchars($task['title']); ?></s>
-                            </div>
-                            <div class="task-meta">
-                                <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                                <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($task['assigned_to_name']); ?></span>
-                                <span><i class="fas fa-check-circle text-success"></i> Completed: <?php echo date('M d, Y', strtotime($task['completed_at'])); ?></span>
-                            </div>
-                        </div>
-                        <button class="btn-outline-modern" onclick="viewTaskDetails(<?php echo $task['id']; ?>)">
-                            <i class="fas fa-eye"></i> View
-                        </button>
+                    <?php endwhile; ?>
+                <?php else: ?>
+                    <div class="empty-state">
+                        <i class="fas fa-trophy"></i>
+                        <p>No completed tasks yet</p>
                     </div>
+                <?php endif; ?>
                 </div>
-                <?php endwhile; ?>
-            <?php else: ?>
-                <div class="empty-state">
-                    <i class="fas fa-trophy"></i>
-                    <p>No completed tasks yet</p>
-                </div>
-            <?php endif; ?>
+            </div>
+            </div>
+            <!-- End Developer Tab Panel -->
+            
         </div>
+        <!-- End Tab Content -->
     </div>
-</div>
 
 <!-- Create Task Modal -->
 <div class="modal fade modal-modern" id="createTaskModal" tabindex="-1">
