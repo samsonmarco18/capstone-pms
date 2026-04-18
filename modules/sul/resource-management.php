@@ -293,6 +293,23 @@ include '../../includes/navbar.php';
     transition: width 0.3s ease;
 }
 
+/* Role Workload */
+.role-card-body {
+    display: block !important;
+    text-align: left !important;
+}
+
+.role-chart {
+    position: relative;
+    height: 140px;
+    width: 100%;
+    margin-top: 0.75rem;
+}
+
+.role-breakdown {
+    text-align: left;
+}
+
 /* Badges */
 .badge-role-expert {
     background: #fef3c7;
@@ -511,9 +528,8 @@ include '../../includes/navbar.php';
                 <div class="card-header">
                     <h5><i class="fas fa-chart-pie me-2"></i>Workload by Role</h5>
                 </div>
-                <div class="card-body">
-                    <canvas id="roleWorkloadChart" style="height: 200px; width: 100%;"></canvas>
-                    <div class="mt-3">
+                <div class="card-body role-card-body">
+                    <div class="role-breakdown">
                         <?php 
                         $workloadByRole->data_seek(0);
                         while($role = $workloadByRole->fetch_assoc()): 
@@ -531,6 +547,9 @@ include '../../includes/navbar.php';
                         </div>
                         <?php endwhile; ?>
                     </div>
+                    <div class="role-chart">
+                        <canvas id="roleWorkloadChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -544,7 +563,6 @@ include '../../includes/navbar.php';
         <div class="table-container">
             <table class="data-table">
                 <thead>
-                    60
                         <th>Resource</th>
                         <th>Role</th>
                         <th>Active</th>
@@ -776,8 +794,8 @@ new Chart(roleCtx, {
     },
     options: {
         responsive: true,
-        maintainAspectRatio: true,
-        plugins: { legend: { position: 'bottom' } }
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } }
     }
 });
 

@@ -5,45 +5,339 @@ requireRole('expert');
 $conn = getConnection();
 $user = getCurrentUser();
 
-// Get tasks assigned to this expert
+$availableDepartments = [
+    'Frontend Developer',
+    'Backend Developer',
+    'Full Stack Developer',
+    'QA Engineer',
+    'UI/UX Designer',
+    'DevOps Engineer',
+    'Database Administrator',
+];
+
+// Check if project_phases column exists (auto-create if missing)
+$hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
+if (!$hasProjectPhases) {
+    try {
+        $conn->query("ALTER TABLE projects ADD COLUMN project_phases LONGTEXT NULL");
+        $hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
+    } catch (Throwable $e) {
+        // Leave $hasProjectPhases as false; UI will show warning
+    }
+}
+
+// Check if phase_name column exists in feature_estimations
+$hasPhaseName = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'phase_name'")->num_rows > 0;
+if (!$hasPhaseName) {
+    try {
+        $conn->query("ALTER TABLE feature_estimations ADD COLUMN phase_name VARCHAR(150) NULL");
+        $hasPhaseName = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'phase_name'")->num_rows > 0;
+    } catch (Throwable $e) {
+        // Leave $hasPhaseName as false
+    }
+}
+
+$hasInvolvementPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'involvement_plan_json'")->num_rows > 0;
+if (!$hasInvolvementPlan) {
+    try {
+        $conn->query("ALTER TABLE feature_estimations ADD COLUMN involvement_plan_json LONGTEXT NULL");
+        $hasInvolvementPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'involvement_plan_json'")->num_rows > 0;
+    } catch (Throwable $e) {
+        // Leave $hasInvolvementPlan as false
+    }
+}
+
+$hasComponentPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'component_plan_json'")->num_rows > 0;
+if (!$hasComponentPlan) {
+    try {
+        $conn->query("ALTER TABLE feature_estimations ADD COLUMN component_plan_json LONGTEXT NULL");
+        $hasComponentPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'component_plan_json'")->num_rows > 0;
+    } catch (Throwable $e) {
+        // Leave $hasComponentPlan as false
+    }
+}
+
+// Check if sales approval columns exist in tasks (auto-create if missing)
+$hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+if (!$hasSalesApproval) {
+    try {
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved TINYINT(1) DEFAULT 0");
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_by INT NULL");
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_at DATETIME NULL");
+        $hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+    } catch (Throwable $e) {
+        // Leave $hasSalesApproval as false; sales approval will be skipped
+    }
+}
+
+// Get tasks assigned to this expert that are pending estimation (status = 'todo')
 $tasks = $conn->query("
-    SELECT t.*, p.name as project_name, p.id as project_id
+    SELECT t.*, p.name as project_name, p.id as project_id,
+           p.timeline_start, p.timeline_end" . ($hasProjectPhases ? ", p.project_phases" : "") . "
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
-    WHERE t.assigned_to = {$user['id']} AND t.status != 'completed'
-    ORDER BY t.deadline ASC
+    WHERE t.assigned_to = {$user['id']} 
+      AND t.task_type = 'feature'
+      AND t.status IN ('todo', 'in_review')
+    ORDER BY 
+        CASE t.status WHEN 'todo' THEN 1 ELSE 2 END,
+        t.deadline ASC
 ");
 
-// Handle estimation submission
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+// Get projects for project setup (show all active projects)
+$expertProjectsResult = $conn->query("
+    SELECT p.id, p.name, p.timeline_start, p.timeline_end" . ($hasProjectPhases ? ", p.project_phases" : "") . "
+    FROM projects p
+    WHERE p.status != 'completed'
+    ORDER BY p.name ASC
+");
+
+$expertProjects = [];
+while ($row = $expertProjectsResult->fetch_assoc()) {
+    $expertProjects[] = $row;
+}
+
+// Handle Project Setup Update (phases + team composition + cost estimation)
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['project_setup'])) {
+    $projectId = (int) ($_POST['project_id'] ?? 0);
+    $phases = $_POST['phases_json'] ?? '[]';
+    $projectStart = !empty($_POST['project_start']) ? $_POST['project_start'] : null;
+    $projectEnd = !empty($_POST['project_end']) ? $_POST['project_end'] : null;
+
+    if ($projectId > 0) {
+        if ($hasProjectPhases) {
+            $stmt = $conn->prepare("UPDATE projects SET project_phases = ?, timeline_start = ?, timeline_end = ? WHERE id = ?");
+            $stmt->bind_param("sssi", $phases, $projectStart, $projectEnd, $projectId);
+            $stmt->execute();
+        }
+
+        logActivity($user['id'], 'project_setup', 'projects', $projectId, null, [
+            'project_phases' => $phases,
+            'project_start' => $projectStart,
+            'project_end' => $projectEnd,
+        ]);
+
+        // Auto-submit to Sales if all features are estimated
+        $totalStmt = $conn->prepare("
+            SELECT COUNT(*) as total 
+            FROM tasks 
+            WHERE project_id = ? AND task_type = 'feature' AND assigned_to = ?
+        ");
+        $totalStmt->bind_param("ii", $projectId, $user['id']);
+        $totalStmt->execute();
+        $totalCount = (int) ($totalStmt->get_result()->fetch_assoc()['total'] ?? 0);
+        $totalStmt->close();
+
+        $doneStmt = $conn->prepare("
+            SELECT COUNT(*) as done 
+            FROM feature_estimations fe
+            JOIN tasks t ON fe.task_id = t.id
+            WHERE t.project_id = ? AND t.task_type = 'feature' AND t.assigned_to = ?
+              AND fe.expert_id = ? AND fe.status = 'completed'
+        ");
+        $doneStmt->bind_param("iii", $projectId, $user['id'], $user['id']);
+        $doneStmt->execute();
+        $doneCount = (int) ($doneStmt->get_result()->fetch_assoc()['done'] ?? 0);
+        $doneStmt->close();
+
+        if ($totalCount > 0 && $doneCount === $totalCount) {
+            $salesColumns = $hasSalesApproval ? ", sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL" : "";
+            $submitStmt = $conn->prepare("
+                UPDATE tasks 
+                SET status = 'in_review'{$salesColumns}
+                WHERE project_id = ? AND task_type = 'feature' AND assigned_to = ?
+            ");
+            $submitStmt->bind_param("ii", $projectId, $user['id']);
+            $submitStmt->execute();
+            $submitStmt->close();
+
+            $salesUsers = $conn->query("SELECT id FROM users WHERE role = 'sales' AND status = 'active'");
+            while ($sales = $salesUsers->fetch_assoc()) {
+                createNotification(
+                    (int) $sales['id'],
+                    "Estimations Ready for Approval",
+                    "Feature estimations are ready for sales approval.",
+                    'approval',
+                    'projects',
+                    (int) $projectId,
+                    BASE_URL . 'modules/sales/estimation-approval.php'
+                );
+            }
+
+            $_SESSION['success'] = "Project setup saved and estimations sent to Sales.";
+        } else {
+            $_SESSION['error'] = "Project setup not submitted. Estimated features: {$doneCount} / {$totalCount}. Complete all feature estimates before saving setup.";
+        }
+    } else {
+        $_SESSION['error'] = "Please select a project to save setup.";
+    }
+
+    header('Location: feature-estimation.php');
+    exit();
+}
+
+// Handle task estimation save (draft)
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($_POST['submit_all'])) {
     $taskId = $_POST['task_id'];
-    $minDays = $_POST['min_days'];
-    $likelyDays = $_POST['likely_days'];
-    $maxDays = $_POST['max_days'];
-    $expectation = $_POST['expectation'];
+    $minDays = (int) ($_POST['min_days'] ?? 0);
+    $likelyDays = (int) ($_POST['likely_days'] ?? 0);
+    $maxDays = (int) ($_POST['max_days'] ?? 0);
+    $expectation = trim((string) ($_POST['expectation'] ?? ''));
+    $phaseName = $_POST['phase_name'] ?? null;
+    $plannedStart = !empty($_POST['planned_start']) ? $_POST['planned_start'] : null;
+    $plannedEnd = !empty($_POST['planned_end']) ? $_POST['planned_end'] : null;
+    $involvementPlan = json_decode((string) ($_POST['involvement_plan_json'] ?? '[]'), true);
+    $componentPlan = json_decode((string) ($_POST['component_plan_json'] ?? '[]'), true);
+
+    $normalizedInvolvement = [];
+    if (is_array($involvementPlan)) {
+        foreach ($involvementPlan as $entry) {
+            $role = trim((string) ($entry['role'] ?? ''));
+            $percentage = (int) ($entry['percentage'] ?? 0);
+            if ($role !== '' && !in_array($role, $availableDepartments, true)) {
+                continue;
+            }
+            if ($role === '' && $percentage <= 0) {
+                continue;
+            }
+            $normalizedInvolvement[] = [
+                'role' => $role,
+                'percentage' => max(0, min(100, $percentage)),
+            ];
+        }
+    }
+
+    $normalizedComponents = [];
+    if (is_array($componentPlan)) {
+        foreach ($componentPlan as $entry) {
+            $component = trim((string) ($entry['name'] ?? ''));
+            if ($component === '') {
+                continue;
+            }
+            $normalizedComponents[] = [
+                'name' => $component,
+            ];
+        }
+    }
+
+    $involvementPlanJson = json_encode($normalizedInvolvement, JSON_UNESCAPED_UNICODE);
+    $componentPlanJson = json_encode($normalizedComponents, JSON_UNESCAPED_UNICODE);
+
+    if ($minDays <= 0 || $likelyDays <= 0 || $maxDays <= 0) {
+        $_SESSION['error'] = "Minimum, most likely, and maximum days must all be greater than zero.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($minDays > $likelyDays || $likelyDays > $maxDays) {
+        $_SESSION['error'] = "Please keep the estimate order as Minimum <= Most Likely <= Maximum.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($expectation === '') {
+        $_SESSION['error'] = "Please add an expectation description for the feature.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+    
+    // Get the project_id for this task
+    $taskInfo = $conn->query("SELECT project_id FROM tasks WHERE id = $taskId")->fetch_assoc();
+    $projectId = $taskInfo['project_id'];
     
     // Check if estimation exists
     $existing = $conn->query("SELECT id FROM feature_estimations WHERE task_id = $taskId AND expert_id = {$user['id']}");
     
     if($existing->num_rows > 0) {
-        $stmt = $conn->prepare("UPDATE feature_estimations SET min_days=?, likely_days=?, max_days=?, expectation_description=?, status='completed', submitted_at=NOW() WHERE task_id=? AND expert_id=?");
-        $stmt->bind_param("iiisii", $minDays, $likelyDays, $maxDays, $expectation, $taskId, $user['id']);
+        $updateParts = [
+            "min_days=?",
+            "likely_days=?",
+            "max_days=?",
+        ];
+        $types = "iii";
+        $params = [$minDays, $likelyDays, $maxDays];
+
+        if ($hasPhaseName) {
+            $updateParts[] = "phase_name=?";
+            $types .= "s";
+            $params[] = $phaseName;
+        }
+
+        if ($hasInvolvementPlan) {
+            $updateParts[] = "involvement_plan_json=?";
+            $types .= "s";
+            $params[] = $involvementPlanJson;
+        }
+
+        if ($hasComponentPlan) {
+            $updateParts[] = "component_plan_json=?";
+            $types .= "s";
+            $params[] = $componentPlanJson;
+        }
+
+        $updateParts[] = "expectation_description=?";
+        $types .= "s";
+        $params[] = $expectation;
+
+        $types .= "ii";
+        $params[] = (int) $taskId;
+        $params[] = (int) $user['id'];
+
+        $stmt = $conn->prepare("UPDATE feature_estimations SET " . implode(', ', $updateParts) . ", status='completed', submitted_at=NOW() WHERE task_id=? AND expert_id=?");
+        $stmt->bind_param($types, ...$params);
     } else {
-        $stmt = $conn->prepare("INSERT INTO feature_estimations (task_id, expert_id, min_days, likely_days, max_days, expectation_description, status, submitted_at) VALUES (?, ?, ?, ?, ?, ?, 'completed', NOW())");
-        $stmt->bind_param("iiiiis", $taskId, $user['id'], $minDays, $likelyDays, $maxDays, $expectation);
+        $columns = ['task_id', 'expert_id', 'project_id', 'min_days', 'likely_days', 'max_days'];
+        $placeholders = ['?', '?', '?', '?', '?', '?'];
+        $types = "iiiiii";
+        $params = [(int) $taskId, (int) $user['id'], (int) $projectId, $minDays, $likelyDays, $maxDays];
+
+        if ($hasPhaseName) {
+            $columns[] = 'phase_name';
+            $placeholders[] = '?';
+            $types .= "s";
+            $params[] = $phaseName;
+        }
+
+        if ($hasInvolvementPlan) {
+            $columns[] = 'involvement_plan_json';
+            $placeholders[] = '?';
+            $types .= "s";
+            $params[] = $involvementPlanJson;
+        }
+
+        if ($hasComponentPlan) {
+            $columns[] = 'component_plan_json';
+            $placeholders[] = '?';
+            $types .= "s";
+            $params[] = $componentPlanJson;
+        }
+
+        $columns[] = 'expectation_description';
+        $placeholders[] = '?';
+        $types .= "s";
+        $params[] = $expectation;
+
+        $stmt = $conn->prepare("INSERT INTO feature_estimations (" . implode(', ', $columns) . ", status, submitted_at) VALUES (" . implode(', ', $placeholders) . ", 'completed', NOW())");
+        $stmt->bind_param($types, ...$params);
     }
     
     if($stmt->execute()) {
-        // Update task status
-        $conn->query("UPDATE tasks SET status = 'review' WHERE id = $taskId");
+        // Save draft estimations without sending to Sales yet
+        $taskStmt = $conn->prepare("UPDATE tasks SET started_at = ?, deadline = ?, estimated_days_min = ?, estimated_days_likely = ?, estimated_days_max = ? WHERE id = ?");
+        $taskStmt->bind_param("ssiiii", $plannedStart, $plannedEnd, $minDays, $likelyDays, $maxDays, $taskId);
+        $taskStmt->execute();
         
         logActivity($user['id'], 'submit_estimation', 'tasks', $taskId, null, $_POST);
-        $_SESSION['success'] = "Estimation submitted successfully";
+        $_SESSION['success'] = "Estimation saved successfully";
+    } else {
+        $_SESSION['error'] = "Failed to save estimation: " . $conn->error;
     }
     
     header('Location: feature-estimation.php');
     exit();
 }
+
+// Bulk submission handled on project setup save.
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -108,43 +402,538 @@ include '../../includes/navbar.php';
     color: rgba(255, 255, 255, 0.9);
 }
 
-/* Cards */
-.estimation-card {
+/* Timeline Section */
+    .timeline-section {
+        background: white;
+        border-radius: 20px;
+        border: 1px solid var(--gray-200);
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 2rem;
+    }
+
+.timeline-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.timeline-header h5 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-800);
+}
+
+.gantt-container {
+    padding: 1.5rem;
+}
+
+.gantt-container canvas {
+    width: 100% !important;
+    height: 320px !important;
+}
+
+/* Phase Management Section */
+.phase-management-card {
     background: white;
     border-radius: 20px;
     border: 1px solid var(--gray-200);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
-    transition: all 0.2s ease;
-    height: 100%;
+    margin-bottom: 2rem;
 }
 
-.estimation-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
-}
-
-.card-header-custom {
-    padding: 1.25rem 1.5rem;
-    background: white;
+.phase-header {
+    padding: 1rem 1.5rem;
+    background: var(--gray-50);
     border-bottom: 1px solid var(--gray-200);
 }
 
-.card-header-custom h5 {
+.phase-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-800);
+}
+
+.phase-header h5 i {
+    color: var(--theme-primary);
+    margin-right: 0.5rem;
+}
+
+.project-selector {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.phase-list {
+    padding: 1.5rem;
+}
+
+.phase-item {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+    background: var(--gray-50);
+    border-radius: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.phase-name {
+    flex: 2;
+    min-width: 150px;
+}
+
+.phase-name input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.phase-dates {
+    flex: 1;
+    min-width: 120px;
+}
+
+.phase-dates input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.phase-remove {
+    flex-shrink: 0;
+}
+
+.btn-remove-phase {
+    background: #fee2e2;
+    border: none;
+    color: #dc2626;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+
+.btn-remove-phase:hover {
+    background: #dc2626;
+    color: white;
+}
+
+.btn-add-phase {
+    background: transparent;
+    border: 1px dashed var(--gray-400);
+    color: var(--gray-600);
+    padding: 0.5rem 1rem;
+    border-radius: 40px;
+    font-size: 0.8rem;
+    margin-top: 1rem;
+    cursor: pointer;
+    width: 100%;
+}
+
+.btn-add-phase:hover {
+    border-color: var(--theme-primary);
+    color: var(--theme-primary);
+}
+
+.btn-save-phases {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: white;
+    border: none;
+    padding: 0.5rem 1.5rem;
+    border-radius: 40px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.btn-save-phases:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
+}
+
+/* Project Setup Sections */
+.setup-section {
+    border-top: 1px solid var(--gray-200);
+}
+
+.setup-section-header {
+    padding: 1rem 1.5rem;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.setup-section-header h6 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--gray-800);
+}
+
+.setup-section-header h6 i {
+    color: var(--theme-primary);
+    margin-right: 0.5rem;
+}
+
+.setup-section-body {
+    padding: 1.5rem;
+}
+
+.team-item,
+.cost-item {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.team-role {
+    font-weight: 600;
+    color: var(--gray-800);
+}
+
+.btn-remove-item {
+    background: #fee2e2;
+    border: none;
+    color: #dc2626;
+    padding: 0.35rem 0.7rem;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+
+.btn-remove-item:hover {
+    background: #dc2626;
+    color: white;
+}
+
+/* Gantt Preview */
+.gantt-preview {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.gantt-row-preview {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.gantt-label {
+    width: 50px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--gray-600);
+    text-transform: uppercase;
+}
+
+.gantt-bar-track {
+    flex: 1;
+    height: 10px;
+    background: var(--gray-200);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+}
+
+.gantt-bar {
+    height: 100%;
+    transition: width 0.2s ease;
+}
+
+.min-bar { background: #60a5fa; }
+.likely-bar { background: #34d399; }
+.max-bar { background: #f97316; }
+
+.management-table-section {
+    background: white;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+}
+
+.management-table-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.management-table-header h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--gray-800);
+}
+
+.management-table-header p {
+    margin: 0.35rem 0 0;
+    color: var(--gray-600);
+    font-size: 0.82rem;
+}
+
+.management-table-meta {
+    font-size: 0.78rem;
+    color: var(--theme-primary);
+    font-weight: 600;
+}
+
+.management-table-wrap {
+    overflow-x: auto;
+}
+
+.management-table {
+    width: 100%;
+    min-width: 980px;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.management-table th,
+.management-table td {
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid var(--gray-200);
+    vertical-align: top;
+}
+
+.management-table th {
+    background: var(--gray-50);
+    color: var(--gray-700);
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.management-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.management-table tbody tr:hover td {
+    background: #fbfdff;
+}
+
+.table-feature-name {
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: 0.35rem;
+}
+
+.table-feature-meta {
+    font-size: 0.78rem;
+    color: var(--gray-600);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.table-phase-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: #e0f2fe;
+    color: #0369a1;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.table-list {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.table-list-item {
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    background: var(--gray-50);
+    line-height: 1.35;
+}
+
+.table-list-item strong {
+    display: block;
+    font-size: 0.84rem;
+    color: var(--gray-800);
+}
+
+.table-list-item span {
+    font-size: 0.76rem;
+    color: var(--gray-600);
+}
+
+.days-stack {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.day-badge {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.7rem;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.day-badge.min {
+    background: rgba(96, 165, 250, 0.14);
+    color: #1d4ed8;
+}
+
+.day-badge.likely {
+    background: rgba(52, 211, 153, 0.14);
+    color: #047857;
+}
+
+.day-badge.max {
+    background: rgba(249, 115, 22, 0.14);
+    color: #c2410c;
+}
+
+.table-empty {
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--gray-600);
+}
+
+.table-input {
+    width: 100%;
+    border: 1px solid var(--gray-300);
+    border-radius: 10px;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.82rem;
+    background: white;
+    color: var(--gray-800);
+}
+
+.table-input:focus {
+    outline: none;
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
+.table-input[disabled] {
+    background: var(--gray-100);
+    color: var(--gray-600);
+}
+
+.pm-inline-btn {
+    border: 1px dashed var(--gray-300);
+    background: white;
+    color: var(--theme-primary);
+    border-radius: 10px;
+    padding: 0.4rem 0.65rem;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.pm-inline-btn:hover {
+    border-color: var(--theme-primary);
+    background: #f7fbff;
+}
+
+.pm-inline-btn.remove {
+    color: #dc2626;
+    border-color: #fecaca;
+}
+
+.pm-inline-btn.remove:hover {
+    background: #fff5f5;
+}
+
+.pm-action-row {
+    margin-top: 0.5rem;
+}
+
+.pm-days-grid {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.pm-day-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--gray-600);
+    margin-bottom: 0.3rem;
+    display: block;
+}
+
+/* Feature List */
+.feature-list {
+    background: white;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow-sm);
+}
+
+.feature-row {
+    border-bottom: 1px solid var(--gray-200);
+    padding: 1.25rem 1.5rem;
+}
+
+.feature-row:last-child {
+    border-bottom: none;
+}
+
+.feature-title {
     font-size: 1rem;
     font-weight: 600;
     color: var(--gray-900);
-    margin: 0 0 0.25rem 0;
 }
 
-.card-header-custom .project-name {
+.feature-meta {
     font-size: 0.75rem;
     color: var(--gray-500);
-    margin: 0;
 }
 
-.card-body-custom {
-    padding: 1.5rem;
+.feature-row.incomplete {
+    border-left: 4px solid #f59e0b;
+    background: #fff7ed;
+}
+
+.feature-row.complete {
+    border-left: 4px solid #10b981;
+    background: #f0fdf4;
+}
+
+.progress-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    text-transform: uppercase;
+}
+
+.progress-badge.ready {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.progress-badge.pending {
+    background: #fef3c7;
+    color: #d97706;
 }
 
 /* Form Elements */
@@ -257,6 +1046,11 @@ textarea.form-control-custom {
         font-size: 1.5rem;
     }
     
+    .phase-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
     .card-header-custom {
         padding: 1rem 1.25rem;
     }
@@ -273,91 +1067,1150 @@ textarea.form-control-custom {
         <div>
             <h2>
                 <i class="fas fa-calculator me-2"></i> 
-                Feature Estimation
+                Timeline Feature Recommendations
             </h2>
-            <p>Provide three-point estimations for each assigned feature</p>
+            <p>Provide three-point estimations and build the realtime project timeline</p>
         </div>
     </div>
 
-    <div class="row g-4">
+    <div class="phase-management-card">
+        <div class="phase-header">
+            <h5><i class="fas fa-folder-open me-2"></i>Select Project</h5>
+        </div>
+        <div class="project-selector">
+            <label class="form-label">Choose a project to load features, timeline, and estimations</label>
+            <div class="row g-2">
+                <div class="col-md-8">
+                    <select id="phaseProjectSelect" class="form-control-custom">
+                        <option value="">-- Select a project --</option>
+                        <?php foreach ($expertProjects as $proj): ?>
+                            <option value="<?php echo $proj['id']; ?>" 
+                                    data-phases='<?php echo $hasProjectPhases ? htmlspecialchars($proj['project_phases'] ?? '', ENT_QUOTES, 'UTF-8') : ''; ?>'
+                                    data-start="<?php echo $proj['timeline_start']; ?>"
+                                    data-end="<?php echo $proj['timeline_end']; ?>">
+                                <?php echo htmlspecialchars($proj['name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button type="button" class="btn-save-phases" id="saveSetupBtn" style="display: none;" onclick="saveProjectSetup()">
+                        <i class="fas fa-save"></i> Save Project Setup
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="projectSections" style="display: none;">
+        <div class="phase-management-card">
+            <div class="phase-header">
+                <h5><i class="fas fa-stream"></i> Project Timeline Phases</h5>
+            </div>
+            <form method="POST" id="projectSetupForm">
+                <input type="hidden" name="project_setup" value="1">
+                <input type="hidden" name="project_id" id="setupProjectId">
+                <input type="hidden" name="phases_json" id="phasesJson">
+                <input type="hidden" name="project_start" id="projectStartHidden">
+                <input type="hidden" name="project_end" id="projectEndHidden">
+                <div id="phaseEditor">
+                    <div class="project-selector" style="border-top: 1px solid var(--gray-200);">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Project Start Date</label>
+                                <input type="date" id="projectStartInput" class="form-control-custom">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Project End Date</label>
+                                <input type="date" id="projectEndInput" class="form-control-custom">
+                            </div>
+                        </div>
+                        <small class="text-muted d-block mt-2">These dates define the project timeline used in the Gantt chart.</small>
+                    </div>
+                    <div class="phase-list">
+                        <div id="phasesContainer">
+                            <!-- Phases will be added here dynamically -->
+                        </div>
+                        <button type="button" class="btn-add-phase" onclick="addPhase()">
+                            <i class="fas fa-plus"></i> Add Phase
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="timeline-section">
+            <div class="timeline-header">
+                <h5><i class="fas fa-stream me-2"></i>Timeline Feature Recommendations</h5>
+                <p class="text-muted mb-0 small">Real-time Gantt chart updates as you estimate each feature.</p>
+            </div>
+            <div id="expertGanttContainer" class="gantt-container">
+                <div class="text-muted small">No timeline data yet.</div>
+            </div>
+        </div>
+
+        <div class="management-table-section">
+            <div class="management-table-header">
+                <div>
+                    <h5><i class="fas fa-table me-2"></i>Project Management Table</h5>
+                    <p>Clean planning view for features, involved teams, allocation percentages, components, and day estimates.</p>
+                </div>
+                <div class="management-table-meta" id="managementTableMeta">Select a project to load the planning table.</div>
+            </div>
+            <div class="management-table-wrap" id="projectManagementTable">
+                <div class="table-empty">Select a project to load the planning table.</div>
+            </div>
+        </div>
+
+        <!-- Feature List -->
         <?php if($tasks->num_rows > 0): ?>
+        <div class="feature-list">
+            <div class="feature-row" id="featureProgressRow">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div class="feature-title">Feature Estimation Progress</div>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="feature-meta" id="featureProgressText">Estimated: 0 / 0</div>
+                        <span class="progress-badge pending" id="featureProgressBadge">Not Ready</span>
+                    </div>
+                </div>
+                <small class="text-muted">All features must be estimated before submission to Sales.</small>
+            </div>
             <?php while($task = $tasks->fetch_assoc()): 
-                // Get existing estimation
                 $estimation = $conn->query("SELECT * FROM feature_estimations WHERE task_id = {$task['id']} AND expert_id = {$user['id']}")->fetch_assoc();
+                $isEstimated = $estimation && !empty($estimation['min_days']) && !empty($estimation['likely_days']) && !empty($estimation['max_days']);
+                $projectPhases = [];
+                if($hasProjectPhases && !empty($task['project_phases'])) {
+                    $projectPhases = json_decode($task['project_phases'], true);
+                }
+                if (empty($projectPhases) || !is_array($projectPhases)) {
+                    $projectPhases = [
+                        ['name' => 'Planning'],
+                        ['name' => 'Research'],
+                        ['name' => 'Design'],
+                        ['name' => 'Implementation'],
+                        ['name' => 'Follow Up'],
+                    ];
+                }
             ?>
-            <div class="col-lg-6">
-                <div class="estimation-card">
-                    <div class="card-header-custom">
-                        <h5><?php echo htmlspecialchars($task['title']); ?></h5>
-                        <p class="project-name">
-                            <i class="fas fa-folder me-1"></i>
-                            <?php echo htmlspecialchars($task['project_name']); ?>
-                        </p>
+            <?php $isReadonly = $task['status'] !== 'todo'; ?>
+            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" style="display:none;">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                    <div>
+                        <div class="feature-title"><?php echo htmlspecialchars($task['title']); ?></div>
+                        <div class="feature-meta"><i class="fas fa-folder me-1"></i><?php echo htmlspecialchars($task['project_name']); ?></div>
                     </div>
-                    <div class="card-body-custom">
-                        <div class="mb-3">
-                            <div class="text-muted small mb-2">Description</div>
-                            <p class="mb-0 text-secondary"><?php echo htmlspecialchars($task['description']); ?></p>
-                        </div>
-                        
-                        <form method="POST" class="mt-4">
-                            <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                            
-                            <div class="mb-3">
-                                <label class="form-label">Expectation Description</label>
-                                <textarea name="expectation" class="form-control-custom" rows="2" required placeholder="What should this feature accomplish?"><?php echo htmlspecialchars($estimation['expectation_description'] ?? ''); ?></textarea>
-                            </div>
-                            
-                            <div class="row g-3 mb-4">
-                                <div class="col-md-4">
-                                    <label class="form-label">Minimum Days (Best)</label>
-                                    <input type="number" name="min_days" class="form-control-custom" step="0.5" 
-                                           value="<?php echo $estimation['min_days'] ?? ''; ?>" required placeholder="0.5">
-                                    <small class="text-muted d-block mt-1">Optimistic estimate</small>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Most Likely Days</label>
-                                    <input type="number" name="likely_days" class="form-control-custom" step="0.5" 
-                                           value="<?php echo $estimation['likely_days'] ?? ''; ?>" required placeholder="1">
-                                    <small class="text-muted d-block mt-1">Realistic estimate</small>
-                                </div>
-                                <div class="col-md-4">
-                                    <label class="form-label">Maximum Days (Worst)</label>
-                                    <input type="number" name="max_days" class="form-control-custom" step="0.5" 
-                                           value="<?php echo $estimation['max_days'] ?? ''; ?>" required placeholder="2">
-                                    <small class="text-muted d-block mt-1">Pessimistic estimate</small>
-                                </div>
-                            </div>
-                            
-                            <button type="submit" class="btn-submit">
-                                <i class="fas fa-calculator"></i> Submit Estimation
-                            </button>
-                        </form>
-                        
-                        <?php if($estimation): ?>
-                        <div class="alert-info-custom">
-                            <small>
-                                <i class="fas fa-chart-line"></i> 
-                                <strong>PERT Estimate:</strong> 
-                                <?php echo round(($estimation['min_days'] + 4*$estimation['likely_days'] + $estimation['max_days'])/6, 1); ?> days
-                                <span class="text-muted">(Min: <?php echo $estimation['min_days']; ?> | Likely: <?php echo $estimation['likely_days']; ?> | Max: <?php echo $estimation['max_days']; ?>)</span>
-                            </small>
-                        </div>
-                        <?php endif; ?>
+                    <?php if ($isReadonly): ?>
+                        <span class="progress-badge ready">Submitted</span>
+                    <?php endif; ?>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted small mb-2">Description</div>
+                    <p class="mb-0 text-secondary"><?php echo htmlspecialchars($task['description']); ?></p>
+                </div>
+                
+                <form method="POST">
+                    <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
+                    <input type="hidden" name="involvement_plan_json" value="<?php echo htmlspecialchars($estimation['involvement_plan_json'] ?? '[]', ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="component_plan_json" value="<?php echo htmlspecialchars($estimation['component_plan_json'] ?? '[]', ENT_QUOTES, 'UTF-8'); ?>">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Expectation Description</label>
+                        <textarea name="expectation" class="form-control-custom" rows="2" required placeholder="What should this feature accomplish?" <?php echo $isReadonly ? 'disabled' : ''; ?>><?php echo htmlspecialchars($estimation['expectation_description'] ?? ''); ?></textarea>
                     </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Project Phase</label>
+                        <select name="phase_name" class="form-control-custom" <?php echo $isReadonly ? 'disabled' : ''; ?>>
+                            <option value="">-- Select phase --</option>
+                            <?php if(!empty($projectPhases)): ?>
+                                <?php foreach($projectPhases as $phase): ?>
+                                    <?php $phaseName = $phase['name'] ?? ''; ?>
+                                    <option value="<?php echo htmlspecialchars($phaseName); ?>" <?php echo ($estimation['phase_name'] ?? '') === $phaseName ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($phaseName); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </select>
+                        <small class="text-muted d-block mt-1">Assign this feature to a project phase</small>
+                    </div>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label">Minimum Days (Best)</label>
+                            <input type="number" name="min_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                                   value="<?php echo $estimation['min_days'] ?? ''; ?>" required placeholder="1">
+                            <small class="text-muted d-block mt-1">Optimistic estimate</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Most Likely Days</label>
+                            <input type="number" name="likely_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                                   value="<?php echo $estimation['likely_days'] ?? ''; ?>" required placeholder="1">
+                            <small class="text-muted d-block mt-1">Realistic estimate</small>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Maximum Days (Worst)</label>
+                            <input type="number" name="max_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                                   value="<?php echo $estimation['max_days'] ?? ''; ?>" required placeholder="3">
+                            <small class="text-muted d-block mt-1">Pessimistic estimate</small>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">Planned Start Date</label>
+                            <input type="date" name="planned_start" class="form-control-custom estimate-start" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                                   value="<?php echo $task['started_at'] ? date('Y-m-d', strtotime($task['started_at'])) : ''; ?>">
+                            <small class="text-muted d-block mt-1">Set the task start for Gantt</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Planned End Date</label>
+                            <input type="date" name="planned_end" class="form-control-custom estimate-end" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                                   value="<?php echo $task['deadline'] ? date('Y-m-d', strtotime($task['deadline'])) : ''; ?>">
+                            <small class="text-muted d-block mt-1">Set the task end for Gantt</small>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <div class="text-muted small mb-2">Gantt Preview (Min / Likely / Max)</div>
+                        <div class="gantt-preview" data-task-id="<?php echo $task['id']; ?>">
+                            <div class="gantt-row-preview">
+                                <span class="gantt-label">Days</span>
+                                <div class="gantt-bar-track">
+                                    <div class="gantt-bar min-bar"></div>
+                                    <div class="gantt-bar likely-bar"></div>
+                                    <div class="gantt-bar max-bar"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <?php if (!$isReadonly): ?>
+                        <button type="submit" class="btn-submit">
+                            <i class="fas fa-save"></i> Save Estimation
+                        </button>
+                    <?php else: ?>
+                        <div class="text-muted small">This feature has been submitted to Sales.</div>
+                    <?php endif; ?>
+                </form>
+                
+                <?php if($estimation): ?>
+                <div class="alert-info-custom">
+                    <small>
+                        <i class="fas fa-chart-line"></i> 
+                        <strong>PERT Estimate:</strong> 
+                        <?php echo round(($estimation['min_days'] + 4*$estimation['likely_days'] + $estimation['max_days'])/6, 1); ?> days
+                        <span class="text-muted">(Min: <?php echo $estimation['min_days']; ?> | Likely: <?php echo $estimation['likely_days']; ?> | Max: <?php echo $estimation['max_days']; ?>)</span>
+                    </small>
                 </div>
-            </div>
-            <?php endwhile; ?>
-        <?php else: ?>
-            <div class="col-12">
-                <div class="empty-state">
-                    <i class="fas fa-check-circle"></i>
-                    <h5>No pending estimations</h5>
-                    <p>All assigned features have been estimated. Great job!</p>
-                </div>
-            </div>
         <?php endif; ?>
     </div>
+            <?php endwhile; ?>
+        </div>
+        <?php else: ?>
+        <div class="empty-state">
+            <i class="fas fa-check-circle"></i>
+            <h5>No pending estimations</h5>
+            <p>All assigned features have been estimated. Great job!</p>
+        </div>
+        <?php endif; ?>
+
+    </div>
 </div>
+
+<script>
+let currentProjectId = null;
+let phases = [];
+
+// Default phases template
+const defaultPhases = [
+    { name: "Planning", start_date: "", end_date: "" },
+    { name: "Research", start_date: "", end_date: "" },
+    { name: "Design", start_date: "", end_date: "" },
+    { name: "Implementation", start_date: "", end_date: "" },
+    { name: "Follow Up", start_date: "", end_date: "" }
+];
+const existingDepartments = <?php echo json_encode($availableDepartments, JSON_UNESCAPED_UNICODE); ?>;
+
+function loadProjectSetup() {
+    const select = document.getElementById('phaseProjectSelect');
+    if (!select) return;
+    const projectId = select.value;
+    const selectedOption = select.options[select.selectedIndex];
+    const phasesData = selectedOption.getAttribute('data-phases');
+    const projectStart = selectedOption.getAttribute('data-start');
+    const projectEnd = selectedOption.getAttribute('data-end');
+    
+    if (!projectId) {
+        currentProjectId = null;
+        document.getElementById('saveSetupBtn').style.display = 'none';
+        const sections = document.getElementById('projectSections');
+        if (sections) sections.style.display = 'none';
+        renderProjectManagementTable();
+        return;
+    }
+    
+    currentProjectId = projectId;
+    document.getElementById('setupProjectId').value = projectId;
+
+    const projectStartInput = document.getElementById('projectStartInput');
+    const projectEndInput = document.getElementById('projectEndInput');
+    if (projectStartInput) projectStartInput.value = projectStart || '';
+    if (projectEndInput) projectEndInput.value = projectEnd || '';
+    
+    if (phasesData && phasesData !== 'null' && phasesData !== '') {
+        try {
+            phases = JSON.parse(phasesData);
+            if (!Array.isArray(phases) || phases.length === 0) {
+                phases = JSON.parse(JSON.stringify(defaultPhases));
+            }
+        } catch(e) {
+            phases = JSON.parse(JSON.stringify(defaultPhases));
+        }
+    } else {
+        phases = JSON.parse(JSON.stringify(defaultPhases));
+    }
+    renderPhases();
+    renderProjectManagementTable();
+
+    const sections = document.getElementById('projectSections');
+    if (sections) sections.style.display = 'block';
+    document.getElementById('saveSetupBtn').style.display = 'block';
+    filterFeatureList();
+    renderExpertGantt();
+}
+
+function renderPhases() {
+    const container = document.getElementById('phasesContainer');
+    let html = '';
+    
+    phases.forEach((phase, index) => {
+        html += `
+            <div class="phase-item" data-phase-index="${index}">
+                <div class="phase-name">
+                    <label class="form-label">Phase Name</label>
+                    <input type="text" class="form-control-custom phase-name-input" value="${escapeHtml(phase.name)}" placeholder="e.g., Planning">
+                </div>
+                <div class="phase-dates">
+                    <label class="form-label">Start Date</label>
+                    <input type="date" class="form-control-custom phase-start-input" value="${phase.start_date || ''}">
+                </div>
+                <div class="phase-dates">
+                    <label class="form-label">End Date</label>
+                    <input type="date" class="form-control-custom phase-end-input" value="${phase.end_date || ''}">
+                </div>
+                <div class="phase-remove">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="button" class="btn-remove-phase" onclick="removePhase(${index})">
+                        <i class="fas fa-trash"></i> Remove
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+    
+    // Add event listeners to update phases array
+    document.querySelectorAll('.phase-name-input').forEach((input, idx) => {
+        input.addEventListener('change', (e) => { phases[idx].name = e.target.value; });
+    });
+    document.querySelectorAll('.phase-start-input').forEach((input, idx) => {
+        input.addEventListener('change', (e) => { phases[idx].start_date = e.target.value; });
+    });
+    document.querySelectorAll('.phase-end-input').forEach((input, idx) => {
+        input.addEventListener('change', (e) => { phases[idx].end_date = e.target.value; });
+    });
+}
+
+function addPhase() {
+    phases.push({ name: "New Phase", start_date: "", end_date: "" });
+    renderPhases();
+}
+
+function removePhase(index) {
+    phases.splice(index, 1);
+    renderPhases();
+}
+
+function saveProjectSetup() {
+    if (!currentProjectId) {
+        alert('Please select a project first');
+        return;
+    }
+    
+    const phasesToSave = [];
+    document.querySelectorAll('.phase-item').forEach(item => {
+        const nameInput = item.querySelector('.phase-name-input');
+        const startInput = item.querySelector('.phase-start-input');
+        const endInput = item.querySelector('.phase-end-input');
+        
+        if (nameInput && nameInput.value.trim()) {
+            phasesToSave.push({
+                name: nameInput.value.trim(),
+                start_date: startInput ? startInput.value : '',
+                end_date: endInput ? endInput.value : ''
+            });
+        }
+    });
+    
+    if (phasesToSave.length === 0) {
+        alert('Please add at least one phase');
+        return;
+    }
+
+    const progressText = document.getElementById('featureProgressText');
+    if (progressText) {
+        const match = progressText.textContent.match(/Estimated:\s*(\d+)\s*\/\s*(\d+)/i);
+        if (match) {
+            const estimated = parseInt(match[1], 10);
+            const total = parseInt(match[2], 10);
+            if (total > 0 && estimated !== total) {
+                alert(`Please complete all feature estimates before saving setup. (${estimated}/${total})`);
+                return;
+            }
+        }
+    }
+    
+    document.getElementById('phasesJson').value = JSON.stringify(phasesToSave);
+    const startInput = document.getElementById('projectStartInput');
+    const endInput = document.getElementById('projectEndInput');
+    if (startInput) document.getElementById('projectStartHidden').value = startInput.value || '';
+    if (endInput) document.getElementById('projectEndHidden').value = endInput.value || '';
+    document.getElementById('projectSetupForm').submit();
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function getSelectedProjectName() {
+    const select = document.getElementById('phaseProjectSelect');
+    if (!select || !select.value) {
+        return '';
+    }
+    return select.options[select.selectedIndex]?.textContent?.trim() || '';
+}
+
+function renderDepartmentOptions(selectedValue) {
+    const currentValue = String(selectedValue || '').trim();
+    const options = currentValue && !existingDepartments.includes(currentValue)
+        ? [currentValue, ...existingDepartments]
+        : existingDepartments;
+
+    if (!options.length) {
+        return '<option value="">No departments available</option>';
+    }
+
+    return ['<option value="">Select department</option>'].concat(
+        options.map(department => {
+            const selected = department === currentValue ? 'selected' : '';
+            return `<option value="${escapeHtml(department)}" ${selected}>${escapeHtml(department)}</option>`;
+        })
+    ).join('');
+}
+
+function updateGanttPreview(card) {
+    if (!card) return;
+    const minVal = Math.max(0, parseInt(card.querySelector('input[name="min_days"]')?.value || '0', 10));
+    const likelyVal = Math.max(minVal, parseInt(card.querySelector('input[name="likely_days"]')?.value || '0', 10));
+    const maxVal = Math.max(likelyVal, parseInt(card.querySelector('input[name="max_days"]')?.value || '0', 10));
+    const maxScale = Math.max(minVal, likelyVal, maxVal, 1);
+
+    const minBar = card.querySelector('.min-bar');
+    const likelyBar = card.querySelector('.likely-bar');
+    const maxBar = card.querySelector('.max-bar');
+
+    const minWidth = (minVal / maxScale) * 100;
+    const likelyWidth = (Math.max(likelyVal - minVal, 0) / maxScale) * 100;
+    const maxWidth = (Math.max(maxVal - Math.max(likelyVal, minVal), 0) / maxScale) * 100;
+
+    if (minBar) minBar.style.width = `${minWidth}%`;
+    if (likelyBar) likelyBar.style.width = `${likelyWidth}%`;
+    if (maxBar) maxBar.style.width = `${maxWidth}%`;
+}
+
+function validateEstimateCard(card) {
+    if (!card) return true;
+    const minInput = card.querySelector('input[name="min_days"]');
+    const likelyInput = card.querySelector('input[name="likely_days"]');
+    const maxInput = card.querySelector('input[name="max_days"]');
+    if (!minInput || !likelyInput || !maxInput) return true;
+
+    const minVal = parseInt(minInput.value || '0', 10);
+    const likelyVal = parseInt(likelyInput.value || '0', 10);
+    const maxVal = parseInt(maxInput.value || '0', 10);
+
+    minInput.setCustomValidity('');
+    likelyInput.setCustomValidity('');
+    maxInput.setCustomValidity('');
+
+    if ((minInput.value || likelyInput.value || maxInput.value) && (minVal <= 0 || likelyVal <= 0 || maxVal <= 0)) {
+        const message = 'All day estimates must be greater than zero.';
+        minInput.setCustomValidity(message);
+        likelyInput.setCustomValidity(message);
+        maxInput.setCustomValidity(message);
+        return false;
+    }
+
+    if (minVal > likelyVal || likelyVal > maxVal) {
+        const message = 'Use Minimum <= Most Likely <= Maximum.';
+        minInput.setCustomValidity(message);
+        likelyInput.setCustomValidity(message);
+        maxInput.setCustomValidity(message);
+        return false;
+    }
+
+    return true;
+}
+
+function bindPreviewHandlers() {
+    document.querySelectorAll('.estimation-card').forEach(card => {
+        const inputs = card.querySelectorAll('.estimate-input');
+        inputs.forEach(input => {
+            input.addEventListener('input', () => updateGanttPreview(card));
+        });
+        updateGanttPreview(card);
+    });
+}
+
+function safeJsonParse(value, fallback = []) {
+    try {
+        const parsed = JSON.parse(value || '[]');
+        return Array.isArray(parsed) ? parsed : fallback;
+    } catch (error) {
+        return fallback;
+    }
+}
+
+function normalizeInvolvementPlan(entries, includeBlank = false) {
+    const normalized = Array.isArray(entries)
+        ? entries.map(entry => ({
+            role: String(entry?.role || '').trim(),
+            percentage: entry?.percentage === '' ? '' : (parseInt(entry?.percentage ?? '0', 10) || 0)
+        })).filter(entry => includeBlank || entry.role !== '' || (entry.percentage !== '' && entry.percentage > 0))
+        : [];
+
+    if (!normalized.length && includeBlank) {
+        return [{ role: '', percentage: '' }];
+    }
+
+    return normalized;
+}
+
+function normalizeComponentPlan(entries, includeBlank = false) {
+    const normalized = Array.isArray(entries)
+        ? entries.map(entry => ({
+            name: String(entry?.name || '').trim()
+        })).filter(entry => includeBlank || entry.name !== '')
+        : [];
+
+    if (!normalized.length && includeBlank) {
+        return [{ name: '' }];
+    }
+
+    return normalized;
+}
+
+function getFeatureCard(taskId) {
+    return document.querySelector(`.feature-row[data-task-id="${taskId}"]`);
+}
+
+function getFeaturePlanInput(taskId, inputName) {
+    const card = getFeatureCard(taskId);
+    return card ? card.querySelector(`input[name="${inputName}"]`) : null;
+}
+
+function getFeatureFormInput(taskId, inputName) {
+    const card = getFeatureCard(taskId);
+    return card ? card.querySelector(`[name="${inputName}"]`) : null;
+}
+
+function getFeatureInvolvementPlan(taskId, includeBlank = false) {
+    const input = getFeaturePlanInput(taskId, 'involvement_plan_json');
+    return normalizeInvolvementPlan(safeJsonParse(input?.value || '[]'), includeBlank);
+}
+
+function setFeatureInvolvementPlan(taskId, entries) {
+    const input = getFeaturePlanInput(taskId, 'involvement_plan_json');
+    if (!input) return;
+    input.value = JSON.stringify(Array.isArray(entries) ? entries : []);
+}
+
+function getFeatureComponentPlan(taskId, includeBlank = false) {
+    const input = getFeaturePlanInput(taskId, 'component_plan_json');
+    return normalizeComponentPlan(safeJsonParse(input?.value || '[]'), includeBlank);
+}
+
+function setFeatureComponentPlan(taskId, entries) {
+    const input = getFeaturePlanInput(taskId, 'component_plan_json');
+    if (!input) return;
+    input.value = JSON.stringify(Array.isArray(entries) ? entries : []);
+}
+
+function renderProjectManagementTable() {
+    const container = document.getElementById('projectManagementTable');
+    const meta = document.getElementById('managementTableMeta');
+    if (!container || !meta) {
+        return;
+    }
+
+    if (!currentProjectId) {
+        meta.textContent = 'Select a project to load the planning table.';
+        container.innerHTML = '<div class="table-empty">Select a project to load the planning table.</div>';
+        return;
+    }
+
+    const projectName = getSelectedProjectName();
+    const featureRows = Array.from(document.querySelectorAll('.feature-row')).filter(row => {
+        return row.id !== 'featureProgressRow' && row.getAttribute('data-project-id') === String(currentProjectId);
+    });
+    meta.textContent = `${projectName || 'Selected project'} | ${featureRows.length} feature${featureRows.length === 1 ? '' : 's'} ready for planning`;
+
+    if (!featureRows.length) {
+        container.innerHTML = '<div class="table-empty">No features are available for this project yet.</div>';
+        return;
+    }
+
+    const rowsHtml = featureRows.map(row => {
+        const taskId = row.getAttribute('data-task-id') || '';
+        const isReadonly = row.getAttribute('data-readonly') === '1';
+        const featureName = escapeHtml(row.querySelector('.feature-title')?.textContent?.trim() || 'Feature');
+        const phaseName = row.querySelector('select[name="phase_name"]')?.value?.trim() || '';
+        const plannedStart = row.querySelector('input[name="planned_start"]')?.value || '';
+        const plannedEnd = row.querySelector('input[name="planned_end"]')?.value || '';
+        const minDays = parseInt(row.querySelector('input[name="min_days"]')?.value || '0', 10) || 0;
+        const likelyDays = parseInt(row.querySelector('input[name="likely_days"]')?.value || '0', 10) || 0;
+        const maxDays = parseInt(row.querySelector('input[name="max_days"]')?.value || '0', 10) || 0;
+        const involvementPlan = getFeatureInvolvementPlan(taskId, !isReadonly);
+        const componentPlan = getFeatureComponentPlan(taskId, !isReadonly);
+
+        const involvedMarkup = involvementPlan.length
+            ? involvementPlan.map((item, index) => `
+                <div class="table-list-item">
+                    <select class="table-input pm-role-input" data-task-id="${taskId}" data-index="${index}" ${isReadonly ? 'disabled' : ''}>
+                        ${renderDepartmentOptions(item.role || '')}
+                    </select>
+                </div>
+            `).join('')
+            : '<div class="table-list-item"><span>No department involved yet.</span></div>';
+
+        const percentageMarkup = involvementPlan.length
+            ? involvementPlan.map((item, index) => `
+                <div class="table-list-item">
+                    <div class="d-flex gap-2 align-items-center">
+                        <input type="number" class="table-input pm-percentage-input" data-task-id="${taskId}" data-index="${index}" min="0" max="100" value="${item.percentage}" placeholder="%" ${isReadonly ? 'disabled' : ''}>
+                        ${!isReadonly ? `<button type="button" class="pm-inline-btn remove pm-remove-role" data-task-id="${taskId}" data-index="${index}">Remove</button>` : ''}
+                    </div>
+                </div>
+            `).join('')
+            : '<div class="table-list-item"><span>No percentage assigned yet.</span></div>';
+
+        const componentMarkup = componentPlan.length
+            ? componentPlan.map((item, index) => `
+                <div class="table-list-item">
+                    <div class="d-flex gap-2 align-items-center">
+                        <input type="text" class="table-input pm-component-input" data-task-id="${taskId}" data-index="${index}" value="${escapeHtml(item.name || '')}" placeholder="e.g. API, Dashboard, Database" ${isReadonly ? 'disabled' : ''}>
+                        ${!isReadonly ? `<button type="button" class="pm-inline-btn remove pm-remove-component" data-task-id="${taskId}" data-index="${index}">Remove</button>` : ''}
+                    </div>
+                </div>
+            `).join('')
+            : '<div class="table-list-item"><span>No components added yet.</span></div>';
+
+        return `
+            <tr>
+                <td>
+                    <div class="table-feature-name">${featureName}</div>
+                    <div class="table-feature-meta">
+                        ${phaseName ? `<span class="table-phase-tag"><i class="fas fa-layer-group"></i>${escapeHtml(phaseName)}</span>` : ''}
+                        ${plannedStart ? `<span>Start: ${escapeHtml(plannedStart)}</span>` : ''}
+                        ${plannedEnd ? `<span>End: ${escapeHtml(plannedEnd)}</span>` : ''}
+                    </div>
+                </td>
+                <td>
+                    <div class="table-list">${involvedMarkup}</div>
+                    ${!isReadonly ? `<div class="pm-action-row"><button type="button" class="pm-inline-btn pm-add-role" data-task-id="${taskId}">Add Department</button></div>` : ''}
+                </td>
+                <td><div class="table-list">${percentageMarkup}</div></td>
+                <td>
+                    <div class="table-list">${componentMarkup}</div>
+                    ${!isReadonly ? `<div class="pm-action-row"><button type="button" class="pm-inline-btn pm-add-component" data-task-id="${taskId}">Add Component</button></div>` : ''}
+                </td>
+                <td>
+                    <div class="pm-days-grid">
+                        <div class="day-badge min">
+                            <div class="w-100">
+                                <span class="pm-day-label">Minimum</span>
+                                <input type="number" class="table-input pm-day-input" data-task-id="${taskId}" data-field="min_days" min="1" step="1" value="${minDays || ''}" placeholder="1" ${isReadonly ? 'disabled' : ''}>
+                            </div>
+                        </div>
+                        <div class="day-badge likely">
+                            <div class="w-100">
+                                <span class="pm-day-label">Most Likely</span>
+                                <input type="number" class="table-input pm-day-input" data-task-id="${taskId}" data-field="likely_days" min="1" step="1" value="${likelyDays || ''}" placeholder="1" ${isReadonly ? 'disabled' : ''}>
+                            </div>
+                        </div>
+                        <div class="day-badge max">
+                            <div class="w-100">
+                                <span class="pm-day-label">Maximum</span>
+                                <input type="number" class="table-input pm-day-input" data-task-id="${taskId}" data-field="max_days" min="1" step="1" value="${maxDays || ''}" placeholder="3" ${isReadonly ? 'disabled' : ''}>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <table class="management-table">
+            <thead>
+                <tr>
+                    <th>Feature Name</th>
+                    <th>Developer / Department Involved</th>
+                    <th>Percentage Involved</th>
+                    <th>Components</th>
+                    <th>Days</th>
+                </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+        </table>
+    `;
+}
+
+function bindProjectManagementTableHandlers() {
+    document.addEventListener('click', (event) => {
+        const addRoleBtn = event.target.closest('.pm-add-role');
+        if (addRoleBtn) {
+            const taskId = addRoleBtn.getAttribute('data-task-id');
+            const plan = getFeatureInvolvementPlan(taskId);
+            plan.push({ role: '', percentage: '' });
+            setFeatureInvolvementPlan(taskId, plan);
+            renderProjectManagementTable();
+            return;
+        }
+
+        const removeRoleBtn = event.target.closest('.pm-remove-role');
+        if (removeRoleBtn) {
+            const taskId = removeRoleBtn.getAttribute('data-task-id');
+            const index = parseInt(removeRoleBtn.getAttribute('data-index') || '-1', 10);
+            const plan = getFeatureInvolvementPlan(taskId);
+            if (index >= 0) {
+                plan.splice(index, 1);
+                setFeatureInvolvementPlan(taskId, plan);
+                renderProjectManagementTable();
+            }
+            return;
+        }
+
+        const addComponentBtn = event.target.closest('.pm-add-component');
+        if (addComponentBtn) {
+            const taskId = addComponentBtn.getAttribute('data-task-id');
+            const plan = getFeatureComponentPlan(taskId);
+            plan.push({ name: '' });
+            setFeatureComponentPlan(taskId, plan);
+            renderProjectManagementTable();
+            return;
+        }
+
+        const removeComponentBtn = event.target.closest('.pm-remove-component');
+        if (removeComponentBtn) {
+            const taskId = removeComponentBtn.getAttribute('data-task-id');
+            const index = parseInt(removeComponentBtn.getAttribute('data-index') || '-1', 10);
+            const plan = getFeatureComponentPlan(taskId);
+            if (index >= 0) {
+                plan.splice(index, 1);
+                setFeatureComponentPlan(taskId, plan);
+                renderProjectManagementTable();
+            }
+        }
+    });
+
+    document.addEventListener('input', (event) => {
+        if (event.target.matches('.pm-role-input, .pm-percentage-input')) {
+            const taskId = event.target.getAttribute('data-task-id');
+            const index = parseInt(event.target.getAttribute('data-index') || '-1', 10);
+            const plan = getFeatureInvolvementPlan(taskId, true);
+            if (index >= 0 && plan[index]) {
+                const roleInput = document.querySelector(`.pm-role-input[data-task-id="${taskId}"][data-index="${index}"]`);
+                const percentageInput = document.querySelector(`.pm-percentage-input[data-task-id="${taskId}"][data-index="${index}"]`);
+                plan[index] = {
+                    role: roleInput?.value?.trim() || '',
+                    percentage: percentageInput?.value === '' ? '' : Math.max(0, Math.min(100, parseInt(percentageInput.value || '0', 10) || 0))
+                };
+                setFeatureInvolvementPlan(taskId, plan);
+            }
+            return;
+        }
+
+        if (event.target.matches('.pm-component-input')) {
+            const taskId = event.target.getAttribute('data-task-id');
+            const index = parseInt(event.target.getAttribute('data-index') || '-1', 10);
+            const plan = getFeatureComponentPlan(taskId, true);
+            if (index >= 0 && plan[index]) {
+                plan[index] = {
+                    name: event.target.value.trim()
+                };
+                setFeatureComponentPlan(taskId, plan);
+            }
+            return;
+        }
+
+        if (event.target.matches('.pm-day-input')) {
+            const taskId = event.target.getAttribute('data-task-id');
+            const field = event.target.getAttribute('data-field');
+            const cardInput = getFeatureFormInput(taskId, field);
+            if (cardInput) {
+                cardInput.value = event.target.value;
+            }
+        }
+    });
+
+    document.addEventListener('change', (event) => {
+        if (event.target.matches('.pm-role-input, .pm-percentage-input')) {
+            const taskId = event.target.getAttribute('data-task-id');
+            const index = parseInt(event.target.getAttribute('data-index') || '-1', 10);
+            const plan = getFeatureInvolvementPlan(taskId, true);
+            if (index >= 0 && plan[index]) {
+                const roleInput = document.querySelector(`.pm-role-input[data-task-id="${taskId}"][data-index="${index}"]`);
+                const percentageInput = document.querySelector(`.pm-percentage-input[data-task-id="${taskId}"][data-index="${index}"]`);
+                plan[index] = {
+                    role: roleInput?.value?.trim() || '',
+                    percentage: percentageInput?.value === '' ? '' : Math.max(0, Math.min(100, parseInt(percentageInput.value || '0', 10) || 0))
+                };
+                setFeatureInvolvementPlan(taskId, plan);
+            }
+        }
+
+        if (event.target.matches('.pm-day-input')) {
+            const taskId = event.target.getAttribute('data-task-id');
+            const field = event.target.getAttribute('data-field');
+            const card = getFeatureCard(taskId);
+            const cardInput = getFeatureFormInput(taskId, field);
+            if (cardInput && card) {
+                cardInput.value = event.target.value;
+                validateEstimateCard(card);
+                updateGanttPreview(card);
+                const minVal = parseInt(card.querySelector('input[name="min_days"]')?.value || '0', 10) || 0;
+                const likelyVal = parseInt(card.querySelector('input[name="likely_days"]')?.value || '0', 10) || 0;
+                const maxVal = parseInt(card.querySelector('input[name="max_days"]')?.value || '0', 10) || 0;
+                const isDone = (minVal > 0 && likelyVal > 0 && maxVal > 0 && minVal <= likelyVal && likelyVal <= maxVal);
+                card.setAttribute('data-estimated', isDone ? '1' : '0');
+                card.classList.toggle('complete', isDone);
+                card.classList.toggle('incomplete', !isDone);
+                renderExpertGantt();
+                renderProjectManagementTable();
+                filterFeatureList();
+            }
+        }
+    });
+}
+
+function buildGanttTasks() {
+    const tasks = [];
+    const projectStartInput = document.getElementById('projectStartInput');
+    const projectStartFallback = projectStartInput?.value || new Date().toISOString().slice(0, 10);
+    document.querySelectorAll('.feature-row').forEach(row => {
+        if (currentProjectId && row.getAttribute('data-project-id') !== currentProjectId) {
+            return;
+        }
+        const title = row.querySelector('.feature-title')?.textContent?.trim() || 'Feature';
+        const taskId = row.querySelector('input[name="task_id"]')?.value || title;
+        const startInput = row.querySelector('input[name="planned_start"]')?.value;
+        const endInput = row.querySelector('input[name="planned_end"]')?.value;
+        const minDays = Math.max(0, parseInt(row.querySelector('input[name="min_days"]')?.value || '0', 10));
+        const likelyDays = Math.max(minDays, parseInt(row.querySelector('input[name="likely_days"]')?.value || '0', 10));
+        const maxDays = Math.max(likelyDays, parseInt(row.querySelector('input[name="max_days"]')?.value || '0', 10));
+
+        let startDate = startInput || projectStartFallback;
+        let endDate = endInput;
+
+        if (startDate && !endDate && maxDays > 0) {
+            const start = new Date(startDate + 'T00:00:00');
+            start.setDate(start.getDate() + Math.max(1, maxDays));
+            endDate = start.toISOString().slice(0, 10);
+        }
+
+        if (!endDate) {
+            const duration = maxDays || likelyDays || minDays || 1;
+            const start = new Date(startDate + 'T00:00:00');
+            start.setDate(start.getDate() + Math.max(1, duration));
+            endDate = start.toISOString().slice(0, 10);
+        }
+
+        tasks.push({
+            id: `task-${taskId}`,
+            name: title,
+            start: startDate,
+            end: endDate,
+            progress: 0,
+            custom_class: 'gantt-task',
+            min_days: minDays,
+            likely_days: likelyDays,
+            max_days: maxDays,
+            is_phase: false
+        });
+    });
+    return tasks;
+}
+
+function diffDays(startDate, endDate) {
+    return Math.max(1, Math.round((endDate - startDate) / 86400000));
+}
+
+function buildThreePointChartRows(tasks) {
+    const rows = tasks.map(task => {
+        const startDate = new Date(`${task.start}T00:00:00`);
+        const endDate = new Date(`${task.end}T00:00:00`);
+        const dateDuration = Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())
+            ? 1
+            : diffDays(startDate, endDate);
+        const minDays = Math.max(0, parseInt(task.min_days || '0', 10));
+        const likelyDays = Math.max(minDays, parseInt(task.likely_days || '0', 10));
+        const maxDays = Math.max(likelyDays, parseInt(task.max_days || '0', 10), dateDuration);
+
+        return {
+            name: task.name,
+            startDate,
+            minDays,
+            likelyDays: Math.max(likelyDays - minDays, 0),
+            maxDays: Math.max(maxDays - likelyDays, 0)
+        };
+    }).filter(task => !Number.isNaN(task.startDate.getTime()));
+
+    if (!rows.length) {
+        return rows;
+    }
+
+    const earliestStart = new Date(Math.min(...rows.map(task => task.startDate.getTime())));
+    rows.forEach(task => {
+        task.offset = Math.max(0, diffDays(earliestStart, task.startDate) - 1);
+    });
+
+    return rows;
+}
+
+function renderExpertGantt() {
+    const container = document.getElementById('expertGanttContainer');
+    if (!container) return;
+    const tasks = buildGanttTasks();
+    if (tasks.length === 0) {
+        container.innerHTML = '<div class="text-muted small">No timeline data yet.</div>';
+        return;
+    }
+    if (typeof Chart === 'undefined') {
+        container.innerHTML = '<div class="text-danger small">Chart.js failed to load. Please check your internet connection.</div>';
+        return;
+    }
+
+    container.innerHTML = '<canvas id="expertGanttCanvas" height="240"></canvas>';
+    const ctx = document.getElementById('expertGanttCanvas').getContext('2d');
+    const chartRows = buildThreePointChartRows(tasks);
+    if (!chartRows.length) {
+        container.innerHTML = '<div class="text-muted small">Add start dates and day estimates to build the timeline.</div>';
+        return;
+    }
+    const labels = chartRows.map(task => task.name);
+    const offsets = chartRows.map(task => task.offset);
+    const minSegments = chartRows.map(task => task.minDays);
+    const likelySegments = chartRows.map(task => task.likelyDays);
+    const maxSegments = chartRows.map(task => task.maxDays);
+
+    if (window.expertGanttChart) {
+        window.expertGanttChart.destroy();
+    }
+
+    window.expertGanttChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Offset',
+                data: offsets,
+                backgroundColor: 'rgba(0,0,0,0)',
+                borderWidth: 0,
+                borderSkipped: false,
+                stack: 'gantt'
+            }, {
+                label: 'Minimum',
+                data: minSegments,
+                backgroundColor: '#bfdbfe',
+                borderRadius: 999,
+                borderSkipped: false,
+                barThickness: 12,
+                stack: 'gantt'
+            }, {
+                label: 'Most Likely',
+                data: likelySegments,
+                backgroundColor: '#86efac',
+                borderRadius: 999,
+                borderSkipped: false,
+                barThickness: 12,
+                stack: 'gantt'
+            }, {
+                label: 'Maximum',
+                data: maxSegments,
+                backgroundColor: '#fdba74',
+                borderRadius: 999,
+                borderSkipped: false,
+                barThickness: 12,
+                stack: 'gantt'
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: {
+                padding: {
+                    top: 8,
+                    right: 16,
+                    bottom: 4,
+                    left: 4
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    stacked: true,
+                    title: { display: true, text: 'Days' },
+                    grid: {
+                        color: 'rgba(148, 163, 184, 0.18)',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#64748b',
+                        padding: 8
+                    },
+                    border: { display: false }
+                },
+                y: {
+                    stacked: true,
+                    grid: { display: false, drawBorder: false },
+                    ticks: {
+                        color: '#334155',
+                        padding: 10
+                    },
+                    border: { display: false }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#0f172a',
+                    titleColor: '#f8fafc',
+                    bodyColor: '#e2e8f0',
+                    padding: 10,
+                    displayColors: false,
+                    callbacks: {
+                        label: (context) => {
+                            if (context.dataset.label === 'Offset') {
+                                return null;
+                            }
+                            const value = Number(context.raw || 0);
+                            return `${context.dataset.label}: ${value} day${value === 1 ? '' : 's'}`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function bindGanttHandlers() {
+    document.addEventListener('input', (e) => {
+        if (e.target.matches('input[name="planned_start"], input[name="planned_end"], input[name="likely_days"], input[name="min_days"], input[name="max_days"]')) {
+            const row = e.target.closest('.feature-row');
+            if (row) {
+                validateEstimateCard(row);
+            }
+            renderExpertGantt();
+            renderProjectManagementTable();
+            if (row) {
+                const minVal = parseInt(row.querySelector('input[name="min_days"]')?.value || '0', 10) || 0;
+                const likelyVal = parseInt(row.querySelector('input[name="likely_days"]')?.value || '0', 10) || 0;
+                const maxVal = parseInt(row.querySelector('input[name="max_days"]')?.value || '0', 10) || 0;
+                const isDone = (minVal > 0 && likelyVal > 0 && maxVal > 0 && minVal <= likelyVal && likelyVal <= maxVal);
+                row.setAttribute('data-estimated', isDone ? '1' : '0');
+                row.classList.toggle('complete', isDone);
+                row.classList.toggle('incomplete', !isDone);
+                filterFeatureList();
+            }
+        }
+        if (e.target.matches('select[name="phase_name"]')) {
+            renderProjectManagementTable();
+        }
+    });
+
+    document.addEventListener('submit', (e) => {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement) || !form.closest('.estimation-card')) {
+            return;
+        }
+        const card = form.closest('.estimation-card');
+        if (!validateEstimateCard(card)) {
+            e.preventDefault();
+            form.reportValidity();
+        }
+    });
+
+    document.addEventListener('change', (e) => {
+        if (e.target.matches('select[name="phase_name"]')) {
+            renderProjectManagementTable();
+        }
+    });
+
+    renderExpertGantt();
+    renderProjectManagementTable();
+}
+
+function filterFeatureList() {
+    let total = 0;
+    let estimated = 0;
+    document.querySelectorAll('.feature-row').forEach(row => {
+        if (row.id === 'featureProgressRow') {
+            return;
+        }
+        const match = !currentProjectId || row.getAttribute('data-project-id') === currentProjectId;
+        row.style.display = match ? '' : 'none';
+        if (match) {
+            total += 1;
+            if (row.getAttribute('data-estimated') === '1') {
+                estimated += 1;
+            }
+        }
+    });
+    const progressText = document.getElementById('featureProgressText');
+    const progressBadge = document.getElementById('featureProgressBadge');
+    if (progressText) {
+        progressText.textContent = `Estimated: ${estimated} / ${total}`;
+    }
+    if (progressBadge) {
+        const ready = total > 0 && estimated === total;
+        progressBadge.textContent = ready ? 'Ready' : 'Not Ready';
+        progressBadge.classList.toggle('ready', ready);
+        progressBadge.classList.toggle('pending', !ready);
+    }
+}
+
+// Initialize
+const phaseSelect = document.getElementById('phaseProjectSelect');
+if (phaseSelect) {
+    phaseSelect.addEventListener('change', loadProjectSetup);
+    // Auto-select first project if none selected
+    if (!phaseSelect.value && phaseSelect.options.length > 1) {
+        phaseSelect.value = phaseSelect.options[1].value;
+        loadProjectSetup();
+    }
+}
+bindPreviewHandlers();
+bindProjectManagementTableHandlers();
+bindGanttHandlers();
+filterFeatureList();
+setTimeout(renderExpertGantt, 50);
+setTimeout(renderProjectManagementTable, 50);
+</script>
 
 <?php include '../../includes/footer.php'; ?>

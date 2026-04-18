@@ -5,6 +5,10 @@ requireRole('expert');
 $conn = getConnection();
 $user = getCurrentUser();
 
+$_SESSION['info'] = "Cost estimation is now managed in Feature Estimation.";
+header('Location: feature-estimation.php');
+exit();
+
 // Get projects assigned to this expert
 $projects = $conn->query("
     SELECT DISTINCT p.* 

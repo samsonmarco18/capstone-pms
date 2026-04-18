@@ -29,10 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Additional Requirements:' . "\n" . $additionalRequirements;
         }
 
-        if ($projectName === '') {
-            $_SESSION['error'] = 'Project name is required for requirement gathering.';
-        } elseif ($requirementsSummary === '' && $meetingNotes === '' && $mom === '') {
-            $_SESSION['error'] = 'Please provide at least one project requirement, meeting note, or MOM entry.';
+        if ($name === '') {
+            $_SESSION['error'] = 'Client name is required.';
         } else {
             $conn->begin_transaction();
 
@@ -43,45 +41,52 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $clientId = $stmt->insert_id;
                 $stmt->close();
 
-                $projectStmt = $conn->prepare("
-                    INSERT INTO projects (
-                        client_id, name, description, status, timeline_start, timeline_end,
-                        meeting_notes, mom, requested_features, created_by, architect_id
-                    ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL)
-                ");
-                $projectStmt->bind_param(
-                    "isssssssi",
-                    $clientId,
-                    $projectName,
-                    $projectDescription,
-                    $timelineStart,
-                    $timelineEnd,
-                    $meetingNotes,
-                    $mom,
-                    $requirementsSummary,
-                    $user['id']
-                );
-                $projectStmt->execute();
-                $projectId = $projectStmt->insert_id;
-                $projectStmt->close();
-
-                $architects = $conn->query("SELECT id FROM users WHERE role = 'architect' AND status = 'active'");
-                while ($architect = $architects->fetch_assoc()) {
-                    createNotification(
-                        (int) $architect['id'],
-                        'New Project Requirements Ready',
-                        'Sales submitted a new project for architectural review: ' . $projectName,
-                        'project',
-                        'projects',
-                        $projectId,
-                        BASE_URL . 'modules/architect/project-review.php?id=' . $projectId
+                $projectId = null;
+                if ($projectName !== '') {
+                    $projectStmt = $conn->prepare("
+                        INSERT INTO projects (
+                            client_id, name, description, status, timeline_start, timeline_end,
+                            meeting_notes, mom, requested_features, created_by, architect_id
+                        ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL)
+                    ");
+                    $projectStmt->bind_param(
+                        "isssssssi",
+                        $clientId,
+                        $projectName,
+                        $projectDescription,
+                        $timelineStart,
+                        $timelineEnd,
+                        $meetingNotes,
+                        $mom,
+                        $requirementsSummary,
+                        $user['id']
                     );
+                    $projectStmt->execute();
+                    $projectId = $projectStmt->insert_id;
+                    $projectStmt->close();
+
+                    $architects = $conn->query("SELECT id FROM users WHERE role = 'architect' AND status = 'active'");
+                    while ($architect = $architects->fetch_assoc()) {
+                        createNotification(
+                            (int) $architect['id'],
+                            'New Project Requirements Ready',
+                            'Sales submitted a new project for architectural review: ' . $projectName,
+                            'project',
+                            'projects',
+                            $projectId,
+                            BASE_URL . 'modules/architect/project-review.php?id=' . $projectId
+                        );
+                    }
                 }
 
                 $conn->commit();
                 logActivity($user['id'], 'add_client', 'clients', $clientId, null, $_POST);
-                logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);
-                $_SESSION['success'] = "Client added and requirements automatically sent to Architect for review.";
+                if ($projectId) {
+                    logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);
+                    $_SESSION['success'] = "Client added and project sent to Architect for review.";
+                } else {
+                    $_SESSION['success'] = "Client added. No project created because project name was empty.";
+                }
             } catch (Throwable $e) {
                 $conn->rollback();
                 $_SESSION['error'] = 'Unable to save client and requirements. Please try again.';

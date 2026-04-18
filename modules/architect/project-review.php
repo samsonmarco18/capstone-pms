@@ -316,13 +316,15 @@ include '../../includes/navbar.php';
     <div class="progress-indicator">
         <div class="progress-step active"><div class="step-number">1</div><div class="step-label">Project Review</div></div>
         <div class="progress-line"></div>
-        <div class="progress-step"><div class="step-number">2</div><div class="step-label">Technology</div></div>
+        <div class="progress-step"><div class="step-number">2</div><div class="step-label">Features</div></div>
         <div class="progress-line"></div>
-        <div class="progress-step"><div class="step-number">3</div><div class="step-label">Developers</div></div>
+        <div class="progress-step"><div class="step-number">3</div><div class="step-label">Technology</div></div>
         <div class="progress-line"></div>
-        <div class="progress-step"><div class="step-number">4</div><div class="step-label">Documents</div></div>
+        <div class="progress-step"><div class="step-number">4</div><div class="step-label">Developers</div></div>
         <div class="progress-line"></div>
-        <div class="progress-step"><div class="step-number">5</div><div class="step-label">Summary</div></div>
+        <div class="progress-step"><div class="step-number">5</div><div class="step-label">Documents</div></div>
+        <div class="progress-line"></div>
+        <div class="progress-step"><div class="step-number">6</div><div class="step-label">Summary</div></div>
     </div>
 
     <div class="row g-4">
@@ -397,8 +399,8 @@ include '../../includes/navbar.php';
             
             <!-- Button placed inside the main column, aligned to the right -->
             <div class="mt-4 text-end">
-                <a class="btn-primary-modern" href="tech-recommendation.php?id=<?php echo $projectId; ?>">
-                    <i class="fas fa-arrow-right"></i> Proceed to Technology
+                <a class="btn-primary-modern" href="features.php?id=<?php echo $projectId; ?>">
+                    <i class="fas fa-arrow-right"></i> Proceed to Features
                 </a>
             </div>
         </div>

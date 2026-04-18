@@ -509,6 +509,7 @@ include '../../includes/navbar.php';
         <ol class="breadcrumb-modern" style="display: flex; flex-wrap: wrap; align-items: center; margin: 0; padding: 0; list-style: none;">
             <li class="breadcrumb-item"><a href="projects.php"><i class="fas fa-folder-open"></i> Projects</a></li>
             <li class="breadcrumb-item"><a href="project-review.php?id=<?php echo $projectId; ?>"><i class="fas fa-clipboard-list"></i> Project Review</a></li>
+            <li class="breadcrumb-item"><a href="features.php?id=<?php echo $projectId; ?>"><i class="fas fa-list-check"></i> Features</a></li>
             <li class="breadcrumb-item"><a href="tech-recommendation.php?id=<?php echo $projectId; ?>"><i class="fas fa-microchip"></i> Technology</a></li>
             <li class="breadcrumb-item active"><i class="fas fa-users"></i> Developer Allocation</li>
         </ol>
@@ -518,13 +519,15 @@ include '../../includes/navbar.php';
     <div class="progress-indicator">
         <div class="progress-step completed"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Project Review</div></div>
         <div class="progress-line completed"></div>
+        <div class="progress-step completed"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Features</div></div>
+        <div class="progress-line completed"></div>
         <div class="progress-step completed"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Technology</div></div>
         <div class="progress-line completed"></div>
-        <div class="progress-step active"><div class="step-number">3</div><div class="step-label">Developers</div></div>
+        <div class="progress-step active"><div class="step-number">4</div><div class="step-label">Developers</div></div>
         <div class="progress-line"></div>
-        <div class="progress-step"><div class="step-number">4</div><div class="step-label">Documents</div></div>
+        <div class="progress-step"><div class="step-number">5</div><div class="step-label">Documents</div></div>
         <div class="progress-line"></div>
-        <div class="progress-step"><div class="step-number">5</div><div class="step-label">Summary</div></div>
+        <div class="progress-step"><div class="step-number">6</div><div class="step-label">Summary</div></div>
     </div>
 
     <div class="row g-4">
