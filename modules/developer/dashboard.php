@@ -47,6 +47,23 @@ $recentCompleted = $conn->query("
     LIMIT 5
 ");
 
+$trackedGitTasks = $conn->query("
+    SELECT COUNT(DISTINCT tgu.task_id) AS count
+    FROM task_git_updates tgu
+    INNER JOIN tasks t ON t.id = tgu.task_id
+    WHERE t.assigned_to = {$user['id']}
+")->fetch_assoc()['count'];
+
+$recentGitActivity = $conn->query("
+    SELECT tgu.*, t.title AS task_title, p.name AS project_name
+    FROM task_git_updates tgu
+    INNER JOIN tasks t ON t.id = tgu.task_id
+    LEFT JOIN projects p ON p.id = t.project_id
+    WHERE t.assigned_to = {$user['id']}
+    ORDER BY tgu.created_at DESC, tgu.id DESC
+    LIMIT 5
+");
+
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
@@ -577,7 +594,67 @@ include '../../includes/navbar.php';
 
     <!-- Recent Completed Tasks -->
     <div class="row mt-4">
-        <div class="col-12">
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-code-branch"></i> Recent Git Activity</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <div class="text-muted text-uppercase small fw-semibold">Tracked Tasks</div>
+                            <div class="h3 mb-0" style="color: #1f6392;"><?php echo $trackedGitTasks; ?></div>
+                        </div>
+                        <i class="fas fa-code-branch" style="font-size: 2.25rem; color: var(--theme-primary); opacity: 0.65;"></i>
+                    </div>
+                    <?php
+                    $gitActionLabels = [
+                        'branch_created' => 'Branch Created',
+                        'commit_pushed' => 'Commit Pushed',
+                        'pull_request_opened' => 'Pull Request Opened',
+                        'merged' => 'Merged',
+                        'deployed' => 'Deployed',
+                        'note' => 'General Note',
+                    ];
+                    $gitStatusLabels = [
+                        'active' => 'Active',
+                        'in_review' => 'In Review',
+                        'merged' => 'Merged',
+                        'closed' => 'Closed',
+                    ];
+                    ?>
+                    <?php while($git = $recentGitActivity->fetch_assoc()): ?>
+                    <div class="timeline-item mb-3">
+                        <h6><?php echo htmlspecialchars($git['task_title']); ?></h6>
+                        <small>
+                            <i class="fas fa-code-branch"></i>
+                            <?php echo htmlspecialchars($git['branch_name']); ?>
+                            <?php if (!empty($git['commit_hash'])): ?>
+                            | <code><?php echo htmlspecialchars(substr($git['commit_hash'], 0, 7)); ?></code>
+                            <?php endif; ?>
+                        </small>
+                        <p class="mb-1"><?php echo htmlspecialchars($gitActionLabels[$git['git_action']] ?? 'Git Update'); ?> | <?php echo htmlspecialchars($gitStatusLabels[$git['status']] ?? ucfirst($git['status'])); ?></p>
+                        <?php if (!empty($git['project_name'])): ?>
+                        <p class="mb-1">Project: <?php echo htmlspecialchars($git['project_name']); ?></p>
+                        <?php endif; ?>
+                        <small><i class="far fa-clock"></i> <?php echo date('M d, Y h:i A', strtotime($git['created_at'])); ?></small>
+                        <div class="mt-2">
+                            <a href="task.php?id=<?php echo $git['task_id']; ?>" class="btn-view">
+                                <i class="fas fa-eye"></i> View Task
+                            </a>
+                        </div>
+                    </div>
+                    <?php endwhile; ?>
+                    <?php if($recentGitActivity->num_rows == 0): ?>
+                    <div class="empty-state">
+                        <i class="fas fa-code-branch"></i>
+                        <p>No Git activity logged yet</p>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-6">
             <div class="card">
                 <div class="card-header">
                     <h5><i class="fas fa-history"></i> Recent Completed Tasks</h5>

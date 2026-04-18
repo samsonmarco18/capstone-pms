@@ -22,11 +22,17 @@ function getConnection(): mysqli
         return $conn;
     }
 
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    try {
+        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    } catch (mysqli_sql_exception $e) {
+        error_log('Database connection failed: ' . $e->getMessage());
 
-    if ($conn->connect_error) {
-        error_log('Database connection failed: ' . $conn->connect_error);
-        die('Database connection error. Please contact the administrator.');
+        $message = 'Database connection error. Please contact the administrator.';
+        if (str_contains(strtolower($e->getMessage()), 'unknown database')) {
+            $message = "Database '" . DB_NAME . "' was not found. Import database.sql first.";
+        }
+
+        die($message);
     }
 
     $conn->set_charset('utf8mb4');

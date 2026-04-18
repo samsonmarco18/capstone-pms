@@ -312,9 +312,11 @@ include '../../includes/navbar.php';
     font-weight: 600;
 }
 
-.badge-complexity.low { background: #d1fae5; color: #059669; }
+.badge-complexity.low,
+.badge-complexity.simple { background: #d1fae5; color: #059669; }
 .badge-complexity.medium { background: #dbeafe; color: #2563eb; }
-.badge-complexity.high { background: #fef3c7; color: #d97706; }
+.badge-complexity.high,
+.badge-complexity.complex { background: #fef3c7; color: #d97706; }
 .badge-complexity.critical { background: #fee2e2; color: #dc2626; }
 
 /* Document Item */

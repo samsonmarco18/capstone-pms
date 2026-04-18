@@ -134,7 +134,7 @@ CREATE TABLE developer_allocations (
     skill_level VARCHAR(50),
     required_count INT DEFAULT 1,
     allocated_count INT DEFAULT 0,
-    complexity_level ENUM('simple', 'medium', 'complex') DEFAULT 'medium',
+    complexity_level ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -167,7 +167,7 @@ CREATE TABLE developer_allocation_assignments (
 CREATE TABLE architecture_documents (
     id INT PRIMARY KEY AUTO_INCREMENT,
     project_id INT NOT NULL,
-    document_type ENUM('architecture_plan', 'workflow_diagram', 'system_design', 'technical_spec') NOT NULL,
+    document_type ENUM('architecture_plan', 'workflow_diagram', 'system_flow', 'deployment_diagram', 'database_schema') NOT NULL,
     file_name VARCHAR(255) NOT NULL,
     file_path VARCHAR(500) NOT NULL,
     description TEXT,
@@ -545,6 +545,155 @@ CREATE TABLE task_comments (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_task_id (task_id),
     INDEX idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- TASK GIT UPDATES TABLE
+-- =====================================================
+CREATE TABLE task_git_updates (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    task_id INT NOT NULL,
+    user_id INT NOT NULL,
+    repository_url VARCHAR(255),
+    branch_name VARCHAR(150) NOT NULL,
+    commit_hash VARCHAR(64),
+    commit_message VARCHAR(255),
+    pull_request_url VARCHAR(255),
+    git_action ENUM('branch_created', 'commit_pushed', 'pull_request_opened', 'merged', 'deployed', 'note') DEFAULT 'commit_pushed',
+    status ENUM('active', 'in_review', 'merged', 'closed') DEFAULT 'active',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_task_id (task_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_branch_name (branch_name),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- PROJECT REPOSITORIES TABLE
+-- =====================================================
+CREATE TABLE project_repositories (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    project_id INT NOT NULL,
+    parent_repository_id INT NULL,
+    name VARCHAR(150) NOT NULL,
+    slug VARCHAR(180) NOT NULL,
+    description TEXT,
+    visibility ENUM('private', 'internal', 'public') DEFAULT 'internal',
+    default_branch_name VARCHAR(150) DEFAULT 'main',
+    repository_status ENUM('active', 'archived') DEFAULT 'active',
+    last_activity_at DATETIME NULL,
+    created_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_project_repo_slug (project_id, slug),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_repository_id) REFERENCES project_repositories(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+    INDEX idx_project_id (project_id),
+    INDEX idx_created_by (created_by),
+    INDEX idx_repo_status (repository_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- REPOSITORY BRANCHES TABLE
+-- =====================================================
+CREATE TABLE repository_branches (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    repository_id INT NOT NULL,
+    source_branch_id INT NULL,
+    name VARCHAR(150) NOT NULL,
+    last_commit_hash VARCHAR(64),
+    branch_status ENUM('active', 'merged', 'deleted') DEFAULT 'active',
+    is_default BOOLEAN DEFAULT FALSE,
+    is_protected BOOLEAN DEFAULT FALSE,
+    created_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_repository_branch (repository_id, name),
+    FOREIGN KEY (repository_id) REFERENCES project_repositories(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_branch_id) REFERENCES repository_branches(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+    INDEX idx_repository_id (repository_id),
+    INDEX idx_branch_status (branch_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- REPOSITORY COMMITS TABLE
+-- =====================================================
+CREATE TABLE repository_commits (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    repository_id INT NOT NULL,
+    branch_id INT NOT NULL,
+    parent_commit_id INT NULL,
+    commit_hash VARCHAR(64) NOT NULL UNIQUE,
+    commit_title VARCHAR(255) NOT NULL,
+    commit_message TEXT,
+    files_changed INT DEFAULT 0,
+    lines_added INT DEFAULT 0,
+    lines_removed INT DEFAULT 0,
+    commit_kind ENUM('commit', 'merge', 'sync') DEFAULT 'commit',
+    authored_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (repository_id) REFERENCES project_repositories(id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_id) REFERENCES repository_branches(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_commit_id) REFERENCES repository_commits(id) ON DELETE SET NULL,
+    FOREIGN KEY (authored_by) REFERENCES users(id) ON DELETE RESTRICT,
+    INDEX idx_commit_repository_id (repository_id),
+    INDEX idx_commit_branch_id (branch_id),
+    INDEX idx_commit_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- REPOSITORY MERGES TABLE
+-- =====================================================
+CREATE TABLE repository_merges (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    repository_id INT NOT NULL,
+    source_branch_id INT NOT NULL,
+    target_branch_id INT NOT NULL,
+    merge_commit_id INT NULL,
+    merged_by INT NOT NULL,
+    merge_status ENUM('pending', 'merged', 'rejected') DEFAULT 'merged',
+    summary VARCHAR(255),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (repository_id) REFERENCES project_repositories(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_branch_id) REFERENCES repository_branches(id) ON DELETE RESTRICT,
+    FOREIGN KEY (target_branch_id) REFERENCES repository_branches(id) ON DELETE RESTRICT,
+    FOREIGN KEY (merge_commit_id) REFERENCES repository_commits(id) ON DELETE SET NULL,
+    FOREIGN KEY (merged_by) REFERENCES users(id) ON DELETE RESTRICT,
+    INDEX idx_merge_repository_id (repository_id),
+    INDEX idx_merge_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- REPOSITORY OPERATIONS TABLE
+-- =====================================================
+CREATE TABLE repository_operations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    repository_id INT NOT NULL,
+    branch_id INT NULL,
+    commit_id INT NULL,
+    user_id INT NOT NULL,
+    operation_type ENUM('create_repository', 'fork_repository', 'create_branch', 'commit', 'push', 'pull', 'merge') NOT NULL,
+    related_repository_id INT NULL,
+    related_branch_id INT NULL,
+    metadata LONGTEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (repository_id) REFERENCES project_repositories(id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_id) REFERENCES repository_branches(id) ON DELETE SET NULL,
+    FOREIGN KEY (commit_id) REFERENCES repository_commits(id) ON DELETE SET NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+    FOREIGN KEY (related_repository_id) REFERENCES project_repositories(id) ON DELETE SET NULL,
+    FOREIGN KEY (related_branch_id) REFERENCES repository_branches(id) ON DELETE SET NULL,
+    INDEX idx_operation_repository_id (repository_id),
+    INDEX idx_operation_branch_id (branch_id),
+    INDEX idx_operation_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================

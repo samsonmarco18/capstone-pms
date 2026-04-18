@@ -48,6 +48,26 @@ if ($task = $result->fetch_assoc()) {
     // Priority color
     $priorityColors = ['low' => 'success', 'medium' => 'warning', 'high' => 'danger', 'critical' => 'dark'];
     $task['priority_color'] = $priorityColors[$task['priority']] ?? 'secondary';
+
+    $gitCountStmt = $conn->prepare('SELECT COUNT(*) AS git_updates_count FROM task_git_updates WHERE task_id = ?');
+    $gitCountStmt->bind_param('i', $taskId);
+    $gitCountStmt->execute();
+    $gitCountRow = $gitCountStmt->get_result()->fetch_assoc();
+    $gitCountStmt->close();
+    $task['git_updates_count'] = (int) ($gitCountRow['git_updates_count'] ?? 0);
+
+    $latestGitStmt = $conn->prepare(
+        'SELECT tgu.*, u.full_name AS user_name
+         FROM task_git_updates tgu
+         INNER JOIN users u ON u.id = tgu.user_id
+         WHERE tgu.task_id = ?
+         ORDER BY tgu.created_at DESC, tgu.id DESC
+         LIMIT 1'
+    );
+    $latestGitStmt->bind_param('i', $taskId);
+    $latestGitStmt->execute();
+    $task['latest_git_update'] = $latestGitStmt->get_result()->fetch_assoc() ?: null;
+    $latestGitStmt->close();
     
     echo json_encode($task);
 } else {

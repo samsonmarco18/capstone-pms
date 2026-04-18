@@ -9,6 +9,7 @@ $menuItems = [
     'admin' => [
         ['label' => 'Dashboard', 'url' => '/modules/admin/dashboard.php', 'icon' => 'tachometer-alt'],
         ['label' => 'Tech Stack', 'url' => '/modules/admin/techstack.php', 'icon' => 'microchip'],
+        ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
         ['label' => 'User Management', 'url' => '/modules/admin/user-management.php', 'icon' => 'users'],
         ['label' => 'Audit Log', 'url' => '/modules/admin/audit-log.php', 'icon' => 'history'],
         ['label' => 'Settings', 'url' => '/modules/admin/settings.php', 'icon' => 'cog'],
@@ -22,6 +23,7 @@ $menuItems = [
     'architect' => [
         ['label' => 'Dashboard', 'url' => '/modules/architect/dashboard.php', 'icon' => 'drafting-compass'],
         ['label' => 'Projects', 'url' => '/modules/architect/projects.php', 'icon' => 'project-diagram'],
+        ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
     ],
     'sul' => [
         ['label' => 'Dashboard', 'url' => '/modules/sul/dashboard.php', 'icon' => 'chart-pie'],
@@ -38,6 +40,7 @@ $menuItems = [
     'developer' => [
         ['label' => 'Dashboard', 'url' => '/modules/developer/dashboard.php', 'icon' => 'code'],
         ['label' => 'Task', 'url' => '/modules/developer/task.php', 'icon' => 'tasks'],
+        ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
     ],
 ];
 

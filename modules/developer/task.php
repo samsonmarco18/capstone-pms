@@ -5,11 +5,30 @@ requireRole('developer');
 $conn = getConnection();
 $user = getCurrentUser();
 
+$taskBaseQuery = "
+    SELECT t.*,
+           p.name AS project_name,
+           latest_git.branch_name AS git_branch_name,
+           latest_git.commit_hash AS git_commit_hash,
+           latest_git.status AS git_status,
+           latest_git.git_action AS git_action,
+           latest_git.pull_request_url AS git_pull_request_url
+    FROM tasks t
+    LEFT JOIN projects p ON p.id = t.project_id
+    LEFT JOIN task_git_updates latest_git ON latest_git.id = (
+        SELECT tgu.id
+        FROM task_git_updates tgu
+        WHERE tgu.task_id = t.id
+        ORDER BY tgu.created_at DESC, tgu.id DESC
+        LIMIT 1
+    )
+";
+
 // Get tasks assigned to this developer
-$todoTasks = $conn->query("SELECT * FROM tasks WHERE assigned_to = {$user['id']} AND status = 'todo' ORDER BY deadline ASC");
-$inProgressTasks = $conn->query("SELECT * FROM tasks WHERE assigned_to = {$user['id']} AND status = 'in_progress' ORDER BY deadline ASC");
-$reviewTasks = $conn->query("SELECT * FROM tasks WHERE assigned_to = {$user['id']} AND status = 'review' ORDER BY deadline ASC");
-$completedTasks = $conn->query("SELECT * FROM tasks WHERE assigned_to = {$user['id']} AND status = 'completed' ORDER BY completed_at DESC LIMIT 10");
+$todoTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'todo' ORDER BY t.deadline ASC");
+$inProgressTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'in_progress' ORDER BY t.deadline ASC");
+$reviewTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'review' ORDER BY t.deadline ASC");
+$completedTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'completed' ORDER BY t.completed_at DESC LIMIT 10");
 
 // Update task status
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
@@ -219,6 +238,31 @@ include '../../includes/navbar.php';
     font-size: 0.7rem;
 }
 
+.git-snippet {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.72rem;
+    color: var(--theme-primary);
+    margin-bottom: 0.65rem;
+}
+
+.git-update-item {
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    background: white;
+}
+
+.git-update-item:last-child {
+    margin-bottom: 0;
+}
+
+.git-update-item code {
+    font-size: 0.75rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
@@ -263,6 +307,15 @@ include '../../includes/navbar.php';
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
                         <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
+                        <?php if (!empty($task['git_branch_name'])): ?>
+                        <div class="git-snippet">
+                            <i class="fas fa-code-branch"></i>
+                            <span><?php echo htmlspecialchars($task['git_branch_name']); ?></span>
+                            <?php if (!empty($task['git_commit_hash'])): ?>
+                            <code><?php echo htmlspecialchars(substr($task['git_commit_hash'], 0, 7)); ?></code>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
                         <div class="d-flex justify-content-between align-items-center">
                             <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
                             <div>
@@ -301,6 +354,15 @@ include '../../includes/navbar.php';
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
                         <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
+                        <?php if (!empty($task['git_branch_name'])): ?>
+                        <div class="git-snippet">
+                            <i class="fas fa-code-branch"></i>
+                            <span><?php echo htmlspecialchars($task['git_branch_name']); ?></span>
+                            <?php if (!empty($task['git_commit_hash'])): ?>
+                            <code><?php echo htmlspecialchars(substr($task['git_commit_hash'], 0, 7)); ?></code>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
                         <div class="d-flex justify-content-between align-items-center">
                             <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
                             <div>
@@ -342,6 +404,15 @@ include '../../includes/navbar.php';
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
                         <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
+                        <?php if (!empty($task['git_branch_name'])): ?>
+                        <div class="git-snippet">
+                            <i class="fas fa-code-branch"></i>
+                            <span><?php echo htmlspecialchars($task['git_branch_name']); ?></span>
+                            <?php if (!empty($task['git_commit_hash'])): ?>
+                            <code><?php echo htmlspecialchars(substr($task['git_commit_hash'], 0, 7)); ?></code>
+                            <?php endif; ?>
+                        </div>
+                        <?php endif; ?>
                         <div class="d-flex justify-content-between align-items-center">
                             <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
                             <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)">
@@ -442,7 +513,8 @@ function viewTask(taskId) {
         method: 'GET',
         data: { id: taskId },
         success: function(response) {
-            const task = JSON.parse(response);
+            const task = typeof response === 'string' ? JSON.parse(response) : response;
+            const latestGit = task.latest_git_update;
             let html = `
                 <div class="row g-4">
                     <div class="col-md-8">
@@ -462,9 +534,103 @@ function viewTask(taskId) {
                             <strong>Estimated Days:</strong> 
                             Min: ${task.estimated_days_min}, Likely: ${task.estimated_days_likely}, Max: ${task.estimated_days_max}
                         </div>
+                        <div class="mt-4 p-3 bg-light rounded-3 border">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                <div>
+                                    <strong><i class="fas fa-code-branch me-2 text-primary"></i>Latest Git Activity</strong>
+                                    <div class="small text-muted mt-1">${task.git_updates_count} update(s) logged for this task</div>
+                                </div>
+                                ${latestGit ? `<span class="badge bg-light text-primary border">${formatGitAction(latestGit.git_action)}</span>` : ''}
+                            </div>
+                            ${latestGit ? `
+                                <div class="row g-3 mt-1">
+                                    <div class="col-sm-6">
+                                        <div class="small text-muted">Branch</div>
+                                        <div class="fw-semibold">${escapeHtml(latestGit.branch_name)}</div>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <div class="small text-muted">Status</div>
+                                        <div>${formatGitStatusBadge(latestGit.status)}</div>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <div class="small text-muted">Commit</div>
+                                        <div>${latestGit.commit_hash ? `<code>${escapeHtml(shortCommit(latestGit.commit_hash))}</code>` : '<span class="text-muted">No commit hash</span>'}</div>
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <div class="small text-muted">Updated By</div>
+                                        <div>${escapeHtml(latestGit.user_name || 'Unknown')}</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="small text-muted">Commit Message</div>
+                                        <div>${latestGit.commit_message ? escapeHtml(latestGit.commit_message) : '<span class="text-muted">No commit message</span>'}</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="small text-muted">Links</div>
+                                        <div class="d-flex gap-2 flex-wrap">
+                                            ${latestGit.repository_url ? `<a href="${escapeAttribute(latestGit.repository_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="fas fa-link me-1"></i>Repository</a>` : ''}
+                                            ${latestGit.pull_request_url ? `<a href="${escapeAttribute(latestGit.pull_request_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="fas fa-code-pull-request me-1"></i>Pull Request</a>` : ''}
+                                            ${!latestGit.repository_url && !latestGit.pull_request_url ? '<span class="text-muted">No links attached</span>' : ''}
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="small text-muted">Notes</div>
+                                        <div>${latestGit.notes ? escapeHtml(latestGit.notes) : '<span class="text-muted">No notes provided</span>'}</div>
+                                    </div>
+                                </div>
+                            ` : `<p class="text-muted mb-0 mt-3">No Git activity has been recorded for this task yet.</p>`}
+                        </div>
                     </div>
                     <div class="col-md-4">
-                        <div class="p-3 bg-light rounded-3">
+                        <div class="p-3 bg-light rounded-3 border mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <label class="form-label mb-0 fw-semibold">Log Git Update</label>
+                                <small class="text-muted">Branch, commit, PR</small>
+                            </div>
+                            <div class="mb-2">
+                                <select id="gitAction" class="form-select form-select-sm">
+                                    <option value="commit_pushed">Commit Pushed</option>
+                                    <option value="branch_created">Branch Created</option>
+                                    <option value="pull_request_opened">Pull Request Opened</option>
+                                    <option value="merged">Merged</option>
+                                    <option value="deployed">Deployed</option>
+                                    <option value="note">General Note</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <input id="gitBranchName" class="form-control form-control-sm" placeholder="Branch name (required)">
+                            </div>
+                            <div class="mb-2">
+                                <input id="gitCommitHash" class="form-control form-control-sm" placeholder="Commit hash">
+                            </div>
+                            <div class="mb-2">
+                                <input id="gitCommitMessage" class="form-control form-control-sm" placeholder="Commit message">
+                            </div>
+                            <div class="mb-2">
+                                <input id="gitPullRequestUrl" class="form-control form-control-sm" placeholder="Pull request URL">
+                            </div>
+                            <div class="mb-2">
+                                <input id="gitRepositoryUrl" class="form-control form-control-sm" placeholder="Repository URL">
+                            </div>
+                            <div class="mb-2">
+                                <select id="gitStatus" class="form-select form-select-sm">
+                                    <option value="active">Active</option>
+                                    <option value="in_review">In Review</option>
+                                    <option value="merged">Merged</option>
+                                    <option value="closed">Closed</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <textarea id="gitNotes" class="form-control form-control-sm" rows="3" placeholder="Notes for this Git update"></textarea>
+                            </div>
+                            <button class="btn-primary-modern w-100" onclick="addGitUpdate(${taskId})">
+                                <i class="fas fa-code-branch"></i> Save Git Update
+                            </button>
+                        </div>
+                        <div class="mt-3">
+                            <h6 class="mb-2">Git History</h6>
+                            <div id="gitUpdatesList" class="small"></div>
+                        </div>
+                        <div class="p-3 bg-light rounded-3 border mt-3">
                             <div class="mb-3">
                                 <label class="form-label">Add Comment</label>
                                 <textarea id="taskComment" class="form-control" rows="3"></textarea>
@@ -482,6 +648,12 @@ function viewTask(taskId) {
             `;
             $('#taskDetails').html(html);
             loadComments(taskId);
+            loadGitUpdates(taskId);
+            new bootstrap.Modal(document.getElementById('taskModal')).show();
+        },
+        error: function(xhr) {
+            const message = xhr.responseJSON?.error || 'Unable to load task details';
+            $('#taskDetails').html(`<div class="alert alert-danger mb-0">${escapeHtml(message)}</div>`);
             new bootstrap.Modal(document.getElementById('taskModal')).show();
         }
     });
@@ -493,7 +665,7 @@ function loadComments(taskId) {
         method: 'GET',
         data: { task_id: taskId },
         success: function(response) {
-            const comments = JSON.parse(response);
+            const comments = typeof response === 'string' ? JSON.parse(response) : response;
             let html = '';
             comments.forEach(comment => {
                 html += `
@@ -509,6 +681,44 @@ function loadComments(taskId) {
     });
 }
 
+function loadGitUpdates(taskId) {
+    $.ajax({
+        url: '../../api/get-task-git-updates.php',
+        method: 'GET',
+        data: { task_id: taskId },
+        success: function(response) {
+            const updates = typeof response === 'string' ? JSON.parse(response) : response;
+            let html = '';
+            updates.forEach(update => {
+                html += `
+                    <div class="git-update-item">
+                        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                            <div>
+                                <strong>${escapeHtml(update.branch_name)}</strong>
+                                <div class="small text-muted">${escapeHtml(update.user_name || 'Unknown')} | ${formatDateTime(update.created_at)}</div>
+                            </div>
+                            ${formatGitStatusBadge(update.status)}
+                        </div>
+                        <div class="small mb-2"><span class="badge bg-light text-dark border">${formatGitAction(update.git_action)}</span></div>
+                        <div class="small mb-2">${update.commit_hash ? `<code>${escapeHtml(shortCommit(update.commit_hash))}</code>` : '<span class="text-muted">No commit hash</span>'}</div>
+                        ${update.commit_message ? `<div class="small mb-2">${escapeHtml(update.commit_message)}</div>` : ''}
+                        ${update.notes ? `<div class="small mb-2 text-muted">${escapeHtml(update.notes)}</div>` : ''}
+                        <div class="d-flex gap-2 flex-wrap">
+                            ${update.repository_url ? `<a href="${escapeAttribute(update.repository_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">Repository</a>` : ''}
+                            ${update.pull_request_url ? `<a href="${escapeAttribute(update.pull_request_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">Pull Request</a>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            $('#gitUpdatesList').html(html || '<p class="text-muted">No Git updates yet</p>');
+        },
+        error: function(xhr) {
+            const message = xhr.responseJSON?.error || 'Unable to load Git history';
+            $('#gitUpdatesList').html(`<p class="text-danger mb-0">${escapeHtml(message)}</p>`);
+        }
+    });
+}
+
 function addComment(taskId) {
     const comment = $('#taskComment').val();
     if(!comment.trim()) return;
@@ -520,15 +730,91 @@ function addComment(taskId) {
         success: function() {
             $('#taskComment').val('');
             loadComments(taskId);
-            alert('✓ Comment added successfully');
+            alert('Comment added successfully');
+        }
+    });
+}
+
+function addGitUpdate(taskId) {
+    const branchName = $('#gitBranchName').val().trim();
+
+    if(!branchName) {
+        alert('Branch name is required for Git updates.');
+        return;
+    }
+
+    $.ajax({
+        url: '../../api/add-task-git-update.php',
+        method: 'POST',
+        dataType: 'json',
+        data: {
+            task_id: taskId,
+            git_action: $('#gitAction').val(),
+            branch_name: branchName,
+            commit_hash: $('#gitCommitHash').val().trim(),
+            commit_message: $('#gitCommitMessage').val().trim(),
+            pull_request_url: $('#gitPullRequestUrl').val().trim(),
+            repository_url: $('#gitRepositoryUrl').val().trim(),
+            status: $('#gitStatus').val(),
+            notes: $('#gitNotes').val().trim()
+        },
+        success: function() {
+            $('#gitCommitHash, #gitCommitMessage, #gitPullRequestUrl, #gitRepositoryUrl, #gitNotes').val('');
+            loadGitUpdates(taskId);
+            viewTask(taskId);
+        },
+        error: function(xhr) {
+            alert(xhr.responseJSON?.error || 'Failed to save Git update');
         }
     });
 }
 
 function escapeHtml(text) {
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = text ?? '';
     return div.innerHTML;
+}
+
+function escapeAttribute(text) {
+    return escapeHtml(text).replace(/"/g, '&quot;');
+}
+
+function shortCommit(hash) {
+    return (hash || '').slice(0, 7);
+}
+
+function formatDateTime(value) {
+    return value ? new Date(value).toLocaleString() : 'Unknown date';
+}
+
+function formatGitAction(action) {
+    const labels = {
+        branch_created: 'Branch Created',
+        commit_pushed: 'Commit Pushed',
+        pull_request_opened: 'Pull Request Opened',
+        merged: 'Merged',
+        deployed: 'Deployed',
+        note: 'General Note'
+    };
+    return labels[action] || 'Git Update';
+}
+
+function formatGitStatusBadge(status) {
+    const labels = {
+        active: 'Active',
+        in_review: 'In Review',
+        merged: 'Merged',
+        closed: 'Closed'
+    };
+    const colors = {
+        active: 'success',
+        in_review: 'warning text-dark',
+        merged: 'primary',
+        closed: 'secondary'
+    };
+    const label = labels[status] || 'Active';
+    const color = colors[status] || 'secondary';
+    return `<span class="badge bg-${color}">${label}</span>`;
 }
 
 // Drag and drop functionality
@@ -572,6 +858,11 @@ function handleDrop(e) {
     if(newStatus) {
         updateTaskStatus(taskId, newStatus);
     }
+}
+
+const selectedTaskId = new URLSearchParams(window.location.search).get('id');
+if(selectedTaskId) {
+    viewTask(selectedTaskId);
 }
 </script>
 

@@ -274,6 +274,25 @@ include '../../includes/navbar.php';
     color: white;
 }
 
+.btn-secondary-action {
+    background: white;
+    color: var(--theme-primary);
+    border: 1px solid rgba(31, 99, 146, 0.2);
+    padding: 0.4rem 0.9rem;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    text-decoration: none;
+}
+
+.btn-secondary-action:hover {
+    background: var(--gray-50);
+    color: var(--theme-dark);
+}
+
 /* Empty State */
 .empty-state-modern {
     text-align: center;
@@ -406,9 +425,14 @@ include '../../includes/navbar.php';
                         </td>
                         <td><?php echo date('M d, Y', strtotime($project['created_at'])); ?></td>
                         <td>
+                            <div class="d-flex flex-wrap gap-2">
                             <a href="project-review.php?id=<?php echo $project['id']; ?>" class="btn-review">
                                 <i class="fas fa-eye"></i> Review
                             </a>
+                            <a href="../version-control/repositories.php?project_id=<?php echo $project['id']; ?>" class="btn-secondary-action">
+                                <i class="fas fa-code-branch"></i> Version Control
+                            </a>
+                            </div>
                         </td>
                     </tr>
                     <?php endwhile; ?>

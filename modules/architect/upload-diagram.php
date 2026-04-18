@@ -6,6 +6,20 @@ $conn = getConnection();
 $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? $_GET['id'] : 0;
 
+function normalizeArchitectureDocumentType(?string $value): string
+{
+    $normalized = strtolower(trim((string) $value));
+
+    return match ($normalized) {
+        'architecture_plan' => 'architecture_plan',
+        'workflow_diagram' => 'workflow_diagram',
+        'system_design', 'system_flow' => 'system_flow',
+        'technical_spec', 'deployment_diagram' => 'deployment_diagram',
+        'database_schema' => 'database_schema',
+        default => 'architecture_plan'
+    };
+}
+
 $project = $conn->query("SELECT * FROM projects WHERE id = $projectId")->fetch_assoc();
 
 if (!$project) {
@@ -21,8 +35,8 @@ $documents = $conn->query("
 ");
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $docType = $_POST['document_type'];
-    $description = $_POST['description'];
+    $docType = normalizeArchitectureDocumentType($_POST['document_type'] ?? '');
+    $description = trim($_POST['description'] ?? '');
     
     if(isset($_FILES['diagram']) && $_FILES['diagram']['error'] == 0) {
         $uploadDir = '../../uploads/architecture/';
@@ -30,13 +44,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             mkdir($uploadDir, 0777, true);
         }
         
-        $fileName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $_FILES['diagram']['name']);
-        $filePath = $uploadDir . $fileName;
+        $originalFileName = basename($_FILES['diagram']['name']);
+        $storedFileName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $originalFileName);
+        $filePath = $uploadDir . $storedFileName;
         $relativePath = str_replace('../../', '', $filePath);
         
         if (move_uploaded_file($_FILES['diagram']['tmp_name'], $filePath)) {
-            $stmt = $conn->prepare("INSERT INTO architecture_documents (project_id, document_type, file_path, description, uploaded_by) VALUES (?, ?, ?, ?, ?)");
-            $stmt->bind_param("isssi", $projectId, $docType, $relativePath, $description, $user['id']);
+            $stmt = $conn->prepare("INSERT INTO architecture_documents (project_id, document_type, file_name, file_path, description, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("issssi", $projectId, $docType, $originalFileName, $relativePath, $description, $user['id']);
             $stmt->execute();
             
             logActivity($user['id'], 'upload_diagram', 'projects', $projectId, null, $_POST);

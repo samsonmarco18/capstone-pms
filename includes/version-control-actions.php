@@ -1,0 +1,475 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/version-control.php';
+
+function vcHandlePostAction(mysqli $conn, array $user, array $post): array
+{
+    $action = trim((string) ($post['action'] ?? ''));
+    $projectId = (int) ($post['project_id'] ?? 0);
+    $repositoryId = (int) ($post['repository_id'] ?? 0);
+
+    if ($action === '') {
+        return ['project_id' => $projectId, 'repository_id' => $repositoryId];
+    }
+
+    if ($action === 'create_repository') {
+        if (!vcCanAccessProject($conn, $user, $projectId)) {
+            throw new RuntimeException('You do not have access to that project.');
+        }
+
+        $name = trim((string) ($post['repository_name'] ?? ''));
+        $slug = vcGenerateSlug((string) ($post['repository_slug'] ?? $name));
+        $description = trim((string) ($post['repository_description'] ?? ''));
+        $visibility = trim((string) ($post['repository_visibility'] ?? 'internal'));
+        $defaultBranch = vcGenerateSlug((string) ($post['default_branch_name'] ?? 'main'));
+        $allowedVisibility = ['private', 'internal', 'public'];
+
+        if ($name === '') {
+            throw new RuntimeException('Repository name is required.');
+        }
+        if (!in_array($visibility, $allowedVisibility, true)) {
+            throw new RuntimeException('Invalid repository visibility.');
+        }
+        if ($defaultBranch === '') {
+            $defaultBranch = 'main';
+        }
+
+        $conn->begin_transaction();
+        try {
+            $parentRepositoryId = null;
+            $repositoryStatus = 'active';
+            $lastActivityAt = date('Y-m-d H:i:s');
+            $stmt = $conn->prepare(
+                'INSERT INTO project_repositories (
+                    project_id, parent_repository_id, name, slug, description,
+                    visibility, default_branch_name, repository_status, last_activity_at, created_by
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->bind_param(
+                'iisssssssi',
+                $projectId,
+                $parentRepositoryId,
+                $name,
+                $slug,
+                $description,
+                $visibility,
+                $defaultBranch,
+                $repositoryStatus,
+                $lastActivityAt,
+                $user['id']
+            );
+            $stmt->execute();
+            $repositoryId = (int) $stmt->insert_id;
+            $stmt->close();
+
+            $sourceBranchId = null;
+            $lastCommitHash = null;
+            $branchStatus = 'active';
+            $isDefault = 1;
+            $isProtected = 1;
+            $branchStmt = $conn->prepare(
+                'INSERT INTO repository_branches (
+                    repository_id, source_branch_id, name, last_commit_hash,
+                    branch_status, is_default, is_protected, created_by
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $branchStmt->bind_param(
+                'iisssiii',
+                $repositoryId,
+                $sourceBranchId,
+                $defaultBranch,
+                $lastCommitHash,
+                $branchStatus,
+                $isDefault,
+                $isProtected,
+                $user['id']
+            );
+            $branchStmt->execute();
+            $branchId = (int) $branchStmt->insert_id;
+            $branchStmt->close();
+
+            vcLogOperation($conn, $repositoryId, $branchId, null, (int) $user['id'], 'create_repository', null, null, ['project_id' => $projectId]);
+            logActivity((int) $user['id'], 'create_repository', 'project_repositories', $repositoryId, null, ['project_id' => $projectId, 'name' => $name]);
+            $conn->commit();
+
+            return ['project_id' => $projectId, 'repository_id' => $repositoryId, 'message' => 'Repository created successfully.'];
+        } catch (Throwable $e) {
+            $conn->rollback();
+            throw $e;
+        }
+    }
+
+    if (!vcCanAccessRepository($conn, $user, $repositoryId)) {
+        throw new RuntimeException('You do not have access to that repository.');
+    }
+
+    $repository = vcGetRepository($conn, $repositoryId);
+    if (!$repository) {
+        throw new RuntimeException('Repository not found.');
+    }
+    $projectId = (int) $repository['project_id'];
+
+    if ($action === 'create_branch') {
+        $branchName = vcGenerateSlug((string) ($post['branch_name'] ?? ''));
+        $sourceBranchId = (int) ($post['source_branch_id'] ?? 0);
+        $isProtected = isset($post['is_protected']) ? 1 : 0;
+
+        if ($branchName === '') {
+            throw new RuntimeException('Branch name is required.');
+        }
+
+        $sourceBranchValue = $sourceBranchId > 0 ? $sourceBranchId : null;
+        $lastCommitHash = null;
+        if ($sourceBranchId > 0) {
+            $sourceStmt = $conn->prepare('SELECT last_commit_hash FROM repository_branches WHERE id = ? AND repository_id = ? LIMIT 1');
+            $sourceStmt->bind_param('ii', $sourceBranchId, $repositoryId);
+            $sourceStmt->execute();
+            $sourceBranch = $sourceStmt->get_result()->fetch_assoc();
+            $sourceStmt->close();
+
+            if (!$sourceBranch) {
+                throw new RuntimeException('Source branch was not found.');
+            }
+            $lastCommitHash = $sourceBranch['last_commit_hash'];
+        }
+
+        $conn->begin_transaction();
+        try {
+            $branchStatus = 'active';
+            $isDefault = 0;
+            $stmt = $conn->prepare(
+                'INSERT INTO repository_branches (
+                    repository_id, source_branch_id, name, last_commit_hash,
+                    branch_status, is_default, is_protected, created_by
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->bind_param(
+                'iisssiii',
+                $repositoryId,
+                $sourceBranchValue,
+                $branchName,
+                $lastCommitHash,
+                $branchStatus,
+                $isDefault,
+                $isProtected,
+                $user['id']
+            );
+            $stmt->execute();
+            $branchId = (int) $stmt->insert_id;
+            $stmt->close();
+
+            vcTouchRepository($conn, $repositoryId);
+            vcLogOperation($conn, $repositoryId, $branchId, null, (int) $user['id'], 'create_branch', null, $sourceBranchValue, ['branch_name' => $branchName]);
+            logActivity((int) $user['id'], 'create_branch', 'repository_branches', $branchId, null, ['repository_id' => $repositoryId, 'branch_name' => $branchName]);
+            $conn->commit();
+
+            return ['project_id' => $projectId, 'repository_id' => $repositoryId, 'message' => 'Branch created successfully.'];
+        } catch (Throwable $e) {
+            $conn->rollback();
+            throw $e;
+        }
+    }
+
+    if ($action === 'create_commit') {
+        $branchId = (int) ($post['branch_id'] ?? 0);
+        $title = trim((string) ($post['commit_title'] ?? ''));
+        $message = trim((string) ($post['commit_message'] ?? ''));
+        $filesChanged = max(0, (int) ($post['files_changed'] ?? 0));
+        $linesAdded = max(0, (int) ($post['lines_added'] ?? 0));
+        $linesRemoved = max(0, (int) ($post['lines_removed'] ?? 0));
+
+        if ($branchId <= 0 || $title === '') {
+            throw new RuntimeException('Branch and commit title are required.');
+        }
+
+        $branchStmt = $conn->prepare('SELECT * FROM repository_branches WHERE id = ? AND repository_id = ? LIMIT 1');
+        $branchStmt->bind_param('ii', $branchId, $repositoryId);
+        $branchStmt->execute();
+        $branch = $branchStmt->get_result()->fetch_assoc();
+        $branchStmt->close();
+
+        if (!$branch) {
+            throw new RuntimeException('Branch not found.');
+        }
+
+        $parentCommitId = null;
+        if (!empty($branch['last_commit_hash'])) {
+            $parentStmt = $conn->prepare('SELECT id FROM repository_commits WHERE commit_hash = ? LIMIT 1');
+            $parentStmt->bind_param('s', $branch['last_commit_hash']);
+            $parentStmt->execute();
+            $parentCommitId = $parentStmt->get_result()->fetch_assoc()['id'] ?? null;
+            $parentStmt->close();
+        }
+
+        $conn->begin_transaction();
+        try {
+            $commitHash = vcGenerateCommitHash($repositoryId, $branchId, (int) $user['id'], $title);
+            $commitKind = 'commit';
+            $stmt = $conn->prepare(
+                'INSERT INTO repository_commits (
+                    repository_id, branch_id, parent_commit_id, commit_hash, commit_title,
+                    commit_message, files_changed, lines_added, lines_removed, commit_kind, authored_by
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->bind_param(
+                'iiisssiiisi',
+                $repositoryId,
+                $branchId,
+                $parentCommitId,
+                $commitHash,
+                $title,
+                $message,
+                $filesChanged,
+                $linesAdded,
+                $linesRemoved,
+                $commitKind,
+                $user['id']
+            );
+            $stmt->execute();
+            $commitId = (int) $stmt->insert_id;
+            $stmt->close();
+
+            $updateStmt = $conn->prepare('UPDATE repository_branches SET last_commit_hash = ?, updated_at = NOW() WHERE id = ?');
+            $updateStmt->bind_param('si', $commitHash, $branchId);
+            $updateStmt->execute();
+            $updateStmt->close();
+
+            vcTouchRepository($conn, $repositoryId);
+            vcLogOperation($conn, $repositoryId, $branchId, $commitId, (int) $user['id'], 'commit', null, null, ['commit_hash' => $commitHash]);
+            logActivity((int) $user['id'], 'create_commit', 'repository_commits', $commitId, null, ['repository_id' => $repositoryId, 'branch_id' => $branchId]);
+            $conn->commit();
+
+            return ['project_id' => $projectId, 'repository_id' => $repositoryId, 'message' => 'Commit recorded successfully.'];
+        } catch (Throwable $e) {
+            $conn->rollback();
+            throw $e;
+        }
+    }
+
+    if ($action === 'log_sync') {
+        $branchId = (int) ($post['branch_id'] ?? 0);
+        $operationType = trim((string) ($post['operation_type'] ?? ''));
+        $notes = trim((string) ($post['operation_notes'] ?? ''));
+
+        if (!in_array($operationType, ['push', 'pull'], true)) {
+            throw new RuntimeException('Only push and pull are allowed here.');
+        }
+
+        $commitId = null;
+        if ($branchId > 0) {
+            $branchStmt = $conn->prepare(
+                'SELECT rc.id
+                 FROM repository_branches rb
+                 LEFT JOIN repository_commits rc ON rc.commit_hash = rb.last_commit_hash
+                 WHERE rb.id = ? AND rb.repository_id = ?
+                 LIMIT 1'
+            );
+            $branchStmt->bind_param('ii', $branchId, $repositoryId);
+            $branchStmt->execute();
+            $commitId = $branchStmt->get_result()->fetch_assoc()['id'] ?? null;
+            $branchStmt->close();
+        }
+
+        vcTouchRepository($conn, $repositoryId);
+        vcLogOperation($conn, $repositoryId, $branchId > 0 ? $branchId : null, $commitId ? (int) $commitId : null, (int) $user['id'], $operationType, null, null, ['notes' => $notes]);
+        logActivity((int) $user['id'], $operationType . '_repository', 'project_repositories', $repositoryId, null, ['branch_id' => $branchId, 'notes' => $notes]);
+
+        return ['project_id' => $projectId, 'repository_id' => $repositoryId, 'message' => ucfirst($operationType) . ' activity recorded.'];
+    }
+
+    if ($action === 'merge_branches') {
+        $sourceBranchId = (int) ($post['source_branch_id'] ?? 0);
+        $targetBranchId = (int) ($post['target_branch_id'] ?? 0);
+        $summary = trim((string) ($post['merge_summary'] ?? ''));
+        $notes = trim((string) ($post['merge_notes'] ?? ''));
+        $closeSourceBranch = isset($post['close_source_branch']);
+
+        if ($sourceBranchId <= 0 || $targetBranchId <= 0 || $sourceBranchId === $targetBranchId) {
+            throw new RuntimeException('Choose different source and target branches.');
+        }
+
+        $branchStmt = $conn->prepare('SELECT * FROM repository_branches WHERE repository_id = ? AND id IN (?, ?)');
+        $branchStmt->bind_param('iii', $repositoryId, $sourceBranchId, $targetBranchId);
+        $branchStmt->execute();
+        $branchRows = $branchStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $branchStmt->close();
+
+        if (count($branchRows) !== 2) {
+            throw new RuntimeException('Branch selection is invalid.');
+        }
+
+        $branchesById = [];
+        foreach ($branchRows as $branchRow) {
+            $branchesById[(int) $branchRow['id']] = $branchRow;
+        }
+
+        $sourceBranch = $branchesById[$sourceBranchId] ?? null;
+        $targetBranch = $branchesById[$targetBranchId] ?? null;
+        if (!$sourceBranch || !$targetBranch) {
+            throw new RuntimeException('Source or target branch was not found.');
+        }
+
+        $parentCommitId = null;
+        if (!empty($targetBranch['last_commit_hash'])) {
+            $parentStmt = $conn->prepare('SELECT id FROM repository_commits WHERE commit_hash = ? LIMIT 1');
+            $parentStmt->bind_param('s', $targetBranch['last_commit_hash']);
+            $parentStmt->execute();
+            $parentCommitId = $parentStmt->get_result()->fetch_assoc()['id'] ?? null;
+            $parentStmt->close();
+        }
+
+        $conn->begin_transaction();
+        try {
+            $mergeTitle = $summary !== '' ? $summary : 'Merge ' . $sourceBranch['name'] . ' into ' . $targetBranch['name'];
+            $mergeHash = vcGenerateCommitHash($repositoryId, $targetBranchId, (int) $user['id'], $mergeTitle);
+            $commitKind = 'merge';
+            $filesChanged = 0;
+            $linesAdded = 0;
+            $linesRemoved = 0;
+            $commitStmt = $conn->prepare(
+                'INSERT INTO repository_commits (
+                    repository_id, branch_id, parent_commit_id, commit_hash, commit_title,
+                    commit_message, files_changed, lines_added, lines_removed, commit_kind, authored_by
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $commitStmt->bind_param(
+                'iiisssiiisi',
+                $repositoryId,
+                $targetBranchId,
+                $parentCommitId,
+                $mergeHash,
+                $mergeTitle,
+                $notes,
+                $filesChanged,
+                $linesAdded,
+                $linesRemoved,
+                $commitKind,
+                $user['id']
+            );
+            $commitStmt->execute();
+            $mergeCommitId = (int) $commitStmt->insert_id;
+            $commitStmt->close();
+
+            $updateTargetStmt = $conn->prepare('UPDATE repository_branches SET last_commit_hash = ?, updated_at = NOW() WHERE id = ?');
+            $updateTargetStmt->bind_param('si', $mergeHash, $targetBranchId);
+            $updateTargetStmt->execute();
+            $updateTargetStmt->close();
+
+            if ($closeSourceBranch) {
+                $status = 'merged';
+                $sourceUpdateStmt = $conn->prepare('UPDATE repository_branches SET branch_status = ?, updated_at = NOW() WHERE id = ?');
+                $sourceUpdateStmt->bind_param('si', $status, $sourceBranchId);
+                $sourceUpdateStmt->execute();
+                $sourceUpdateStmt->close();
+            }
+
+            $mergeStatus = 'merged';
+            $mergeStmt = $conn->prepare(
+                'INSERT INTO repository_merges (
+                    repository_id, source_branch_id, target_branch_id, merge_commit_id,
+                    merged_by, merge_status, summary, notes
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $mergeStmt->bind_param('iiiiisss', $repositoryId, $sourceBranchId, $targetBranchId, $mergeCommitId, $user['id'], $mergeStatus, $mergeTitle, $notes);
+            $mergeStmt->execute();
+            $mergeId = (int) $mergeStmt->insert_id;
+            $mergeStmt->close();
+
+            vcTouchRepository($conn, $repositoryId);
+            vcLogOperation($conn, $repositoryId, $targetBranchId, $mergeCommitId, (int) $user['id'], 'merge', null, $sourceBranchId, ['merge_id' => $mergeId]);
+            logActivity((int) $user['id'], 'merge_branches', 'repository_merges', $mergeId, null, ['repository_id' => $repositoryId, 'source_branch_id' => $sourceBranchId, 'target_branch_id' => $targetBranchId]);
+            $conn->commit();
+
+            return ['project_id' => $projectId, 'repository_id' => $repositoryId, 'message' => 'Branches merged successfully.'];
+        } catch (Throwable $e) {
+            $conn->rollback();
+            throw $e;
+        }
+    }
+
+    if ($action === 'fork_repository') {
+        $targetProjectId = (int) ($post['target_project_id'] ?? 0);
+        if (!vcCanAccessProject($conn, $user, $targetProjectId)) {
+            throw new RuntimeException('You do not have access to the target project.');
+        }
+
+        $forkName = trim((string) ($post['fork_name'] ?? ($repository['name'] . ' Fork')));
+        $forkSlug = vcGenerateSlug((string) ($post['fork_slug'] ?? $forkName));
+        $forkDescription = trim((string) ($post['fork_description'] ?? ('Forked from ' . $repository['name'])));
+        $defaultBranch = $repository['default_branch_name'] ?: 'main';
+
+        if ($forkName === '') {
+            throw new RuntimeException('Fork repository name is required.');
+        }
+
+        $sourceDefaultBranch = vcGetDefaultBranch($conn, $repositoryId);
+
+        $conn->begin_transaction();
+        try {
+            $visibility = $repository['visibility'];
+            $repositoryStatus = 'active';
+            $lastActivityAt = date('Y-m-d H:i:s');
+            $forkStmt = $conn->prepare(
+                'INSERT INTO project_repositories (
+                    project_id, parent_repository_id, name, slug, description,
+                    visibility, default_branch_name, repository_status, last_activity_at, created_by
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $forkStmt->bind_param(
+                'iisssssssi',
+                $targetProjectId,
+                $repositoryId,
+                $forkName,
+                $forkSlug,
+                $forkDescription,
+                $visibility,
+                $defaultBranch,
+                $repositoryStatus,
+                $lastActivityAt,
+                $user['id']
+            );
+            $forkStmt->execute();
+            $forkRepositoryId = (int) $forkStmt->insert_id;
+            $forkStmt->close();
+
+            $sourceBranchRef = $sourceDefaultBranch['id'] ?? null;
+            $lastCommitHash = $sourceDefaultBranch['last_commit_hash'] ?? null;
+            $branchStatus = 'active';
+            $isDefault = 1;
+            $isProtected = 1;
+            $branchStmt = $conn->prepare(
+                'INSERT INTO repository_branches (
+                    repository_id, source_branch_id, name, last_commit_hash,
+                    branch_status, is_default, is_protected, created_by
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $branchStmt->bind_param(
+                'iisssiii',
+                $forkRepositoryId,
+                $sourceBranchRef,
+                $defaultBranch,
+                $lastCommitHash,
+                $branchStatus,
+                $isDefault,
+                $isProtected,
+                $user['id']
+            );
+            $branchStmt->execute();
+            $forkBranchId = (int) $branchStmt->insert_id;
+            $branchStmt->close();
+
+            vcLogOperation($conn, $forkRepositoryId, $forkBranchId, null, (int) $user['id'], 'fork_repository', $repositoryId, $sourceBranchRef ? (int) $sourceBranchRef : null, ['target_project_id' => $targetProjectId]);
+            logActivity((int) $user['id'], 'fork_repository', 'project_repositories', $forkRepositoryId, null, ['source_repository_id' => $repositoryId, 'target_project_id' => $targetProjectId]);
+            $conn->commit();
+
+            return ['project_id' => $targetProjectId, 'repository_id' => $forkRepositoryId, 'message' => 'Repository fork created successfully.'];
+        } catch (Throwable $e) {
+            $conn->rollback();
+            throw $e;
+        }
+    }
+
+    throw new RuntimeException('Unsupported version control action.');
+}
+?>

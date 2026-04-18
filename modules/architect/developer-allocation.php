@@ -6,6 +6,19 @@ $conn = getConnection();
 $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? $_GET['id'] : 0;
 
+function normalizeAllocationComplexity(?string $value): string
+{
+    $normalized = strtolower(trim((string) $value));
+
+    return match ($normalized) {
+        'simple', 'low' => 'low',
+        'medium' => 'medium',
+        'complex', 'high' => 'high',
+        'critical' => 'critical',
+        default => 'medium'
+    };
+}
+
 $project = $conn->query("SELECT * FROM projects WHERE id = $projectId")->fetch_assoc();
 
 // Get existing allocations
@@ -15,12 +28,20 @@ while($row = $allocResult->fetch_assoc()) {
     $existingAllocations[$row['role']] = $row;
 }
 
+$selectedComplexity = 'medium';
+if (!empty($existingAllocations)) {
+    $firstAllocation = reset($existingAllocations);
+    $selectedComplexity = normalizeAllocationComplexity($firstAllocation['complexity_level'] ?? 'medium');
+} elseif ($project) {
+    $selectedComplexity = normalizeAllocationComplexity($project['complexity_level'] ?? 'medium');
+}
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $conn->query("DELETE FROM developer_allocations WHERE project_id = $projectId");
     if(isset($_POST['allocations'])) {
         foreach($_POST['allocations'] as $role => $data) {
             $requiredCount = $data['required'];
-            $complexity = $data['complexity'];
+            $complexity = normalizeAllocationComplexity($data['complexity'] ?? 'medium');
             $stmt = $conn->prepare("INSERT INTO developer_allocations (project_id, role, required_count, complexity_level) VALUES (?, ?, ?, ?)");
             $stmt->bind_param("isis", $projectId, $role, $requiredCount, $complexity);
             $stmt->execute();
@@ -518,10 +539,10 @@ include '../../includes/navbar.php';
                         <div class="mb-4">
                             <label class="form-label">Project Complexity Level</label>
                             <select class="form-select-modern" id="complexityLevel" onchange="updateAllocation()">
-                                <option value="low">Low - Simple application with basic features</option>
-                                <option value="medium">Medium - Standard web/mobile application</option>
-                                <option value="high">High - Complex system with advanced features</option>
-                                <option value="critical">Critical - Enterprise-grade solution</option>
+                                <option value="low" <?php echo $selectedComplexity === 'low' ? 'selected' : ''; ?>>Low - Simple application with basic features</option>
+                                <option value="medium" <?php echo $selectedComplexity === 'medium' ? 'selected' : ''; ?>>Medium - Standard web/mobile application</option>
+                                <option value="high" <?php echo $selectedComplexity === 'high' ? 'selected' : ''; ?>>High - Complex system with advanced features</option>
+                                <option value="critical" <?php echo $selectedComplexity === 'critical' ? 'selected' : ''; ?>>Critical - Enterprise-grade solution</option>
                             </select>
                         </div>
                         
@@ -550,6 +571,7 @@ include '../../includes/navbar.php';
                                     
                                     foreach($roles as $role => $limits):
                                         $existing = $existingAllocations[$role]['required_count'] ?? 0;
+                                        $existingComplexity = normalizeAllocationComplexity($existingAllocations[$role]['complexity_level'] ?? $selectedComplexity);
                                         $available = $availableDevs[$role] ?? 0;
                                         $isShortage = $existing > $available;
                                     ?>
@@ -562,7 +584,7 @@ include '../../includes/navbar.php';
                                                    min="<?php echo $limits['min']; ?>" 
                                                    max="<?php echo $limits['max']; ?>"
                                                    onchange="checkAvailability(this, '<?php echo $role; ?>')">
-                                            <input type="hidden" name="allocations[<?php echo $role; ?>][complexity]" value="medium">
+                                            <input type="hidden" name="allocations[<?php echo $role; ?>][complexity]" value="<?php echo htmlspecialchars($existingComplexity); ?>">
                                         </td>
                                         <td><span class="badge-available"><?php echo $available; ?> available</span></td>
                                         <td class="status-cell">
