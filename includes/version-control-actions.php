@@ -21,6 +21,7 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
         $name = trim((string) ($post['repository_name'] ?? ''));
         $slug = vcGenerateSlug((string) ($post['repository_slug'] ?? $name));
         $description = trim((string) ($post['repository_description'] ?? ''));
+        $externalRemoteUrl = trim((string) ($post['external_remote_url'] ?? ''));
         $visibility = trim((string) ($post['repository_visibility'] ?? 'internal'));
         $defaultBranch = vcGenerateSlug((string) ($post['default_branch_name'] ?? 'main'));
         $allowedVisibility = ['private', 'internal', 'public'];
@@ -40,19 +41,27 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
             $parentRepositoryId = null;
             $repositoryStatus = 'active';
             $lastActivityAt = date('Y-m-d H:i:s');
+            $syncMode = $externalRemoteUrl !== '' ? 'git_hook' : 'manual';
+            $syncProvider = null;
+            $webhookToken = vcGenerateWebhookToken();
             $stmt = $conn->prepare(
                 'INSERT INTO project_repositories (
                     project_id, parent_repository_id, name, slug, description,
+                    external_remote_url, sync_mode, sync_provider, webhook_token,
                     visibility, default_branch_name, repository_status, last_activity_at, created_by
-                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->bind_param(
-                'iisssssssi',
+                'iisssssssssssi',
                 $projectId,
                 $parentRepositoryId,
                 $name,
                 $slug,
                 $description,
+                $externalRemoteUrl,
+                $syncMode,
+                $syncProvider,
+                $webhookToken,
                 $visibility,
                 $defaultBranch,
                 $repositoryStatus,
@@ -98,6 +107,33 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
             $conn->rollback();
             throw $e;
         }
+    }
+
+    if ($action === 'save_sync_settings') {
+        $externalRemoteUrl = trim((string) ($post['external_remote_url'] ?? ''));
+        $syncMode = trim((string) ($post['sync_mode'] ?? 'manual'));
+        $syncProvider = trim((string) ($post['sync_provider'] ?? ''));
+        $allowedModes = ['manual', 'git_hook', 'provider_webhook'];
+
+        if (!in_array($syncMode, $allowedModes, true)) {
+            throw new RuntimeException('Invalid sync mode.');
+        }
+
+        $providerValue = $syncProvider !== '' ? $syncProvider : null;
+        $remoteValue = $externalRemoteUrl !== '' ? $externalRemoteUrl : null;
+
+        $stmt = $conn->prepare(
+            'UPDATE project_repositories
+             SET external_remote_url = ?, sync_mode = ?, sync_provider = ?, updated_at = NOW()
+             WHERE id = ?'
+        );
+        $stmt->bind_param('sssi', $remoteValue, $syncMode, $providerValue, $repositoryId);
+        $stmt->execute();
+        $stmt->close();
+
+        logActivity((int) $user['id'], 'update_repository_sync', 'project_repositories', $repositoryId, null, ['sync_mode' => $syncMode, 'sync_provider' => $providerValue]);
+
+        return ['project_id' => $projectId, 'repository_id' => $repositoryId, 'message' => 'Repository sync settings updated.'];
     }
 
     if (!vcCanAccessRepository($conn, $user, $repositoryId)) {
@@ -410,19 +446,27 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
             $visibility = $repository['visibility'];
             $repositoryStatus = 'active';
             $lastActivityAt = date('Y-m-d H:i:s');
+            $syncMode = $repository['external_remote_url'] ? 'git_hook' : 'manual';
+            $syncProvider = $repository['sync_provider'] ?? null;
+            $webhookToken = vcGenerateWebhookToken();
             $forkStmt = $conn->prepare(
                 'INSERT INTO project_repositories (
                     project_id, parent_repository_id, name, slug, description,
+                    external_remote_url, sync_mode, sync_provider, webhook_token,
                     visibility, default_branch_name, repository_status, last_activity_at, created_by
-                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $forkStmt->bind_param(
-                'iisssssssi',
+                'iisssssssssssi',
                 $targetProjectId,
                 $repositoryId,
                 $forkName,
                 $forkSlug,
                 $forkDescription,
+                $repository['external_remote_url'],
+                $syncMode,
+                $syncProvider,
+                $webhookToken,
                 $visibility,
                 $defaultBranch,
                 $repositoryStatus,

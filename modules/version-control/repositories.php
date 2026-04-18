@@ -88,6 +88,9 @@ $branches = [];
 $commits = [];
 $operations = [];
 $merges = [];
+$syncEndpointUrl = '';
+$hookConfigUrl = '';
+$gitHookScript = '';
 
 if ($selectedRepository) {
     $branchStmt = $conn->prepare(
@@ -149,6 +152,23 @@ if ($selectedRepository) {
     $mergeStmt->execute();
     $merges = $mergeStmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $mergeStmt->close();
+
+    $syncEndpointUrl = BASE_URL . 'api/version-control/sync.php?token=' . urlencode((string) $selectedRepository['webhook_token']);
+    $hookConfigUrl = preg_replace('#/api/version-control/sync\.php\?token=.*$#', '', $syncEndpointUrl) ?: BASE_URL;
+    $gitHookScript = "#!/bin/sh\n" .
+        "PMS_URL=\"" . $syncEndpointUrl . "\"\n" .
+        "json_escape() {\n" .
+        "  printf '%s' \"\$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g' | tr '\\n' ' '\n" .
+        "}\n" .
+        "BRANCH=\$(git rev-parse --abbrev-ref HEAD)\n" .
+        "COMMIT_HASH=\$(git rev-parse HEAD)\n" .
+        "TITLE=\$(git log -1 --pretty=%s)\n" .
+        "BODY=\$(git log -1 --pretty=%B)\n" .
+        "AUTHOR_NAME=\$(git log -1 --pretty=%an)\n" .
+        "AUTHOR_EMAIL=\$(git log -1 --pretty=%ae)\n" .
+        "REMOTE_URL=\$(git config --get remote.origin.url)\n" .
+        "PAYLOAD=\$(printf '{\"event_type\":\"commit\",\"branch_name\":\"%s\",\"commit_hash\":\"%s\",\"commit_title\":\"%s\",\"commit_message\":\"%s\",\"author_name\":\"%s\",\"author_email\":\"%s\",\"remote_url\":\"%s\",\"platform\":\"git-client\"}' \"\$(json_escape \"\$BRANCH\")\" \"\$(json_escape \"\$COMMIT_HASH\")\" \"\$(json_escape \"\$TITLE\")\" \"\$(json_escape \"\$BODY\")\" \"\$(json_escape \"\$AUTHOR_NAME\")\" \"\$(json_escape \"\$AUTHOR_EMAIL\")\" \"\$(json_escape \"\$REMOTE_URL\")\")\n" .
+        "curl -s -X POST \"\$PMS_URL\" -H \"Content-Type: application/json\" -d \"\$PAYLOAD\" >/dev/null 2>&1\n";
 }
 
 include '../../includes/header.php';
@@ -170,6 +190,12 @@ include '../../includes/navbar.php';
 .timeline-item:last-child{border-left-color:transparent;padding-bottom:0;}
 .timeline-item:before{content:'';position:absolute;left:-6px;top:2px;width:10px;height:10px;border-radius:50%;background:var(--theme-primary);}
 .empty-box{border:1px dashed var(--gray-200);border-radius:18px;padding:2rem;text-align:center;color:var(--gray-600);}
+.repo-hero{border:1px solid var(--gray-200);border-radius:18px;padding:1rem 1.1rem;background:linear-gradient(180deg,#fff 0%,#f8fbfd 100%);margin-bottom:1rem;}
+.repo-meta{font-size:.85rem;color:var(--gray-600);}
+.repo-meta code,.hook-box code{font-size:.8rem;}
+.hook-box{background:#0d1117;color:#c9d1d9;border-radius:16px;padding:1rem;overflow:auto;font-size:.78rem;line-height:1.45;}
+.setup-note{font-size:.8rem;color:var(--gray-600);}
+.setup-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .7rem;border-radius:999px;border:1px solid var(--gray-200);background:#fff;font-size:.75rem;margin:.15rem .2rem .15rem 0;}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -238,6 +264,26 @@ include '../../includes/navbar.php';
             <div class="vc-card">
                 <div class="card-head"><?php echo htmlspecialchars($selectedRepository['name']); ?> Snapshot</div>
                 <div class="p-4">
+                    <div class="repo-hero">
+                        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                            <div>
+                                <div class="h5 mb-1"><?php echo htmlspecialchars($selectedRepository['project_name']); ?> / <span class="text-primary"><?php echo htmlspecialchars($selectedRepository['name']); ?></span></div>
+                                <div class="repo-meta">
+                                    <?php echo htmlspecialchars($selectedRepository['description'] ?: 'No repository description yet.'); ?>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <div><span class="pill <?php echo $selectedRepository['repository_status'] === 'active' ? 'green' : 'gray'; ?>"><?php echo ucfirst($selectedRepository['repository_status']); ?></span></div>
+                                <div class="repo-meta mt-2"><?php echo strtoupper(htmlspecialchars((string) $selectedRepository['visibility'])); ?> | <?php echo htmlspecialchars((string) $selectedRepository['sync_mode']); ?></div>
+                            </div>
+                        </div>
+                        <div class="repo-meta mt-3">
+                            Default branch: <code><?php echo htmlspecialchars((string) $selectedRepository['default_branch_name']); ?></code>
+                            <?php if (!empty($selectedRepository['external_remote_url'])): ?>
+                            | Remote: <code><?php echo htmlspecialchars((string) $selectedRepository['external_remote_url']); ?></code>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                     <div class="row g-4">
                         <div class="col-lg-6">
                             <h6 class="fw-semibold mb-3">Branches</h6>
@@ -320,6 +366,39 @@ include '../../includes/navbar.php';
             <div class="vc-card">
                 <div class="card-head">Actions</div>
                 <div class="p-4">
+                    <?php if ($selectedRepository): ?>
+                    <div class="mb-4">
+                        <h6 class="fw-semibold mb-3">Sync Setup</h6>
+                        <div class="setup-chip"><i class="fab fa-github"></i> GitHub webhook</div>
+                        <div class="setup-chip"><i class="fas fa-code"></i> VS Code Git</div>
+                        <div class="setup-chip"><i class="fab fa-android"></i> Android / Termux</div>
+                        <div class="setup-chip"><i class="fas fa-terminal"></i> Git Bash / CLI</div>
+                        <div class="mt-3 mb-2">
+                            <label class="form-label">Webhook / Hook Sync URL</label>
+                            <input class="form-control" readonly value="<?php echo htmlspecialchars($syncEndpointUrl); ?>">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Repository Token</label>
+                            <input class="form-control" readonly value="<?php echo htmlspecialchars((string) $selectedRepository['webhook_token']); ?>">
+                        </div>
+                        <div class="setup-note mb-3">
+                            For devices other than this XAMPP host, replace `localhost` in the URL with your server IP or domain so VS Code, Android, GitHub, GitLab, or Bitbucket can reach it.
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Universal Git Hook Script</label>
+                            <div class="hook-box"><code><?php echo htmlspecialchars($gitHookScript); ?></code></div>
+                            <div class="setup-note mt-2">
+                                Save this as `.git/hooks/post-commit`. Duplicate it for `pre-push` and change `event_type` to `push`. For pull sync, use `post-merge` and change `event_type` to `pull`.
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Provider Webhook Notes</label>
+                            <div class="setup-note">
+                                GitHub, GitLab, and Bitbucket push webhooks are supported. Point the webhook to the sync URL above.
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     <div class="accordion" id="vcAccordion">
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#repoAction">Create Repository</button></h2>
@@ -330,6 +409,7 @@ include '../../includes/navbar.php';
                                         <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
                                         <div class="mb-2"><input class="form-control" name="repository_name" placeholder="Repository name" required></div>
                                         <div class="mb-2"><input class="form-control" name="repository_slug" placeholder="Slug"></div>
+                                        <div class="mb-2"><input class="form-control" name="external_remote_url" placeholder="Remote URL (GitHub/GitLab/Bitbucket/origin URL)"></div>
                                         <div class="row g-2 mb-2">
                                             <div class="col-6"><select class="form-select" name="repository_visibility"><option value="internal">Internal</option><option value="private">Private</option><option value="public">Public</option></select></div>
                                             <div class="col-6"><input class="form-control" name="default_branch_name" value="main"></div>
@@ -342,6 +422,29 @@ include '../../includes/navbar.php';
                         </div>
 
                         <?php if ($selectedRepository): ?>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#settingsAction">Sync Settings</button></h2>
+                            <div id="settingsAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
+                                <form method="POST">
+                                    <input type="hidden" name="action" value="save_sync_settings">
+                                    <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
+                                    <input type="hidden" name="repository_id" value="<?php echo $selectedRepositoryId; ?>">
+                                    <div class="mb-2"><input class="form-control" name="external_remote_url" value="<?php echo htmlspecialchars((string) ($selectedRepository['external_remote_url'] ?? '')); ?>" placeholder="https://github.com/org/repo.git"></div>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-6">
+                                            <select class="form-select" name="sync_mode">
+                                                <option value="manual" <?php echo ($selectedRepository['sync_mode'] ?? '') === 'manual' ? 'selected' : ''; ?>>Manual</option>
+                                                <option value="git_hook" <?php echo ($selectedRepository['sync_mode'] ?? '') === 'git_hook' ? 'selected' : ''; ?>>Git Hook</option>
+                                                <option value="provider_webhook" <?php echo ($selectedRepository['sync_mode'] ?? '') === 'provider_webhook' ? 'selected' : ''; ?>>Provider Webhook</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-6"><input class="form-control" name="sync_provider" value="<?php echo htmlspecialchars((string) ($selectedRepository['sync_provider'] ?? '')); ?>" placeholder="github / gitlab / bitbucket"></div>
+                                    </div>
+                                    <button class="btn btn-primary w-100">Save Sync Settings</button>
+                                </form>
+                            </div></div>
+                        </div>
+
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#branchAction">Create Branch</button></h2>
                             <div id="branchAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
