@@ -4,46 +4,43 @@ services:
     env: docker
     region: oregon
     plan: free
-    
-    # Build & start commands
-    buildCommand: bash bin/build.sh
-    startCommand: php -S 0.0.0.0:$PORT -t public
-    
-    # Environment variables
+
     envVars:
       - key: APP_ENV
         value: production
       - key: DEBUG_MODE
         value: false
+
       - key: DB_HOST
         fromDatabase:
           name: erni-mysql
           property: host
+
       - key: DB_PORT
         value: 3306
+
       - key: DB_USER
         fromDatabase:
           name: erni-mysql
           property: user
+
       - key: DB_PASS
         fromDatabase:
           name: erni-mysql
           property: password
+
       - key: DB_NAME
         fromDatabase:
           name: erni-mysql
           property: database
+
       - key: RENDER_APP_URL
         value: https://${{ render.project.name }}-${{ render.service.name }}.onrender.com
-    
-    # Health check
-    healthCheckPath: /index.php
-    
-    # Deployment hooks
-    preDeployCommand: bash bin/migrate-db.sh
+
+    healthCheckPath: /
 
 databases:
   - name: erni-mysql
     databaseName: erni_pms
     user: erni_user
-    version: 8
+    version: 8.0
