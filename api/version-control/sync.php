@@ -24,6 +24,34 @@ function vcSyncNormalizeBranch(?string $ref): string
     return $value;
 }
 
+function vcSyncBuildFileChanges(array $added, array $modified, array $removed): array
+{
+    $changes = [];
+
+    foreach ($added as $path) {
+        $changes[] = [
+            'path' => (string) $path,
+            'change_type' => 'added',
+        ];
+    }
+
+    foreach ($modified as $path) {
+        $changes[] = [
+            'path' => (string) $path,
+            'change_type' => 'modified',
+        ];
+    }
+
+    foreach ($removed as $path) {
+        $changes[] = [
+            'path' => (string) $path,
+            'change_type' => 'deleted',
+        ];
+    }
+
+    return $changes;
+}
+
 function vcSyncHandleGenericPayload(mysqli $conn, array $repository, array $payload): array
 {
     $operationType = trim((string) ($payload['event_type'] ?? $payload['operation_type'] ?? 'commit'));
@@ -46,6 +74,11 @@ function vcSyncHandleGenericPayload(mysqli $conn, array $repository, array $payl
             'platform' => (string) ($payload['platform'] ?? ''),
             'provider' => (string) ($payload['provider'] ?? ''),
             'notes' => (string) ($payload['notes'] ?? ''),
+            'file_changes' => is_array($payload['file_changes'] ?? null) ? $payload['file_changes'] : null,
+            'file_changes_b64' => (string) ($payload['file_changes_b64'] ?? ''),
+            'file_changes_text' => (string) ($payload['file_changes_text'] ?? ''),
+            'file_stats_b64' => (string) ($payload['file_stats_b64'] ?? ''),
+            'file_stats_text' => (string) ($payload['file_stats_text'] ?? ''),
         ]
     );
 
@@ -86,6 +119,11 @@ function vcSyncHandleGitHubPayload(mysqli $conn, array $repository, array $paylo
                 'provider' => 'github',
                 'platform' => 'github',
                 'notes' => 'GitHub webhook sync',
+                'file_changes' => vcSyncBuildFileChanges(
+                    (array) ($commit['added'] ?? []),
+                    (array) ($commit['modified'] ?? []),
+                    (array) ($commit['removed'] ?? [])
+                ),
             ]
         );
         $lastHash = $result['commit_hash'];
@@ -146,6 +184,11 @@ function vcSyncHandleGitLabPayload(mysqli $conn, array $repository, array $paylo
                 'provider' => 'gitlab',
                 'platform' => 'gitlab',
                 'notes' => 'GitLab webhook sync',
+                'file_changes' => vcSyncBuildFileChanges(
+                    (array) ($commit['added'] ?? []),
+                    (array) ($commit['modified'] ?? []),
+                    (array) ($commit['removed'] ?? [])
+                ),
             ]
         );
         $lastHash = $result['commit_hash'];

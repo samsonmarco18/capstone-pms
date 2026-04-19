@@ -662,6 +662,25 @@ CREATE TABLE repository_commits (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- REPOSITORY COMMIT FILES TABLE
+-- =====================================================
+CREATE TABLE repository_commit_files (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    commit_id INT NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    previous_file_path VARCHAR(500) NULL,
+    change_type ENUM('added', 'modified', 'deleted', 'renamed') DEFAULT 'modified',
+    additions INT DEFAULT 0,
+    deletions INT DEFAULT 0,
+    diff_excerpt LONGTEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (commit_id) REFERENCES repository_commits(id) ON DELETE CASCADE,
+    INDEX idx_commit_file_commit_id (commit_id),
+    INDEX idx_commit_file_change_type (change_type),
+    INDEX idx_commit_file_path (file_path)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- REPOSITORY MERGES TABLE
 -- =====================================================
 CREATE TABLE repository_merges (

@@ -6,7 +6,38 @@ define('DB_USER', 'root');
 define('DB_PASS', '');
 define('DB_NAME', 'erni_pms');
 
-define('BASE_URL', 'http://localhost/erni-pms/');
+define('APP_ROOT_PATH', realpath(dirname(__DIR__)) ?: dirname(__DIR__));
+
+function detectBaseUrl(): string
+{
+    $configuredUrl = trim((string) (getenv('APP_URL') ?: ''));
+    if ($configuredUrl !== '') {
+        return rtrim($configuredUrl, '/') . '/';
+    }
+
+    $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (string) ($_SERVER['SERVER_PORT'] ?? '') === '443'
+        || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+
+    $scheme = $isHttps ? 'https' : 'http';
+    $host = trim((string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+
+    $appRoot = str_replace('\\', '/', APP_ROOT_PATH);
+    $documentRootInput = trim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''));
+    $documentRoot = $documentRootInput !== ''
+        ? str_replace('\\', '/', realpath($documentRootInput) ?: $documentRootInput)
+        : '';
+    $basePath = '/' . basename($appRoot) . '/';
+
+    if ($documentRoot !== '' && str_starts_with(strtolower($appRoot), strtolower($documentRoot))) {
+        $relativePath = trim(substr($appRoot, strlen($documentRoot)), '/');
+        $basePath = ($relativePath !== '' ? '/' . $relativePath : '') . '/';
+    }
+
+    return $scheme . '://' . $host . $basePath;
+}
+
+define('BASE_URL', detectBaseUrl());
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

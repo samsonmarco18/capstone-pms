@@ -9,7 +9,7 @@ $conn = getConnection();
 $user = getCurrentUser();
 $accessibleProjects = vcGetAccessibleProjects($conn, $user);
 
-function vcPageUrl(int $projectId = 0, int $repositoryId = 0): string
+function vcPageUrl(int $projectId = 0, int $repositoryId = 0, int $commitId = 0): string
 {
     $params = [];
     if ($projectId > 0) {
@@ -18,12 +18,16 @@ function vcPageUrl(int $projectId = 0, int $repositoryId = 0): string
     if ($repositoryId > 0) {
         $params['repository_id'] = $repositoryId;
     }
+    if ($commitId > 0) {
+        $params['commit_id'] = $commitId;
+    }
 
     return 'repositories.php' . ($params ? '?' . http_build_query($params) : '');
 }
 
 $selectedProjectId = (int) ($_GET['project_id'] ?? 0);
 $selectedRepositoryId = (int) ($_GET['repository_id'] ?? 0);
+$selectedCommitId = (int) ($_GET['commit_id'] ?? 0);
 
 if ($selectedProjectId <= 0 && $accessibleProjects) {
     $selectedProjectId = (int) $accessibleProjects[0]['id'];
@@ -32,6 +36,8 @@ if ($selectedProjectId <= 0 && $accessibleProjects) {
 if ($selectedProjectId > 0 && !vcCanAccessProject($conn, $user, $selectedProjectId)) {
     $selectedProjectId = $accessibleProjects ? (int) $accessibleProjects[0]['id'] : 0;
 }
+
+$createRepositoryPreviewUrl = vcGenerateRepositoryHttpCloneUrl('repository');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -88,9 +94,25 @@ $branches = [];
 $commits = [];
 $operations = [];
 $merges = [];
+$selectedCommit = null;
+$selectedCommitFiles = [];
+$selectedCommitSummary = [
+    'files' => 0,
+    'added' => 0,
+    'modified' => 0,
+    'deleted' => 0,
+    'renamed' => 0,
+    'lines_added' => 0,
+    'lines_removed' => 0,
+];
 $syncEndpointUrl = '';
 $hookConfigUrl = '';
 $gitHookScript = '';
+$selectedRepositoryHttpCloneUrl = '';
+$selectedRepositoryLocalClonePath = '';
+$selectedRepositoryFileCloneUrl = '';
+$selectedRepositoryWorkspacePath = '';
+$selectedRepositoryHasWorkspace = false;
 
 if ($selectedRepository) {
     $branchStmt = $conn->prepare(
@@ -114,7 +136,7 @@ if ($selectedRepository) {
          INNER JOIN users u ON u.id = rc.authored_by
          WHERE rc.repository_id = ?
          ORDER BY rc.created_at DESC, rc.id DESC
-         LIMIT 10"
+         LIMIT 15"
     );
     $commitStmt->bind_param('i', $selectedRepositoryId);
     $commitStmt->execute();
@@ -155,20 +177,45 @@ if ($selectedRepository) {
 
     $syncEndpointUrl = BASE_URL . 'api/version-control/sync.php?token=' . urlencode((string) $selectedRepository['webhook_token']);
     $hookConfigUrl = preg_replace('#/api/version-control/sync\.php\?token=.*$#', '', $syncEndpointUrl) ?: BASE_URL;
-    $gitHookScript = "#!/bin/sh\n" .
-        "PMS_URL=\"" . $syncEndpointUrl . "\"\n" .
-        "json_escape() {\n" .
-        "  printf '%s' \"\$1\" | sed 's/\\\\/\\\\\\\\/g; s/\"/\\\\\"/g' | tr '\\n' ' '\n" .
-        "}\n" .
-        "BRANCH=\$(git rev-parse --abbrev-ref HEAD)\n" .
-        "COMMIT_HASH=\$(git rev-parse HEAD)\n" .
-        "TITLE=\$(git log -1 --pretty=%s)\n" .
-        "BODY=\$(git log -1 --pretty=%B)\n" .
-        "AUTHOR_NAME=\$(git log -1 --pretty=%an)\n" .
-        "AUTHOR_EMAIL=\$(git log -1 --pretty=%ae)\n" .
-        "REMOTE_URL=\$(git config --get remote.origin.url)\n" .
-        "PAYLOAD=\$(printf '{\"event_type\":\"commit\",\"branch_name\":\"%s\",\"commit_hash\":\"%s\",\"commit_title\":\"%s\",\"commit_message\":\"%s\",\"author_name\":\"%s\",\"author_email\":\"%s\",\"remote_url\":\"%s\",\"platform\":\"git-client\"}' \"\$(json_escape \"\$BRANCH\")\" \"\$(json_escape \"\$COMMIT_HASH\")\" \"\$(json_escape \"\$TITLE\")\" \"\$(json_escape \"\$BODY\")\" \"\$(json_escape \"\$AUTHOR_NAME\")\" \"\$(json_escape \"\$AUTHOR_EMAIL\")\" \"\$(json_escape \"\$REMOTE_URL\")\")\n" .
-        "curl -s -X POST \"\$PMS_URL\" -H \"Content-Type: application/json\" -d \"\$PAYLOAD\" >/dev/null 2>&1\n";
+    $gitHookScript = vcGenerateLocalSyncHookScript($syncEndpointUrl);
+    $selectedRepositoryHttpCloneUrl = vcGenerateRepositoryHttpCloneUrl((string) $selectedRepository['slug']);
+    $selectedRepositoryLocalClonePath = vcGenerateRepositoryLocalClonePath((string) $selectedRepository['slug']);
+    $selectedRepositoryFileCloneUrl = vcGenerateRepositoryFileCloneUrl((string) $selectedRepository['slug']);
+    $selectedRepositoryWorkspacePath = vcGetRepositoryWorkspacePath((string) $selectedRepository['slug']);
+    $selectedRepositoryHasWorkspace = is_dir($selectedRepositoryWorkspacePath);
+
+    if ($selectedCommitId > 0) {
+        $selectedCommitStmt = $conn->prepare(
+            "SELECT rc.*, rb.name AS branch_name, u.full_name AS author_name
+             FROM repository_commits rc
+             INNER JOIN repository_branches rb ON rb.id = rc.branch_id
+             INNER JOIN users u ON u.id = rc.authored_by
+             WHERE rc.repository_id = ? AND rc.id = ?
+             LIMIT 1"
+        );
+        $selectedCommitStmt->bind_param('ii', $selectedRepositoryId, $selectedCommitId);
+        $selectedCommitStmt->execute();
+        $selectedCommit = $selectedCommitStmt->get_result()->fetch_assoc() ?: null;
+        $selectedCommitStmt->close();
+    }
+
+    if (!$selectedCommit && $commits) {
+        $selectedCommit = $commits[0];
+        $selectedCommitId = (int) $selectedCommit['id'];
+    }
+
+    if ($selectedCommit) {
+        $selectedCommitFiles = vcGetCommitFiles($conn, (int) $selectedCommit['id']);
+        foreach ($selectedCommitFiles as $fileChange) {
+            $selectedCommitSummary['files']++;
+            $selectedCommitSummary['lines_added'] += (int) ($fileChange['additions'] ?? 0);
+            $selectedCommitSummary['lines_removed'] += (int) ($fileChange['deletions'] ?? 0);
+            $changeType = (string) ($fileChange['change_type'] ?? 'modified');
+            if (isset($selectedCommitSummary[$changeType])) {
+                $selectedCommitSummary[$changeType]++;
+            }
+        }
+    }
 }
 
 include '../../includes/header.php';
@@ -227,7 +274,11 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .timeline-item{position:relative;padding:0 0 .2rem 1.35rem;border-left:2px solid var(--gray-200);}
 .timeline-item:last-child{padding-bottom:0;border-left-color:transparent;}
 .timeline-item:before{content:'';position:absolute;left:-6px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--theme-primary);box-shadow:0 0 0 4px rgba(31,99,146,.10);}
+.timeline-item.active{border-left-color:rgba(31,99,146,.4);}
+.timeline-item.active:before{background:#0f9d58;box-shadow:0 0 0 4px rgba(15,157,88,.12);}
 .timeline-title{font-weight:700;color:var(--gray-900);}
+.commit-link{display:block;color:inherit;text-decoration:none;padding-right:.25rem;}
+.commit-link:hover .timeline-title{color:var(--theme-primary);}
 .merge-card{border:1px solid var(--gray-200);border-radius:18px;padding:1rem;background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);}
 .merge-card+.merge-card{margin-top:.9rem;}
 .empty-box{border:1px dashed var(--gray-300);border-radius:18px;padding:2rem;text-align:center;color:var(--gray-600);background:linear-gradient(180deg,#fff 0%,#fbfcfe 100%);}
@@ -236,6 +287,10 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .setup-note{font-size:.82rem;color:var(--gray-600);line-height:1.5;}
 .setup-chip-row{display:flex;flex-wrap:wrap;gap:.45rem;}
 .setup-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.38rem .8rem;border-radius:999px;border:1px solid var(--gray-200);background:#fff;font-size:.76rem;font-weight:600;}
+.clone-action-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-bottom:1rem;}
+.clone-action-row .btn{border-radius:14px;padding:.72rem .95rem;font-weight:700;}
+.clone-feedback{display:none;font-size:.8rem;color:#047857;margin-bottom:.75rem;}
+.clone-feedback.show{display:block;}
 .hook-box{background:#0d1117;color:#c9d1d9;border-radius:16px;padding:1rem;overflow:auto;font-size:.78rem;line-height:1.45;max-height:320px;}
 .vc-sidebar{position:sticky;top:1.25rem;}
 .vc-card .accordion-item{border:1px solid var(--gray-200);border-radius:18px;overflow:hidden;background:#fff;}
@@ -249,7 +304,27 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .vc-card .form-control:focus,.vc-card .form-select:focus{border-color:rgba(31,99,146,.4);box-shadow:0 0 0 .2rem rgba(31,99,146,.12);}
 .vc-card .btn.btn-primary{border-radius:14px;padding:.72rem .95rem;font-weight:700;background:linear-gradient(135deg,var(--theme-primary),var(--theme-dark));border:none;}
 .vc-card .btn.btn-primary:hover{background:linear-gradient(135deg,var(--theme-dark),var(--theme-primary));}
+.vc-card .btn.btn-outline-primary{border-radius:14px;padding:.72rem .95rem;font-weight:700;border-color:rgba(31,99,146,.28);color:var(--theme-primary);}
+.vc-card .btn.btn-outline-primary:hover{background:var(--theme-primary);border-color:var(--theme-primary);color:#fff;}
+.commit-detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:.8rem;margin-top:1rem;}
+.file-change-list{display:flex;flex-direction:column;gap:.8rem;}
+.file-change-row{border:1px solid var(--gray-200);border-radius:18px;padding:1rem;background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);}
+.file-change-header{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;flex-wrap:wrap;}
+.file-change-path{font-weight:700;color:var(--gray-900);word-break:break-word;}
+.file-change-old{font-size:.82rem;color:var(--gray-600);margin-top:.18rem;}
+.file-change-meta{display:flex;gap:.55rem;align-items:center;flex-wrap:wrap;}
+.change-badge{display:inline-flex;align-items:center;padding:.32rem .72rem;border-radius:999px;font-size:.72rem;font-weight:700;line-height:1;}
+.change-badge.added{background:#d1fae5;color:#047857;}
+.change-badge.modified{background:#dbeafe;color:#1d4ed8;}
+.change-badge.deleted{background:#fee2e2;color:#b91c1c;}
+.change-badge.renamed{background:#fef3c7;color:#b45309;}
+.change-lines{font-size:.8rem;color:var(--gray-600);}
+.diff-bar{display:flex;height:8px;border-radius:999px;overflow:hidden;background:#e5e7eb;margin-top:.8rem;}
+.diff-bar span{display:block;height:100%;}
+.diff-bar .plus{background:#16a34a;}
+.diff-bar .minus{background:#dc2626;}
 @media (max-width: 1199.98px){.vc-sidebar{position:static;}}
+@media (max-width: 575.98px){.clone-action-row{grid-template-columns:1fr;}}
 @media (max-width: 767.98px){.vc-header{padding:1.5rem;}.vc-header-title{font-size:1.6rem;}.repo-stats,.repo-summary-grid{grid-template-columns:1fr;}}
 </style>
 
@@ -357,7 +432,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                         <div class="repo-meta mt-3">
                             Default branch: <code><?php echo htmlspecialchars((string) $selectedRepository['default_branch_name']); ?></code>
                             <?php if (!empty($selectedRepository['external_remote_url'])): ?>
-                            | Remote: <code><?php echo htmlspecialchars((string) $selectedRepository['external_remote_url']); ?></code>
+                            | Clone URL: <code><?php echo htmlspecialchars((string) $selectedRepository['external_remote_url']); ?></code>
                             <?php endif; ?>
                         </div>
                         <div class="repo-summary-grid">
@@ -414,10 +489,12 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 <?php if (!$commits): ?><div class="empty-box">No commits yet.</div><?php else: ?>
                                 <div class="timeline-list">
                                     <?php foreach ($commits as $commit): ?>
-                                    <div class="timeline-item">
-                                        <div class="timeline-title"><?php echo htmlspecialchars($commit['commit_title']); ?></div>
-                                        <div class="small text-muted"><code><?php echo htmlspecialchars(substr($commit['commit_hash'], 0, 7)); ?></code> on <?php echo htmlspecialchars($commit['branch_name']); ?></div>
-                                        <div class="small text-muted mt-1"><?php echo htmlspecialchars($commit['author_name']); ?> | <?php echo date('M d, Y h:i A', strtotime($commit['created_at'])); ?></div>
+                                    <div class="timeline-item <?php echo (int) $commit['id'] === $selectedCommitId ? 'active' : ''; ?>">
+                                        <a class="commit-link" href="<?php echo htmlspecialchars(vcPageUrl($selectedProjectId, $selectedRepositoryId, (int) $commit['id'])); ?>">
+                                            <div class="timeline-title"><?php echo htmlspecialchars($commit['commit_title']); ?></div>
+                                            <div class="small text-muted"><code><?php echo htmlspecialchars(substr($commit['commit_hash'], 0, 7)); ?></code> on <?php echo htmlspecialchars($commit['branch_name']); ?></div>
+                                            <div class="small text-muted mt-1"><?php echo htmlspecialchars($commit['author_name']); ?> | <?php echo date('M d, Y h:i A', strtotime($commit['created_at'])); ?></div>
+                                        </a>
                                     </div>
                                     <?php endforeach; ?>
                                 </div>
@@ -471,6 +548,102 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                     </div>
                 </div>
             </div>
+
+            <div class="vc-card">
+                <div class="card-head">
+                    <div>
+                        <div class="section-kicker">Commit Explorer</div>
+                        <div>Files Changed</div>
+                    </div>
+                </div>
+                <div class="p-4">
+                    <?php if (!$selectedCommit): ?>
+                    <div class="empty-box">Select a repository commit to inspect changed project files.</div>
+                    <?php else: ?>
+                    <div class="repo-hero">
+                        <div class="repo-hero-top">
+                            <div>
+                                <div class="repo-hero-title mb-1"><?php echo htmlspecialchars($selectedCommit['commit_title']); ?></div>
+                                <div class="repo-meta">
+                                    <code><?php echo htmlspecialchars($selectedCommit['commit_hash']); ?></code>
+                                    | <?php echo htmlspecialchars($selectedCommit['branch_name']); ?>
+                                    | <?php echo htmlspecialchars($selectedCommit['author_name']); ?>
+                                    | <?php echo date('M d, Y h:i A', strtotime($selectedCommit['created_at'])); ?>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <div><span class="pill blue"><?php echo ucfirst(htmlspecialchars((string) $selectedCommit['commit_kind'])); ?></span></div>
+                                <div class="repo-meta mt-2"><?php echo (int) $selectedCommit['files_changed']; ?> file(s) | +<?php echo (int) $selectedCommit['lines_added']; ?> / -<?php echo (int) $selectedCommit['lines_removed']; ?></div>
+                            </div>
+                        </div>
+                        <div class="repo-meta mt-3">
+                            <?php echo htmlspecialchars($selectedCommit['commit_message'] ?: 'No detailed commit message recorded for this commit.'); ?>
+                        </div>
+                        <div class="commit-detail-grid">
+                            <div class="summary-tile">
+                                <strong><?php echo (int) $selectedCommitSummary['files']; ?></strong>
+                                <span>Tracked files</span>
+                            </div>
+                            <div class="summary-tile">
+                                <strong><?php echo (int) $selectedCommitSummary['added']; ?></strong>
+                                <span>Added</span>
+                            </div>
+                            <div class="summary-tile">
+                                <strong><?php echo (int) $selectedCommitSummary['modified']; ?></strong>
+                                <span>Modified</span>
+                            </div>
+                            <div class="summary-tile">
+                                <strong><?php echo (int) $selectedCommitSummary['deleted']; ?></strong>
+                                <span>Deleted</span>
+                            </div>
+                            <div class="summary-tile">
+                                <strong><?php echo (int) $selectedCommitSummary['renamed']; ?></strong>
+                                <span>Renamed</span>
+                            </div>
+                            <div class="summary-tile">
+                                <strong>+<?php echo (int) $selectedCommitSummary['lines_added']; ?> / -<?php echo (int) $selectedCommitSummary['lines_removed']; ?></strong>
+                                <span>Line summary</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <?php if (!$selectedCommitFiles): ?>
+                    <div class="empty-box">No file-level details were stored for this commit yet. New manual commits, git hooks, and supported webhooks will populate this view automatically.</div>
+                    <?php else: ?>
+                    <div class="file-change-list">
+                        <?php foreach ($selectedCommitFiles as $fileChange): ?>
+                        <?php
+                            $totalLines = max(1, (int) $fileChange['additions'] + (int) $fileChange['deletions']);
+                            $plusWidth = ((int) $fileChange['additions'] / $totalLines) * 100;
+                            $minusWidth = ((int) $fileChange['deletions'] / $totalLines) * 100;
+                        ?>
+                        <div class="file-change-row">
+                            <div class="file-change-header">
+                                <div>
+                                    <div class="file-change-path"><?php echo htmlspecialchars((string) $fileChange['file_path']); ?></div>
+                                    <?php if (!empty($fileChange['previous_file_path'])): ?>
+                                    <div class="file-change-old">Previously: <?php echo htmlspecialchars((string) $fileChange['previous_file_path']); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="file-change-meta">
+                                    <span class="change-badge <?php echo htmlspecialchars((string) $fileChange['change_type']); ?>"><?php echo ucfirst(htmlspecialchars((string) $fileChange['change_type'])); ?></span>
+                                    <span class="change-lines">+<?php echo (int) $fileChange['additions']; ?> / -<?php echo (int) $fileChange['deletions']; ?></span>
+                                </div>
+                            </div>
+                            <div class="diff-bar">
+                                <span class="plus" style="width: <?php echo $plusWidth; ?>%"></span>
+                                <span class="minus" style="width: <?php echo $minusWidth; ?>%"></span>
+                            </div>
+                            <?php if (!empty($fileChange['diff_excerpt'])): ?>
+                            <pre class="hook-box mt-3 mb-0"><code><?php echo htmlspecialchars((string) $fileChange['diff_excerpt']); ?></code></pre>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
             <?php endif; ?>
         </div>
 
@@ -486,6 +659,52 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                 <div class="p-4">
                     <?php if ($selectedRepository): ?>
                     <div class="setup-stack mb-4">
+                        <div class="setup-panel">
+                            <h6 class="fw-semibold mb-3">Repository Access</h6>
+                            <div id="cloneFeedback" class="clone-feedback">Clone URL copied.</div>
+                            <div class="clone-action-row">
+                                <button type="button" class="btn btn-primary" onclick="copyCloneUrl('<?php echo htmlspecialchars($selectedRepositoryHttpCloneUrl, ENT_QUOTES); ?>')">
+                                    <i class="fas fa-code-branch me-2"></i>Copy Clone URL
+                                </button>
+                                <?php if (!$selectedRepositoryHasWorkspace && !in_array($user['role'], ['sul'], true)): ?>
+                                <form method="POST" class="m-0">
+                                    <input type="hidden" name="action" value="create_working_folder">
+                                    <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
+                                    <input type="hidden" name="repository_id" value="<?php echo $selectedRepositoryId; ?>">
+                                    <button type="submit" class="btn btn-outline-primary w-100">
+                                        <i class="fas fa-folder-plus me-2"></i>Create Working Folder
+                                    </button>
+                                </form>
+                                <?php else: ?>
+                                <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . $selectedRepositoryId); ?>">
+                                    <i class="fas fa-download me-2"></i>Download Files
+                                </a>
+                                <?php endif; ?>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">Working Folder</label>
+                                <input class="form-control" readonly value="<?php echo htmlspecialchars($selectedRepositoryWorkspacePath); ?>">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">HTTP Clone URL</label>
+                                <input class="form-control" id="httpCloneUrlField" readonly value="<?php echo htmlspecialchars($selectedRepositoryHttpCloneUrl); ?>">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">Server Repository Path</label>
+                                <input class="form-control" readonly value="<?php echo htmlspecialchars($selectedRepositoryLocalClonePath); ?>">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">File Clone URL</label>
+                                <input class="form-control" readonly value="<?php echo htmlspecialchars($selectedRepositoryFileCloneUrl); ?>">
+                            </div>
+                            <div class="setup-note">
+                                <?php if ($selectedRepositoryHasWorkspace): ?>
+                                The working folder is already ready. Open that folder and you can commit, push, and merge right away.
+                                <?php else: ?>
+                                The working folder has not been created yet for this repository. On Windows, the HTTP clone URL is the most reliable fallback when local path cloning fails.
+                                <?php endif; ?>
+                            </div>
+                        </div>
                         <div class="setup-panel">
                             <h6 class="fw-semibold mb-3">Sync Setup</h6>
                             <div class="setup-chip-row">
@@ -503,14 +722,14 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 <input class="form-control" readonly value="<?php echo htmlspecialchars((string) $selectedRepository['webhook_token']); ?>">
                             </div>
                             <div class="setup-note">
-                                For devices other than this XAMPP host, replace `localhost` in the URL with your server IP or domain so VS Code, Android, GitHub, GitLab, or Bitbucket can reach it.
+                                The URLs above are generated from the current host, so they keep working after deployment as long as your web server is reachable from the client machine.
                             </div>
                         </div>
-                        <div class="setup-panel">
+                            <div class="setup-panel">
                             <label class="form-label">Universal Git Hook Script</label>
                             <div class="hook-box"><code><?php echo htmlspecialchars($gitHookScript); ?></code></div>
                             <div class="setup-note mt-2">
-                                Save this as `.git/hooks/post-commit`. Duplicate it for `pre-push` and change `event_type` to `push`. For pull sync, use `post-merge` and change `event_type` to `pull`.
+                                Save this as `.git/hooks/post-commit`. It now sends the changed, added, renamed, and deleted files for the latest commit. Duplicate it for `pre-push` and change `event_type` to `push`. For pull sync, use `post-merge` and change `event_type` to `pull`.
                             </div>
                         </div>
                         <div class="setup-panel">
@@ -532,7 +751,12 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                         <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
                                         <div class="mb-2"><input class="form-control" name="repository_name" placeholder="Repository name" required></div>
                                         <div class="mb-2"><input class="form-control" name="repository_slug" placeholder="Slug"></div>
-                                        <div class="mb-2"><input class="form-control" name="external_remote_url" placeholder="Remote URL (GitHub/GitLab/Bitbucket/origin URL)"></div>
+                                        <div class="mb-2">
+                                            <input class="form-control" id="createRepositoryRemoteUrl" name="external_remote_url" value="<?php echo htmlspecialchars($createRepositoryPreviewUrl); ?>" placeholder="Repository URL will be generated automatically" readonly>
+                                        </div>
+                                        <div class="setup-note mb-2">
+                                            ERNI PMS will create the bare repository, the managed clone URL, and a ready-to-use working folder automatically.
+                                        </div>
                                         <div class="row g-2 mb-2">
                                             <div class="col-6"><select class="form-select" name="repository_visibility"><option value="internal">Internal</option><option value="private">Private</option><option value="public">Public</option></select></div>
                                             <div class="col-6"><input class="form-control" name="default_branch_name" value="main"></div>
@@ -600,6 +824,12 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                     <div class="mb-2"><input class="form-control" name="commit_title" placeholder="Commit title" required></div>
                                     <div class="mb-2"><textarea class="form-control" name="commit_message" rows="2" placeholder="Commit message"></textarea></div>
                                     <div class="row g-2 mb-2"><div class="col-4"><input class="form-control" type="number" min="0" name="files_changed" value="1"></div><div class="col-4"><input class="form-control" type="number" min="0" name="lines_added" value="0"></div><div class="col-4"><input class="form-control" type="number" min="0" name="lines_removed" value="0"></div></div>
+                                    <div class="mb-2">
+                                        <textarea class="form-control" name="commit_files" rows="4" placeholder="M modules/version-control/repositories.php | +24 -3&#10;D legacy/old-file.php | +0 -18&#10;A assets/js/repo-viewer.js | +66 -0"></textarea>
+                                    </div>
+                                    <div class="setup-note mb-2">
+                                        Optional file list format: `M path/to/file.php | +12 -4`, `D path/to/file.php | +0 -9`, `A path/to/file.php | +40 -0`, or `R old.php -> new.php | +3 -1`.
+                                    </div>
                                     <button class="btn btn-primary w-100">Record Commit</button>
                                 </form>
                             </div></div>
@@ -668,5 +898,85 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
     </div>
     <?php endif; ?>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const nameInput = document.querySelector('input[name="repository_name"]');
+    const slugInput = document.querySelector('input[name="repository_slug"]');
+    const remoteUrlInput = document.getElementById('createRepositoryRemoteUrl');
+
+    if (!nameInput || !slugInput || !remoteUrlInput) {
+        return;
+    }
+
+    function slugify(value) {
+        return String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '') || 'repository';
+    }
+
+    function buildAutoUrl() {
+        const repoSlug = slugify(slugInput.value || nameInput.value);
+        return `${window.BASE_URL}git/${encodeURIComponent(repoSlug)}.git`;
+    }
+
+    function syncAutoUrl() {
+        const current = remoteUrlInput.value.trim();
+        if (current === '' || current.indexOf(`${window.BASE_URL}git/`) === 0) {
+            remoteUrlInput.value = buildAutoUrl();
+        }
+    }
+
+    nameInput.addEventListener('input', syncAutoUrl);
+    slugInput.addEventListener('input', syncAutoUrl);
+    syncAutoUrl();
+});
+
+function copyCloneUrl(url) {
+    const feedback = document.getElementById('cloneFeedback');
+    const showFeedback = function (message) {
+        if (!feedback) {
+            return;
+        }
+        feedback.textContent = message;
+        feedback.classList.add('show');
+        window.setTimeout(function () {
+            feedback.classList.remove('show');
+        }, 2200);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url)
+            .then(function () {
+                showFeedback('Clone URL copied.');
+            })
+            .catch(function () {
+                fallbackCopy(url, showFeedback);
+            });
+        return;
+    }
+
+    fallbackCopy(url, showFeedback);
+}
+
+function fallbackCopy(url, showFeedback) {
+    const field = document.getElementById('httpCloneUrlField');
+    if (field) {
+        field.focus();
+        field.select();
+        field.setSelectionRange(0, field.value.length);
+        try {
+            document.execCommand('copy');
+            showFeedback('Clone URL copied.');
+            return;
+        } catch (error) {
+        }
+    }
+
+    window.prompt('Copy this clone URL:', url);
+}
+</script>
 
 <?php include '../../includes/footer.php'; ?>
