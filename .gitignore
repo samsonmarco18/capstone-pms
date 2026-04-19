@@ -1,0 +1,51 @@
+# Dependencies
+vendor/
+node_modules/
+composer.lock
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+
+# Build & Logs
+logs/
+*.log
+dist/
+build/
+
+# Operating System
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temporary Files
+temp/
+tmp/
+cache/
+.cache/
+
+# User-specific files
+uploads/user-temp/
+git-workspaces/temp/
+
+# Git repository storage (server-managed)
+git/*.git/
+
+# Node (if using npm later)
+npm-debug.log
+yarn-error.log
+
+# Render specific
+.render/
