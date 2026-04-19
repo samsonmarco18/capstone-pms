@@ -5,8 +5,8 @@ requireRole('sul');
 $conn = getConnection();
 $user = getCurrentUser();
 
-// Get all resources (experts and developers)
-$resources = $conn->query("
+// Get developers
+$developers = $conn->query("
     SELECT u.*, 
            COUNT(t.id) as total_tasks,
            SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
@@ -18,7 +18,25 @@ $resources = $conn->query("
                ELSE NULL END), 1) as avg_completion_days
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
+    WHERE u.role = 'developer' AND u.status = 'active'
+    GROUP BY u.id
+    ORDER BY active_tasks DESC
+");
+
+// Get experts
+$experts = $conn->query("
+    SELECT u.*, 
+           COUNT(t.id) as total_tasks,
+           SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
+           SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as active_tasks,
+           SUM(CASE WHEN t.status = 'todo' THEN 1 ELSE 0 END) as pending_tasks,
+           SUM(CASE WHEN t.status != 'completed' AND t.deadline < NOW() THEN 1 ELSE 0 END) as overdue_tasks,
+           ROUND(AVG(CASE WHEN t.status = 'completed' AND t.completed_at IS NOT NULL 
+               THEN TIMESTAMPDIFF(HOUR, t.created_at, t.completed_at) / 24 
+               ELSE NULL END), 1) as avg_completion_days
+    FROM users u
+    LEFT JOIN tasks t ON u.id = t.assigned_to
+    WHERE u.role = 'expert' AND u.status = 'active'
     GROUP BY u.id
     ORDER BY active_tasks DESC
 ");
@@ -45,6 +63,45 @@ $skills = $conn->query("
     FROM users 
     WHERE role IN ('expert', 'developer') AND status = 'active'
 ")->fetch_assoc();
+
+// Get workload distribution by role
+$workloadByRole = $conn->query("
+    SELECT u.role, 
+           COUNT(DISTINCT u.id) as member_count,
+           COUNT(t.id) as total_tasks,
+           SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
+           SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
+    FROM users u
+    LEFT JOIN tasks t ON u.id = t.assigned_to
+    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
+    GROUP BY u.role
+");
+
+// Get skill distribution
+$skills = $conn->query("
+    SELECT 
+        SUM(CASE WHEN role = 'expert' THEN 1 ELSE 0 END) as experts,
+        SUM(CASE WHEN role = 'developer' THEN 1 ELSE 0 END) as developers,
+        COUNT(*) as total
+    FROM users 
+    WHERE role IN ('expert', 'developer') AND status = 'active'
+")->fetch_assoc();
+
+// Get available developers (not already in SUL's team)
+$availableDevelopers = $conn->query("
+    SELECT u.id, u.full_name, u.email, u.department
+    FROM users u
+    WHERE u.role = 'developer' AND u.status = 'active'
+    ORDER BY u.full_name
+");
+
+// Get available experts (not already in SUL's team)
+$availableExperts = $conn->query("
+    SELECT u.id, u.full_name, u.email, u.department
+    FROM users u
+    WHERE u.role = 'expert' AND u.status = 'active'
+    ORDER BY u.full_name
+");
 
 // Get projects with resource allocation
 $projects = $conn->query("
@@ -90,11 +147,44 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         header('Location: resource-management.php');
         exit();
     }
+
+    if (isset($_POST['add_resource'])) {
+        $userId = (int) $_POST['user_id'];
+        $role = $_POST['role'];
+
+        if (!in_array($role, ['developer', 'expert'])) {
+            $_SESSION['error'] = "Invalid role selected";
+        } else {
+            // Check if user exists and is the correct role
+            $stmt = $conn->prepare("SELECT id, full_name, role FROM users WHERE id = ? AND role = ? AND status = 'active'");
+            $stmt->bind_param("is", $userId, $role);
+            $stmt->execute();
+            $existingUser = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if (!$existingUser) {
+                $_SESSION['error'] = "Selected user not found or not available";
+            } else {
+                // Check if user is already in SUL's team (you might want to add a team assignment table)
+                // For now, just log the assignment
+                logActivity($user['id'], 'assign_resource_to_team', 'users', $userId, null, ['assigned_by_sul' => $user['id'], 'role' => $role]);
+                $_SESSION['success'] = ucfirst($role) . " " . htmlspecialchars($existingUser['full_name']) . " has been assigned to your team";
+            }
+        }
+        header('Location: resource-management.php');
+        exit();
+    }
 }
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
+?>
+
+<?php
+$flashSuccess = $_SESSION['success'] ?? null;
+$flashError = $_SESSION['error'] ?? null;
+unset($_SESSION['success'], $_SESSION['error']);
 ?>
 
 <style>
@@ -384,6 +474,42 @@ include '../../includes/navbar.php';
     background: var(--gray-300);
 }
 
+/* Tabs */
+.nav-tabs {
+    border-bottom: 2px solid var(--gray-200);
+    margin-bottom: 0;
+}
+
+.nav-tabs .nav-link {
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--gray-600);
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.2s;
+}
+
+.nav-tabs .nav-link:hover {
+    border-bottom-color: var(--theme-light);
+    color: var(--theme-primary);
+}
+
+.nav-tabs .nav-link.active {
+    background: none;
+    border-bottom-color: var(--theme-primary);
+    color: var(--theme-primary);
+}
+
+.nav-tabs .nav-link .badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+}
+
+/* Tab Content */
+.tab-content {
+    padding-top: 1rem;
+}
+
 /* List Group */
 .list-group-item {
     padding: 1rem 1.25rem;
@@ -462,6 +588,10 @@ include '../../includes/navbar.php';
             <p>Manage team resources, workload, and availability</p>
         </div>
     </div>
+
+    <!-- Flash Messages -->
+    <?php if ($flashSuccess): ?><div class="alert alert-success"><?php echo htmlspecialchars($flashSuccess); ?></div><?php endif; ?>
+    <?php if ($flashError): ?><div class="alert alert-danger border-0"><?php echo htmlspecialchars($flashError); ?></div><?php endif; ?>
 
     <!-- Statistics Cards -->
     <div class="stats-grid">
@@ -560,56 +690,151 @@ include '../../includes/navbar.php';
         <div class="card-header">
             <h5><i class="fas fa-list me-2"></i>Resource Details & Workload</h5>
         </div>
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                        <th>Resource</th>
-                        <th>Role</th>
-                        <th>Active</th>
-                        <th>Completed</th>
-                        <th>Pending</th>
-                        <th>Overdue</th>
-                        <th>Avg Days</th>
-                        <th>Workload</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </thead>
-                <tbody>
-                    <?php while($resource = $resources->fetch_assoc()): 
-                        $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
-                        $statusClass = $resource['active_tasks'] >= 5 ? 'overloaded' : ($resource['active_tasks'] >= 3 ? 'busy' : ($resource['active_tasks'] > 0 ? 'available' : 'free'));
-                        $statusText = $resource['active_tasks'] >= 5 ? 'Overloaded' : ($resource['active_tasks'] >= 3 ? 'Busy' : ($resource['active_tasks'] > 0 ? 'Available' : 'Free'));
-                    ?>
-                    <tr>
-                        <td>
-                            <div class="fw-semibold"><?php echo htmlspecialchars($resource['full_name']); ?></div>
-                            <small class="text-muted"><?php echo htmlspecialchars($resource['email']); ?></small>
-                        </td>
-                        <td><span class="badge-role-<?php echo $resource['role']; ?>"><?php echo strtoupper($resource['role']); ?></span></td>
-                        <td><?php echo $resource['active_tasks']; ?></td>
-                        <td><?php echo $resource['completed_tasks']; ?></td>
-                        <td><?php echo $resource['pending_tasks']; ?></td>
-                        <td><?php if($resource['overdue_tasks'] > 0): ?><span class="badge-status-overloaded"><?php echo $resource['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
-                        <td><?php echo $resource['avg_completion_days'] ?? 'N/A'; ?>d</td>
-                        <td>
-                            <div class="progress-modern" style="width: 100px;">
-                                <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resource['active_tasks'] >= 5 ? '#dc2626' : ($resource['active_tasks'] >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
-                            </div>
-                            <small><?php echo $workloadPercent; ?>%</small>
-                        </td>
-                        <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
-                        <td>
-                            <button class="btn-primary-modern btn-sm-modern" onclick="editAllocation(<?php echo $resource['id']; ?>, '<?php echo htmlspecialchars($resource['full_name']); ?>', <?php echo $resource['active_tasks']; ?>)">
-                                <i class="fas fa-sliders-h"></i>
-                            </button>
-                            <button class="btn-secondary-modern btn-sm-modern" onclick="viewResourceTasks(<?php echo $resource['id']; ?>)">
-                                <i class="fas fa-tasks"></i>
-                            </button>
-                        </td>
-                    </tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
+        <div class="card-body">
+            <!-- Nav tabs -->
+            <ul class="nav nav-tabs" id="resourceTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="developers-tab" data-bs-toggle="tab" data-bs-target="#developers" type="button" role="tab" aria-controls="developers" aria-selected="true">
+                        <i class="fas fa-code me-2"></i>Developers
+                        <span class="badge bg-primary ms-2"><?php echo $skills['developers']; ?></span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="experts-tab" data-bs-toggle="tab" data-bs-target="#experts" type="button" role="tab" aria-controls="experts" aria-selected="false">
+                        <i class="fas fa-brain me-2"></i>Experts
+                        <span class="badge bg-warning ms-2"><?php echo $skills['experts']; ?></span>
+                    </button>
+                </li>
+            </ul>
+
+            <!-- Tab content -->
+            <div class="tab-content mt-4" id="resourceTabsContent">
+                <!-- Developers Tab -->
+                <div class="tab-pane fade show active" id="developers" role="tabpanel" aria-labelledby="developers-tab">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0">Developer Resources</h6>
+                        <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#addDeveloperModal">
+                            <i class="fas fa-user-plus me-2"></i>Assign Developer
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Resource</th>
+                                    <th>Role</th>
+                                    <th>Active</th>
+                                    <th>Completed</th>
+                                    <th>Pending</th>
+                                    <th>Overdue</th>
+                                    <th>Avg Days</th>
+                                    <th>Workload</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php while($resource = $developers->fetch_assoc()): 
+                                    $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
+                                    $statusClass = $resource['active_tasks'] >= 5 ? 'overloaded' : ($resource['active_tasks'] >= 3 ? 'busy' : ($resource['active_tasks'] > 0 ? 'available' : 'free'));
+                                    $statusText = $resource['active_tasks'] >= 5 ? 'Overloaded' : ($resource['active_tasks'] >= 3 ? 'Busy' : ($resource['active_tasks'] > 0 ? 'Available' : 'Free'));
+                                ?>
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold"><?php echo htmlspecialchars($resource['full_name']); ?></div>
+                                        <small class="text-muted"><?php echo htmlspecialchars($resource['email']); ?></small>
+                                    </td>
+                                    <td><span class="badge-role-<?php echo $resource['role']; ?>"><?php echo strtoupper($resource['role']); ?></span></td>
+                                    <td><?php echo $resource['active_tasks']; ?></td>
+                                    <td><?php echo $resource['completed_tasks']; ?></td>
+                                    <td><?php echo $resource['pending_tasks']; ?></td>
+                                    <td><?php if($resource['overdue_tasks'] > 0): ?><span class="badge-status-overloaded"><?php echo $resource['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
+                                    <td><?php echo $resource['avg_completion_days'] ?? 'N/A'; ?>d</td>
+                                    <td>
+                                        <div class="progress-modern" style="width: 100px;">
+                                            <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resource['active_tasks'] >= 5 ? '#dc2626' : ($resource['active_tasks'] >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
+                                        </div>
+                                        <small><?php echo $workloadPercent; ?>%</small>
+                                    </td>
+                                    <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
+                                    <td>
+                                        <button class="btn-primary-modern btn-sm-modern" onclick="editAllocation(<?php echo $resource['id']; ?>, '<?php echo htmlspecialchars($resource['full_name']); ?>', <?php echo $resource['active_tasks']; ?>)">
+                                            <i class="fas fa-sliders-h"></i>
+                                        </button>
+                                        <button class="btn-secondary-modern btn-sm-modern" onclick="viewResourceTasks(<?php echo $resource['id']; ?>)">
+                                            <i class="fas fa-tasks"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Experts Tab -->
+                <div class="tab-pane fade" id="experts" role="tabpanel" aria-labelledby="experts-tab">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0">Expert Resources</h6>
+                        <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#addExpertModal">
+                            <i class="fas fa-user-plus me-2"></i>Assign Expert
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Resource</th>
+                                    <th>Role</th>
+                                    <th>Active</th>
+                                    <th>Completed</th>
+                                    <th>Pending</th>
+                                    <th>Overdue</th>
+                                    <th>Avg Days</th>
+                                    <th>Workload</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php while($resource = $experts->fetch_assoc()): 
+                                    $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
+                                    $statusClass = $resource['active_tasks'] >= 5 ? 'overloaded' : ($resource['active_tasks'] >= 3 ? 'busy' : ($resource['active_tasks'] > 0 ? 'available' : 'free'));
+                                    $statusText = $resource['active_tasks'] >= 5 ? 'Overloaded' : ($resource['active_tasks'] >= 3 ? 'Busy' : ($resource['active_tasks'] > 0 ? 'Available' : 'Free'));
+                                ?>
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold"><?php echo htmlspecialchars($resource['full_name']); ?></div>
+                                        <small class="text-muted"><?php echo htmlspecialchars($resource['email']); ?></small>
+                                    </td>
+                                    <td><span class="badge-role-<?php echo $resource['role']; ?>"><?php echo strtoupper($resource['role']); ?></span></td>
+                                    <td><?php echo $resource['active_tasks']; ?></td>
+                                    <td><?php echo $resource['completed_tasks']; ?></td>
+                                    <td><?php echo $resource['pending_tasks']; ?></td>
+                                    <td><?php if($resource['overdue_tasks'] > 0): ?><span class="badge-status-overloaded"><?php echo $resource['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
+                                    <td><?php echo $resource['avg_completion_days'] ?? 'N/A'; ?>d</td>
+                                    <td>
+                                        <div class="progress-modern" style="width: 100px;">
+                                            <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resource['active_tasks'] >= 5 ? '#dc2626' : ($resource['active_tasks'] >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
+                                        </div>
+                                        <small><?php echo $workloadPercent; ?>%</small>
+                                    </td>
+                                    <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
+                                    <td>
+                                        <button class="btn-primary-modern btn-sm-modern" onclick="editAllocation(<?php echo $resource['id']; ?>, '<?php echo htmlspecialchars($resource['full_name']); ?>', <?php echo $resource['active_tasks']; ?>)">
+                                            <i class="fas fa-sliders-h"></i>
+                                        </button>
+                                        <button class="btn-secondary-modern btn-sm-modern" onclick="viewResourceTasks(<?php echo $resource['id']; ?>)">
+                                            <i class="fas fa-tasks"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -683,6 +908,76 @@ include '../../includes/navbar.php';
     </div>
 </div>
 
+<!-- Add Developer Modal -->
+<div class="modal fade modal-modern" id="addDeveloperModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-code me-2"></i>Assign Developer to Team</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="role" value="developer">
+                    <div class="mb-3">
+                        <label class="form-label">Select Developer</label>
+                        <select name="user_id" class="form-select" required>
+                            <option value="">Choose a developer...</option>
+                            <?php $availableDevelopers->data_seek(0); while($dev = $availableDevelopers->fetch_assoc()): ?>
+                            <option value="<?php echo $dev['id']; ?>">
+                                <?php echo htmlspecialchars($dev['full_name']); ?> 
+                                (<?php echo htmlspecialchars($dev['email']); ?>)
+                                <?php if($dev['department']): ?> - <?php echo htmlspecialchars($dev['department']); ?><?php endif; ?>
+                            </option>
+                            <?php endwhile; ?>
+                        </select>
+                        <small class="text-muted">Only developers created by admin are available for assignment</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary-modern" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="add_resource" class="btn-primary-modern">Assign Developer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add Expert Modal -->
+<div class="modal fade modal-modern" id="addExpertModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-brain me-2"></i>Assign Expert to Team</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="role" value="expert">
+                    <div class="mb-3">
+                        <label class="form-label">Select Expert</label>
+                        <select name="user_id" class="form-select" required>
+                            <option value="">Choose an expert...</option>
+                            <?php $availableExperts->data_seek(0); while($exp = $availableExperts->fetch_assoc()): ?>
+                            <option value="<?php echo $exp['id']; ?>">
+                                <?php echo htmlspecialchars($exp['full_name']); ?> 
+                                (<?php echo htmlspecialchars($exp['email']); ?>)
+                                <?php if($exp['department']): ?> - <?php echo htmlspecialchars($exp['department']); ?><?php endif; ?>
+                            </option>
+                            <?php endwhile; ?>
+                        </select>
+                        <small class="text-muted">Only experts created by admin are available for assignment</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary-modern" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="add_resource" class="btn-primary-modern">Assign Expert</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Edit Allocation Modal -->
 <div class="modal fade modal-modern" id="editAllocationModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -746,9 +1041,15 @@ const workloadData = <?php
     $names = [];
     $active = [];
     $completed = [];
-    $resources->data_seek(0);
-    while($row = $resources->fetch_assoc()) {
-        $names[] = $row['full_name'];
+    $developers->data_seek(0);
+    while($row = $developers->fetch_assoc()) {
+        $names[] = $row['full_name'] . ' (Dev)';
+        $active[] = $row['active_tasks'];
+        $completed[] = $row['completed_tasks'];
+    }
+    $experts->data_seek(0);
+    while($row = $experts->fetch_assoc()) {
+        $names[] = $row['full_name'] . ' (Exp)';
         $active[] = $row['active_tasks'];
         $completed[] = $row['completed_tasks'];
     }

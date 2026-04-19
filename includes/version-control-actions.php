@@ -13,9 +13,21 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
         return ['project_id' => $projectId, 'repository_id' => $repositoryId];
     }
 
+    if ($user['role'] === 'sul' && $action !== 'merge_branches') {
+        throw new RuntimeException('SUL is only allowed to merge branches in version control.');
+    }
+
+    if ($user['role'] === 'architect' && !in_array($action, ['merge_branches', 'create_repository', 'fork_repository', 'create_branch', 'delete_branch', 'protect_branch', 'log_sync'], true)) {
+        throw new RuntimeException('Architects can only perform merge, repository creation, branching, and sync operations in version control.');
+    }
+
     if ($action === 'create_repository') {
         if (!vcCanAccessProject($conn, $user, $projectId)) {
             throw new RuntimeException('You do not have access to that project.');
+        }
+
+        if (!in_array($user['role'], ['admin', 'architect'], true)) {
+            throw new RuntimeException('Only Architects and Admins can create repositories.');
         }
 
         $name = trim((string) ($post['repository_name'] ?? ''));

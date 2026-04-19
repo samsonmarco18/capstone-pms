@@ -3,7 +3,7 @@ require_once '../../includes/auth.php';
 require_once '../../includes/version-control.php';
 require_once '../../includes/version-control-actions.php';
 
-requireRole(['admin', 'architect', 'developer']);
+requireRole(['admin', 'architect', 'developer', 'sul']);
 
 $conn = getConnection();
 $user = getCurrentUser();
@@ -265,7 +265,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
     </div>
 
     <?php if ($flashSuccess): ?><div class="alert alert-success"><?php echo htmlspecialchars($flashSuccess); ?></div><?php endif; ?>
-    <?php if ($flashError): ?><div class="alert alert-danger"><?php echo htmlspecialchars($flashError); ?></div><?php endif; ?>
+    <?php if ($flashError): ?><div class="alert alert-danger border-0"><?php echo htmlspecialchars($flashError); ?></div><?php endif; ?>
 
     <?php if (!$accessibleProjects): ?>
     <div class="vc-card p-4"><div class="empty-box"><i class="fas fa-folder-open d-block mb-2"></i>No accessible projects yet.</div></div>
@@ -522,6 +522,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                     </div>
                     <?php endif; ?>
                     <div class="accordion" id="vcAccordion">
+                        <?php if (in_array($user['role'], ['admin', 'architect'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#repoAction">Create Repository</button></h2>
                             <div id="repoAction" class="accordion-collapse collapse show" data-bs-parent="#vcAccordion">
@@ -542,8 +543,10 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </div>
                             </div>
                         </div>
+                        <?php endif; ?>
 
                         <?php if ($selectedRepository): ?>
+                        <?php if (!in_array($user['role'], ['sul'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#settingsAction">Sync Settings</button></h2>
                             <div id="settingsAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
@@ -567,6 +570,8 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                             </div></div>
                         </div>
 
+                        <?php endif; ?>
+                        <?php if (!in_array($user['role'], ['sul'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#branchAction">Create Branch</button></h2>
                             <div id="branchAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
@@ -581,7 +586,9 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </form>
                             </div></div>
                         </div>
+                        <?php endif; ?>
 
+                        <?php if (!in_array($user['role'], ['sul'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#commitAction">Commit</button></h2>
                             <div id="commitAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
@@ -597,7 +604,9 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </form>
                             </div></div>
                         </div>
+                        <?php endif; ?>
 
+                        <?php if (!in_array($user['role'], ['sul'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#syncAction">Push / Pull</button></h2>
                             <div id="syncAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
@@ -612,7 +621,9 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </form>
                             </div></div>
                         </div>
+                        <?php endif; ?>
 
+                        <?php if (in_array($user['role'], ['sul', 'architect'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#mergeAction">Merge</button></h2>
                             <div id="mergeAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
@@ -629,7 +640,9 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </form>
                             </div></div>
                         </div>
+                        <?php endif; ?>
 
+                        <?php if (!in_array($user['role'], ['sul'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#forkAction">Fork</button></h2>
                             <div id="forkAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
@@ -645,6 +658,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </form>
                             </div></div>
                         </div>
+                        <?php endif; ?>
                         <?php endif; ?>
                     </div>
                 </div>

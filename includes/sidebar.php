@@ -24,6 +24,7 @@ $menuItems = [
     'architect' => [
         ['label' => 'Dashboard', 'url' => '/modules/architect/dashboard.php', 'icon' => 'drafting-compass'],
         ['label' => 'Projects', 'url' => '/modules/architect/projects.php', 'icon' => 'project-diagram'],
+        ['label' => 'Resource Management', 'url' => '/modules/architect/resource-management.php', 'icon' => 'users-cog'],
         ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
     ],
     'sul' => [
@@ -31,6 +32,7 @@ $menuItems = [
         ['label' => 'Task Allocation', 'url' => '/modules/sul/task-allocation.php', 'icon' => 'tasks'],
         ['label' => 'Resource Management', 'url' => '/modules/sul/resource-management.php', 'icon' => 'users-cog'],
         ['label' => 'Performance / Report', 'url' => '/modules/sul/performance-report.php', 'icon' => 'chart-bar'],
+        ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
     ],
     'expert' => [
         ['label' => 'Dashboard', 'url' => '/modules/expert/dashboard.php', 'icon' => 'clipboard-list'],

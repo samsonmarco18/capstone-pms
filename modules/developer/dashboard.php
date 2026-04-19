@@ -114,6 +114,11 @@ include '../../includes/navbar.php';
     color: var(--gray-600);
 }
 
+.developer-overview-badge {
+    background-color: var(--theme-primary) !important;
+    color: #fff !important;
+}
+
 /* Stats Cards */
 .stats-grid {
     display: grid;
@@ -410,13 +415,21 @@ include '../../includes/navbar.php';
 </style>
 
 <div class="container-fluid px-4 py-4">
-    <!-- Welcome Banner -->
-    <div class="welcome-banner">
-        <h2>
-            <i class="fas fa-code me-2"></i> 
-            Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!
-        </h2>
-        <p>Developer Dashboard - Track your tasks and performance</p>
+    <!-- Welcome Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-12">
+                            <span class="badge developer-overview-badge mb-2 px-3 py-2">Developer Overview</span>
+                            <h1 class="h3 mb-1">Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h1>
+                            <p class="text-muted mb-0 small">Developer Dashboard - Track your tasks, manage code, and monitor project progress for efficient delivery.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Statistics Cards -->

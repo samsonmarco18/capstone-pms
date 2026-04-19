@@ -34,6 +34,17 @@ function vcGetAccessibleProjects(mysqli $conn, array $user): array
         return $projects;
     }
 
+    if ($role === 'sul') {
+        $sql = "
+            SELECT p.id, p.name, p.status, c.name AS client_name
+            FROM projects p
+            INNER JOIN clients c ON c.id = p.client_id
+            WHERE p.status != 'completed'
+            ORDER BY p.name
+        ";
+        return $conn->query($sql)->fetch_all(MYSQLI_ASSOC);
+    }
+
     if ($role === 'developer') {
         $stmt = $conn->prepare(
             "SELECT DISTINCT p.id, p.name, p.status, c.name AS client_name

@@ -103,6 +103,11 @@ include '../../includes/navbar.php';
     color: var(--gray-600);
 }
 
+.sales-overview-badge {
+    background-color: var(--theme-primary) !important;
+    color: #fff !important;
+}
+
 /* Stats Cards */
 .stats-grid {
     display: grid;
@@ -402,14 +407,20 @@ include '../../includes/navbar.php';
 </style>
 
 <div class="container-fluid px-4 py-4">
-    <!-- Page Header -->
-    <div class="page-header-modern">
-        <div>
-            <h2>
-                <i class="fas fa-chart-line me-2"></i> 
-                Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!
-            </h2>
-            <p>Sales Dashboard - Track clients, projects, and performance metrics</p>
+    <!-- Welcome Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-12">
+                            <span class="badge sales-overview-badge mb-2 px-3 py-2">Sales Overview</span>
+                            <h1 class="h3 mb-1">Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h1>
+                            <p class="text-muted mb-0 small">Sales Dashboard - Track clients, manage projects, and monitor performance metrics for business growth.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
