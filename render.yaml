@@ -1,7 +1,7 @@
 services:
   - type: web
     name: erni-pms
-    runtime: php
+    env: docker
     region: oregon
     plan: free
     
