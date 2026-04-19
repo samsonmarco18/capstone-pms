@@ -3,6 +3,20 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
 
+function vcIsExecAvailable(): bool
+{
+    if (function_exists('exec') === false) {
+        return false;
+    }
+    
+    $disabled = (string) ini_get('disable_functions');
+    if (strpos($disabled, 'exec') !== false) {
+        return false;
+    }
+    
+    return true;
+}
+
 function vcGetAccessibleProjects(mysqli $conn, array $user): array
 {
     $role = $user['role'] ?? '';
@@ -225,6 +239,15 @@ function vcDeleteDirectoryRecursive(string $path): void
 
 function vcRunProcess(array $commandParts, ?string $workingDirectory = null): array
 {
+    if (!vcIsExecAvailable()) {
+        throw new RuntimeException(
+            'Git operations are not available on this hosting environment. ' .
+            'The server has disabled the exec() function which is required for git commands. ' .
+            'This is a common restriction on shared hosting. ' .
+            'Contact your hosting provider to enable exec() or consider upgrading to a VPS/dedicated server.'
+        );
+    }
+    
     $command = implode(' ', array_map('escapeshellarg', $commandParts));
     $executionDirectory = $workingDirectory ?: APP_ROOT_PATH;
     $previousDirectory = getcwd() ?: APP_ROOT_PATH;
