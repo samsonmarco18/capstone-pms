@@ -74,12 +74,24 @@ mysql -u root -p < database.sql
 
 ### 4. Configure Environment
 
-Edit `config/.env.php` (already configured for localhost):
+The tracked `config/.env.php` is now safe to share and uses:
+- local defaults for XAMPP development
+- environment variables for production secrets
+- an optional untracked `config/.env.local.php` override file for per-machine settings
+
+To customize locally, create `config/.env.local.php` from `config/.env.local.example.php`.
+
+Example:
 ```php
-// Automatically uses:
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_NAME', 'erni_pms');
+<?php
+
+return [
+  'DB_HOST' => 'localhost',
+  'DB_USER' => 'root',
+  'DB_PASS' => '',
+  'DB_NAME' => 'erni_pms',
+  'APP_URL' => 'http://localhost/erni-pms',
+];
 ```
 
 ### 5. Start Application
@@ -95,6 +107,10 @@ php -S localhost:8000
 - Copy folder to `C:\xampppp\htdocs\erni-pms`
 - Start Apache and MySQL
 - Visit: `http://localhost/erni-pms`
+
+Optional HTTPS on localhost:
+- Run `powershell -ExecutionPolicy Bypass -File .\bin\setup-local-https.ps1`
+- Trust and install the generated certificate on your own machine only
 
 ### 6. First Login
 

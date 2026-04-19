@@ -4,6 +4,16 @@
  * Supports: Local development, InfinityFree, Render, and other platforms
  */
 
+// Optional per-developer overrides. This file should stay untracked.
+$localOverrides = [];
+$localConfigFile = __DIR__ . '/.env.local.php';
+if (is_file($localConfigFile)) {
+    $loadedOverrides = require $localConfigFile;
+    if (is_array($loadedOverrides)) {
+        $localOverrides = $loadedOverrides;
+    }
+}
+
 // Detect environment - check multiple indicators
 $host = strtolower($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '');
 $isCliMode = php_sapi_name() === 'cli' || php_sapi_name() === 'cli-server';
@@ -29,8 +39,14 @@ $isProduction = !$isCliMode &&
 
 // Helper function to get env variable with fallback
 function getEnvOrDefault($varName, $default = null) {
+    global $localOverrides;
+
+    if (array_key_exists($varName, $localOverrides)) {
+        return $localOverrides[$varName];
+    }
+
     $value = getenv($varName);
-    return ($value !== false) ? $value : $default;
+    return ($value !== false && $value !== '') ? $value : $default;
 }
 
 if ($isRender) {
@@ -43,11 +59,11 @@ if ($isRender) {
     define('APP_ENV', 'production');
     define('DEBUG_MODE', false);
 } elseif ($isProduction && !$isLocalhost) {
-    // INFINITYFREE OR OTHER PRODUCTION
-    define('DB_HOST', getEnvOrDefault('DB_HOST', 'sql209.infinityfree.com'));
-    define('DB_USER', getEnvOrDefault('DB_USER', 'if0_41295176'));
-    define('DB_PASS', getEnvOrDefault('DB_PASS', 'Marco01182005'));
-    define('DB_NAME', getEnvOrDefault('DB_NAME', 'if0_41295176_ernie'));
+    // PRODUCTION MUST SUPPLY SECRETS VIA ENVIRONMENT VARIABLES
+    define('DB_HOST', getEnvOrDefault('DB_HOST', ''));
+    define('DB_USER', getEnvOrDefault('DB_USER', ''));
+    define('DB_PASS', getEnvOrDefault('DB_PASS', ''));
+    define('DB_NAME', getEnvOrDefault('DB_NAME', ''));
     define('APP_ENV', 'production');
     define('DEBUG_MODE', false);
 } else {

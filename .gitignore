@@ -7,8 +7,10 @@ composer.lock
 .env
 .env.local
 .env.*.local
+config/.env.local.php
 *.pem
 *.key
+bin/local-cert/
 
 # IDE
 .vscode/
@@ -39,6 +41,7 @@ cache/
 # User-specific files
 uploads/user-temp/
 git-workspaces/temp/
+/erni-pms/
 
 # Git repository storage (server-managed)
 git/*.git/

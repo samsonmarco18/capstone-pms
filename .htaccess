@@ -3,7 +3,8 @@
     RewriteEngine On
     RewriteBase /erni-pms/
     
-    # Redirect to HTTPS
+    # Redirect to HTTPS outside local development hosts
+    RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$ [NC]
     RewriteCond %{HTTPS} off
     RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
     

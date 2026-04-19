@@ -9,11 +9,16 @@ if (!defined('DB_HOST') || !defined('DB_USER') || !defined('DB_NAME')) {
     die('Database configuration not loaded. Check config/.env.php');
 }
 
-define('APP_ROOT_PATH', realpath(dirname(__DIR__)) ?: dirname(__DIR__));
+if (!defined('APP_ROOT_PATH')) {
+    define('APP_ROOT_PATH', realpath(dirname(__DIR__)) ?: dirname(__DIR__));
+}
 
 function detectBaseUrl(): string
 {
-    $configuredUrl = trim((string) (getenv('APP_URL') ?: ''));
+    $configuredUrl = defined('APP_URL') ? trim((string) APP_URL) : '';
+    if ($configuredUrl === '') {
+        $configuredUrl = trim((string) (getenv('APP_URL') ?: ''));
+    }
     if ($configuredUrl !== '') {
         return rtrim($configuredUrl, '/') . '/';
     }
