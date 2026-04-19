@@ -1,10 +1,13 @@
 <?php
 declare(strict_types=1);
 
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_NAME', 'erni_pms');
+// Load environment configuration
+require_once __DIR__ . '/.env.php';
+
+// Verify database constants are defined
+if (!defined('DB_HOST') || !defined('DB_USER') || !defined('DB_NAME')) {
+    die('Database configuration not loaded. Check config/.env.php');
+}
 
 define('APP_ROOT_PATH', realpath(dirname(__DIR__)) ?: dirname(__DIR__));
 

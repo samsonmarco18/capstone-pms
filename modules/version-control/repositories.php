@@ -8,6 +8,7 @@ requireRole(['admin', 'architect', 'developer', 'sul']);
 $conn = getConnection();
 $user = getCurrentUser();
 $accessibleProjects = vcGetAccessibleProjects($conn, $user);
+$execAvailable = vcIsExecAvailable();
 
 function vcPageUrl(int $projectId = 0, int $repositoryId = 0, int $commitId = 0): string
 {
@@ -341,6 +342,15 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 
     <?php if ($flashSuccess): ?><div class="alert alert-success"><?php echo htmlspecialchars($flashSuccess); ?></div><?php endif; ?>
     <?php if ($flashError): ?><div class="alert alert-danger border-0"><?php echo htmlspecialchars($flashError); ?></div><?php endif; ?>
+    
+    <?php if (!$execAvailable): ?>
+    <div class="alert alert-warning border-0">
+        <strong>⚠️ Git Operations Not Available</strong><br>
+        Your hosting provider has disabled the exec() function required for git operations. 
+        Repository creation, cloning, and management features are not available. 
+        To use git features, contact your hosting provider to enable exec() or upgrade to a VPS/dedicated server.
+    </div>
+    <?php endif; ?>
 
     <?php if (!$accessibleProjects): ?>
     <div class="vc-card p-4"><div class="empty-box"><i class="fas fa-folder-open d-block mb-2"></i>No accessible projects yet.</div></div>
@@ -667,6 +677,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                     <i class="fas fa-code-branch me-2"></i>Copy Clone URL
                                 </button>
                                 <?php if (!$selectedRepositoryHasWorkspace && !in_array($user['role'], ['sul'], true)): ?>
+                                <?php if ($execAvailable): ?>
                                 <form method="POST" class="m-0">
                                     <input type="hidden" name="action" value="create_working_folder">
                                     <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
@@ -675,6 +686,11 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                         <i class="fas fa-folder-plus me-2"></i>Create Working Folder
                                     </button>
                                 </form>
+                                <?php else: ?>
+                                <button type="button" class="btn btn-outline-primary w-100" disabled title="Git operations not available on this server">
+                                    <i class="fas fa-folder-plus me-2"></i>Create Working Folder (Unavailable)
+                                </button>
+                                <?php endif; ?>
                                 <?php else: ?>
                                 <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . $selectedRepositoryId); ?>">
                                     <i class="fas fa-download me-2"></i>Download Files
@@ -741,7 +757,17 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                     </div>
                     <?php endif; ?>
                     <div class="accordion" id="vcAccordion">
-                        <?php if (in_array($user['role'], ['admin', 'architect'], true)): ?>
+                    <?php if (in_array($user['role'], ['admin', 'architect'], true)): ?>
+                        <?php if (!$execAvailable): ?>
+                        <div class="accordion-item" style="opacity: 0.5;">
+                            <h2 class="accordion-header"><button class="accordion-button disabled" type="button" disabled>Create Repository (Unavailable)</button></h2>
+                            <div class="accordion-collapse collapse" data-bs-parent="#vcAccordion">
+                                <div class="accordion-body text-muted">
+                                    <p>Git operations are not available on this server. The exec() function has been disabled by your hosting provider.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <?php else: ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#repoAction">Create Repository</button></h2>
                             <div id="repoAction" class="accordion-collapse collapse show" data-bs-parent="#vcAccordion">
@@ -767,6 +793,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </div>
                             </div>
                         </div>
+                        <?php endif; ?>
                         <?php endif; ?>
 
                         <?php if ($selectedRepository): ?>
