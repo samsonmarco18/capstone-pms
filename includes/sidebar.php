@@ -24,7 +24,6 @@ $menuItems = [
     'architect' => [
         ['label' => 'Dashboard', 'url' => '/modules/architect/dashboard.php', 'icon' => 'drafting-compass'],
         ['label' => 'Projects', 'url' => '/modules/architect/projects.php', 'icon' => 'project-diagram'],
-        ['label' => 'Resource Management', 'url' => '/modules/architect/resource-management.php', 'icon' => 'users-cog'],
         ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
     ],
     'sul' => [
