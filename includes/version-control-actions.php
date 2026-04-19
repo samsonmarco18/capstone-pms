@@ -17,7 +17,7 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
         throw new RuntimeException('SUL is only allowed to merge branches in version control.');
     }
 
-    if ($user['role'] === 'architect' && !in_array($action, ['merge_branches', 'create_repository', 'fork_repository', 'create_branch', 'delete_branch', 'protect_branch', 'log_sync'], true)) {
+    if ($user['role'] === 'architect' && !in_array($action, ['merge_branches', 'create_repository', 'fork_repository', 'create_branch', 'delete_branch', 'protect_branch', 'log_sync', 'create_working_folder'], true)) {
         throw new RuntimeException('Architects can only perform merge, repository creation, branching, and sync operations in version control.');
     }
 
@@ -48,13 +48,25 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
             $defaultBranch = 'main';
         }
 
+        $projectStmt = $conn->prepare('SELECT name FROM projects WHERE id = ? LIMIT 1');
+        $projectStmt->bind_param('i', $projectId);
+        $projectStmt->execute();
+        $projectRow = $projectStmt->get_result()->fetch_assoc();
+        $projectStmt->close();
+
+        if (!$projectRow) {
+            throw new RuntimeException('Project not found.');
+        }
+
         $conn->begin_transaction();
+        $managedRepository = null;
         try {
             $parentRepositoryId = null;
             $repositoryStatus = 'active';
             $lastActivityAt = date('Y-m-d H:i:s');
-            $syncMode = $externalRemoteUrl !== '' ? 'git_hook' : 'manual';
+            $syncMode = 'manual';
             $syncProvider = null;
+            $initialRemoteUrl = null;
             $webhookToken = vcGenerateWebhookToken();
             $stmt = $conn->prepare(
                 'INSERT INTO project_repositories (
@@ -70,7 +82,7 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
                 $name,
                 $slug,
                 $description,
-                $externalRemoteUrl,
+                $initialRemoteUrl,
                 $syncMode,
                 $syncProvider,
                 $webhookToken,
@@ -84,8 +96,37 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
             $repositoryId = (int) $stmt->insert_id;
             $stmt->close();
 
+            $syncEndpointUrl = rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode($webhookToken);
+            $managedRepository = vcCreateManagedRepository(
+                $projectId,
+                (string) $projectRow['name'],
+                $name,
+                $slug,
+                $defaultBranch,
+                $syncEndpointUrl
+            );
+
+            $updateRepositoryStmt = $conn->prepare(
+                'UPDATE project_repositories
+                 SET external_remote_url = ?, sync_mode = ?, updated_at = NOW()
+                 WHERE id = ?'
+            );
+            $cloneUrl = (string) ($managedRepository['http_clone_url'] ?? vcGenerateRepositoryHttpCloneUrl($slug));
+            $updateRepositoryStmt->bind_param('ssi', $cloneUrl, $syncMode, $repositoryId);
+            $updateRepositoryStmt->execute();
+            $updateRepositoryStmt->close();
+
             $sourceBranchId = null;
             $lastCommitHash = null;
+            try {
+                $branchProbe = vcRunGitCommand(
+                    ['--git-dir=' . vcGetRepositoryBarePath($slug), 'rev-parse', $defaultBranch],
+                    APP_ROOT_PATH
+                );
+                $lastCommitHash = trim((string) ($branchProbe['stdout'] ?? ''));
+            } catch (Throwable $ignored) {
+                $lastCommitHash = null;
+            }
             $branchStatus = 'active';
             $isDefault = 1;
             $isProtected = 1;
@@ -110,13 +151,79 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
             $branchId = (int) $branchStmt->insert_id;
             $branchStmt->close();
 
+            if ($lastCommitHash !== null && $lastCommitHash !== '') {
+                $nameStatusOutput = vcRunGitCommand(
+                    ['--git-dir=' . vcGetRepositoryBarePath($slug), 'show', '--pretty=', '--name-status', $lastCommitHash],
+                    APP_ROOT_PATH
+                );
+                $numstatOutput = vcRunGitCommand(
+                    ['--git-dir=' . vcGetRepositoryBarePath($slug), 'show', '--pretty=', '--numstat', $lastCommitHash],
+                    APP_ROOT_PATH
+                );
+
+                $changesByKey = vcParseNameStatusOutput((string) ($nameStatusOutput['stdout'] ?? ''));
+                $statsByKey = vcParseNumstatOutput((string) ($numstatOutput['stdout'] ?? ''));
+                foreach ($statsByKey as $changeKey => $stats) {
+                    if (isset($changesByKey[$changeKey])) {
+                        $changesByKey[$changeKey]['additions'] = (int) $stats['additions'];
+                        $changesByKey[$changeKey]['deletions'] = (int) $stats['deletions'];
+                    }
+                }
+                $initialCommitFiles = array_values($changesByKey);
+                $initialLinesAdded = array_sum(array_map(static fn(array $change): int => (int) ($change['additions'] ?? 0), $initialCommitFiles));
+                $initialLinesRemoved = array_sum(array_map(static fn(array $change): int => (int) ($change['deletions'] ?? 0), $initialCommitFiles));
+
+                $commitKind = 'commit';
+                $initialCommitStmt = $conn->prepare(
+                    'INSERT INTO repository_commits (
+                        repository_id, branch_id, parent_commit_id, commit_hash, commit_title,
+                        commit_message, files_changed, lines_added, lines_removed, commit_kind, authored_by
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $parentCommitId = null;
+                $commitTitle = 'Initial repository scaffold';
+                $commitMessage = 'Initial repository scaffold';
+                $filesChanged = count($initialCommitFiles);
+                $initialCommitStmt->bind_param(
+                    'iiisssiiisi',
+                    $repositoryId,
+                    $branchId,
+                    $parentCommitId,
+                    $lastCommitHash,
+                    $commitTitle,
+                    $commitMessage,
+                    $filesChanged,
+                    $initialLinesAdded,
+                    $initialLinesRemoved,
+                    $commitKind,
+                    $user['id']
+                );
+                $initialCommitStmt->execute();
+                $initialCommitId = (int) $initialCommitStmt->insert_id;
+                $initialCommitStmt->close();
+
+                if ($initialCommitFiles !== []) {
+                    vcSaveCommitFiles($conn, $initialCommitId, $initialCommitFiles);
+                }
+            }
+
             vcLogOperation($conn, $repositoryId, $branchId, null, (int) $user['id'], 'create_repository', null, null, ['project_id' => $projectId]);
             logActivity((int) $user['id'], 'create_repository', 'project_repositories', $repositoryId, null, ['project_id' => $projectId, 'name' => $name]);
             $conn->commit();
 
-            return ['project_id' => $projectId, 'repository_id' => $repositoryId, 'message' => 'Repository created successfully.'];
+            return ['project_id' => $projectId, 'repository_id' => $repositoryId, 'message' => 'Repository and working folder created successfully.'];
         } catch (Throwable $e) {
             $conn->rollback();
+            if ($managedRepository && !empty($managedRepository['bare_repository_path'])) {
+                vcDeleteDirectoryRecursive((string) $managedRepository['bare_repository_path']);
+            } else {
+                vcDeleteDirectoryRecursive(vcGetRepositoryBarePath($slug));
+            }
+            if ($managedRepository && !empty($managedRepository['workspace_path'])) {
+                vcDeleteDirectoryRecursive((string) $managedRepository['workspace_path']);
+            } else {
+                vcDeleteDirectoryRecursive(vcGetRepositoryWorkspacePath($slug));
+            }
             throw $e;
         }
     }
@@ -157,6 +264,43 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
         throw new RuntimeException('Repository not found.');
     }
     $projectId = (int) $repository['project_id'];
+
+    if ($action === 'create_working_folder') {
+        if (in_array($user['role'], ['sul'], true)) {
+            throw new RuntimeException('SUL cannot create repository working folders.');
+        }
+
+        $workspace = vcCreateRepositoryWorkspace(
+            (string) $repository['slug'],
+            (string) ($repository['default_branch_name'] ?? 'main'),
+            vcGenerateRepositoryHttpCloneUrl((string) $repository['slug'])
+        );
+        vcLogOperation(
+            $conn,
+            $repositoryId,
+            null,
+            null,
+            (int) $user['id'],
+            'create_repository',
+            null,
+            null,
+            ['workspace_path' => $workspace['workspace_path'] ?? null]
+        );
+        logActivity(
+            (int) $user['id'],
+            'create_repository_working_folder',
+            'project_repositories',
+            $repositoryId,
+            null,
+            ['workspace_path' => $workspace['workspace_path'] ?? null]
+        );
+
+        return [
+            'project_id' => $projectId,
+            'repository_id' => $repositoryId,
+            'message' => 'Working folder created successfully.',
+        ];
+    }
 
     if ($action === 'create_branch') {
         $branchName = vcGenerateSlug((string) ($post['branch_name'] ?? ''));
@@ -226,6 +370,17 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
         $filesChanged = max(0, (int) ($post['files_changed'] ?? 0));
         $linesAdded = max(0, (int) ($post['lines_added'] ?? 0));
         $linesRemoved = max(0, (int) ($post['lines_removed'] ?? 0));
+        $commitFiles = vcParseCommitFilesText((string) ($post['commit_files'] ?? ''));
+
+        if ($commitFiles !== []) {
+            $filesChanged = max($filesChanged, count($commitFiles));
+            if ($linesAdded === 0) {
+                $linesAdded = array_sum(array_map(static fn(array $change): int => (int) ($change['additions'] ?? 0), $commitFiles));
+            }
+            if ($linesRemoved === 0) {
+                $linesRemoved = array_sum(array_map(static fn(array $change): int => (int) ($change['deletions'] ?? 0), $commitFiles));
+            }
+        }
 
         if ($branchId <= 0 || $title === '') {
             throw new RuntimeException('Branch and commit title are required.');
@@ -277,6 +432,10 @@ function vcHandlePostAction(mysqli $conn, array $user, array $post): array
             $stmt->execute();
             $commitId = (int) $stmt->insert_id;
             $stmt->close();
+
+            if ($commitFiles !== []) {
+                vcSaveCommitFiles($conn, $commitId, $commitFiles);
+            }
 
             $updateStmt = $conn->prepare('UPDATE repository_branches SET last_commit_hash = ?, updated_at = NOW() WHERE id = ?');
             $updateStmt->bind_param('si', $commitHash, $branchId);
