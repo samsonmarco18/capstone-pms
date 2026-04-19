@@ -8,6 +8,7 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+
       - key: DEBUG_MODE
         value: false
 
@@ -43,4 +44,4 @@ databases:
   - name: erni-mysql
     databaseName: erni_pms
     user: erni_user
-    version: 8.0
+    version: 8
