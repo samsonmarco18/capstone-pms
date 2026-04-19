@@ -301,12 +301,12 @@ include 'includes/navbar.php';
 
             <!-- Action Buttons -->
             <div class="profile-actions <?php echo ($user['role'] ?? '') === 'admin' ? '' : 'single'; ?>">
-                <a href="edit-profile.php" class="btn-edit">
-                    <i class="fas fa-edit"></i> Edit Profile
+                <a href="settings.php" class="btn-edit">
+                    <i class="fas fa-user-cog"></i> Account Settings
                 </a>
                 <?php if (($user['role'] ?? '') === 'admin'): ?>
-                <a href="change-password.php" class="btn-password">
-                    <i class="fas fa-key"></i> Change Password
+                <a href="modules/admin/settings.php" class="btn-password">
+                    <i class="fas fa-sliders-h"></i> Admin Settings
                 </a>
                 <?php endif; ?>
             </div>

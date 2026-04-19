@@ -18,6 +18,7 @@ if (is_file($localConfigFile)) {
 $host = strtolower($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '');
 $isCliMode = php_sapi_name() === 'cli' || php_sapi_name() === 'cli-server';
 $isRender = !empty(getenv('RENDER'));
+$appRootPath = realpath(dirname(__DIR__)) ?: dirname(__DIR__);
 
 // Determine if running locally
 $isLocalhost = $isCliMode || 
@@ -82,17 +83,35 @@ define('DB_PORT', (int) getEnvOrDefault('DB_PORT', 3306));
 // APPLICATION CONFIGURATION
 // ==============================================
 
-// App URL - with fallback detection
-$appUrl = getEnvOrDefault('APP_URL', null);
-if (!$appUrl) {
+function detectAppUrl(string $appRootPath, bool $isRender): string
+{
     $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
         || (string) ($_SERVER['SERVER_PORT'] ?? '') === '443'
         || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https'
-        || $isRender; // Render uses HTTPS by default
-    
+        || $isRender;
+
     $scheme = $isHttps ? 'https' : 'http';
     $host = trim((string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
-    $appUrl = $scheme . '://' . $host;
+
+    $normalizedAppRoot = str_replace('\\', '/', $appRootPath);
+    $documentRootInput = trim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''));
+    $documentRoot = $documentRootInput !== ''
+        ? str_replace('\\', '/', realpath($documentRootInput) ?: $documentRootInput)
+        : '';
+
+    $basePath = '/' . basename($normalizedAppRoot) . '/';
+    if ($documentRoot !== '' && str_starts_with(strtolower($normalizedAppRoot), strtolower($documentRoot))) {
+        $relativePath = trim(substr($normalizedAppRoot, strlen($documentRoot)), '/');
+        $basePath = ($relativePath !== '' ? '/' . $relativePath : '') . '/';
+    }
+
+    return $scheme . '://' . $host . $basePath;
+}
+
+// App URL - with fallback detection
+$appUrl = getEnvOrDefault('APP_URL', null);
+if (!$appUrl) {
+    $appUrl = detectAppUrl($appRootPath, $isRender);
 }
 define('APP_URL', rtrim($appUrl, '/') . '/');
 
@@ -105,7 +124,7 @@ define('UPLOAD_MAX_SIZE', (int) getEnvOrDefault('UPLOAD_MAX_SIZE', 52428800)); /
 // PATH CONFIGURATION
 // ==============================================
 
-define('APP_ROOT_PATH', realpath(dirname(__DIR__)) ?: dirname(__DIR__));
+define('APP_ROOT_PATH', $appRootPath);
 define('UPLOAD_PATH', APP_ROOT_PATH . '/uploads/');
 define('GIT_PATH', APP_ROOT_PATH . '/git/');
 define('GIT_WORKSPACES_PATH', APP_ROOT_PATH . '/git-workspaces/');

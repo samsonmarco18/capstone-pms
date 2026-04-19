@@ -4,8 +4,8 @@ require_once 'config/database.php';
 // Get connection
 $conn = getConnection();
 
-// Password to set for all users
-$password = 'test123';
+// Password to set for all users. Keep aligned with the seeded demo data.
+$password = 'password';
 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
 
 echo "Hashing password: " . $hashed_password . "\n\n";
@@ -31,9 +31,9 @@ echo str_repeat("-", 60) . "\n";
 
 // Test password verification for first user
 $testUser = $conn->query("SELECT * FROM users LIMIT 1")->fetch_assoc();
-if(password_verify('test123', $testUser['password'])) {
+if(password_verify($password, $testUser['password'])) {
     echo "✅ Password verification successful!\n";
-    echo "You can now login with: " . $testUser['email'] . " / test123\n";
+    echo "You can now login with: " . $testUser['email'] . " / $password\n";
 } else {
     echo "❌ Password verification failed!\n";
 }

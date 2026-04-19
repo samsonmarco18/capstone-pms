@@ -144,7 +144,13 @@ function markNotificationRead(id) {
 }
 
 function initTooltips() {
-    $('[title]').tooltip({ trigger: 'hover focus' });
+    if (!window.bootstrap || !bootstrap.Tooltip) {
+        return;
+    }
+
+    document.querySelectorAll('[title]').forEach(function (element) {
+        bootstrap.Tooltip.getOrCreateInstance(element, { trigger: 'hover focus' });
+    });
 }
 
 function showToast(title, message, type = 'success') {
