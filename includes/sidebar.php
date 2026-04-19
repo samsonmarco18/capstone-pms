@@ -9,7 +9,6 @@ $menuItems = [
     'admin' => [
         ['label' => 'Dashboard', 'url' => '/modules/admin/dashboard.php', 'icon' => 'tachometer-alt'],
         ['label' => 'Tech Stack', 'url' => '/modules/admin/techstack.php', 'icon' => 'microchip'],
-        ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
         ['label' => 'User Management', 'url' => '/modules/admin/user-management.php', 'icon' => 'users'],
         ['label' => 'Audit Log', 'url' => '/modules/admin/audit-log.php', 'icon' => 'history'],
         ['label' => 'Settings', 'url' => '/modules/admin/settings.php', 'icon' => 'cog'],
