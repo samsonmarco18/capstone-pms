@@ -44,4 +44,3 @@ databases:
   - name: erni-mysql
     databaseName: erni_pms
     user: erni_user
-    version: 8
