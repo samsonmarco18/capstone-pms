@@ -23,7 +23,7 @@ if ($folderId <= 0) {
     exit();
 }
 
-function getFolderBreadcrumb(mysqli $conn, int $folderId): array
+function getFolderBreadcrumb(mysqli|PgsqlMysqliCompatConnection $conn, int $folderId): array
 {
     $path = [];
     $currentId = $folderId;

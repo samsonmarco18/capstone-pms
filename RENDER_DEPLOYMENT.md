@@ -5,8 +5,9 @@
 ## Important Notes
 
 - Use a new `Docker` web service or a Blueprint. An existing `Node` service will not run this PHP app correctly.
-- The checked-in `render.yaml` no longer tries to create MySQL because Render Blueprints reserve `databases:` for Postgres.
-- Create MySQL separately, then provide `DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`, and `DB_PORT` to the web service.
+- The checked-in `render.yaml` now provisions a free Render Postgres database for this app.
+- The app uses `DB_DRIVER=pgsql` on Render and keeps local MySQL support for local development.
+- Import `database.postgres.sql` into the Render Postgres instance after the first deploy.
 - Free web services do not provide persistent storage for `uploads/`, `git/`, or `git-workspaces/`.
 
 ### Step 1: Prepare Your Repository
@@ -32,14 +33,14 @@
 3. Configure these environment variables:
    - `APP_ENV`: `production` (auto-set in render.yaml)
    - `DEBUG_MODE`: `false` (auto-set in render.yaml)
-   - `DB_HOST`: your MySQL host
-   - `DB_USER`: your MySQL username
-   - `DB_PASS`: your MySQL password
-   - `DB_NAME`: `erni_pms` (or your actual database name)
-   - `DB_PORT`: `3306`
+   - `DB_DRIVER`: `pgsql` (auto-set in render.yaml)
+   - `DATABASE_URL`: auto-linked from the Blueprint Postgres database
 
 4. Click **"Create Resource"**
-5. Render will build and deploy your application
+5. Render will create:
+   - 1 Docker web service
+   - 1 free Postgres database
+6. Render will build and deploy your application
 
 ### Step 4: Access Your Application
 
@@ -62,20 +63,16 @@ If you prefer manual setup without blueprint:
 4. Render will use the repo `Dockerfile` automatically
 
 ### Provision Database
-1. Create a MySQL service separately, or use an existing external MySQL database
-2. Copy the connection credentials
+1. Create a free Render Postgres database
+2. Copy the internal connection string
 
 ### Configure Environment Variables
 Add these in Web Service settings:
 ```
-DB_HOST=<from MySQL info>
-DB_USER=<from MySQL info>
-DB_PASS=<from MySQL info>
-DB_NAME=erni_pms
-DB_PORT=3306
+DB_DRIVER=pgsql
+DATABASE_URL=<from Render Postgres internal connection string>
 APP_ENV=production
 DEBUG_MODE=false
-APP_URL=https://your-domain.onrender.com
 ```
 
 ---

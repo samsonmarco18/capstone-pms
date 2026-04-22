@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 // Load environment configuration
 require_once __DIR__ . '/.env.php';
+require_once __DIR__ . '/database-compat.php';
 
 // Verify database constants are defined
 if (!defined('DB_HOST') || !defined('DB_USER') || !defined('DB_NAME')) {
@@ -53,17 +54,21 @@ if (session_status() === PHP_SESSION_NONE) {
 
 date_default_timezone_set('Asia/Manila');
 
-function getConnection(): mysqli
+function getConnection(): mysqli|PgsqlMysqliCompatConnection
 {
     static $conn = null;
 
-    if ($conn instanceof mysqli) {
+    if ($conn instanceof mysqli || $conn instanceof PgsqlMysqliCompatConnection) {
         return $conn;
     }
 
     try {
-        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-    } catch (mysqli_sql_exception $e) {
+        if (DB_DRIVER === 'pgsql') {
+            $conn = new PgsqlMysqliCompatConnection(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+        } else {
+            $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+        }
+    } catch (Throwable $e) {
         error_log('Database connection failed: ' . $e->getMessage());
 
         $message = 'Database connection error. Please contact the administrator.';
@@ -74,7 +79,9 @@ function getConnection(): mysqli
         die($message);
     }
 
-    $conn->set_charset('utf8mb4');
+    if (DB_DRIVER === 'mysql') {
+        $conn->set_charset('utf8mb4');
+    }
 
     return $conn;
 }

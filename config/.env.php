@@ -50,34 +50,67 @@ function getEnvOrDefault($varName, $default = null) {
     return ($value !== false && $value !== '') ? $value : $default;
 }
 
+function parseDatabaseUrl(?string $databaseUrl): array
+{
+    $databaseUrl = trim((string) $databaseUrl);
+    if ($databaseUrl === '') {
+        return [];
+    }
+
+    $parts = parse_url($databaseUrl);
+    if (!is_array($parts)) {
+        return [];
+    }
+
+    return [
+        'driver' => match (strtolower((string) ($parts['scheme'] ?? ''))) {
+            'postgres', 'postgresql', 'pgsql' => 'pgsql',
+            default => 'mysql',
+        },
+        'host' => (string) ($parts['host'] ?? ''),
+        'port' => (int) ($parts['port'] ?? 0),
+        'user' => rawurldecode((string) ($parts['user'] ?? '')),
+        'pass' => rawurldecode((string) ($parts['pass'] ?? '')),
+        'name' => rawurldecode(ltrim((string) ($parts['path'] ?? ''), '/')),
+    ];
+}
+
+$databaseUrlConfig = parseDatabaseUrl((string) getEnvOrDefault('DATABASE_URL', getEnvOrDefault('DB_URL', '')));
+$resolvedDbDriver = strtolower((string) getEnvOrDefault('DB_DRIVER', $databaseUrlConfig['driver'] ?? 'mysql'));
+if (!in_array($resolvedDbDriver, ['mysql', 'pgsql'], true)) {
+    $resolvedDbDriver = 'mysql';
+}
+
+define('DB_DRIVER', $resolvedDbDriver);
+
 if ($isRender) {
     // RENDER CLOUD DEPLOYMENT
     // Environment variables set by render.yaml
-    define('DB_HOST', getEnvOrDefault('DB_HOST', ''));
-    define('DB_USER', getEnvOrDefault('DB_USER', ''));
-    define('DB_PASS', getEnvOrDefault('DB_PASS', ''));
-    define('DB_NAME', getEnvOrDefault('DB_NAME', 'erni_pms'));
+    define('DB_HOST', getEnvOrDefault('DB_HOST', $databaseUrlConfig['host'] ?? ''));
+    define('DB_USER', getEnvOrDefault('DB_USER', $databaseUrlConfig['user'] ?? ''));
+    define('DB_PASS', getEnvOrDefault('DB_PASS', $databaseUrlConfig['pass'] ?? ''));
+    define('DB_NAME', getEnvOrDefault('DB_NAME', $databaseUrlConfig['name'] ?? 'erni_pms'));
     define('APP_ENV', 'production');
     define('DEBUG_MODE', false);
 } elseif ($isProduction && !$isLocalhost) {
     // PRODUCTION MUST SUPPLY SECRETS VIA ENVIRONMENT VARIABLES
-    define('DB_HOST', getEnvOrDefault('DB_HOST', ''));
-    define('DB_USER', getEnvOrDefault('DB_USER', ''));
-    define('DB_PASS', getEnvOrDefault('DB_PASS', ''));
-    define('DB_NAME', getEnvOrDefault('DB_NAME', ''));
+    define('DB_HOST', getEnvOrDefault('DB_HOST', $databaseUrlConfig['host'] ?? ''));
+    define('DB_USER', getEnvOrDefault('DB_USER', $databaseUrlConfig['user'] ?? ''));
+    define('DB_PASS', getEnvOrDefault('DB_PASS', $databaseUrlConfig['pass'] ?? ''));
+    define('DB_NAME', getEnvOrDefault('DB_NAME', $databaseUrlConfig['name'] ?? ''));
     define('APP_ENV', 'production');
     define('DEBUG_MODE', false);
 } else {
     // LOCAL DEVELOPMENT
-    define('DB_HOST', getEnvOrDefault('DB_HOST', 'localhost'));
-    define('DB_USER', getEnvOrDefault('DB_USER', 'root'));
-    define('DB_PASS', getEnvOrDefault('DB_PASS', ''));
-    define('DB_NAME', getEnvOrDefault('DB_NAME', 'erni_pms'));
+    define('DB_HOST', getEnvOrDefault('DB_HOST', $databaseUrlConfig['host'] ?? 'localhost'));
+    define('DB_USER', getEnvOrDefault('DB_USER', $databaseUrlConfig['user'] ?? 'root'));
+    define('DB_PASS', getEnvOrDefault('DB_PASS', $databaseUrlConfig['pass'] ?? ''));
+    define('DB_NAME', getEnvOrDefault('DB_NAME', $databaseUrlConfig['name'] ?? 'erni_pms'));
     define('APP_ENV', getEnvOrDefault('APP_ENV', 'development'));
     define('DEBUG_MODE', getEnvOrDefault('DEBUG_MODE', '1') !== '0');
 }
 
-define('DB_PORT', (int) getEnvOrDefault('DB_PORT', 3306));
+define('DB_PORT', (int) getEnvOrDefault('DB_PORT', $databaseUrlConfig['port'] ?? (DB_DRIVER === 'pgsql' ? 5432 : 3306)));
 
 // ==============================================
 // APPLICATION CONFIGURATION

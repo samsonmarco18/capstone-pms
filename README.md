@@ -158,6 +158,11 @@ VALUES (
 
 See [QUICKSTART_RENDER.md](QUICKSTART_RENDER.md) for detailed steps.
 
+For the free Render path, this repo now includes:
+- `render.yaml` for a Docker web service plus free Render Postgres
+- `database.postgres.sql` for importing the PostgreSQL schema
+- dual-driver support so local MySQL development can continue
+
 ### Deploy to Other Platforms
 
 - **InfinityFree**: `.env.php` auto-detects and uses InfinityFree credentials

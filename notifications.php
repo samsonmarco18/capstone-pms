@@ -22,29 +22,9 @@ $stmt->bind_param('i', $user['id']);
 $stmt->execute();
 $notifications = [];
 $result = $stmt->get_result();
-if ($result instanceof mysqli_result) {
+if (is_object($result) && method_exists($result, 'fetch_assoc')) {
     while ($row = $result->fetch_assoc()) {
         $notifications[] = $row;
-    }
-} elseif (is_array($result)) {
-    $notifications = $result;
-} else {
-    $stmt->store_result();
-    $meta = $stmt->result_metadata();
-    if ($meta) {
-        $fields = $meta->fetch_fields();
-        $rowData = [];
-        $bindArgs = [];
-        foreach ($fields as $field) {
-            $rowData[$field->name] = null;
-            $bindArgs[] = &$rowData[$field->name];
-        }
-        if ($bindArgs) {
-            $stmt->bind_result(...$bindArgs);
-            while ($stmt->fetch()) {
-                $notifications[] = $rowData;
-            }
-        }
     }
 }
 $stmt->close();

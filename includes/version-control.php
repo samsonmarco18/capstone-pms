@@ -17,7 +17,7 @@ function vcIsExecAvailable(): bool
     return true;
 }
 
-function vcGetAccessibleProjects(mysqli $conn, array $user): array
+function vcGetAccessibleProjects(mysqli|PgsqlMysqliCompatConnection $conn, array $user): array
 {
     $role = $user['role'] ?? '';
     $userId = (int) ($user['id'] ?? 0);
@@ -82,7 +82,7 @@ function vcGetAccessibleProjects(mysqli $conn, array $user): array
     return [];
 }
 
-function vcCanAccessProject(mysqli $conn, array $user, int $projectId): bool
+function vcCanAccessProject(mysqli|PgsqlMysqliCompatConnection $conn, array $user, int $projectId): bool
 {
     foreach (vcGetAccessibleProjects($conn, $user) as $project) {
         if ((int) $project['id'] === $projectId) {
@@ -93,7 +93,7 @@ function vcCanAccessProject(mysqli $conn, array $user, int $projectId): bool
     return false;
 }
 
-function vcGetRepository(mysqli $conn, int $repositoryId): ?array
+function vcGetRepository(mysqli|PgsqlMysqliCompatConnection $conn, int $repositoryId): ?array
 {
     $stmt = $conn->prepare(
         "SELECT pr.*, p.name AS project_name, c.name AS client_name,
@@ -115,7 +115,7 @@ function vcGetRepository(mysqli $conn, int $repositoryId): ?array
     return $repository;
 }
 
-function vcCanAccessRepository(mysqli $conn, array $user, int $repositoryId): bool
+function vcCanAccessRepository(mysqli|PgsqlMysqliCompatConnection $conn, array $user, int $repositoryId): bool
 {
     $repository = vcGetRepository($conn, $repositoryId);
 
@@ -942,7 +942,7 @@ function vcGenerateCommitHash(int $repositoryId, int $branchId, int $userId, str
     return substr(sha1($repositoryId . '|' . $branchId . '|' . $userId . '|' . $title . '|' . microtime(true) . '|' . random_int(1000, 9999)), 0, 12);
 }
 
-function vcTouchRepository(mysqli $conn, int $repositoryId): void
+function vcTouchRepository(mysqli|PgsqlMysqliCompatConnection $conn, int $repositoryId): void
 {
     $stmt = $conn->prepare('UPDATE project_repositories SET last_activity_at = NOW() WHERE id = ?');
     $stmt->bind_param('i', $repositoryId);
@@ -951,7 +951,7 @@ function vcTouchRepository(mysqli $conn, int $repositoryId): void
 }
 
 function vcLogOperation(
-    mysqli $conn,
+    mysqli|PgsqlMysqliCompatConnection $conn,
     int $repositoryId,
     ?int $branchId,
     ?int $commitId,
@@ -986,7 +986,7 @@ function vcLogOperation(
     return $result;
 }
 
-function vcGetDefaultBranch(mysqli $conn, int $repositoryId): ?array
+function vcGetDefaultBranch(mysqli|PgsqlMysqliCompatConnection $conn, int $repositoryId): ?array
 {
     $stmt = $conn->prepare(
         'SELECT * FROM repository_branches WHERE repository_id = ? ORDER BY is_default DESC, created_at ASC LIMIT 1'
@@ -999,7 +999,7 @@ function vcGetDefaultBranch(mysqli $conn, int $repositoryId): ?array
     return $branch;
 }
 
-function vcFindRepositoryByWebhookToken(mysqli $conn, string $token): ?array
+function vcFindRepositoryByWebhookToken(mysqli|PgsqlMysqliCompatConnection $conn, string $token): ?array
 {
     $stmt = $conn->prepare(
         "SELECT pr.*, p.name AS project_name, c.name AS client_name
@@ -1017,7 +1017,7 @@ function vcFindRepositoryByWebhookToken(mysqli $conn, string $token): ?array
     return $repository;
 }
 
-function vcFindOrCreateBranch(mysqli $conn, int $repositoryId, string $branchName, int $userId, ?string $commitHash = null): array
+function vcFindOrCreateBranch(mysqli|PgsqlMysqliCompatConnection $conn, int $repositoryId, string $branchName, int $userId, ?string $commitHash = null): array
 {
     $normalizedBranchName = trim($branchName);
     if ($normalizedBranchName === '') {
@@ -1084,7 +1084,7 @@ function vcFindOrCreateBranch(mysqli $conn, int $repositoryId, string $branchNam
     return $branch;
 }
 
-function vcFindCommitByHash(mysqli $conn, int $repositoryId, string $commitHash): ?array
+function vcFindCommitByHash(mysqli|PgsqlMysqliCompatConnection $conn, int $repositoryId, string $commitHash): ?array
 {
     if ($commitHash === '') {
         return null;
@@ -1099,7 +1099,7 @@ function vcFindCommitByHash(mysqli $conn, int $repositoryId, string $commitHash)
     return $commit;
 }
 
-function vcEnsureCommitFileTrackingSchema(mysqli $conn): void
+function vcEnsureCommitFileTrackingSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
 {
     static $initialized = false;
 
@@ -1107,26 +1107,54 @@ function vcEnsureCommitFileTrackingSchema(mysqli $conn): void
         return;
     }
 
-    $sql = "
-        CREATE TABLE IF NOT EXISTS repository_commit_files (
-            id INT PRIMARY KEY AUTO_INCREMENT,
-            commit_id INT NOT NULL,
-            file_path VARCHAR(500) NOT NULL,
-            previous_file_path VARCHAR(500) NULL,
-            change_type ENUM('added', 'modified', 'deleted', 'renamed') DEFAULT 'modified',
-            additions INT DEFAULT 0,
-            deletions INT DEFAULT 0,
-            diff_excerpt LONGTEXT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (commit_id) REFERENCES repository_commits(id) ON DELETE CASCADE,
-            INDEX idx_commit_file_commit_id (commit_id),
-            INDEX idx_commit_file_change_type (change_type),
-            INDEX idx_commit_file_path (file_path)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ";
+    if (DB_DRIVER === 'pgsql') {
+        $statements = [
+            "
+                CREATE TABLE IF NOT EXISTS repository_commit_files (
+                    id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                    commit_id INT NOT NULL,
+                    file_path VARCHAR(500) NOT NULL,
+                    previous_file_path VARCHAR(500) NULL,
+                    change_type VARCHAR(20) DEFAULT 'modified',
+                    additions INT DEFAULT 0,
+                    deletions INT DEFAULT 0,
+                    diff_excerpt TEXT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (commit_id) REFERENCES repository_commits(id) ON DELETE CASCADE
+                )
+            ",
+            'CREATE INDEX IF NOT EXISTS idx_commit_file_commit_id ON repository_commit_files (commit_id)',
+            'CREATE INDEX IF NOT EXISTS idx_commit_file_change_type ON repository_commit_files (change_type)',
+            'CREATE INDEX IF NOT EXISTS idx_commit_file_path ON repository_commit_files (file_path)',
+        ];
 
-    if ($conn->query($sql) === false) {
-        throw new RuntimeException('Failed to prepare repository commit file tracking.');
+        foreach ($statements as $statement) {
+            if ($conn->query($statement) === false) {
+                throw new RuntimeException('Failed to prepare repository commit file tracking.');
+            }
+        }
+    } else {
+        $sql = "
+            CREATE TABLE IF NOT EXISTS repository_commit_files (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                commit_id INT NOT NULL,
+                file_path VARCHAR(500) NOT NULL,
+                previous_file_path VARCHAR(500) NULL,
+                change_type ENUM('added', 'modified', 'deleted', 'renamed') DEFAULT 'modified',
+                additions INT DEFAULT 0,
+                deletions INT DEFAULT 0,
+                diff_excerpt LONGTEXT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (commit_id) REFERENCES repository_commits(id) ON DELETE CASCADE,
+                INDEX idx_commit_file_commit_id (commit_id),
+                INDEX idx_commit_file_change_type (change_type),
+                INDEX idx_commit_file_path (file_path)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ";
+
+        if ($conn->query($sql) === false) {
+            throw new RuntimeException('Failed to prepare repository commit file tracking.');
+        }
     }
 
     $initialized = true;
@@ -1377,7 +1405,7 @@ function vcResolveCommitFilesFromPayload(array $payload): array
     return [];
 }
 
-function vcSaveCommitFiles(mysqli $conn, int $commitId, array $changes): void
+function vcSaveCommitFiles(mysqli|PgsqlMysqliCompatConnection $conn, int $commitId, array $changes): void
 {
     if ($commitId <= 0) {
         return;
@@ -1416,7 +1444,7 @@ function vcSaveCommitFiles(mysqli $conn, int $commitId, array $changes): void
     $insertStmt->close();
 }
 
-function vcGetCommitFiles(mysqli $conn, int $commitId): array
+function vcGetCommitFiles(mysqli|PgsqlMysqliCompatConnection $conn, int $commitId): array
 {
     if ($commitId <= 0) {
         return [];
@@ -1438,7 +1466,7 @@ function vcGetCommitFiles(mysqli $conn, int $commitId): array
     return $files;
 }
 
-function vcSyncExternalCommit(mysqli $conn, array $repository, array $payload): array
+function vcSyncExternalCommit(mysqli|PgsqlMysqliCompatConnection $conn, array $repository, array $payload): array
 {
     $repositoryId = (int) $repository['id'];
     $systemUserId = (int) ($repository['created_by'] ?? 1);

@@ -52,7 +52,7 @@ function vcSyncBuildFileChanges(array $added, array $modified, array $removed): 
     return $changes;
 }
 
-function vcSyncHandleGenericPayload(mysqli $conn, array $repository, array $payload): array
+function vcSyncHandleGenericPayload(mysqli|PgsqlMysqliCompatConnection $conn, array $repository, array $payload): array
 {
     $operationType = trim((string) ($payload['event_type'] ?? $payload['operation_type'] ?? 'commit'));
     $branchName = vcSyncNormalizeBranch((string) ($payload['branch_name'] ?? ''));
@@ -89,7 +89,7 @@ function vcSyncHandleGenericPayload(mysqli $conn, array $repository, array $payl
     ];
 }
 
-function vcSyncHandleGitHubPayload(mysqli $conn, array $repository, array $payload): array
+function vcSyncHandleGitHubPayload(mysqli|PgsqlMysqliCompatConnection $conn, array $repository, array $payload): array
 {
     $branchName = vcSyncNormalizeBranch((string) ($payload['ref'] ?? ''));
     $remoteUrl = (string) (($payload['repository']['html_url'] ?? $payload['repository']['clone_url'] ?? ''));
@@ -157,7 +157,7 @@ function vcSyncHandleGitHubPayload(mysqli $conn, array $repository, array $paylo
     ];
 }
 
-function vcSyncHandleGitLabPayload(mysqli $conn, array $repository, array $payload): array
+function vcSyncHandleGitLabPayload(mysqli|PgsqlMysqliCompatConnection $conn, array $repository, array $payload): array
 {
     $branchName = vcSyncNormalizeBranch((string) ($payload['ref'] ?? ''));
     $remoteUrl = (string) (($payload['project']['web_url'] ?? $payload['repository']['homepage'] ?? ''));
@@ -222,7 +222,7 @@ function vcSyncHandleGitLabPayload(mysqli $conn, array $repository, array $paylo
     ];
 }
 
-function vcSyncHandleBitbucketPayload(mysqli $conn, array $repository, array $payload): array
+function vcSyncHandleBitbucketPayload(mysqli|PgsqlMysqliCompatConnection $conn, array $repository, array $payload): array
 {
     $changes = (array) ($payload['push']['changes'] ?? []);
     $synced = 0;

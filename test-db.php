@@ -1,10 +1,10 @@
 <?php
-/**
- * Database Connection Test
- * Visit: https://yourdomain.ernie.is-great.org/test-db.php
- */
+declare(strict_types=1);
 
 header('Content-Type: text/html; charset=utf-8');
+
+require_once __DIR__ . '/config/database.php';
+
 echo '<!DOCTYPE html>';
 echo '<html>';
 echo '<head><title>Database Connection Test</title>';
@@ -18,90 +18,64 @@ echo 'code { background: #f4f4f4; padding: 2px 5px; border-radius: 3px; }';
 echo '</style></head>';
 echo '<body>';
 
-echo '<h1>🔧 Database Connection Test</h1>';
-
-// Load config
-require_once __DIR__ . '/config/.env.php';
+echo '<h1>Database Connection Test</h1>';
 
 echo '<div class="info">';
 echo '<strong>Connection Details:</strong><br>';
-echo 'Host: <code>' . DB_HOST . '</code><br>';
-echo 'User: <code>' . DB_USER . '</code><br>';
-echo 'Database: <code>' . DB_NAME . '</code><br>';
-echo 'Port: <code>3306</code> (default)';
+echo 'Driver: <code>' . htmlspecialchars(DB_DRIVER) . '</code><br>';
+echo 'Host: <code>' . htmlspecialchars(DB_HOST) . '</code><br>';
+echo 'User: <code>' . htmlspecialchars(DB_USER) . '</code><br>';
+echo 'Database: <code>' . htmlspecialchars(DB_NAME) . '</code><br>';
+echo 'Port: <code>' . DB_PORT . '</code>';
 echo '</div>';
 
-// Test connection
 echo '<h2>Testing Connection...</h2>';
 
 try {
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-    
-    if ($conn->connect_error) {
-        echo '<div class="error">';
-        echo '<strong>❌ Connection Failed</strong><br>';
-        echo 'Error: ' . htmlspecialchars($conn->connect_error) . '<br><br>';
-        echo '<strong>Troubleshooting:</strong><br>';
-        echo '1. Verify credentials are correct<br>';
-        echo '2. Check if database exists in InfinityFree panel<br>';
-        echo '3. Ensure password has no trailing spaces<br>';
-        echo '4. Try connecting via phpMyAdmin first<br>';
-        echo '</div>';
-    } else {
-        echo '<div class="success">';
-        echo '<strong>✅ Connection Successful!</strong>';
-        echo '</div>';
-        
-        // Test database
-        echo '<h2>Checking Database...</h2>';
-        $result = $conn->query("SHOW TABLES");
-        
-        if ($result) {
-            $tableCount = $result->num_rows;
-            if ($tableCount > 0) {
-                echo '<div class="success">';
-                echo '<strong>✅ Database has ' . $tableCount . ' tables</strong><br>';
-                echo 'Tables: ';
-                while ($row = $result->fetch_row()) {
-                    echo '<code>' . htmlspecialchars($row[0]) . '</code> ';
-                }
-                echo '</div>';
-            } else {
-                echo '<div class="info">';
-                echo '<strong>⚠️ Database is empty</strong><br>';
-                echo 'You need to import <code>database.sql</code> using phpMyAdmin';
-                echo '</div>';
-            }
-        } else {
-            echo '<div class="error">';
-            echo '<strong>❌ Query Error:</strong> ' . htmlspecialchars($conn->error);
-            echo '</div>';
-        }
-        
-        // Test user permissions
-        echo '<h2>Checking Permissions...</h2>';
-        $permTest = $conn->query("SELECT VERSION()");
-        if ($permTest) {
-            $version = $permTest->fetch_row()[0];
+    $conn = getConnection();
+
+    echo '<div class="success"><strong>Connection successful.</strong></div>';
+
+    echo '<h2>Checking Database...</h2>';
+    $result = $conn->query('SHOW TABLES');
+
+    if ($result && is_object($result) && property_exists($result, 'num_rows')) {
+        $tableCount = (int) $result->num_rows;
+        if ($tableCount > 0) {
             echo '<div class="success">';
-            echo '<strong>✅ Query permissions OK</strong><br>';
-            echo 'MySQL Version: <code>' . htmlspecialchars($version) . '</code>';
+            echo '<strong>Database has ' . $tableCount . ' tables.</strong><br>';
+            echo 'Tables: ';
+            while ($row = $result->fetch_row()) {
+                echo '<code>' . htmlspecialchars((string) ($row[0] ?? '')) . '</code> ';
+            }
+            echo '</div>';
+        } else {
+            echo '<div class="info">';
+            echo '<strong>Database is empty.</strong><br>';
+            echo 'Import <code>' . (DB_DRIVER === 'pgsql' ? 'database.postgres.sql' : 'database.sql') . '</code>.';
             echo '</div>';
         }
-        
-        $conn->close();
+    } else {
+        echo '<div class="error"><strong>Query error:</strong> ' . htmlspecialchars($conn->error ?? 'Unknown database error') . '</div>';
     }
-} catch (Exception $e) {
-    echo '<div class="error">';
-    echo '<strong>❌ Connection Error</strong><br>';
-    echo 'Exception: ' . htmlspecialchars($e->getMessage());
-    echo '</div>';
+
+    echo '<h2>Checking Permissions...</h2>';
+    $versionResult = $conn->query('SELECT VERSION()');
+    if ($versionResult && is_object($versionResult)) {
+        $version = $versionResult->fetch_row()[0] ?? '';
+        echo '<div class="success">';
+        echo '<strong>Query permissions OK.</strong><br>';
+        echo (DB_DRIVER === 'pgsql' ? 'PostgreSQL Version: ' : 'Database Version: ');
+        echo '<code>' . htmlspecialchars((string) $version) . '</code>';
+        echo '</div>';
+    }
+} catch (Throwable $e) {
+    echo '<div class="error"><strong>Connection error:</strong> ' . htmlspecialchars($e->getMessage()) . '</div>';
 }
 
 echo '<p style="margin-top: 30px; color: #666; font-size: 12px;">';
 echo 'Test completed at: ' . date('Y-m-d H:i:s') . ' (UTC+8)';
-echo '<br><a href="check-deployment.php">← Back to Deployment Check</a>';
+echo '<br><a href="check-deployment.php">Back to Deployment Check</a>';
 echo '</p>';
 
 echo '</body></html>';
-?>

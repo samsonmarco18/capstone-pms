@@ -10,7 +10,7 @@ $conn = getConnection();
 $user = getCurrentUser();
 $roleFilter = trim((string) ($_GET['role'] ?? $user['role']));
 
-function ensureClientRootFolders(mysqli $conn, int $createdBy): void
+function ensureClientRootFolders(mysqli|PgsqlMysqliCompatConnection $conn, int $createdBy): void
 {
     $clientResult = $conn->query('SELECT id, name FROM clients ORDER BY name ASC');
     if (!$clientResult) {
@@ -55,7 +55,7 @@ function ensureClientRootFolders(mysqli $conn, int $createdBy): void
     $updateStmt->close();
 }
 
-function getFolderTree(mysqli $conn, int $parentId, ?string $roleFilter = null): array
+function getFolderTree(mysqli|PgsqlMysqliCompatConnection $conn, int $parentId, ?string $roleFilter = null): array
 {
     $sql = '
         SELECT f.*,

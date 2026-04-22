@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/version-control.php';
 
-function vcHandlePostAction(mysqli $conn, array $user, array $post): array
+function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $user, array $post): array
 {
     $action = trim((string) ($post['action'] ?? ''));
     $projectId = (int) ($post['project_id'] ?? 0);
