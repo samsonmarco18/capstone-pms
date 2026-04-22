@@ -1,46 +1,24 @@
 services:
   - type: web
     name: erni-pms
-    env: docker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
     region: oregon
     plan: free
-
+    autoDeployTrigger: commit
+    healthCheckPath: /healthz.php
     envVars:
       - key: APP_ENV
         value: production
-
       - key: DEBUG_MODE
         value: false
-
       - key: DB_HOST
-        fromDatabase:
-          name: erni-mysql
-          property: host
-
+        sync: false
       - key: DB_PORT
-        value: 3306
-
+        value: "3306"
       - key: DB_USER
-        fromDatabase:
-          name: erni-mysql
-          property: user
-
+        sync: false
       - key: DB_PASS
-        fromDatabase:
-          name: erni-mysql
-          property: password
-
+        sync: false
       - key: DB_NAME
-        fromDatabase:
-          name: erni-mysql
-          property: database
-
-      - key: RENDER_APP_URL
-        value: https://${{ render.project.name }}-${{ render.service.name }}.onrender.com
-
-    healthCheckPath: /
-
-databases:
-  - name: erni-mysql
-    databaseName: erni_pms
-    user: erni_user
+        value: erni_pms

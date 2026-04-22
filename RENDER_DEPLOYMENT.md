@@ -2,6 +2,13 @@
 
 ## Quick Start
 
+## Important Notes
+
+- Use a new `Docker` web service or a Blueprint. An existing `Node` service will not run this PHP app correctly.
+- The checked-in `render.yaml` no longer tries to create MySQL because Render Blueprints reserve `databases:` for Postgres.
+- Create MySQL separately, then provide `DB_HOST`, `DB_USER`, `DB_PASS`, `DB_NAME`, and `DB_PORT` to the web service.
+- Free web services do not provide persistent storage for `uploads/`, `git/`, or `git-workspaces/`.
+
 ### Step 1: Prepare Your Repository
 
 1. Ensure `render.yaml` and `Procfile` are in the root directory
@@ -25,14 +32,14 @@
 3. Configure these environment variables:
    - `APP_ENV`: `production` (auto-set in render.yaml)
    - `DEBUG_MODE`: `false` (auto-set in render.yaml)
-   - Leave database variables empty (Render manages them automatically)
+   - `DB_HOST`: your MySQL host
+   - `DB_USER`: your MySQL username
+   - `DB_PASS`: your MySQL password
+   - `DB_NAME`: `erni_pms` (or your actual database name)
+   - `DB_PORT`: `3306`
 
 4. Click **"Create Resource"**
-5. Render will automatically:
-   - Provision a MySQL database
-   - Build your application
-   - Run migrations
-   - Deploy your site
+5. Render will build and deploy your application
 
 ### Step 4: Access Your Application
 
@@ -51,14 +58,12 @@ If you prefer manual setup without blueprint:
 ### Create Web Service
 1. Click **"New"** → **"Web Service"**
 2. Connect your GitHub repository
-3. Set build command: `bash bin/build.sh`
-4. Set start command: `php -S 0.0.0.0:$PORT`
+3. Set the runtime/language to `Docker`
+4. Render will use the repo `Dockerfile` automatically
 
 ### Provision Database
-1. In Render dashboard, click **"New"** → **"MySQL"**
-2. Name it: `erni-mysql`
-3. Database: `erni_pms`
-4. Copy the connection credentials
+1. Create a MySQL service separately, or use an existing external MySQL database
+2. Copy the connection credentials
 
 ### Configure Environment Variables
 Add these in Web Service settings:
@@ -117,12 +122,12 @@ APP_URL=https://your-domain.onrender.com
 |----------|---------|-------|
 | `APP_ENV` | production | Set by render.yaml |
 | `DEBUG_MODE` | false | Keep false in production |
-| `DB_HOST` | Auto | Set by Render MySQL |
-| `DB_USER` | Auto | Set by Render MySQL |
-| `DB_PASS` | Auto | Set by Render MySQL |
-| `DB_NAME` | erni_pms | Fixed database name |
+| `DB_HOST` | Required | Your MySQL host |
+| `DB_USER` | Required | Your MySQL username |
+| `DB_PASS` | Required | Your MySQL password |
+| `DB_NAME` | erni_pms | Change if your DB uses a different name |
 | `DB_PORT` | 3306 | Default MySQL port |
-| `APP_URL` | Auto | Generated automatically |
+| `APP_URL` | Auto-detected | Usually no manual value needed |
 
 ---
 

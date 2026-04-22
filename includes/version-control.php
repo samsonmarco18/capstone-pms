@@ -605,7 +605,7 @@ function vcCreateRepositoryArchive(string $slug, string $refName): array
         vcEnsureDirectory($hooksDir);
 
         // Create post-commit hook with sync functionality
-        $syncUrl = getenv('ERNI_PMS_SYNC_ENDPOINT') ?: 'http://localhost/erni-pms/api/version-control/sync.php';
+        $syncUrl = getenv('ERNI_PMS_SYNC_ENDPOINT') ?: rtrim(BASE_URL, '/') . '/api/version-control/sync.php';
         $postCommitHook = vcGenerateLocalSyncHookScript($syncUrl);
         $postCommitPath = $hooksDir . DIRECTORY_SEPARATOR . 'post-commit';
         vcWriteTextFile($postCommitPath, $postCommitHook);

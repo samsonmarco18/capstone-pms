@@ -2,6 +2,13 @@
 
 This guide will walk you through deploying ERNI PMS to Render (a modern cloud platform).
 
+## Important Before You Deploy
+
+- This project should be deployed on Render as a `Docker` web service, not a `Node` service.
+- The current `render.yaml` creates only the web app. Render Blueprints manage Postgres in `databases:`, not MySQL.
+- If you need MySQL on Render, create it separately as a private service or use an existing external MySQL database.
+- Free Render web services use ephemeral storage, so uploaded files and server-side git repositories will not persist across redeploys unless you move to a paid plan with persistent disks.
+
 ## What is Render?
 
 [Render](https://render.com) is a cloud platform that:
@@ -58,8 +65,9 @@ git push -u origin main
 
 3. **Review Configuration**
    - Render automatically reads `render.yaml`
-   - Services to create: 1 Web Service + 1 MySQL Database
-   - Review settings (all should be pre-configured)
+   - Service to create: 1 Docker Web Service
+   - Enter your `DB_HOST`, `DB_USER`, and `DB_PASS` when Render prompts for them
+   - Keep `DB_PORT=3306` and `DB_NAME=erni_pms` unless your database uses different values
    - Click: **"Create Resource"**
 
 4. **Wait for Deployment**
@@ -74,6 +82,15 @@ git push -u origin main
    - Visit in browser
 
 **That's it! 🎉**
+
+### If You Already Created a Node Service
+
+Your screenshot shows the existing Render service was created with the `Node` runtime. That service will keep failing for this PHP project.
+
+Create a new Render service using one of these paths instead:
+
+1. `New` → `Blueprint` and let Render read `render.yaml`
+2. `New` → `Web Service`, then set the runtime/language to `Docker`
 
 ---
 

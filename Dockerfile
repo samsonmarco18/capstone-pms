@@ -1,16 +1,22 @@
 FROM php:8.2-apache
 
-# Enable rewrite (optional but useful for clean URLs)
-RUN a2enmod rewrite
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install MySQL extensions
-RUN docker-php-ext-install mysqli pdo pdo_mysql
+RUN docker-php-ext-install mysqli pdo pdo_mysql \
+    && a2enmod rewrite headers \
+    && sed -ri 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
 
-# Copy everything to Apache root
+COPY docker/apache-render-port.sh /usr/local/bin/apache-render-port.sh
+RUN chmod +x /usr/local/bin/apache-render-port.sh
+
+WORKDIR /var/www/html
 COPY . /var/www/html/
 
-# Fix permissions
-RUN chown -R www-data:www-data /var/www/html
+RUN mkdir -p /var/www/html/uploads /var/www/html/git /var/www/html/git-workspaces /var/www/html/logs \
+    && chown -R www-data:www-data /var/www/html
 
-# Expose port 80
-EXPOSE 80
+EXPOSE 10000
+
+CMD ["apache-render-port.sh"]
