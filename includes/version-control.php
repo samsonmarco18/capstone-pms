@@ -1456,7 +1456,13 @@ function vcGetCommitFiles(mysqli|PgsqlMysqliCompatConnection $conn, int $commitI
         'SELECT *
          FROM repository_commit_files
          WHERE commit_id = ?
-         ORDER BY FIELD(change_type, \'added\', \'modified\', \'renamed\', \'deleted\'), file_path ASC'
+         ORDER BY CASE change_type
+             WHEN \'added\' THEN 1
+             WHEN \'modified\' THEN 2
+             WHEN \'renamed\' THEN 3
+             WHEN \'deleted\' THEN 4
+             ELSE 5
+         END, file_path ASC'
     );
     $stmt->bind_param('i', $commitId);
     $stmt->execute();

@@ -61,13 +61,22 @@ $repositories = [];
 if ($selectedProjectId > 0) {
     $repoStmt = $conn->prepare(
         "SELECT pr.*, parent_repo.name AS parent_repository_name,
-                COUNT(DISTINCT rb.id) AS branch_count, COUNT(DISTINCT rc.id) AS commit_count
+                COALESCE(branch_counts.branch_count, 0) AS branch_count,
+                COALESCE(commit_counts.commit_count, 0) AS commit_count
          FROM project_repositories pr
          LEFT JOIN project_repositories parent_repo ON parent_repo.id = pr.parent_repository_id
-         LEFT JOIN repository_branches rb ON rb.repository_id = pr.id AND rb.branch_status != 'deleted'
-         LEFT JOIN repository_commits rc ON rc.repository_id = pr.id
+         LEFT JOIN (
+             SELECT repository_id, COUNT(*) AS branch_count
+             FROM repository_branches
+             WHERE branch_status != 'deleted'
+             GROUP BY repository_id
+         ) branch_counts ON branch_counts.repository_id = pr.id
+         LEFT JOIN (
+             SELECT repository_id, COUNT(*) AS commit_count
+             FROM repository_commits
+             GROUP BY repository_id
+         ) commit_counts ON commit_counts.repository_id = pr.id
          WHERE pr.project_id = ?
-         GROUP BY pr.id
          ORDER BY COALESCE(pr.last_activity_at, pr.updated_at) DESC, pr.name ASC"
     );
     $repoStmt->bind_param('i', $selectedProjectId);
@@ -117,12 +126,16 @@ $selectedRepositoryHasWorkspace = false;
 
 if ($selectedRepository) {
     $branchStmt = $conn->prepare(
-        "SELECT rb.*, source_branch.name AS source_branch_name, COUNT(DISTINCT rc.id) AS commit_count
+        "SELECT rb.*, source_branch.name AS source_branch_name,
+                COALESCE(commit_counts.commit_count, 0) AS commit_count
          FROM repository_branches rb
          LEFT JOIN repository_branches source_branch ON source_branch.id = rb.source_branch_id
-         LEFT JOIN repository_commits rc ON rc.branch_id = rb.id
+         LEFT JOIN (
+             SELECT branch_id, COUNT(*) AS commit_count
+             FROM repository_commits
+             GROUP BY branch_id
+         ) commit_counts ON commit_counts.branch_id = rb.id
          WHERE rb.repository_id = ?
-         GROUP BY rb.id
          ORDER BY rb.is_default DESC, rb.created_at ASC"
     );
     $branchStmt->bind_param('i', $selectedRepositoryId);
