@@ -68,7 +68,7 @@ function parseDatabaseUrl(?string $databaseUrl): array
             default => 'mysql',
         },
         'host' => (string) ($parts['host'] ?? ''),
-        'port' => (int) ($parts['port'] ?? 0),
+        'port' => isset($parts['port']) ? (int) $parts['port'] : null,
         'user' => rawurldecode((string) ($parts['user'] ?? '')),
         'pass' => rawurldecode((string) ($parts['pass'] ?? '')),
         'name' => rawurldecode(ltrim((string) ($parts['path'] ?? ''), '/')),
