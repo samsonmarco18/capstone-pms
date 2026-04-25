@@ -201,7 +201,9 @@ function vcResolvePreferredWritableRemoteUrl(string $slug, ?string $externalRemo
 
     if ($portableClient) {
         if (vcIsRenderEnvironment()) {
-            return null;
+            // Downloaded repositories still need a readable origin on Render,
+            // even when pushes require configuring an external remote.
+            return vcGenerateRepositoryHttpCloneUrl($slug);
         }
 
         return vcGenerateRepositoryFileCloneUrl($slug);
