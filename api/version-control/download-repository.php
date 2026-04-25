@@ -30,7 +30,8 @@ $archive = null;
 try {
     $archive = vcCreateRepositoryArchive(
         (string) $repository['slug'],
-        (string) ($repository['default_branch_name'] ?: 'main')
+        (string) ($repository['default_branch_name'] ?: 'main'),
+        (string) ($repository['external_remote_url'] ?? '')
     );
 
     $archivePath = (string) $archive['archive_path'];

@@ -187,6 +187,54 @@ function vcGenerateRepositoryFileCloneUrl(string $slug): string
     return 'file://' . $path;
 }
 
+function vcIsRenderEnvironment(): bool
+{
+    return (bool) getenv('RENDER');
+}
+
+function vcResolvePreferredWritableRemoteUrl(string $slug, ?string $externalRemoteUrl = null, bool $portableClient = false): ?string
+{
+    $externalRemoteUrl = trim((string) $externalRemoteUrl);
+    if ($externalRemoteUrl !== '' && !vcIsInternalManagedRepositoryUrl($externalRemoteUrl)) {
+        return $externalRemoteUrl;
+    }
+
+    if ($portableClient) {
+        return null;
+    }
+
+    return vcGetRepositoryBarePath($slug);
+}
+
+function vcTryGitCommand(array $arguments, ?string $workingDirectory = null): bool
+{
+    try {
+        vcRunGitCommand($arguments, $workingDirectory);
+        return true;
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function vcConfigureLocalRepositoryRemote(string $repositoryPath, string $slug, string $defaultBranch, ?string $externalRemoteUrl = null, bool $portableClient = false): void
+{
+    $originUrl = vcResolvePreferredWritableRemoteUrl($slug, $externalRemoteUrl, $portableClient);
+
+    if ($originUrl === null) {
+        vcTryGitCommand(['remote', 'remove', 'origin'], $repositoryPath);
+        vcTryGitCommand(['config', '--unset', 'branch.' . $defaultBranch . '.remote'], $repositoryPath);
+        vcTryGitCommand(['config', '--unset', 'branch.' . $defaultBranch . '.merge'], $repositoryPath);
+        return;
+    }
+
+    if (!vcTryGitCommand(['remote', 'set-url', 'origin', $originUrl], $repositoryPath)) {
+        vcTryGitCommand(['remote', 'add', 'origin', $originUrl], $repositoryPath);
+    }
+
+    vcTryGitCommand(['config', 'branch.' . $defaultBranch . '.remote', 'origin'], $repositoryPath);
+    vcTryGitCommand(['config', 'branch.' . $defaultBranch . '.merge', 'refs/heads/' . $defaultBranch], $repositoryPath);
+}
+
 function vcIsInternalManagedRepositoryUrl(string $url): bool
 {
     $normalized = trim($url);
@@ -378,7 +426,7 @@ function vcInstallWorkspaceSyncHook(string $workspacePath): void
     @chmod($hookPath, 0755);
 }
 
-function vcCreateRepositoryWorkspace(string $slug, string $defaultBranch, string $httpCloneUrl): array
+function vcCreateRepositoryWorkspace(string $slug, string $defaultBranch, string $httpCloneUrl, ?string $externalRemoteUrl = null): array
 {
     $workspacePath = vcGetRepositoryWorkspacePath($slug);
 
@@ -389,7 +437,9 @@ function vcCreateRepositoryWorkspace(string $slug, string $defaultBranch, string
     vcEnsureWorkspaceStorageRoot();
 
     try {
-        vcRunGitCommand(['clone', '--branch=' . $defaultBranch, $httpCloneUrl, $workspacePath], APP_ROOT_PATH);
+        $cloneSource = vcGetRepositoryBarePath($slug);
+        vcRunGitCommand(['clone', '--branch=' . $defaultBranch, $cloneSource, $workspacePath], APP_ROOT_PATH);
+        vcConfigureLocalRepositoryRemote($workspacePath, $slug, $defaultBranch, $externalRemoteUrl, false);
         vcInstallWorkspaceSyncHook($workspacePath);
     } catch (Throwable $e) {
         vcDeleteDirectoryRecursive($workspacePath);
@@ -505,7 +555,7 @@ function vcCreateManagedRepository(
         vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, '--work-tree=' . $tempWorkingPath, 'commit', '-m', 'Initial repository scaffold'], APP_ROOT_PATH);
         vcInstallServerRepositoryHooks($bareRepositoryPath, $syncEndpointUrl);
         vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'update-server-info'], APP_ROOT_PATH);
-        vcCreateRepositoryWorkspace($slug, $defaultBranch, $httpCloneUrl);
+        vcCreateRepositoryWorkspace($slug, $defaultBranch, $httpCloneUrl, null);
     } catch (Throwable $e) {
         vcDeleteDirectoryRecursive($tempWorkingPath);
         vcDeleteDirectoryRecursive($bareRepositoryPath);
@@ -524,7 +574,7 @@ function vcCreateManagedRepository(
     ];
 }
 
-function vcCreateRepositoryArchive(string $slug, string $refName): array
+function vcCreateRepositoryArchive(string $slug, string $refName, ?string $externalRemoteUrl = null): array
 {
     $bareRepositoryPath = vcGetRepositoryBarePath($slug);
     if (!is_dir($bareRepositoryPath)) {
@@ -570,6 +620,7 @@ function vcCreateRepositoryArchive(string $slug, string $refName): array
                 ['clone', '--quiet', $repoPathForGit, $cloneTempDir],
                 $tempDir
             );
+            vcConfigureLocalRepositoryRemote($cloneTempDir, $slug, $refName, $externalRemoteUrl, true);
             
             error_log('Git clone completed successfully');
         } catch (Throwable $gitError) {

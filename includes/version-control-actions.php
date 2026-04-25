@@ -273,7 +273,8 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
         $workspace = vcCreateRepositoryWorkspace(
             (string) $repository['slug'],
             (string) ($repository['default_branch_name'] ?? 'main'),
-            vcGenerateRepositoryHttpCloneUrl((string) $repository['slug'])
+            vcGenerateRepositoryHttpCloneUrl((string) $repository['slug']),
+            (string) ($repository['external_remote_url'] ?? '')
         );
         vcLogOperation(
             $conn,
