@@ -17,7 +17,7 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
         throw new RuntimeException('SUL is only allowed to merge branches in version control.');
     }
 
-    if ($user['role'] === 'architect' && !in_array($action, ['merge_branches', 'create_repository', 'fork_repository', 'create_branch', 'delete_branch', 'protect_branch', 'log_sync', 'create_working_folder'], true)) {
+    if ($user['role'] === 'architect' && !in_array($action, ['merge_branches', 'create_repository', 'fork_repository', 'create_branch', 'delete_branch', 'protect_branch', 'log_sync', 'create_working_folder', 'delete_repository'], true)) {
         throw new RuntimeException('Architects can only perform merge, repository creation, branching, and sync operations in version control.');
     }
 
@@ -33,7 +33,7 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
         $name = trim((string) ($post['repository_name'] ?? ''));
         $slug = vcGenerateSlug((string) ($post['repository_slug'] ?? $name));
         $description = trim((string) ($post['repository_description'] ?? ''));
-        $externalRemoteUrl = trim((string) ($post['external_remote_url'] ?? ''));
+        $externalRemoteUrl = vcNormalizeExternalRemoteUrl((string) ($post['external_remote_url'] ?? ''));
         $visibility = trim((string) ($post['repository_visibility'] ?? 'internal'));
         $defaultBranch = vcGenerateSlug((string) ($post['default_branch_name'] ?? 'main'));
         $allowedVisibility = ['private', 'internal', 'public'];
@@ -66,7 +66,7 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
             $lastActivityAt = date('Y-m-d H:i:s');
             $syncMode = 'manual';
             $syncProvider = null;
-            $initialRemoteUrl = null;
+            $initialRemoteUrl = $externalRemoteUrl;
             $webhookToken = vcGenerateWebhookToken();
             $stmt = $conn->prepare(
                 'INSERT INTO project_repositories (
@@ -105,16 +105,6 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
                 $defaultBranch,
                 $syncEndpointUrl
             );
-
-            $updateRepositoryStmt = $conn->prepare(
-                'UPDATE project_repositories
-                 SET external_remote_url = ?, sync_mode = ?, updated_at = NOW()
-                 WHERE id = ?'
-            );
-            $cloneUrl = (string) ($managedRepository['http_clone_url'] ?? vcGenerateRepositoryHttpCloneUrl($slug));
-            $updateRepositoryStmt->bind_param('ssi', $cloneUrl, $syncMode, $repositoryId);
-            $updateRepositoryStmt->execute();
-            $updateRepositoryStmt->close();
 
             $sourceBranchId = null;
             $lastCommitHash = null;
@@ -229,7 +219,7 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
     }
 
     if ($action === 'save_sync_settings') {
-        $externalRemoteUrl = trim((string) ($post['external_remote_url'] ?? ''));
+        $externalRemoteUrl = vcNormalizeExternalRemoteUrl((string) ($post['external_remote_url'] ?? ''));
         $syncMode = trim((string) ($post['sync_mode'] ?? 'manual'));
         $syncProvider = trim((string) ($post['sync_provider'] ?? ''));
         $allowedModes = ['manual', 'git_hook', 'provider_webhook'];
@@ -239,7 +229,7 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
         }
 
         $providerValue = $syncProvider !== '' ? $syncProvider : null;
-        $remoteValue = $externalRemoteUrl !== '' ? $externalRemoteUrl : null;
+        $remoteValue = $externalRemoteUrl;
 
         $stmt = $conn->prepare(
             'UPDATE project_repositories
@@ -264,6 +254,40 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
         throw new RuntimeException('Repository not found.');
     }
     $projectId = (int) $repository['project_id'];
+
+    if ($action === 'delete_repository') {
+        if (!vcCanDeleteRepository($user)) {
+            throw new RuntimeException('Only Admins and Architects can delete repositories.');
+        }
+
+        $repositoryName = (string) ($repository['name'] ?? 'repository');
+        $repositorySlug = (string) ($repository['slug'] ?? '');
+        $projectId = (int) ($repository['project_id'] ?? 0);
+        $oldData = $repository;
+
+        $conn->begin_transaction();
+        try {
+            vcDeleteRepositoryTracking($conn, $repositoryId);
+            $fallbackRepositoryId = vcFindProjectFallbackRepositoryId($conn, $projectId);
+            logActivity((int) $user['id'], 'delete_repository', 'project_repositories', $repositoryId, $oldData, ['deleted' => true]);
+            $conn->commit();
+        } catch (Throwable $e) {
+            $conn->rollback();
+            throw $e;
+        }
+
+        try {
+            vcDeleteManagedRepositoryStorage($repositorySlug);
+        } catch (Throwable $storageError) {
+            error_log('Repository storage cleanup failed for slug ' . $repositorySlug . ': ' . $storageError->getMessage());
+        }
+
+        return [
+            'project_id' => $projectId,
+            'repository_id' => $fallbackRepositoryId,
+            'message' => 'Repository "' . $repositoryName . '" deleted successfully.',
+        ];
+    }
 
     if ($action === 'create_working_folder') {
         if (in_array($user['role'], ['sul'], true)) {
@@ -618,7 +642,8 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
             $visibility = $repository['visibility'];
             $repositoryStatus = 'active';
             $lastActivityAt = date('Y-m-d H:i:s');
-            $syncMode = $repository['external_remote_url'] ? 'git_hook' : 'manual';
+            $forkExternalRemoteUrl = vcNormalizeExternalRemoteUrl((string) ($repository['external_remote_url'] ?? ''));
+            $syncMode = $forkExternalRemoteUrl !== null ? 'git_hook' : 'manual';
             $syncProvider = $repository['sync_provider'] ?? null;
             $webhookToken = vcGenerateWebhookToken();
             $forkStmt = $conn->prepare(
@@ -635,7 +660,7 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
                 $forkName,
                 $forkSlug,
                 $forkDescription,
-                $repository['external_remote_url'],
+                $forkExternalRemoteUrl,
                 $syncMode,
                 $syncProvider,
                 $webhookToken,

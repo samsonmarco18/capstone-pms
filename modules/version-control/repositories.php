@@ -38,7 +38,7 @@ if ($selectedProjectId > 0 && !vcCanAccessProject($conn, $user, $selectedProject
     $selectedProjectId = $accessibleProjects ? (int) $accessibleProjects[0]['id'] : 0;
 }
 
-$createRepositoryPreviewUrl = vcGenerateRepositoryHttpCloneUrl('repository');
+$createRepositoryPreviewUrl = vcResolveManagedRepositoryCreateUrl('repository');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -123,6 +123,9 @@ $selectedRepositoryLocalClonePath = '';
 $selectedRepositoryFileCloneUrl = '';
 $selectedRepositoryWorkspacePath = '';
 $selectedRepositoryHasWorkspace = false;
+$selectedRepositoryDisplayRemoteUrl = '';
+$selectedRepositoryDisplayRemoteKind = 'managed';
+$selectedRepositoryExternalRemoteUrl = '';
 
 if ($selectedRepository) {
     $branchStmt = $conn->prepare(
@@ -197,6 +200,9 @@ if ($selectedRepository) {
     $selectedRepositoryFileCloneUrl = vcGenerateRepositoryFileCloneUrl((string) $selectedRepository['slug']);
     $selectedRepositoryWorkspacePath = vcGetRepositoryWorkspacePath((string) $selectedRepository['slug']);
     $selectedRepositoryHasWorkspace = is_dir($selectedRepositoryWorkspacePath);
+    $selectedRepositoryExternalRemoteUrl = (string) (vcNormalizeExternalRemoteUrl((string) ($selectedRepository['external_remote_url'] ?? '')) ?? '');
+    $selectedRepositoryDisplayRemoteUrl = vcResolveRepositoryDisplayRemote($selectedRepositoryExternalRemoteUrl, (string) $selectedRepository['slug']);
+    $selectedRepositoryDisplayRemoteKind = vcGetRepositoryDisplayRemoteKind($selectedRepositoryExternalRemoteUrl);
 
     if ($selectedCommitId > 0) {
         $selectedCommitStmt = $conn->prepare(
@@ -454,9 +460,8 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                         </div>
                         <div class="repo-meta mt-3">
                             Default branch: <code><?php echo htmlspecialchars((string) $selectedRepository['default_branch_name']); ?></code>
-                            <?php if (!empty($selectedRepository['external_remote_url'])): ?>
-                            | Clone URL: <code><?php echo htmlspecialchars((string) $selectedRepository['external_remote_url']); ?></code>
-                            <?php endif; ?>
+                            | <?php echo $selectedRepositoryDisplayRemoteKind === 'external' ? 'External remote' : 'Managed remote'; ?>:
+                            <code><?php echo htmlspecialchars($selectedRepositoryDisplayRemoteUrl); ?></code>
                         </div>
                         <div class="repo-summary-grid">
                             <div class="summary-tile">
@@ -686,7 +691,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                             <h6 class="fw-semibold mb-3">Repository Access</h6>
                             <div id="cloneFeedback" class="clone-feedback">Clone URL copied.</div>
                             <div class="clone-action-row">
-                                <button type="button" class="btn btn-primary" onclick="copyCloneUrl('<?php echo htmlspecialchars($selectedRepositoryHttpCloneUrl, ENT_QUOTES); ?>')">
+                                <button type="button" class="btn btn-primary" onclick="copyCloneUrl('<?php echo htmlspecialchars($selectedRepositoryDisplayRemoteUrl, ENT_QUOTES); ?>')">
                                     <i class="fas fa-code-branch me-2"></i>Copy Clone URL
                                 </button>
                                 <?php if (!$selectedRepositoryHasWorkspace && !in_array($user['role'], ['sul'], true)): ?>
@@ -715,12 +720,16 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 <input class="form-control" readonly value="<?php echo htmlspecialchars($selectedRepositoryWorkspacePath); ?>">
                             </div>
                             <div class="mb-2">
-                                <label class="form-label">HTTP Clone URL</label>
-                                <input class="form-control" id="httpCloneUrlField" readonly value="<?php echo htmlspecialchars($selectedRepositoryHttpCloneUrl); ?>">
+                                <label class="form-label"><?php echo htmlspecialchars(vcGetRepositoryManagedCloneLabel()); ?></label>
+                                <input class="form-control" id="httpCloneUrlField" readonly value="<?php echo htmlspecialchars(vcResolveManagedRepositoryDisplayUrl((string) $selectedRepository['slug'])); ?>">
                             </div>
                             <div class="mb-2">
                                 <label class="form-label">Server Repository Path</label>
                                 <input class="form-control" readonly value="<?php echo htmlspecialchars($selectedRepositoryLocalClonePath); ?>">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label"><?php echo htmlspecialchars(vcGetRepositoryExternalRemoteLabel()); ?></label>
+                                <input class="form-control" readonly value="<?php echo htmlspecialchars($selectedRepositoryExternalRemoteUrl); ?>" placeholder="<?php echo htmlspecialchars(vcGetRepositoryExternalRemotePlaceholder()); ?>">
                             </div>
                             <div class="mb-2">
                                 <label class="form-label">File Clone URL</label>
@@ -730,8 +739,9 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 <?php if ($selectedRepositoryHasWorkspace): ?>
                                 The working folder is already ready. Open that folder and you can commit, push, and merge right away.
                                 <?php else: ?>
-                                The working folder has not been created yet for this repository. On Windows, the HTTP clone URL is the most reliable fallback when local path cloning fails.
+                                The working folder has not been created yet for this repository.
                                 <?php endif; ?>
+                                <br><?php echo htmlspecialchars(vcGetManagedRepositoryPortablePushHint()); ?>
                             </div>
                         </div>
                         <div class="setup-panel">
@@ -791,10 +801,18 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                         <div class="mb-2"><input class="form-control" name="repository_name" placeholder="Repository name" required></div>
                                         <div class="mb-2"><input class="form-control" name="repository_slug" placeholder="Slug"></div>
                                         <div class="mb-2">
-                                            <input class="form-control" id="createRepositoryRemoteUrl" name="external_remote_url" value="<?php echo htmlspecialchars($createRepositoryPreviewUrl); ?>" placeholder="Repository URL will be generated automatically" readonly>
+                                            <label class="form-label"><?php echo htmlspecialchars(vcGetRepositoryManagedCloneLabel()); ?></label>
+                                            <input class="form-control" id="createRepositoryManagedUrl" data-template="<?php echo htmlspecialchars(vcResolveManagedRepositoryCreateUrl('__slug__')); ?>" value="<?php echo htmlspecialchars($createRepositoryPreviewUrl); ?>" readonly>
                                         </div>
                                         <div class="setup-note mb-2">
-                                            ERNI PMS will create the bare repository, the managed clone URL, and a ready-to-use working folder automatically.
+                                            <?php echo htmlspecialchars(vcGetManagedRepositoryCreateHint()); ?>
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label"><?php echo htmlspecialchars(vcGetRepositoryExternalRemoteLabel()); ?></label>
+                                            <input class="form-control" name="external_remote_url" placeholder="<?php echo htmlspecialchars(vcGetRepositoryExternalRemotePlaceholder()); ?>">
+                                        </div>
+                                        <div class="setup-note mb-2">
+                                            <?php echo htmlspecialchars(vcGetRepositoryExternalRemoteHelp()); ?>
                                         </div>
                                         <div class="row g-2 mb-2">
                                             <div class="col-6"><select class="form-select" name="repository_visibility"><option value="internal">Internal</option><option value="private">Private</option><option value="public">Public</option></select></div>
@@ -818,7 +836,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                     <input type="hidden" name="action" value="save_sync_settings">
                                     <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
                                     <input type="hidden" name="repository_id" value="<?php echo $selectedRepositoryId; ?>">
-                                    <div class="mb-2"><input class="form-control" name="external_remote_url" value="<?php echo htmlspecialchars((string) ($selectedRepository['external_remote_url'] ?? '')); ?>" placeholder="https://github.com/org/repo.git"></div>
+                                    <div class="mb-2"><input class="form-control" name="external_remote_url" value="<?php echo htmlspecialchars($selectedRepositoryExternalRemoteUrl); ?>" placeholder="<?php echo htmlspecialchars(vcGetRepositoryExternalRemotePlaceholder()); ?>"></div>
                                     <div class="row g-2 mb-2">
                                         <div class="col-6">
                                             <select class="form-select" name="sync_mode">
@@ -929,6 +947,23 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                             </div></div>
                         </div>
                         <?php endif; ?>
+
+                        <?php if (vcCanDeleteRepository($user) && $selectedRepository): ?>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#deleteRepositoryAction">Delete Repository</button></h2>
+                            <div id="deleteRepositoryAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
+                                <div class="setup-note mb-3">
+                                    This removes the repository from ERNI PMS and deletes its managed storage and working folder. Existing downloaded copies on your machine are not deleted.
+                                </div>
+                                <form method="POST" onsubmit="return confirm('Delete repository <?php echo htmlspecialchars(addslashes((string) $selectedRepository['name'])); ?>? This cannot be undone.');">
+                                    <input type="hidden" name="action" value="delete_repository">
+                                    <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
+                                    <input type="hidden" name="repository_id" value="<?php echo $selectedRepositoryId; ?>">
+                                    <button class="btn btn-danger w-100">Delete Repository</button>
+                                </form>
+                            </div></div>
+                        </div>
+                        <?php endif; ?>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -943,7 +978,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 document.addEventListener('DOMContentLoaded', function () {
     const nameInput = document.querySelector('input[name="repository_name"]');
     const slugInput = document.querySelector('input[name="repository_slug"]');
-    const remoteUrlInput = document.getElementById('createRepositoryRemoteUrl');
+    const remoteUrlInput = document.getElementById('createRepositoryManagedUrl');
 
     if (!nameInput || !slugInput || !remoteUrlInput) {
         return;
@@ -959,14 +994,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function buildAutoUrl() {
         const repoSlug = slugify(slugInput.value || nameInput.value);
+        const template = remoteUrlInput.dataset.template || '';
+        if (template.indexOf('__slug__') !== -1) {
+            return template.replace('__slug__', encodeURIComponent(repoSlug));
+        }
         return `${window.BASE_URL}git/${encodeURIComponent(repoSlug)}.git`;
     }
 
     function syncAutoUrl() {
-        const current = remoteUrlInput.value.trim();
-        if (current === '' || current.indexOf(`${window.BASE_URL}git/`) === 0) {
-            remoteUrlInput.value = buildAutoUrl();
-        }
+        remoteUrlInput.value = buildAutoUrl();
     }
 
     nameInput.addEventListener('input', syncAutoUrl);

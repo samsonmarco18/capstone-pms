@@ -194,45 +194,163 @@ function vcIsRenderEnvironment(): bool
 
 function vcResolvePreferredWritableRemoteUrl(string $slug, ?string $externalRemoteUrl = null, bool $portableClient = false): ?string
 {
-    $externalRemoteUrl = trim((string) $externalRemoteUrl);
-    if ($externalRemoteUrl !== '' && !vcIsInternalManagedRepositoryUrl($externalRemoteUrl)) {
+    $externalRemoteUrl = vcNormalizeExternalRemoteUrl($externalRemoteUrl);
+    if ($externalRemoteUrl !== null) {
         return $externalRemoteUrl;
     }
 
     if ($portableClient) {
-        return null;
+        if (vcIsRenderEnvironment()) {
+            return null;
+        }
+
+        return vcGenerateRepositoryFileCloneUrl($slug);
+    }
+
+    if (vcIsRenderEnvironment()) {
+        return vcGetRepositoryBarePath($slug);
     }
 
     return vcGetRepositoryBarePath($slug);
 }
 
-function vcTryGitCommand(array $arguments, ?string $workingDirectory = null): bool
+function vcDeleteManagedRepositoryStorage(string $slug): void
 {
-    try {
-        vcRunGitCommand($arguments, $workingDirectory);
-        return true;
-    } catch (Throwable) {
-        return false;
-    }
+    vcDeleteDirectoryRecursive(vcGetRepositoryBarePath($slug));
+    vcDeleteDirectoryRecursive(vcGetRepositoryWorkspacePath($slug));
 }
 
-function vcConfigureLocalRepositoryRemote(string $repositoryPath, string $slug, string $defaultBranch, ?string $externalRemoteUrl = null, bool $portableClient = false): void
+function vcCanDeleteRepository(array $user): bool
 {
-    $originUrl = vcResolvePreferredWritableRemoteUrl($slug, $externalRemoteUrl, $portableClient);
+    return in_array((string) ($user['role'] ?? ''), ['admin', 'architect'], true);
+}
 
-    if ($originUrl === null) {
-        vcTryGitCommand(['remote', 'remove', 'origin'], $repositoryPath);
-        vcTryGitCommand(['config', '--unset', 'branch.' . $defaultBranch . '.remote'], $repositoryPath);
-        vcTryGitCommand(['config', '--unset', 'branch.' . $defaultBranch . '.merge'], $repositoryPath);
-        return;
+function vcCanConfigureRepositorySync(array $user): bool
+{
+    return !in_array((string) ($user['role'] ?? ''), ['sul'], true);
+}
+
+function vcCanManagedRepositoryPushFromPortableClient(): bool
+{
+    return !vcIsRenderEnvironment();
+}
+
+function vcGetManagedRepositoryPortablePushHint(): string
+{
+    if (vcCanManagedRepositoryPushFromPortableClient()) {
+        return 'Downloaded repositories can push back to the PMS-managed bare repository on this same machine.';
     }
 
-    if (!vcTryGitCommand(['remote', 'set-url', 'origin', $originUrl], $repositoryPath)) {
-        vcTryGitCommand(['remote', 'add', 'origin', $originUrl], $repositoryPath);
+    return 'On Render, downloaded repositories need an external remote URL before push will work from your local machine.';
+}
+
+function vcGetManagedRepositoryCreateHint(): string
+{
+    if (vcCanManagedRepositoryPushFromPortableClient()) {
+        return 'ERNI PMS will create the managed repository and a ready-to-use working folder. Local downloads can push back to this PMS instance on the same machine.';
     }
 
-    vcTryGitCommand(['config', 'branch.' . $defaultBranch . '.remote', 'origin'], $repositoryPath);
-    vcTryGitCommand(['config', 'branch.' . $defaultBranch . '.merge', 'refs/heads/' . $defaultBranch], $repositoryPath);
+    return 'ERNI PMS will create the managed repository and a ready-to-use working folder. For pushes from your local machine, set an external remote URL after creation.';
+}
+
+function vcGetRepositoryManagedCloneLabel(): string
+{
+    return vcCanManagedRepositoryPushFromPortableClient() ? 'Managed Clone / Push URL' : 'Managed Clone URL';
+}
+
+function vcGetRepositoryManagedRemoteDescription(): string
+{
+    if (vcCanManagedRepositoryPushFromPortableClient()) {
+        return 'Use this PMS-managed repository when your app and Git client are on the same machine.';
+    }
+
+    return 'This PMS-managed URL is useful for server-side tracking and downloads. Use an external remote for local push from Render deployments.';
+}
+
+function vcGetRepositoryExternalRemoteLabel(): string
+{
+    return 'External Remote URL';
+}
+
+function vcGetRepositoryExternalRemotePlaceholder(): string
+{
+    return 'Optional: https://github.com/your-account/your-repo.git';
+}
+
+function vcGetRepositoryExternalRemoteHelp(): string
+{
+    if (vcCanManagedRepositoryPushFromPortableClient()) {
+        return 'Leave this blank to use the PMS-managed repository locally, or set a GitHub/GitLab remote if you prefer.';
+    }
+
+    return 'Set this if you want downloaded repositories to push from your local machine when the PMS app runs on Render.';
+}
+
+function vcDeleteRepositoryTracking(mysqli|PgsqlMysqliCompatConnection $conn, int $repositoryId): void
+{
+    $clearParentStmt = $conn->prepare('UPDATE project_repositories SET parent_repository_id = NULL WHERE parent_repository_id = ?');
+    $clearParentStmt->bind_param('i', $repositoryId);
+    $clearParentStmt->execute();
+    $clearParentStmt->close();
+
+    $deleteMergesStmt = $conn->prepare('DELETE FROM repository_merges WHERE repository_id = ?');
+    $deleteMergesStmt->bind_param('i', $repositoryId);
+    $deleteMergesStmt->execute();
+    $deleteMergesStmt->close();
+
+    $deleteOperationsStmt = $conn->prepare('DELETE FROM repository_operations WHERE repository_id = ?');
+    $deleteOperationsStmt->bind_param('i', $repositoryId);
+    $deleteOperationsStmt->execute();
+    $deleteOperationsStmt->close();
+
+    $deleteRepositoryStmt = $conn->prepare('DELETE FROM project_repositories WHERE id = ?');
+    $deleteRepositoryStmt->bind_param('i', $repositoryId);
+    $deleteRepositoryStmt->execute();
+    $deleteRepositoryStmt->close();
+}
+
+function vcFindProjectFallbackRepositoryId(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId): int
+{
+    if ($projectId <= 0) {
+        return 0;
+    }
+
+    $stmt = $conn->prepare('SELECT id FROM project_repositories WHERE project_id = ? ORDER BY created_at DESC, id DESC LIMIT 1');
+    $stmt->bind_param('i', $projectId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return (int) ($row['id'] ?? 0);
+}
+
+function vcResolveManagedRepositoryDisplayUrl(string $slug): string
+{
+    if (vcCanManagedRepositoryPushFromPortableClient()) {
+        return vcGenerateRepositoryFileCloneUrl($slug);
+    }
+
+    return vcGenerateRepositoryHttpCloneUrl($slug);
+}
+
+function vcResolveManagedRepositoryCreateUrl(string $slug): string
+{
+    return vcResolveManagedRepositoryDisplayUrl($slug);
+}
+
+function vcResolveRepositoryDisplayRemote(?string $externalRemoteUrl, string $slug): string
+{
+    $externalRemoteUrl = vcNormalizeExternalRemoteUrl($externalRemoteUrl);
+    if ($externalRemoteUrl !== null) {
+        return $externalRemoteUrl;
+    }
+
+    return vcResolveManagedRepositoryDisplayUrl($slug);
+}
+
+function vcGetRepositoryDisplayRemoteKind(?string $externalRemoteUrl): string
+{
+    return vcNormalizeExternalRemoteUrl($externalRemoteUrl) !== null ? 'external' : 'managed';
 }
 
 function vcIsInternalManagedRepositoryUrl(string $url): bool
@@ -245,6 +363,16 @@ function vcIsInternalManagedRepositoryUrl(string $url): bool
     $prefix = rtrim(BASE_URL, '/') . '/git/';
 
     return str_starts_with($normalized, $prefix) && str_ends_with($normalized, '.git');
+}
+
+function vcNormalizeExternalRemoteUrl(?string $externalRemoteUrl): ?string
+{
+    $externalRemoteUrl = trim((string) $externalRemoteUrl);
+    if ($externalRemoteUrl === '' || vcIsInternalManagedRepositoryUrl($externalRemoteUrl)) {
+        return null;
+    }
+
+    return $externalRemoteUrl;
 }
 
 function vcEnsureDirectory(string $path): void
@@ -324,6 +452,16 @@ function vcRunGitCommand(array $arguments, ?string $workingDirectory = null): ar
     }
 
     return $result;
+}
+
+function vcTryGitCommand(array $arguments, ?string $workingDirectory = null): bool
+{
+    try {
+        vcRunGitCommand($arguments, $workingDirectory);
+        return true;
+    } catch (Throwable $ignored) {
+        return false;
+    }
 }
 
 function vcWriteTextFile(string $path, string $contents): void
@@ -424,6 +562,35 @@ function vcInstallWorkspaceSyncHook(string $workspacePath): void
     $hookPath = $workspacePath . DIRECTORY_SEPARATOR . '.git' . DIRECTORY_SEPARATOR . 'hooks' . DIRECTORY_SEPARATOR . 'post-commit';
     vcCopyFile($exampleHookPath, $hookPath);
     @chmod($hookPath, 0755);
+}
+
+function vcConfigureLocalRepositoryRemote(
+    string $repositoryPath,
+    string $slug,
+    string $defaultBranch,
+    ?string $externalRemoteUrl = null,
+    bool $portableClient = false
+): void {
+    $remoteUrl = vcResolvePreferredWritableRemoteUrl($slug, $externalRemoteUrl, $portableClient);
+    $hasOrigin = vcTryGitCommand(['remote', 'get-url', 'origin'], $repositoryPath);
+
+    if ($remoteUrl === null) {
+        if ($hasOrigin) {
+            vcTryGitCommand(['remote', 'remove', 'origin'], $repositoryPath);
+        }
+        return;
+    }
+
+    if ($hasOrigin) {
+        vcRunGitCommand(['remote', 'set-url', 'origin', $remoteUrl], $repositoryPath);
+    } else {
+        vcRunGitCommand(['remote', 'add', 'origin', $remoteUrl], $repositoryPath);
+    }
+
+    $defaultBranch = trim($defaultBranch);
+    if ($defaultBranch !== '') {
+        vcTryGitCommand(['branch', '--set-upstream-to=origin/' . $defaultBranch, $defaultBranch], $repositoryPath);
+    }
 }
 
 function vcCreateRepositoryWorkspace(string $slug, string $defaultBranch, string $httpCloneUrl, ?string $externalRemoteUrl = null): array
