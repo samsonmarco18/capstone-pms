@@ -156,11 +156,12 @@ VALUES (
 6. Follow the setup wizard
 7. Done! ✅
 
-See [QUICKSTART_RENDER.md](QUICKSTART_RENDER.md) for detailed steps.
+See [QUICKSTART_RENDER.md](QUICKSTART_RENDER.md) for the short path and [RENDER_DEPLOYMENT.md](RENDER_DEPLOYMENT.md) for the full guide.
 
-For the free Render path, this repo now includes:
-- `render.yaml` for a Docker web service plus free Render Postgres
-- `database.postgres.sql` for importing the PostgreSQL schema
+For the Render path, this repo now includes:
+- `render.yaml` for a Docker web service plus Render Postgres
+- `database.postgres.sql` for the PostgreSQL schema and seed data
+- automatic first-boot Postgres initialization inside the container
 - dual-driver support so local MySQL development can continue
 
 ### Deploy to Other Platforms

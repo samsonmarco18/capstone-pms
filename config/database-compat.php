@@ -259,25 +259,72 @@ final class PgsqlQueryTranslator
             $sql
         ) ?? $sql;
 
-        $sql = preg_replace_callback(
-            '/DATE_SUB\s*\(\s*(.+?)\s*,\s*INTERVAL\s+(\d+)\s+(MINUTE|HOUR|DAY|MONTH|YEAR)\s*\)/i',
-            static fn(array $matches): string =>
-                '(' . trim($matches[1]) . " - INTERVAL '" . $matches[2] . ' ' . strtolower($matches[3]) . "')",
-            $sql
-        ) ?? $sql;
+        $sql = self::translateInsertIgnore($sql);
+        $sql = self::translateFunctionCalls($sql, 'DATE_SUB', static function (array $args): ?string {
+            if (count($args) !== 2) {
+                return null;
+            }
 
-        $sql = preg_replace_callback(
-            '/DATE_ADD\s*\(\s*(.+?)\s*,\s*INTERVAL\s+(\d+)\s+(MINUTE|HOUR|DAY|MONTH|YEAR)\s*\)/i',
-            static fn(array $matches): string =>
-                '(' . trim($matches[1]) . " + INTERVAL '" . $matches[2] . ' ' . strtolower($matches[3]) . "')",
-            $sql
-        ) ?? $sql;
+            if (!preg_match('/^INTERVAL\s+(\d+)\s+(MINUTE|HOUR|DAY|MONTH|YEAR)$/i', trim($args[1]), $matches)) {
+                return null;
+            }
 
-        $sql = preg_replace_callback(
-            '/DATEDIFF\s*\(\s*([^,]+)\s*,\s*NOW\(\)\s*\)/i',
-            static fn(array $matches): string => 'CAST((DATE(' . trim($matches[1]) . ') - CURRENT_DATE) AS INTEGER)',
-            $sql
-        ) ?? $sql;
+            return '(' . trim($args[0]) . " - INTERVAL '" . $matches[1] . ' ' . strtolower($matches[2]) . "')";
+        });
+        $sql = self::translateFunctionCalls($sql, 'DATE_ADD', static function (array $args): ?string {
+            if (count($args) !== 2) {
+                return null;
+            }
+
+            if (!preg_match('/^INTERVAL\s+(\d+)\s+(MINUTE|HOUR|DAY|MONTH|YEAR)$/i', trim($args[1]), $matches)) {
+                return null;
+            }
+
+            return '(' . trim($args[0]) . " + INTERVAL '" . $matches[1] . ' ' . strtolower($matches[2]) . "')";
+        });
+        $sql = self::translateFunctionCalls($sql, 'DATEDIFF', static function (array $args): ?string {
+            if (count($args) !== 2) {
+                return null;
+            }
+
+            return 'CAST((DATE(' . trim($args[0]) . ') - DATE(' . trim($args[1]) . ')) AS INTEGER)';
+        });
+        $sql = self::translateFunctionCalls($sql, 'TIMESTAMPDIFF', static function (array $args): ?string {
+            if (count($args) !== 3) {
+                return null;
+            }
+
+            $unit = strtoupper(trim($args[0], " \t\n\r\0\x0B'\""));
+            $seconds = match ($unit) {
+                'MINUTE' => 60,
+                'HOUR' => 3600,
+                'DAY' => 86400,
+                default => null,
+            };
+
+            if ($seconds === null) {
+                return null;
+            }
+
+            return '(EXTRACT(EPOCH FROM ((' . trim($args[2]) . ') - (' . trim($args[1]) . '))) / ' . $seconds . ')';
+        });
+        $sql = self::translateFunctionCalls($sql, 'DATE_FORMAT', static function (array $args): ?string {
+            if (count($args) !== 2) {
+                return null;
+            }
+
+            $format = trim($args[1], " \t\n\r\0\x0B'\"");
+            $mappedFormat = strtr($format, [
+                '%Y' => 'YYYY',
+                '%m' => 'MM',
+                '%d' => 'DD',
+                '%H' => 'HH24',
+                '%i' => 'MI',
+                '%s' => 'SS',
+            ]);
+
+            return "TO_CHAR(" . trim($args[0]) . ", '" . str_replace("'", "''", $mappedFormat) . "')";
+        });
 
         $sql = preg_replace('/\bCURDATE\(\)/i', 'CURRENT_DATE', $sql) ?? $sql;
         $sql = preg_replace('/\bLONGTEXT\b/i', 'TEXT', $sql) ?? $sql;
@@ -291,5 +338,114 @@ final class PgsqlQueryTranslator
         $sql = preg_replace('/\bENUM\s*\((?:[^()]|(?R))*\)/i', 'TEXT', $sql) ?? $sql;
 
         return $sql;
+    }
+
+    private static function translateInsertIgnore(string $sql): string
+    {
+        if (preg_match('/^\s*INSERT\s+IGNORE\s+INTO\b/i', $sql) !== 1) {
+            return $sql;
+        }
+
+        $translated = preg_replace('/^\s*INSERT\s+IGNORE\s+INTO\b/i', 'INSERT INTO', $sql, 1) ?? $sql;
+        $trimmed = rtrim($translated);
+
+        if (str_ends_with($trimmed, ';')) {
+            return substr($trimmed, 0, -1) . ' ON CONFLICT DO NOTHING;';
+        }
+
+        return $trimmed . ' ON CONFLICT DO NOTHING';
+    }
+
+    /**
+     * @param callable(array<int, string>): ?string $callback
+     */
+    private static function translateFunctionCalls(string $sql, string $functionName, callable $callback): string
+    {
+        $needle = strtoupper($functionName) . '(';
+        $offset = 0;
+
+        while (($position = stripos($sql, $needle, $offset)) !== false) {
+            $openParen = strpos($sql, '(', $position + strlen($functionName));
+            if ($openParen === false) {
+                break;
+            }
+
+            $closeParen = self::findMatchingParen($sql, $openParen);
+            if ($closeParen === null) {
+                break;
+            }
+
+            $arguments = self::splitTopLevelArguments(substr($sql, $openParen + 1, $closeParen - $openParen - 1));
+            $replacement = $callback($arguments);
+
+            if ($replacement === null) {
+                $offset = $closeParen + 1;
+                continue;
+            }
+
+            $sql = substr($sql, 0, $position) . $replacement . substr($sql, $closeParen + 1);
+            $offset = $position + strlen($replacement);
+        }
+
+        return $sql;
+    }
+
+    private static function findMatchingParen(string $sql, int $openParen): ?int
+    {
+        $depth = 0;
+        $length = strlen($sql);
+
+        for ($i = $openParen; $i < $length; $i++) {
+            $character = $sql[$i];
+
+            if ($character === '(') {
+                $depth++;
+                continue;
+            }
+
+            if ($character === ')') {
+                $depth--;
+                if ($depth === 0) {
+                    return $i;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function splitTopLevelArguments(string $input): array
+    {
+        $parts = [];
+        $current = '';
+        $depth = 0;
+        $length = strlen($input);
+
+        for ($i = 0; $i < $length; $i++) {
+            $character = $input[$i];
+
+            if ($character === ',' && $depth === 0) {
+                $parts[] = trim($current);
+                $current = '';
+                continue;
+            }
+
+            if ($character === '(') {
+                $depth++;
+            } elseif ($character === ')') {
+                $depth--;
+            }
+
+            $current .= $character;
+        }
+
+        if (trim($current) !== '') {
+            $parts[] = trim($current);
+        }
+
+        return $parts;
     }
 }
