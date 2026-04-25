@@ -2,8 +2,8 @@
 set -eu
 
 if [ -z "${DATABASE_URL:-}" ]; then
-    echo "Skipping Postgres bootstrap because DATABASE_URL is not set."
-    exit 0
+    echo "DATABASE_URL is required for Postgres startup but is not set."
+    exit 1
 fi
 
 if [ ! -f "database.postgres.sql" ]; then

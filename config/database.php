@@ -62,6 +62,11 @@ function getConnection(): mysqli|PgsqlMysqliCompatConnection
         return $conn;
     }
 
+    if (DB_DRIVER === 'pgsql' && (DB_HOST === '' || DB_USER === '' || DB_NAME === '')) {
+        error_log('Postgres configuration is incomplete. Check Render environment variables.');
+        die('Database configuration is incomplete. Ensure Render DATABASE_URL is configured.');
+    }
+
     try {
         if (DB_DRIVER === 'pgsql') {
             $conn = new PgsqlMysqliCompatConnection(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
@@ -69,11 +74,22 @@ function getConnection(): mysqli|PgsqlMysqliCompatConnection
             $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
         }
     } catch (Throwable $e) {
-        error_log('Database connection failed: ' . $e->getMessage());
+        $errorMessage = $e->getMessage();
+        error_log('Database connection failed: ' . $errorMessage);
 
         $message = 'Database connection error. Please contact the administrator.';
-        if (str_contains(strtolower($e->getMessage()), 'unknown database')) {
+        $normalized = strtolower($errorMessage);
+
+        if (str_contains($normalized, 'unknown database')) {
             $message = "Database '" . DB_NAME . "' was not found. Import database.sql first.";
+        } elseif (str_contains($normalized, 'database "') && str_contains($normalized, '" does not exist')) {
+            $message = "Database '" . DB_NAME . "' does not exist on Render yet. Check the Postgres resource and DATABASE_URL.";
+        } elseif (str_contains($normalized, 'could not translate host name')) {
+            $message = 'Database host could not be resolved. Check Render DATABASE_URL.';
+        } elseif (str_contains($normalized, 'connection refused') || str_contains($normalized, 'no route to host')) {
+            $message = 'Database server is unreachable. Check Render Postgres status and region.';
+        } elseif (str_contains($normalized, 'could not find driver')) {
+            $message = 'PostgreSQL PHP driver is missing in the container image.';
         }
 
         die($message);
