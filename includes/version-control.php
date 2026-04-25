@@ -172,6 +172,12 @@ function vcGenerateRepositoryHttpCloneUrl(string $slug): string
     return rtrim(BASE_URL, '/') . '/git/' . rawurlencode(vcGenerateSlug($slug)) . '.git';
 }
 
+function vcGetManagedRepositoryPushUsername(): string
+{
+    $username = trim((string) (getenv('GIT_HTTP_PUSH_USERNAME') ?: 'git'));
+    return $username !== '' ? $username : 'git';
+}
+
 function vcGenerateRepositoryLocalClonePath(string $slug): string
 {
     return vcGetRepositoryBarePath($slug);
@@ -234,39 +240,39 @@ function vcCanConfigureRepositorySync(array $user): bool
 
 function vcCanManagedRepositoryPushFromPortableClient(): bool
 {
-    return !vcIsRenderEnvironment();
+    return true;
 }
 
 function vcGetManagedRepositoryPortablePushHint(): string
 {
-    if (vcCanManagedRepositoryPushFromPortableClient()) {
-        return 'Downloaded repositories can push back to the PMS-managed bare repository on this same machine.';
+    if (vcIsRenderEnvironment()) {
+        return 'Downloaded repositories can push back to the PMS-managed repository on Render by using the repository token as the HTTP password.';
     }
 
-    return 'On Render, downloaded repositories need an external remote URL before push will work from your local machine.';
+    return 'Downloaded repositories can push back to the PMS-managed bare repository on this same machine.';
 }
 
 function vcGetManagedRepositoryCreateHint(): string
 {
-    if (vcCanManagedRepositoryPushFromPortableClient()) {
-        return 'ERNI PMS will create the managed repository and a ready-to-use working folder. Local downloads can push back to this PMS instance on the same machine.';
+    if (vcIsRenderEnvironment()) {
+        return 'ERNI PMS will create the managed repository and a ready-to-use working folder. On Render, use the repository token as the HTTP password when pushing from your Git client.';
     }
 
-    return 'ERNI PMS will create the managed repository and a ready-to-use working folder. For pushes from your local machine, set an external remote URL after creation.';
+    return 'ERNI PMS will create the managed repository and a ready-to-use working folder. Local downloads can push back to this PMS instance on the same machine.';
 }
 
 function vcGetRepositoryManagedCloneLabel(): string
 {
-    return vcCanManagedRepositoryPushFromPortableClient() ? 'Managed Clone / Push URL' : 'Managed Clone URL';
+    return 'Managed Clone / Push URL';
 }
 
 function vcGetRepositoryManagedRemoteDescription(): string
 {
-    if (vcCanManagedRepositoryPushFromPortableClient()) {
-        return 'Use this PMS-managed repository when your app and Git client are on the same machine.';
+    if (vcIsRenderEnvironment()) {
+        return 'Use this PMS-managed HTTPS remote for clone, fetch, and push. Use your repository token as the HTTP password when Git prompts.';
     }
 
-    return 'This PMS-managed URL is useful for server-side tracking and downloads. Use an external remote for local push from Render deployments.';
+    return 'Use this PMS-managed repository when your app and Git client are on the same machine.';
 }
 
 function vcGetRepositoryExternalRemoteLabel(): string
@@ -281,11 +287,11 @@ function vcGetRepositoryExternalRemotePlaceholder(): string
 
 function vcGetRepositoryExternalRemoteHelp(): string
 {
-    if (vcCanManagedRepositoryPushFromPortableClient()) {
-        return 'Leave this blank to use the PMS-managed repository locally, or set a GitHub/GitLab remote if you prefer.';
+    if (vcIsRenderEnvironment()) {
+        return 'Leave this blank to use the PMS-managed Render remote with the repository token, or set a GitHub/GitLab remote if you prefer.';
     }
 
-    return 'Set this if you want downloaded repositories to push from your local machine when the PMS app runs on Render.';
+    return 'Leave this blank to use the PMS-managed repository locally, or set a GitHub/GitLab remote if you prefer.';
 }
 
 function vcDeleteRepositoryTracking(mysqli|PgsqlMysqliCompatConnection $conn, int $repositoryId): void
@@ -328,7 +334,7 @@ function vcFindProjectFallbackRepositoryId(mysqli|PgsqlMysqliCompatConnection $c
 
 function vcResolveManagedRepositoryDisplayUrl(string $slug): string
 {
-    if (vcCanManagedRepositoryPushFromPortableClient()) {
+    if (!vcIsRenderEnvironment()) {
         return vcGenerateRepositoryFileCloneUrl($slug);
     }
 
@@ -340,11 +346,37 @@ function vcResolveManagedRepositoryCreateUrl(string $slug): string
     return vcResolveManagedRepositoryDisplayUrl($slug);
 }
 
-function vcResolveRepositoryDisplayRemote(?string $externalRemoteUrl, string $slug): string
+function vcGenerateRepositoryAuthenticatedHttpCloneUrl(string $slug, string $webhookToken): string
+{
+    $webhookToken = trim($webhookToken);
+    if ($webhookToken === '') {
+        return vcGenerateRepositoryHttpCloneUrl($slug);
+    }
+
+    $parts = parse_url(vcGenerateRepositoryHttpCloneUrl($slug));
+    if (!is_array($parts) || empty($parts['host'])) {
+        return vcGenerateRepositoryHttpCloneUrl($slug);
+    }
+
+    $scheme = (string) ($parts['scheme'] ?? 'https');
+    $host = (string) $parts['host'];
+    $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+    $path = (string) ($parts['path'] ?? '');
+    $username = rawurlencode(vcGetManagedRepositoryPushUsername());
+    $password = rawurlencode($webhookToken);
+
+    return $scheme . '://' . $username . ':' . $password . '@' . $host . $port . $path;
+}
+
+function vcResolveRepositoryDisplayRemote(?string $externalRemoteUrl, string $slug, ?string $webhookToken = null): string
 {
     $externalRemoteUrl = vcNormalizeExternalRemoteUrl($externalRemoteUrl);
     if ($externalRemoteUrl !== null) {
         return $externalRemoteUrl;
+    }
+
+    if (vcIsRenderEnvironment()) {
+        return vcGenerateRepositoryAuthenticatedHttpCloneUrl($slug, (string) $webhookToken);
     }
 
     return vcResolveManagedRepositoryDisplayUrl($slug);
@@ -360,6 +392,15 @@ function vcIsInternalManagedRepositoryUrl(string $url): bool
     $normalized = trim($url);
     if ($normalized === '') {
         return false;
+    }
+
+    $parts = parse_url($normalized);
+    if (is_array($parts) && !empty($parts['host'])) {
+        $scheme = (string) ($parts['scheme'] ?? 'https');
+        $host = (string) $parts['host'];
+        $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
+        $path = (string) ($parts['path'] ?? '');
+        $normalized = $scheme . '://' . $host . $port . $path;
     }
 
     $prefix = rtrim(BASE_URL, '/') . '/git/';
@@ -645,6 +686,8 @@ function vcBuildRepositoryReadme(
         "```bash\n" .
         "git clone \"" . str_replace('\\', '/', $localClonePath) . "\"\n" .
         "```\n\n" .
+        "## Push Authentication\n\n" .
+        "Use the repository token shown in ERNI PMS as the HTTP password when pushing to the managed remote.\n\n" .
         "## PMS Sync\n\n" .
         "A sample hook is included in `.erni-pms/post-commit.example.sh`.\n" .
         "Copy it into `.git/hooks/post-commit` inside your cloned repository to sync commits back to ERNI PMS automatically.\n";
@@ -720,6 +763,8 @@ function vcCreateManagedRepository(
 
         vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'config', 'user.name', 'ERNI PMS'], APP_ROOT_PATH);
         vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'config', 'user.email', 'noreply@erni-pms.local'], APP_ROOT_PATH);
+        vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'config', 'http.receivepack', 'true'], APP_ROOT_PATH);
+        vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'config', 'http.uploadpack', 'true'], APP_ROOT_PATH);
         vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, '--work-tree=' . $tempWorkingPath, 'add', '.'], APP_ROOT_PATH);
         vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, '--work-tree=' . $tempWorkingPath, 'commit', '-m', 'Initial repository scaffold'], APP_ROOT_PATH);
         vcInstallServerRepositoryHooks($bareRepositoryPath, $syncEndpointUrl);

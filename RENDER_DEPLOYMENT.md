@@ -85,6 +85,8 @@ Change the password immediately after the first login.
 - The app listens on Render's assigned `PORT`.
 - Health checks are served from `/healthz.php`.
 - The app uses the Postgres compatibility layer in `config/database-compat.php` for MySQL-style queries still used by the codebase.
+- Managed Git repositories are served through Apache smart HTTP at `/git/<slug>.git`.
+- Clone and fetch work over HTTPS, and push works over HTTPS when the Git client uses the repository token as the HTTP password.
 
 ## Storage limitations
 

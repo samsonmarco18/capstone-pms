@@ -201,7 +201,11 @@ if ($selectedRepository) {
     $selectedRepositoryWorkspacePath = vcGetRepositoryWorkspacePath((string) $selectedRepository['slug']);
     $selectedRepositoryHasWorkspace = is_dir($selectedRepositoryWorkspacePath);
     $selectedRepositoryExternalRemoteUrl = (string) (vcNormalizeExternalRemoteUrl((string) ($selectedRepository['external_remote_url'] ?? '')) ?? '');
-    $selectedRepositoryDisplayRemoteUrl = vcResolveRepositoryDisplayRemote($selectedRepositoryExternalRemoteUrl, (string) $selectedRepository['slug']);
+    $selectedRepositoryDisplayRemoteUrl = vcResolveRepositoryDisplayRemote(
+        $selectedRepositoryExternalRemoteUrl,
+        (string) $selectedRepository['slug'],
+        (string) ($selectedRepository['webhook_token'] ?? '')
+    );
     $selectedRepositoryDisplayRemoteKind = vcGetRepositoryDisplayRemoteKind($selectedRepositoryExternalRemoteUrl);
 
     if ($selectedCommitId > 0) {
@@ -761,6 +765,8 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 <input class="form-control" readonly value="<?php echo htmlspecialchars((string) $selectedRepository['webhook_token']); ?>">
                             </div>
                             <div class="setup-note">
+                                On Render, the copy button uses the managed Git username and this repository token so `git push` can authenticate over HTTPS.
+                                <br>
                                 The URLs above are generated from the current host, so they keep working after deployment as long as your web server is reachable from the client machine.
                             </div>
                         </div>

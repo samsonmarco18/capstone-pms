@@ -5,11 +5,14 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN docker-php-ext-install mysqli pdo pdo_mysql pdo_pgsql pgsql \
-    && a2enmod rewrite headers \
+    && a2enmod rewrite headers cgi env setenvif \
     && sed -ri 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
 
 COPY docker/apache-render-port.sh /usr/local/bin/apache-render-port.sh
-RUN chmod +x /usr/local/bin/apache-render-port.sh
+COPY docker/apache-git-http.conf /etc/apache2/conf-available/git-http.conf
+COPY docker/git-http-backend-wrapper.sh /usr/local/bin/git-http-backend-wrapper.sh
+RUN chmod +x /usr/local/bin/apache-render-port.sh /usr/local/bin/git-http-backend-wrapper.sh \
+    && a2enconf git-http
 
 WORKDIR /var/www/html
 COPY . /var/www/html/
