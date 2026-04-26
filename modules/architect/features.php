@@ -2,6 +2,32 @@
 require_once '../../includes/auth.php';
 requireRole('architect');
 
+ob_start();
+register_shutdown_function(static function (): void {
+    if (ob_get_level() === 0) {
+        return;
+    }
+
+    foreach (headers_list() as $header) {
+        if (stripos($header, 'Location:') === 0) {
+            ob_end_flush();
+            return;
+        }
+    }
+
+    $content = ob_get_contents();
+    if ($content !== false && trim($content) === '') {
+        error_log('Architect features page returned an empty response body.');
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: text/html; charset=UTF-8');
+        }
+        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Features Page Error</title><style>body{margin:0;font-family:Arial,sans-serif;background:#f5f7fb;color:#1f2937}.wrap{max-width:720px;margin:8vh auto;padding:24px}.card{background:#fff;border:1px solid #dbe3ef;border-radius:16px;padding:24px;box-shadow:0 12px 28px rgba(15,23,42,.08)}h1{margin:0 0 12px;font-size:24px}p{margin:0 0 10px;line-height:1.5}.btn{display:inline-block;margin-top:16px;padding:10px 14px;border-radius:10px;background:#1f6392;color:#fff;text-decoration:none}</style></head><body><div class="wrap"><div class="card"><h1>Features page failed to render</h1><p>The request completed without returning any page content.</p><p>Check the Render logs for the request to <code>/modules/architect/features.php</code>.</p><a class="btn" href="project-review.php?id=' . (int) ($_GET['id'] ?? 0) . '">Back to Project Review</a></div></div></body></html>';
+    }
+
+    ob_end_flush();
+});
+
 $conn = getConnection();
 $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
