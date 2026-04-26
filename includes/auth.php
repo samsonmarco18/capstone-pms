@@ -16,9 +16,25 @@ function getCurrentUser(): ?array
 
     $conn = getConnection();
     $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+    if ($stmt === false) {
+        error_log('getCurrentUser prepare failed: ' . ($conn->error ?? 'unknown error'));
+        return null;
+    }
+
     $stmt->bind_param('i', $_SESSION['user_id']);
-    $stmt->execute();
+    if (!$stmt->execute()) {
+        error_log('getCurrentUser execute failed for user_id=' . (int) $_SESSION['user_id'] . ': ' . ($conn->error ?? 'unknown error'));
+        $stmt->close();
+        return null;
+    }
+
     $result = $stmt->get_result();
+    if ($result === false) {
+        error_log('getCurrentUser get_result failed for user_id=' . (int) $_SESSION['user_id'] . ': ' . ($conn->error ?? 'unknown error'));
+        $stmt->close();
+        return null;
+    }
+
     $user = $result->fetch_assoc() ?: null;
     $stmt->close();
 
@@ -52,6 +68,7 @@ function hasAllRoles(array $roles): bool
 function requireLogin(): void
 {
     if (!isLoggedIn()) {
+        error_log('requireLogin redirecting guest from ' . ($_SERVER['REQUEST_URI'] ?? 'unknown-uri'));
         $_SESSION['redirect_after_login'] = $_SERVER['REQUEST_URI'] ?? BASE_URL;
         header('Location: ' . BASE_URL . 'login.php');
         exit();
@@ -63,6 +80,12 @@ function requireRole(array|string $roles): void
     requireLogin();
 
     if (!hasRole($roles)) {
+        $user = getCurrentUser();
+        error_log(
+            'requireRole denied access to ' . ($_SERVER['REQUEST_URI'] ?? 'unknown-uri')
+            . ' for user_id=' . (int) ($user['id'] ?? 0)
+            . ' role=' . (string) ($user['role'] ?? 'unknown')
+        );
         http_response_code(403);
         header('Location: ' . BASE_URL . 'index.php');
         exit();

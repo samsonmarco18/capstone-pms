@@ -2,6 +2,12 @@
 require_once '../../includes/auth.php';
 requireRole('architect');
 
+function featuresDebugCheckpoint(string $step): void
+{
+    header('X-ERNI-Features-Step: ' . $step, true);
+    error_log('features.php checkpoint: ' . $step);
+}
+
 ob_start();
 register_shutdown_function(static function (): void {
     if (ob_get_level() === 0) {
@@ -28,13 +34,18 @@ register_shutdown_function(static function (): void {
     ob_end_flush();
 });
 
+featuresDebugCheckpoint('after-auth');
+
 $conn = getConnection();
 $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $pageError = null;
 
+featuresDebugCheckpoint('connection-ready');
+
 $project = null;
 try {
+    featuresDebugCheckpoint('project-query-start');
     $projectStmt = $conn->prepare("
         SELECT p.*, c.name AS client_name
         FROM projects p
@@ -56,12 +67,15 @@ try {
     }
 
     $projectStmt->close();
+    featuresDebugCheckpoint('project-query-complete');
 } catch (Throwable $e) {
     error_log($e->getMessage());
     $pageError = 'Unable to load the project details right now.';
+    featuresDebugCheckpoint('project-query-failed');
 }
 
 if (!$project && $pageError === null) {
+    featuresDebugCheckpoint('project-missing-redirect');
     $_SESSION['error'] = 'Project not found or unavailable.';
     header('Location: projects.php');
     exit();
@@ -109,6 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
 $existingFeatures = [];
 if ($project) {
     try {
+        featuresDebugCheckpoint('feature-query-start');
         $featureStmt = $conn->prepare("
             SELECT id, title, description, priority
             FROM tasks
@@ -133,12 +148,15 @@ if ($project) {
             throw new RuntimeException('Architect features list execute failed: ' . $conn->error);
         }
         $featureStmt->close();
+        featuresDebugCheckpoint('feature-query-complete');
     } catch (Throwable $e) {
         error_log($e->getMessage());
         $pageError = 'Feature records are unavailable right now. You can still add new features below.';
+        featuresDebugCheckpoint('feature-query-failed');
     }
 }
 
+featuresDebugCheckpoint('before-template-includes');
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
