@@ -243,6 +243,53 @@ CREATE TABLE feature_estimations (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- FEATURE ESTIMATION MANUAL RECOMMENDATIONS TABLE
+-- =====================================================
+CREATE TABLE feature_estimation_manual_recommendations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    feature_signature VARCHAR(190) NOT NULL,
+    feature_title VARCHAR(255) NOT NULL,
+    recommendation_name VARCHAR(255) NOT NULL,
+    source_project_id INT NULL,
+    source_task_id INT NULL,
+    phase_name VARCHAR(150),
+    expectation_description LONGTEXT,
+    min_days INT NOT NULL,
+    likely_days INT NOT NULL,
+    max_days INT NOT NULL,
+    involvement_plan_json LONGTEXT,
+    component_plan_json LONGTEXT,
+    created_by INT NOT NULL,
+    updated_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_manual_feature_recommendation (created_by, feature_signature, recommendation_name),
+    KEY idx_manual_feature_signature (feature_signature),
+    FOREIGN KEY (source_project_id) REFERENCES projects(id) ON DELETE SET NULL,
+    FOREIGN KEY (source_task_id) REFERENCES tasks(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- FEATURE ESTIMATION RECOMMENDATION FEEDBACK TABLE
+-- =====================================================
+CREATE TABLE feature_estimation_recommendation_feedback (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    task_id INT NOT NULL,
+    source_type ENUM('history', 'manual') NOT NULL,
+    source_id INT NOT NULL,
+    action ENUM('accepted', 'rejected') NOT NULL,
+    acted_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_task_recommendation_feedback (task_id, source_type, source_id),
+    KEY idx_feedback_task (task_id),
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (acted_by) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- TEAM COMPOSITION TABLE
 -- =====================================================
 CREATE TABLE team_compositions (

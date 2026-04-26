@@ -15,6 +15,47 @@ $availableDepartments = [
     'Database Administrator',
 ];
 
+function featureRecommendationSignature(string $value): string
+{
+    $normalized = function_exists('mb_strtolower')
+        ? mb_strtolower($value, 'UTF-8')
+        : strtolower($value);
+    $normalized = preg_replace('/[^a-z0-9]+/i', ' ', $normalized) ?? '';
+    $normalized = trim(preg_replace('/\s+/', ' ', $normalized) ?? '');
+
+    return substr($normalized, 0, 190);
+}
+
+function saveRecommendationFeedback(mysqli $conn, int $taskId, string $sourceType, int $sourceId, string $action, int $expertId): void
+{
+    if ($taskId <= 0 || $sourceId <= 0) {
+        return;
+    }
+
+    if (!in_array($sourceType, ['history', 'manual'], true) || !in_array($action, ['accepted', 'rejected'], true)) {
+        return;
+    }
+
+    $stmt = $conn->prepare("
+        INSERT INTO feature_estimation_recommendation_feedback (task_id, source_type, source_id, action, acted_by)
+        VALUES (?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE action = VALUES(action), acted_by = VALUES(acted_by), updated_at = CURRENT_TIMESTAMP
+    ");
+    if (!$stmt) {
+        return;
+    }
+
+    $stmt->bind_param('isisi', $taskId, $sourceType, $sourceId, $action, $expertId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function decodeRecommendationJson(?string $json): array
+{
+    $decoded = json_decode((string) $json, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
 // Check if project_phases column exists (auto-create if missing)
 $hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
 if (!$hasProjectPhases) {
@@ -54,6 +95,67 @@ if (!$hasComponentPlan) {
         $hasComponentPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'component_plan_json'")->num_rows > 0;
     } catch (Throwable $e) {
         // Leave $hasComponentPlan as false
+    }
+}
+
+$hasManualRecommendationTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_manual_recommendations'")->num_rows > 0;
+if (!$hasManualRecommendationTable) {
+    try {
+        $conn->query("
+            CREATE TABLE feature_estimation_manual_recommendations (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                feature_signature VARCHAR(190) NOT NULL,
+                feature_title VARCHAR(255) NOT NULL,
+                recommendation_name VARCHAR(255) NOT NULL,
+                source_project_id INT NULL,
+                source_task_id INT NULL,
+                phase_name VARCHAR(150) NULL,
+                expectation_description LONGTEXT,
+                min_days INT NOT NULL,
+                likely_days INT NOT NULL,
+                max_days INT NOT NULL,
+                involvement_plan_json LONGTEXT NULL,
+                component_plan_json LONGTEXT NULL,
+                created_by INT NOT NULL,
+                updated_by INT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_manual_feature_recommendation (created_by, feature_signature, recommendation_name),
+                KEY idx_manual_feature_signature (feature_signature),
+                CONSTRAINT fk_manual_recommendation_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+                CONSTRAINT fk_manual_recommendation_updater FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+                CONSTRAINT fk_manual_recommendation_project FOREIGN KEY (source_project_id) REFERENCES projects(id) ON DELETE SET NULL,
+                CONSTRAINT fk_manual_recommendation_task FOREIGN KEY (source_task_id) REFERENCES tasks(id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        $hasManualRecommendationTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_manual_recommendations'")->num_rows > 0;
+    } catch (Throwable $e) {
+        $hasManualRecommendationTable = false;
+    }
+}
+
+$hasRecommendationFeedbackTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_recommendation_feedback'")->num_rows > 0;
+if (!$hasRecommendationFeedbackTable) {
+    try {
+        $conn->query("
+            CREATE TABLE feature_estimation_recommendation_feedback (
+                id INT PRIMARY KEY AUTO_INCREMENT,
+                task_id INT NOT NULL,
+                source_type ENUM('history', 'manual') NOT NULL,
+                source_id INT NOT NULL,
+                action ENUM('accepted', 'rejected') NOT NULL,
+                acted_by INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_task_recommendation_feedback (task_id, source_type, source_id),
+                KEY idx_feedback_task (task_id),
+                CONSTRAINT fk_recommendation_feedback_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                CONSTRAINT fk_recommendation_feedback_actor FOREIGN KEY (acted_by) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ");
+        $hasRecommendationFeedbackTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_recommendation_feedback'")->num_rows > 0;
+    } catch (Throwable $e) {
+        $hasRecommendationFeedbackTable = false;
     }
 }
 
@@ -178,7 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['project_setup'])) {
 
 // Handle task estimation save (draft)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($_POST['submit_all'])) {
-    $taskId = $_POST['task_id'];
+    $taskId = (int) ($_POST['task_id'] ?? 0);
     $minDays = (int) ($_POST['min_days'] ?? 0);
     $likelyDays = (int) ($_POST['likely_days'] ?? 0);
     $maxDays = (int) ($_POST['max_days'] ?? 0);
@@ -186,6 +288,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     $phaseName = $_POST['phase_name'] ?? null;
     $plannedStart = !empty($_POST['planned_start']) ? $_POST['planned_start'] : null;
     $plannedEnd = !empty($_POST['planned_end']) ? $_POST['planned_end'] : null;
+    $manualRecommendationName = trim((string) ($_POST['manual_recommendation_name'] ?? ''));
+    $acceptedRecommendationType = trim((string) ($_POST['accepted_recommendation_type'] ?? ''));
+    $acceptedRecommendationId = (int) ($_POST['accepted_recommendation_id'] ?? 0);
+    $rejectedRecommendations = json_decode((string) ($_POST['rejected_recommendations_json'] ?? '[]'), true);
     $involvementPlan = json_decode((string) ($_POST['involvement_plan_json'] ?? '[]'), true);
     $componentPlan = json_decode((string) ($_POST['component_plan_json'] ?? '[]'), true);
 
@@ -241,9 +347,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
         exit();
     }
     
-    // Get the project_id for this task
-    $taskInfo = $conn->query("SELECT project_id FROM tasks WHERE id = $taskId")->fetch_assoc();
-    $projectId = $taskInfo['project_id'];
+    $taskStmt = $conn->prepare("SELECT project_id, title FROM tasks WHERE id = ? LIMIT 1");
+    $taskStmt->bind_param('i', $taskId);
+    $taskStmt->execute();
+    $taskInfo = $taskStmt->get_result()->fetch_assoc();
+    $taskStmt->close();
+    $projectId = (int) ($taskInfo['project_id'] ?? 0);
+    $taskTitle = (string) ($taskInfo['title'] ?? '');
+
+    if ($projectId <= 0 || $taskTitle === '') {
+        $_SESSION['error'] = "We couldn't find that feature anymore. Please refresh and try again.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
     
     // Check if estimation exists
     $existing = $conn->query("SELECT id FROM feature_estimations WHERE task_id = $taskId AND expert_id = {$user['id']}");
@@ -327,6 +443,76 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
         $taskStmt->bind_param("ssiiii", $plannedStart, $plannedEnd, $minDays, $likelyDays, $maxDays, $taskId);
         $taskStmt->execute();
         
+        if ($hasRecommendationFeedbackTable && is_array($rejectedRecommendations)) {
+            foreach ($rejectedRecommendations as $rejectedRecommendation) {
+                $sourceType = trim((string) ($rejectedRecommendation['source_type'] ?? ''));
+                $sourceId = (int) ($rejectedRecommendation['source_id'] ?? 0);
+                saveRecommendationFeedback($conn, $taskId, $sourceType, $sourceId, 'rejected', (int) $user['id']);
+            }
+        }
+
+        if ($hasRecommendationFeedbackTable && $acceptedRecommendationId > 0) {
+            saveRecommendationFeedback($conn, $taskId, $acceptedRecommendationType, $acceptedRecommendationId, 'accepted', (int) $user['id']);
+        }
+
+        if ($hasManualRecommendationTable && $manualRecommendationName !== '') {
+            $featureSignature = featureRecommendationSignature($taskTitle);
+            $templateStmt = $conn->prepare("
+                INSERT INTO feature_estimation_manual_recommendations (
+                    feature_signature,
+                    feature_title,
+                    recommendation_name,
+                    source_project_id,
+                    source_task_id,
+                    phase_name,
+                    expectation_description,
+                    min_days,
+                    likely_days,
+                    max_days,
+                    involvement_plan_json,
+                    component_plan_json,
+                    created_by,
+                    updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    feature_title = VALUES(feature_title),
+                    source_project_id = VALUES(source_project_id),
+                    source_task_id = VALUES(source_task_id),
+                    phase_name = VALUES(phase_name),
+                    expectation_description = VALUES(expectation_description),
+                    min_days = VALUES(min_days),
+                    likely_days = VALUES(likely_days),
+                    max_days = VALUES(max_days),
+                    involvement_plan_json = VALUES(involvement_plan_json),
+                    component_plan_json = VALUES(component_plan_json),
+                    updated_by = VALUES(updated_by),
+                    updated_at = CURRENT_TIMESTAMP
+            ");
+
+            if ($templateStmt) {
+                $expertId = (int) $user['id'];
+                $templateStmt->bind_param(
+                    'sssiissiiissii',
+                    $featureSignature,
+                    $taskTitle,
+                    $manualRecommendationName,
+                    $projectId,
+                    $taskId,
+                    $phaseName,
+                    $expectation,
+                    $minDays,
+                    $likelyDays,
+                    $maxDays,
+                    $involvementPlanJson,
+                    $componentPlanJson,
+                    $expertId,
+                    $expertId
+                );
+                $templateStmt->execute();
+                $templateStmt->close();
+            }
+        }
+
         logActivity($user['id'], 'submit_estimation', 'tasks', $taskId, null, $_POST);
         $_SESSION['success'] = "Estimation saved successfully";
     } else {
@@ -338,6 +524,154 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
 }
 
 // Bulk submission handled on project setup save.
+
+$taskRows = [];
+while ($row = $tasks->fetch_assoc()) {
+    $taskRows[] = $row;
+}
+
+$recommendationsByTask = [];
+$taskFeedbackMap = [];
+$taskIds = array_values(array_filter(array_map(static function (array $taskRow): int {
+    return (int) ($taskRow['id'] ?? 0);
+}, $taskRows)));
+
+if (!empty($taskIds) && $hasRecommendationFeedbackTable) {
+    $feedbackSql = "
+        SELECT task_id, source_type, source_id, action
+        FROM feature_estimation_recommendation_feedback
+        WHERE acted_by = {$user['id']} AND task_id IN (" . implode(',', $taskIds) . ")
+    ";
+    $feedbackResult = $conn->query($feedbackSql);
+    if ($feedbackResult) {
+        while ($feedbackRow = $feedbackResult->fetch_assoc()) {
+            $taskFeedbackMap[(int) $feedbackRow['task_id']][$feedbackRow['source_type'] . ':' . (int) $feedbackRow['source_id']] = (string) $feedbackRow['action'];
+        }
+    }
+}
+
+$historyRecommendationsBySignature = [];
+$historyRecommendationsResult = $conn->query("
+    SELECT
+        fe.id AS recommendation_id,
+        fe.task_id,
+        fe.project_id,
+        fe.phase_name,
+        fe.expectation_description,
+        fe.min_days,
+        fe.likely_days,
+        fe.max_days,
+        fe.involvement_plan_json,
+        fe.component_plan_json,
+        fe.updated_at,
+        t.title AS task_title,
+        p.name AS project_name,
+        u.full_name AS expert_name
+    FROM feature_estimations fe
+    INNER JOIN tasks t ON t.id = fe.task_id
+    INNER JOIN projects p ON p.id = fe.project_id
+    LEFT JOIN users u ON u.id = fe.expert_id
+    WHERE fe.status = 'completed' AND t.task_type = 'feature'
+    ORDER BY fe.updated_at DESC, fe.id DESC
+");
+
+if ($historyRecommendationsResult) {
+    while ($historyRow = $historyRecommendationsResult->fetch_assoc()) {
+        $signature = featureRecommendationSignature((string) ($historyRow['task_title'] ?? ''));
+        if ($signature === '') {
+            continue;
+        }
+
+        $historyRecommendationsBySignature[$signature][] = [
+            'source_type' => 'history',
+            'source_id' => (int) $historyRow['recommendation_id'],
+            'label' => (string) ($historyRow['task_title'] ?? 'Previous feature'),
+            'subtitle' => trim((string) ($historyRow['project_name'] ?? '')) !== ''
+                ? 'Used in ' . (string) $historyRow['project_name']
+                : 'Saved from a previous project',
+            'expert_name' => (string) ($historyRow['expert_name'] ?? ''),
+            'updated_at' => (string) ($historyRow['updated_at'] ?? ''),
+            'task_id' => (int) $historyRow['task_id'],
+            'payload' => [
+                'expectation' => (string) ($historyRow['expectation_description'] ?? ''),
+                'phase_name' => (string) ($historyRow['phase_name'] ?? ''),
+                'min_days' => (int) ($historyRow['min_days'] ?? 0),
+                'likely_days' => (int) ($historyRow['likely_days'] ?? 0),
+                'max_days' => (int) ($historyRow['max_days'] ?? 0),
+                'involvement_plan' => decodeRecommendationJson($historyRow['involvement_plan_json'] ?? '[]'),
+                'component_plan' => decodeRecommendationJson($historyRow['component_plan_json'] ?? '[]'),
+            ],
+        ];
+    }
+}
+
+$manualRecommendationsBySignature = [];
+if ($hasManualRecommendationTable) {
+    $manualRecommendationsResult = $conn->query("
+        SELECT r.*, p.name AS project_name
+        FROM feature_estimation_manual_recommendations r
+        LEFT JOIN projects p ON p.id = r.source_project_id
+        WHERE r.created_by = {$user['id']}
+        ORDER BY r.updated_at DESC, r.id DESC
+    ");
+
+    if ($manualRecommendationsResult) {
+        while ($manualRow = $manualRecommendationsResult->fetch_assoc()) {
+            $signature = (string) ($manualRow['feature_signature'] ?? '');
+            if ($signature === '') {
+                continue;
+            }
+
+            $manualRecommendationsBySignature[$signature][] = [
+                'source_type' => 'manual',
+                'source_id' => (int) $manualRow['id'],
+                'label' => (string) ($manualRow['recommendation_name'] ?? 'Saved recommendation'),
+                'subtitle' => trim((string) ($manualRow['project_name'] ?? '')) !== ''
+                    ? 'Your saved version from ' . (string) $manualRow['project_name']
+                    : 'Your saved manual recommendation',
+                'expert_name' => (string) ($user['full_name'] ?? ''),
+                'updated_at' => (string) ($manualRow['updated_at'] ?? ''),
+                'task_id' => (int) ($manualRow['source_task_id'] ?? 0),
+                'payload' => [
+                    'expectation' => (string) ($manualRow['expectation_description'] ?? ''),
+                    'phase_name' => (string) ($manualRow['phase_name'] ?? ''),
+                    'min_days' => (int) ($manualRow['min_days'] ?? 0),
+                    'likely_days' => (int) ($manualRow['likely_days'] ?? 0),
+                    'max_days' => (int) ($manualRow['max_days'] ?? 0),
+                    'involvement_plan' => decodeRecommendationJson($manualRow['involvement_plan_json'] ?? '[]'),
+                    'component_plan' => decodeRecommendationJson($manualRow['component_plan_json'] ?? '[]'),
+                ],
+            ];
+        }
+    }
+}
+
+foreach ($taskRows as $taskRow) {
+    $taskId = (int) ($taskRow['id'] ?? 0);
+    $signature = featureRecommendationSignature((string) ($taskRow['title'] ?? ''));
+    $taskRecommendations = [];
+
+    foreach ($manualRecommendationsBySignature[$signature] ?? [] as $recommendation) {
+        $feedbackKey = $recommendation['source_type'] . ':' . $recommendation['source_id'];
+        if (($taskFeedbackMap[$taskId][$feedbackKey] ?? '') === 'rejected') {
+            continue;
+        }
+        $taskRecommendations[] = $recommendation;
+    }
+
+    foreach ($historyRecommendationsBySignature[$signature] ?? [] as $recommendation) {
+        if ((int) $recommendation['task_id'] === $taskId) {
+            continue;
+        }
+        $feedbackKey = $recommendation['source_type'] . ':' . $recommendation['source_id'];
+        if (($taskFeedbackMap[$taskId][$feedbackKey] ?? '') === 'rejected') {
+            continue;
+        }
+        $taskRecommendations[] = $recommendation;
+    }
+
+    $recommendationsByTask[$taskId] = array_slice($taskRecommendations, 0, 4);
+}
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -1009,6 +1343,184 @@ textarea.form-control-custom {
     color: var(--theme-primary);
 }
 
+.recommendation-panel {
+    border: 1px solid #bfdbfe;
+    background: linear-gradient(180deg, #eff6ff 0%, #f8fafc 100%);
+    border-radius: 16px;
+    padding: 1rem;
+}
+
+.recommendation-panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.9rem;
+}
+
+.recommendation-panel-header h6 {
+    margin: 0 0 0.2rem 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e3a8a;
+}
+
+.recommendation-panel-header p {
+    margin: 0;
+    font-size: 0.78rem;
+    color: #475569;
+}
+
+.recommendation-count {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.3rem 0.7rem;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.recommendation-list {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.recommendation-card {
+    background: white;
+    border: 1px solid #dbeafe;
+    border-radius: 14px;
+    padding: 0.95rem;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+
+.recommendation-card.is-hidden {
+    display: none;
+}
+
+.recommendation-card.is-accepted {
+    border-color: #86efac;
+    background: #f0fdf4;
+}
+
+.recommendation-meta-row,
+.recommendation-stats,
+.recommendation-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+}
+
+.recommendation-meta-row {
+    justify-content: space-between;
+    margin-bottom: 0.55rem;
+}
+
+.recommendation-tag {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.recommendation-tag.history {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.recommendation-tag.manual {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.recommendation-updated,
+.recommendation-subtitle,
+.recommendation-phase,
+.recommendation-expectation {
+    color: #475569;
+}
+
+.recommendation-updated {
+    font-size: 0.73rem;
+}
+
+.recommendation-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.recommendation-subtitle {
+    font-size: 0.78rem;
+    margin-top: 0.1rem;
+}
+
+.recommendation-stats {
+    margin-top: 0.75rem;
+}
+
+.recommendation-stats span {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    padding: 0.22rem 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.recommendation-phase {
+    margin-top: 0.55rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.recommendation-expectation {
+    font-size: 0.78rem;
+    margin: 0.65rem 0 0 0;
+}
+
+.recommendation-actions {
+    margin-top: 0.85rem;
+}
+
+.recommendation-btn {
+    border: none;
+    border-radius: 999px;
+    padding: 0.48rem 0.85rem;
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.recommendation-btn.accept {
+    background: #1d4ed8;
+    color: white;
+}
+
+.recommendation-btn.reject {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+.recommendation-save-panel {
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 14px;
+    padding: 0.9rem;
+}
+
+.recommendation-save-panel.highlight {
+    border-color: #1d4ed8;
+    background: #eff6ff;
+}
+
 /* Empty State */
 .empty-state {
     text-align: center;
@@ -1163,7 +1675,7 @@ textarea.form-control-custom {
         </div>
 
         <!-- Feature List -->
-        <?php if($tasks->num_rows > 0): ?>
+        <?php if(count($taskRows) > 0): ?>
         <div class="feature-list">
             <div class="feature-row" id="featureProgressRow">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -1175,9 +1687,10 @@ textarea.form-control-custom {
                 </div>
                 <small class="text-muted">All features must be estimated before submission to Sales.</small>
             </div>
-            <?php while($task = $tasks->fetch_assoc()): 
+            <?php foreach($taskRows as $task): 
                 $estimation = $conn->query("SELECT * FROM feature_estimations WHERE task_id = {$task['id']} AND expert_id = {$user['id']}")->fetch_assoc();
                 $isEstimated = $estimation && !empty($estimation['min_days']) && !empty($estimation['likely_days']) && !empty($estimation['max_days']);
+                $taskRecommendations = $recommendationsByTask[(int) $task['id']] ?? [];
                 $projectPhases = [];
                 if($hasProjectPhases && !empty($task['project_phases'])) {
                     $projectPhases = json_decode($task['project_phases'], true);
@@ -1212,6 +1725,72 @@ textarea.form-control-custom {
                     <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
                     <input type="hidden" name="involvement_plan_json" value="<?php echo htmlspecialchars($estimation['involvement_plan_json'] ?? '[]', ENT_QUOTES, 'UTF-8'); ?>">
                     <input type="hidden" name="component_plan_json" value="<?php echo htmlspecialchars($estimation['component_plan_json'] ?? '[]', ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="accepted_recommendation_type" value="">
+                    <input type="hidden" name="accepted_recommendation_id" value="">
+                    <input type="hidden" name="rejected_recommendations_json" value="[]">
+
+                    <?php if (!empty($taskRecommendations)): ?>
+                    <div class="recommendation-panel mb-4">
+                        <div class="recommendation-panel-header">
+                            <div>
+                                <h6><i class="fas fa-lightbulb me-2"></i>Feature Recommendation</h6>
+                                <p>We found similar estimates from past projects and your saved manual versions.</p>
+                            </div>
+                            <span class="recommendation-count"><?php echo count($taskRecommendations); ?> match<?php echo count($taskRecommendations) === 1 ? '' : 'es'; ?></span>
+                        </div>
+                        <div class="recommendation-list">
+                            <?php foreach ($taskRecommendations as $recommendation): ?>
+                                <?php
+                                    $recommendationPayload = htmlspecialchars(json_encode($recommendation['payload'], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+                                    $recommendationSourceType = htmlspecialchars($recommendation['source_type'], ENT_QUOTES, 'UTF-8');
+                                    $recommendationSourceId = (int) $recommendation['source_id'];
+                                ?>
+                                <div class="recommendation-card" data-source-type="<?php echo $recommendationSourceType; ?>" data-source-id="<?php echo $recommendationSourceId; ?>">
+                                    <div class="recommendation-meta-row">
+                                        <span class="recommendation-tag <?php echo $recommendation['source_type'] === 'manual' ? 'manual' : 'history'; ?>">
+                                            <?php echo $recommendation['source_type'] === 'manual' ? 'Manual' : 'Past Project'; ?>
+                                        </span>
+                                        <?php if (!empty($recommendation['updated_at'])): ?>
+                                            <span class="recommendation-updated">Updated <?php echo htmlspecialchars(date('M d, Y', strtotime($recommendation['updated_at']))); ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="recommendation-title"><?php echo htmlspecialchars($recommendation['label']); ?></div>
+                                    <div class="recommendation-subtitle"><?php echo htmlspecialchars($recommendation['subtitle']); ?></div>
+                                    <div class="recommendation-stats">
+                                        <span>Min <?php echo (int) $recommendation['payload']['min_days']; ?></span>
+                                        <span>Likely <?php echo (int) $recommendation['payload']['likely_days']; ?></span>
+                                        <span>Max <?php echo (int) $recommendation['payload']['max_days']; ?></span>
+                                    </div>
+                                    <?php if (!empty($recommendation['payload']['phase_name'])): ?>
+                                        <div class="recommendation-phase">Phase: <?php echo htmlspecialchars($recommendation['payload']['phase_name']); ?></div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($recommendation['payload']['expectation'])): ?>
+                                        <p class="recommendation-expectation"><?php echo htmlspecialchars($recommendation['payload']['expectation']); ?></p>
+                                    <?php endif; ?>
+                                    <div class="recommendation-actions">
+                                        <button
+                                            type="button"
+                                            class="recommendation-btn accept recommendation-accept"
+                                            data-payload="<?php echo $recommendationPayload; ?>"
+                                            data-source-type="<?php echo $recommendationSourceType; ?>"
+                                            data-source-id="<?php echo $recommendationSourceId; ?>"
+                                        >
+                                            Use Recommendation
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="recommendation-btn reject recommendation-reject"
+                                            data-source-type="<?php echo $recommendationSourceType; ?>"
+                                            data-source-id="<?php echo $recommendationSourceId; ?>"
+                                        >
+                                            Reject
+                                        </button>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     
                     <div class="mb-3">
                         <label class="form-label">Expectation Description</label>
@@ -1283,6 +1862,21 @@ textarea.form-control-custom {
                             </div>
                         </div>
                     </div>
+
+                    <?php if (!$isReadonly): ?>
+                    <div class="recommendation-save-panel mb-4">
+                        <label class="form-label">Save This Estimate As A Reusable Recommendation</label>
+                        <input
+                            type="text"
+                            name="manual_recommendation_name"
+                            class="form-control-custom manual-recommendation-name"
+                            maxlength="255"
+                            placeholder="Optional name, like Standard Login Flow - Complex"
+                            value=""
+                        >
+                        <small class="text-muted d-block mt-1 manual-recommendation-help">Useful when you adjust or reject a suggested estimate and want your version available next time.</small>
+                    </div>
+                    <?php endif; ?>
                     
                     <?php if (!$isReadonly): ?>
                         <button type="submit" class="btn-submit">
@@ -1304,7 +1898,7 @@ textarea.form-control-custom {
                 </div>
         <?php endif; ?>
     </div>
-            <?php endwhile; ?>
+            <?php endforeach; ?>
         </div>
         <?php else: ?>
         <div class="empty-state">
@@ -1579,7 +2173,13 @@ function bindPreviewHandlers() {
 function safeJsonParse(value, fallback = []) {
     try {
         const parsed = JSON.parse(value || '[]');
-        return Array.isArray(parsed) ? parsed : fallback;
+        if (Array.isArray(fallback)) {
+            return Array.isArray(parsed) ? parsed : fallback;
+        }
+        if (fallback && typeof fallback === 'object') {
+            return parsed && typeof parsed === 'object' ? parsed : fallback;
+        }
+        return parsed ?? fallback;
     } catch (error) {
         return fallback;
     }
@@ -1648,6 +2248,181 @@ function setFeatureComponentPlan(taskId, entries) {
     const input = getFeaturePlanInput(taskId, 'component_plan_json');
     if (!input) return;
     input.value = JSON.stringify(Array.isArray(entries) ? entries : []);
+}
+
+function getFeatureHiddenInput(taskId, inputName) {
+    const card = getFeatureCard(taskId);
+    return card ? card.querySelector(`input[name="${inputName}"]`) : null;
+}
+
+function getRejectedRecommendations(taskId) {
+    const input = getFeatureHiddenInput(taskId, 'rejected_recommendations_json');
+    const entries = safeJsonParse(input?.value || '[]', []);
+    return Array.isArray(entries) ? entries : [];
+}
+
+function setRejectedRecommendations(taskId, entries) {
+    const input = getFeatureHiddenInput(taskId, 'rejected_recommendations_json');
+    if (!input) return;
+    input.value = JSON.stringify(Array.isArray(entries) ? entries : []);
+}
+
+function updateRecommendationPanel(card) {
+    if (!card) return;
+    const panel = card.querySelector('.recommendation-panel');
+    if (!panel) return;
+    const visibleCards = panel.querySelectorAll('.recommendation-card:not(.is-hidden)');
+    panel.style.display = visibleCards.length ? '' : 'none';
+}
+
+function highlightManualRecommendationPanel(card, sourceLabel = '') {
+    const panel = card?.querySelector('.recommendation-save-panel');
+    const help = card?.querySelector('.manual-recommendation-help');
+    if (!panel || !help) {
+        return;
+    }
+
+    panel.classList.add('highlight');
+    help.textContent = sourceLabel
+        ? `You rejected ${sourceLabel}. Add a name here if you want your manual version to become the next recommendation.`
+        : 'You can save this manual version as a reusable recommendation for later.';
+}
+
+function applyRecommendationToCard(card, payload, sourceType, sourceId) {
+    if (!card || !payload) return;
+    const taskId = card.getAttribute('data-task-id');
+    const expectationInput = card.querySelector('textarea[name="expectation"]');
+    const phaseInput = card.querySelector('select[name="phase_name"]');
+    const minInput = card.querySelector('input[name="min_days"]');
+    const likelyInput = card.querySelector('input[name="likely_days"]');
+    const maxInput = card.querySelector('input[name="max_days"]');
+    const plannedStartInput = card.querySelector('input[name="planned_start"]');
+    const plannedEndInput = card.querySelector('input[name="planned_end"]');
+    const acceptedTypeInput = card.querySelector('input[name="accepted_recommendation_type"]');
+    const acceptedIdInput = card.querySelector('input[name="accepted_recommendation_id"]');
+
+    if (expectationInput) expectationInput.value = payload.expectation || '';
+    if (phaseInput) phaseInput.value = payload.phase_name || '';
+    if (minInput) minInput.value = payload.min_days || '';
+    if (likelyInput) likelyInput.value = payload.likely_days || '';
+    if (maxInput) maxInput.value = payload.max_days || '';
+
+    const projectStartValue = document.getElementById('projectStartInput')?.value || '';
+    if (plannedStartInput && !plannedStartInput.value && projectStartValue) {
+        plannedStartInput.value = projectStartValue;
+    }
+    if (plannedEndInput && !plannedEndInput.value && plannedStartInput?.value) {
+        const duration = Math.max(1, parseInt(payload.likely_days || payload.max_days || payload.min_days || '1', 10));
+        const endDate = new Date(`${plannedStartInput.value}T00:00:00`);
+        endDate.setDate(endDate.getDate() + duration);
+        plannedEndInput.value = endDate.toISOString().slice(0, 10);
+    }
+
+    setFeatureInvolvementPlan(taskId, Array.isArray(payload.involvement_plan) ? payload.involvement_plan : []);
+    setFeatureComponentPlan(taskId, Array.isArray(payload.component_plan) ? payload.component_plan : []);
+
+    if (acceptedTypeInput) acceptedTypeInput.value = sourceType || '';
+    if (acceptedIdInput) acceptedIdInput.value = String(sourceId || '');
+
+    const rejectedEntries = getRejectedRecommendations(taskId).filter(entry => {
+        return !(entry?.source_type === sourceType && String(entry?.source_id) === String(sourceId));
+    });
+    setRejectedRecommendations(taskId, rejectedEntries);
+
+    const recommendationCards = card.querySelectorAll('.recommendation-card');
+    recommendationCards.forEach(item => {
+        item.classList.toggle(
+            'is-accepted',
+            item.getAttribute('data-source-type') === sourceType && item.getAttribute('data-source-id') === String(sourceId)
+        );
+    });
+
+    validateEstimateCard(card);
+    updateGanttPreview(card);
+    card.setAttribute('data-estimated', '1');
+    card.classList.add('complete');
+    card.classList.remove('incomplete');
+    renderProjectManagementTable();
+    renderExpertGantt();
+    filterFeatureList();
+}
+
+async function persistRejectedRecommendation(taskId, sourceType, sourceId) {
+    const response = await fetch(`${window.BASE_URL}api/save-feature-recommendation-feedback.php`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+        },
+        body: new URLSearchParams({
+            task_id: String(taskId || ''),
+            source_type: String(sourceType || ''),
+            source_id: String(sourceId || ''),
+            action: 'rejected'
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error('Unable to save rejected recommendation.');
+    }
+
+    return response.json();
+}
+
+function bindRecommendationHandlers() {
+    document.addEventListener('click', async (event) => {
+        const acceptButton = event.target.closest('.recommendation-accept');
+        if (acceptButton) {
+            const card = acceptButton.closest('.estimation-card');
+            if (!card) return;
+
+            const payload = safeJsonParse(acceptButton.getAttribute('data-payload') || '{}', {});
+            applyRecommendationToCard(
+                card,
+                payload,
+                acceptButton.getAttribute('data-source-type') || '',
+                acceptButton.getAttribute('data-source-id') || ''
+            );
+            return;
+        }
+
+        const rejectButton = event.target.closest('.recommendation-reject');
+        if (!rejectButton) {
+            return;
+        }
+
+        const card = rejectButton.closest('.estimation-card');
+        const recommendationCard = rejectButton.closest('.recommendation-card');
+        const taskId = card?.getAttribute('data-task-id') || '';
+        const sourceType = rejectButton.getAttribute('data-source-type') || '';
+        const sourceId = rejectButton.getAttribute('data-source-id') || '';
+
+        if (!card || !recommendationCard || !taskId || !sourceType || !sourceId) {
+            return;
+        }
+
+        const rejectedEntries = getRejectedRecommendations(taskId).filter(entry => {
+            return !(entry?.source_type === sourceType && String(entry?.source_id) === String(sourceId));
+        });
+        rejectedEntries.push({ source_type: sourceType, source_id: sourceId });
+        setRejectedRecommendations(taskId, rejectedEntries);
+
+        recommendationCard.classList.add('is-hidden');
+        updateRecommendationPanel(card);
+        highlightManualRecommendationPanel(card, recommendationCard.querySelector('.recommendation-title')?.textContent?.trim() || 'that suggestion');
+
+        const acceptedTypeInput = card.querySelector('input[name="accepted_recommendation_type"]');
+        const acceptedIdInput = card.querySelector('input[name="accepted_recommendation_id"]');
+        if (acceptedTypeInput?.value === sourceType && acceptedIdInput?.value === String(sourceId)) {
+            acceptedTypeInput.value = '';
+            acceptedIdInput.value = '';
+        }
+
+        try {
+            await persistRejectedRecommendation(taskId, sourceType, sourceId);
+        } catch (error) {
+            console.warn(error);
+        }
+    });
 }
 
 function renderProjectManagementTable() {
@@ -2208,6 +2983,7 @@ if (phaseSelect) {
 bindPreviewHandlers();
 bindProjectManagementTableHandlers();
 bindGanttHandlers();
+bindRecommendationHandlers();
 filterFeatureList();
 setTimeout(renderExpertGantt, 50);
 setTimeout(renderProjectManagementTable, 50);
