@@ -6,14 +6,35 @@ $conn = getConnection();
 $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-$project = $conn->query("
+$projectStmt = $conn->prepare("
     SELECT p.*, c.name AS client_name
     FROM projects p
     JOIN clients c ON p.client_id = c.id
-    WHERE p.id = $projectId
-")->fetch_assoc();
+    WHERE p.id = ?
+    LIMIT 1
+");
+
+if ($projectStmt === false) {
+    error_log('Architect features project query prepare failed: ' . $conn->error);
+    $_SESSION['error'] = 'Unable to load the project right now.';
+    header('Location: projects.php');
+    exit();
+}
+
+$projectStmt->bind_param('i', $projectId);
+$project = null;
+if ($projectStmt->execute()) {
+    $projectResult = $projectStmt->get_result();
+    $project = $projectResult ? $projectResult->fetch_assoc() : null;
+} else {
+    error_log('Architect features project query execute failed: ' . $conn->error);
+}
+$projectStmt->close();
 
 if (!$project) {
+    if (empty($_SESSION['error'])) {
+        $_SESSION['error'] = 'Project not found or unavailable.';
+    }
     header('Location: projects.php');
     exit();
 }
@@ -59,15 +80,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
 
 $existingFeatures = [];
 if ($project) {
-    $featureResult = $conn->query("
+    $featureStmt = $conn->prepare("
         SELECT id, title, description, priority
         FROM tasks
-        WHERE project_id = $projectId
+        WHERE project_id = ?
           AND task_type = 'feature'
         ORDER BY id ASC
     ");
-    while ($row = $featureResult->fetch_assoc()) {
-        $existingFeatures[] = $row;
+
+    if ($featureStmt === false) {
+        error_log('Architect features list prepare failed: ' . $conn->error);
+    } else {
+        $featureType = 'feature';
+        $featureStmt->bind_param('is', $projectId, $featureType);
+        if ($featureStmt->execute()) {
+            $featureResult = $featureStmt->get_result();
+            if ($featureResult) {
+                while ($row = $featureResult->fetch_assoc()) {
+                    $existingFeatures[] = $row;
+                }
+            }
+        } else {
+            error_log('Architect features list execute failed: ' . $conn->error);
+        }
+        $featureStmt->close();
     }
 }
 
