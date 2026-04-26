@@ -91,8 +91,7 @@ if ($project) {
     if ($featureStmt === false) {
         error_log('Architect features list prepare failed: ' . $conn->error);
     } else {
-        $featureType = 'feature';
-        $featureStmt->bind_param('is', $projectId, $featureType);
+        $featureStmt->bind_param('i', $projectId);
         if ($featureStmt->execute()) {
             $featureResult = $featureStmt->get_result();
             if ($featureResult) {
@@ -264,6 +263,13 @@ include '../../includes/navbar.php';
     align-items: center;
     gap: 0.5rem;
     flex: 1;
+    text-decoration: none;
+    transition: transform 0.2s ease;
+}
+
+a.progress-step:hover {
+    text-decoration: none;
+    transform: translateY(-2px);
 }
 
 .progress-step .step-number {
@@ -335,17 +341,17 @@ include '../../includes/navbar.php';
     </nav>
 
     <div class="progress-indicator">
-        <div class="progress-step completed"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Project Review</div></div>
+        <a class="progress-step completed" href="project-review.php?id=<?php echo $projectId; ?>"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Project Review</div></a>
         <div class="progress-line completed"></div>
-        <div class="progress-step active"><div class="step-number">2</div><div class="step-label">Features</div></div>
+        <a class="progress-step active" href="features.php?id=<?php echo $projectId; ?>"><div class="step-number">2</div><div class="step-label">Features</div></a>
         <div class="progress-line"></div>
-        <div class="progress-step"><div class="step-number">3</div><div class="step-label">Technology</div></div>
+        <a class="progress-step" href="tech-recommendation.php?id=<?php echo $projectId; ?>"><div class="step-number">3</div><div class="step-label">Technology</div></a>
         <div class="progress-line"></div>
-        <div class="progress-step"><div class="step-number">4</div><div class="step-label">Developers</div></div>
+        <a class="progress-step" href="developer-allocation.php?id=<?php echo $projectId; ?>"><div class="step-number">4</div><div class="step-label">Developers</div></a>
         <div class="progress-line"></div>
-        <div class="progress-step"><div class="step-number">5</div><div class="step-label">Documents</div></div>
+        <a class="progress-step" href="upload-diagram.php?id=<?php echo $projectId; ?>"><div class="step-number">5</div><div class="step-label">Documents</div></a>
         <div class="progress-line"></div>
-        <div class="progress-step"><div class="step-number">6</div><div class="step-label">Summary</div></div>
+        <a class="progress-step" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">6</div><div class="step-label">Summary</div></a>
     </div>
 
     <form method="POST" class="card p-4">
