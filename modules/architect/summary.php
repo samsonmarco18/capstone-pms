@@ -49,6 +49,7 @@ $documents = $conn->query("
 $techRecommendationCount = (int) $techRecommendations->num_rows;
 $allocationCount = (int) $allocations->num_rows;
 $documentCount = (int) $documents->num_rows;
+$summaryReadyForSubmit = $featureCount > 0 && $techRecommendationCount > 0 && $allocationCount > 0 && $documentCount > 0;
 
 // Handle submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -570,7 +571,7 @@ a.progress-step:hover {
                     <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Developers Needed</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php $totalDevs = 0; $allocations->data_seek(0); while($alloc = $allocations->fetch_assoc()) { $totalDevs += $alloc['required_count']; } echo $totalDevs; ?></h3></div>
                     <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Documents Uploaded</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $documentCount; ?></h3></div>
                     <hr>
-                    <?php if ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || $documentCount <= 0): ?>
+                    <?php if (!$summaryReadyForSubmit): ?>
                     <div class="alert alert-warning small">
                         Complete Features, Technology, Developer Allocation, and Documents before final submission.
                     </div>
@@ -578,7 +579,7 @@ a.progress-step:hover {
                     <div class="alert-info-modern"><i class="fas fa-info-circle me-2"></i>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</div>
                     <form method="POST">
                         <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="confirmCheck" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
-                        <button type="submit" class="btn-submit" id="submitBtn" disabled <?php echo ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || $documentCount <= 0) ? 'disabled' : ''; ?>><i class="fas fa-paper-plane"></i> Submit to SUL</button>
+                        <button type="submit" class="btn-submit" id="submitBtn" disabled><i class="fas fa-paper-plane"></i> Submit to SUL</button>
                     </form>
                 </div>
             </div>
@@ -587,9 +588,22 @@ a.progress-step:hover {
 </div>
 
 <script>
-const summaryReadyForSubmit = <?php echo ($featureCount > 0 && $techRecommendationCount > 0 && $allocationCount > 0 && $documentCount > 0) ? 'true' : 'false'; ?>;
-document.getElementById('confirmCheck').addEventListener('change', function() {
-    document.getElementById('submitBtn').disabled = !summaryReadyForSubmit || !this.checked;
+const summaryReadyForSubmit = <?php echo $summaryReadyForSubmit ? 'true' : 'false'; ?>;
+
+document.addEventListener('DOMContentLoaded', () => {
+    const confirmCheck = document.getElementById('confirmCheck');
+    const submitBtn = document.getElementById('submitBtn');
+
+    if (!confirmCheck || !submitBtn) {
+        return;
+    }
+
+    function syncSubmitButton() {
+        submitBtn.disabled = !summaryReadyForSubmit || !confirmCheck.checked;
+    }
+
+    confirmCheck.addEventListener('change', syncSubmitButton);
+    syncSubmitButton();
 });
 </script>
 
