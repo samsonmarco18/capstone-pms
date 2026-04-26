@@ -48,8 +48,44 @@ function detectBaseUrl(): string
 
 define('BASE_URL', detectBaseUrl());
 
-if (session_status() === PHP_SESSION_NONE) {
+function startConfiguredSession(): void
+{
+    if (session_status() !== PHP_SESSION_NONE) {
+        return;
+    }
+
+    $baseUrlParts = parse_url(BASE_URL);
+    $isHttps = (($baseUrlParts['scheme'] ?? '') === 'https')
+        || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (string) ($_SERVER['SERVER_PORT'] ?? '') === '443';
+
+    if (PHP_VERSION_ID >= 70300) {
+        session_set_cookie_params([
+            'lifetime' => 0,
+            'path' => '/',
+            'domain' => '',
+            'secure' => SECURE_COOKIES || $isHttps,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    } else {
+        session_set_cookie_params(
+            0,
+            '/; samesite=Lax',
+            '',
+            SECURE_COOKIES || $isHttps,
+            true
+        );
+    }
+
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.cookie_secure', (SECURE_COOKIES || $isHttps) ? '1' : '0');
     session_start();
+}
+
+if (session_status() === PHP_SESSION_NONE) {
+    startConfiguredSession();
 }
 
 date_default_timezone_set('Asia/Manila');
