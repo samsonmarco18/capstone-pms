@@ -4,26 +4,130 @@ requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
-$projectId = isset($_GET['id']) ? $_GET['id'] : 0;
+$projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+
+$hasCloudPlatform = $conn->query("SHOW COLUMNS FROM projects LIKE 'cloud_platform'")->num_rows > 0;
+if (!$hasCloudPlatform) {
+    try {
+        $conn->query("ALTER TABLE projects ADD COLUMN cloud_platform VARCHAR(100) NULL");
+        $hasCloudPlatform = $conn->query("SHOW COLUMNS FROM projects LIKE 'cloud_platform'")->num_rows > 0;
+    } catch (Throwable $e) {
+        $hasCloudPlatform = false;
+    }
+}
+
+$hasDatabaseServer = $conn->query("SHOW COLUMNS FROM projects LIKE 'database_server'")->num_rows > 0;
+if (!$hasDatabaseServer) {
+    try {
+        $conn->query("ALTER TABLE projects ADD COLUMN database_server VARCHAR(100) NULL");
+        $hasDatabaseServer = $conn->query("SHOW COLUMNS FROM projects LIKE 'database_server'")->num_rows > 0;
+    } catch (Throwable $e) {
+        $hasDatabaseServer = false;
+    }
+}
+
+$hasStorageRequirements = $conn->query("SHOW COLUMNS FROM projects LIKE 'storage_requirements'")->num_rows > 0;
+if (!$hasStorageRequirements) {
+    try {
+        $conn->query("ALTER TABLE projects ADD COLUMN storage_requirements VARCHAR(255) NULL");
+        $hasStorageRequirements = $conn->query("SHOW COLUMNS FROM projects LIKE 'storage_requirements'")->num_rows > 0;
+    } catch (Throwable $e) {
+        $hasStorageRequirements = false;
+    }
+}
+
+$hasAdditionalServices = $conn->query("SHOW COLUMNS FROM projects LIKE 'additional_services'")->num_rows > 0;
+if (!$hasAdditionalServices) {
+    try {
+        $conn->query("ALTER TABLE projects ADD COLUMN additional_services TEXT NULL");
+        $hasAdditionalServices = $conn->query("SHOW COLUMNS FROM projects LIKE 'additional_services'")->num_rows > 0;
+    } catch (Throwable $e) {
+        $hasAdditionalServices = false;
+    }
+}
 
 $project = $conn->query("SELECT * FROM projects WHERE id = $projectId")->fetch_assoc();
+if (!$project) {
+    header('Location: projects.php');
+    exit();
+}
 $technologies = $conn->query("SELECT * FROM technologies WHERE status = 'active'");
 
+$existingRecommendations = [];
+$existingRecommendationResult = $conn->query("
+    SELECT tech_id, service_type, estimated_cost, notes
+    FROM tech_recommendations
+    WHERE project_id = $projectId
+");
+while ($row = $existingRecommendationResult->fetch_assoc()) {
+    $existingRecommendations[(int) $row['tech_id']] = $row;
+}
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $cloudPlatform = trim((string) ($_POST['cloud_platform'] ?? ''));
+    $databaseServer = trim((string) ($_POST['database_server'] ?? ''));
+    $storageRequirements = trim((string) ($_POST['storage'] ?? ''));
+    $additionalServices = trim((string) ($_POST['additional_services'] ?? ''));
+
     // Clear existing recommendations
     $conn->query("DELETE FROM tech_recommendations WHERE project_id = $projectId");
     
     // Save new recommendations
     if(isset($_POST['technologies'])) {
         foreach($_POST['technologies'] as $tech) {
-            $techId = $tech['id'];
-            $serviceType = $tech['service_type'];
-            $cost = $tech['cost'];
-            $notes = $tech['notes'];
+            $techId = (int) ($tech['id'] ?? 0);
+            $serviceType = trim((string) ($tech['service_type'] ?? ''));
+            $cost = (float) ($tech['cost'] ?? 0);
+            $annualCost = $cost * 12;
+            $notes = trim((string) ($tech['notes'] ?? ''));
+
+            if ($techId <= 0) {
+                continue;
+            }
             
-            $stmt = $conn->prepare("INSERT INTO tech_recommendations (project_id, tech_id, service_type, estimated_cost, notes) VALUES (?, ?, ?, ?, ?)");
-            $stmt->bind_param("iisds", $projectId, $techId, $serviceType, $cost, $notes);
+            $stmt = $conn->prepare("
+                INSERT INTO tech_recommendations (project_id, tech_id, service_type, estimated_cost, annual_cost, notes, createdby)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->bind_param("iisddsi", $projectId, $techId, $serviceType, $cost, $annualCost, $notes, $user['id']);
             $stmt->execute();
+            $stmt->close();
+        }
+    }
+
+    if ($hasCloudPlatform || $hasDatabaseServer || $hasStorageRequirements || $hasAdditionalServices) {
+        $updateParts = [];
+        $types = '';
+        $params = [];
+
+        if ($hasCloudPlatform) {
+            $updateParts[] = 'cloud_platform = ?';
+            $types .= 's';
+            $params[] = $cloudPlatform;
+        }
+        if ($hasDatabaseServer) {
+            $updateParts[] = 'database_server = ?';
+            $types .= 's';
+            $params[] = $databaseServer;
+        }
+        if ($hasStorageRequirements) {
+            $updateParts[] = 'storage_requirements = ?';
+            $types .= 's';
+            $params[] = $storageRequirements;
+        }
+        if ($hasAdditionalServices) {
+            $updateParts[] = 'additional_services = ?';
+            $types .= 's';
+            $params[] = $additionalServices;
+        }
+
+        if (!empty($updateParts)) {
+            $types .= 'i';
+            $params[] = $projectId;
+            $projectUpdateStmt = $conn->prepare("UPDATE projects SET " . implode(', ', $updateParts) . " WHERE id = ?");
+            $projectUpdateStmt->bind_param($types, ...$params);
+            $projectUpdateStmt->execute();
+            $projectUpdateStmt->close();
         }
     }
     
@@ -477,10 +581,12 @@ include '../../includes/navbar.php';
                                 <div class="row g-2">
                                     <div class="col-md-4">
                                         <div class="form-check">
+                                            <?php $savedRecommendation = $existingRecommendations[(int) $tech['id']] ?? null; ?>
                                             <input class="form-check-input tech-checkbox" type="checkbox" 
                                                    name="technologies[<?php echo $tech['id']; ?>][id]" 
                                                    value="<?php echo $tech['id']; ?>" 
-                                                   id="tech_<?php echo $tech['id']; ?>">
+                                                   id="tech_<?php echo $tech['id']; ?>"
+                                                   <?php echo $savedRecommendation ? 'checked' : ''; ?>>
                                             <label class="form-check-label fw-bold" for="tech_<?php echo $tech['id']; ?>">
                                                 <?php echo htmlspecialchars($tech['name']); ?>
                                             </label>
@@ -490,23 +596,23 @@ include '../../includes/navbar.php';
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label">Service Type</label>
-                                        <select name="technologies[<?php echo $tech['id']; ?>][service_type]" class="form-select-modern" disabled>
-                                            <option value="Development">Development</option>
-                                            <option value="Testing">Testing</option>
-                                            <option value="Production">Production</option>
-                                            <option value="Backup">Backup</option>
+                                        <select name="technologies[<?php echo $tech['id']; ?>][service_type]" class="form-select-modern" <?php echo $savedRecommendation ? '' : 'disabled'; ?>>
+                                            <option value="Development" <?php echo (($savedRecommendation['service_type'] ?? '') === 'Development') ? 'selected' : ''; ?>>Development</option>
+                                            <option value="Testing" <?php echo (($savedRecommendation['service_type'] ?? '') === 'Testing') ? 'selected' : ''; ?>>Testing</option>
+                                            <option value="Production" <?php echo (($savedRecommendation['service_type'] ?? '') === 'Production') ? 'selected' : ''; ?>>Production</option>
+                                            <option value="Backup" <?php echo (($savedRecommendation['service_type'] ?? '') === 'Backup') ? 'selected' : ''; ?>>Backup</option>
                                         </select>
                                     </div>
                                     <div class="col-md-2">
                                         <label class="form-label">Monthly Cost ($)</label>
                                         <input type="number" name="technologies[<?php echo $tech['id']; ?>][cost]" 
                                                class="form-control-modern" step="0.01" 
-                                               value="<?php echo $tech['price']; ?>" disabled>
+                                               value="<?php echo htmlspecialchars((string) ($savedRecommendation['estimated_cost'] ?? $tech['price'])); ?>" <?php echo $savedRecommendation ? '' : 'disabled'; ?>>
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label">Notes</label>
                                         <input type="text" name="technologies[<?php echo $tech['id']; ?>][notes]" 
-                                               class="form-control-modern" placeholder="Optional" disabled>
+                                               class="form-control-modern" placeholder="Optional" value="<?php echo htmlspecialchars((string) ($savedRecommendation['notes'] ?? '')); ?>" <?php echo $savedRecommendation ? '' : 'disabled'; ?>>
                                     </div>
                                 </div>
                             </div>
@@ -524,27 +630,27 @@ include '../../includes/navbar.php';
                             <div class="col-md-6">
                                 <label class="form-label">Cloud Platform</label>
                                 <select name="cloud_platform" class="form-select-modern">
-                                    <option value="Azure">Microsoft Azure</option>
-                                    <option value="AWS">Amazon Web Services</option>
-                                    <option value="GCP">Google Cloud Platform</option>
+                                    <option value="Azure" <?php echo (($project['cloud_platform'] ?? '') === 'Azure') ? 'selected' : ''; ?>>Microsoft Azure</option>
+                                    <option value="AWS" <?php echo (($project['cloud_platform'] ?? '') === 'AWS') ? 'selected' : ''; ?>>Amazon Web Services</option>
+                                    <option value="GCP" <?php echo (($project['cloud_platform'] ?? '') === 'GCP') ? 'selected' : ''; ?>>Google Cloud Platform</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Database Server</label>
                                 <select name="database_server" class="form-select-modern">
-                                    <option value="Azure SQL">Azure SQL Database</option>
-                                    <option value="MySQL">MySQL</option>
-                                    <option value="PostgreSQL">PostgreSQL</option>
-                                    <option value="MongoDB">MongoDB</option>
+                                    <option value="Azure SQL" <?php echo (($project['database_server'] ?? '') === 'Azure SQL') ? 'selected' : ''; ?>>Azure SQL Database</option>
+                                    <option value="MySQL" <?php echo (($project['database_server'] ?? '') === 'MySQL') ? 'selected' : ''; ?>>MySQL</option>
+                                    <option value="PostgreSQL" <?php echo (($project['database_server'] ?? '') === 'PostgreSQL') ? 'selected' : ''; ?>>PostgreSQL</option>
+                                    <option value="MongoDB" <?php echo (($project['database_server'] ?? '') === 'MongoDB') ? 'selected' : ''; ?>>MongoDB</option>
                                 </select>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Storage Requirements</label>
-                                <input type="text" name="storage" class="form-control-modern" placeholder="e.g., 100GB SSD">
+                                <input type="text" name="storage" class="form-control-modern" placeholder="e.g., 100GB SSD" value="<?php echo htmlspecialchars((string) ($project['storage_requirements'] ?? '')); ?>">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Additional Services</label>
-                                <input type="text" name="additional_services" class="form-control-modern" placeholder="CDN, Load Balancer, etc.">
+                                <input type="text" name="additional_services" class="form-control-modern" placeholder="CDN, Load Balancer, etc." value="<?php echo htmlspecialchars((string) ($project['additional_services'] ?? '')); ?>">
                             </div>
                         </div>
                     </div>
@@ -617,6 +723,8 @@ $(document).ready(function() {
         else { $('#costSummary').html('<p class="text-muted text-center py-3">Select technologies to see cost summary</p>'); }
         $('#totalCost').text('$' + total.toFixed(2));
     }
+
+    updateCostSummary();
 });
 </script>
 

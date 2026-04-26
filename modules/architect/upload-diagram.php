@@ -4,7 +4,7 @@ requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
-$projectId = isset($_GET['id']) ? $_GET['id'] : 0;
+$projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 function normalizeArchitectureDocumentType(?string $value): string
 {
@@ -33,6 +33,14 @@ $documents = $conn->query("
     WHERE project_id = $projectId 
     ORDER BY created_at DESC
 ");
+
+$uploadedDocumentTypes = [];
+if ($documents) {
+    while ($documentRow = $documents->fetch_assoc()) {
+        $uploadedDocumentTypes[] = (string) ($documentRow['document_type'] ?? '');
+    }
+    $documents->data_seek(0);
+}
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $docType = normalizeArchitectureDocumentType($_POST['document_type'] ?? '');
@@ -536,7 +544,7 @@ include '../../includes/navbar.php';
                                 </div>
                                 <div class="d-flex gap-2">
                                     <a href="<?php echo BASE_URL; ?>/<?php echo $doc['file_path']; ?>" class="btn-review" target="_blank"><i class="fas fa-eye"></i></a>
-                                    <button class="btn-danger-modern" onclick="deleteDocument(<?php echo $doc['id']; ?>)"><i class="fas fa-trash"></i></button>
+                                    <button type="button" class="btn-danger-modern" onclick="deleteDocument(<?php echo $doc['id']; ?>)"><i class="fas fa-trash"></i></button>
                                 </div>
                             </div>
                         </div>
@@ -561,10 +569,10 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check1" <?php echo $documents->num_rows > 0 ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check1">Architecture Plan Uploaded</label></div></div></div>
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check2" disabled><label class="form-check-label" for="check2">Workflow Diagram Uploaded</label></div></div></div>
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check3" disabled><label class="form-check-label" for="check3">Technical Documentation Complete</label></div></div></div>
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check4" disabled><label class="form-check-label" for="check4">Ready for SUL Review</label></div></div></div>
+                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check1" <?php echo in_array('architecture_plan', $uploadedDocumentTypes, true) ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check1">Architecture Plan Uploaded</label></div></div></div>
+                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check2" <?php echo in_array('workflow_diagram', $uploadedDocumentTypes, true) ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check2">Workflow Diagram Uploaded</label></div></div></div>
+                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check3" <?php echo count($uploadedDocumentTypes) >= 3 ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check3">Technical Documentation Complete</label></div></div></div>
+                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check4" <?php echo count($uploadedDocumentTypes) > 0 ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check4">Ready for SUL Review</label></div></div></div>
                     </div>
                 </div>
             </div>

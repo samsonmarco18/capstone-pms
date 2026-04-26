@@ -13,6 +13,11 @@ $project = $conn->query("
     WHERE p.id = $projectId
 ")->fetch_assoc();
 
+if (!$project) {
+    header('Location: projects.php');
+    exit();
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
     $features = $_POST['features'] ?? [];
 
@@ -374,7 +379,7 @@ include '../../includes/navbar.php';
                 <i class="fas fa-plus me-1"></i> Add Feature
             </button>
             <button type="submit" class="btn-save">
-                <i class="fas fa-paper-plane me-1"></i> Save Features & Send to SUL
+                <i class="fas fa-arrow-right me-1"></i> Save Features & Continue
             </button>
         </div>
     </form>

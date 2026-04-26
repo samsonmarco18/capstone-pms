@@ -14,6 +14,11 @@ $project = $conn->query("
     WHERE p.id = $projectId
 ")->fetch_assoc();
 
+if (!$project) {
+    header('Location: projects.php');
+    exit();
+}
+
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';

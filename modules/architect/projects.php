@@ -5,9 +5,37 @@ requireRole('architect');
 $conn = getConnection();
 $user = getCurrentUser();
 
+function architectProjectNextStep(array $project): array
+{
+    $projectId = (int) ($project['id'] ?? 0);
+    $featureCount = (int) ($project['feature_count'] ?? 0);
+    $techCount = (int) ($project['tech_count'] ?? 0);
+    $allocationCount = (int) ($project['allocation_count'] ?? 0);
+    $documentCount = (int) ($project['document_count'] ?? 0);
+
+    if ($featureCount <= 0) {
+        return ['url' => 'project-review.php?id=' . $projectId, 'label' => 'Start Review', 'step' => 'Step 1 of 6'];
+    }
+    if ($techCount <= 0) {
+        return ['url' => 'tech-recommendation.php?id=' . $projectId, 'label' => 'Continue Technology', 'step' => 'Step 3 of 6'];
+    }
+    if ($allocationCount <= 0) {
+        return ['url' => 'developer-allocation.php?id=' . $projectId, 'label' => 'Continue Developers', 'step' => 'Step 4 of 6'];
+    }
+    if ($documentCount <= 0) {
+        return ['url' => 'upload-diagram.php?id=' . $projectId, 'label' => 'Continue Documents', 'step' => 'Step 5 of 6'];
+    }
+
+    return ['url' => 'summary.php?id=' . $projectId, 'label' => 'Open Summary', 'step' => 'Step 6 of 6'];
+}
+
 // Get all projects assigned to this architect
 $projects = $conn->query("
-    SELECT p.*, c.name as client_name 
+    SELECT p.*, c.name as client_name,
+           (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.task_type = 'feature') AS feature_count,
+           (SELECT COUNT(*) FROM tech_recommendations tr WHERE tr.project_id = p.id) AS tech_count,
+           (SELECT COUNT(*) FROM developer_allocations da WHERE da.project_id = p.id) AS allocation_count,
+           (SELECT COUNT(*) FROM architecture_documents ad WHERE ad.project_id = p.id) AS document_count
     FROM projects p 
     JOIN clients c ON p.client_id = c.id 
     WHERE p.architect_id = {$user['id']} OR p.architect_id IS NULL
@@ -293,6 +321,13 @@ include '../../includes/navbar.php';
     color: var(--theme-dark);
 }
 
+.progress-meta {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--gray-600);
+    margin-top: 0.35rem;
+}
+
 /* Empty State */
 .empty-state-modern {
     text-align: center;
@@ -426,13 +461,21 @@ include '../../includes/navbar.php';
                         <td><?php echo date('M d, Y', strtotime($project['created_at'])); ?></td>
                         <td>
                             <div class="d-flex flex-wrap gap-2">
-                            <a href="project-review.php?id=<?php echo $project['id']; ?>" class="btn-review">
-                                <i class="fas fa-eye"></i> Review
+                            <?php $nextStep = architectProjectNextStep($project); ?>
+                            <a href="<?php echo htmlspecialchars($nextStep['url']); ?>" class="btn-review">
+                                <i class="fas fa-eye"></i> <?php echo htmlspecialchars($nextStep['label']); ?>
                             </a>
                             <a href="../version-control/repositories.php?project_id=<?php echo $project['id']; ?>" class="btn-secondary-action">
                                 <i class="fas fa-code-branch"></i> Version Control
                             </a>
                             </div>
+                            <span class="progress-meta">
+                                Features: <?php echo (int) $project['feature_count']; ?> |
+                                Tech: <?php echo (int) $project['tech_count']; ?> |
+                                Devs: <?php echo (int) $project['allocation_count']; ?> |
+                                Docs: <?php echo (int) $project['document_count']; ?> |
+                                <?php echo htmlspecialchars($nextStep['step']); ?>
+                            </span>
                         </td>
                     </tr>
                     <?php endwhile; ?>

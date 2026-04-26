@@ -4,7 +4,7 @@ requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
-$projectId = isset($_GET['id']) ? $_GET['id'] : 0;
+$projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 function normalizeAllocationComplexity(?string $value): string
 {
@@ -20,6 +20,10 @@ function normalizeAllocationComplexity(?string $value): string
 }
 
 $project = $conn->query("SELECT * FROM projects WHERE id = $projectId")->fetch_assoc();
+if (!$project) {
+    header('Location: projects.php');
+    exit();
+}
 
 // Get existing allocations
 $existingAllocations = [];
@@ -567,9 +571,17 @@ include '../../includes/navbar.php';
                                     ];
                                     
                                     $availableDevs = [];
-                                    $devQuery = $conn->query("SELECT role, COUNT(*) as count FROM users WHERE role = 'developer' AND status = 'active' GROUP BY role");
+                                    $devQuery = $conn->query("
+                                        SELECT department, COUNT(*) as count
+                                        FROM users
+                                        WHERE role IN ('developer', 'expert')
+                                          AND status = 'active'
+                                          AND department IS NOT NULL
+                                          AND department != ''
+                                        GROUP BY department
+                                    ");
                                     while($dev = $devQuery->fetch_assoc()) {
-                                        $availableDevs[$dev['role']] = $dev['count'];
+                                        $availableDevs[$dev['department']] = $dev['count'];
                                     }
                                     
                                     foreach($roles as $role => $limits):

@@ -4,7 +4,12 @@ requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
-$projectId = isset($_GET['id']) ? $_GET['id'] : 0;
+$projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+
+$hasCloudPlatform = $conn->query("SHOW COLUMNS FROM projects LIKE 'cloud_platform'")->num_rows > 0;
+$hasDatabaseServer = $conn->query("SHOW COLUMNS FROM projects LIKE 'database_server'")->num_rows > 0;
+$hasStorageRequirements = $conn->query("SHOW COLUMNS FROM projects LIKE 'storage_requirements'")->num_rows > 0;
+$hasAdditionalServices = $conn->query("SHOW COLUMNS FROM projects LIKE 'additional_services'")->num_rows > 0;
 
 $project = $conn->query("
     SELECT p.*, c.name as client_name 
@@ -17,6 +22,9 @@ if (!$project) {
     header('Location: projects.php');
     exit();
 }
+
+$featureCountRow = $conn->query("SELECT COUNT(*) AS total FROM tasks WHERE project_id = $projectId AND task_type = 'feature'")->fetch_assoc();
+$featureCount = (int) ($featureCountRow['total'] ?? 0);
 
 // Get technology recommendations
 $techRecommendations = $conn->query("
@@ -38,8 +46,18 @@ $documents = $conn->query("
     WHERE project_id = $projectId
 ");
 
+$techRecommendationCount = (int) $techRecommendations->num_rows;
+$allocationCount = (int) $allocations->num_rows;
+$documentCount = (int) $documents->num_rows;
+
 // Handle submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || $documentCount <= 0) {
+        $_SESSION['error'] = 'Please complete every architect step before submitting to SUL.';
+        header('Location: summary.php?id=' . $projectId);
+        exit();
+    }
+
     $conn->query("UPDATE projects SET status = 'in_progress' WHERE id = $projectId");
     
     $title = "New Architecture Plan Ready for Review";
@@ -452,6 +470,18 @@ include '../../includes/navbar.php';
                         <tr><td>Client:</td><td><?php echo htmlspecialchars($project['client_name']); ?></td></tr>
                         <tr><td>Timeline:</td><td><?php echo date('M d, Y', strtotime($project['timeline_start'])); ?> - <?php echo date('M d, Y', strtotime($project['timeline_end'])); ?></td></tr>
                         <tr><td>Status:</td><td><span class="badge-status pending">Ready for SUL Review</span></td></tr>
+                        <?php if ($hasCloudPlatform && !empty($project['cloud_platform'])): ?>
+                        <tr><td>Cloud Platform:</td><td><?php echo htmlspecialchars($project['cloud_platform']); ?></td></tr>
+                        <?php endif; ?>
+                        <?php if ($hasDatabaseServer && !empty($project['database_server'])): ?>
+                        <tr><td>Database Server:</td><td><?php echo htmlspecialchars($project['database_server']); ?></td></tr>
+                        <?php endif; ?>
+                        <?php if ($hasStorageRequirements && !empty($project['storage_requirements'])): ?>
+                        <tr><td>Storage:</td><td><?php echo htmlspecialchars($project['storage_requirements']); ?></td></tr>
+                        <?php endif; ?>
+                        <?php if ($hasAdditionalServices && !empty($project['additional_services'])): ?>
+                        <tr><td>Additional Services:</td><td><?php echo htmlspecialchars($project['additional_services']); ?></td></tr>
+                        <?php endif; ?>
                     </table>
                 </div>
             </div>
@@ -528,14 +558,20 @@ include '../../includes/navbar.php';
                     <h5 class="mb-0 fw-semibold" style="color: var(--theme-primary);"><i class="fas fa-chart-simple me-2"></i>Submission Summary</h5>
                 </div>
                 <div class="card-body p-4">
-                    <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Technologies Recommended</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $techRecommendations->num_rows; ?></h3></div>
+                    <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Features</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $featureCount; ?></h3></div>
+                    <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Technologies Recommended</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $techRecommendationCount; ?></h3></div>
                     <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Developers Needed</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php $totalDevs = 0; $allocations->data_seek(0); while($alloc = $allocations->fetch_assoc()) { $totalDevs += $alloc['required_count']; } echo $totalDevs; ?></h3></div>
-                    <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Documents Uploaded</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $documents->num_rows; ?></h3></div>
+                    <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Documents Uploaded</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $documentCount; ?></h3></div>
                     <hr>
+                    <?php if ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || $documentCount <= 0): ?>
+                    <div class="alert alert-warning small">
+                        Complete Features, Technology, Developer Allocation, and Documents before final submission.
+                    </div>
+                    <?php endif; ?>
                     <div class="alert-info-modern"><i class="fas fa-info-circle me-2"></i>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</div>
                     <form method="POST">
                         <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="confirmCheck" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
-                        <button type="submit" class="btn-submit" id="submitBtn" disabled><i class="fas fa-paper-plane"></i> Submit to SUL</button>
+                        <button type="submit" class="btn-submit" id="submitBtn" disabled <?php echo ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || $documentCount <= 0) ? 'disabled' : ''; ?>><i class="fas fa-paper-plane"></i> Submit to SUL</button>
                     </form>
                 </div>
             </div>
@@ -544,8 +580,9 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
+const summaryReadyForSubmit = <?php echo ($featureCount > 0 && $techRecommendationCount > 0 && $allocationCount > 0 && $documentCount > 0) ? 'true' : 'false'; ?>;
 document.getElementById('confirmCheck').addEventListener('change', function() {
-    document.getElementById('submitBtn').disabled = !this.checked;
+    document.getElementById('submitBtn').disabled = !summaryReadyForSubmit || !this.checked;
 });
 </script>
 
