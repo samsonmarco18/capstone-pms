@@ -2,80 +2,26 @@
 require_once '../../includes/auth.php';
 requireRole('architect');
 
-function featuresDebugCheckpoint(string $step): void
-{
-    header('X-ERNI-Features-Step: ' . $step, true);
-    error_log('features.php checkpoint: ' . $step);
-}
-
-ob_start();
-register_shutdown_function(static function (): void {
-    if (ob_get_level() === 0) {
-        return;
-    }
-
-    foreach (headers_list() as $header) {
-        if (stripos($header, 'Location:') === 0) {
-            ob_end_flush();
-            return;
-        }
-    }
-
-    $content = ob_get_contents();
-    if ($content !== false && trim($content) === '') {
-        error_log('Architect features page returned an empty response body.');
-        if (!headers_sent()) {
-            http_response_code(500);
-            header('Content-Type: text/html; charset=UTF-8');
-        }
-        echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Features Page Error</title><style>body{margin:0;font-family:Arial,sans-serif;background:#f5f7fb;color:#1f2937}.wrap{max-width:720px;margin:8vh auto;padding:24px}.card{background:#fff;border:1px solid #dbe3ef;border-radius:16px;padding:24px;box-shadow:0 12px 28px rgba(15,23,42,.08)}h1{margin:0 0 12px;font-size:24px}p{margin:0 0 10px;line-height:1.5}.btn{display:inline-block;margin-top:16px;padding:10px 14px;border-radius:10px;background:#1f6392;color:#fff;text-decoration:none}</style></head><body><div class="wrap"><div class="card"><h1>Features page failed to render</h1><p>The request completed without returning any page content.</p><p>Check the Render logs for the request to <code>/modules/architect/features.php</code>.</p><a class="btn" href="project-review.php?id=' . (int) ($_GET['id'] ?? 0) . '">Back to Project Review</a></div></div></body></html>';
-    }
-
-    ob_end_flush();
-});
-
-featuresDebugCheckpoint('after-auth');
-
 $conn = getConnection();
 $user = getCurrentUser();
-$projectId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $pageError = null;
 
-featuresDebugCheckpoint('connection-ready');
+$projectResult = $conn->query("
+    SELECT p.*, c.name AS client_name
+    FROM projects p
+    JOIN clients c ON p.client_id = c.id
+    WHERE p.id = $projectId
+");
 
-$project = null;
-try {
-    featuresDebugCheckpoint('project-query-start');
-    $projectStmt = $conn->prepare("
-        SELECT p.*, c.name AS client_name
-        FROM projects p
-        JOIN clients c ON p.client_id = c.id
-        WHERE p.id = ?
-        LIMIT 1
-    ");
-
-    if ($projectStmt === false) {
-        throw new RuntimeException('Architect features project query prepare failed: ' . $conn->error);
-    }
-
-    $projectStmt->bind_param('i', $projectId);
-    if ($projectStmt->execute()) {
-        $projectResult = $projectStmt->get_result();
-        $project = $projectResult ? $projectResult->fetch_assoc() : null;
-    } else {
-        throw new RuntimeException('Architect features project query execute failed: ' . $conn->error);
-    }
-
-    $projectStmt->close();
-    featuresDebugCheckpoint('project-query-complete');
-} catch (Throwable $e) {
-    error_log($e->getMessage());
+if ($projectResult === false) {
+    error_log('Architect features project query failed: ' . ($conn->error ?? 'unknown error'));
     $pageError = 'Unable to load the project details right now.';
-    featuresDebugCheckpoint('project-query-failed');
 }
 
+$project = $projectResult ? $projectResult->fetch_assoc() : null;
+
 if (!$project && $pageError === null) {
-    featuresDebugCheckpoint('project-missing-redirect');
     $_SESSION['error'] = 'Project not found or unavailable.';
     header('Location: projects.php');
     exit();
@@ -122,41 +68,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
 
 $existingFeatures = [];
 if ($project) {
-    try {
-        featuresDebugCheckpoint('feature-query-start');
-        $featureStmt = $conn->prepare("
-            SELECT id, title, description, priority
-            FROM tasks
-            WHERE project_id = ?
-              AND task_type = 'feature'
-            ORDER BY id ASC
-        ");
+    $featureResult = $conn->query("
+        SELECT id, title, description, priority
+        FROM tasks
+        WHERE project_id = $projectId
+          AND task_type = 'feature'
+        ORDER BY id ASC
+    ");
 
-        if ($featureStmt === false) {
-            throw new RuntimeException('Architect features list prepare failed: ' . $conn->error);
-        }
-
-        $featureStmt->bind_param('i', $projectId);
-        if ($featureStmt->execute()) {
-            $featureResult = $featureStmt->get_result();
-            if ($featureResult) {
-                while ($row = $featureResult->fetch_assoc()) {
-                    $existingFeatures[] = $row;
-                }
-            }
-        } else {
-            throw new RuntimeException('Architect features list execute failed: ' . $conn->error);
-        }
-        $featureStmt->close();
-        featuresDebugCheckpoint('feature-query-complete');
-    } catch (Throwable $e) {
-        error_log($e->getMessage());
+    if ($featureResult === false) {
+        error_log('Architect features list query failed: ' . ($conn->error ?? 'unknown error'));
         $pageError = 'Feature records are unavailable right now. You can still add new features below.';
-        featuresDebugCheckpoint('feature-query-failed');
+    } else {
+        while ($row = $featureResult->fetch_assoc()) {
+            $existingFeatures[] = $row;
+        }
     }
 }
-
-featuresDebugCheckpoint('before-template-includes');
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
