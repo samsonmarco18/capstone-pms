@@ -5,36 +5,38 @@ requireRole('architect');
 $conn = getConnection();
 $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$pageError = null;
 
-$projectStmt = $conn->prepare("
-    SELECT p.*, c.name AS client_name
-    FROM projects p
-    JOIN clients c ON p.client_id = c.id
-    WHERE p.id = ?
-    LIMIT 1
-");
-
-if ($projectStmt === false) {
-    error_log('Architect features project query prepare failed: ' . $conn->error);
-    $_SESSION['error'] = 'Unable to load the project right now.';
-    header('Location: projects.php');
-    exit();
-}
-
-$projectStmt->bind_param('i', $projectId);
 $project = null;
-if ($projectStmt->execute()) {
-    $projectResult = $projectStmt->get_result();
-    $project = $projectResult ? $projectResult->fetch_assoc() : null;
-} else {
-    error_log('Architect features project query execute failed: ' . $conn->error);
-}
-$projectStmt->close();
+try {
+    $projectStmt = $conn->prepare("
+        SELECT p.*, c.name AS client_name
+        FROM projects p
+        JOIN clients c ON p.client_id = c.id
+        WHERE p.id = ?
+        LIMIT 1
+    ");
 
-if (!$project) {
-    if (empty($_SESSION['error'])) {
-        $_SESSION['error'] = 'Project not found or unavailable.';
+    if ($projectStmt === false) {
+        throw new RuntimeException('Architect features project query prepare failed: ' . $conn->error);
     }
+
+    $projectStmt->bind_param('i', $projectId);
+    if ($projectStmt->execute()) {
+        $projectResult = $projectStmt->get_result();
+        $project = $projectResult ? $projectResult->fetch_assoc() : null;
+    } else {
+        throw new RuntimeException('Architect features project query execute failed: ' . $conn->error);
+    }
+
+    $projectStmt->close();
+} catch (Throwable $e) {
+    error_log($e->getMessage());
+    $pageError = 'Unable to load the project details right now.';
+}
+
+if (!$project && $pageError === null) {
+    $_SESSION['error'] = 'Project not found or unavailable.';
     header('Location: projects.php');
     exit();
 }
@@ -80,17 +82,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
 
 $existingFeatures = [];
 if ($project) {
-    $featureStmt = $conn->prepare("
-        SELECT id, title, description, priority
-        FROM tasks
-        WHERE project_id = ?
-          AND task_type = 'feature'
-        ORDER BY id ASC
-    ");
+    try {
+        $featureStmt = $conn->prepare("
+            SELECT id, title, description, priority
+            FROM tasks
+            WHERE project_id = ?
+              AND task_type = 'feature'
+            ORDER BY id ASC
+        ");
 
-    if ($featureStmt === false) {
-        error_log('Architect features list prepare failed: ' . $conn->error);
-    } else {
+        if ($featureStmt === false) {
+            throw new RuntimeException('Architect features list prepare failed: ' . $conn->error);
+        }
+
         $featureStmt->bind_param('i', $projectId);
         if ($featureStmt->execute()) {
             $featureResult = $featureStmt->get_result();
@@ -100,9 +104,12 @@ if ($project) {
                 }
             }
         } else {
-            error_log('Architect features list execute failed: ' . $conn->error);
+            throw new RuntimeException('Architect features list execute failed: ' . $conn->error);
         }
         $featureStmt->close();
+    } catch (Throwable $e) {
+        error_log($e->getMessage());
+        $pageError = 'Feature records are unavailable right now. You can still add new features below.';
     }
 }
 
@@ -324,6 +331,9 @@ a.progress-step:hover {
 </style>
 
 <div class="container-fluid px-4 py-4">
+    <?php if ($pageError): ?>
+        <div class="alert alert-warning"><?php echo htmlspecialchars($pageError); ?></div>
+    <?php endif; ?>
     <?php if (!$project): ?>
         <div class="alert alert-warning">Project not found.</div>
     <?php else: ?>

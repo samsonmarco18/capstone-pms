@@ -192,6 +192,51 @@ define('LOG_PATH', APP_ROOT_PATH . '/logs/');
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 ini_set('error_log', APP_ROOT_PATH . '/logs/error.log');
+error_reporting(E_ALL);
+
+function renderFatalErrorResponse(Throwable|string $error): void
+{
+    $message = $error instanceof Throwable ? $error->getMessage() : (string) $error;
+    $trace = $error instanceof Throwable ? $error->getTraceAsString() : '';
+    $requestUri = $_SERVER['REQUEST_URI'] ?? 'unknown';
+
+    error_log("Unhandled application error on {$requestUri}: {$message}" . ($trace !== '' ? PHP_EOL . $trace : ''));
+
+    if (php_sapi_name() === 'cli') {
+        fwrite(STDERR, "Unhandled application error: {$message}" . PHP_EOL);
+        return;
+    }
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: text/html; charset=UTF-8');
+    }
+
+    $safeMessage = DEBUG_MODE
+        ? htmlspecialchars($message, ENT_QUOTES, 'UTF-8')
+        : 'Something went wrong while loading this page.';
+    $safeRequestUri = htmlspecialchars($requestUri, ENT_QUOTES, 'UTF-8');
+
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Application Error</title><style>body{margin:0;font-family:Arial,sans-serif;background:#f5f7fb;color:#1f2937}.wrap{max-width:720px;margin:8vh auto;padding:24px}.card{background:#fff;border:1px solid #dbe3ef;border-radius:16px;padding:24px;box-shadow:0 12px 28px rgba(15,23,42,.08)}h1{margin:0 0 12px;font-size:24px}p{margin:0 0 10px;line-height:1.5}.meta{margin-top:16px;font-size:13px;color:#64748b}.btn{display:inline-block;margin-top:16px;padding:10px 14px;border-radius:10px;background:#1f6392;color:#fff;text-decoration:none}</style></head><body><div class="wrap"><div class="card"><h1>Page failed to load</h1><p>' . $safeMessage . '</p><p>Check the application logs for the exact server error, then reload the page.</p><div class="meta">Request: ' . $safeRequestUri . '</div><a class="btn" href="' . htmlspecialchars(APP_URL, ENT_QUOTES, 'UTF-8') . '">Go to dashboard</a></div></div></body></html>';
+}
+
+set_exception_handler(static function (Throwable $exception): void {
+    renderFatalErrorResponse($exception);
+});
+
+register_shutdown_function(static function (): void {
+    $error = error_get_last();
+    if ($error === null) {
+        return;
+    }
+
+    $fatalTypes = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+    if (!in_array($error['type'] ?? 0, $fatalTypes, true)) {
+        return;
+    }
+
+    renderFatalErrorResponse(($error['message'] ?? 'Unknown fatal error') . ' in ' . ($error['file'] ?? 'unknown file') . ' on line ' . ($error['line'] ?? 0));
+});
 
 // Timezone
 date_default_timezone_set('Asia/Manila');
