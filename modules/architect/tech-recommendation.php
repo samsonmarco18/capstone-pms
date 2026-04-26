@@ -6,45 +6,10 @@ $conn = getConnection();
 $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
-$hasCloudPlatform = $conn->query("SHOW COLUMNS FROM projects LIKE 'cloud_platform'")->num_rows > 0;
-if (!$hasCloudPlatform) {
-    try {
-        $conn->query("ALTER TABLE projects ADD COLUMN cloud_platform VARCHAR(100) NULL");
-        $hasCloudPlatform = $conn->query("SHOW COLUMNS FROM projects LIKE 'cloud_platform'")->num_rows > 0;
-    } catch (Throwable $e) {
-        $hasCloudPlatform = false;
-    }
-}
-
-$hasDatabaseServer = $conn->query("SHOW COLUMNS FROM projects LIKE 'database_server'")->num_rows > 0;
-if (!$hasDatabaseServer) {
-    try {
-        $conn->query("ALTER TABLE projects ADD COLUMN database_server VARCHAR(100) NULL");
-        $hasDatabaseServer = $conn->query("SHOW COLUMNS FROM projects LIKE 'database_server'")->num_rows > 0;
-    } catch (Throwable $e) {
-        $hasDatabaseServer = false;
-    }
-}
-
-$hasStorageRequirements = $conn->query("SHOW COLUMNS FROM projects LIKE 'storage_requirements'")->num_rows > 0;
-if (!$hasStorageRequirements) {
-    try {
-        $conn->query("ALTER TABLE projects ADD COLUMN storage_requirements VARCHAR(255) NULL");
-        $hasStorageRequirements = $conn->query("SHOW COLUMNS FROM projects LIKE 'storage_requirements'")->num_rows > 0;
-    } catch (Throwable $e) {
-        $hasStorageRequirements = false;
-    }
-}
-
-$hasAdditionalServices = $conn->query("SHOW COLUMNS FROM projects LIKE 'additional_services'")->num_rows > 0;
-if (!$hasAdditionalServices) {
-    try {
-        $conn->query("ALTER TABLE projects ADD COLUMN additional_services TEXT NULL");
-        $hasAdditionalServices = $conn->query("SHOW COLUMNS FROM projects LIKE 'additional_services'")->num_rows > 0;
-    } catch (Throwable $e) {
-        $hasAdditionalServices = false;
-    }
-}
+$hasCloudPlatform = dbColumnExists($conn, 'projects', 'cloud_platform');
+$hasDatabaseServer = dbColumnExists($conn, 'projects', 'database_server');
+$hasStorageRequirements = dbColumnExists($conn, 'projects', 'storage_requirements');
+$hasAdditionalServices = dbColumnExists($conn, 'projects', 'additional_services');
 
 $project = $conn->query("SELECT * FROM projects WHERE id = $projectId")->fetch_assoc();
 if (!$project) {

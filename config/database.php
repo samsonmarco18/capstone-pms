@@ -101,4 +101,43 @@ function getConnection(): mysqli|PgsqlMysqliCompatConnection
 
     return $conn;
 }
+
+function dbColumnExists(mysqli|PgsqlMysqliCompatConnection $conn, string $table, string $column): bool
+{
+    $tableName = strtolower(trim($table));
+    $columnName = strtolower(trim($column));
+
+    if ($tableName === '' || $columnName === '') {
+        return false;
+    }
+
+    $escapedTable = $conn->real_escape_string($tableName);
+    $escapedColumn = $conn->real_escape_string($columnName);
+
+    if (DB_DRIVER === 'pgsql') {
+        $sql = "
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = '{$escapedTable}'
+              AND column_name = '{$escapedColumn}'
+            LIMIT 1
+        ";
+    } else {
+        $sql = "
+            SELECT COLUMN_NAME AS column_name
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = '{$escapedTable}'
+              AND COLUMN_NAME = '{$escapedColumn}'
+            LIMIT 1
+        ";
+    }
+
+    $result = $conn->query($sql);
+
+    return $result instanceof mysqli_result
+        ? $result->num_rows > 0
+        : ($result instanceof PgsqlMysqliCompatResult && $result->num_rows > 0);
+}
 ?>

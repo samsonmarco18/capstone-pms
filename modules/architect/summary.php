@@ -6,10 +6,10 @@ $conn = getConnection();
 $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
-$hasCloudPlatform = $conn->query("SHOW COLUMNS FROM projects LIKE 'cloud_platform'")->num_rows > 0;
-$hasDatabaseServer = $conn->query("SHOW COLUMNS FROM projects LIKE 'database_server'")->num_rows > 0;
-$hasStorageRequirements = $conn->query("SHOW COLUMNS FROM projects LIKE 'storage_requirements'")->num_rows > 0;
-$hasAdditionalServices = $conn->query("SHOW COLUMNS FROM projects LIKE 'additional_services'")->num_rows > 0;
+$hasCloudPlatform = dbColumnExists($conn, 'projects', 'cloud_platform');
+$hasDatabaseServer = dbColumnExists($conn, 'projects', 'database_server');
+$hasStorageRequirements = dbColumnExists($conn, 'projects', 'storage_requirements');
+$hasAdditionalServices = dbColumnExists($conn, 'projects', 'additional_services');
 
 $project = $conn->query("
     SELECT p.*, c.name as client_name 
