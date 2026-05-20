@@ -89,6 +89,7 @@ CREATE TABLE projects (
     meeting_notes TEXT,
     mom TEXT,
     requested_features LONGTEXT,
+    sales_budget DECIMAL(15, 2) NULL,
     cloud_platform VARCHAR(100),
     database_server VARCHAR(100),
     storage_requirements VARCHAR(255),

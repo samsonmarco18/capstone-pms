@@ -11,6 +11,7 @@ $hasCloudPlatform = dbColumnExists($conn, 'projects', 'cloud_platform');
 $hasDatabaseServer = dbColumnExists($conn, 'projects', 'database_server');
 $hasStorageRequirements = dbColumnExists($conn, 'projects', 'storage_requirements');
 $hasAdditionalServices = dbColumnExists($conn, 'projects', 'additional_services');
+$hasSalesBudget = dbColumnExists($conn, 'projects', 'sales_budget');
 
 $project = $conn->query("
     SELECT p.*, c.name as client_name 
@@ -487,6 +488,9 @@ a.progress-step:hover {
                         <tr><td>Client:</td><td><?php echo htmlspecialchars($project['client_name']); ?></td></tr>
                         <tr><td>Timeline:</td><td><?php echo date('M d, Y', strtotime($project['timeline_start'])); ?> - <?php echo date('M d, Y', strtotime($project['timeline_end'])); ?></td></tr>
                         <tr><td>Status:</td><td><span class="badge-status pending">Ready for SUL Review</span></td></tr>
+                        <?php if ($hasSalesBudget && !empty($project['sales_budget'])): ?>
+                        <tr><td>Budget:</td><td><?php echo number_format((float) $project['sales_budget'], 2); ?></td></tr>
+                        <?php endif; ?>
                         <?php if ($hasCloudPlatform && !empty($project['cloud_platform'])): ?>
                         <tr><td>Cloud Platform:</td><td><?php echo htmlspecialchars($project['cloud_platform']); ?></td></tr>
                         <?php endif; ?>

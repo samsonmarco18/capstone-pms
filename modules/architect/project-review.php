@@ -5,6 +5,7 @@ requireRole('architect');
 $conn = getConnection();
 $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$hasSalesBudget = dbColumnExists($conn, 'projects', 'sales_budget');
 
 $project = $conn->query("
     SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email,
@@ -368,6 +369,12 @@ a.progress-step:hover {
                             ?>
                         </div>
                     </div>
+                    <?php if ($hasSalesBudget && !empty($project['sales_budget'])): ?>
+                    <div class="detail-row">
+                        <div class="detail-label">Budget</div>
+                        <div class="detail-value"><?php echo number_format((float) $project['sales_budget'], 2); ?></div>
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
 

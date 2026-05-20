@@ -4,6 +4,22 @@ requireRole('sales');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$hasSalesBudget = dbColumnExists($conn, 'projects', 'sales_budget');
+
+function parseSalesBudgetInput(string $value): ?float
+{
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    $normalized = str_replace(',', '', $trimmed);
+    if (!preg_match('/^\d+(?:\.\d{1,2})?$/', $normalized)) {
+        return null;
+    }
+
+    return (float) $normalized;
+}
 
 // Handle client operations (same logic as before)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -21,6 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $mom = trim((string) ($_POST['mom'] ?? ''));
         $requestedFeatures = trim((string) ($_POST['requested_features'] ?? ''));
         $additionalRequirements = trim((string) ($_POST['additional_requirements'] ?? ''));
+        $salesBudgetInput = trim((string) ($_POST['sales_budget'] ?? ''));
+        $salesBudget = parseSalesBudgetInput($salesBudgetInput);
         $timelineStart = $_POST['timeline_start'] ?: null;
         $timelineEnd = $_POST['timeline_end'] ?: ($deadline ?: null);
 
@@ -28,9 +46,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($additionalRequirements !== '') {
             $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Additional Requirements:' . "\n" . $additionalRequirements;
         }
+        if (!$hasSalesBudget && $salesBudgetInput !== '') {
+            $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Budget:' . "\n" . $salesBudgetInput;
+        }
 
         if ($name === '') {
             $_SESSION['error'] = 'Client name is required.';
+        } elseif ($salesBudgetInput !== '' && $salesBudget === null) {
+            $_SESSION['error'] = 'Budget must be a valid number.';
         } else {
             $conn->begin_transaction();
 
@@ -43,24 +66,47 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                 $projectId = null;
                 if ($projectName !== '') {
-                    $projectStmt = $conn->prepare("
-                        INSERT INTO projects (
-                            client_id, name, description, status, timeline_start, timeline_end,
-                            meeting_notes, mom, requested_features, created_by, architect_id
-                        ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL)
-                    ");
-                    $projectStmt->bind_param(
-                        "isssssssi",
-                        $clientId,
-                        $projectName,
-                        $projectDescription,
-                        $timelineStart,
-                        $timelineEnd,
-                        $meetingNotes,
-                        $mom,
-                        $requirementsSummary,
-                        $user['id']
-                    );
+                    if ($hasSalesBudget) {
+                        $projectStmt = $conn->prepare("
+                            INSERT INTO projects (
+                                client_id, name, description, status, timeline_start, timeline_end,
+                                meeting_notes, mom, requested_features, sales_budget, created_by, architect_id
+                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULLIF(?, ''), ?, NULL)
+                        ");
+                        $projectBudget = $salesBudget === null ? '' : number_format($salesBudget, 2, '.', '');
+                        $projectStmt->bind_param(
+                            'issssssssi',
+                            $clientId,
+                            $projectName,
+                            $projectDescription,
+                            $timelineStart,
+                            $timelineEnd,
+                            $meetingNotes,
+                            $mom,
+                            $requirementsSummary,
+                            $projectBudget,
+                            $user['id']
+                        );
+                    } else {
+                        $projectStmt = $conn->prepare("
+                            INSERT INTO projects (
+                                client_id, name, description, status, timeline_start, timeline_end,
+                                meeting_notes, mom, requested_features, created_by, architect_id
+                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL)
+                        ");
+                        $projectStmt->bind_param(
+                            'isssssssi',
+                            $clientId,
+                            $projectName,
+                            $projectDescription,
+                            $timelineStart,
+                            $timelineEnd,
+                            $meetingNotes,
+                            $mom,
+                            $requirementsSummary,
+                            $user['id']
+                        );
+                    }
                     $projectStmt->execute();
                     $projectId = $projectStmt->insert_id;
                     $projectStmt->close();
@@ -896,6 +942,11 @@ include '../../includes/navbar.php';
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Requested Timeline Start</label>
                             <input type="date" name="timeline_start" class="form-control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Budget</label>
+                            <input type="number" name="sales_budget" class="form-control" min="0" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00">
+                            <small class="text-muted">Used as the decision insight budget baseline when provided.</small>
                         </div>
                         <div class="col-12 mb-3">
                             <label class="form-label">Project Description</label>

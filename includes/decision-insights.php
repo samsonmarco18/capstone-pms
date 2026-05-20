@@ -194,6 +194,7 @@ function di_empty_decision_insights(): array
             'forecast_delay_days' => 0,
             'monthly_burn' => 0,
             'budget_total' => 0,
+            'budget_baseline_source' => 'Modeled project budget floor',
             'budget_health' => 100,
             'budget_consumed_ratio' => 0,
             'overspend_forecast' => 0,
@@ -578,7 +579,20 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
     $developerMonthly = max((float) max($requiredMembers, $assignedMembers), 0.0) * 15000.0;
     $monthlyBurn = $infrastructureMonthly + $developerMonthly;
     $projectMonths = max($timelineTotalDays / 30, 1.0);
-    $budgetTotal = max(di_float($artifactMetrics['sales_budget_total']), $monthlyBurn * $projectMonths);
+    $salesRequirementBudget = di_float($project['sales_budget'] ?? 0);
+    $salesReportBudgetTotal = di_float($artifactMetrics['sales_budget_total']);
+    $modeledBudgetFloor = $monthlyBurn * $projectMonths;
+    $budgetTotal = $modeledBudgetFloor;
+    $budgetBaselineSource = 'Modeled project budget floor';
+
+    if ($salesRequirementBudget > 0) {
+        $budgetTotal = $salesRequirementBudget;
+        $budgetBaselineSource = 'Sales requirement budget';
+    } elseif ($salesReportBudgetTotal > 0) {
+        $budgetTotal = $salesReportBudgetTotal;
+        $budgetBaselineSource = 'Sales report total';
+    }
+
     $budgetConsumed = $monthlyBurn * ($timelineElapsedDays / 30);
     $budgetConsumedRatio = di_ratio($budgetConsumed, max($budgetTotal, 1.0));
     $plannedMonthlyBudget = di_ratio($budgetTotal, $projectMonths);
@@ -716,6 +730,7 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
         'developer_monthly' => round($developerMonthly, 2),
         'monthly_burn' => round($monthlyBurn, 2),
         'budget_total' => round($budgetTotal, 2),
+        'budget_baseline_source' => $budgetBaselineSource,
         'budget_health' => round($budgetHealth, 1),
         'budget_consumed_ratio' => round($budgetConsumedRatio * 100, 1),
         'overspend_forecast' => round($overspendForecast, 2),
@@ -823,7 +838,7 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
         [
             'title' => 'Budget Burn Exposure',
             'score' => di_clamp(100 - $metrics['budget_health']),
-            'detail' => "Modeled monthly burn is " . number_format($metrics['monthly_burn'], 2) . " against a total budget of " . number_format($metrics['budget_total'], 2) . ".",
+            'detail' => "Modeled monthly burn is " . number_format($metrics['monthly_burn'], 2) . " against the {$metrics['budget_baseline_source']} of " . number_format($metrics['budget_total'], 2) . '.',
             'action' => 'Watch overspend forecast and align budget with scope before approval pressure increases.',
             'band' => di_band_for_score(di_clamp(100 - $metrics['budget_health'])),
         ],

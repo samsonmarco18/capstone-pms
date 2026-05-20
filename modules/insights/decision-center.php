@@ -1274,7 +1274,7 @@ include '../../includes/navbar.php';
                                 <tr>
                                     <td>Total Budget Baseline</td>
                                     <td><?php echo number_format($insights['metrics']['budget_total'], 2); ?></td>
-                                    <td class="subtext">Latest sales report or modeled project budget floor</td>
+                                    <td class="subtext"><?php echo htmlspecialchars($insights['metrics']['budget_baseline_source']); ?></td>
                                 </tr>
                                 <tr>
                                     <td>Monthly Burn</td>
