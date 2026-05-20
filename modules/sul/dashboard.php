@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-delay-insights.php';
 requireRole('sul');
 
 $conn = getConnection();
@@ -496,6 +497,14 @@ include '../../includes/navbar.php';
             <div class="stat-sub">Requires immediate attention</div>
         </div>
     </div>
+
+    <?php
+    delayInsightsRenderSection($conn, $user, [
+        'limit' => 3,
+        'title' => 'Project Delay Insight Notifications',
+        'subtitle' => 'See where planning risk is high, which projects are already slipping, and which owners should be aligned first to reduce delay.',
+    ]);
+    ?>
 
     <!-- Row 1: Task Status + Upcoming Schedule + Projects Needing Allocation -->
     <div class="row g-3 mb-4">

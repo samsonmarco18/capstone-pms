@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-delay-insights.php';
 requireRole('admin');
 
 $user = getCurrentUser();
@@ -167,6 +168,14 @@ include '../../includes/navbar.php';
             </div>
         </div>
     </div>
+
+    <?php
+    delayInsightsRenderSection($conn, $user, [
+        'limit' => 3,
+        'title' => 'Project Delay Insight Notifications',
+        'subtitle' => 'Administration can review planning-stage delay probability, success outlook, current delay causes, and the owners who need follow-up.',
+    ]);
+    ?>
 
     <!-- Charts Section -->
     <div class="row g-3">

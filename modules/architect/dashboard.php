@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-delay-insights.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -272,6 +273,14 @@ include '../../includes/navbar.php';
             </div>
         </div>
     </div>
+
+    <?php
+    delayInsightsRenderSection($conn, $user, [
+        'limit' => 3,
+        'title' => 'Project Delay Insight Notifications',
+        'subtitle' => 'Use these cards to judge the likely delay percentage before handoff, the current success chance, and the active reasons or owners behind delivery slippage.',
+    ]);
+    ?>
 
     <!-- Charts Section -->
     <div class="row g-3 mb-4">

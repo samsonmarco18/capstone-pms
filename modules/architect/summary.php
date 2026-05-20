@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-delay-insights.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -464,6 +465,14 @@ a.progress-step:hover {
         <div class="progress-line completed"></div>
         <a class="progress-step active" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">6</div><div class="step-label">Summary</div></a>
     </div>
+
+    <?php
+    delayInsightsRenderSection($conn, $user, [
+        'project_id' => $projectId,
+        'title' => 'Project Insight Notifications',
+        'subtitle' => 'Before submission, review the predicted delay percentage, success rate, recommended adjustments, and the delay causes or owners that already need attention for this project.',
+    ]);
+    ?>
 
     <div class="row g-4">
         <div class="col-lg-8">

@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-delay-insights.php';
 requireRole('expert');
 
 $conn = getConnection();
@@ -492,6 +493,14 @@ include '../../includes/navbar.php';
             </div>
         </div>
     </div>
+
+    <?php
+    delayInsightsRenderSection($conn, $user, [
+        'limit' => 3,
+        'title' => 'Project Delay Insight Notifications',
+        'subtitle' => 'Expert teams can review delay probability, success outlook, and the blockers or owners that may need sharper estimation or technical intervention.',
+    ]);
+    ?>
 
     <div class="row g-4">
         <div class="col-xl-7">

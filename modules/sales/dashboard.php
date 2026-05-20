@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-delay-insights.php';
 requireRole('sales');
 
 $conn = getConnection();
@@ -454,6 +455,14 @@ include '../../includes/navbar.php';
             <div class="stat-sub">Project success rate</div>
         </div>
     </div>
+
+    <?php
+    delayInsightsRenderSection($conn, $user, [
+        'limit' => 3,
+        'title' => 'Project Delay Insight Notifications',
+        'subtitle' => 'Sales can see the likely chance of delay before delivery, the current success outlook, and the owners or bottlenecks that may affect client commitments.',
+    ]);
+    ?>
 
     <!-- Charts Row -->
     <div class="row g-4 mb-4">

@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-delay-insights.php';
 requireRole('developer');
 
 $conn = getConnection();
@@ -502,6 +503,14 @@ include '../../includes/navbar.php';
             </div>
         </div>
     </div>
+
+    <?php
+    delayInsightsRenderSection($conn, $user, [
+        'limit' => 3,
+        'title' => 'Project Delay Insight Notifications',
+        'subtitle' => 'Developers can see projected delay risk, the current success chance, and the overdue or blocked work that is pushing projects behind schedule.',
+    ]);
+    ?>
 
     <div class="row g-4 mb-4">
         <div class="col-xl-7">
