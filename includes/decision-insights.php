@@ -133,6 +133,7 @@ function di_access_rule(array $user): array
         'sul' => ['where' => '1 = 1', 'types' => '', 'params' => []],
         'architect' => ['where' => '(p.architect_id = ? OR p.architect_id IS NULL)', 'types' => 'i', 'params' => [$userId]],
         'expert' => ['where' => 'EXISTS (SELECT 1 FROM tasks tx WHERE tx.project_id = p.id AND tx.assigned_to = ?)', 'types' => 'i', 'params' => [$userId]],
+        'developer' => ['where' => 'EXISTS (SELECT 1 FROM tasks tx WHERE tx.project_id = p.id AND tx.assigned_to = ?)', 'types' => 'i', 'params' => [$userId]],
     ];
 
     return $rules[$user['role'] ?? 'admin'] ?? $rules['admin'];
@@ -147,6 +148,7 @@ function di_load_accessible_projects(mysqli $conn, array $user): array
             p.name,
             p.status,
             p.complexity_level,
+            p.created_at,
             c.name AS client_name,
             p.timeline_start,
             p.timeline_end
@@ -246,6 +248,13 @@ function di_empty_decision_insights(): array
 function di_scenario_catalog(): array
 {
     return [
+        'current_state' => [
+            'label' => 'Current Overview',
+            'unit_label' => 'state',
+            'default_value' => 0,
+            'min' => 0,
+            'max' => 0,
+        ],
         'add_developers' => [
             'label' => 'Add Developers',
             'unit_label' => 'developers',
@@ -287,10 +296,19 @@ function di_scenario_catalog(): array
 function di_simulate_scenario(array $baseline, string $scenario, float $value): array
 {
     $catalog = di_scenario_catalog();
-    $config = $catalog[$scenario] ?? $catalog['add_developers'];
+    $config = $catalog[$scenario] ?? $catalog['current_state'];
     $boundedValue = di_clamp($value, (float) $config['min'], (float) $config['max']);
 
     $simulators = [
+        'current_state' => static function (array $base, float $units): array {
+            $costDelta = 0.0;
+            $delayDelta = 0.0;
+            $riskDelta = 0.0;
+            $productivityDelta = 0.0;
+            $confidenceDelta = 0.0;
+
+            return compact('costDelta', 'delayDelta', 'riskDelta', 'productivityDelta', 'confidenceDelta');
+        },
         'add_developers' => static function (array $base, float $units): array {
             $costDelta = $base['developer_unit_cost'] * $units;
             $delayDelta = -min($base['forecast_delay_days'], ($units * 2.4) + ($base['remaining_work_days'] * 0.08));
@@ -339,7 +357,7 @@ function di_simulate_scenario(array $baseline, string $scenario, float $value): 
         },
     ];
 
-    $deltas = ($simulators[$scenario] ?? $simulators['add_developers'])($baseline, $boundedValue);
+    $deltas = ($simulators[$scenario] ?? $simulators['current_state'])($baseline, $boundedValue);
 
     $after = [
         'monthly_burn' => max($baseline['monthly_burn'] + $deltas['costDelta'], 0.0),

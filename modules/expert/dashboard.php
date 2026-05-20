@@ -495,10 +495,11 @@ include '../../includes/navbar.php';
     </div>
 
     <?php
-    delayInsightsRenderSection($conn, $user, [
-        'limit' => 3,
-        'title' => 'Project Delay Insight Notifications',
-        'subtitle' => 'Expert teams can review delay probability, success outlook, and the blockers or owners that may need sharper estimation or technical intervention.',
+    delayInsightsRenderCompactList($conn, $user, [
+        'limit' => 4,
+        'title' => 'Project Insight List',
+        'subtitle' => 'Small one-line project signals with direct links to the full insight page.',
+        'button_label' => 'View Project',
     ]);
     ?>
 

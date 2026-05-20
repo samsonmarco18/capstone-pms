@@ -1,8 +1,9 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/decision-insights.php';
+require_once '../../includes/project-delay-insights.php';
 
-requireRole(['admin', 'sales', 'architect', 'sul', 'expert']);
+requireRole(['admin', 'sales', 'architect', 'sul', 'expert', 'developer']);
 
 $conn = getConnection();
 $user = getCurrentUser();
@@ -15,8 +16,10 @@ if (!$canViewBudget) {
 }
 
 $selectedProjectId = (int) ($_GET['project_id'] ?? ($projects[0]['id'] ?? 0));
-$requestedScenario = (string) ($_GET['scenario'] ?? 'add_developers');
-$defaultScenario = array_key_first($scenarioCatalog) ?: 'add_developers';
+$requestedView = (string) ($_GET['view'] ?? 'overview');
+$currentView = $requestedView === 'statistics' ? 'statistics' : 'overview';
+$requestedScenario = (string) ($_GET['scenario'] ?? 'current_state');
+$defaultScenario = array_key_first($scenarioCatalog) ?: 'current_state';
 $scenarioType = array_key_exists($requestedScenario, $scenarioCatalog) ? $requestedScenario : $defaultScenario;
 $scenarioConfig = $scenarioCatalog[$scenarioType];
 $scenarioValue = di_clamp(
@@ -146,6 +149,26 @@ $comparisonChart = [
     'risk' => array_map(static fn(array $row): float => round($row['simulation']['after']['risk_score'], 1), $strategyComparisons),
 ];
 
+$overviewInsights = delayInsightsLoadInsights($conn, $user, [
+    'limit' => max(1, count($projects)),
+]);
+
+$overviewInsightsByProject = [];
+foreach ($overviewInsights as $overviewInsight) {
+    $overviewInsightsByProject[(int) $overviewInsight['project']['id']] = $overviewInsight;
+}
+
+$overviewUrl = BASE_URL . 'modules/insights/decision-center.php?project_id=' . $selectedProjectId . '&view=overview';
+$statisticsUrl = BASE_URL . 'modules/insights/decision-center.php?project_id=' . $selectedProjectId . '&view=statistics';
+if ($scenarioType !== 'current_state') {
+    $statisticsUrl .= '&scenario=' . urlencode($scenarioType) . '&scenario_value=' . (float) $scenarioValue;
+}
+$actionCatalog = array_filter(
+    $scenarioCatalog,
+    static fn(string $key): bool => $key !== 'current_state',
+    ARRAY_FILTER_USE_KEY
+);
+
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
@@ -240,8 +263,375 @@ include '../../includes/navbar.php';
     margin-bottom: 1.5rem;
 }
 
+.insight-toolbar {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.toolbar-dropdown {
+    position: relative;
+}
+
+.toolbar-menu {
+    min-width: 260px;
+    border-radius: 18px;
+    border: 1px solid var(--gray-200);
+    box-shadow: var(--shadow-md);
+    padding: 0.55rem;
+}
+
+.toolbar-menu .dropdown-item {
+    border-radius: 12px;
+    font-size: 0.86rem;
+    padding: 0.7rem 0.85rem;
+    white-space: normal;
+}
+
+.toolbar-menu .dropdown-item:active {
+    background: var(--insight-primary);
+}
+
+.toolbar-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    border-radius: 999px;
+    padding: 0.78rem 1.05rem;
+    border: 1px solid var(--gray-200);
+    background: #fff;
+    color: var(--gray-900);
+    font-weight: 600;
+    text-decoration: none;
+    box-shadow: var(--shadow-sm);
+}
+
+.toolbar-button:hover {
+    color: var(--insight-primary);
+    border-color: rgba(31, 99, 146, 0.3);
+}
+
+.toolbar-button.primary {
+    background: linear-gradient(135deg, var(--insight-primary) 0%, var(--insight-dark) 100%);
+    color: #fff;
+    border-color: transparent;
+}
+
+.toolbar-button.primary:hover {
+    color: #fff;
+}
+
 .filter-card .card-body {
     padding: 1.4rem;
+}
+
+.overview-card-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.2rem;
+    margin-bottom: 1.5rem;
+}
+
+.overview-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.7fr);
+    gap: 0.9rem;
+    margin-bottom: 1.25rem;
+}
+
+.overview-control-card {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 22px;
+    box-shadow: var(--shadow-sm);
+    padding: 1rem 1.1rem;
+}
+
+.overview-control-label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    color: var(--gray-600);
+    margin-bottom: 0.55rem;
+}
+
+.overview-search-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.7rem;
+    align-items: center;
+}
+
+.overview-search-input,
+.overview-sort-select {
+    width: 100%;
+    border: 1px solid var(--gray-200);
+    border-radius: 14px;
+    padding: 0.78rem 0.95rem;
+    font-size: 0.9rem;
+    color: var(--gray-900);
+    background: #fff;
+}
+
+.overview-search-input:focus,
+.overview-sort-select:focus {
+    outline: none;
+    border-color: rgba(31, 99, 146, 0.45);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
+.overview-search-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border-radius: 14px;
+    padding: 0.78rem 1rem;
+    border: none;
+    background: linear-gradient(135deg, var(--insight-primary) 0%, var(--insight-dark) 100%);
+    color: #fff;
+    font-weight: 700;
+}
+
+.overview-results-note {
+    margin-bottom: 1rem;
+    font-size: 0.82rem;
+    color: var(--gray-600);
+}
+
+.overview-project-card {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 28px;
+    box-shadow: var(--shadow-sm);
+    padding: 1.6rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.overview-project-card.risk-low {
+    border-color: #bbf7d0;
+    box-shadow: 0 8px 18px rgba(16, 185, 129, 0.08);
+}
+
+.overview-project-card.risk-medium {
+    border-color: #fde68a;
+    box-shadow: 0 8px 18px rgba(245, 158, 11, 0.1);
+}
+
+.overview-project-card.risk-high {
+    border-color: #fecaca;
+    box-shadow: 0 10px 22px rgba(239, 68, 68, 0.12);
+}
+
+.overview-project-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 1.15rem;
+    align-items: flex-start;
+    padding-bottom: 0.2rem;
+}
+
+.overview-project-head h5 {
+    margin: 0 0 0.35rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--gray-900);
+}
+
+.overview-project-meta {
+    font-size: 0.76rem;
+    color: var(--gray-600);
+    line-height: 1.5;
+}
+
+.delay-risk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    border: 1px solid transparent;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
+}
+
+.delay-risk-low {
+    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+    color: #166534;
+    border-color: #86efac;
+}
+
+.delay-risk-medium {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    color: #92400e;
+    border-color: #fbbf24;
+}
+
+.delay-risk-high {
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    color: #991b1b;
+    border-color: #f87171;
+}
+
+.overview-insight-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.overview-panel {
+    border: 1px solid var(--gray-200);
+    border-radius: 22px;
+    padding: 1.1rem 1.1rem 1rem;
+    background: #fff;
+}
+
+.overview-panel.before {
+    background: linear-gradient(180deg, rgba(59, 130, 246, 0.06) 0%, #ffffff 100%);
+}
+
+.overview-panel.after {
+    background: linear-gradient(180deg, rgba(245, 158, 11, 0.06) 0%, #ffffff 100%);
+}
+
+.overview-project-card.risk-low .overview-panel.before {
+    background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, #ffffff 100%);
+    border-color: #bbf7d0;
+}
+
+.overview-project-card.risk-medium .overview-panel.before {
+    background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, #ffffff 100%);
+    border-color: #fde68a;
+}
+
+.overview-project-card.risk-high .overview-panel.before {
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.08) 0%, #ffffff 100%);
+    border-color: #fecaca;
+}
+
+.overview-project-card.risk-low .overview-panel.after {
+    background: linear-gradient(180deg, rgba(22, 163, 74, 0.05) 0%, #ffffff 100%);
+}
+
+.overview-project-card.risk-medium .overview-panel.after {
+    background: linear-gradient(180deg, rgba(217, 119, 6, 0.06) 0%, #ffffff 100%);
+}
+
+.overview-project-card.risk-high .overview-panel.after {
+    background: linear-gradient(180deg, rgba(220, 38, 38, 0.06) 0%, #ffffff 100%);
+}
+
+.overview-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.95rem;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--gray-900);
+}
+
+.overview-metric-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.7rem;
+    margin-bottom: 0.9rem;
+}
+
+.overview-mini-card {
+    border: 1px solid var(--gray-200);
+    border-radius: 18px;
+    padding: 0.75rem 0.85rem;
+    background: #fff;
+}
+
+.overview-mini-card span {
+    display: block;
+    font-size: 0.67rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--gray-600);
+    margin-bottom: 0.2rem;
+}
+
+.overview-mini-card strong {
+    font-size: 1.35rem;
+    color: var(--insight-primary);
+    line-height: 1;
+}
+
+.overview-summary {
+    font-size: 0.82rem;
+    color: var(--gray-700);
+    line-height: 1.6;
+    margin: 0;
+}
+
+.overview-list {
+    margin: 0.85rem 0 0;
+    padding-left: 1rem;
+    color: var(--gray-700);
+    font-size: 0.79rem;
+    line-height: 1.6;
+}
+
+.overview-list li {
+    margin-bottom: 0.38rem;
+}
+
+.overview-list li:last-child {
+    margin-bottom: 0;
+}
+
+.overview-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.9rem;
+}
+
+.overview-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.34rem 0.68rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border: 1px solid #fdba74;
+    background: #fff7ed;
+    color: #9a3412;
+}
+
+.overview-note {
+    margin-top: 0.9rem;
+    padding: 0.8rem 0.9rem;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.76rem;
+    line-height: 1.5;
+}
+
+.overview-footer {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 0.1rem;
+}
+
+.action-modal-note {
+    font-size: 0.8rem;
+    color: var(--gray-600);
 }
 
 .metric-grid {
@@ -533,84 +923,91 @@ include '../../includes/navbar.php';
     .insights-hero h1 {
         font-size: 1.55rem;
     }
+
+    .overview-project-head {
+        flex-direction: column;
+    }
+
+    .overview-project-head .delay-risk-badge {
+        align-self: flex-start;
+    }
+
+    .overview-controls {
+        grid-template-columns: 1fr;
+    }
+
+    .overview-search-row {
+        grid-template-columns: 1fr;
+    }
+
 }
 </style>
 
 <div class="container-fluid px-4 py-4">
     <div class="insights-hero">
         <span class="badge-tone info mb-3">Decision-Driven Insights Center</span>
-        <h1><?php echo htmlspecialchars($projectTitle); ?></h1>
-        <p>Formula-based analysis for decision impact, risk exposure, schedule slippage, resource efficiency, KPI deviations, <?php echo $canViewBudget ? 'budget burn, ' : ''; ?>confidence scoring, and scenario simulation.</p>
+        <h1><?php echo htmlspecialchars($currentView === 'statistics' ? $projectTitle : 'Project Insights Overview'); ?></h1>
+        <p>
+            <?php if ($currentView === 'statistics'): ?>
+                Formula-based analysis for decision impact, risk exposure, schedule slippage, resource efficiency, KPI deviations, <?php echo $canViewBudget ? 'budget burn, ' : ''; ?>confidence scoring, and action-based insight testing.
+            <?php else: ?>
+                Browse project overview cards first, then open the full statistics only when you need the deeper analysis for one project.
+            <?php endif; ?>
+        </p>
         <div class="project-meta">
-            <div class="project-chip"><strong>Client:</strong> <?php echo htmlspecialchars($projectClient); ?></div>
-            <div class="project-chip"><strong>Status:</strong> <?php echo htmlspecialchars($projectStatus); ?></div>
-            <div class="project-chip"><strong>Complexity:</strong> <?php echo htmlspecialchars($projectComplexity); ?></div>
-            <div class="project-chip"><strong>Timeline:</strong> <?php echo (int) $insights['metrics']['timeline_total_days']; ?> days</div>
+            <?php if ($currentView === 'statistics'): ?>
+                <div class="project-chip"><strong>Client:</strong> <?php echo htmlspecialchars($projectClient); ?></div>
+                <div class="project-chip"><strong>Status:</strong> <?php echo htmlspecialchars($projectStatus); ?></div>
+                <div class="project-chip"><strong>Complexity:</strong> <?php echo htmlspecialchars($projectComplexity); ?></div>
+                <div class="project-chip"><strong>Timeline:</strong> <?php echo (int) $insights['metrics']['timeline_total_days']; ?> days</div>
+            <?php else: ?>
+                <div class="project-chip"><strong>Projects:</strong> <?php echo count($projects); ?></div>
+                <div class="project-chip"><strong>Role:</strong> <?php echo htmlspecialchars(getRoleDisplayName($userRole)); ?></div>
+                <div class="project-chip"><strong>Focus:</strong> Delay, confidence, and delivery signals</div>
+            <?php endif; ?>
         </div>
     </div>
 
-    <div class="filter-card">
-        <div class="card-body">
-            <form method="GET" class="row g-3 align-items-end">
-                <div class="col-lg-5">
-                    <label class="form-label">Project</label>
-                    <select name="project_id" class="form-select">
-                        <?php foreach ($projects as $project): ?>
-                            <option value="<?php echo (int) $project['id']; ?>" <?php echo $selectedProjectId === (int) $project['id'] ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($project['name'] . ' - ' . $project['client_name']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-lg-3">
-                    <label class="form-label">Scenario</label>
-                    <select name="scenario" class="form-select">
-                        <?php foreach ($scenarioCatalog as $key => $catalogItem): ?>
-                            <option value="<?php echo htmlspecialchars($key); ?>" <?php echo $scenarioType === $key ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($catalogItem['label']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="col-lg-2">
-                    <label class="form-label">Value</label>
-                    <input
-                        type="number"
-                        name="scenario_value"
-                        class="form-control"
-                        value="<?php echo htmlspecialchars((string) $scenarioValue); ?>"
-                        min="<?php echo (float) $scenarioConfig['min']; ?>"
-                        max="<?php echo (float) $scenarioConfig['max']; ?>"
-                        step="1"
+    <?php if ($currentView === 'statistics'): ?>
+    <div class="insight-toolbar">
+        <div class="dropdown toolbar-dropdown">
+            <button class="toolbar-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-bolt"></i>
+                Actions
+            </button>
+            <div class="dropdown-menu toolbar-menu">
+                <a class="dropdown-item" href="<?php echo htmlspecialchars($overviewUrl); ?>">
+                    Current Overview
+                </a>
+                <?php foreach ($actionCatalog as $actionKey => $actionItem): ?>
+                    <button
+                        type="button"
+                        class="dropdown-item open-action-modal"
+                        data-project-id="<?php echo (int) $selectedProjectId; ?>"
+                        data-project-name="<?php echo htmlspecialchars($projectTitle); ?>"
+                        data-scenario="<?php echo htmlspecialchars($actionKey); ?>"
+                        data-label="<?php echo htmlspecialchars($actionItem['label']); ?>"
+                        data-default-value="<?php echo htmlspecialchars((string) $actionItem['default_value']); ?>"
+                        data-min="<?php echo htmlspecialchars((string) $actionItem['min']); ?>"
+                        data-max="<?php echo htmlspecialchars((string) $actionItem['max']); ?>"
+                        data-unit="<?php echo htmlspecialchars($actionItem['unit_label']); ?>"
                     >
-                </div>
-                <div class="col-lg-2">
-                    <button type="submit" class="btn btn-insight w-100">Recalculate</button>
-                </div>
-            </form>
-            <div class="scenario-note mt-3">
-                Current simulation uses <strong><?php echo htmlspecialchars($scenarioConfig['label']); ?></strong> with a magnitude of
-                <strong><?php echo number_format($simulation['value'], 0); ?></strong> <?php echo htmlspecialchars($scenarioConfig['unit_label']); ?>.
-                This module reads existing project, task, estimation, git, and allocation data<?php echo $canViewBudget ? ', including cost tables.' : '.'; ?>
+                        <?php echo htmlspecialchars($actionItem['label']); ?>
+                    </button>
+                <?php endforeach; ?>
             </div>
         </div>
-    </div>
 
-    <div class="metric-grid">
-        <?php foreach ($metricCards as $card): ?>
-            <div class="metric-card">
-                <div class="icon tone-<?php echo htmlspecialchars($card['tone']); ?>">
-                    <i class="fas fa-<?php echo htmlspecialchars($card['icon']); ?>"></i>
-                </div>
-                <div class="label"><?php echo htmlspecialchars($card['label']); ?></div>
-                <div class="value tone-<?php echo htmlspecialchars($card['tone']); ?>">
-                    <?php echo htmlspecialchars($card['value']); ?><?php echo htmlspecialchars($card['suffix']); ?>
-                </div>
-                <div class="meta"><?php echo htmlspecialchars($card['meta']); ?></div>
-            </div>
-        <?php endforeach; ?>
+        <?php if ($currentView === 'statistics'): ?>
+            <a class="toolbar-button primary" href="<?php echo htmlspecialchars($overviewUrl); ?>">
+                <i class="fas fa-layer-group"></i>
+                Back to Overview
+            </a>
+        <?php endif; ?>
     </div>
+    <?php endif; ?>
 
+    <?php if ($currentView === 'statistics'): ?>
     <div class="row g-4 mb-4">
         <div class="col-xl-7">
             <div class="section-card">
@@ -1075,105 +1472,423 @@ include '../../includes/navbar.php';
             </div>
         </div>
     </div>
+    <?php else: ?>
+    <div class="overview-controls">
+        <div class="overview-control-card">
+            <label class="overview-control-label" for="overviewSearch">Search Projects</label>
+            <div class="overview-search-row">
+                <input
+                    type="text"
+                    id="overviewSearch"
+                    class="overview-search-input"
+                    placeholder="Search by project, client, status, or timeline"
+                >
+                <button type="button" class="overview-search-button" id="overviewSearchButton">
+                    <i class="fas fa-search"></i>
+                    Search
+                </button>
+            </div>
+        </div>
+        <div class="overview-control-card">
+            <label class="overview-control-label" for="overviewSort">Sort Projects</label>
+            <select id="overviewSort" class="overview-sort-select">
+                <option value="date">Date</option>
+                <option value="alphabetical">Alphabetical</option>
+                <option value="risk">Risk Level</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="overview-results-note" id="overviewResultsNote">
+        Showing <?php echo count($projects); ?> project card(s).
+    </div>
+
+    <div class="overview-card-grid">
+        <?php foreach ($projects as $project): ?>
+            <?php
+            $projectId = (int) $project['id'];
+            $overviewInsight = $overviewInsightsByProject[$projectId] ?? null;
+            $projectStatsUrl = BASE_URL . 'modules/insights/decision-center.php?project_id=' . $projectId . '&view=statistics';
+            $riskLevel = $overviewInsight['before']['risk_level'] ?? 'Low';
+            $riskClass = $riskLevel === 'High' ? 'delay-risk-high' : ($riskLevel === 'Medium' ? 'delay-risk-medium' : 'delay-risk-low');
+            $riskOrder = $riskLevel === 'High' ? 3 : ($riskLevel === 'Medium' ? 2 : 1);
+            $createdAtTs = !empty($project['created_at']) ? (strtotime((string) $project['created_at']) ?: 0) : 0;
+            $searchBlob = strtolower(trim(
+                $project['name']
+                . ' '
+                . ($project['client_name'] ?? '')
+                . ' '
+                . ucwords(str_replace('_', ' ', (string) ($project['status'] ?? '')))
+                . ' '
+                . delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))
+            ));
+            ?>
+            <div
+                class="overview-project-card js-overview-card <?php echo $riskLevel === 'High' ? 'risk-high' : ($riskLevel === 'Medium' ? 'risk-medium' : 'risk-low'); ?>"
+                data-name="<?php echo htmlspecialchars(strtolower((string) $project['name'])); ?>"
+                data-date="<?php echo (int) $createdAtTs; ?>"
+                data-risk="<?php echo (int) $riskOrder; ?>"
+                data-search="<?php echo htmlspecialchars($searchBlob); ?>"
+            >
+                <div class="overview-project-head">
+                    <div>
+                        <h5><?php echo htmlspecialchars($project['name']); ?></h5>
+                        <div class="overview-project-meta">
+                            Client: <?php echo htmlspecialchars($project['client_name']); ?> |
+                            Status: <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $project['status']))); ?> |
+                            Timeline: <?php echo htmlspecialchars(delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))); ?>
+                        </div>
+                    </div>
+                    <span class="delay-risk-badge <?php echo $riskClass; ?>">
+                        <i class="fas fa-signal"></i>
+                        <?php echo htmlspecialchars($riskLevel); ?> Delay Risk
+                    </span>
+                </div>
+
+                <?php if ($overviewInsight !== null): ?>
+                    <div class="overview-insight-layout">
+                        <div class="overview-panel before">
+                            <div class="overview-panel-title">
+                                <i class="fas fa-drafting-compass"></i>
+                                Before Project Insight
+                            </div>
+                            <div class="overview-metric-grid">
+                                <div class="overview-mini-card">
+                                    <span>Delay Chance</span>
+                                    <strong><?php echo (int) $overviewInsight['before']['delay_probability']; ?>%</strong>
+                                </div>
+                                <div class="overview-mini-card">
+                                    <span>Success Chance</span>
+                                    <strong><?php echo (int) $overviewInsight['before']['success_probability']; ?>%</strong>
+                                </div>
+                            </div>
+                            <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['before']['summary']); ?></p>
+                            <?php if (!empty($overviewInsight['before']['tips'])): ?>
+                                <ul class="overview-list">
+                                    <?php foreach (array_slice($overviewInsight['before']['tips'], 0, 2) as $tip): ?>
+                                        <li><?php echo htmlspecialchars($tip); ?></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="overview-panel after">
+                            <div class="overview-panel-title">
+                                <i class="fas fa-clipboard-list"></i>
+                                After Project Review
+                            </div>
+                            <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['after']['summary']); ?></p>
+                            <?php if (!empty($overviewInsight['after']['reasons'])): ?>
+                                <div class="overview-tags">
+                                    <?php foreach (array_slice($overviewInsight['after']['reasons'], 0, 2) as $reason): ?>
+                                        <span class="overview-tag"><?php echo htmlspecialchars($reason); ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                            <div class="overview-note"><?php echo htmlspecialchars($overviewInsight['after']['note']); ?></div>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <p class="overview-summary">Insight details are not available yet for this project.</p>
+                <?php endif; ?>
+
+                <div class="overview-footer">
+                    <a class="toolbar-button primary" href="<?php echo htmlspecialchars($projectStatsUrl); ?>">
+                        <i class="fas fa-chart-bar"></i>
+                        View Overall Statistics
+                    </a>
+                    <button
+                        type="button"
+                        class="toolbar-button open-action-modal"
+                        data-project-id="<?php echo $projectId; ?>"
+                        data-project-name="<?php echo htmlspecialchars($project['name']); ?>"
+                        data-scenario=""
+                        data-label=""
+                        data-default-value=""
+                        data-min=""
+                        data-max=""
+                        data-unit=""
+                    >
+                        <i class="fas fa-bolt"></i>
+                        Actions
+                    </button>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
 
     <?php echo count($projects) === 0 ? '<div class="empty-state mt-4"><i class="fas fa-inbox fa-2x mb-3"></i><div>No accessible projects were found for this role.</div></div>' : ''; ?>
+</div>
+
+<div class="modal fade" id="projectActionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 24px; border: 1px solid #e9ecef;">
+            <form method="GET">
+                <div class="modal-header border-0 pb-0">
+                    <div>
+                        <h5 class="modal-title fw-semibold">Project Action</h5>
+                        <p class="text-muted small mb-0" id="projectActionModalProject">Set the action details before opening the full statistics view.</p>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-3">
+                    <input type="hidden" name="project_id" id="actionProjectId" value="<?php echo (int) $selectedProjectId; ?>">
+                    <input type="hidden" name="view" value="statistics">
+
+                    <div class="mb-3">
+                        <label class="form-label">Action</label>
+                        <select class="form-select" name="scenario" id="actionScenario" required>
+                            <option value="" selected disabled>Select an action</option>
+                            <?php foreach ($actionCatalog as $actionKey => $actionItem): ?>
+                                <option
+                                    value="<?php echo htmlspecialchars($actionKey); ?>"
+                                    data-default-value="<?php echo htmlspecialchars((string) $actionItem['default_value']); ?>"
+                                    data-min="<?php echo htmlspecialchars((string) $actionItem['min']); ?>"
+                                    data-max="<?php echo htmlspecialchars((string) $actionItem['max']); ?>"
+                                    data-unit="<?php echo htmlspecialchars($actionItem['unit_label']); ?>"
+                                >
+                                    <?php echo htmlspecialchars($actionItem['label']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Value</label>
+                        <input type="number" class="form-control" name="scenario_value" id="actionValue" step="1" required>
+                        <div class="action-modal-note mt-2" id="actionValueNote">Choose an action first to see the needed value range.</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-insight px-4">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <script>
 const radarData = <?php echo json_encode($radarChart, JSON_UNESCAPED_UNICODE); ?>;
 const strategyData = <?php echo json_encode($comparisonChart, JSON_UNESCAPED_UNICODE); ?>;
+const actionCatalog = <?php echo json_encode($actionCatalog, JSON_UNESCAPED_UNICODE); ?>;
 
-new Chart(document.getElementById('decisionRadarChart'), {
-    type: 'radar',
-    data: {
-        labels: radarData.labels,
-        datasets: [
-            {
-                label: 'Before',
-                data: radarData.before,
-                backgroundColor: 'rgba(31, 99, 146, 0.15)',
-                borderColor: '#1f6392',
-                pointBackgroundColor: '#1f6392'
-            },
-            {
-                label: 'After',
-                data: radarData.after,
-                backgroundColor: 'rgba(16, 185, 129, 0.18)',
-                borderColor: '#10b981',
-                pointBackgroundColor: '#10b981'
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-            r: {
-                min: 0,
-                max: 100,
-                ticks: {
-                    stepSize: 20,
-                    backdropColor: 'transparent'
-                },
-                grid: {
-                    color: 'rgba(0, 0, 0, 0.08)'
-                },
-                angleLines: {
-                    color: 'rgba(0, 0, 0, 0.08)'
-                }
-            }
-        },
-        plugins: {
-            legend: {
-                position: 'bottom'
-            }
-        }
+const actionModalEl = document.getElementById('projectActionModal');
+const actionScenarioEl = document.getElementById('actionScenario');
+const actionValueEl = document.getElementById('actionValue');
+const actionProjectIdEl = document.getElementById('actionProjectId');
+const actionValueNoteEl = document.getElementById('actionValueNote');
+const actionProjectLabelEl = document.getElementById('projectActionModalProject');
+const actionModal = actionModalEl && window.bootstrap ? new bootstrap.Modal(actionModalEl) : null;
+
+function syncActionValueMeta() {
+    if (!actionScenarioEl || !actionValueEl || !actionValueNoteEl) {
+        return;
     }
+
+    const selectedOption = actionScenarioEl.options[actionScenarioEl.selectedIndex];
+    if (!selectedOption || !selectedOption.value) {
+        actionValueEl.value = '';
+        actionValueEl.removeAttribute('min');
+        actionValueEl.removeAttribute('max');
+        actionValueNoteEl.textContent = 'Choose an action first to see the needed value range.';
+        return;
+    }
+
+    const defaultValue = selectedOption.dataset.defaultValue || '';
+    const min = selectedOption.dataset.min || '';
+    const max = selectedOption.dataset.max || '';
+    const unit = selectedOption.dataset.unit || 'units';
+
+    actionValueEl.value = defaultValue;
+    actionValueEl.min = min;
+    actionValueEl.max = max;
+    actionValueNoteEl.textContent = `Enter a value between ${min} and ${max} ${unit}.`;
+}
+
+document.querySelectorAll('.open-action-modal').forEach((button) => {
+    button.addEventListener('click', () => {
+        if (!actionModal || !actionScenarioEl || !actionProjectIdEl || !actionProjectLabelEl) {
+            return;
+        }
+
+        const projectId = button.getAttribute('data-project-id') || '<?php echo (int) $selectedProjectId; ?>';
+        const projectName = button.getAttribute('data-project-name') || '<?php echo htmlspecialchars($projectTitle, ENT_QUOTES); ?>';
+        const scenario = button.getAttribute('data-scenario') || '';
+
+        actionProjectIdEl.value = projectId;
+        actionProjectLabelEl.textContent = `Project: ${projectName}`;
+        actionScenarioEl.value = scenario;
+        syncActionValueMeta();
+        actionModal.show();
+    });
 });
 
-new Chart(document.getElementById('strategyChart'), {
-    type: 'bar',
-    data: {
-        labels: strategyData.labels,
-        datasets: [
-            {
-                label: 'Confidence After',
-                data: strategyData.confidence,
-                backgroundColor: '#1f6392',
-                borderRadius: 10
-            },
-            {
-                label: 'Risk After',
-                data: strategyData.risk,
-                backgroundColor: '#f59e0b',
-                borderRadius: 10
+if (actionScenarioEl) {
+    actionScenarioEl.addEventListener('change', syncActionValueMeta);
+}
+
+const overviewGridEl = document.querySelector('.overview-card-grid');
+const overviewSearchEl = document.getElementById('overviewSearch');
+const overviewSearchButtonEl = document.getElementById('overviewSearchButton');
+const overviewSortEl = document.getElementById('overviewSort');
+const overviewResultsNoteEl = document.getElementById('overviewResultsNote');
+
+function applyOverviewFilters() {
+    if (!overviewGridEl) {
+        return;
+    }
+
+    const cards = Array.from(overviewGridEl.querySelectorAll('.js-overview-card'));
+    const query = (overviewSearchEl?.value || '').trim().toLowerCase();
+    const sortMode = overviewSortEl?.value || 'date';
+
+    cards.forEach((card) => {
+        const haystack = (card.getAttribute('data-search') || '').toLowerCase();
+        const matches = query === '' || haystack.includes(query);
+        card.style.display = matches ? '' : 'none';
+    });
+
+    const visibleCards = cards.filter((card) => card.style.display !== 'none');
+    visibleCards.sort((left, right) => {
+        if (sortMode === 'alphabetical') {
+            return (left.getAttribute('data-name') || '').localeCompare(right.getAttribute('data-name') || '');
+        }
+
+        if (sortMode === 'risk') {
+            const riskDiff = Number(right.getAttribute('data-risk') || '0') - Number(left.getAttribute('data-risk') || '0');
+            if (riskDiff !== 0) {
+                return riskDiff;
             }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'bottom'
-            }
+            return (left.getAttribute('data-name') || '').localeCompare(right.getAttribute('data-name') || '');
+        }
+
+        const dateDiff = Number(right.getAttribute('data-date') || '0') - Number(left.getAttribute('data-date') || '0');
+        if (dateDiff !== 0) {
+            return dateDiff;
+        }
+        return (left.getAttribute('data-name') || '').localeCompare(right.getAttribute('data-name') || '');
+    });
+
+    visibleCards.forEach((card) => overviewGridEl.appendChild(card));
+
+    if (overviewResultsNoteEl) {
+        overviewResultsNoteEl.textContent = `Showing ${visibleCards.length} project card(s).`;
+    }
+}
+
+if (overviewSearchEl) {
+    overviewSearchEl.addEventListener('input', applyOverviewFilters);
+}
+
+if (overviewSearchButtonEl) {
+    overviewSearchButtonEl.addEventListener('click', applyOverviewFilters);
+}
+
+if (overviewSortEl) {
+    overviewSortEl.addEventListener('change', applyOverviewFilters);
+}
+
+applyOverviewFilters();
+
+const radarChartEl = document.getElementById('decisionRadarChart');
+if (radarChartEl) {
+    new Chart(radarChartEl, {
+        type: 'radar',
+        data: {
+            labels: radarData.labels,
+            datasets: [
+                {
+                    label: 'Before',
+                    data: radarData.before,
+                    backgroundColor: 'rgba(31, 99, 146, 0.15)',
+                    borderColor: '#1f6392',
+                    pointBackgroundColor: '#1f6392'
+                },
+                {
+                    label: 'After',
+                    data: radarData.after,
+                    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+                    borderColor: '#10b981',
+                    pointBackgroundColor: '#10b981'
+                }
+            ]
         },
-        scales: {
-            y: {
-                beginAtZero: true,
-                max: 100,
-                grid: {
-                    color: 'rgba(0, 0, 0, 0.06)'
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    min: 0,
+                    max: 100,
+                    ticks: {
+                        stepSize: 20,
+                        backdropColor: 'transparent'
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.08)'
+                    },
+                    angleLines: {
+                        color: 'rgba(0, 0, 0, 0.08)'
+                    }
                 }
             },
-            x: {
-                grid: {
-                    display: false
+            plugins: {
+                legend: {
+                    position: 'bottom'
                 }
             }
         }
-    }
-});
+    });
+}
+
+const strategyChartEl = document.getElementById('strategyChart');
+if (strategyChartEl) {
+    new Chart(strategyChartEl, {
+        type: 'bar',
+        data: {
+            labels: strategyData.labels,
+            datasets: [
+                {
+                    label: 'Confidence After',
+                    data: strategyData.confidence,
+                    backgroundColor: '#1f6392',
+                    borderRadius: 10
+                },
+                {
+                    label: 'Risk After',
+                    data: strategyData.risk,
+                    backgroundColor: '#f59e0b',
+                    borderRadius: 10
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.06)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
 </script>
 
 <?php include '../../includes/footer.php'; ?>

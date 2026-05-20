@@ -499,10 +499,11 @@ include '../../includes/navbar.php';
     </div>
 
     <?php
-    delayInsightsRenderSection($conn, $user, [
-        'limit' => 3,
-        'title' => 'Project Delay Insight Notifications',
-        'subtitle' => 'See where planning risk is high, which projects are already slipping, and which owners should be aligned first to reduce delay.',
+    delayInsightsRenderCompactList($conn, $user, [
+        'limit' => 4,
+        'title' => 'Project Insight List',
+        'subtitle' => 'Small one-line project signals with direct links to the full insight page.',
+        'button_label' => 'View Project',
     ]);
     ?>
 

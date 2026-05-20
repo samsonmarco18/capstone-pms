@@ -64,6 +64,7 @@ $menuItems = [
     ],
     'developer' => [
         ['label' => 'Dashboard', 'url' => '/modules/developer/dashboard.php', 'icon' => 'code'],
+        ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Task', 'url' => '/modules/developer/task.php', 'icon' => 'tasks'],
         ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
     ],
