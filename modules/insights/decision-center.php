@@ -191,6 +191,11 @@ include '../../includes/navbar.php';
     --shadow-md: 0 6px 12px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.03);
 }
 
+body,
+#page-content-wrapper {
+    background: #ffffff;
+}
+
 .insights-hero {
     background: linear-gradient(135deg, var(--insight-primary) 0%, var(--insight-dark) 100%);
     border-radius: 28px;
@@ -199,16 +204,6 @@ include '../../includes/navbar.php';
     position: relative;
     overflow: hidden;
     margin-bottom: 1.5rem;
-}
-
-.insights-hero::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background:
-        radial-gradient(circle at top right, rgba(255, 255, 255, 0.16), transparent 28%),
-        radial-gradient(circle at bottom left, rgba(255, 255, 255, 0.12), transparent 24%);
-    pointer-events: none;
 }
 
 .insights-hero h1 {
@@ -415,18 +410,18 @@ include '../../includes/navbar.php';
 }
 
 .overview-project-card.risk-low {
-    border-color: #bbf7d0;
-    box-shadow: 0 8px 18px rgba(16, 185, 129, 0.08);
+    border-color: var(--gray-200);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
 }
 
 .overview-project-card.risk-medium {
-    border-color: #fde68a;
-    box-shadow: 0 8px 18px rgba(245, 158, 11, 0.1);
+    border-color: var(--gray-200);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
 }
 
 .overview-project-card.risk-high {
-    border-color: #fecaca;
-    box-shadow: 0 10px 22px rgba(239, 68, 68, 0.12);
+    border-color: var(--gray-200);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
 }
 
 .overview-project-head {
@@ -492,11 +487,6 @@ include '../../includes/navbar.php';
     padding: 1.1rem 1.1rem 1rem;
     background: #fff;
 }
-
-.overview-panel.before {
-    background: linear-gradient(180deg, rgba(59, 130, 246, 0.06) 0%, #ffffff 100%);
-}
-
 .overview-panel.after {
     background: linear-gradient(180deg, rgba(245, 158, 11, 0.06) 0%, #ffffff 100%);
 }
