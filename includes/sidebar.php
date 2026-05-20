@@ -9,6 +9,7 @@ $role = $user['role'] ?? 'guest';
 $menuItems = [
     'admin' => [
         ['label' => 'Dashboard', 'url' => '/modules/admin/dashboard.php', 'icon' => 'tachometer-alt'],
+        ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Tech Stack', 'url' => '/modules/admin/techstack.php', 'icon' => 'microchip'],
         ['label' => 'User Management', 'url' => '/modules/admin/user-management.php', 'icon' => 'users', 'matches' => ['/modules/admin/edit-user.php', '/modules/admin/view-user.php']],
         ['label' => 'Audit Log', 'url' => '/modules/admin/audit-log.php', 'icon' => 'history'],
@@ -16,6 +17,7 @@ $menuItems = [
     ],
     'sales' => [
         ['label' => 'Dashboard', 'url' => '/modules/sales/dashboard.php', 'icon' => 'chart-line'],
+        ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Clients', 'url' => '/modules/sales/clients.php', 'icon' => 'building'],
         ['label' => 'Estimation Approval', 'url' => '/modules/sales/estimation-approval.php', 'icon' => 'clipboard-check'],
         ['label' => 'Report', 'url' => '/modules/sales/report.php', 'icon' => 'file-invoice-dollar'],
@@ -23,6 +25,7 @@ $menuItems = [
     ],
     'architect' => [
         ['label' => 'Dashboard', 'url' => '/modules/architect/dashboard.php', 'icon' => 'drafting-compass'],
+        ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         [
             'label' => 'Projects',
             'url' => '/modules/architect/projects.php',
@@ -40,6 +43,7 @@ $menuItems = [
     ],
     'sul' => [
         ['label' => 'Dashboard', 'url' => '/modules/sul/dashboard.php', 'icon' => 'chart-pie'],
+        ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Task Allocation', 'url' => '/modules/sul/task-allocation.php', 'icon' => 'tasks'],
         ['label' => 'Resource Management', 'url' => '/modules/sul/resource-management.php', 'icon' => 'users-cog'],
         ['label' => 'Performance / Report', 'url' => '/modules/sul/performance-report.php', 'icon' => 'chart-bar'],
@@ -47,6 +51,7 @@ $menuItems = [
     ],
     'expert' => [
         ['label' => 'Dashboard', 'url' => '/modules/expert/dashboard.php', 'icon' => 'clipboard-list'],
+        ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         [
             'label' => 'Feature Estimation',
             'url' => '/modules/expert/feature-estimation.php',
