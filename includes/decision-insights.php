@@ -43,7 +43,7 @@ function di_day_diff(string $from, string $to): int
     return (int) floor(($toTs - $fromTs) / 86400);
 }
 
-function di_prepare(mysqli $conn, string $sql): mysqli_stmt
+function di_prepare(mysqli|PgsqlMysqliCompatConnection $conn, string $sql): mysqli_stmt|PgsqlMysqliCompatStatement
 {
     $stmt = $conn->prepare($sql);
 
@@ -54,14 +54,14 @@ function di_prepare(mysqli $conn, string $sql): mysqli_stmt
     return $stmt;
 }
 
-function di_execute(mysqli_stmt $stmt, string $types = '', array $params = []): mysqli_stmt
+function di_execute(mysqli_stmt|PgsqlMysqliCompatStatement $stmt, string $types = '', array $params = []): mysqli_stmt|PgsqlMysqliCompatStatement
 {
     if ($types !== '') {
         $stmt->bind_param($types, ...$params);
     }
 
     if (!$stmt->execute()) {
-        $error = $stmt->error;
+        $error = $stmt instanceof mysqli_stmt ? (string) $stmt->error : 'Unknown error';
         $stmt->close();
         throw new RuntimeException('Failed to execute decision insights query: ' . $error);
     }
@@ -69,7 +69,7 @@ function di_execute(mysqli_stmt $stmt, string $types = '', array $params = []): 
     return $stmt;
 }
 
-function di_fetch_all(mysqli_stmt $stmt): array
+function di_fetch_all(mysqli_stmt|PgsqlMysqliCompatStatement $stmt): array
 {
     $rows = [];
     $result = $stmt->get_result();
@@ -83,7 +83,7 @@ function di_fetch_all(mysqli_stmt $stmt): array
     return $rows;
 }
 
-function di_fetch_one(mysqli_stmt $stmt): array
+function di_fetch_one(mysqli_stmt|PgsqlMysqliCompatStatement $stmt): array
 {
     $result = $stmt->get_result();
     $row = $result->fetch_assoc() ?: [];
@@ -139,7 +139,7 @@ function di_access_rule(array $user): array
     return $rules[$user['role'] ?? 'admin'] ?? $rules['admin'];
 }
 
-function di_load_accessible_projects(mysqli $conn, array $user): array
+function di_load_accessible_projects(mysqli|PgsqlMysqliCompatConnection $conn, array $user): array
 {
     $rule = di_access_rule($user);
     $sql = "
@@ -382,7 +382,7 @@ function di_simulate_scenario(array $baseline, string $scenario, float $value): 
     ];
 }
 
-function di_load_decision_insights(mysqli $conn, int $projectId): array
+function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId): array
 {
     $empty = di_empty_decision_insights();
 
@@ -414,19 +414,27 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
     $taskSql = "
         SELECT
             COUNT(*) AS total_tasks,
-            SUM(t.status = 'completed') AS completed_tasks,
-            SUM(t.status IN ('in_progress', 'review', 'in_review', 'blocked')) AS active_tasks,
-            SUM(t.status != 'completed' AND t.deadline < CURDATE()) AS overdue_tasks,
-            SUM(t.status = 'blocked') AS blocked_tasks,
-            SUM(COALESCE(t.assigned_to, 0) = 0) AS unassigned_tasks,
-            SUM(t.status IN ('review', 'in_review')) AS review_tasks,
-            SUM(t.priority IN ('high', 'critical') AND t.status != 'completed') AS high_pressure_tasks,
-            SUM(COALESCE(t.estimated_days_likely, fe.avg_likely_days, 0)) AS estimated_work_days,
+            SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) AS completed_tasks,
+            SUM(CASE WHEN t.status IN ('in_progress', 'review', 'in_review', 'blocked') THEN 1 ELSE 0 END) AS active_tasks,
+            SUM(CASE WHEN t.status != 'completed' AND t.deadline < CURDATE() THEN 1 ELSE 0 END) AS overdue_tasks,
+            SUM(CASE WHEN t.status = 'blocked' THEN 1 ELSE 0 END) AS blocked_tasks,
+            SUM(CASE WHEN COALESCE(t.assigned_to, 0) = 0 THEN 1 ELSE 0 END) AS unassigned_tasks,
+            SUM(CASE WHEN t.status IN ('review', 'in_review') THEN 1 ELSE 0 END) AS review_tasks,
+            SUM(CASE WHEN t.priority IN ('high', 'critical') AND t.status != 'completed' THEN 1 ELSE 0 END) AS high_pressure_tasks,
+            SUM(COALESCE(t.sales_estimate_days, t.estimated_days_likely, fe.avg_likely_days, t.estimated_days_max, t.estimated_days_min, 0)) AS estimated_work_days,
+            SUM(
+                CASE
+                    WHEN t.status = 'completed'
+                    THEN COALESCE(t.actual_days, t.sales_estimate_days, t.estimated_days_likely, fe.avg_likely_days, t.estimated_days_max, t.estimated_days_min, 1)
+                    ELSE 0
+                END
+            ) AS completed_estimated_work_days,
             SUM(COALESCE(NULLIF(t.actual_days, 0), GREATEST(DATEDIFF(CURDATE(), DATE(COALESCE(t.started_at, t.created_at))), 0))) AS actual_work_days_proxy,
+            SUM(COALESCE(NULLIF(t.actual_effort_hours, 0), NULLIF(t.estimated_effort_hours, 0), 0)) AS logged_effort_hours,
             AVG(
                 CASE
                     WHEN t.status = 'completed' AND t.completed_at IS NOT NULL
-                    THEN TIMESTAMPDIFF(DAY, t.created_at, t.completed_at)
+                    THEN TIMESTAMPDIFF(DAY, COALESCE(t.started_at, t.created_at), t.completed_at)
                     ELSE NULL
                 END
             ) AS average_completion_days
@@ -449,7 +457,9 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
             'review_tasks' => 0,
             'high_pressure_tasks' => 0,
             'estimated_work_days' => 0,
+            'completed_estimated_work_days' => 0,
             'actual_work_days_proxy' => 0,
+            'logged_effort_hours' => 0,
             'average_completion_days' => 0,
         ],
         di_fetch_one(di_execute(di_prepare($conn, $taskSql), 'i', [$projectId]))
@@ -457,9 +467,21 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
 
     $flowSql = "
         SELECT
-            SUM(COALESCE(DATEDIFF(CURDATE(), DATE(COALESCE(g.last_update_at, t.updated_at))), 999) >= 3
-                AND t.status IN ('in_progress', 'review', 'in_review', 'blocked')) AS stalled_tasks,
-            SUM(DATE(COALESCE(g.last_update_at, t.updated_at)) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)) AS recent_git_updates
+            SUM(
+                CASE
+                    WHEN COALESCE(DATEDIFF(CURDATE(), DATE(COALESCE(g.last_update_at, t.updated_at))), 999) >= 3
+                        AND t.status IN ('in_progress', 'review', 'in_review', 'blocked')
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS stalled_tasks,
+            SUM(
+                CASE
+                    WHEN DATE(COALESCE(g.last_update_at, t.updated_at)) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
+                    THEN 1
+                    ELSE 0
+                END
+            ) AS recent_git_updates
         FROM tasks t
         LEFT JOIN (
             SELECT task_id, MAX(created_at) AS last_update_at
@@ -484,7 +506,63 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
             (SELECT COUNT(*) FROM cost_estimations WHERE project_id = ?) AS cost_plan_items,
             (SELECT COALESCE(SUM(COALESCE(estimated_monthly_cost, monthly_cost, 0)), 0) FROM cost_estimations WHERE project_id = ?) AS cost_estimation_monthly,
             (SELECT COALESCE(SUM(COALESCE(estimated_cost, 0)), 0) FROM tech_recommendations WHERE project_id = ?) AS tech_recommendation_monthly,
-            (SELECT COALESCE(SUM(total_cost), 0) FROM sales_reports WHERE project_id = ?) AS sales_budget_total
+            (
+                SELECT COALESCE(sr.total_cost, 0)
+                FROM sales_reports sr
+                WHERE sr.project_id = ?
+                ORDER BY
+                    CASE sr.status
+                        WHEN 'approved' THEN 0
+                        WHEN 'submitted' THEN 1
+                        WHEN 'invoiced' THEN 2
+                        ELSE 3
+                    END,
+                    sr.report_date DESC,
+                    sr.created_at DESC,
+                    sr.id DESC
+                LIMIT 1
+            ) AS latest_sales_report_total,
+            (
+                SELECT COALESCE(sr.developer_cost, 0)
+                FROM sales_reports sr
+                WHERE sr.project_id = ?
+                ORDER BY
+                    CASE sr.status
+                        WHEN 'approved' THEN 0
+                        WHEN 'submitted' THEN 1
+                        WHEN 'invoiced' THEN 2
+                        ELSE 3
+                    END,
+                    sr.report_date DESC,
+                    sr.created_at DESC,
+                    sr.id DESC
+                LIMIT 1
+            ) AS latest_sales_report_developer_cost,
+            (
+                SELECT COALESCE(
+                    CASE
+                        WHEN COALESCE(sr.technology_cost, 0) > 0
+                             AND COALESCE(sr.resource_cost, 0) > 0
+                             AND ABS(COALESCE(sr.technology_cost, 0) - COALESCE(sr.resource_cost, 0)) < 0.01
+                        THEN GREATEST(COALESCE(sr.technology_cost, 0), COALESCE(sr.resource_cost, 0))
+                        ELSE COALESCE(sr.technology_cost, 0) + COALESCE(sr.resource_cost, 0)
+                    END,
+                    0
+                )
+                FROM sales_reports sr
+                WHERE sr.project_id = ?
+                ORDER BY
+                    CASE sr.status
+                        WHEN 'approved' THEN 0
+                        WHEN 'submitted' THEN 1
+                        WHEN 'invoiced' THEN 2
+                        ELSE 3
+                    END,
+                    sr.report_date DESC,
+                    sr.created_at DESC,
+                    sr.id DESC
+                LIMIT 1
+            ) AS latest_sales_report_platform_cost
     ";
     $artifactMetrics = array_replace(
         [
@@ -497,13 +575,28 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
             'cost_plan_items' => 0,
             'cost_estimation_monthly' => 0,
             'tech_recommendation_monthly' => 0,
-            'sales_budget_total' => 0,
+            'latest_sales_report_total' => 0,
+            'latest_sales_report_developer_cost' => 0,
+            'latest_sales_report_platform_cost' => 0,
         ],
         di_fetch_one(di_execute(
             di_prepare($conn, $artifactSql),
-            'iiiiiiiiii',
-            [$projectId, $projectId, $projectId, $projectId, $projectId, $projectId, $projectId, $projectId, $projectId, $projectId]
+            'iiiiiiiiiiii',
+            [$projectId, $projectId, $projectId, $projectId, $projectId, $projectId, $projectId, $projectId, $projectId, $projectId, $projectId, $projectId]
         ))
+    );
+
+    $assignmentSql = "
+        SELECT
+            COUNT(DISTINCT CASE WHEN daa.status IN ('assigned', 'accepted', 'completed') THEN daa.developer_id ELSE NULL END) AS allocated_members,
+            COUNT(DISTINCT CASE WHEN daa.status IN ('accepted', 'completed') THEN daa.developer_id ELSE NULL END) AS committed_members
+        FROM developer_allocations da
+        LEFT JOIN developer_allocation_assignments daa ON daa.allocation_id = da.id
+        WHERE da.project_id = ?
+    ";
+    $assignmentMetrics = array_replace(
+        ['allocated_members' => 0, 'committed_members' => 0],
+        di_fetch_one(di_execute(di_prepare($conn, $assignmentSql), 'i', [$projectId]))
     );
 
     $performanceSql = "
@@ -531,9 +624,9 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
             COALESCE(u.full_name, 'Unassigned Pool') AS full_name,
             COALESCE(u.role, 'unassigned') AS role,
             COUNT(t.id) AS total_tasks,
-            SUM(t.status IN ('in_progress', 'review', 'in_review', 'blocked')) AS active_tasks,
-            SUM(t.status = 'completed') AS completed_tasks,
-            SUM(t.status != 'completed' AND t.deadline < CURDATE()) AS overdue_tasks
+            SUM(CASE WHEN t.status IN ('in_progress', 'review', 'in_review', 'blocked') THEN 1 ELSE 0 END) AS active_tasks,
+            SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) AS completed_tasks,
+            SUM(CASE WHEN t.status != 'completed' AND t.deadline < CURDATE() THEN 1 ELSE 0 END) AS overdue_tasks
         FROM tasks t
         LEFT JOIN users u ON u.id = t.assigned_to
         WHERE t.project_id = ?
@@ -559,28 +652,43 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
     $stalledTasks = di_int($flowMetrics['stalled_tasks']);
     $recentGitUpdates = di_int($flowMetrics['recent_git_updates']);
     $requiredMembers = max(di_int($artifactMetrics['required_members']), 0);
-    $assignedMembers = max(count(array_filter($workloads, static fn(array $row): bool => di_int($row['id']) > 0)), 0);
+    $workloadAssignedMembers = count(array_filter($workloads, static fn(array $row): bool => di_int($row['id']) > 0));
+    $allocatedMembers = max(di_int($assignmentMetrics['allocated_members']), 0);
+    $committedMembers = max(di_int($assignmentMetrics['committed_members']), 0);
+    $assignedMembers = max($workloadAssignedMembers, $allocatedMembers, $committedMembers, 0);
     $estimatedWorkDays = max(di_float($taskMetrics['estimated_work_days']), (float) max($totalTasks, 1));
+    $completedEstimatedWorkDays = max(di_float($taskMetrics['completed_estimated_work_days']), 0.0);
     $actualWorkDaysProxy = max(di_float($taskMetrics['actual_work_days_proxy']), 0.0);
+    $loggedEffortHours = max(di_float($taskMetrics['logged_effort_hours']), 0.0);
     $openTasks = max($totalTasks - $completedTasks, 0);
     $plannedProgress = di_ratio((float) $timelineElapsedDays, (float) $timelineTotalDays);
-    $actualProgress = di_ratio((float) $completedTasks, (float) max($totalTasks, 1));
-    $earnedValue = $estimatedWorkDays * $actualProgress;
+    $actualProgress = $estimatedWorkDays > 0
+        ? di_ratio($completedEstimatedWorkDays, $estimatedWorkDays)
+        : di_ratio((float) $completedTasks, (float) max($totalTasks, 1));
+    $earnedValue = min($estimatedWorkDays, $completedEstimatedWorkDays > 0 ? $completedEstimatedWorkDays : ($estimatedWorkDays * $actualProgress));
     $plannedValue = $estimatedWorkDays * $plannedProgress;
     $scheduleVariance = $earnedValue - $plannedValue;
     $deliveryVelocity = di_ratio($earnedValue, (float) max($timelineElapsedDays, 1));
     $projectedRemainingDays = max($estimatedWorkDays - $earnedValue, 0.0) / max($deliveryVelocity, 0.25);
     $forecastDelayDays = max($projectedRemainingDays - $timelineRemainingDays, 0.0);
 
+    $salesReportPlatformMonthly = di_float($artifactMetrics['latest_sales_report_platform_cost']);
+    $salesReportDeveloperMonthly = di_float($artifactMetrics['latest_sales_report_developer_cost']);
+    $salesReportMonthly = ($salesReportDeveloperMonthly + $salesReportPlatformMonthly) > 0
+        ? ($salesReportDeveloperMonthly + $salesReportPlatformMonthly)
+        : di_float($artifactMetrics['latest_sales_report_total']);
     $infrastructureMonthly = max(
+        $salesReportPlatformMonthly,
         di_float($artifactMetrics['cost_estimation_monthly']),
         di_float($artifactMetrics['tech_recommendation_monthly'])
     );
-    $developerMonthly = max((float) max($requiredMembers, $assignedMembers), 0.0) * 15000.0;
+    $developerMonthly = max(
+        $salesReportDeveloperMonthly,
+        max((float) max($requiredMembers, $assignedMembers), 0.0) * 15000.0
+    );
     $monthlyBurn = $infrastructureMonthly + $developerMonthly;
     $projectMonths = max($timelineTotalDays / 30, 1.0);
     $salesRequirementBudget = di_float($project['sales_budget'] ?? 0);
-    $salesReportBudgetTotal = di_float($artifactMetrics['sales_budget_total']);
     $modeledBudgetFloor = $monthlyBurn * $projectMonths;
     $budgetTotal = $modeledBudgetFloor;
     $budgetBaselineSource = 'Modeled project budget floor';
@@ -588,9 +696,9 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
     if ($salesRequirementBudget > 0) {
         $budgetTotal = $salesRequirementBudget;
         $budgetBaselineSource = 'Sales requirement budget';
-    } elseif ($salesReportBudgetTotal > 0) {
-        $budgetTotal = $salesReportBudgetTotal;
-        $budgetBaselineSource = 'Sales report total';
+    } elseif ($salesReportMonthly > 0) {
+        $budgetTotal = max($modeledBudgetFloor, $salesReportMonthly * $projectMonths);
+        $budgetBaselineSource = 'Latest sales report extrapolated across project timeline';
     }
 
     $budgetConsumed = $monthlyBurn * ($timelineElapsedDays / 30);
@@ -600,6 +708,13 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
     $projectedTotalSpend = $budgetConsumed + $remainingSpendProjection;
     $overspendForecast = max($projectedTotalSpend - $budgetTotal, 0.0);
     $budgetHealth = di_clamp(100 - ($budgetConsumedRatio * 100));
+
+    if (di_float($performanceMetrics['average_completion_rate']) <= 0 && $totalTasks > 0) {
+        $performanceMetrics['average_completion_rate'] = round($actualProgress * 100, 1);
+    }
+    if (di_float($performanceMetrics['total_hours_logged']) <= 0 && $loggedEffortHours > 0) {
+        $performanceMetrics['total_hours_logged'] = $loggedEffortHours;
+    }
 
     $openTaskBase = max($openTasks, 1);
     $overdueRatio = di_ratio((float) $overdueTasks, (float) $openTaskBase);
@@ -838,7 +953,7 @@ function di_load_decision_insights(mysqli $conn, int $projectId): array
         [
             'title' => 'Budget Burn Exposure',
             'score' => di_clamp(100 - $metrics['budget_health']),
-            'detail' => "Modeled monthly burn is " . number_format($metrics['monthly_burn'], 2) . " against the {$metrics['budget_baseline_source']} of " . number_format($metrics['budget_total'], 2) . '.',
+            'detail' => "Estimated monthly burn is " . number_format($metrics['monthly_burn'], 2) . " against the {$metrics['budget_baseline_source']} of " . number_format($metrics['budget_total'], 2) . '.',
             'action' => 'Watch overspend forecast and align budget with scope before approval pressure increases.',
             'band' => di_band_for_score(di_clamp(100 - $metrics['budget_health'])),
         ],

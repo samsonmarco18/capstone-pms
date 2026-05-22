@@ -76,7 +76,7 @@ $metricCards = [
         'value' => number_format($insights['metrics']['monthly_burn'], 2),
         'suffix' => '',
         'tone' => 'info',
-        'meta' => 'Modeled budget usage',
+        'meta' => 'Estimated budget usage',
         'icon' => 'coins',
     ],
 ];
@@ -159,10 +159,65 @@ foreach ($overviewInsights as $overviewInsight) {
 }
 
 $overviewUrl = BASE_URL . 'modules/insights/decision-center.php?project_id=' . $selectedProjectId . '&view=overview';
-$statisticsUrl = BASE_URL . 'modules/insights/decision-center.php?project_id=' . $selectedProjectId . '&view=statistics';
+$statisticsBaseUrl = BASE_URL . 'modules/insights/decision-center.php?project_id=' . $selectedProjectId . '&view=statistics';
+$statisticsUrl = $statisticsBaseUrl;
 if ($scenarioType !== 'current_state') {
     $statisticsUrl .= '&scenario=' . urlencode($scenarioType) . '&scenario_value=' . (float) $scenarioValue;
 }
+$signalSectionUrls = [
+    'risk' => $statisticsBaseUrl . '#risk-heatmap',
+    'deadline' => $statisticsBaseUrl . '#deadline-analyzer',
+    'budget' => $statisticsBaseUrl . '#budget-engine',
+    'resource' => $statisticsBaseUrl . '#resource-efficiency',
+    'planning' => $statisticsBaseUrl . '#kpi-monitoring',
+];
+$signalActionResolver = static function (array $insight) use ($userRole, $selectedProjectId, $insights, $signalSectionUrls, $statisticsBaseUrl): array {
+    $projectId = (int) $selectedProjectId;
+    $clientId = (int) ($insights['project']['client_id'] ?? 0);
+
+    $actionsByTitle = [
+        'Delivery Risk Pressure' => match ($userRole) {
+            'architect' => ['url' => BASE_URL . 'modules/architect/developer-allocation.php?id=' . $projectId, 'label' => 'Open Developer Allocation'],
+            'sul' => ['url' => BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId, 'label' => 'Open Task Allocation'],
+            'developer' => ['url' => BASE_URL . 'modules/developer/task.php', 'label' => 'Open My Tasks'],
+            'expert' => ['url' => BASE_URL . 'modules/expert/feature-estimation.php', 'label' => 'Open Feature Estimation'],
+            default => ['url' => $signalSectionUrls['risk'], 'label' => 'Review Risk Details'],
+        },
+        'Deadline Slippage Outlook' => match ($userRole) {
+            'architect' => ['url' => BASE_URL . 'modules/architect/developer-allocation.php?id=' . $projectId, 'label' => 'Adjust Team Plan'],
+            'sul' => ['url' => BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId, 'label' => 'Adjust Task Schedule'],
+            'developer' => ['url' => BASE_URL . 'modules/developer/task.php', 'label' => 'Update Task Progress'],
+            'expert' => ['url' => BASE_URL . 'modules/expert/feature-estimation.php', 'label' => 'Review Estimates'],
+            default => ['url' => $signalSectionUrls['deadline'], 'label' => 'Review Deadline Analyzer'],
+        },
+        'Budget Burn Exposure' => match ($userRole) {
+            'sales' => ['url' => BASE_URL . 'modules/sales/report.php' . ($clientId > 0 ? '?client_id=' . $clientId : ''), 'label' => 'Open Sales Report'],
+            default => ['url' => $signalSectionUrls['budget'], 'label' => 'Review Budget Insight'],
+        },
+        'Planning Readiness' => match ($userRole) {
+            'architect' => ['url' => BASE_URL . 'modules/architect/project-review.php?id=' . $projectId, 'label' => 'Complete Project Planning'],
+            'sales' => ['url' => BASE_URL . 'modules/sales/clients.php', 'label' => 'Open Client Setup'],
+            'expert' => ['url' => BASE_URL . 'modules/expert/feature-estimation.php', 'label' => 'Review Estimations'],
+            'sul' => ['url' => BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId, 'label' => 'Review Handoff Tasks'],
+            default => ['url' => $signalSectionUrls['planning'], 'label' => 'Review Planning KPI'],
+        },
+        'Resource Balance' => match ($userRole) {
+            'architect' => ['url' => BASE_URL . 'modules/architect/developer-allocation.php?id=' . $projectId, 'label' => 'Rebalance Team Plan'],
+            'sul' => ['url' => BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId, 'label' => 'Reassign Tasks'],
+            'developer' => ['url' => BASE_URL . 'modules/developer/task.php', 'label' => 'Check My Tasks'],
+            'expert' => ['url' => BASE_URL . 'modules/expert/feature-estimation.php', 'label' => 'Review Workload Inputs'],
+            default => ['url' => $signalSectionUrls['resource'], 'label' => 'Review Resource Details'],
+        },
+    ];
+
+    return $actionsByTitle[$insight['title']] ?? ['url' => $statisticsBaseUrl, 'label' => 'Open Insights'];
+};
+$topInsights = array_map(
+    static function (array $insight) use ($signalActionResolver): array {
+        return array_merge($insight, $signalActionResolver($insight));
+    },
+    $topInsights
+);
 $actionCatalog = array_filter(
     $scenarioCatalog,
     static fn(string $key): bool => $key !== 'current_state',
@@ -833,6 +888,33 @@ include '../../includes/navbar.php';
     color: var(--gray-600);
 }
 
+.insight-actions {
+    margin-top: 0.8rem;
+    display: flex;
+    justify-content: flex-start;
+}
+
+.insight-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.56rem 0.9rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--insight-primary) 0%, var(--insight-dark) 100%);
+    color: #fff;
+    text-decoration: none;
+    font-size: 0.78rem;
+    font-weight: 700;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.18);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.insight-link:hover {
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(31, 99, 146, 0.24);
+}
+
 .delta-pill {
     display: inline-flex;
     align-items: center;
@@ -1089,7 +1171,7 @@ include '../../includes/navbar.php';
         </div>
 
         <div class="col-xl-5">
-            <div class="section-card">
+            <div class="section-card" id="risk-heatmap">
                 <div class="card-header">
                     <h5><i class="fas fa-chart-pie"></i> Before vs After Profile</h5>
                 </div>
@@ -1214,6 +1296,12 @@ include '../../includes/navbar.php';
                                 </div>
                                 <p><?php echo htmlspecialchars($insight['detail']); ?></p>
                                 <small><?php echo htmlspecialchars($insight['action']); ?></small>
+                                <div class="insight-actions">
+                                    <a class="insight-link" href="<?php echo htmlspecialchars((string) ($insight['url'] ?? $statisticsBaseUrl)); ?>">
+                                        <i class="fas fa-arrow-right"></i>
+                                        <?php echo htmlspecialchars((string) ($insight['label'] ?? 'Open Insights')); ?>
+                                    </a>
+                                </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -1224,7 +1312,7 @@ include '../../includes/navbar.php';
 
     <div class="row g-4 mb-4">
         <div class="<?php echo $canViewBudget ? 'col-xl-6' : 'col-12'; ?>">
-            <div class="section-card">
+            <div class="section-card" id="deadline-analyzer">
                 <div class="card-header">
                     <h5><i class="fas fa-hourglass-half"></i> Predictive Deadline Slippage Analyzer</h5>
                 </div>
@@ -1264,7 +1352,7 @@ include '../../includes/navbar.php';
 
         <?php if ($canViewBudget): ?>
             <div class="col-xl-6">
-                <div class="section-card">
+                <div class="section-card" id="budget-engine">
                     <div class="card-header">
                         <h5><i class="fas fa-coins"></i> Budget Burn Rate Insight Engine</h5>
                     </div>
@@ -1306,7 +1394,7 @@ include '../../includes/navbar.php';
 
     <div class="row g-4 mb-4">
         <div class="col-xl-6">
-            <div class="section-card">
+            <div class="section-card" id="resource-efficiency">
                 <div class="card-header">
                     <h5><i class="fas fa-users-gear"></i> Resource Efficiency Intelligence</h5>
                 </div>
@@ -1391,7 +1479,7 @@ include '../../includes/navbar.php';
 
     <div class="row g-4">
         <div class="col-xl-7">
-            <div class="section-card">
+            <div class="section-card" id="kpi-monitoring">
                 <div class="card-header">
                     <h5><i class="fas fa-gauge-high"></i> KPI Deviation Monitoring System</h5>
                 </div>
