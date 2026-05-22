@@ -8,6 +8,7 @@ $user = getCurrentUser();
 $reportId = (int) ($_GET['report_id'] ?? 0);
 $receiptId = (int) ($_GET['receipt_id'] ?? 0);
 $clientId = (int) ($_GET['client_id'] ?? 0);
+$contextClientId = $clientId;
 
 // Get receipts for client or specific report
 if ($receiptId) {
@@ -49,10 +50,26 @@ if ($receiptId) {
 
 // Get client name for header
 $clientName = '';
-if ($clientId) {
-    $client = $conn->query("SELECT name FROM clients WHERE id = $clientId")->fetch_assoc();
+if ($contextClientId === 0 && ($receiptId || $reportId)) {
+    $contextQuery = $conn->query("
+        SELECT sr.client_id, c.name
+        FROM sales_reports sr
+        JOIN clients c ON sr.client_id = c.id
+        " . ($receiptId
+            ? "JOIN receipts r ON r.report_id = sr.id WHERE r.id = $receiptId"
+            : "WHERE sr.id = $reportId") . "
+        LIMIT 1
+    ");
+    $contextRow = $contextQuery ? $contextQuery->fetch_assoc() : null;
+    $contextClientId = (int) ($contextRow['client_id'] ?? 0);
+    $clientName = $contextRow['name'] ?? '';
+}
+if ($contextClientId) {
+    $client = $conn->query("SELECT name FROM clients WHERE id = $contextClientId")->fetch_assoc();
     $clientName = $client['name'] ?? 'All Clients';
 }
+$reportCreateUrl = 'report.php' . ($contextClientId > 0 ? '?client_id=' . $contextClientId : '');
+$clientReceiptsUrl = 'receipt.php' . ($contextClientId > 0 ? '?client_id=' . $contextClientId : '');
 
 // Get statistics
 $totalReceipts = $conn->query("SELECT COUNT(*) as count FROM receipts")->fetch_assoc()['count'];
@@ -335,6 +352,7 @@ include '../../includes/navbar.php';
 .btn-secondary-modern {
     background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
     color: white;
+    text-decoration: none;
     border: none;
     padding: 0.5rem 1rem;
     border-radius: 10px;
@@ -353,6 +371,7 @@ include '../../includes/navbar.php';
 .btn-primary-modern {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
     color: white;
+    text-decoration: none;
     border: none;
     padding: 0.5rem 1rem;
     border-radius: 10px;
@@ -478,11 +497,14 @@ include '../../includes/navbar.php';
                 <a href="receipt.php" class="btn-secondary-modern">
                     <i class="fas fa-list"></i> All Receipts
                 </a>
-                <?php if ($clientId): ?>
-                    <a href="receipt.php" class="btn-primary-modern">
+                <?php if ($contextClientId): ?>
+                    <a href="<?php echo htmlspecialchars($clientReceiptsUrl); ?>" class="btn-secondary-modern">
                         <i class="fas fa-building"></i> This Client
                     </a>
                 <?php endif; ?>
+                <a href="<?php echo htmlspecialchars($reportCreateUrl); ?>" class="btn-primary-modern">
+                    <i class="fas fa-plus"></i> Create New Report
+                </a>
             </div>
         </div>
         
@@ -534,9 +556,7 @@ include '../../includes/navbar.php';
                 <i class="fas fa-receipt"></i>
                 <h4>No Receipts Generated Yet</h4>
                 <p>Create a sales report to generate receipts for your clients</p>
-                <a href="report.php" class="btn-primary-modern">
-                    <i class="fas fa-plus"></i> Create New Report
-                </a>
+                
             </div>
             <?php endif; ?>
         </div>

@@ -218,6 +218,279 @@ $topInsights = array_map(
     },
     $topInsights
 );
+$metricCatalog = [
+    'risk_exposure' => [
+        'label' => 'Risk Exposure',
+        'value' => number_format($insights['metrics']['risk_exposure'], 1),
+        'suffix' => '/100',
+        'tone' => $insights['bands']['risk_exposure']['tone'],
+        'meta' => $insights['bands']['risk_exposure']['label'],
+        'icon' => 'shield-halved',
+    ],
+    'decision_confidence' => [
+        'label' => 'Decision Confidence',
+        'value' => number_format($insights['metrics']['decision_confidence'], 1),
+        'suffix' => '%',
+        'tone' => $insights['bands']['decision_confidence']['tone'],
+        'meta' => $insights['bands']['decision_confidence']['label'],
+        'icon' => 'chart-line',
+    ],
+    'forecast_delay_days' => [
+        'label' => 'Forecast Delay',
+        'value' => number_format($insights['metrics']['forecast_delay_days'], 1),
+        'suffix' => ' days',
+        'tone' => $insights['metrics']['forecast_delay_days'] > 0 ? 'warning' : 'success',
+        'meta' => 'Projected slippage',
+        'icon' => 'clock',
+    ],
+    'monthly_burn' => [
+        'label' => 'Monthly Burn',
+        'value' => number_format($insights['metrics']['monthly_burn'], 2),
+        'suffix' => '',
+        'tone' => 'info',
+        'meta' => 'Estimated budget usage',
+        'icon' => 'coins',
+    ],
+    'budget_health' => [
+        'label' => 'Budget Health',
+        'value' => number_format($insights['metrics']['budget_health'], 1),
+        'suffix' => '%',
+        'tone' => $insights['bands']['budget_health']['tone'],
+        'meta' => $insights['bands']['budget_health']['label'],
+        'icon' => 'wallet',
+    ],
+    'planning_readiness' => [
+        'label' => 'Planning Readiness',
+        'value' => number_format($insights['metrics']['planning_readiness'], 1),
+        'suffix' => '%',
+        'tone' => $insights['bands']['planning_readiness']['tone'],
+        'meta' => $insights['bands']['planning_readiness']['label'],
+        'icon' => 'clipboard-check',
+    ],
+    'resource_efficiency' => [
+        'label' => 'Resource Efficiency',
+        'value' => number_format($insights['metrics']['resource_efficiency'], 1),
+        'suffix' => '%',
+        'tone' => $insights['bands']['resource_efficiency']['tone'],
+        'meta' => $insights['bands']['resource_efficiency']['label'],
+        'icon' => 'users-gear',
+    ],
+    'git_momentum' => [
+        'label' => 'Git Momentum',
+        'value' => number_format($insights['metrics']['git_momentum'], 1),
+        'suffix' => '%',
+        'tone' => di_band_for_score($insights['metrics']['git_momentum'])['tone'],
+        'meta' => (int) $insights['metrics']['recent_git_updates'] . ' recent updates',
+        'icon' => 'code-branch',
+    ],
+    'schedule_stability' => [
+        'label' => 'Schedule Stability',
+        'value' => number_format($insights['metrics']['schedule_stability'], 1),
+        'suffix' => '%',
+        'tone' => $insights['bands']['schedule_stability']['tone'],
+        'meta' => $insights['bands']['schedule_stability']['label'],
+        'icon' => 'calendar-check',
+    ],
+    'testing_risk' => [
+        'label' => 'Testing Risk',
+        'value' => number_format($insights['metrics']['testing_risk'], 1),
+        'suffix' => '/100',
+        'tone' => $insights['bands']['testing_risk']['tone'],
+        'meta' => $insights['bands']['testing_risk']['label'],
+        'icon' => 'vial-circle-check',
+    ],
+    'client_risk' => [
+        'label' => 'Client Risk',
+        'value' => number_format($insights['metrics']['client_risk'], 1),
+        'suffix' => '/100',
+        'tone' => $insights['bands']['client_risk']['tone'],
+        'meta' => $insights['bands']['client_risk']['label'],
+        'icon' => 'handshake-angle',
+    ],
+    'impact_chain_score' => [
+        'label' => 'Impact Chain',
+        'value' => number_format($insights['metrics']['impact_chain_score'], 1),
+        'suffix' => '/100',
+        'tone' => $insights['bands']['impact_chain_score']['tone'],
+        'meta' => $insights['bands']['impact_chain_score']['label'],
+        'icon' => 'diagram-project',
+    ],
+];
+$roleProfiles = [
+    'admin' => [
+        'focus' => 'Portfolio control, escalation, and governance',
+        'hero_summary' => 'Prioritize intervention on the projects creating the highest delivery, budget, and coordination risk.',
+        'decision_question' => 'Which project needs leadership intervention first?',
+        'signal_title' => 'Administrator Intervention Signals',
+        'kpi_title' => 'Administrator KPI Watchlist',
+        'kpi_note' => 'Use these signals to spot projects that need escalation, governance correction, or resource intervention.',
+        'metric_keys' => ['risk_exposure', 'forecast_delay_days', 'budget_health'],
+        'kpi_labels' => ['Overdue Rate', 'Budget Health', 'Schedule Stability', 'Resource Efficiency'],
+        'insight_priority' => ['Delivery Risk Pressure', 'Budget Burn Exposure', 'Deadline Slippage Outlook', 'Resource Balance', 'Planning Readiness'],
+        'priority_items' => ['Portfolio-wide delivery risk', 'Budget and overspend exposure', 'Cross-team workload imbalance'],
+        'next_actions' => ['Escalate the riskiest project owner', 'Rebalance capacity across teams', 'Tighten approval or governance checkpoints'],
+    ],
+    'sales' => [
+        'focus' => 'Client commitment, profitability, and scope control',
+        'hero_summary' => 'Prioritize insights that affect delivery promises, client trust, and commercial margin.',
+        'decision_question' => 'Which project needs a client-facing reset first?',
+        'signal_title' => 'Sales Commitment Signals',
+        'kpi_title' => 'Sales Commercial Watchlist',
+        'kpi_note' => 'Use these KPIs to judge whether delivery promises, budget, and client expectation management are still healthy.',
+        'metric_keys' => ['budget_health', 'forecast_delay_days', 'client_risk'],
+        'kpi_labels' => ['Budget Health', 'Schedule Stability', 'Completion Rate', 'Planning Readiness'],
+        'insight_priority' => ['Budget Burn Exposure', 'Deadline Slippage Outlook', 'Planning Readiness', 'Delivery Risk Pressure', 'Resource Balance'],
+        'priority_items' => ['Client-facing delay exposure', 'Margin and burn-rate pressure', 'Scope and approval readiness'],
+        'next_actions' => ['Prepare scope or timeline tradeoffs', 'Follow up estimate and approval bottlenecks', 'Reset client expectations before trust drops'],
+    ],
+    'architect' => [
+        'focus' => 'Planning readiness, staffing fit, and technical delivery design',
+        'hero_summary' => 'Prioritize the structural conditions that determine whether the team can deliver at the planned pace.',
+        'decision_question' => 'What should be corrected in the plan or team design now?',
+        'signal_title' => 'Architect Delivery Design Signals',
+        'kpi_title' => 'Architect Planning Watchlist',
+        'kpi_note' => 'These KPIs show whether the project plan, staffing model, and delivery structure are strong enough for current complexity.',
+        'metric_keys' => ['planning_readiness', 'resource_efficiency', 'schedule_stability'],
+        'kpi_labels' => ['Planning Readiness', 'Resource Efficiency', 'Schedule Stability', 'Git Momentum'],
+        'insight_priority' => ['Planning Readiness', 'Resource Balance', 'Deadline Slippage Outlook', 'Delivery Risk Pressure', 'Budget Burn Exposure'],
+        'priority_items' => ['Planning artifact completeness', 'Team composition versus workload', 'Schedule stability against complexity'],
+        'next_actions' => ['Adjust developer allocation', 'Close planning and architecture gaps', 'Reduce dependency-driven slowdown'],
+    ],
+    'sul' => [
+        'focus' => 'Task flow, blockers, and workload balance',
+        'hero_summary' => 'Prioritize execution signals that show where delivery is slowing down inside the team.',
+        'decision_question' => 'Which execution bottleneck should be resolved first?',
+        'signal_title' => 'Service Unit Leader Flow Signals',
+        'kpi_title' => 'Service Unit Leader Execution Watchlist',
+        'kpi_note' => 'These KPIs focus on overdue work, flow interruptions, and the health of day-to-day task execution.',
+        'metric_keys' => ['forecast_delay_days', 'resource_efficiency', 'git_momentum'],
+        'kpi_labels' => ['Overdue Rate', 'Resource Efficiency', 'Git Momentum', 'Completion Rate'],
+        'insight_priority' => ['Delivery Risk Pressure', 'Resource Balance', 'Deadline Slippage Outlook', 'Planning Readiness'],
+        'priority_items' => ['Blocked and overdue task flow', 'Workload distribution across members', 'Execution pace against timeline'],
+        'next_actions' => ['Reassign tasks and unblock work', 'Re-sequence sprint priorities', 'Push stalled work back into active progress'],
+    ],
+    'expert' => [
+        'focus' => 'Estimation realism, complexity feasibility, and delivery impact',
+        'hero_summary' => 'Prioritize signals that reveal where estimates, solution assumptions, or complexity are weakening delivery confidence.',
+        'decision_question' => 'Which assumptions need to be re-estimated or clarified now?',
+        'signal_title' => 'Expert Feasibility Signals',
+        'kpi_title' => 'Expert Estimation Watchlist',
+        'kpi_note' => 'These KPIs help experts judge whether scope, planning quality, and downstream impact still match the current delivery path.',
+        'metric_keys' => ['planning_readiness', 'testing_risk', 'impact_chain_score'],
+        'kpi_labels' => ['Planning Readiness', 'Schedule Stability', 'Resource Efficiency', 'Completion Rate'],
+        'insight_priority' => ['Planning Readiness', 'Deadline Slippage Outlook', 'Delivery Risk Pressure', 'Resource Balance', 'Budget Burn Exposure'],
+        'priority_items' => ['Feature and scope ambiguity', 'Complexity-driven delivery impact', 'Estimate confidence against timeline'],
+        'next_actions' => ['Refine estimates and assumptions', 'Flag unclear requirements early', 'Recommend safer team or scope structure'],
+    ],
+    'developer' => [
+        'focus' => 'Execution priority, blockers, and near-term delivery pressure',
+        'hero_summary' => 'Prioritize the signals that help individual contributors focus on the work most likely to affect delivery now.',
+        'decision_question' => 'What work should be prioritized or unblocked first?',
+        'signal_title' => 'Developer Execution Signals',
+        'kpi_title' => 'Developer Delivery Watchlist',
+        'kpi_note' => 'These KPIs highlight the pace, stability, and active blockers that developers should respond to first.',
+        'metric_keys' => ['forecast_delay_days', 'git_momentum', 'testing_risk'],
+        'kpi_labels' => ['Overdue Rate', 'Git Momentum', 'Completion Rate', 'Schedule Stability'],
+        'insight_priority' => ['Delivery Risk Pressure', 'Deadline Slippage Outlook', 'Resource Balance', 'Planning Readiness'],
+        'priority_items' => ['Immediate blockers and overdue work', 'Near-term deadline pressure', 'Code and review momentum'],
+        'next_actions' => ['Update task progress quickly', 'Raise blockers before they age', 'Focus on the highest-risk active work first'],
+    ],
+];
+$roleSignalOverrides = [
+    'admin' => [
+        'Delivery Risk Pressure' => ['title' => 'Executive Delivery Intervention', 'action' => 'Escalate the delivery owner, reassign capacity, and require a concrete recovery plan.'],
+        'Deadline Slippage Outlook' => ['title' => 'Schedule Recovery Priority', 'action' => 'Decide whether to add capacity, adjust timeline, or reduce scope at the leadership level.'],
+        'Budget Burn Exposure' => ['title' => 'Budget Governance Exposure', 'action' => 'Review burn pressure, approvals, and scope controls before overspend becomes structural.'],
+        'Planning Readiness' => ['title' => 'Governance Readiness Gap', 'action' => 'Require missing planning artifacts before the project pushes more work into execution.'],
+        'Resource Balance' => ['title' => 'Cross-Team Capacity Imbalance', 'action' => 'Rebalance teams or ownership where work distribution is weakening delivery stability.'],
+    ],
+    'sales' => [
+        'Delivery Risk Pressure' => ['title' => 'Client Delivery Risk', 'action' => 'Prepare a client-ready explanation and internal recovery path before confidence drops externally.'],
+        'Deadline Slippage Outlook' => ['title' => 'Commitment Slippage Outlook', 'action' => 'Decide whether the client needs a timeline reset, scope trim, or phased delivery plan.'],
+        'Budget Burn Exposure' => ['title' => 'Margin and Burn Exposure', 'action' => 'Protect margin by aligning scope, approvals, and commercial expectations early.'],
+        'Planning Readiness' => ['title' => 'Approval Readiness Gap', 'action' => 'Close planning or requirement gaps that could weaken estimate approval or client trust.'],
+        'Resource Balance' => ['title' => 'Delivery Capacity Pressure', 'action' => 'Coordinate with delivery leads before capacity issues turn into missed commitments.'],
+    ],
+    'architect' => [
+        'Delivery Risk Pressure' => ['title' => 'Delivery Architecture Pressure', 'action' => 'Correct staffing or structural bottlenecks before the delivery plan falls further behind.'],
+        'Deadline Slippage Outlook' => ['title' => 'Plan Stability Outlook', 'action' => 'Rework staffing, sequencing, or technical scope to absorb projected slippage.'],
+        'Budget Burn Exposure' => ['title' => 'Design Cost Pressure', 'action' => 'Check whether the current solution and staffing shape are causing avoidable burn.'],
+        'Planning Readiness' => ['title' => 'Planning and Architecture Readiness', 'action' => 'Complete the missing artifacts that the team needs before scaling execution.'],
+        'Resource Balance' => ['title' => 'Staffing Fit Signal', 'action' => 'Realign ownership, skills, or allocation where complexity no longer matches team capacity.'],
+    ],
+    'sul' => [
+        'Delivery Risk Pressure' => ['title' => 'Execution Flow Pressure', 'action' => 'Unblock overdue work, shorten queues, and reset priorities for the team immediately.'],
+        'Deadline Slippage Outlook' => ['title' => 'Task Flow Delay Outlook', 'action' => 'Resequence work and reassign ownership before the current pace misses the delivery target.'],
+        'Budget Burn Exposure' => ['title' => 'Execution Cost Awareness', 'action' => 'Flag wasteful execution patterns that are increasing cost without moving delivery.'],
+        'Planning Readiness' => ['title' => 'Handoff Readiness Gap', 'action' => 'Close the missing planning inputs that are slowing assignment and execution.'],
+        'Resource Balance' => ['title' => 'Team Allocation Imbalance', 'action' => 'Reassign tasks across the team where ownership load is causing avoidable delays.'],
+    ],
+    'expert' => [
+        'Delivery Risk Pressure' => ['title' => 'Feasibility Risk Pressure', 'action' => 'Check whether estimate or solution assumptions are making current tasks riskier than planned.'],
+        'Deadline Slippage Outlook' => ['title' => 'Estimate Slippage Outlook', 'action' => 'Review whether complexity or sizing assumptions still support the committed timeline.'],
+        'Budget Burn Exposure' => ['title' => 'Scope Cost Pressure', 'action' => 'Identify scope elements that are driving cost faster than value or readiness.'],
+        'Planning Readiness' => ['title' => 'Estimation Readiness Gap', 'action' => 'Refine ambiguous requirements and missing sizing inputs before execution expands.'],
+        'Resource Balance' => ['title' => 'Complexity-to-Capacity Fit', 'action' => 'Recommend changes where team composition no longer fits the technical workload.'],
+    ],
+    'developer' => [
+        'Delivery Risk Pressure' => ['title' => 'Active Delivery Pressure', 'action' => 'Focus on the blocked or overdue work most likely to affect near-term delivery.'],
+        'Deadline Slippage Outlook' => ['title' => 'Near-Term Slippage Outlook', 'action' => 'Update progress and escalate blockers before the current queue slips further.'],
+        'Budget Burn Exposure' => ['title' => 'Delivery Efficiency Pressure', 'action' => 'Work with leads to avoid rework or stalled effort that consumes time without progress.'],
+        'Planning Readiness' => ['title' => 'Execution Clarity Gap', 'action' => 'Raise unclear requirements or missing inputs before implementation slows down.'],
+        'Resource Balance' => ['title' => 'Workload Balance Signal', 'action' => 'Coordinate with the lead when assignment load or review queues block your momentum.'],
+    ],
+];
+$roleProfile = $roleProfiles[$userRole] ?? $roleProfiles['admin'];
+if (!$canViewBudget) {
+    $roleProfile['metric_keys'] = array_values(array_filter($roleProfile['metric_keys'], static fn(string $key): bool => $key !== 'budget_health' && $key !== 'monthly_burn'));
+    $roleProfile['kpi_labels'] = array_values(array_filter($roleProfile['kpi_labels'], static fn(string $label): bool => $label !== 'Budget Health'));
+    $roleProfile['insight_priority'] = array_values(array_filter($roleProfile['insight_priority'], static fn(string $title): bool => $title !== 'Budget Burn Exposure'));
+}
+$roleMetricCards = array_values(array_filter(
+    array_map(
+        static fn(string $key): ?array => $metricCatalog[$key] ?? null,
+        $roleProfile['metric_keys']
+    )
+));
+if ($roleMetricCards === []) {
+    $roleMetricCards = $metricCards;
+}
+$kpiRowsByLabel = [];
+foreach ($kpiRows as $kpi) {
+    $kpiRowsByLabel[$kpi['label']] = $kpi;
+}
+$roleKpiRows = [];
+foreach ($roleProfile['kpi_labels'] as $label) {
+    if (isset($kpiRowsByLabel[$label])) {
+        $roleKpiRows[] = $kpiRowsByLabel[$label];
+    }
+}
+if ($roleKpiRows === []) {
+    $roleKpiRows = $kpiRows;
+}
+$roleInsightPriority = array_flip($roleProfile['insight_priority']);
+$topInsights = array_map(
+    static function (array $insight) use ($roleSignalOverrides, $userRole): array {
+        $baseTitle = $insight['title'];
+        $override = $roleSignalOverrides[$userRole][$baseTitle] ?? [];
+
+        return array_merge($insight, $override, ['base_title' => $baseTitle]);
+    },
+    $topInsights
+);
+usort(
+    $topInsights,
+    static function (array $left, array $right) use ($roleInsightPriority): int {
+        $leftOrder = $roleInsightPriority[$left['base_title']] ?? 99;
+        $rightOrder = $roleInsightPriority[$right['base_title']] ?? 99;
+        if ($leftOrder !== $rightOrder) {
+            return $leftOrder <=> $rightOrder;
+        }
+
+        return ($right['score'] ?? 0) <=> ($left['score'] ?? 0);
+    }
+);
+$topInsights = array_slice($topInsights, 0, 4);
 $actionCatalog = array_filter(
     $scenarioCatalog,
     static fn(string $key): bool => $key !== 'current_state',
@@ -720,9 +993,86 @@ body,
     margin-bottom: 0.35rem;
 }
 
+.metric-card .value span {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-left: 0.2rem;
+}
+
 .metric-card .meta {
     font-size: 0.8rem;
     color: var(--gray-600);
+}
+
+.role-brief-card .card-body {
+    display: grid;
+    gap: 1rem;
+}
+
+.role-brief-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(220px, 1fr));
+    gap: 1rem;
+    align-items: start;
+}
+
+.role-brief-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--insight-primary);
+}
+
+.role-brief-card h6 {
+    margin: 0.35rem 0 0.4rem;
+    font-size: 1rem;
+    color: var(--gray-900);
+}
+
+.role-brief-card p {
+    margin: 0;
+    color: var(--gray-700);
+    font-size: 0.84rem;
+    line-height: 1.6;
+}
+
+.role-brief-block {
+    border: 1px solid var(--gray-200);
+    border-radius: 18px;
+    padding: 0.95rem 1rem;
+    background: var(--gray-50);
+}
+
+.role-brief-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-600);
+    margin-bottom: 0.7rem;
+}
+
+.role-brief-list {
+    margin: 0;
+    padding-left: 1rem;
+    color: var(--gray-700);
+    font-size: 0.82rem;
+    line-height: 1.6;
+}
+
+.role-brief-list li + li {
+    margin-top: 0.35rem;
+}
+
+@media (max-width: 1200px) {
+    .role-brief-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .tone-success { color: #059669; }
@@ -1021,17 +1371,19 @@ body,
         <h1><?php echo htmlspecialchars($currentView === 'statistics' ? $projectTitle : 'Project Insights Overview'); ?></h1>
         <p>
             <?php if ($currentView === 'statistics'): ?>
-                Formula-based analysis for decision impact, risk exposure, schedule slippage, resource efficiency, KPI deviations, <?php echo $canViewBudget ? 'budget burn, ' : ''; ?>confidence scoring, and action-based insight testing.
+                <?php echo htmlspecialchars(getRoleDisplayName($userRole)); ?> lens: <?php echo htmlspecialchars($roleProfile['hero_summary']); ?>
             <?php else: ?>
                 Browse project overview cards first, then open the full statistics only when you need the deeper analysis for one project.
             <?php endif; ?>
         </p>
         <div class="project-meta">
             <?php if ($currentView === 'statistics'): ?>
+                <div class="project-chip"><strong>Role:</strong> <?php echo htmlspecialchars(getRoleDisplayName($userRole)); ?></div>
+                <div class="project-chip"><strong>Focus:</strong> <?php echo htmlspecialchars($roleProfile['focus']); ?></div>
                 <div class="project-chip"><strong>Client:</strong> <?php echo htmlspecialchars($projectClient); ?></div>
                 <div class="project-chip"><strong>Status:</strong> <?php echo htmlspecialchars($projectStatus); ?></div>
                 <div class="project-chip"><strong>Complexity:</strong> <?php echo htmlspecialchars($projectComplexity); ?></div>
-                <div class="project-chip"><strong>Timeline:</strong> <?php echo (int) $insights['metrics']['timeline_total_days']; ?> days</div>
+                <div class="project-chip"><strong>Decision Question:</strong> <?php echo htmlspecialchars($roleProfile['decision_question']); ?></div>
             <?php else: ?>
                 <div class="project-chip"><strong>Projects:</strong> <?php echo count($projects); ?></div>
                 <div class="project-chip"><strong>Role:</strong> <?php echo htmlspecialchars(getRoleDisplayName($userRole)); ?></div>
@@ -1080,6 +1432,23 @@ body,
     <?php endif; ?>
 
     <?php if ($currentView === 'statistics'): ?>
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="metric-grid mb-0">
+                <?php foreach ($roleMetricCards as $card): ?>
+                    <div class="metric-card">
+                        <i class="fas fa-<?php echo htmlspecialchars($card['icon']); ?> icon tone-<?php echo htmlspecialchars($card['tone']); ?>"></i>
+                        <div class="label"><?php echo htmlspecialchars($card['label']); ?></div>
+                        <div class="value tone-<?php echo htmlspecialchars($card['tone']); ?>">
+                            <?php echo htmlspecialchars($card['value']); ?><span><?php echo htmlspecialchars($card['suffix']); ?></span>
+                        </div>
+                        <div class="meta"><?php echo htmlspecialchars($card['meta']); ?></div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4 mb-4">
         <div class="col-xl-7">
             <div class="section-card">
@@ -1173,6 +1542,44 @@ body,
     </div>
 
     <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="section-card role-brief-card">
+                <div class="card-header">
+                    <h5><i class="fas fa-crosshairs"></i> Role Decision Brief</h5>
+                </div>
+                <div class="card-body">
+                    <div class="role-brief-grid">
+                        <div>
+                            <span class="role-brief-eyebrow">
+                                <i class="fas fa-user-shield"></i>
+                                <?php echo htmlspecialchars(getRoleDisplayName($userRole)); ?>
+                            </span>
+                            <h6><?php echo htmlspecialchars($roleProfile['decision_question']); ?></h6>
+                            <p><?php echo htmlspecialchars($roleProfile['focus']); ?></p>
+                        </div>
+
+                        <div class="role-brief-block">
+                            <span class="role-brief-label">Important Aspects</span>
+                            <ul class="role-brief-list">
+                                <?php foreach ($roleProfile['priority_items'] as $item): ?>
+                                    <li><?php echo htmlspecialchars($item); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+
+                        <div class="role-brief-block">
+                            <span class="role-brief-label">Recommended Decisions</span>
+                            <ul class="role-brief-list">
+                                <?php foreach ($roleProfile['next_actions'] as $item): ?>
+                                    <li><?php echo htmlspecialchars($item); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="col-xl-7">
             <div class="section-card">
                 <div class="card-header">
@@ -1274,7 +1681,7 @@ body,
         <div class="col-xl-6">
             <div class="section-card">
                 <div class="card-header">
-                    <h5><i class="fas fa-lightbulb"></i> Top Decision Signals</h5>
+                    <h5><i class="fas fa-lightbulb"></i> <?php echo htmlspecialchars($roleProfile['signal_title']); ?></h5>
                 </div>
                 <div class="card-body">
                     <div class="insight-list">
@@ -1471,9 +1878,10 @@ body,
         <div class="col-xl-7">
             <div class="section-card" id="kpi-monitoring">
                 <div class="card-header">
-                    <h5><i class="fas fa-gauge-high"></i> KPI Deviation Monitoring System</h5>
+                    <h5><i class="fas fa-gauge-high"></i> <?php echo htmlspecialchars($roleProfile['kpi_title']); ?></h5>
                 </div>
                 <div class="card-body">
+                    <div class="scenario-note mb-3"><?php echo htmlspecialchars($roleProfile['kpi_note']); ?></div>
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -1485,7 +1893,7 @@ body,
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($kpiRows as $kpi): ?>
+                            <?php foreach ($roleKpiRows as $kpi): ?>
                                 <?php $varianceTone = $kpi['deviation'] >= 0 ? 'delta-positive' : 'delta-negative'; ?>
                                 <tr>
                                     <td><?php echo htmlspecialchars($kpi['label']); ?></td>
