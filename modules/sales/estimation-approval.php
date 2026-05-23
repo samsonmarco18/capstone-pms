@@ -282,17 +282,182 @@ include '../../includes/navbar.php';
     color: rgba(255, 255, 255, 0.9);
 }
 
+.project-approval-group {
+    display: grid;
+    gap: 0;
+    padding: 0;
+    margin-bottom: 1.35rem;
+    border-radius: 24px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%);
+    border: 1px solid #dfe9f1;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+}
+
+.project-approval-toggle {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 1.25rem;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.project-approval-toggle:hover {
+    background: rgba(248, 250, 252, 0.85);
+}
+
+.project-approval-toggle:focus-visible {
+    outline: 3px solid rgba(31, 99, 146, 0.18);
+    outline-offset: -3px;
+}
+
+.project-approval-toggle-main {
+    min-width: 0;
+    display: grid;
+    gap: 0.55rem;
+}
+
+.project-approval-toggle-side {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.project-approval-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.38rem 0.72rem;
+    border-radius: 999px;
+    background: rgba(31, 99, 146, 0.08);
+    color: var(--theme-primary);
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.project-approval-head h5 {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.project-approval-head p {
+    margin: 0;
+    color: #64748b;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    max-width: 680px;
+}
+
+.project-approval-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.project-approval-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.48rem 0.78rem;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid #e3ebf2;
+    color: #475569;
+    font-size: 0.74rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.project-approval-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid #e3ebf2;
+    color: var(--theme-primary);
+    font-size: 0.9rem;
+    flex: 0 0 2.2rem;
+    transition: transform 0.2s ease;
+}
+
+.project-approval-group.is-open .project-approval-chevron {
+    transform: rotate(180deg);
+}
+
+.project-approval-body {
+    display: none;
+    padding: 0 1.25rem 1.25rem;
+    background: linear-gradient(180deg, rgba(248, 251, 254, 0.55) 0%, rgba(255, 255, 255, 0) 100%);
+}
+
+.project-approval-group.is-open .project-approval-body {
+    display: grid;
+    gap: 1.1rem;
+}
+
+.project-gantt-panel {
+    padding: 1rem 1.1rem;
+    border-radius: 20px;
+    background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
+    border: 1px solid #e2e8f0;
+}
+
+.project-gantt-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+}
+
+.project-gantt-head h6 {
+    margin: 0;
+    font-size: 0.96rem;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.project-gantt-head p {
+    margin: 0.25rem 0 0;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.project-feature-stack {
+    display: grid;
+    gap: 1rem;
+}
+
 .task-card {
     background: white;
-    border-radius: 16px;
+    border-radius: 20px;
     padding: 1.25rem;
     border: 1px solid var(--gray-200);
     box-shadow: var(--shadow-sm);
     margin-bottom: 1rem;
+    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
 }
 
 .task-card:hover {
     box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
 }
 
 .task-meta {
@@ -304,13 +469,145 @@ include '../../includes/navbar.php';
     margin-top: 0.5rem;
 }
 
+.approval-task-card {
+    padding: 1.5rem;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+    margin-bottom: 0;
+}
+
+.approval-card-main {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.1rem;
+    min-height: 100%;
+}
+
+.approval-card-content {
+    min-width: 0;
+}
+
+.approval-feature-header {
+    display: grid;
+    gap: 0.9rem;
+    margin-bottom: 1.1rem;
+}
+
+.approval-feature-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: fit-content;
+    padding: 0.4rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(31, 99, 146, 0.08);
+    color: var(--theme-primary);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.approval-feature-title {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #1f2937;
+    line-height: 1.25;
+}
+
+.approval-meta-list {
+    gap: 0.65rem;
+    margin-top: 0;
+}
+
+.approval-meta-list span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.7rem;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1px solid #e5edf5;
+    color: #52606d;
+    font-size: 0.74rem;
+    line-height: 1;
+}
+
+.expectation-note {
+    margin: 0;
+    padding: 0.9rem 1rem;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(31, 99, 146, 0.06) 0%, rgba(31, 99, 146, 0.02) 100%);
+    border: 1px solid rgba(31, 99, 146, 0.1);
+    color: #4b6477;
+    font-size: 0.86rem;
+    line-height: 1.6;
+}
+
+.timeline-panel {
+    display: grid;
+    gap: 1rem;
+    padding: 1.15rem;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid #e6eef5;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.timeline-panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.timeline-panel-head h6 {
+    margin: 0.15rem 0 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.timeline-kicker {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--theme-primary);
+}
+
+.timeline-helper {
+    margin: 0.35rem 0 0;
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+.timeline-pert-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 0.8rem;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+    font-size: 0.76rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 .btn-action {
     border: none;
-    padding: 0.4rem 0.8rem;
-    border-radius: 10px;
-    font-size: 0.75rem;
+    padding: 0.72rem 1rem;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: 700;
     cursor: pointer;
     transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+    min-width: 124px;
 }
 
 .btn-approve {
@@ -330,12 +627,13 @@ include '../../includes/navbar.php';
 
 .btn-action:hover {
     transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
 }
 
 .gantt-preview {
     display: grid;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
+    gap: 0.8rem;
+    margin-top: 0;
 }
 
 .gantt-row-preview {
@@ -345,7 +643,7 @@ include '../../includes/navbar.php';
 }
 
 .gantt-label {
-    width: 60px;
+    width: 68px;
     font-size: 0.7rem;
     font-weight: 600;
     color: var(--gray-600);
@@ -363,21 +661,76 @@ include '../../includes/navbar.php';
 
 .gantt-bar {
     height: 100%;
+    transition: width 0.25s ease;
 }
 
 .min-bar { background: #60a5fa; }
 .likely-bar { background: #34d399; }
 .max-bar { background: #f97316; }
 
+.timeline-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+.timeline-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.65rem;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #52606d;
+    font-size: 0.72rem;
+    font-weight: 600;
+}
+
+.timeline-legend-dot {
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 999px;
+    flex: 0 0 0.7rem;
+}
+
+.timeline-legend-dot.min { background: #60a5fa; }
+.timeline-legend-dot.likely { background: #34d399; }
+.timeline-legend-dot.max { background: #f97316; }
+
 .choice-group {
     display: grid;
-    gap: 0.75rem;
-    margin-top: 0.75rem;
+    gap: 0.9rem;
+    padding-top: 0.15rem;
+}
+
+.choice-group-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.choice-group-head .form-label {
+    margin: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--theme-primary);
+}
+
+.choice-group-head p {
+    margin: 0.3rem 0 0;
+    font-size: 0.82rem;
+    color: #64748b;
+    line-height: 1.55;
 }
 
 .estimate-choice-list {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
     gap: 0.75rem;
     width: 100%;
 }
@@ -397,19 +750,38 @@ include '../../includes/navbar.php';
 
 .estimate-choice-body {
     display: grid;
-    gap: 0.25rem;
-    padding: 0.9rem 1rem;
-    border: 1px solid var(--gray-200);
-    border-radius: 14px;
-    background: #fff;
+    gap: 0.35rem;
+    height: 100%;
+    padding: 1rem 1rem 0.95rem;
+    border: 1px solid #dfe8ef;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
     box-shadow: var(--shadow-sm);
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
+.estimate-choice-card:hover .estimate-choice-body {
+    border-color: #c8d9e6;
+    transform: translateY(-1px);
+}
+
 .estimate-choice-card input:checked + .estimate-choice-body {
     border-color: var(--theme-primary);
-    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12), 0 12px 24px rgba(31, 99, 146, 0.08);
     transform: translateY(-1px);
+}
+
+.estimate-choice-tone {
+    display: inline-flex;
+    width: fit-content;
+    padding: 0.32rem 0.58rem;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: var(--theme-primary);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .estimate-choice-title {
@@ -421,9 +793,25 @@ include '../../includes/navbar.php';
 }
 
 .estimate-choice-days {
-    font-size: 1rem;
+    font-size: 1.18rem;
     font-weight: 700;
     color: var(--theme-primary);
+}
+
+.estimate-choice-caption {
+    font-size: 0.76rem;
+    color: #64748b;
+    line-height: 1.45;
+}
+
+.choice-footer {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.choice-range-note {
+    font-size: 0.8rem;
+    color: #64748b;
 }
 
 .empty-state {
@@ -447,10 +835,78 @@ include '../../includes/navbar.php';
 
 .sales-choice-status {
     display: block;
-    margin-top: 0.45rem;
-    font-size: 0.78rem;
+    padding: 0.8rem 0.95rem;
+    border-radius: 14px;
+    background: rgba(31, 99, 146, 0.06);
+    border: 1px solid rgba(31, 99, 146, 0.1);
+    font-size: 0.8rem;
     color: var(--theme-primary);
-    font-weight: 600;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+.approval-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    min-width: 0;
+    padding-top: 1rem;
+    border-top: 1px solid #e6eef5;
+}
+
+.approval-actions-label {
+    display: none;
+}
+
+@media (max-width: 991.98px) {
+    .approval-actions {
+        justify-content: flex-end;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .project-approval-group {
+        border-radius: 20px;
+    }
+
+    .project-approval-toggle {
+        padding: 1rem;
+    }
+
+    .project-approval-body {
+        padding: 0 1rem 1rem;
+    }
+
+    .approval-task-card {
+        padding: 1rem;
+    }
+
+    .approval-feature-title {
+        font-size: 1.15rem;
+    }
+
+    .timeline-panel {
+        padding: 1rem;
+    }
+
+    .gantt-row-preview {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .gantt-label {
+        width: auto;
+    }
+
+    .approval-actions {
+        justify-content: stretch;
+    }
+
+    .approval-actions .btn-action {
+        flex: 1 1 100%;
+    }
 }
 </style>
 
@@ -460,91 +916,165 @@ include '../../includes/navbar.php';
         <p>Review expert estimations and approve before SUL assignment.</p>
     </div>
 
-    <?php if (count($ganttProjects) > 0): ?>
-        <?php foreach ($ganttProjects as $pid => $projectData): ?>
-            <div class="task-card">
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                    <h6 class="mb-0"><i class="fas fa-stream me-2"></i><?php echo htmlspecialchars($projectData['project_name']); ?></h6>
-                    <span class="text-muted small">Gantt Chart</span>
-                </div>
-                <div class="gantt-modal-body">
-                    <div id="salesGantt_<?php echo (int) $pid; ?>"></div>
-                </div>
-            </div>
-        <?php endforeach; ?>
-    <?php endif; ?>
-
-    <?php if (count($pendingTaskRows) > 0): ?>
-        <?php foreach ($pendingTaskRows as $task): ?>
-            <?php 
-                $minDays = (float) ($task['min_days'] ?? 0);
-                $likelyDays = (float) ($task['likely_days'] ?? 0);
-                $maxDays = (float) ($task['max_days'] ?? 0);
-                $pert = round(($minDays + 4*$likelyDays + $maxDays)/6, 1);
+    <?php if (count($tasksByProject) > 0): ?>
+        <?php foreach ($tasksByProject as $pid => $projectTasks): ?>
+            <?php
+                $projectTitle = (string) ($projectTasks[0]['project_name'] ?? 'Project');
+                $featureCount = count($projectTasks);
+                $isInitiallyOpen = array_key_first($tasksByProject) === $pid;
             ?>
-            <div class="task-card">
-                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                    <div>
-                        <h6 class="mb-1"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <div class="task-meta">
-                            <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                            <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($task['expert_name']); ?></span>
-                            <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
-                            <span><i class="fas fa-chart-line"></i> PERT: <?php echo $pert; ?> days</span>
+            <section class="project-approval-group<?php echo $isInitiallyOpen ? ' is-open' : ''; ?>" data-project-group data-project-id="<?php echo (int) $pid; ?>">
+                <button
+                    type="button"
+                    class="project-approval-toggle"
+                    data-project-toggle
+                    aria-expanded="<?php echo $isInitiallyOpen ? 'true' : 'false'; ?>"
+                    aria-controls="projectApprovalBody_<?php echo (int) $pid; ?>"
+                >
+                    <div class="project-approval-toggle-main project-approval-head">
+                        <span class="project-approval-kicker"><i class="fas fa-diagram-project"></i> Project Approval Review</span>
+                        <h5><?php echo htmlspecialchars($projectTitle); ?></h5>
+                        <p>Review this project timeline first, then finalize the sales commitment for each pending feature below.</p>
+                    </div>
+                    <div class="project-approval-toggle-side">
+                        <div class="project-approval-summary">
+                            <span class="project-approval-pill"><i class="fas fa-layer-group"></i> <?php echo $featureCount; ?> pending feature<?php echo $featureCount === 1 ? '' : 's'; ?></span>
                         </div>
-                        <small class="text-muted d-block mt-2"><?php echo htmlspecialchars($task['expectation_description'] ?? ''); ?></small>
-                        <div class="gantt-preview" data-task-id="<?php echo (int) $task['id']; ?>">
-                            <div class="gantt-row-preview">
-                                <span class="gantt-label">Days</span>
-                                <div class="gantt-bar-track">
-                                    <div class="gantt-bar min-bar" style="width: <?php echo $maxDays > 0 ? ($minDays / $maxDays * 100) : 0; ?>%;"></div>
-                                    <div class="gantt-bar likely-bar" style="width: <?php echo $maxDays > 0 ? (max($likelyDays - $minDays, 0) / $maxDays * 100) : 0; ?>%;"></div>
-                                    <div class="gantt-bar max-bar" style="width: <?php echo $maxDays > 0 ? (max($maxDays - max($likelyDays, $minDays), 0) / $maxDays * 100) : 0; ?>%;"></div>
+                        <span class="project-approval-chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                    </div>
+                </button>
+
+                <div
+                    class="project-approval-body"
+                    id="projectApprovalBody_<?php echo (int) $pid; ?>"
+                    data-project-body
+                    <?php echo $isInitiallyOpen ? '' : 'hidden'; ?>
+                >
+                    <div class="project-gantt-panel">
+                        <div class="project-gantt-head">
+                            <div>
+                                <h6>Project Gantt Overview</h6>
+                                <p>The gantt stays attached to this project so the feature approvals below are easier to review in context.</p>
+                            </div>
+                        </div>
+                        <div id="salesGantt_<?php echo (int) $pid; ?>"></div>
+                    </div>
+
+                    <div class="project-feature-stack">
+                        <?php foreach ($projectTasks as $task): ?>
+                            <?php 
+                                $minDays = (float) ($task['min_days'] ?? 0);
+                                $likelyDays = (float) ($task['likely_days'] ?? 0);
+                                $maxDays = (float) ($task['max_days'] ?? 0);
+                                $pert = round(($minDays + 4*$likelyDays + $maxDays)/6, 1);
+                                $deadlineLabel = !empty($task['deadline']) ? date('M d, Y', strtotime($task['deadline'])) : 'No deadline yet';
+                                $expectationDescription = trim((string) ($task['expectation_description'] ?? ''));
+                            ?>
+                            <div class="task-card approval-task-card">
+                                <div class="approval-card-main">
+                                    <div class="approval-card-content">
+                                        <div class="approval-feature-header">
+                                            <div class="approval-feature-eyebrow"><i class="fas fa-layer-group"></i> Feature Pending Approval</div>
+                                            <div>
+                                                <h6 class="approval-feature-title"><?php echo htmlspecialchars($task['title']); ?></h6>
+                                                <div class="task-meta approval-meta-list">
+                                                    <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($task['expert_name']); ?></span>
+                                                    <span><i class="far fa-calendar-alt"></i> Due: <?php echo htmlspecialchars($deadlineLabel); ?></span>
+                                                    <span><i class="fas fa-chart-line"></i> PERT: <?php echo $pert; ?> days</span>
+                                                </div>
+                                            </div>
+                                            <?php if ($expectationDescription !== ''): ?>
+                                                <p class="expectation-note"><?php echo htmlspecialchars($expectationDescription); ?></p>
+                                            <?php endif; ?>
+                                        </div>
+
+                                        <div class="timeline-panel">
+                                            <div class="timeline-panel-head">
+                                                <div>
+                                                    <span class="timeline-kicker">Timeline Preview</span>
+                                                    <h6>Finalize Timeline Scenario</h6>
+                                                    <p class="timeline-helper">Compare the expert range, then select the delivery commitment Sales will approve for this feature.</p>
+                                                </div>
+                                                <span class="timeline-pert-badge"><i class="fas fa-wave-square"></i> PERT <?php echo $pert; ?> days</span>
+                                            </div>
+
+                                            <div class="gantt-preview" data-task-id="<?php echo (int) $task['id']; ?>">
+                                                <div class="gantt-row-preview">
+                                                    <span class="gantt-label">Days</span>
+                                                    <div class="gantt-bar-track">
+                                                        <div class="gantt-bar min-bar" style="width: <?php echo $maxDays > 0 ? ($minDays / $maxDays * 100) : 0; ?>%;"></div>
+                                                        <div class="gantt-bar likely-bar" style="width: <?php echo $maxDays > 0 ? (max($likelyDays - $minDays, 0) / $maxDays * 100) : 0; ?>%;"></div>
+                                                        <div class="gantt-bar max-bar" style="width: <?php echo $maxDays > 0 ? (max($maxDays - max($likelyDays, $minDays), 0) / $maxDays * 100) : 0; ?>%;"></div>
+                                                    </div>
+                                                </div>
+                                                <div class="timeline-legend">
+                                                    <span class="timeline-legend-item"><span class="timeline-legend-dot min"></span> Minimum: <?php echo (int) $minDays; ?> day<?php echo (int) $minDays === 1 ? '' : 's'; ?></span>
+                                                    <span class="timeline-legend-item"><span class="timeline-legend-dot likely"></span> Most Likely: <?php echo (int) $likelyDays; ?> day<?php echo (int) $likelyDays === 1 ? '' : 's'; ?></span>
+                                                    <span class="timeline-legend-item"><span class="timeline-legend-dot max"></span> Maximum: <?php echo (int) $maxDays; ?> day<?php echo (int) $maxDays === 1 ? '' : 's'; ?></span>
+                                                </div>
+                                            </div>
+
+                                            <div class="choice-group">
+                                                <div class="choice-group-head">
+                                                    <div>
+                                                        <label class="form-label mb-0">Sales Commitment</label>
+                                                        <p>Pick the timeline scenario that should become the official committed duration for this feature.</p>
+                                                    </div>
+                                                </div>
+
+                                                <div class="estimate-choice-list">
+                                                    <label class="estimate-choice-card">
+                                                        <input type="radio" name="estimate_choice_<?php echo (int) $task['id']; ?>" value="min" data-days="<?php echo (int) $minDays; ?>">
+                                                        <span class="estimate-choice-body">
+                                                            <span class="estimate-choice-tone">Fastest</span>
+                                                            <span class="estimate-choice-title">Minimum</span>
+                                                            <span class="estimate-choice-days"><?php echo (int) $minDays; ?> day<?php echo (int) $minDays === 1 ? '' : 's'; ?></span>
+                                                            <span class="estimate-choice-caption">Use the shortest delivery promise when the scope is tightly controlled.</span>
+                                                        </span>
+                                                    </label>
+                                                    <label class="estimate-choice-card">
+                                                        <input type="radio" name="estimate_choice_<?php echo (int) $task['id']; ?>" value="likely" data-days="<?php echo (int) $likelyDays; ?>">
+                                                        <span class="estimate-choice-body">
+                                                            <span class="estimate-choice-tone">Balanced</span>
+                                                            <span class="estimate-choice-title">Most Likely</span>
+                                                            <span class="estimate-choice-days"><?php echo (int) $likelyDays; ?> day<?php echo (int) $likelyDays === 1 ? '' : 's'; ?></span>
+                                                            <span class="estimate-choice-caption">Use the most realistic scenario for standard execution and normal risk.</span>
+                                                        </span>
+                                                    </label>
+                                                    <label class="estimate-choice-card">
+                                                        <input type="radio" name="estimate_choice_<?php echo (int) $task['id']; ?>" value="max" data-days="<?php echo (int) $maxDays; ?>">
+                                                        <span class="estimate-choice-body">
+                                                            <span class="estimate-choice-tone">Safest Buffer</span>
+                                                            <span class="estimate-choice-title">Maximum</span>
+                                                            <span class="estimate-choice-days"><?php echo (int) $maxDays; ?> day<?php echo (int) $maxDays === 1 ? '' : 's'; ?></span>
+                                                            <span class="estimate-choice-caption">Use the widest buffer when there is stronger delivery uncertainty or coordination risk.</span>
+                                                        </span>
+                                                    </label>
+                                                </div>
+
+                                                <div class="choice-footer">
+                                                    <small class="choice-range-note">Expert range: Min <?php echo (int) $minDays; ?>, Likely <?php echo (int) $likelyDays; ?>, Max <?php echo (int) $maxDays; ?> days.</small>
+                                                    <span class="sales-choice-status" id="salesChoiceStatus_<?php echo (int) $task['id']; ?>">Showing all expert scenarios. Pick one to finalize the timeline.</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="approval-actions">
+                                        <span class="approval-actions-label">Actions</span>
+                                        <button class="btn-action btn-approve" onclick="approveEstimation(<?php echo (int) $task['id']; ?>)">
+                                            <i class="fas fa-check me-1"></i> Approve
+                                        </button>
+                                        <button class="btn-action btn-reject" onclick="openRejectModal(<?php echo (int) $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
+                                            <i class="fas fa-times me-1"></i> Reject
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="choice-group">
-                            <label class="form-label mb-0">Finalize Timeline Scenario</label>
-                            <div class="estimate-choice-list">
-                                <label class="estimate-choice-card">
-                                    <input type="radio" name="estimate_choice_<?php echo (int) $task['id']; ?>" value="min" data-days="<?php echo (int) $minDays; ?>">
-                                    <span class="estimate-choice-body">
-                                        <span class="estimate-choice-title">Minimum</span>
-                                        <span class="estimate-choice-days"><?php echo (int) $minDays; ?> days</span>
-                                    </span>
-                                </label>
-                                <label class="estimate-choice-card">
-                                    <input type="radio" name="estimate_choice_<?php echo (int) $task['id']; ?>" value="likely" data-days="<?php echo (int) $likelyDays; ?>">
-                                    <span class="estimate-choice-body">
-                                        <span class="estimate-choice-title">Most Likely</span>
-                                        <span class="estimate-choice-days"><?php echo (int) $likelyDays; ?> days</span>
-                                    </span>
-                                </label>
-                                <label class="estimate-choice-card">
-                                    <input type="radio" name="estimate_choice_<?php echo (int) $task['id']; ?>" value="max" data-days="<?php echo (int) $maxDays; ?>">
-                                    <span class="estimate-choice-body">
-                                        <span class="estimate-choice-title">Maximum</span>
-                                        <span class="estimate-choice-days"><?php echo (int) $maxDays; ?> days</span>
-                                    </span>
-                                </label>
-                            </div>
-                            <small class="text-muted">Min: <?php echo (int) $minDays; ?>, Likely: <?php echo (int) $likelyDays; ?>, Max: <?php echo (int) $maxDays; ?>. Choose which one Sales will commit to.</small>
-                            <span class="sales-choice-status" id="salesChoiceStatus_<?php echo (int) $task['id']; ?>">Showing all expert scenarios. Pick one to finalize the timeline.</span>
-                        </div>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button class="btn-action btn-view" onclick="openGanttModal(<?php echo (int) $task['project_id']; ?>)">
-                            <i class="fas fa-stream me-1"></i> View Gantt
-                        </button>
-                        <button class="btn-action btn-approve" onclick="approveEstimation(<?php echo (int) $task['id']; ?>)">
-                            <i class="fas fa-check me-1"></i> Approve
-                        </button>
-                        <button class="btn-action btn-reject" onclick="openRejectModal(<?php echo (int) $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
-                            <i class="fas fa-times me-1"></i> Reject
-                        </button>
+                        <?php endforeach; ?>
                     </div>
                 </div>
-            </div>
+            </section>
         <?php endforeach; ?>
     <?php else: ?>
         <div class="empty-state">
@@ -552,21 +1082,6 @@ include '../../includes/navbar.php';
             <p class="mt-2 mb-0">No estimations awaiting sales approval.</p>
         </div>
     <?php endif; ?>
-</div>
-
-<!-- Gantt Modal -->
-<div class="modal fade modal-modern" id="ganttModal" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-stream me-2"></i><span id="ganttProjectTitle">Project Timeline</span></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body gantt-modal-body">
-                <div id="ganttChartContainer"></div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- Reject Modal -->
@@ -870,14 +1385,7 @@ function syncSalesSelection(taskId) {
         if (!data || !data.tasks || !data.tasks.some(task => getTaskNumericId(task) === String(taskId))) {
             return;
         }
-        const target = document.getElementById(`salesGantt_${projectId}`);
-        if (target) {
-            renderThreePointGantt(target, data.tasks, `salesGanttInline_${projectId}`);
-        }
-        const modalTitle = document.getElementById('ganttProjectTitle');
-        if (modalTitle && modalTitle.textContent === data.project_name) {
-            renderThreePointGantt(document.getElementById('ganttChartContainer'), data.tasks, 'salesGanttModalChart');
-        }
+        refreshProjectGantt(projectId);
     });
 }
 
@@ -902,20 +1410,55 @@ function openRejectModal(taskId, taskTitle) {
     new bootstrap.Modal(document.getElementById('rejectModal')).show();
 }
 
-function openGanttModal(projectId) {
-    const project = ganttProjects[projectId];
-    const container = document.getElementById('ganttChartContainer');
-    renderThreePointGantt(container, project?.tasks || [], 'salesGanttModalChart');
-    document.getElementById('ganttProjectTitle').textContent = project ? project.project_name : 'Project Timeline';
-    new bootstrap.Modal(document.getElementById('ganttModal')).show();
-}
-
-Object.keys(ganttProjects).forEach((projectId) => {
+function refreshProjectGantt(projectId) {
     const data = ganttProjects[projectId];
     if (!data || !data.tasks || data.tasks.length === 0) return;
     const target = document.getElementById(`salesGantt_${projectId}`);
     if (target) {
         renderThreePointGantt(target, data.tasks, `salesGanttInline_${projectId}`);
+    }
+}
+
+function setProjectGroupOpen(group, shouldOpen) {
+    if (!group) {
+        return;
+    }
+
+    const toggle = group.querySelector('[data-project-toggle]');
+    const body = group.querySelector('[data-project-body]');
+    if (!toggle || !body) {
+        return;
+    }
+
+    group.classList.toggle('is-open', shouldOpen);
+    toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+
+    if (shouldOpen) {
+        body.hidden = false;
+        const projectId = group.dataset.projectId;
+        if (projectId) {
+            refreshProjectGantt(projectId);
+        }
+    } else {
+        body.hidden = true;
+    }
+}
+
+document.querySelectorAll('[data-project-group]').forEach((group) => {
+    const toggle = group.querySelector('[data-project-toggle]');
+    if (!toggle) {
+        return;
+    }
+
+    toggle.addEventListener('click', () => {
+        const shouldOpen = !group.classList.contains('is-open');
+        setProjectGroupOpen(group, shouldOpen);
+    });
+
+    if (group.classList.contains('is-open')) {
+        setProjectGroupOpen(group, true);
+    } else {
+        setProjectGroupOpen(group, false);
     }
 });
 

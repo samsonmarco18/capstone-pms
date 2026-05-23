@@ -276,32 +276,6 @@ $projects = $conn->query("
 // Handle task operations
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
-    // Create new task
-    if (isset($_POST['create_task'])) {
-        $projectId = $_POST['project_id'];
-        $title = trim($_POST['title']);
-        $description = trim($_POST['description']);
-        $priority = $_POST['priority'];
-        $deadline = $_POST['deadline'];
-        
-        $stmt = $conn->prepare("
-            INSERT INTO tasks (project_id, title, description, priority, deadline, status, assigned_by) 
-            VALUES (?, ?, ?, ?, ?, 'todo', ?)
-        ");
-        $stmt->bind_param("issssi", $projectId, $title, $description, $priority, $deadline, $user['id']);
-        
-        if ($stmt->execute()) {
-            $newTaskId = $stmt->insert_id;
-            logActivity($user['id'], 'create_task', 'tasks', $newTaskId, null, $_POST);
-            
-            $_SESSION['success'] = "Task created successfully! Now assign it to an Expert for estimation.";
-            header("Location: task-allocation.php");
-            exit();
-        } else {
-            $_SESSION['error'] = "Failed to create task: " . $conn->error;
-        }
-    }
-    
     // Assign task to expert
     if (isset($_POST['assign_to_expert'])) {
         $taskId = $_POST['task_id'];
@@ -926,9 +900,7 @@ include '../../includes/navbar.php';
                         Unassigned Tasks
                         <span class="badge-count"><?php echo $unassignedTasks->num_rows; ?> tasks</span>
                     </h5>
-                    <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#createTaskModal">
-                        <i class="fas fa-plus"></i> Create New Task
-                    </button>
+                    
                 </div>
                 <div class="p-3">
                     <?php if($unassignedTasks->num_rows > 0): ?>
