@@ -23,12 +23,56 @@ $projectStatus = $conn->query("
     GROUP BY status
 ");
 
-// Get user's schedule
+// Get user's schedule and related project/client deadlines
 $schedules = $conn->query("
-    SELECT * FROM schedules 
-    WHERE user_id = {$user['id']} 
-    AND start_time >= NOW() 
-    ORDER BY start_time 
+    SELECT title, description, schedule_type, start_date, start_time, status, project_id
+    FROM (
+        SELECT
+            s.title,
+            s.description,
+            s.schedule_type,
+            s.start_date,
+            COALESCE(s.start_time, '00:00:00') AS start_time,
+            s.status,
+            s.project_id
+        FROM schedules s
+        WHERE s.user_id = {$user['id']}
+            AND s.status <> 'cancelled'
+            AND (
+                s.start_date > CURDATE()
+                OR (s.start_date = CURDATE() AND COALESCE(s.start_time, '00:00:00') >= CURTIME())
+            )
+        UNION ALL
+        SELECT
+            CONCAT('Project deadline: ', p.name) AS title,
+            CONCAT('Client: ', c.name) AS description,
+            'deadline' AS schedule_type,
+            p.timeline_end AS start_date,
+            '17:00:00' AS start_time,
+            p.status,
+            p.id AS project_id
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id
+        WHERE p.timeline_end IS NOT NULL
+            AND p.timeline_end >= CURDATE()
+            AND p.status NOT IN ('completed', 'cancelled')
+            AND c.created_by = {$user['id']}
+        UNION ALL
+        SELECT
+            CONCAT('Client deadline: ', c.name) AS title,
+            c.contact_person AS description,
+            'deadline' AS schedule_type,
+            c.deadline AS start_date,
+            '17:00:00' AS start_time,
+            c.status,
+            NULL AS project_id
+        FROM clients c
+        WHERE c.deadline IS NOT NULL
+            AND c.deadline >= CURDATE()
+            AND c.status <> 'inactive'
+            AND c.created_by = {$user['id']}
+    ) upcoming
+    ORDER BY start_date, start_time
     LIMIT 5
 ");
 
@@ -523,7 +567,7 @@ include '../../includes/navbar.php';
                                         </span>
                                     </div>
                                 </div>
-                                <a href="clients.php?id=<?php echo $client['id']; ?>" class="btn-view">
+                                <a href="clients.php?view=<?php echo $client['id']; ?>" class="btn-view">
                                     <i class="fas fa-eye"></i> View
                                 </a>
                             </div>
@@ -554,7 +598,7 @@ include '../../includes/navbar.php';
                             <div class="timeline-title"><?php echo htmlspecialchars($schedule['title']); ?></div>
                             <div class="timeline-time">
                                 <i class="far fa-clock"></i>
-                                <?php echo date('M d, Y h:i A', strtotime($schedule['start_time'])); ?>
+                                <?php echo date('M d, Y h:i A', strtotime($schedule['start_date'] . ' ' . $schedule['start_time'])); ?>
                             </div>
                             <?php if(!empty($schedule['description'])): ?>
                             <div class="timeline-desc">

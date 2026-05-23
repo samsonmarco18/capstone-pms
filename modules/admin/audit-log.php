@@ -627,7 +627,7 @@ include '../../includes/navbar.php';
                     </tr>
                 </thead>
                 <tbody>
-                    <?php while($log = $logs->fetch_assoc()): ?>
+                    <?php $displayRecordNumber = $logs->num_rows; while($log = $logs->fetch_assoc()): ?>
                     <tr>
                         <td style="white-space: nowrap;">
                             <i class="far fa-clock me-1 text-muted"></i>
@@ -651,7 +651,7 @@ include '../../includes/navbar.php';
                             <?php echo ucfirst($log['table_name']); ?>
                         </td>
                         <td>
-                            <span class="badge bg-light text-dark">#<?php echo $log['record_id']; ?></span>
+                            <span class="badge bg-light text-dark">#<?php echo $displayRecordNumber--; ?></span>
                         </td>
                         <td>
                             <code><?php echo $log['ip_address']; ?></code>
@@ -729,7 +729,12 @@ function viewDetails(logId) {
         method: 'GET',
         data: { id: logId },
         success: function(response) {
-            const log = JSON.parse(response);
+            const log = typeof response === 'string' ? JSON.parse(response) : response;
+            if (log.error) {
+                $('#logDetailsContent').html(`<div class="text-center py-4"><i class="fas fa-exclamation-circle fa-3x text-danger mb-3"></i><p>${log.error}</p></div>`);
+                new bootstrap.Modal(document.getElementById('logDetailsModal')).show();
+                return;
+            }
             let html = `
                 <div class="row g-4">
                     <div class="col-md-6">
@@ -747,13 +752,13 @@ function viewDetails(logId) {
                         ${log.old_data ? `
                             <div class="data-preview">
                                 <h6 class="mb-3 text-warning"><i class="fas fa-history me-2"></i>Before Change</h6>
-                                <pre><code>${JSON.stringify(JSON.parse(log.old_data), null, 2)}</code></pre>
+                                <pre><code>${formatJsonData(log.old_data)}</code></pre>
                             </div>
                         ` : ''}
                         ${log.new_data ? `
                             <div class="data-preview mt-3">
                                 <h6 class="mb-3 text-success"><i class="fas fa-save me-2"></i>After Change</h6>
-                                <pre><code>${JSON.stringify(JSON.parse(log.new_data), null, 2)}</code></pre>
+                                <pre><code>${formatJsonData(log.new_data)}</code></pre>
                             </div>
                         ` : ''}
                     </div>
@@ -768,6 +773,14 @@ function viewDetails(logId) {
     });
 }
 
+function formatJsonData(value) {
+    try {
+        return JSON.stringify(typeof value === 'string' ? JSON.parse(value) : value, null, 2);
+    } catch (error) {
+        return value || '';
+    }
+}
+
 function restoreItem(logId, tableName, recordId) {
     if(confirm('Are you sure you want to restore this deleted item? This will recover all associated data.')) {
         $.ajax({
@@ -779,7 +792,7 @@ function restoreItem(logId, tableName, recordId) {
                 record_id: recordId
             },
             success: function(response) {
-                const result = JSON.parse(response);
+                const result = typeof response === 'string' ? JSON.parse(response) : response;
                 if(result.success) {
                     alert('✓ Item restored successfully');
                     setTimeout(() => location.reload(), 1500);
@@ -787,6 +800,12 @@ function restoreItem(logId, tableName, recordId) {
                     alert('✗ Error: ' + result.error);
                 }
             }
+        }).fail(function(xhr) {
+            let message = 'Restore failed';
+            try {
+                message = JSON.parse(xhr.responseText).error || message;
+            } catch (error) {}
+            alert('Error: ' + message);
         });
     }
 }

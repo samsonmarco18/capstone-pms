@@ -14,9 +14,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $expiry_date = $_POST['expiry_date'];
         
         $today = date('Y-m-d');
-        if ($expiry_date < $today) {
+        if ($expiry_date && $expiry_date < $today) {
             $status = 'expired';
-        } elseif ($expiry_date <= date('Y-m-d', strtotime('+30 days'))) {
+        } elseif ($expiry_date && $expiry_date <= date('Y-m-d', strtotime('+30 days'))) {
             $status = 'expiring';
         } else {
             $status = 'active';
@@ -39,9 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $oldData = $conn->query("SELECT * FROM technologies WHERE id = $id")->fetch_assoc();
         
         $today = date('Y-m-d');
-        if ($expiry_date < $today) {
+        if ($expiry_date && $expiry_date < $today) {
             $status = 'expired';
-        } elseif ($expiry_date <= date('Y-m-d', strtotime('+30 days'))) {
+        } elseif ($expiry_date && $expiry_date <= date('Y-m-d', strtotime('+30 days'))) {
             $status = 'expiring';
         } else {
             $status = 'active';
@@ -71,7 +71,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     exit();
 }
 
-$technologies = $conn->query("SELECT * FROM technologies ORDER BY expiry_date ASC");
+$conn->query("
+    UPDATE technologies
+    SET status = CASE
+        WHEN expiry_date IS NOT NULL AND expiry_date < CURDATE() THEN 'expired'
+        WHEN expiry_date IS NOT NULL AND expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'expiring'
+        WHEN status <> 'inactive' THEN 'active'
+        ELSE status
+    END
+");
+$technologies = $conn->query("SELECT * FROM technologies ORDER BY FIELD(status, 'expired', 'expiring', 'active', 'inactive'), expiry_date ASC");
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -540,7 +549,7 @@ include '../../includes/navbar.php';
         if($tech['status'] == 'active') $activeCount++;
         elseif($tech['status'] == 'expiring') $expiringCount++;
         elseif($tech['status'] == 'expired') $expiredCount++;
-        $totalValue += $tech['price'];
+        $totalValue += (float) ($tech['price'] ?? 0);
     }
     $technologies->data_seek(0);
     ?>
@@ -557,6 +566,10 @@ include '../../includes/navbar.php';
         <div class="stat-card-mini">
             <div class="stat-label">Expiring Soon</div>
             <div class="stat-number" style="color: #f59e0b;"><?php echo $expiringCount; ?></div>
+        </div>
+        <div class="stat-card-mini">
+            <div class="stat-label">Expired Services</div>
+            <div class="stat-number" style="color: #ef4444;"><?php echo $expiredCount; ?></div>
         </div>
         <div class="stat-card-mini">
             <div class="stat-label">Monthly Spend</div>
@@ -627,9 +640,9 @@ include '../../includes/navbar.php';
                     </button>
                 </div>
                 
-                <?php if($tech['status'] == 'expiring'): ?>
+                <?php if(in_array($tech['status'], ['expiring', 'expired'], true)): ?>
                 <div style="padding: 0 1.5rem 1.5rem;">
-                    <button class="btn-modern btn-success-modern w-100" onclick="renewTechnology(<?php echo $tech['id']; ?>)">
+                    <button class="btn-modern btn-success-modern w-100" onclick="openRenewTechnologyModal(<?php echo htmlspecialchars(json_encode($tech)); ?>)">
                         <i class="fas fa-sync-alt me-1"></i> Renew Subscription
                     </button>
                 </div>
@@ -647,6 +660,53 @@ include '../../includes/navbar.php';
             </button>
         </div>
     <?php endif; ?>
+</div>
+
+<!-- Renew Technology Modal -->
+<div class="modal fade modal-modern" id="renewTechnologyModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-sync-alt me-2"></i> Renew Subscription
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="renewTechnologyForm">
+                <input type="hidden" name="id" id="renew_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Technology Name</label>
+                        <input type="text" id="renew_name" class="form-control" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Current Expiry Date</label>
+                        <input type="date" id="renew_current_expiry_date" class="form-control" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Current Monthly Cost ($)</label>
+                        <input type="number" id="renew_current_price" class="form-control" step="0.01" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">New Expiry Date</label>
+                        <input type="date" name="expiry_date" id="renew_expiry_date" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Monthly Cost Increase ($)</label>
+                        <input type="number" name="price_increase" id="renew_price_increase" class="form-control" step="0.01" min="0" required>
+                        <small class="text-muted d-block mt-1">This amount will be added to the current monthly cost.</small>
+                    </div>
+                    <div class="alert alert-danger d-none mb-0" id="renewError"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-primary-modern px-4">
+                        <i class="fas fa-save me-1"></i> Renew
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <!-- Add Technology Modal -->
@@ -768,18 +828,52 @@ function deleteTechnology(id, name) {
     }
 }
 
-function renewTechnology(id) {
-    if (confirm('Renew this technology/service? This will extend the expiry date by 1 year.')) {
-        $.ajax({
-            url: '../../api/renew-technology.php',
-            method: 'POST',
-            data: { id: id },
-            success: function(response) {
-                location.reload();
-            }
-        });
-    }
+function openRenewTechnologyModal(tech) {
+    document.getElementById('renew_id').value = tech.id;
+    document.getElementById('renew_name').value = tech.name;
+    document.getElementById('renew_current_expiry_date').value = tech.expiry_date || '';
+    document.getElementById('renew_current_price').value = Number(tech.price || 0).toFixed(2);
+    document.getElementById('renew_price_increase').value = Number(tech.price || 0).toFixed(2);
+
+    const currentDate = tech.expiry_date ? new Date(`${tech.expiry_date}T00:00:00`) : new Date();
+    const baseDate = currentDate < new Date() ? new Date() : currentDate;
+    baseDate.setFullYear(baseDate.getFullYear() + 1);
+    document.getElementById('renew_expiry_date').value = baseDate.toISOString().slice(0, 10);
+
+    document.getElementById('renewError').classList.add('d-none');
+    new bootstrap.Modal(document.getElementById('renewTechnologyModal')).show();
 }
+
+document.getElementById('renewTechnologyForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const errorBox = document.getElementById('renewError');
+    errorBox.classList.add('d-none');
+
+    $.ajax({
+        url: '../../api/renew-technology.php',
+        method: 'POST',
+        data: $(this).serialize(),
+        success: function(response) {
+            const result = typeof response === 'string' ? JSON.parse(response) : response;
+            if (result.success) {
+                location.reload();
+                return;
+            }
+
+            errorBox.textContent = result.error || 'Unable to renew subscription';
+            errorBox.classList.remove('d-none');
+        },
+        error: function(xhr) {
+            let message = 'Unable to renew subscription';
+            try {
+                message = JSON.parse(xhr.responseText).error || message;
+            } catch (error) {}
+            errorBox.textContent = message;
+            errorBox.classList.remove('d-none');
+        }
+    });
+});
 </script>
 
 <?php

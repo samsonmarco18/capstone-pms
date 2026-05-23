@@ -1,0 +1,111 @@
+<?php
+header('Content-Type: application/json');
+
+require_once __DIR__ . '/../includes/auth.php';
+requireRole('admin');
+
+$conn = getConnection();
+$admin = getCurrentUser();
+$logId = (int) ($_POST['log_id'] ?? 0);
+
+if ($logId <= 0) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Audit log ID required']);
+    exit();
+}
+
+$stmt = $conn->prepare(
+    'SELECT * FROM audit_logs
+     WHERE id = ? AND action LIKE "%delete%" AND old_data IS NOT NULL
+     LIMIT 1'
+);
+$stmt->bind_param('i', $logId);
+$stmt->execute();
+$log = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if (!$log) {
+    http_response_code(404);
+    echo json_encode(['success' => false, 'error' => 'Restorable audit record not found']);
+    exit();
+}
+
+$tableName = (string) ($log['table_name'] ?? '');
+if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Invalid table name']);
+    exit();
+}
+
+$oldData = json_decode((string) $log['old_data'], true);
+if (!is_array($oldData) || !$oldData) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Deleted item data is not available']);
+    exit();
+}
+
+$escapedTableName = $conn->real_escape_string($tableName);
+$columnsSql = DB_DRIVER === 'pgsql'
+    ? "SELECT column_name AS Field FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = '{$escapedTableName}'"
+    : "SHOW COLUMNS FROM `{$escapedTableName}`";
+$columnsResult = $conn->query($columnsSql);
+if (!$columnsResult) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'Unable to inspect deleted item table']);
+    exit();
+}
+
+$columns = [];
+while ($column = $columnsResult->fetch_assoc()) {
+    $columns[] = (string) $column['Field'];
+}
+
+$restoreData = array_intersect_key($oldData, array_flip($columns));
+if (!$restoreData) {
+    http_response_code(400);
+    echo json_encode(['success' => false, 'error' => 'No matching columns were found to restore']);
+    exit();
+}
+
+$identifierQuote = DB_DRIVER === 'pgsql' ? '"' : '`';
+$quoteIdentifier = static function (string $identifier) use ($identifierQuote): string {
+    return $identifierQuote . str_replace($identifierQuote, $identifierQuote . $identifierQuote, $identifier) . $identifierQuote;
+};
+$quotedTableName = $quoteIdentifier($tableName);
+
+if (isset($restoreData['id'])) {
+    $existingStmt = $conn->prepare("SELECT id FROM {$quotedTableName} WHERE id = ? LIMIT 1");
+    $existingId = (int) $restoreData['id'];
+    $existingStmt->bind_param('i', $existingId);
+    $existingStmt->execute();
+    $exists = $existingStmt->get_result()->fetch_assoc();
+    $existingStmt->close();
+
+    if ($exists) {
+        unset($restoreData['id']);
+    }
+}
+
+$columnSql = implode(', ', array_map($quoteIdentifier, array_keys($restoreData)));
+$placeholders = implode(', ', array_fill(0, count($restoreData), '?'));
+$types = str_repeat('s', count($restoreData));
+$values = array_map(static fn ($value) => $value === null ? null : (string) $value, array_values($restoreData));
+
+$insertStmt = $conn->prepare("INSERT INTO {$quotedTableName} ($columnSql) VALUES ($placeholders)");
+$insertStmt->bind_param($types, ...$values);
+
+if (!$insertStmt->execute()) {
+    $error = $insertStmt->error;
+    $insertStmt->close();
+    http_response_code(500);
+    echo json_encode(['success' => false, 'error' => $error ?: 'Restore failed']);
+    exit();
+}
+
+$newId = $insertStmt->insert_id;
+$insertStmt->close();
+
+logActivity((int) $admin['id'], 'restore_deleted_item', $tableName, $newId ?: (int) ($log['record_id'] ?? 0), null, $restoreData);
+
+echo json_encode(['success' => true, 'id' => $newId]);
+?>

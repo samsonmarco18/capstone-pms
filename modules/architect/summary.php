@@ -51,12 +51,18 @@ $documents = $conn->query("
 $techRecommendationCount = (int) $techRecommendations->num_rows;
 $allocationCount = (int) $allocations->num_rows;
 $documentCount = (int) $documents->num_rows;
-$summaryReadyForSubmit = $featureCount > 0 && $techRecommendationCount > 0 && $allocationCount > 0 && $documentCount > 0;
+$documentTypesResult = $conn->query("SELECT DISTINCT document_type FROM architecture_documents WHERE project_id = $projectId");
+$documentTypes = [];
+while ($documentTypeRow = $documentTypesResult->fetch_assoc()) {
+    $documentTypes[] = (string) $documentTypeRow['document_type'];
+}
+$hasRequiredDocuments = in_array('architecture_plan', $documentTypes, true) && in_array('workflow_diagram', $documentTypes, true);
+$summaryReadyForSubmit = $featureCount > 0 && $techRecommendationCount > 0 && $allocationCount > 0 && $hasRequiredDocuments;
 
 // Handle submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || $documentCount <= 0) {
-        $_SESSION['error'] = 'Please complete every architect step before submitting to SUL.';
+    if ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || !$hasRequiredDocuments) {
+        $_SESSION['error'] = 'Please complete every architect step and upload the Architecture Plan plus Workflow Diagram before submitting to SUL.';
         header('Location: summary.php?id=' . $projectId);
         exit();
     }
@@ -586,7 +592,7 @@ a.progress-step:hover {
                     <hr>
                     <?php if (!$summaryReadyForSubmit): ?>
                     <div class="alert alert-warning small">
-                        Complete Features, Technology, Developer Allocation, and Documents before final submission.
+                        Complete Features, Technology, Developer Allocation, Architecture Plan, and Workflow Diagram before final submission.
                     </div>
                     <?php endif; ?>
                     <div class="alert-info-modern"><i class="fas fa-info-circle me-2"></i>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</div>

@@ -1097,7 +1097,11 @@ function viewClient(id) {
         method: 'GET',
         data: { id: id },
         success: function(response) {
-            const client = JSON.parse(response);
+            const client = typeof response === 'string' ? JSON.parse(response) : response;
+            if (client.error) {
+                alert(client.error);
+                return;
+            }
             let html = `
                 <div class="row g-4">
                     <div class="col-md-6">
@@ -1138,7 +1142,7 @@ function viewClient(id) {
                 method: 'GET',
                 data: { client_id: id },
                 success: function(projectsResponse) {
-                    const projects = JSON.parse(projectsResponse);
+                    const projects = typeof projectsResponse === 'string' ? JSON.parse(projectsResponse) : projectsResponse;
                     if(projects.length > 0) {
                         let projectsHtml = '<div class="list-group">';
                         projects.forEach(project => {
@@ -1161,6 +1165,13 @@ function viewClient(id) {
             });
             
             new bootstrap.Modal(document.getElementById('viewClientModal')).show();
+        },
+        error: function(xhr) {
+            let message = 'Unable to load client details';
+            try {
+                message = JSON.parse(xhr.responseText).error || message;
+            } catch (error) {}
+            alert(message);
         }
     });
 }
@@ -1182,6 +1193,14 @@ function deleteClient(id, name) {
 document.getElementById('searchInput').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         applyFilters();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const params = new URLSearchParams(window.location.search);
+    const clientId = params.get('view') || params.get('id');
+    if (clientId) {
+        viewClient(clientId);
     }
 });
 </script>

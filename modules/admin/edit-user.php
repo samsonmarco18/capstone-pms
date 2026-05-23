@@ -5,6 +5,14 @@ requireRole('admin');
 $conn = getConnection();
 $admin = getCurrentUser();
 $userId = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
+$departments = [
+    'Administration',
+    'Sales',
+    'Architecture',
+    'Service Unit Leadership',
+    'Expert',
+    'Development'
+];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId > 0) {
     $stmt = $conn->prepare('UPDATE users SET full_name = ?, department = ?, role = ?, status = ?, designation = ? WHERE id = ?');
@@ -57,7 +65,19 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Department</label>
-                            <input type="text" name="department" class="form-control" value="<?php echo htmlspecialchars($selectedUser['department']); ?>">
+                            <select name="department" class="form-select">
+                                <option value="">Select department</option>
+                                <?php foreach ($departments as $department): ?>
+                                    <option value="<?php echo htmlspecialchars($department); ?>" <?php echo $selectedUser['department'] === $department ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($department); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                                <?php if ($selectedUser['department'] && !in_array($selectedUser['department'], $departments, true)): ?>
+                                    <option value="<?php echo htmlspecialchars($selectedUser['department']); ?>" selected>
+                                        <?php echo htmlspecialchars($selectedUser['department']); ?>
+                                    </option>
+                                <?php endif; ?>
+                            </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Role</label>
