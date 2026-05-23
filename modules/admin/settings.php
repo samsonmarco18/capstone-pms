@@ -1,20 +1,26 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/app-settings.php';
+require_once '../../includes/mailer.php';
 requireRole('admin');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$generalSettings = getAppSettings(['company_name', 'notification_email', 'timezone']);
 
 // Handle settings updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['update_general'])) {
-        $siteName = $_POST['site_name'];
-        $siteEmail = $_POST['site_email'];
-        $timezone = $_POST['timezone'];
+        $siteName = trim((string) ($_POST['site_name'] ?? 'ERNI PMS'));
+        $siteEmail = trim((string) ($_POST['site_email'] ?? ''));
+        $timezone = trim((string) ($_POST['timezone'] ?? 'Asia/Manila'));
         
         $_SESSION['site_name'] = $siteName;
         $_SESSION['site_email'] = $siteEmail;
-        
+
+        setAppSetting('company_name', $siteName, 'Company official name', 'system');
+        setAppSetting('notification_email', $siteEmail, 'System notification email', 'system');
+        setAppSetting('timezone', $timezone, 'Default system timezone', 'system');
         date_default_timezone_set($timezone);
         
         logActivity($user['id'], 'update_general_settings', 'settings', 0, null, $_POST);
@@ -45,6 +51,64 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         logActivity($user['id'], 'update_notification_settings', 'users', $user['id'], null, $_POST);
         $_SESSION['success'] = "Notification settings updated successfully";
     }
+
+    if (isset($_POST['update_mail_settings'])) {
+        $mailEnabled = isset($_POST['mail_enabled']) ? '1' : '0';
+        $mailHost = trim((string) ($_POST['mail_host'] ?? 'smtp.gmail.com'));
+        $mailPort = trim((string) ($_POST['mail_port'] ?? '587'));
+        $mailEncryption = trim((string) ($_POST['mail_encryption'] ?? 'tls'));
+        $mailUsername = trim((string) ($_POST['mail_username'] ?? ''));
+        $mailPassword = trim((string) ($_POST['mail_password'] ?? ''));
+        $mailFromEmail = trim((string) ($_POST['mail_from_email'] ?? $mailUsername));
+        $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'ERNI PMS'));
+
+        $saved = setAppSetting('mail_enabled', $mailEnabled, 'Enable SMTP email delivery', 'system')
+            && setAppSetting('mail_host', $mailHost, 'SMTP server host', 'system')
+            && setAppSetting('mail_port', $mailPort, 'SMTP server port', 'system')
+            && setAppSetting('mail_encryption', $mailEncryption, 'SMTP transport security', 'system')
+            && setAppSetting('mail_username', $mailUsername, 'SMTP username', 'system')
+            && setAppSetting('mail_from_email', $mailFromEmail, 'Mail sender address', 'system')
+            && setAppSetting('mail_from_name', $mailFromName, 'Mail sender name', 'system');
+
+        if ($mailPassword !== '') {
+            $saved = $saved && setAppSetting('mail_password', $mailPassword, 'SMTP app password', 'system');
+        }
+
+        logActivity($user['id'], 'update_mail_settings', 'settings', 0, null, [
+            'mail_enabled' => $mailEnabled,
+            'mail_host' => $mailHost,
+            'mail_port' => $mailPort,
+            'mail_encryption' => $mailEncryption,
+            'mail_username' => $mailUsername,
+            'mail_from_email' => $mailFromEmail,
+            'mail_from_name' => $mailFromName,
+            'mail_password_updated' => $mailPassword !== '',
+        ]);
+
+        $_SESSION[$saved ? 'success' : 'error'] = $saved
+            ? 'Gmail SMTP settings saved successfully'
+            : 'Failed to save Gmail SMTP settings';
+    }
+
+    if (isset($_POST['send_test_email'])) {
+        $testEmail = trim((string) ($_POST['test_email'] ?? (string) ($user['email'] ?? '')));
+        $result = sendSystemEmail(
+            $testEmail,
+            'ERNI PMS Gmail Integration Test',
+            '<div style="font-family:Arial,sans-serif;padding:24px;"><h2 style="color:#1f6392;">ERNI PMS Gmail Test</h2><p>Your Gmail SMTP integration is working.</p><p>This message confirms the system can now send email through your configured Google account.</p></div>',
+            "ERNI PMS Gmail Test\n\nYour Gmail SMTP integration is working."
+        );
+
+        logActivity($user['id'], 'send_test_email', 'settings', 0, null, [
+            'test_email' => $testEmail,
+            'success' => $result['success'],
+            'error' => $result['error'],
+        ], $result['success'] ? 'success' : 'failed');
+
+        $_SESSION[$result['success'] ? 'success' : 'error'] = $result['success']
+            ? 'Test email sent successfully to ' . $testEmail
+            : 'Test email failed: ' . $result['error'];
+    }
     
     if (isset($_POST['backup_database'])) {
         $backupFile = '../../backups/backup_' . date('Y-m-d_H-i-s') . '.sql';
@@ -65,8 +129,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // Get current settings
-$currentTimezone = date_default_timezone_get();
+$currentTimezone = $generalSettings['timezone'] ?? date_default_timezone_get();
 $emailNotifications = $conn->query("SELECT email_notifications, task_reminders, project_updates FROM users WHERE id = {$user['id']}")->fetch_assoc();
+$activeMailConfig = getMailConfig();
+$mailConfigured = isMailConfigured();
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -468,11 +534,11 @@ input:checked + .switch-slider:before {
                 <form method="POST">
                     <div class="form-group">
                         <label class="form-label">Site Name</label>
-                        <input type="text" name="site_name" class="form-control-modern" value="ERNI PMS" required>
+                        <input type="text" name="site_name" class="form-control-modern" value="<?php echo htmlspecialchars($generalSettings['company_name'] ?? 'ERNI PMS'); ?>" required>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Site Email</label>
-                        <input type="email" name="site_email" class="form-control-modern" value="admin@erni.com" required>
+                        <input type="email" name="site_email" class="form-control-modern" value="<?php echo htmlspecialchars($generalSettings['notification_email'] ?? 'admin@erni.com'); ?>" required>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Default Timezone</label>
@@ -516,6 +582,81 @@ input:checked + .switch-slider:before {
                     </div>
                     <button type="submit" name="update_security" class="btn-primary-modern w-100">
                         <i class="fas fa-save"></i> Save Changes
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <div class="card-header-modern">
+                <i class="fas fa-envelope-open-text"></i>
+                <h5>Gmail SMTP</h5>
+            </div>
+            <div class="card-body-modern">
+                <form method="POST">
+                    <div class="switch-wrapper">
+                        <div class="switch-info">
+                            <label>Enable Email Sending</label>
+                            <small>Turn on automatic Gmail delivery for system notifications</small>
+                        </div>
+                        <label class="form-switch-modern">
+                            <input type="checkbox" name="mail_enabled" <?php echo ($activeMailConfig['enabled'] ?? false) ? 'checked' : ''; ?>>
+                            <span class="switch-slider"></span>
+                        </label>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 1.25rem;">
+                        <label class="form-label">SMTP Host</label>
+                        <input type="text" name="mail_host" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['host'] ?? 'smtp.gmail.com'); ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">SMTP Port</label>
+                        <input type="number" name="mail_port" class="form-control-modern" value="<?php echo htmlspecialchars((string) ($activeMailConfig['port'] ?? 587)); ?>" min="1" max="65535" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Encryption</label>
+                        <select name="mail_encryption" class="form-select-modern">
+                            <option value="tls" <?php echo ($activeMailConfig['encryption'] ?? 'tls') === 'tls' ? 'selected' : ''; ?>>TLS</option>
+                            <option value="ssl" <?php echo ($activeMailConfig['encryption'] ?? '') === 'ssl' ? 'selected' : ''; ?>>SSL</option>
+                            <option value="none" <?php echo ($activeMailConfig['encryption'] ?? '') === 'none' ? 'selected' : ''; ?>>None</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gmail Address</label>
+                        <input type="email" name="mail_username" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['username'] ?? ''); ?>" required>
+                        <span class="form-text">Use the Gmail or Google Workspace address that will send the messages.</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Google App Password</label>
+                        <input type="password" name="mail_password" class="form-control-modern" placeholder="Leave blank to keep current saved password">
+                        <span class="form-text">Use a Google App Password, not your normal Gmail password.</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">From Email</label>
+                        <input type="email" name="mail_from_email" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_email'] ?? ''); ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">From Name</label>
+                        <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'ERNI PMS'); ?>" required>
+                    </div>
+                    <p class="form-text" style="margin-bottom: 1rem;">
+                        Status: <?php echo $mailConfigured ? '<strong style="color:#16a34a;">Ready to send</strong>' : '<strong style="color:#dc2626;">Incomplete configuration</strong>'; ?>
+                    </p>
+                    <button type="submit" name="update_mail_settings" class="btn-primary-modern w-100">
+                        <i class="fas fa-save"></i> Save Gmail Settings
+                    </button>
+                </form>
+
+                <hr style="margin: 1.5rem 0;">
+
+                <form method="POST">
+                    <div class="form-group">
+                        <label class="form-label">Send Test Email To</label>
+                        <input type="email" name="test_email" class="form-control-modern" value="<?php echo htmlspecialchars((string) ($user['email'] ?? '')); ?>" required>
+                        <span class="form-text">Send yourself a quick test before relying on automatic notifications.</span>
+                    </div>
+                    <button type="submit" name="send_test_email" class="btn-warning-modern w-100">
+                        <i class="fas fa-paper-plane"></i> Send Test Email
                     </button>
                 </form>
             </div>

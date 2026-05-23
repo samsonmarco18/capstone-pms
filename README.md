@@ -94,6 +94,27 @@ return [
 ];
 ```
 
+Optional Gmail SMTP for automatic email sending:
+```php
+<?php
+
+return [
+  'MAIL_ENABLED' => '1',
+  'MAIL_HOST' => 'smtp.gmail.com',
+  'MAIL_PORT' => '587',
+  'MAIL_ENCRYPTION' => 'tls',
+  'MAIL_USERNAME' => 'altheapalentinos@gmail.com',
+  'MAIL_PASSWORD' => 'huar rcmc lwnb ebck',
+  'MAIL_FROM_EMAIL' => 'altheapalentinos@gmail.com',
+  'MAIL_FROM_NAME' => 'Erni PMS',
+];
+```
+
+Important for Gmail:
+- enable 2-Step Verification on the Google account
+- create a Google App Password
+- use the App Password here, not the normal Gmail password
+
 ### 5. Start Application
 
 **Option A: Using PHP Built-in Server**
@@ -126,14 +147,7 @@ SELECT email, full_name FROM users WHERE role = 'admin' LIMIT 1;
 
 Or create a test user:
 ```sql
-INSERT INTO users (full_name, email, password, role, created_at)
-VALUES (
-  'Admin User',
-  'admin@test.com',
-  SHA2('password123', 256),
-  'admin',
-  NOW()
-);
+z
 ```
 
 ## 🌍 Cloud Deployment
