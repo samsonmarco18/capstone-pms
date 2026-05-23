@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/mailer.php';
 
 function isLoggedIn(): bool
 {
@@ -187,6 +188,10 @@ function createNotification(
         $stmt->bind_param('issssis', $userId, $title, $message, $type, $relatedTable, $relatedId, $actionUrl);
         $result = $stmt->execute();
         $stmt->close();
+
+        if ($result) {
+            sendNotificationEmailToUser($userId, $title, $message, $type, $actionUrl);
+        }
 
         return $result;
     } catch (Throwable $e) {

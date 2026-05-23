@@ -6,4 +6,12 @@ return [
     'DB_PASS' => '',
     'DB_NAME' => 'erni_pms',
     'APP_URL' => 'http://localhost/erni-pms',
+    'MAIL_ENABLED' => '1',
+    'MAIL_HOST' => 'smtp.gmail.com',
+    'MAIL_PORT' => '587',
+    'MAIL_ENCRYPTION' => 'tls',
+    'MAIL_USERNAME' => 'yourgmail@gmail.com',
+    'MAIL_PASSWORD' => 'your-google-app-password',
+    'MAIL_FROM_EMAIL' => 'yourgmail@gmail.com',
+    'MAIL_FROM_NAME' => 'ERNI PMS',
 ];

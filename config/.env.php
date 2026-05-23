@@ -171,6 +171,19 @@ define('GIT_USER_NAME', getEnvOrDefault('GIT_USER_NAME', 'ERNI PMS'));
 define('GIT_USER_EMAIL', getEnvOrDefault('GIT_USER_EMAIL', 'noreply@erni-pms.local'));
 
 // ==============================================
+// MAIL CONFIGURATION
+// ==============================================
+
+define('MAIL_ENABLED', getEnvOrDefault('MAIL_ENABLED', '0') === '1');
+define('MAIL_HOST', (string) getEnvOrDefault('MAIL_HOST', ''));
+define('MAIL_PORT', (int) getEnvOrDefault('MAIL_PORT', 0));
+define('MAIL_ENCRYPTION', (string) getEnvOrDefault('MAIL_ENCRYPTION', 'tls'));
+define('MAIL_USERNAME', (string) getEnvOrDefault('MAIL_USERNAME', ''));
+define('MAIL_PASSWORD', (string) getEnvOrDefault('MAIL_PASSWORD', ''));
+define('MAIL_FROM_EMAIL', (string) getEnvOrDefault('MAIL_FROM_EMAIL', ''));
+define('MAIL_FROM_NAME', (string) getEnvOrDefault('MAIL_FROM_NAME', ''));
+
+// ==============================================
 // CACHING CONFIGURATION
 // ==============================================
 

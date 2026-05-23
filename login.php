@@ -576,7 +576,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="sendResetLink()">Send Reset Link</button>
+                    <button type="button" class="btn btn-primary" id="resetRequestBtn" onclick="sendResetLink()">Send Request</button>
                 </div>
             </div>
         </div>
@@ -605,14 +605,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             new bootstrap.Modal(document.getElementById('forgotPasswordModal')).show();
         }
 
-        function sendResetLink() {
+        async function sendResetLink() {
             const email = document.getElementById('resetEmail').value;
+            const button = document.getElementById('resetRequestBtn');
             if (!email) {
                 alert('Please enter your email address');
                 return;
             }
-            alert('Password reset request recorded for ' + email + '.');
-            bootstrap.Modal.getInstance(document.getElementById('forgotPasswordModal')).hide();
+
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
+
+            try {
+                const response = await fetch('api/request-password-reset.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                const result = await response.json();
+                alert(result.message || 'If the account exists, your password reset request has been sent to the administrator.');
+                document.getElementById('resetEmail').value = '';
+                bootstrap.Modal.getInstance(document.getElementById('forgotPasswordModal')).hide();
+            } catch (error) {
+                alert('Unable to send the request right now. Please try again in a moment.');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Send Request';
+            }
         }
 
         document.getElementById('loginForm').addEventListener('submit', function () {

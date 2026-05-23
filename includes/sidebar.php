@@ -12,6 +12,7 @@ $menuItems = [
         ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Tech Stack', 'url' => '/modules/admin/techstack.php', 'icon' => 'microchip'],
         ['label' => 'User Management', 'url' => '/modules/admin/user-management.php', 'icon' => 'users', 'matches' => ['/modules/admin/edit-user.php', '/modules/admin/view-user.php']],
+        ['label' => 'Password Resets', 'url' => '/modules/admin/password-reset-requests.php', 'icon' => 'key'],
         ['label' => 'Audit Log', 'url' => '/modules/admin/audit-log.php', 'icon' => 'history'],
         ['label' => 'Settings', 'url' => '/modules/admin/settings.php', 'icon' => 'cog'],
     ],
