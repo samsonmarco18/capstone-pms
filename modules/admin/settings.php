@@ -194,31 +194,75 @@ include '../../includes/navbar.php';
     color: rgba(255, 255, 255, 0.9);
 }
 
-/* Settings Cards */
-.settings-grid {
+/* Settings Layout */
+.settings-layout {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 260px minmax(0, 1fr);
     gap: 1.5rem;
+    align-items: start;
+}
+
+.settings-nav-card {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 20px;
+    box-shadow: var(--shadow-sm);
+    padding: 0.75rem;
+    position: sticky;
+    top: 88px;
+}
+
+.settings-nav-card .nav-link {
+    width: 100%;
+    border: 0;
+    border-radius: 14px;
+    color: var(--gray-600);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    font-weight: 600;
+    text-align: left;
+    transition: all 0.18s ease;
+}
+
+.settings-nav-card .nav-link span {
+    flex: 1;
+}
+
+.settings-nav-card .nav-link i {
+    width: 18px;
+    color: var(--theme-primary);
+    text-align: center;
+}
+
+.settings-nav-card .nav-link:hover {
+    background: var(--gray-50);
+    color: var(--theme-primary);
+}
+
+.settings-nav-card .nav-link.active {
+    background: linear-gradient(135deg, #e9f7ff 0%, #f3fbff 100%);
+    color: var(--theme-primary);
+    box-shadow: inset 0 0 0 1px rgba(31, 99, 146, 0.12);
+}
+
+.settings-content {
+    min-width: 0;
 }
 
 .settings-card {
     background: white;
-    border-radius: 24px;
+    border-radius: 20px;
     border: 1px solid var(--gray-200);
     overflow: hidden;
-    transition: all 0.3s ease;
     box-shadow: var(--shadow-sm);
-    height: fit-content;
-}
-
-.settings-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
 }
 
 .card-header-modern {
-    padding: 1.25rem 1.5rem;
-    background: linear-gradient(135deg, rgba(31, 99, 146, 0.05) 0%, rgba(31, 99, 146, 0.02) 100%);
+    padding: 1.35rem 1.5rem;
+    background: #ffffff;
     border-bottom: 1px solid var(--gray-200);
     display: flex;
     align-items: center;
@@ -239,6 +283,62 @@ include '../../includes/navbar.php';
 
 .card-body-modern {
     padding: 1.5rem;
+}
+
+.settings-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 1.25rem;
+}
+
+.settings-form-grid .form-group {
+    margin-bottom: 0;
+}
+
+.settings-form-grid .full-span {
+    grid-column: 1 / -1;
+}
+
+.settings-actions {
+    margin-top: 1.5rem;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.settings-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.settings-status.ready {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.settings-status.incomplete {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.nav-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--gray-300);
+    margin-left: auto;
+}
+
+.nav-dot.ready {
+    background: #16a34a;
+}
+
+.nav-dot.warning {
+    background: #dc2626;
 }
 
 /* Form Elements */
@@ -361,7 +461,7 @@ input:checked + .switch-slider:before {
     color: white;
     border: none;
     padding: 0.6rem 1.5rem;
-    border-radius: 40px;
+    border-radius: 12px;
     font-weight: 500;
     transition: all 0.2s;
     cursor: pointer;
@@ -381,7 +481,7 @@ input:checked + .switch-slider:before {
     color: white;
     border: none;
     padding: 0.6rem 1.5rem;
-    border-radius: 40px;
+    border-radius: 12px;
     font-weight: 500;
     transition: all 0.2s;
     cursor: pointer;
@@ -401,7 +501,7 @@ input:checked + .switch-slider:before {
     color: white;
     border: none;
     padding: 0.6rem 1.5rem;
-    border-radius: 40px;
+    border-radius: 12px;
     font-weight: 500;
     transition: all 0.2s;
     cursor: pointer;
@@ -487,8 +587,18 @@ input:checked + .switch-slider:before {
 
 /* Responsive */
 @media (max-width: 992px) {
-    .settings-grid {
+    .settings-layout {
         grid-template-columns: 1fr;
+    }
+
+    .settings-nav-card {
+        position: static;
+    }
+
+    .settings-nav-card .nav {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
     }
 }
 
@@ -499,6 +609,14 @@ input:checked + .switch-slider:before {
     
     .card-body-modern {
         padding: 1.25rem;
+    }
+
+    .settings-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-nav-card .nav {
+        grid-template-columns: 1fr;
     }
     
     .switch-wrapper {
@@ -523,8 +641,31 @@ input:checked + .switch-slider:before {
         </div>
     </div>
 
-    <div class="settings-grid">
+    <div class="settings-layout">
+        <aside class="settings-nav-card">
+            <div class="nav flex-column nav-pills" id="settingsTabs" role="tablist" aria-orientation="vertical">
+                <button class="nav-link active" id="general-tab" data-bs-toggle="pill" data-bs-target="#general-panel" type="button" role="tab" aria-controls="general-panel" aria-selected="true">
+                    <i class="fas fa-globe"></i> <span>General</span>
+                </button>
+                <button class="nav-link" id="mail-tab" data-bs-toggle="pill" data-bs-target="#mail-panel" type="button" role="tab" aria-controls="mail-panel" aria-selected="false">
+                    <i class="fas fa-envelope-open-text"></i> <span>Gmail SMTP</span>
+                    <span class="nav-dot <?php echo $mailConfigured ? 'ready' : 'warning'; ?>"></span>
+                </button>
+                <button class="nav-link" id="notifications-tab" data-bs-toggle="pill" data-bs-target="#notifications-panel" type="button" role="tab" aria-controls="notifications-panel" aria-selected="false">
+                    <i class="fas fa-bell"></i> <span>Notifications</span>
+                </button>
+                <button class="nav-link" id="security-tab" data-bs-toggle="pill" data-bs-target="#security-panel" type="button" role="tab" aria-controls="security-panel" aria-selected="false">
+                    <i class="fas fa-shield-alt"></i> <span>Security</span>
+                </button>
+                <button class="nav-link" id="maintenance-tab" data-bs-toggle="pill" data-bs-target="#maintenance-panel" type="button" role="tab" aria-controls="maintenance-panel" aria-selected="false">
+                    <i class="fas fa-tools"></i> <span>Maintenance</span>
+                </button>
+            </div>
+        </aside>
+
+        <div class="settings-content tab-content" id="settingsTabContent">
         <!-- General Settings -->
+        <div class="tab-pane fade show active" id="general-panel" role="tabpanel" aria-labelledby="general-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-globe"></i>
@@ -532,6 +673,7 @@ input:checked + .switch-slider:before {
             </div>
             <div class="card-body-modern">
                 <form method="POST">
+                    <div class="settings-form-grid">
                     <div class="form-group">
                         <label class="form-label">Site Name</label>
                         <input type="text" name="site_name" class="form-control-modern" value="<?php echo htmlspecialchars($generalSettings['company_name'] ?? 'ERNI PMS'); ?>" required>
@@ -550,14 +692,19 @@ input:checked + .switch-slider:before {
                             <option value="Asia/Tokyo" <?php echo $currentTimezone == 'Asia/Tokyo' ? 'selected' : ''; ?>>Asia/Tokyo</option>
                         </select>
                     </div>
-                    <button type="submit" name="update_general" class="btn-primary-modern w-100">
+                    </div>
+                    <div class="settings-actions">
+                    <button type="submit" name="update_general" class="btn-primary-modern">
                         <i class="fas fa-save"></i> Save Changes
                     </button>
+                    </div>
                 </form>
             </div>
         </div>
+        </div>
 
         <!-- Security Settings -->
+        <div class="tab-pane fade" id="security-panel" role="tabpanel" aria-labelledby="security-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-shield-alt"></i>
@@ -565,6 +712,7 @@ input:checked + .switch-slider:before {
             </div>
             <div class="card-body-modern">
                 <form method="POST">
+                    <div class="settings-form-grid">
                     <div class="form-group">
                         <label class="form-label">Session Timeout (minutes)</label>
                         <input type="number" name="session_timeout" class="form-control-modern" value="30" min="5" max="480">
@@ -580,13 +728,18 @@ input:checked + .switch-slider:before {
                         <input type="number" name="max_login_attempts" class="form-control-modern" value="5" min="3" max="10">
                         <span class="form-text">Failed attempts before account lockout</span>
                     </div>
-                    <button type="submit" name="update_security" class="btn-primary-modern w-100">
+                    </div>
+                    <div class="settings-actions">
+                    <button type="submit" name="update_security" class="btn-primary-modern">
                         <i class="fas fa-save"></i> Save Changes
                     </button>
+                    </div>
                 </form>
             </div>
         </div>
+        </div>
 
+        <div class="tab-pane fade" id="mail-panel" role="tabpanel" aria-labelledby="mail-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-envelope-open-text"></i>
@@ -605,7 +758,8 @@ input:checked + .switch-slider:before {
                         </label>
                     </div>
 
-                    <div class="form-group" style="margin-top: 1.25rem;">
+                    <div class="settings-form-grid" style="margin-top: 1.25rem;">
+                    <div class="form-group">
                         <label class="form-label">SMTP Host</label>
                         <input type="text" name="mail_host" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['host'] ?? 'smtp.gmail.com'); ?>" required>
                     </div>
@@ -639,30 +793,42 @@ input:checked + .switch-slider:before {
                         <label class="form-label">From Name</label>
                         <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'ERNI PMS'); ?>" required>
                     </div>
-                    <p class="form-text" style="margin-bottom: 1rem;">
-                        Status: <?php echo $mailConfigured ? '<strong style="color:#16a34a;">Ready to send</strong>' : '<strong style="color:#dc2626;">Incomplete configuration</strong>'; ?>
-                    </p>
-                    <button type="submit" name="update_mail_settings" class="btn-primary-modern w-100">
+                    <div class="form-group full-span">
+                        <span class="settings-status <?php echo $mailConfigured ? 'ready' : 'incomplete'; ?>">
+                            <i class="fas <?php echo $mailConfigured ? 'fa-check-circle' : 'fa-circle-exclamation'; ?>"></i>
+                            <?php echo $mailConfigured ? 'Ready to send' : 'Incomplete configuration'; ?>
+                        </span>
+                    </div>
+                    </div>
+                    <div class="settings-actions">
+                    <button type="submit" name="update_mail_settings" class="btn-primary-modern">
                         <i class="fas fa-save"></i> Save Gmail Settings
                     </button>
+                    </div>
                 </form>
 
                 <hr style="margin: 1.5rem 0;">
 
                 <form method="POST">
+                    <div class="settings-form-grid">
                     <div class="form-group">
                         <label class="form-label">Send Test Email To</label>
                         <input type="email" name="test_email" class="form-control-modern" value="<?php echo htmlspecialchars((string) ($user['email'] ?? '')); ?>" required>
                         <span class="form-text">Send yourself a quick test before relying on automatic notifications.</span>
                     </div>
+                    <div class="form-group" style="align-self: end;">
                     <button type="submit" name="send_test_email" class="btn-warning-modern w-100">
                         <i class="fas fa-paper-plane"></i> Send Test Email
                     </button>
+                    </div>
+                    </div>
                 </form>
             </div>
         </div>
+        </div>
 
         <!-- Notification Settings -->
+        <div class="tab-pane fade" id="notifications-panel" role="tabpanel" aria-labelledby="notifications-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-bell"></i>
@@ -703,14 +869,18 @@ input:checked + .switch-slider:before {
                         </label>
                     </div>
                     
-                    <button type="submit" name="update_notifications" class="btn-primary-modern w-100 mt-3">
+                    <div class="settings-actions">
+                    <button type="submit" name="update_notifications" class="btn-primary-modern">
                         <i class="fas fa-save"></i> Save Preferences
                     </button>
+                    </div>
                 </form>
             </div>
         </div>
+        </div>
 
         <!-- System Maintenance -->
+        <div class="tab-pane fade" id="maintenance-panel" role="tabpanel" aria-labelledby="maintenance-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-tools"></i>
@@ -766,6 +936,8 @@ input:checked + .switch-slider:before {
                     </div>
                 </div>
             </div>
+        </div>
+        </div>
         </div>
     </div>
 </div>
