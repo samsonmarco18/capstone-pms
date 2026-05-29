@@ -99,7 +99,7 @@ try {
         'SELECT g.id, g.name, g.description
          FROM chat_groups g
          INNER JOIN chat_group_members gm ON gm.group_id = g.id
-         WHERE gm.user_id = ?
+         WHERE gm.user_id = ? AND gm.left_at IS NULL
          ORDER BY g.name ASC'
     );
     if ($groupStmt === false) {
@@ -129,7 +129,7 @@ try {
     $groupMemberCountStmt = $conn->prepare(
         'SELECT COUNT(*) AS member_count
          FROM chat_group_members
-         WHERE group_id = ?'
+         WHERE group_id = ? AND left_at IS NULL'
     );
     if ($groupMemberCountStmt === false) {
         throw new RuntimeException('Failed to prepare group member count query: ' . $conn->error);

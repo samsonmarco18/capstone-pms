@@ -32,24 +32,78 @@ $teamCompositions = $conn->query("
     LIMIT 5
 ");
 
-// Get cost estimations summary
-$costEstimates = $conn->query("
-    SELECT ce.*, p.name as project_name 
-    FROM cost_estimations ce
-    JOIN projects p ON ce.project_id = p.id
-    WHERE ce.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-    ORDER BY ce.created_at DESC
+// Get recent feature estimations for this expert
+$recentFeatureEstimates = $conn->query("
+    SELECT 
+        fe.task_id,
+        fe.min_days,
+        fe.likely_days,
+        fe.max_days,
+        fe.phase_name,
+        fe.status,
+        COALESCE(fe.submitted_at, fe.updated_at) as latest_update,
+        t.title as task_title,
+        p.name as project_name,
+        p.id as project_id
+    FROM feature_estimations fe
+    JOIN tasks t ON fe.task_id = t.id
+    JOIN projects p ON fe.project_id = p.id
+    WHERE fe.expert_id = {$user['id']}
+      AND COALESCE(fe.submitted_at, fe.updated_at) >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+    ORDER BY latest_update DESC
     LIMIT 5
 ");
 
-// Get user's schedule
-$schedules = $conn->query("
-    SELECT * FROM schedules 
-    WHERE user_id = {$user['id']} 
-    AND start_time >= NOW() 
-    ORDER BY start_time 
+// Build Expert agenda from manual schedules, pending estimates, and upcoming assigned deadlines
+$expertAgenda = [];
+
+$scheduleRows = $conn->query("
+    SELECT title, description, start_date, start_time, schedule_type
+    FROM schedules
+    WHERE user_id = {$user['id']}
+      AND start_date IS NOT NULL
+      AND start_date >= CURDATE()
+    ORDER BY start_date ASC, start_time ASC
     LIMIT 5
 ");
+while ($schedule = $scheduleRows->fetch_assoc()) {
+    $agendaDate = trim((string) ($schedule['start_date'] ?? ''));
+    $agendaTime = trim((string) ($schedule['start_time'] ?? ''));
+    $expertAgenda[] = [
+        'title' => (string) ($schedule['title'] ?? 'Scheduled item'),
+        'description' => (string) ($schedule['description'] ?? ''),
+        'date' => $agendaDate . ($agendaTime !== '' ? ' ' . $agendaTime : ''),
+        'type' => ucfirst((string) ($schedule['schedule_type'] ?? 'Schedule')),
+        'icon' => 'calendar-alt',
+        'url' => '',
+    ];
+}
+
+$agendaTaskRows = $conn->query("
+    SELECT t.id, t.title, t.description, t.deadline, t.status, p.name AS project_name
+    FROM tasks t
+    JOIN projects p ON t.project_id = p.id
+    WHERE t.assigned_to = {$user['id']}
+      AND t.status != 'completed'
+    ORDER BY COALESCE(t.deadline, NOW()) ASC
+    LIMIT 8
+");
+while ($task = $agendaTaskRows->fetch_assoc()) {
+    $hasDeadline = !empty($task['deadline']);
+    $expertAgenda[] = [
+        'title' => (string) ($task['title'] ?? 'Assigned task'),
+        'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
+        'date' => $hasDeadline ? (string) $task['deadline'] : date('Y-m-d H:i:s'),
+        'type' => ((string) ($task['status'] ?? '') === 'todo') ? 'Estimate Needed' : 'Assigned Task',
+        'icon' => ((string) ($task['status'] ?? '') === 'todo') ? 'calculator' : 'flag-checkered',
+        'url' => 'feature-estimation.php?task_id=' . (int) ($task['id'] ?? 0),
+    ];
+}
+
+usort($expertAgenda, static function (array $left, array $right): int {
+    return strtotime((string) ($left['date'] ?? '')) <=> strtotime((string) ($right['date'] ?? ''));
+});
+$expertAgenda = array_slice($expertAgenda, 0, 5);
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -308,7 +362,7 @@ include '../../includes/navbar.php';
     font-weight: 600;
 }
 
-.badge-cost {
+.badge-estimate {
     background: var(--theme-primary);
     color: white;
     padding: 0.25rem 0.75rem;
@@ -594,47 +648,81 @@ include '../../includes/navbar.php';
                     <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
                 </div>
                 <div class="card-body">
-                    <?php if($schedules->num_rows > 0): ?>
-                        <?php while($schedule = $schedules->fetch_assoc()): ?>
+                    <?php if($expertAgenda): ?>
+                        <?php foreach($expertAgenda as $agendaItem): ?>
                         <div class="timeline-item mb-3">
-                            <h6><?php echo htmlspecialchars($schedule['title']); ?></h6>
-                            <small><i class="far fa-clock"></i> <?php echo date('M d, Y h:i A', strtotime($schedule['start_time'])); ?></small>
-                            <?php if(!empty($schedule['description'])): ?>
-                            <p><?php echo htmlspecialchars($schedule['description']); ?></p>
+                            <h6>
+                                <i class="fas fa-<?php echo htmlspecialchars($agendaItem['icon']); ?> me-1"></i>
+                                <?php echo htmlspecialchars($agendaItem['title']); ?>
+                            </h6>
+                            <small>
+                                <span class="badge bg-light text-dark me-2"><?php echo htmlspecialchars($agendaItem['type']); ?></span>
+                                <i class="far fa-clock"></i>
+                                <?php echo date('M d, Y h:i A', strtotime((string) $agendaItem['date'])); ?>
+                            </small>
+                            <?php if(!empty($agendaItem['description'])): ?>
+                            <p><?php echo htmlspecialchars($agendaItem['description']); ?></p>
+                            <?php endif; ?>
+                            <?php if(!empty($agendaItem['url'])): ?>
+                            <a href="<?php echo htmlspecialchars($agendaItem['url']); ?>" class="btn-estimate mt-2">
+                                Open
+                            </a>
                             <?php endif; ?>
                         </div>
-                        <?php endwhile; ?>
+                        <?php endforeach; ?>
                     <?php else: ?>
                         <div class="empty-state">
                             <i class="fas fa-calendar-week"></i>
-                            <p>No upcoming schedules</p>
+                            <p>No upcoming schedule items</p>
                         </div>
                     <?php endif; ?>
                 </div>
             </div>
             
-            <!-- Recent Cost Estimates -->
+            <!-- Recent Feature Estimates -->
             <div class="card">
                 <div class="card-header">
-                    <h5><i class="fas fa-dollar-sign"></i> Recent Cost Estimates</h5>
+                    <h5><i class="fas fa-chart-line"></i> Recent Feature Estimates</h5>
                 </div>
                 <div>
-                    <?php if($costEstimates->num_rows > 0): ?>
-                        <?php while($cost = $costEstimates->fetch_assoc()): ?>
+                    <?php if($recentFeatureEstimates->num_rows > 0): ?>
+                        <?php while($estimate = $recentFeatureEstimates->fetch_assoc()): ?>
+                        <?php
+                            $minDays = (int) ($estimate['min_days'] ?? 0);
+                            $likelyDays = (int) ($estimate['likely_days'] ?? 0);
+                            $maxDays = (int) ($estimate['max_days'] ?? 0);
+                            $pertDays = round(($minDays + (4 * $likelyDays) + $maxDays) / 6, 1);
+                        ?>
                         <div class="list-group-item-custom">
-                            <div class="d-flex justify-content-between align-items-center">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
                                 <div>
-                                    <div class="fw-semibold mb-1"><?php echo htmlspecialchars($cost['project_name']); ?></div>
-                                    <small class="text-muted"><?php echo htmlspecialchars($cost['component']); ?> (<?php echo htmlspecialchars($cost['azure_service']); ?>)</small>
+                                    <div class="fw-semibold mb-1"><?php echo htmlspecialchars($estimate['task_title']); ?></div>
+                                    <small class="text-muted">
+                                        <?php echo htmlspecialchars($estimate['project_name']); ?>
+                                        <?php if(!empty($estimate['phase_name'])): ?>
+                                            &bull; <?php echo htmlspecialchars($estimate['phase_name']); ?>
+                                        <?php endif; ?>
+                                        <?php if(!empty($estimate['latest_update'])): ?>
+                                            &bull; Updated <?php echo date('M d, Y', strtotime((string) $estimate['latest_update'])); ?>
+                                        <?php endif; ?>
+                                    </small>
+                                    <div class="small text-muted mt-1">
+                                        Min <?php echo $minDays; ?>d &bull; Likely <?php echo $likelyDays; ?>d &bull; Max <?php echo $maxDays; ?>d
+                                    </div>
+                                    <div class="mt-2">
+                                        <a href="feature-estimation.php?task_id=<?php echo (int) $estimate['task_id']; ?>" class="btn-estimate">
+                                            Review Estimate
+                                        </a>
+                                    </div>
                                 </div>
-                                <span class="badge-cost">$<?php echo number_format($cost['monthly_cost'], 2); ?></span>
+                                <span class="badge-estimate"><?php echo number_format($pertDays, 1); ?>d PERT</span>
                             </div>
                         </div>
                         <?php endwhile; ?>
                     <?php else: ?>
                         <div class="empty-state">
                             <i class="fas fa-chart-line"></i>
-                            <p>No cost estimates available</p>
+                            <p>No recent feature estimates</p>
                         </div>
                     <?php endif; ?>
                 </div>
