@@ -522,7 +522,7 @@ include '../../includes/navbar.php';
 
 /* Sales Planner */
 .agenda-preview {
-    padding: 1.35rem 1.5rem;
+    padding: 1.15rem 1.25rem;
 }
 
 .agenda-header {
@@ -530,7 +530,7 @@ include '../../includes/navbar.php';
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.25rem;
 }
 
 .agenda-title {
@@ -560,7 +560,12 @@ include '../../includes/navbar.php';
 }
 
 .agenda-date-group {
-    margin-bottom: 1.6rem;
+    min-width: 0;
+    margin-bottom: 1rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--gray-100);
+    border-radius: 14px;
+    background: #ffffff;
 }
 
 .agenda-date-row {
@@ -568,7 +573,7 @@ include '../../includes/navbar.php';
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
 }
 
 .agenda-date-label {
@@ -586,10 +591,10 @@ include '../../includes/navbar.php';
 
 .agenda-item {
     display: grid;
-    grid-template-columns: 74px 6px minmax(0, 1fr);
-    gap: 1.25rem;
+    grid-template-columns: 66px 6px minmax(0, 1fr);
+    gap: 1rem;
     align-items: center;
-    padding: 0.65rem 0;
+    padding: 0.55rem 0;
 }
 
 .agenda-time {
@@ -993,7 +998,7 @@ include '../../includes/navbar.php';
 
     <!-- Lists Row -->
     <div class="row g-4">
-        <div class="col-lg-4">
+        <div class="col-lg-7">
             <div class="list-card">
                 <div class="card-header">
                     <h5>
@@ -1034,7 +1039,7 @@ include '../../includes/navbar.php';
             </div>
         </div>
 
-        <div class="col-lg-8">
+        <div class="col-lg-5">
             <div class="list-card">
                 <div class="card-body">
                     <div class="agenda-preview">
