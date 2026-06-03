@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
+require_once '../../includes/schedule-calendar.php';
 requireRole('expert');
 
 $conn = getConnection();
@@ -46,8 +47,12 @@ $costEstimates = $conn->query("
 $schedules = $conn->query("
     SELECT * FROM schedules 
     WHERE user_id = {$user['id']} 
-    AND start_time >= NOW() 
-    ORDER BY start_time 
+    AND status <> 'cancelled'
+    AND (
+        start_date > CURDATE()
+        OR (start_date = CURDATE() AND COALESCE(start_time, '00:00:00') >= CURTIME())
+    )
+    ORDER BY start_date, start_time 
     LIMIT 5
 ");
 
@@ -594,22 +599,7 @@ include '../../includes/navbar.php';
                     <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
                 </div>
                 <div class="card-body">
-                    <?php if($schedules->num_rows > 0): ?>
-                        <?php while($schedule = $schedules->fetch_assoc()): ?>
-                        <div class="timeline-item mb-3">
-                            <h6><?php echo htmlspecialchars($schedule['title']); ?></h6>
-                            <small><i class="far fa-clock"></i> <?php echo date('M d, Y h:i A', strtotime($schedule['start_time'])); ?></small>
-                            <?php if(!empty($schedule['description'])): ?>
-                            <p><?php echo htmlspecialchars($schedule['description']); ?></p>
-                            <?php endif; ?>
-                        </div>
-                        <?php endwhile; ?>
-                    <?php else: ?>
-                        <div class="empty-state">
-                            <i class="fas fa-calendar-week"></i>
-                            <p>No upcoming schedules</p>
-                        </div>
-                    <?php endif; ?>
+                    <?php renderScheduleCalendar($schedules); ?>
                 </div>
             </div>
             

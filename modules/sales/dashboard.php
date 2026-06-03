@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
+require_once '../../includes/schedule-calendar.php';
 requireRole('sales');
 
 $conn = getConnection();
@@ -592,28 +593,7 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="card-body">
-                    <?php if($schedules->num_rows > 0): ?>
-                        <?php while($schedule = $schedules->fetch_assoc()): ?>
-                        <div class="timeline-item-modern">
-                            <div class="timeline-title"><?php echo htmlspecialchars($schedule['title']); ?></div>
-                            <div class="timeline-time">
-                                <i class="far fa-clock"></i>
-                                <?php echo date('M d, Y h:i A', strtotime($schedule['start_date'] . ' ' . $schedule['start_time'])); ?>
-                            </div>
-                            <?php if(!empty($schedule['description'])): ?>
-                            <div class="timeline-desc">
-                                <i class="fas fa-info-circle"></i>
-                                <?php echo htmlspecialchars($schedule['description']); ?>
-                            </div>
-                            <?php endif; ?>
-                        </div>
-                        <?php endwhile; ?>
-                    <?php else: ?>
-                        <div class="empty-state-modern">
-                            <i class="fas fa-calendar-week"></i>
-                            <p>No upcoming schedules</p>
-                        </div>
-                    <?php endif; ?>
+                    <?php renderScheduleCalendar($schedules); ?>
                 </div>
             </div>
         </div>

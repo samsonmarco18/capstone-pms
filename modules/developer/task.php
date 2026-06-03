@@ -88,8 +88,27 @@ if ($developerProjects && $developerProjects->num_rows > 0) {
 
 // Update task status
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
-    $taskId = $_POST['task_id'];
-    $newStatus = $_POST['new_status'];
+    $taskId = (int) ($_POST['task_id'] ?? 0);
+    $newStatus = (string) ($_POST['new_status'] ?? '');
+    $allowedStatuses = ['todo', 'in_progress', 'review', 'completed'];
+
+    if ($taskId <= 0 || !in_array($newStatus, $allowedStatuses, true)) {
+        $_SESSION['error'] = "Invalid task status update.";
+        header('Location: task.php');
+        exit();
+    }
+
+    $taskCheck = $conn->prepare("SELECT id FROM tasks WHERE id = ? AND assigned_to = ?");
+    $taskCheck->bind_param("ii", $taskId, $user['id']);
+    $taskCheck->execute();
+    $validTask = $taskCheck->get_result()->num_rows > 0;
+    $taskCheck->close();
+
+    if (!$validTask) {
+        $_SESSION['error'] = "You can only update tasks assigned to you.";
+        header('Location: task.php');
+        exit();
+    }
     
     $completedAt = $newStatus === 'completed' ? date('Y-m-d H:i:s') : null;
     $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = ? WHERE id = ?");
@@ -1413,6 +1432,9 @@ function handleDrop(e) {
     else if(columnTitle === 'Completed') newStatus = 'completed';
     
     if(newStatus) {
+        if (newStatus === 'completed' && !confirm('Are you sure you want to mark this task as completed?')) {
+            return;
+        }
         updateTaskStatus(taskId, newStatus);
     }
 }

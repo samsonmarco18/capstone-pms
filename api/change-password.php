@@ -11,14 +11,36 @@ if (!isLoggedIn()) {
 $user = getCurrentUser();
 $data = json_decode(file_get_contents('php://input'), true);
 
-if (!$data || !isset($data['password'])) {
+if (!$data || !isset($data['password'], $data['current_password'])) {
     http_response_code(400);
     echo json_encode(['error' => 'Invalid data']);
     exit();
 }
 
-$password = password_hash($data['password'], PASSWORD_DEFAULT);
+$newPassword = trim((string) $data['password']);
+$currentPassword = (string) $data['current_password'];
+
+if (strlen($newPassword) < 6) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Password must be at least 6 characters']);
+    exit();
+}
+
 $conn = getConnection();
+
+$checkStmt = $conn->prepare("SELECT password FROM users WHERE id = ?");
+$checkStmt->bind_param("i", $user['id']);
+$checkStmt->execute();
+$currentUserRow = $checkStmt->get_result()->fetch_assoc();
+$checkStmt->close();
+
+if (!$currentUserRow || !password_verify($currentPassword, (string) $currentUserRow['password'])) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Please verify your current password before changing it']);
+    exit();
+}
+
+$password = password_hash($newPassword, PASSWORD_DEFAULT);
 
 $stmt = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
 $stmt->bind_param("si", $password, $user['id']);
