@@ -294,12 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             header("Location: task-allocation.php");
             exit();
         }
-    
-    // Assign task to expert
-    if (isset($_POST['assign_to_expert'])) {
-        $taskId = $_POST['task_id'];
-        $expertId = $_POST['expert_id'];
-        
+
         $stmt = $conn->prepare("UPDATE tasks SET assigned_to = ?, status = 'todo' WHERE id = ?");
         $stmt->bind_param("ii", $expertId, $taskId);
         

@@ -65,6 +65,7 @@ $schedules = $conn->query("
         OR (start_date = CURDATE() AND COALESCE(start_time, '00:00:00') >= CURTIME())
     )
     ORDER BY start_date, start_time 
+");
 // Build Expert agenda from manual schedules, pending estimates, and upcoming assigned deadlines
 $expertAgenda = [];
 

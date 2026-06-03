@@ -45,6 +45,7 @@ $schedules = $conn->query("
         OR (start_date = CURDATE() AND COALESCE(start_time, '00:00:00') >= CURTIME())
     )
     ORDER BY start_date, start_time 
+");
 // Get tasks that need developer attention beyond calendar deadlines
 $attentionTasks = $conn->query("
     SELECT t.*, p.name as project_name

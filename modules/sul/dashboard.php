@@ -37,21 +37,6 @@ $expertAvailability = $conn->query("
     ORDER BY active_tasks ASC
 ");
 
-// Get projects that have work waiting for SUL allocation or review
-$projectsNeedingAllocation = $conn->query("
-    SELECT p.*, c.name as client_name, COUNT(t.id) AS pending_task_count
-    FROM projects p
-    JOIN clients c ON p.client_id = c.id
-    JOIN tasks t ON t.project_id = p.id
-    WHERE p.status != 'completed'
-      AND t.status IN ('todo', 'review')
-      AND (
-          t.assigned_to IS NULL
-          OR t.assigned_to = 0
-          OR t.assigned_to IN (SELECT id FROM users WHERE role = 'expert')
-      )
-    GROUP BY p.id
-    ORDER BY p.created_at DESC
 // Get projects that need SUL task allocation/action
 $projectsNeedingAllocation = $conn->query("
     SELECT
