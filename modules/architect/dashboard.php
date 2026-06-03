@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
+require_once '../../includes/schedule-calendar.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -27,6 +28,16 @@ $reviewProjects = $conn->query("
     LIMIT 5
 ");
 
+// Get user's schedule
+$schedules = $conn->query("
+    SELECT * FROM schedules 
+    WHERE user_id = {$user['id']} 
+    AND status <> 'cancelled'
+    AND (
+        start_date > CURDATE()
+        OR (start_date = CURDATE() AND COALESCE(start_time, '00:00:00') >= CURTIME())
+    )
+    ORDER BY start_date, start_time 
 // Build Architect agenda from manual schedules and project deadlines
 $architectAgenda = [];
 
@@ -350,6 +361,7 @@ include '../../includes/navbar.php';
                     <h5 class="mb-0 fw-semibold" style="color: #1f6392;">Upcoming Schedule</h5>
                 </div>
                 <div class="card-body p-4">
+                    <?php renderScheduleCalendar($schedules); ?>
                     <?php if($architectAgenda): ?>
                         <?php foreach($architectAgenda as $agendaItem): ?>
                         <div class="timeline-item mb-3">

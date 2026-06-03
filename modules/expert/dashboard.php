@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
+require_once '../../includes/schedule-calendar.php';
 requireRole('expert');
 
 $conn = getConnection();
@@ -54,6 +55,16 @@ $recentFeatureEstimates = $conn->query("
     LIMIT 5
 ");
 
+// Get user's schedule
+$schedules = $conn->query("
+    SELECT * FROM schedules 
+    WHERE user_id = {$user['id']} 
+    AND status <> 'cancelled'
+    AND (
+        start_date > CURDATE()
+        OR (start_date = CURDATE() AND COALESCE(start_time, '00:00:00') >= CURTIME())
+    )
+    ORDER BY start_date, start_time 
 // Build Expert agenda from manual schedules, pending estimates, and upcoming assigned deadlines
 $expertAgenda = [];
 
@@ -648,6 +659,7 @@ include '../../includes/navbar.php';
                     <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
                 </div>
                 <div class="card-body">
+                    <?php renderScheduleCalendar($schedules); ?>
                     <?php if($expertAgenda): ?>
                         <?php foreach($expertAgenda as $agendaItem): ?>
                         <div class="timeline-item mb-3">

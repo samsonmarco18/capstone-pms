@@ -5,10 +5,26 @@ requireLogin();
 $user = getCurrentUser();
 $conn = getConnection();
 $message = '';
+$error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
     $password = trim((string) $_POST['password']);
-    if (strlen($password) >= 6) {
+    $confirmPassword = trim((string) ($_POST['confirm_password'] ?? ''));
+    $currentPassword = (string) ($_POST['current_password'] ?? '');
+
+    $stmt = $conn->prepare('SELECT password FROM users WHERE id = ?');
+    $stmt->bind_param('i', $user['id']);
+    $stmt->execute();
+    $currentUserRow = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$currentUserRow || !password_verify($currentPassword, (string) $currentUserRow['password'])) {
+        $error = 'Please verify your current password before changing it.';
+    } elseif (strlen($password) < 6) {
+        $error = 'New password must be at least 6 characters.';
+    } elseif ($password !== $confirmPassword) {
+        $error = 'New password and confirmation do not match.';
+    } else {
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
         $stmt = $conn->prepare('UPDATE users SET password = ? WHERE id = ?');
         $stmt->bind_param('si', $hashedPassword, $user['id']);
@@ -35,11 +51,22 @@ include 'includes/navbar.php';
                     <?php if ($message): ?>
                         <div class="alert alert-success"><?php echo htmlspecialchars($message); ?></div>
                     <?php endif; ?>
+                    <?php if ($error): ?>
+                        <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                    <?php endif; ?>
 
                     <form method="POST">
                         <div class="mb-3">
+                            <label class="form-label">Current Password</label>
+                            <input type="password" name="current_password" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">New Password</label>
                             <input type="password" name="password" class="form-control" minlength="6" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confirm New Password</label>
+                            <input type="password" name="confirm_password" class="form-control" minlength="6" required>
                         </div>
                         <button type="submit" class="btn btn-primary">Update Password</button>
                     </form>

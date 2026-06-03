@@ -37,6 +37,21 @@ $expertAvailability = $conn->query("
     ORDER BY active_tasks ASC
 ");
 
+// Get projects that have work waiting for SUL allocation or review
+$projectsNeedingAllocation = $conn->query("
+    SELECT p.*, c.name as client_name, COUNT(t.id) AS pending_task_count
+    FROM projects p
+    JOIN clients c ON p.client_id = c.id
+    JOIN tasks t ON t.project_id = p.id
+    WHERE p.status != 'completed'
+      AND t.status IN ('todo', 'review')
+      AND (
+          t.assigned_to IS NULL
+          OR t.assigned_to = 0
+          OR t.assigned_to IN (SELECT id FROM users WHERE role = 'expert')
+      )
+    GROUP BY p.id
+    ORDER BY p.created_at DESC
 // Get projects that need SUL task allocation/action
 $projectsNeedingAllocation = $conn->query("
     SELECT
@@ -664,7 +679,7 @@ include '../../includes/navbar.php';
     ]);
     ?>
 
-    <!-- Row 1: Task Status + Upcoming Schedule + Projects Needing Allocation -->
+    <!-- Row 1: Task Status + Projects Needing Allocation -->
     <div class="row g-3 mb-4">
         <div class="col-xl-7">
             <div class="card">
@@ -745,6 +760,11 @@ include '../../includes/navbar.php';
                                             Timeline: <?php echo date('M d', strtotime($project['timeline_start'])); ?> - <?php echo date('M d, Y', strtotime($project['timeline_end'])); ?>
                                         </small>
                                     </div>
+                                    <div class="mt-1">
+                                        <small class="text-muted">
+                                            <i class="fas fa-tasks me-1"></i>
+                                            Pending tasks: <?php echo (int) $project['pending_task_count']; ?>
+                                        </small>
                                     <div class="allocation-status-tags">
                                         <?php if($totalTasksForProject === 0): ?>
                                             <span class="allocation-status-tag warning">No tasks yet</span>
@@ -857,6 +877,7 @@ include '../../includes/navbar.php';
                             <?php while($task = $recentTasks->fetch_assoc()): 
                                 $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
                             ?>
+                            <tr>
                                 <td>
                                     <div class="fw-semibold"><?php echo htmlspecialchars($task['title']); ?></div>
                                     <small class="text-muted"><?php echo htmlspecialchars(substr($task['description'], 0, 50)); ?></small>
@@ -929,6 +950,25 @@ include '../../includes/navbar.php';
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn-primary-modern" onclick="confirmAssign()">Assign Task</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Details Modal -->
+<div class="modal fade modal-modern" id="taskDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-info-circle me-2"></i> Task Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="taskDetailsContent">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1016,8 +1056,9 @@ function assignTask(userId, userName) {
     $.ajax({
         url: '../../api/get-unassigned-tasks.php',
         method: 'GET',
+        dataType: 'json',
         success: function(response) {
-            const tasks = JSON.parse(response);
+            const tasks = response;
             let html = '<div class="list-group">';
             tasks.forEach(task => {
                 html += `
@@ -1039,9 +1080,10 @@ function selectTaskForUser(taskId, userId, taskTitle) {
         $.ajax({
             url: '../../api/assign-task.php',
             method: 'POST',
+            dataType: 'json',
             data: { task_id: taskId, user_id: userId, send_email: true },
             success: function(response) {
-                const result = JSON.parse(response);
+                const result = response;
                 if(result.success) {
                     alert('✓ Task assigned successfully');
                     setTimeout(() => location.reload(), 1500);
@@ -1058,9 +1100,10 @@ function assignTaskTo(taskId) {
     $.ajax({
         url: '../../api/get-task-details.php',
         method: 'GET',
+        dataType: 'json',
         data: { id: taskId },
         success: function(response) {
-            const task = JSON.parse(response);
+            const task = response;
             $('#assignTaskTitle').text(task.title);
             $('#assignTaskModal').modal('show');
         }
@@ -1079,9 +1122,10 @@ function confirmAssign() {
     $.ajax({
         url: '../../api/assign-task.php',
         method: 'POST',
+        dataType: 'json',
         data: { task_id: currentTaskId, user_id: userId, send_email: sendEmail },
         success: function(response) {
-            const result = JSON.parse(response);
+            const result = response;
             if(result.success) {
                 alert('✓ Task assigned successfully');
                 $('#assignTaskModal').modal('hide');
@@ -1094,7 +1138,56 @@ function confirmAssign() {
 }
 
 function viewTask(taskId) {
-    window.location.href = '../../modules/developer/task.php?id=' + taskId;
+    $('#taskDetailsContent').html(`
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `);
+
+    $.ajax({
+        url: '../../api/get-task-details.php',
+        method: 'GET',
+        dataType: 'json',
+        data: { id: taskId },
+        success: function(response) {
+            const task = response;
+            if (task.error) {
+                $('#taskDetailsContent').html(`<div class="alert alert-danger mb-0">${escapeHtml(task.error)}</div>`);
+            } else {
+                $('#taskDetailsContent').html(`
+                    <div class="row g-4">
+                        <div class="col-md-8">
+                            <h5 class="mb-3">${escapeHtml(task.title || '')}</h5>
+                            <p class="text-muted">${escapeHtml(task.description || 'No description provided.')}</p>
+                            <div class="mb-2"><strong>Project:</strong> ${escapeHtml(task.project_name || 'No project')}</div>
+                            <div class="mb-2"><strong>Client:</strong> ${escapeHtml(task.client_name || 'No client')}</div>
+                            <div class="mb-2"><strong>Deadline:</strong> ${task.deadline ? new Date(task.deadline).toLocaleDateString() : 'Not set'}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 bg-light rounded-3">
+                                <p class="mb-2"><strong>Status:</strong> ${escapeHtml((task.status || '').replaceAll('_', ' '))}</p>
+                                <p class="mb-2"><strong>Priority:</strong> ${escapeHtml(task.priority || '')}</p>
+                                <p class="mb-0"><strong>Assigned To:</strong> ${escapeHtml(task.assigned_to_name || 'Unassigned')}</p>
+                            </div>
+                        </div>
+                    </div>
+                `);
+            }
+            new bootstrap.Modal(document.getElementById('taskDetailsModal')).show();
+        },
+        error: function() {
+            $('#taskDetailsContent').html('<div class="alert alert-danger mb-0">Unable to load task details.</div>');
+            new bootstrap.Modal(document.getElementById('taskDetailsModal')).show();
+        }
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text ?? '';
+    return div.innerHTML;
 }
 </script>
 
