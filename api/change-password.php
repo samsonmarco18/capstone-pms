@@ -41,11 +41,15 @@ if (!$currentUserRow || !password_verify($currentPassword, (string) $currentUser
 }
 
 $password = password_hash($newPassword, PASSWORD_DEFAULT);
-
-$stmt = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
+$hasPasswordChangedAt = ensureUserPasswordSecurityColumns();
+$sql = $hasPasswordChangedAt
+    ? "UPDATE users SET password = ?, password_changed_at = CURRENT_TIMESTAMP WHERE id = ?"
+    : "UPDATE users SET password = ? WHERE id = ?";
+$stmt = $conn->prepare($sql);
 $stmt->bind_param("si", $password, $user['id']);
 
 if ($stmt->execute()) {
+    unset($_SESSION['force_password_change']);
     logActivity($user['id'], 'change_password', 'users', $user['id']);
     echo json_encode(['success' => true]);
 } else {

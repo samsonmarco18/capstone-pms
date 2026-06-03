@@ -1326,12 +1326,14 @@ body {
     left: 0;
     bottom: 0;
     z-index: 1030;
-    overflow-x: hidden;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     background: #ffffff;
     border-right: 1px solid rgba(18, 80, 127, 0.14);
     box-shadow: none;
     padding-top: 0;
+    height: 100vh;
     transition: transform 0.24s ease;
 }
 
@@ -1457,10 +1459,31 @@ body {
     font-size: 1rem;
 }
 
+#sidebar-wrapper .sidebar-nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-bottom: 12px;
+    scrollbar-gutter: stable;
+}
+
+#sidebar-wrapper .sidebar-nav::-webkit-scrollbar {
+    width: 8px;
+}
+
+#sidebar-wrapper .sidebar-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#sidebar-wrapper .sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(18, 80, 127, 0.18);
+    border-radius: 999px;
+}
+
 .sidebar-footer {
-    position: absolute;
-    bottom: 0;
-    width: 100%;
+    position: static;
+    margin-top: auto;
     padding: 18px 20px 22px;
     border-top: 1px solid rgba(18, 80, 127, 0.1);
     background: #fff;
@@ -1511,6 +1534,8 @@ body {
 }
 
 #sidebar-wrapper.collapsed .sidebar-nav {
+    flex: 1 1 auto;
+    min-height: 0;
     padding-top: 8px;
 }
 

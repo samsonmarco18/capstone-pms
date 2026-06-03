@@ -5,14 +5,7 @@ requireRole('admin');
 $conn = getConnection();
 $admin = getCurrentUser();
 $userId = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
-$departments = [
-    'Administration',
-    'Sales',
-    'Architecture',
-    'Service Unit Leadership',
-    'Expert',
-    'Development'
-];
+$departments = getDepartmentOptions();
 $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId > 0) {

@@ -22,7 +22,7 @@ if (!function_exists('normalizeScheduleDateTime')) {
 }
 
 if (!function_exists('renderScheduleCalendar')) {
-    function renderScheduleCalendar($schedules): void
+    function renderScheduleCalendar($schedules, bool $showFullCalendarButton = true): void
     {
         static $stylesRendered = false;
 
@@ -39,6 +39,10 @@ if (!function_exists('renderScheduleCalendar')) {
                 ];
             }
         }
+
+        usort($events, static function (array $left, array $right): int {
+            return $left['datetime']->getTimestamp() <=> $right['datetime']->getTimestamp();
+        });
 
         $today = new DateTime('today');
         $baseDate = !empty($events) ? clone $events[0]['datetime'] : clone $today;
@@ -63,6 +67,12 @@ if (!function_exists('renderScheduleCalendar')) {
                     align-items: center;
                     justify-content: space-between;
                     gap: 1rem;
+                    flex-wrap: wrap;
+                }
+
+                .schedule-calendar__month-heading {
+                    display: grid;
+                    gap: 0.2rem;
                 }
 
                 .schedule-calendar__month-title {
@@ -73,9 +83,45 @@ if (!function_exists('renderScheduleCalendar')) {
                 }
 
                 .schedule-calendar__count {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.35rem;
                     color: #6c757d;
                     font-size: 0.8rem;
                     font-weight: 600;
+                }
+
+                .schedule-calendar__actions {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.6rem;
+                    margin-left: auto;
+                }
+
+                .schedule-calendar__button {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.45rem;
+                    padding: 0.55rem 0.9rem;
+                    border: 0;
+                    border-radius: 999px;
+                    background: linear-gradient(135deg, #1f6392, #184f73);
+                    color: #ffffff;
+                    text-decoration: none;
+                    font-size: 0.82rem;
+                    font-weight: 700;
+                    box-shadow: 0 10px 20px rgba(31, 99, 146, 0.18);
+                    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+                }
+
+                .schedule-calendar__button:hover {
+                    transform: translateY(-1px);
+                    box-shadow: 0 14px 24px rgba(31, 99, 146, 0.22);
+                }
+
+                .schedule-calendar__button:focus {
+                    outline: none;
+                    box-shadow: 0 0 0 0.2rem rgba(31, 99, 146, 0.2);
                 }
 
                 .schedule-calendar__grid {
@@ -201,14 +247,31 @@ if (!function_exists('renderScheduleCalendar')) {
                     font-size: 2.4rem;
                     margin-bottom: 0.65rem;
                 }
+
             </style>
             <?php $stylesRendered = true;
         endif; ?>
 
         <div class="schedule-calendar">
             <div class="schedule-calendar__month">
-                <h6 class="schedule-calendar__month-title"><?php echo $baseDate->format('F Y'); ?></h6>
-                <span class="schedule-calendar__count"><?php echo count($events); ?> scheduled</span>
+                <div class="schedule-calendar__month-heading">
+                    <h6 class="schedule-calendar__month-title"><?php echo $baseDate->format('F Y'); ?></h6>
+                    <span class="schedule-calendar__count">
+                        <i class="far fa-calendar-alt"></i>
+                        <?php echo count($events); ?> scheduled
+                    </span>
+                </div>
+                <?php if ($showFullCalendarButton): ?>
+                    <div class="schedule-calendar__actions">
+                        <a
+                            href="<?php echo htmlspecialchars(BASE_URL . 'calendar.php'); ?>"
+                            class="schedule-calendar__button"
+                        >
+                            <i class="fas fa-calendar-week"></i>
+                            Calendar
+                        </a>
+                    </div>
+                <?php endif; ?>
             </div>
 
             <div class="schedule-calendar__grid" aria-label="Schedule calendar">

@@ -248,8 +248,11 @@ function getPasswordResetRequestById(int $requestId): ?array
 
     try {
         $conn = getConnection();
+        $passwordChangedAtSelect = dbColumnExists($conn, 'users', 'password_changed_at')
+            ? ', u.password_changed_at'
+            : '';
         $stmt = $conn->prepare(
-            "SELECT pr.*, u.username, u.full_name, u.email, u.role, u.status AS user_status, u.password,
+            "SELECT pr.*, u.username, u.full_name, u.email, u.role, u.status AS user_status, u.password{$passwordChangedAtSelect},
                     admin.full_name AS processed_by_name
              FROM password_reset_requests pr
              INNER JOIN users u ON u.id = pr.user_id
@@ -399,12 +402,20 @@ function sendTemporaryPasswordForRequest(int $requestId, int $adminId, string $a
     }
 
     $conn = getConnection();
+    ensureUserPasswordSecurityColumns();
     $temporaryPassword = generateTemporaryPassword();
     $newPasswordHash = hashPassword($temporaryPassword);
     $previousPasswordHash = (string) ($request['password'] ?? '');
+    $previousPasswordChangedAt = isset($request['password_changed_at']) && $request['password_changed_at'] !== ''
+        ? (string) $request['password_changed_at']
+        : null;
 
     try {
-        $updatePasswordStmt = $conn->prepare('UPDATE users SET password = ? WHERE id = ?');
+        $hasPasswordChangedAt = dbColumnExists($conn, 'users', 'password_changed_at');
+        $updateSql = $hasPasswordChangedAt
+            ? 'UPDATE users SET password = ?, password_changed_at = CURRENT_TIMESTAMP WHERE id = ?'
+            : 'UPDATE users SET password = ? WHERE id = ?';
+        $updatePasswordStmt = $conn->prepare($updateSql);
         if ($updatePasswordStmt === false) {
             return ['success' => false, 'error' => 'Failed to prepare the password update.'];
         }
@@ -419,7 +430,11 @@ function sendTemporaryPasswordForRequest(int $requestId, int $adminId, string $a
 
         $emailResult = sendTemporaryPasswordEmail($request, $temporaryPassword, $adminNote);
         if (!$emailResult['success']) {
-            $rollbackSucceeded = rollbackTemporaryPassword($request['user_id'], $previousPasswordHash);
+            $rollbackSucceeded = rollbackTemporaryPassword(
+                $request['user_id'],
+                $previousPasswordHash,
+                $hasPasswordChangedAt ? $previousPasswordChangedAt : null
+            );
             updatePasswordResetRequestStatus(
                 $requestId,
                 'failed',
@@ -559,16 +574,31 @@ function updatePasswordResetRequestStatus(
     }
 }
 
-function rollbackTemporaryPassword(int $userId, string $previousPasswordHash): bool
+function rollbackTemporaryPassword(int $userId, string $previousPasswordHash, ?string $previousPasswordChangedAt = null): bool
 {
     try {
         $conn = getConnection();
-        $stmt = $conn->prepare('UPDATE users SET password = ? WHERE id = ?');
+        $hasPasswordChangedAt = dbColumnExists($conn, 'users', 'password_changed_at');
+        $sql = $hasPasswordChangedAt
+            ? ($previousPasswordChangedAt === null || $previousPasswordChangedAt === ''
+                ? 'UPDATE users SET password = ?, password_changed_at = NULL WHERE id = ?'
+                : 'UPDATE users SET password = ?, password_changed_at = ? WHERE id = ?')
+            : 'UPDATE users SET password = ? WHERE id = ?';
+        $stmt = $conn->prepare($sql);
         if ($stmt === false) {
             return false;
         }
 
-        $stmt->bind_param('si', $previousPasswordHash, $userId);
+        if ($hasPasswordChangedAt) {
+            if ($previousPasswordChangedAt === null || $previousPasswordChangedAt === '') {
+                $stmt->bind_param('si', $previousPasswordHash, $userId);
+            } else {
+                $stmt->bind_param('ssi', $previousPasswordHash, $previousPasswordChangedAt, $userId);
+            }
+        } else {
+            $stmt->bind_param('si', $previousPasswordHash, $userId);
+        }
+
         $result = $stmt->execute();
         $stmt->close();
 

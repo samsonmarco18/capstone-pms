@@ -28,6 +28,7 @@ CREATE TABLE users (
     phone VARCHAR(20),
     address TEXT,
     designation VARCHAR(100),
+    password_changed_at TIMESTAMP NULL,
     last_login TIMESTAMP NULL,
     email_notifications SMALLINT DEFAULT 1,
     task_reminders SMALLINT DEFAULT 1,

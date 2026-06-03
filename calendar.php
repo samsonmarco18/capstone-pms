@@ -1,0 +1,670 @@
+<?php
+require_once __DIR__ . '/includes/auth.php';
+
+requireLogin();
+
+$conn = getConnection();
+$user = getCurrentUser();
+
+if (!$user) {
+    header('Location: ' . BASE_URL . 'login.php');
+    exit();
+}
+
+function calendarPageParseDateTime(string $dateValue, string $timeValue = ''): DateTime
+{
+    $dateValue = trim($dateValue);
+    $timeValue = trim($timeValue);
+    $candidate = $dateValue !== ''
+        ? $dateValue . ($timeValue !== '' ? ' ' . $timeValue : '')
+        : ($timeValue !== '' ? $timeValue : 'now');
+
+    try {
+        return new DateTime($candidate);
+    } catch (Throwable $exception) {
+        return new DateTime();
+    }
+}
+
+function calendarPageAddEvent(array &$events, array $event): void
+{
+    $dateValue = trim((string) ($event['date'] ?? ''));
+    $timeValue = trim((string) ($event['time'] ?? ''));
+    $dateTime = calendarPageParseDateTime($dateValue, $timeValue);
+
+    $events[] = [
+        'title' => trim((string) ($event['title'] ?? 'Schedule')) ?: 'Schedule',
+        'description' => trim((string) ($event['description'] ?? '')),
+        'datetime' => $dateTime,
+        'date_key' => $dateTime->format('Y-m-d'),
+        'time_label' => $dateTime->format('h:i A'),
+        'category' => trim((string) ($event['category'] ?? 'Calendar')) ?: 'Calendar',
+        'color' => trim((string) ($event['color'] ?? '')) ?: '#1f6392',
+        'url' => trim((string) ($event['url'] ?? '')),
+        'status' => trim((string) ($event['status'] ?? '')),
+    ];
+}
+
+$role = (string) ($user['role'] ?? '');
+$userId = (int) $user['id'];
+
+$calendarMonthInput = trim((string) ($_GET['calendar_month'] ?? date('Y-m')));
+if (!preg_match('/^\d{4}-\d{2}$/', $calendarMonthInput)) {
+    $calendarMonthInput = date('Y-m');
+}
+
+$calendarStart = DateTime::createFromFormat('Y-m-d', $calendarMonthInput . '-01') ?: new DateTime('first day of this month');
+$calendarStart->setTime(0, 0, 0);
+$calendarEnd = (clone $calendarStart)->modify('last day of this month');
+$calendarMonth = $calendarStart->format('Y-m');
+$monthStartString = $calendarStart->format('Y-m-d');
+$monthEndString = $calendarEnd->format('Y-m-d');
+$previousMonth = (clone $calendarStart)->modify('-1 month')->format('Y-m');
+$nextMonth = (clone $calendarStart)->modify('+1 month')->format('Y-m');
+$firstCalendarDay = (clone $calendarStart)->modify('-' . (int) $calendarStart->format('w') . ' days');
+$lastCalendarDay = (clone $calendarEnd)->modify('+' . (6 - (int) $calendarEnd->format('w')) . ' days');
+
+$events = [];
+
+$scheduleStatement = $conn->prepare("
+    SELECT title, description, schedule_type, start_date, start_time, color_code, status
+    FROM schedules
+    WHERE user_id = ?
+      AND status <> 'cancelled'
+      AND start_date BETWEEN ? AND ?
+    ORDER BY start_date ASC, start_time ASC, id ASC
+");
+$scheduleStatement->bind_param('iss', $userId, $monthStartString, $monthEndString);
+$scheduleStatement->execute();
+$scheduleRows = $scheduleStatement->get_result();
+
+while ($row = $scheduleRows->fetch_assoc()) {
+        calendarPageAddEvent($events, [
+            'title' => (string) ($row['title'] ?? 'Schedule'),
+            'description' => (string) ($row['description'] ?? ''),
+            'date' => (string) ($row['start_date'] ?? ''),
+            'time' => (string) ($row['start_time'] ?? '09:00:00'),
+        'category' => ucfirst((string) ($row['schedule_type'] ?? 'Schedule')),
+        'color' => trim((string) ($row['color_code'] ?? '')) ?: '#1f6392',
+        'status' => (string) ($row['status'] ?? ''),
+    ]);
+}
+
+if (in_array($role, ['architect', 'developer', 'expert', 'sul'], true)) {
+    $taskStatement = $conn->prepare("
+        SELECT
+            t.title,
+            t.description,
+            t.deadline,
+            t.status,
+            t.priority,
+            p.name AS project_name
+        FROM tasks t
+        LEFT JOIN projects p ON p.id = t.project_id
+        WHERE t.assigned_to = ?
+          AND t.deadline BETWEEN ? AND ?
+          AND t.status <> 'completed'
+        ORDER BY t.deadline ASC, t.id ASC
+    ");
+    $taskStatement->bind_param('iss', $userId, $monthStartString, $monthEndString);
+    $taskStatement->execute();
+    $taskRows = $taskStatement->get_result();
+
+    while ($row = $taskRows->fetch_assoc()) {
+        $status = (string) ($row['status'] ?? '');
+        $priority = (string) ($row['priority'] ?? '');
+        $color = '#1f6392';
+        if ($status === 'blocked') {
+            $color = '#dc3545';
+        } elseif ($priority === 'high') {
+            $color = '#fd7e14';
+        } elseif ($status === 'review' || $status === 'in_review') {
+            $color = '#0d6efd';
+        }
+
+        calendarPageAddEvent($events, [
+            'title' => (string) ($row['title'] ?? 'Task'),
+            'description' => trim((string) ($row['project_name'] ?? '')) !== ''
+                ? 'Project: ' . (string) ($row['project_name'] ?? '')
+                : '',
+            'date' => (string) ($row['deadline'] ?? ''),
+            'time' => '09:00:00',
+            'category' => 'Task',
+            'color' => $color,
+            'status' => $status,
+        ]);
+    }
+    $taskStatement->close();
+}
+
+if ($role === 'architect') {
+    $projectStatement = $conn->prepare("
+        SELECT p.name, p.timeline_end, p.status, c.name AS client_name
+        FROM projects p
+        INNER JOIN clients c ON c.id = p.client_id
+        WHERE (p.architect_id = ? OR p.architect_id IS NULL)
+          AND p.timeline_end BETWEEN ? AND ?
+          AND p.status <> 'completed'
+        ORDER BY p.timeline_end ASC, p.id ASC
+    ");
+    $projectStatement->bind_param('iss', $userId, $monthStartString, $monthEndString);
+    $projectStatement->execute();
+    $projectRows = $projectStatement->get_result();
+
+    while ($row = $projectRows->fetch_assoc()) {
+        calendarPageAddEvent($events, [
+            'title' => (string) ($row['name'] ?? 'Project'),
+            'description' => trim((string) ($row['client_name'] ?? '')) !== ''
+                ? 'Client: ' . (string) ($row['client_name'] ?? '')
+                : '',
+            'date' => (string) ($row['timeline_end'] ?? ''),
+            'time' => '09:00:00',
+            'category' => 'Project',
+            'color' => '#0d6efd',
+            'status' => (string) ($row['status'] ?? ''),
+        ]);
+    }
+    $projectStatement->close();
+}
+
+usort($events, static function (array $left, array $right): int {
+    return $left['datetime']->getTimestamp() <=> $right['datetime']->getTimestamp();
+});
+
+$eventsByDate = [];
+foreach ($events as $event) {
+    $eventsByDate[$event['date_key']][] = $event;
+}
+
+$today = new DateTime('today');
+$selectedDayInput = trim((string) ($_GET['day'] ?? ''));
+$selectedDay = null;
+if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $selectedDayInput)) {
+    $candidate = DateTime::createFromFormat('Y-m-d', $selectedDayInput);
+    if ($candidate instanceof DateTime && $candidate->format('Y-m') === $calendarMonth) {
+        $selectedDay = $candidate;
+    }
+}
+if (!$selectedDay) {
+    if ($today->format('Y-m') === $calendarMonth) {
+        $selectedDay = clone $today;
+    } elseif (!empty($events)) {
+        $selectedDay = clone $events[0]['datetime'];
+    } else {
+        $selectedDay = clone $calendarStart;
+    }
+}
+
+$selectedDayKey = $selectedDay->format('Y-m-d');
+$selectedEvents = $eventsByDate[$selectedDayKey] ?? [];
+
+$currentMonthEventCount = count($events);
+$todayEventCount = isset($eventsByDate[$today->format('Y-m-d')]) ? count($eventsByDate[$today->format('Y-m-d')]) : 0;
+$weekEnd = (clone $today)->modify('+6 days')->format('Y-m-d');
+$weekEventCount = 0;
+foreach ($events as $event) {
+    $dateKey = $event['date_key'];
+    if ($dateKey >= $today->format('Y-m-d') && $dateKey <= $weekEnd) {
+        $weekEventCount++;
+    }
+}
+
+include __DIR__ . '/includes/header.php';
+include __DIR__ . '/includes/sidebar.php';
+include __DIR__ . '/includes/navbar.php';
+?>
+
+<style>
+.calendar-shell {
+    display: grid;
+    gap: 1rem;
+}
+
+.calendar-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.5rem 1.6rem;
+    border-radius: 28px;
+    background: linear-gradient(135deg, #1f6392 0%, #184f73 100%);
+    color: #fff;
+    box-shadow: 0 20px 45px rgba(31, 99, 146, 0.2);
+}
+
+.calendar-hero h1 {
+    margin: 0;
+    font-size: 1.65rem;
+    font-weight: 800;
+}
+
+.calendar-hero__meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.calendar-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.calendar-nav a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    text-decoration: none;
+    transition: transform 0.18s ease, background 0.18s ease;
+}
+
+.calendar-nav a:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.calendar-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+
+.calendar-stat {
+    padding: 1rem 1.1rem;
+    border-radius: 22px;
+    border: 1px solid #e9eef4;
+    background: #fff;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.calendar-stat span {
+    display: block;
+    color: #6c757d;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.calendar-stat strong {
+    display: block;
+    margin-top: 0.35rem;
+    color: #184f73;
+    font-size: 1.6rem;
+    font-weight: 800;
+}
+
+.calendar-card {
+    border: 0;
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+}
+
+.calendar-card__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.2rem 1.4rem;
+    border-bottom: 1px solid rgba(31, 99, 146, 0.08);
+    background: #fff;
+}
+
+.calendar-card__header h2,
+.calendar-card__header h3 {
+    margin: 0;
+    color: #184f73;
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.55rem;
+    padding: 1.4rem;
+    background: linear-gradient(180deg, #fbfdff 0%, #ffffff 100%);
+}
+
+.calendar-weekday {
+    color: #6c757d;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.calendar-day,
+.calendar-blank {
+    min-height: 5.15rem;
+    border-radius: 16px;
+}
+
+.calendar-day {
+    position: relative;
+    display: block;
+    padding: 0.55rem;
+    border: 1px solid #e9eef4;
+    background: #fff;
+    color: #184f73;
+    text-decoration: none;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.calendar-day:hover {
+    transform: translateY(-1px);
+    border-color: rgba(31, 99, 146, 0.3);
+    box-shadow: 0 10px 20px rgba(31, 99, 146, 0.08);
+}
+
+.calendar-day.is-muted {
+    opacity: 0.45;
+}
+
+.calendar-day.is-today {
+    border-color: #1f6392;
+    box-shadow: inset 0 0 0 1px #1f6392;
+}
+
+.calendar-day.is-selected {
+    background: linear-gradient(180deg, rgba(31, 99, 146, 0.08), rgba(31, 99, 146, 0.04));
+    border-color: rgba(31, 99, 146, 0.35);
+}
+
+.calendar-date {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 999px;
+    font-size: 0.88rem;
+    font-weight: 800;
+}
+
+.calendar-day.is-today .calendar-date {
+    background: #1f6392;
+    color: #fff;
+}
+
+.calendar-day.is-selected .calendar-date {
+    background: rgba(31, 99, 146, 0.14);
+}
+
+.calendar-dots {
+    position: absolute;
+    left: 0.55rem;
+    right: 0.55rem;
+    bottom: 0.55rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.calendar-dot {
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 999px;
+    background: #1f6392;
+}
+
+.calendar-side {
+    display: grid;
+    gap: 1rem;
+}
+
+.calendar-panel {
+    border-radius: 28px;
+    border: 1px solid #e9eef4;
+    background: #fff;
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
+}
+
+.calendar-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1.1rem 1.25rem;
+    border-bottom: 1px solid #eef2f6;
+}
+
+.calendar-panel__header h3 {
+    margin: 0;
+    color: #184f73;
+    font-size: 0.98rem;
+    font-weight: 800;
+}
+
+.calendar-panel__body {
+    padding: 1rem 1.25rem 1.15rem;
+}
+
+.calendar-event {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.75rem;
+    padding: 0.85rem 0;
+}
+
+.calendar-event + .calendar-event {
+    border-top: 1px solid #eef2f6;
+}
+
+.calendar-event__marker {
+    width: 0.78rem;
+    height: 0.78rem;
+    margin-top: 0.3rem;
+    border-radius: 999px;
+    background: var(--event-color, #1f6392);
+    box-shadow: 0 0 0 4px rgba(31, 99, 146, 0.12);
+}
+
+.calendar-event__title {
+    margin: 0;
+    color: #184f73;
+    font-size: 0.94rem;
+    font-weight: 800;
+}
+
+.calendar-event__meta {
+    margin-top: 0.2rem;
+    color: #6c757d;
+    font-size: 0.8rem;
+}
+
+.calendar-empty {
+    padding: 1rem 0;
+    color: #6c757d;
+    font-size: 0.92rem;
+}
+
+@media (max-width: 1199.98px) {
+    .calendar-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 991.98px) {
+    .calendar-hero {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .calendar-grid {
+        gap: 0.4rem;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .calendar-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .calendar-grid {
+        padding: 1rem;
+    }
+
+    .calendar-day,
+    .calendar-blank {
+        min-height: 4.6rem;
+    }
+}
+</style>
+
+<div class="container-fluid calendar-shell">
+    <div class="calendar-hero">
+        <div>
+            <h1><?php echo htmlspecialchars($calendarStart->format('F Y')); ?></h1>
+        </div>
+
+        <div class="calendar-hero__meta">
+            <div class="calendar-nav" aria-label="Calendar navigation">
+                <a href="calendar.php?calendar_month=<?php echo urlencode($previousMonth); ?>" aria-label="Previous month">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+                <a href="calendar.php?calendar_month=<?php echo urlencode(date('Y-m')); ?>&day=<?php echo urlencode(date('Y-m-d')); ?>" aria-label="Current month">
+                    <i class="fas fa-circle"></i>
+                </a>
+                <a href="calendar.php?calendar_month=<?php echo urlencode($nextMonth); ?>" aria-label="Next month">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="calendar-stats mb-4">
+        <div class="calendar-stat">
+            <span>Today</span>
+            <strong><?php echo $todayEventCount; ?></strong>
+        </div>
+        <div class="calendar-stat">
+            <span>This Week</span>
+            <strong><?php echo $weekEventCount; ?></strong>
+        </div>
+        <div class="calendar-stat">
+            <span>This Month</span>
+            <strong><?php echo $currentMonthEventCount; ?></strong>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-8">
+            <div class="calendar-card">
+                <div class="calendar-card__header">
+                    <div>
+                        <h2><?php echo htmlspecialchars($calendarStart->format('F Y')); ?></h2>
+                    </div>
+                    <a class="btn btn-sm btn-outline-primary" href="calendar.php?calendar_month=<?php echo urlencode(date('Y-m')); ?>&day=<?php echo urlencode(date('Y-m-d')); ?>">
+                        Today
+                    </a>
+                </div>
+
+                <div class="calendar-grid" aria-label="Monthly calendar">
+                    <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $weekday): ?>
+                        <div class="calendar-weekday"><?php echo $weekday; ?></div>
+                    <?php endforeach; ?>
+
+                    <?php for ($blank = 0; $blank < $leadingBlanks; $blank++): ?>
+                        <div class="calendar-blank" aria-hidden="true"></div>
+                    <?php endfor; ?>
+
+                    <?php
+                    for ($day = 1; $day <= (int) $calendarStart->format('t'); $day++):
+                        $dateKey = $calendarStart->format('Y-m-') . str_pad((string) $day, 2, '0', STR_PAD_LEFT);
+                        $dayEvents = $eventsByDate[$dateKey] ?? [];
+                        $classes = ['calendar-day'];
+                        if ($dateKey < $today->format('Y-m-d') && $calendarMonth === $today->format('Y-m') && empty($dayEvents)) {
+                            $classes[] = 'is-muted';
+                        }
+                        if ($dateKey === $today->format('Y-m-d')) {
+                            $classes[] = 'is-today';
+                        }
+                        if ($dateKey === $selectedDayKey) {
+                            $classes[] = 'is-selected';
+                        }
+                    ?>
+                        <a class="<?php echo implode(' ', $classes); ?>" href="calendar.php?calendar_month=<?php echo urlencode($calendarMonth); ?>&day=<?php echo urlencode($dateKey); ?>">
+                            <span class="calendar-date"><?php echo $day; ?></span>
+                            <?php if (!empty($dayEvents)): ?>
+                                <span class="calendar-dots" aria-hidden="true">
+                                    <?php foreach (array_slice($dayEvents, 0, 4) as $event): ?>
+                                        <span class="calendar-dot" style="background: <?php echo htmlspecialchars($event['color']); ?>;"></span>
+                                    <?php endforeach; ?>
+                                </span>
+                            <?php endif; ?>
+                        </a>
+                    <?php endfor; ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4">
+            <div class="calendar-side">
+                <div class="calendar-panel">
+                    <div class="calendar-panel__header">
+                        <h3><?php echo htmlspecialchars($selectedDay->format('F j, Y')); ?></h3>
+                        <span class="badge rounded-pill text-bg-primary"><?php echo count($selectedEvents); ?></span>
+                    </div>
+                    <div class="calendar-panel__body">
+                        <?php if (!empty($selectedEvents)): ?>
+                            <?php foreach ($selectedEvents as $event): ?>
+                                <div class="calendar-event">
+                                    <span class="calendar-event__marker" style="--event-color: <?php echo htmlspecialchars($event['color']); ?>;"></span>
+                                    <div>
+                                        <p class="calendar-event__title"><?php echo htmlspecialchars($event['title']); ?></p>
+                                        <div class="calendar-event__meta">
+                                            <i class="far fa-clock me-1"></i><?php echo htmlspecialchars($event['time_label']); ?>
+                                            <span class="ms-2 badge text-bg-light"><?php echo htmlspecialchars($event['category']); ?></span>
+                                        </div>
+                                        <?php if ($event['description'] !== ''): ?>
+                                            <div class="calendar-event__meta mt-1"><?php echo htmlspecialchars($event['description']); ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <div class="calendar-empty">No items for this day.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="calendar-panel">
+                    <div class="calendar-panel__header">
+                        <h3>Upcoming</h3>
+                        <span class="badge rounded-pill text-bg-light"><?php echo $currentMonthEventCount; ?></span>
+                    </div>
+                    <div class="calendar-panel__body">
+                        <?php if (!empty($events)): ?>
+                            <?php foreach (array_slice($events, 0, 5) as $event): ?>
+                                <div class="calendar-event">
+                                    <span class="calendar-event__marker" style="--event-color: <?php echo htmlspecialchars($event['color']); ?>;"></span>
+                                    <div>
+                                        <p class="calendar-event__title"><?php echo htmlspecialchars($event['title']); ?></p>
+                                        <div class="calendar-event__meta">
+                                            <?php echo htmlspecialchars($event['datetime']->format('M j, h:i A')); ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <div class="calendar-empty">Nothing scheduled this month.</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php
+$scheduleStatement->close();
+include __DIR__ . '/includes/footer.php';

@@ -19,6 +19,7 @@ CREATE TABLE users (
     phone VARCHAR(20),
     address TEXT,
     designation VARCHAR(100),
+    password_changed_at DATETIME NULL,
     last_login DATETIME NULL,
     email_notifications BOOLEAN DEFAULT TRUE,
     task_reminders BOOLEAN DEFAULT TRUE,

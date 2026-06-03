@@ -6,6 +6,7 @@ $user = getCurrentUser();
 $conn = getConnection();
 $message = '';
 $error = '';
+$forcePasswordChange = !empty($_SESSION['force_password_change']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
     $password = trim((string) $_POST['password']);
@@ -26,11 +27,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['password'])) {
         $error = 'New password and confirmation do not match.';
     } else {
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-        $stmt = $conn->prepare('UPDATE users SET password = ? WHERE id = ?');
-        $stmt->bind_param('si', $hashedPassword, $user['id']);
+        $hasPasswordChangedAt = ensureUserPasswordSecurityColumns();
+        $sql = $hasPasswordChangedAt
+            ? 'UPDATE users SET password = ?, password_changed_at = CURRENT_TIMESTAMP WHERE id = ?'
+            : 'UPDATE users SET password = ? WHERE id = ?';
+        $stmt = $conn->prepare($sql);
+        if ($hasPasswordChangedAt) {
+            $stmt->bind_param('si', $hashedPassword, $user['id']);
+        } else {
+            $stmt->bind_param('si', $hashedPassword, $user['id']);
+        }
         $stmt->execute();
         $stmt->close();
         $message = 'Password updated successfully.';
+        unset($_SESSION['force_password_change']);
         logActivity((int) $user['id'], 'change_password', 'users', (int) $user['id']);
     }
 }
@@ -48,6 +58,9 @@ include 'includes/navbar.php';
                     <h5 class="mb-0">Account Settings</h5>
                 </div>
                 <div class="card-body">
+                    <?php if ($forcePasswordChange): ?>
+                        <div class="alert alert-warning">Please update your password to continue.</div>
+                    <?php endif; ?>
                     <?php if ($message): ?>
                         <div class="alert alert-success"><?php echo htmlspecialchars($message); ?></div>
                     <?php endif; ?>
