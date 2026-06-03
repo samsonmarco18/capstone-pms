@@ -21,13 +21,17 @@ $highPriority = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE assigned
 $mediumPriority = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE assigned_to = {$user['id']} AND priority = 'medium' AND status != 'completed'")->fetch_assoc()['count'];
 $lowPriority = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE assigned_to = {$user['id']} AND priority = 'low' AND status != 'completed'")->fetch_assoc()['count'];
 
-// Get upcoming deadlines
+// Get deadline-driven task queue
 $upcomingTasks = $conn->query("
-    SELECT * FROM tasks 
-    WHERE assigned_to = {$user['id']} 
-    AND status != 'completed' 
-    AND deadline >= NOW() 
-    ORDER BY deadline ASC 
+    SELECT t.*, p.name as project_name
+    FROM tasks t
+    JOIN projects p ON t.project_id = p.id
+    WHERE t.assigned_to = {$user['id']}
+    AND t.status != 'completed'
+    AND t.deadline IS NOT NULL
+    ORDER BY 
+        CASE WHEN t.deadline < CURDATE() THEN 0 ELSE 1 END,
+        t.deadline ASC
     LIMIT 5
 ");
 
@@ -41,6 +45,26 @@ $schedules = $conn->query("
         OR (start_date = CURDATE() AND COALESCE(start_time, '00:00:00') >= CURTIME())
     )
     ORDER BY start_date, start_time 
+// Get tasks that need developer attention beyond calendar deadlines
+$attentionTasks = $conn->query("
+    SELECT t.*, p.name as project_name
+    FROM tasks t
+    JOIN projects p ON t.project_id = p.id
+    WHERE t.assigned_to = {$user['id']}
+    AND t.status != 'completed'
+    AND (
+        t.status IN ('blocked', 'in_review', 'review')
+        OR t.deadline < CURDATE()
+        OR (t.deadline IS NULL AND t.status IN ('todo', 'in_progress'))
+    )
+    ORDER BY
+        CASE
+            WHEN t.status = 'blocked' THEN 0
+            WHEN t.deadline < CURDATE() THEN 1
+            WHEN t.status IN ('in_review', 'review') THEN 2
+            ELSE 3
+        END,
+        COALESCE(t.deadline, DATE(t.created_at)) ASC
     LIMIT 5
 ");
 
@@ -333,6 +357,80 @@ include '../../includes/navbar.php';
 .badge-days.warning { background: #fef3c7; color: #d97706; }
 .badge-days.normal { background: #dbeafe; color: #2563eb; }
 
+.attention-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+}
+
+.attention-item {
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 1rem;
+    background: #fff;
+}
+
+.attention-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: flex-start;
+    margin-bottom: 0.6rem;
+}
+
+.attention-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin: 0;
+}
+
+.attention-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 0.75rem;
+    color: var(--gray-600);
+    font-size: 0.76rem;
+    margin-bottom: 0.75rem;
+}
+
+.attention-reason {
+    flex: 0 0 auto;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.attention-reason.urgent {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.attention-reason.warning {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.attention-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+@media (max-width: 575.98px) {
+    .attention-top,
+    .attention-actions {
+        display: block;
+    }
+
+    .attention-reason {
+        display: inline-flex;
+        margin-top: 0.5rem;
+    }
+}
+
 /* Progress Bar */
 .progress-custom {
     height: 8px;
@@ -561,20 +659,26 @@ include '../../includes/navbar.php';
                 </div>
                 <div>
                     <?php while($task = $upcomingTasks->fetch_assoc()): 
-                        $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
-                        $badgeClass = $daysLeft <= 2 ? 'urgent' : ($daysLeft <= 5 ? 'warning' : 'normal');
+                        $daysLeft = (int) ceil((strtotime($task['deadline']) - strtotime(date('Y-m-d'))) / (60 * 60 * 24));
+                        $badgeClass = $daysLeft < 0 ? 'urgent' : ($daysLeft <= 2 ? 'urgent' : ($daysLeft <= 5 ? 'warning' : 'normal'));
+                        $deadlineLabel = $daysLeft < 0
+                            ? abs($daysLeft) . ' day' . (abs($daysLeft) === 1 ? '' : 's') . ' overdue'
+                            : ($daysLeft === 0 ? 'Due today' : $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's') . ' left');
                     ?>
                     <div class="list-group-item-custom">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                             <div class="flex-grow-1">
                                 <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
-                                <small class="text-muted"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></small>
+                                <small class="text-muted"><?php echo htmlspecialchars($task['project_name']); ?></small>
+                                <?php if(!empty($task['description'])): ?>
+                                <div><small class="text-muted"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></small></div>
+                                <?php endif; ?>
                                 <div class="mt-1">
                                     <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></small>
                                 </div>
                             </div>
                             <span class="badge-days <?php echo $badgeClass; ?>">
-                                <?php echo $daysLeft; ?> days left
+                                <?php echo htmlspecialchars($deadlineLabel); ?>
                             </span>
                         </div>
                         <div class="mt-2">
@@ -588,6 +692,62 @@ include '../../includes/navbar.php';
                     <div class="empty-state">
                         <i class="fas fa-check-circle"></i>
                         <p>No upcoming tasks</p>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-exclamation-circle"></i> Needs Attention</h5>
+                </div>
+                <div class="card-body">
+                    <div class="attention-list">
+                    <?php while($task = $attentionTasks->fetch_assoc()): ?>
+                    <?php
+                        $statusLabel = ucwords(str_replace('_', ' ', (string) ($task['status'] ?? 'todo')));
+                        $attentionReason = $statusLabel;
+                        $attentionTone = 'normal';
+                        if ((string) ($task['status'] ?? '') === 'blocked') {
+                            $attentionReason = 'Blocked';
+                            $attentionTone = 'urgent';
+                        } elseif (!empty($task['deadline']) && strtotime((string) $task['deadline']) < strtotime(date('Y-m-d'))) {
+                            $attentionReason = 'Overdue';
+                            $attentionTone = 'urgent';
+                        } elseif (in_array((string) ($task['status'] ?? ''), ['in_review', 'review'], true)) {
+                            $attentionReason = 'Review Needed';
+                            $attentionTone = 'warning';
+                        } elseif (empty($task['deadline'])) {
+                            $attentionReason = 'No Deadline Set';
+                            $attentionTone = 'warning';
+                        }
+                    ?>
+                    <div class="attention-item <?php echo htmlspecialchars($attentionTone); ?>">
+                        <div class="attention-top">
+                            <h6 class="attention-title"><?php echo htmlspecialchars($task['title']); ?></h6>
+                            <span class="attention-reason <?php echo htmlspecialchars($attentionTone); ?>"><?php echo htmlspecialchars($attentionReason); ?></span>
+                        </div>
+                        <div class="attention-meta">
+                            <span><i class="fas fa-folder-open me-1"></i><?php echo htmlspecialchars($task['project_name']); ?></span>
+                            <span><i class="fas fa-signal me-1"></i><?php echo htmlspecialchars(ucfirst((string) ($task['priority'] ?? 'medium'))); ?> priority</span>
+                            <?php if(!empty($task['deadline'])): ?>
+                            <span><i class="far fa-calendar-alt me-1"></i>Due <?php echo date('M d, Y', strtotime((string) $task['deadline'])); ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="attention-actions">
+                            <a href="task.php?id=<?php echo (int) $task['id']; ?>" class="btn-view">
+                                <i class="fas fa-tasks"></i> View Task
+                            </a>
+                        </div>
+                    </div>
+                    <?php endwhile; ?>
+                    </div>
+                    <?php if($attentionTasks->num_rows == 0): ?>
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle"></i>
+                        <p>No tasks need attention</p>
                     </div>
                     <?php endif; ?>
                 </div>

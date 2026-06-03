@@ -294,6 +294,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             header("Location: task-allocation.php");
             exit();
         }
+    
+    // Assign task to expert
+    if (isset($_POST['assign_to_expert'])) {
+        $taskId = $_POST['task_id'];
+        $expertId = $_POST['expert_id'];
         
         $stmt = $conn->prepare("UPDATE tasks SET assigned_to = ?, status = 'todo' WHERE id = ?");
         $stmt->bind_param("ii", $expertId, $taskId);
@@ -792,6 +797,11 @@ include '../../includes/navbar.php';
     border: none;
 }
 
+.modal-modern .modal-header .modal-title,
+.modal-modern .modal-header .modal-title i {
+    color: #ffffff !important;
+}
+
 .modal-modern .modal-header .btn-close {
     filter: brightness(0) invert(1);
 }
@@ -999,6 +1009,7 @@ include '../../includes/navbar.php';
                         Unassigned Tasks
                         <span class="badge-count"><?php echo $unassignedTasks->num_rows; ?> tasks</span>
                     </h5>
+                    
                 </div>
                 <div class="p-3">
                     <?php if($unassignedTasks->num_rows > 0): ?>

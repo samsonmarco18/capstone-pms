@@ -13,14 +13,18 @@ $pendingProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (a
 $inProgressProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (architect_id = {$user['id']} OR architect_id IS NULL) AND status = 'in_progress'")->fetch_assoc()['count'];
 $completedProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (architect_id = {$user['id']} OR architect_id IS NULL) AND status = 'completed'")->fetch_assoc()['count'];
 
-// Get projects under review
+// Get projects ready for architect review with quick readiness context
 $reviewProjects = $conn->query("
-    SELECT p.*, c.name as client_name 
+    SELECT 
+        p.*, 
+        c.name as client_name,
+        (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) as task_count,
+        (SELECT COUNT(*) FROM architecture_documents ad WHERE ad.project_id = p.id) as document_count
     FROM projects p 
     JOIN clients c ON p.client_id = c.id 
     WHERE (p.architect_id = {$user['id']} OR p.architect_id IS NULL) 
     AND p.status = 'review'
-    ORDER BY p.created_at DESC 
+    ORDER BY COALESCE(p.timeline_end, DATE(p.created_at)) ASC, p.created_at DESC 
     LIMIT 5
 ");
 
@@ -34,8 +38,58 @@ $schedules = $conn->query("
         OR (start_date = CURDATE() AND COALESCE(start_time, '00:00:00') >= CURTIME())
     )
     ORDER BY start_date, start_time 
+// Build Architect agenda from manual schedules and project deadlines
+$architectAgenda = [];
+
+$scheduleRows = $conn->query("
+    SELECT title, description, start_date, start_time, schedule_type
+    FROM schedules
+    WHERE user_id = {$user['id']}
+      AND start_date IS NOT NULL
+      AND start_date >= CURDATE()
+      AND status IN ('scheduled', 'in_progress')
+    ORDER BY start_date ASC, start_time ASC
     LIMIT 5
 ");
+while ($schedule = $scheduleRows->fetch_assoc()) {
+    $agendaDate = trim((string) ($schedule['start_date'] ?? ''));
+    $agendaTime = trim((string) ($schedule['start_time'] ?? ''));
+    $architectAgenda[] = [
+        'title' => (string) ($schedule['title'] ?? 'Scheduled item'),
+        'description' => (string) ($schedule['description'] ?? ''),
+        'date' => $agendaDate . ($agendaTime !== '' ? ' ' . $agendaTime : ''),
+        'type' => ucfirst((string) ($schedule['schedule_type'] ?? 'Schedule')),
+        'icon' => 'calendar-alt',
+        'url' => '',
+    ];
+}
+
+$projectMilestones = $conn->query("
+    SELECT p.id, p.name, p.status, p.timeline_end, c.name as client_name
+    FROM projects p
+    JOIN clients c ON p.client_id = c.id
+    WHERE (p.architect_id = {$user['id']} OR p.architect_id IS NULL)
+      AND p.status IN ('pending', 'requirements_gathering', 'architectural_review', 'tech_recommendation', 'developer_allocation', 'arch_documentation')
+      AND p.timeline_end IS NOT NULL
+      AND p.timeline_end >= CURDATE()
+    ORDER BY p.timeline_end ASC
+    LIMIT 8
+");
+while ($project = $projectMilestones->fetch_assoc()) {
+    $architectAgenda[] = [
+        'title' => (string) ($project['name'] ?? 'Project milestone'),
+        'description' => 'Client: ' . (string) ($project['client_name'] ?? 'Client'),
+        'date' => (string) ($project['timeline_end'] ?? ''),
+        'type' => 'Project Deadline',
+        'icon' => 'flag-checkered',
+        'url' => 'projects.php',
+    ];
+}
+
+usort($architectAgenda, static function (array $left, array $right): int {
+    return strtotime((string) ($left['date'] ?? '')) <=> strtotime((string) ($right['date'] ?? ''));
+});
+$architectAgenda = array_slice($architectAgenda, 0, 5);
 
 // Get recent activities
 $activities = $conn->query("
@@ -308,6 +362,36 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="card-body p-4">
                     <?php renderScheduleCalendar($schedules); ?>
+                    <?php if($architectAgenda): ?>
+                        <?php foreach($architectAgenda as $agendaItem): ?>
+                        <div class="timeline-item mb-3">
+                            <div class="timeline-title">
+                                <i class="fas fa-<?php echo htmlspecialchars($agendaItem['icon']); ?> me-1"></i>
+                                <?php echo htmlspecialchars($agendaItem['title']); ?>
+                            </div>
+                            <div class="timeline-time">
+                                <span class="badge bg-light text-dark me-2"><?php echo htmlspecialchars($agendaItem['type']); ?></span>
+                                <i class="far fa-clock"></i>
+                                <?php echo date('M d, Y h:i A', strtotime((string) $agendaItem['date'])); ?>
+                            </div>
+                            <?php if(!empty($agendaItem['description'])): ?>
+                            <div class="timeline-desc">
+                                <?php echo htmlspecialchars($agendaItem['description']); ?>
+                            </div>
+                            <?php endif; ?>
+                            <?php if(!empty($agendaItem['url'])): ?>
+                            <a href="<?php echo htmlspecialchars($agendaItem['url']); ?>" class="btn-review mt-2">
+                                <i class="fas fa-arrow-right"></i> Open
+                            </a>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="empty-state-mini">
+                            <i class="fas fa-calendar-week"></i>
+                            <p>No upcoming agenda items</p>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -332,7 +416,16 @@ include '../../includes/navbar.php';
                                 <div class="mt-1">
                                     <small class="text-muted">
                                         <i class="far fa-calendar-alt me-1"></i>
-                                        Created: <?php echo date('M d, Y', strtotime($project['created_at'])); ?>
+                                        Target: <?php echo !empty($project['timeline_end']) ? date('M d, Y', strtotime($project['timeline_end'])) : 'No target date'; ?>
+                                    </small>
+                                </div>
+                                <div class="mt-1">
+                                    <small class="text-muted">
+                                        <i class="fas fa-list-check me-1"></i>
+                                        <?php echo (int) $project['task_count']; ?> task<?php echo (int) $project['task_count'] === 1 ? '' : 's'; ?>
+                                        &bull;
+                                        <i class="fas fa-file-alt me-1"></i>
+                                        <?php echo (int) $project['document_count']; ?> document<?php echo (int) $project['document_count'] === 1 ? '' : 's'; ?>
                                     </small>
                                 </div>
                             </div>

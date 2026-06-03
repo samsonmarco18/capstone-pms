@@ -408,6 +408,195 @@ include '../../includes/navbar.php';
     font-size: 0.75rem;
 }
 
+.task-detail-hero {
+    border: 1px solid rgba(31, 99, 146, 0.18);
+    border-radius: 8px;
+    padding: 1.15rem;
+    background: linear-gradient(135deg, rgba(31, 99, 146, 0.10), #fff 58%);
+    margin-bottom: 1rem;
+}
+
+.task-detail-modal .modal-dialog {
+    max-width: min(1180px, calc(100vw - 2rem));
+}
+
+.task-detail-modal .modal-content {
+    border: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+}
+
+.task-detail-modal .modal-header {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    border-bottom: 0;
+    padding: 1rem 1.25rem;
+}
+
+.task-detail-modal .modal-title {
+    color: #fff;
+    font-weight: 700;
+}
+
+.task-detail-modal .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+    opacity: 0.9;
+}
+
+.task-detail-modal .modal-body {
+    background: #f8fafc;
+    padding: 1.25rem;
+}
+
+.task-detail-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--theme-dark);
+    margin: 0 0 0.45rem;
+}
+
+.task-detail-desc {
+    color: var(--gray-600);
+    font-size: 0.88rem;
+    line-height: 1.55;
+    margin: 0;
+}
+
+.task-facts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.task-fact,
+.task-detail-panel,
+.task-side-panel {
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+}
+
+.task-fact {
+    padding: 0.8rem;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.task-fact-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--gray-500);
+    margin-bottom: 0.3rem;
+}
+
+.task-fact-value {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--theme-dark);
+}
+
+.task-detail-panel {
+    background: #fff;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.task-detail-panel h6,
+.task-side-panel h6,
+.task-side-panel label {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--theme-dark);
+}
+
+.task-side-panel {
+    background: #fff;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.task-side-panel .form-control,
+.task-side-panel .form-select {
+    border-color: var(--gray-300);
+    border-radius: 8px;
+}
+
+.task-side-panel .form-control:focus,
+.task-side-panel .form-select:focus {
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 0.18rem rgba(31, 99, 146, 0.16);
+}
+
+.task-side-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.task-side-heading label {
+    margin: 0;
+    line-height: 1.35;
+}
+
+.task-side-heading small {
+    max-width: 8rem;
+    text-align: right;
+    line-height: 1.35;
+}
+
+.task-detail-action {
+    width: 100%;
+    justify-content: center;
+    border: 0;
+    border-radius: 8px;
+    padding: 0.65rem 0.9rem;
+    font-size: 0.82rem;
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: #fff;
+}
+
+.git-latest-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+}
+
+.git-latest-label {
+    font-size: 0.7rem;
+    color: var(--gray-500);
+    margin-bottom: 0.2rem;
+}
+
+.git-latest-value {
+    font-size: 0.85rem;
+    color: var(--gray-900);
+    font-weight: 600;
+    word-break: break-word;
+}
+
+@media (max-width: 767.98px) {
+    .task-facts-grid,
+    .git-latest-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .task-side-heading {
+        display: block;
+    }
+
+    .task-side-heading small {
+        display: block;
+        max-width: none;
+        text-align: left;
+        margin-top: 0.25rem;
+    }
+}
+
 /* Modal Gantt Styles */
 .gantt-modal-body {
     max-height: 70vh;
@@ -806,8 +995,8 @@ include '../../includes/navbar.php';
 </div>
 
 <!-- Task Detail Modal -->
-<div class="modal fade modal-modern" id="taskModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+<div class="modal fade modal-modern task-detail-modal" id="taskModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-info-circle me-2"></i>Task Details</h5>
@@ -1091,74 +1280,87 @@ function viewTask(taskId) {
         success: function(response) {
             const task = typeof response === 'string' ? JSON.parse(response) : response;
             const latestGit = task.latest_git_update;
+            const deadlineText = task.deadline ? new Date(task.deadline).toLocaleDateString() : 'No deadline set';
+            const estimateText = [task.estimated_days_min, task.estimated_days_likely, task.estimated_days_max].every(value => value)
+                ? `Min ${task.estimated_days_min}d | Likely ${task.estimated_days_likely}d | Max ${task.estimated_days_max}d`
+                : 'No estimate available';
             let html = `
                 <div class="row g-4">
-                    <div class="col-md-8">
-                        <h5 class="mb-3">${escapeHtml(task.title)}</h5>
-                        <div class="mb-3">
-                            <strong>Description:</strong>
-                            <p class="mt-2">${escapeHtml(task.description)}</p>
+                    <div class="col-lg-8">
+                        <div class="task-detail-hero">
+                            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                <div>
+                                    <h5 class="task-detail-title">${escapeHtml(task.title)}</h5>
+                                    <p class="task-detail-desc">${task.description ? escapeHtml(task.description) : 'No description provided.'}</p>
+                                </div>
+                                <span class="badge-priority-${task.priority}">${escapeHtml(task.priority || 'medium')}</span>
+                            </div>
                         </div>
-                        <div class="mb-2">
-                            <strong>Priority:</strong> 
-                            <span class="badge-priority-${task.priority}">${task.priority}</span>
+
+                        <div class="task-facts-grid">
+                            <div class="task-fact">
+                                <div class="task-fact-label">Deadline</div>
+                                <div class="task-fact-value">${escapeHtml(deadlineText)}</div>
+                            </div>
+                            <div class="task-fact">
+                                <div class="task-fact-label">Status</div>
+                                <div class="task-fact-value">${escapeHtml((task.status || 'todo').replaceAll('_', ' '))}</div>
+                            </div>
+                            <div class="task-fact">
+                                <div class="task-fact-label">Estimate</div>
+                                <div class="task-fact-value">${escapeHtml(estimateText)}</div>
+                            </div>
                         </div>
-                        <div class="mb-2">
-                            <strong>Deadline:</strong> ${new Date(task.deadline).toLocaleDateString()}
-                        </div>
-                        <div class="mb-2">
-                            <strong>Estimated Days:</strong> 
-                            Min: ${task.estimated_days_min}, Likely: ${task.estimated_days_likely}, Max: ${task.estimated_days_max}
-                        </div>
-                        <div class="mt-4 p-3 bg-light rounded-3 border">
+
+                        <div class="task-detail-panel">
                             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                                 <div>
-                                    <strong><i class="fas fa-code-branch me-2 text-primary"></i>Latest Git Activity</strong>
+                                    <h6><i class="fas fa-code-branch me-2 text-primary"></i>Latest Git Activity</h6>
                                     <div class="small text-muted mt-1">${task.git_updates_count} update(s) logged for this task</div>
                                 </div>
                                 ${latestGit ? `<span class="badge bg-light text-primary border">${formatGitAction(latestGit.git_action)}</span>` : ''}
                             </div>
                             ${latestGit ? `
-                                <div class="row g-3 mt-1">
-                                    <div class="col-sm-6">
-                                        <div class="small text-muted">Branch</div>
-                                        <div class="fw-semibold">${escapeHtml(latestGit.branch_name)}</div>
+                                <div class="git-latest-grid mt-3">
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Branch</div>
+                                        <div class="git-latest-value">${escapeHtml(latestGit.branch_name)}</div>
                                     </div>
-                                    <div class="col-sm-6">
-                                        <div class="small text-muted">Status</div>
-                                        <div>${formatGitStatusBadge(latestGit.status)}</div>
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Status</div>
+                                        <div class="git-latest-value">${formatGitStatusBadge(latestGit.status)}</div>
                                     </div>
-                                    <div class="col-sm-6">
-                                        <div class="small text-muted">Commit</div>
-                                        <div>${latestGit.commit_hash ? `<code>${escapeHtml(shortCommit(latestGit.commit_hash))}</code>` : '<span class="text-muted">No commit hash</span>'}</div>
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Commit</div>
+                                        <div class="git-latest-value">${latestGit.commit_hash ? `<code>${escapeHtml(shortCommit(latestGit.commit_hash))}</code>` : '<span class="text-muted">No commit hash</span>'}</div>
                                     </div>
-                                    <div class="col-sm-6">
-                                        <div class="small text-muted">Updated By</div>
-                                        <div>${escapeHtml(latestGit.user_name || 'Unknown')}</div>
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Updated By</div>
+                                        <div class="git-latest-value">${escapeHtml(latestGit.user_name || 'Unknown')}</div>
                                     </div>
-                                    <div class="col-12">
-                                        <div class="small text-muted">Commit Message</div>
-                                        <div>${latestGit.commit_message ? escapeHtml(latestGit.commit_message) : '<span class="text-muted">No commit message</span>'}</div>
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Commit Message</div>
+                                        <div class="git-latest-value">${latestGit.commit_message ? escapeHtml(latestGit.commit_message) : '<span class="text-muted">No commit message</span>'}</div>
                                     </div>
-                                    <div class="col-12">
-                                        <div class="small text-muted">Links</div>
-                                        <div class="d-flex gap-2 flex-wrap">
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Links</div>
+                                        <div class="git-latest-value d-flex gap-2 flex-wrap">
                                             ${latestGit.repository_url ? `<a href="${escapeAttribute(latestGit.repository_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="fas fa-link me-1"></i>Repository</a>` : ''}
                                             ${latestGit.pull_request_url ? `<a href="${escapeAttribute(latestGit.pull_request_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="fas fa-code-pull-request me-1"></i>Pull Request</a>` : ''}
                                             ${!latestGit.repository_url && !latestGit.pull_request_url ? '<span class="text-muted">No links attached</span>' : ''}
                                         </div>
                                     </div>
-                                    <div class="col-12">
-                                        <div class="small text-muted">Notes</div>
-                                        <div>${latestGit.notes ? escapeHtml(latestGit.notes) : '<span class="text-muted">No notes provided</span>'}</div>
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Notes</div>
+                                        <div class="git-latest-value">${latestGit.notes ? escapeHtml(latestGit.notes) : '<span class="text-muted">No notes provided</span>'}</div>
                                     </div>
                                 </div>
                             ` : `<p class="text-muted mb-0 mt-3">No Git activity has been recorded for this task yet.</p>`}
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <div class="p-3 bg-light rounded-3 border mb-3">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="col-lg-4">
+                        <div class="task-side-panel">
+                            <div class="task-side-heading">
                                 <label class="form-label mb-0 fw-semibold">Log Git Update</label>
                                 <small class="text-muted">Branch, commit, PR</small>
                             </div>
@@ -1198,24 +1400,24 @@ function viewTask(taskId) {
                             <div class="mb-3">
                                 <textarea id="gitNotes" class="form-control form-control-sm" rows="3" placeholder="Notes for this Git update"></textarea>
                             </div>
-                            <button class="btn-primary-modern w-100" onclick="addGitUpdate(${taskId})">
+                            <button class="btn-primary-modern task-detail-action" onclick="addGitUpdate(${taskId})">
                                 <i class="fas fa-code-branch"></i> Save Git Update
                             </button>
                         </div>
-                        <div class="mt-3">
+                        <div class="task-detail-panel">
                             <h6 class="mb-2">Git History</h6>
                             <div id="gitUpdatesList" class="small"></div>
                         </div>
-                        <div class="p-3 bg-light rounded-3 border mt-3">
+                        <div class="task-side-panel">
                             <div class="mb-3">
                                 <label class="form-label">Add Comment</label>
                                 <textarea id="taskComment" class="form-control" rows="3"></textarea>
                             </div>
-                            <button class="btn-primary-modern w-100" onclick="addComment(${taskId})">
+                            <button class="btn-primary-modern task-detail-action" onclick="addComment(${taskId})">
                                 <i class="fas fa-paper-plane"></i> Add Comment
                             </button>
                         </div>
-                        <div class="mt-3">
+                        <div class="task-detail-panel">
                             <h6 class="mb-2">Comments</h6>
                             <div id="commentsList" class="small"></div>
                         </div>

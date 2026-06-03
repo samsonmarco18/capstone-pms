@@ -6,6 +6,89 @@ requireRole('sales');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$currentUserId = (int) $user['id'];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['create_plan'])) {
+        $planTitle = trim((string) ($_POST['plan_title'] ?? ''));
+        $planDate = trim((string) ($_POST['plan_date'] ?? ''));
+        $planTime = trim((string) ($_POST['plan_time'] ?? '09:00'));
+        $planType = trim((string) ($_POST['plan_type'] ?? 'meeting'));
+        $planLocation = trim((string) ($_POST['plan_location'] ?? ''));
+        $planDescription = trim((string) ($_POST['plan_description'] ?? ''));
+        $validTypes = ['meeting', 'deadline', 'milestone', 'review', 'holiday', 'personal'];
+
+        if ($planTitle !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $planDate) && in_array($planType, $validTypes, true)) {
+            $colorMap = [
+                'meeting' => '#1f6392',
+                'deadline' => '#dc2626',
+                'milestone' => '#7c3aed',
+                'review' => '#d97706',
+                'holiday' => '#059669',
+                'personal' => '#64748b',
+            ];
+            $colorCode = $colorMap[$planType] ?? '#1f6392';
+            $status = 'scheduled';
+            $reminderDays = 1;
+
+            $stmt = $conn->prepare(
+                'INSERT INTO schedules (user_id, title, description, schedule_type, start_date, start_time, end_date, end_time, location, color_code, status, reminder_days)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+
+            if ($stmt !== false) {
+                $stmt->bind_param(
+                    'issssssssssi',
+                    $currentUserId,
+                    $planTitle,
+                    $planDescription,
+                    $planType,
+                    $planDate,
+                    $planTime,
+                    $planDate,
+                    $planTime,
+                    $planLocation,
+                    $colorCode,
+                    $status,
+                    $reminderDays
+                );
+                $stmt->execute();
+                $stmt->close();
+                logActivity($currentUserId, 'create_sales_plan', 'schedules', 0, null, [
+                    'title' => $planTitle,
+                    'date' => $planDate,
+                    'time' => $planTime,
+                    'type' => $planType,
+                ]);
+                $_SESSION['success'] = 'Sales plan added to your calendar.';
+            } else {
+                $_SESSION['error'] = 'Unable to prepare the sales plan.';
+            }
+        } else {
+            $_SESSION['error'] = 'Please enter a title, date, and valid plan type.';
+        }
+
+        header('Location: dashboard.php?calendar_month=' . urlencode(substr($planDate !== '' ? $planDate : date('Y-m-d'), 0, 7)));
+        exit();
+    }
+
+    if (isset($_POST['delete_plan'])) {
+        $planId = (int) ($_POST['plan_id'] ?? 0);
+        if ($planId > 0) {
+            $stmt = $conn->prepare('DELETE FROM schedules WHERE id = ? AND user_id = ?');
+            if ($stmt !== false) {
+                $stmt->bind_param('ii', $planId, $currentUserId);
+                $stmt->execute();
+                $stmt->close();
+                logActivity($currentUserId, 'delete_sales_plan', 'schedules', $planId);
+                $_SESSION['success'] = 'Sales plan removed.';
+            }
+        }
+
+        header('Location: dashboard.php?calendar_month=' . urlencode((string) ($_POST['calendar_month'] ?? date('Y-m'))));
+        exit();
+    }
+}
 
 // Get statistics
 $totalClients = $conn->query("SELECT COUNT(*) as count FROM clients")->fetch_assoc()['count'];
@@ -76,6 +159,67 @@ $schedules = $conn->query("
     ORDER BY start_date, start_time
     LIMIT 5
 ");
+$calendarMonthInput = trim((string) ($_GET['calendar_month'] ?? date('Y-m')));
+if (!preg_match('/^\d{4}-\d{2}$/', $calendarMonthInput)) {
+    $calendarMonthInput = date('Y-m');
+}
+
+$calendarStart = DateTime::createFromFormat('Y-m-d', $calendarMonthInput . '-01') ?: new DateTime('first day of this month');
+$calendarStart->setTime(0, 0, 0);
+$calendarEnd = (clone $calendarStart)->modify('last day of this month');
+$calendarMonth = $calendarStart->format('Y-m');
+$previousMonth = (clone $calendarStart)->modify('-1 month')->format('Y-m');
+$nextMonth = (clone $calendarStart)->modify('+1 month')->format('Y-m');
+$firstCalendarDay = (clone $calendarStart)->modify('-' . (int) $calendarStart->format('w') . ' days');
+$lastCalendarDay = (clone $calendarEnd)->modify('+' . (6 - (int) $calendarEnd->format('w')) . ' days');
+
+$plansByDate = [];
+$monthlyPlans = [];
+$monthStartString = $calendarStart->format('Y-m-d');
+$monthEndString = $calendarEnd->format('Y-m-d');
+$planStmt = $conn->prepare(
+    'SELECT *
+     FROM schedules
+     WHERE user_id = ? AND start_date BETWEEN ? AND ?
+     ORDER BY start_date ASC, start_time ASC'
+);
+
+if ($planStmt !== false) {
+    $planStmt->bind_param('iss', $currentUserId, $monthStartString, $monthEndString);
+    $planStmt->execute();
+    $planResult = $planStmt->get_result();
+    if ($planResult) {
+        while ($plan = $planResult->fetch_assoc()) {
+            $planDate = (string) ($plan['start_date'] ?? '');
+            $monthlyPlans[] = $plan;
+            $plansByDate[$planDate][] = $plan;
+        }
+    }
+    $planStmt->close();
+}
+
+$upcomingPlans = [];
+$todayString = date('Y-m-d');
+$upcomingStmt = $conn->prepare(
+    'SELECT *
+     FROM schedules
+     WHERE user_id = ? AND start_date >= ? AND status = ?
+     ORDER BY start_date ASC, start_time ASC
+     LIMIT 5'
+);
+
+if ($upcomingStmt !== false) {
+    $scheduledStatus = 'scheduled';
+    $upcomingStmt->bind_param('iss', $currentUserId, $todayString, $scheduledStatus);
+    $upcomingStmt->execute();
+    $upcomingResult = $upcomingStmt->get_result();
+    if ($upcomingResult) {
+        while ($plan = $upcomingResult->fetch_assoc()) {
+            $upcomingPlans[] = $plan;
+        }
+    }
+    $upcomingStmt->close();
+}
 
 // Get monthly sales data
 $monthlySales = $conn->query("
@@ -429,6 +573,357 @@ include '../../includes/navbar.php';
     margin: 0;
 }
 
+/* Sales Planner */
+.agenda-preview {
+    padding: 1.15rem 1.25rem;
+}
+
+.agenda-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.agenda-title {
+    margin: 0;
+    color: var(--gray-900);
+    font-size: 1.35rem;
+    font-weight: 600;
+}
+
+.agenda-open-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 0;
+    background: var(--theme-primary);
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 12px 24px rgba(31, 99, 146, 0.22);
+    transition: all 0.18s ease;
+}
+
+.agenda-open-btn:hover {
+    transform: translateY(-1px);
+    background: var(--theme-primary-dark);
+}
+
+.agenda-date-group {
+    min-width: 0;
+    margin-bottom: 1rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--gray-100);
+    border-radius: 14px;
+    background: #ffffff;
+}
+
+.agenda-date-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.85rem;
+}
+
+.agenda-date-label {
+    color: #9ca3af;
+    font-size: 0.98rem;
+    font-weight: 500;
+}
+
+.agenda-more-btn {
+    border: 0;
+    background: transparent;
+    color: #9ca3af;
+    padding: 0;
+}
+
+.agenda-item {
+    display: grid;
+    grid-template-columns: 66px 6px minmax(0, 1fr);
+    gap: 1rem;
+    align-items: center;
+    padding: 0.55rem 0;
+}
+
+.agenda-time {
+    color: #111827;
+    font-size: 1.2rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.agenda-color {
+    width: 6px;
+    height: 48px;
+    border-radius: 999px;
+}
+
+.agenda-kicker {
+    color: #9ca3af;
+    font-size: 0.78rem;
+    font-weight: 500;
+    line-height: 1.2;
+    margin-bottom: 0.2rem;
+}
+
+.agenda-text {
+    color: #7b8190;
+    font-size: 0.98rem;
+    font-weight: 600;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.planner-modal .modal-dialog {
+    max-width: 1040px;
+}
+
+.planner-modal .modal-content {
+    border: 0;
+    border-radius: 22px;
+    overflow: hidden;
+}
+
+.planner-modal .modal-header {
+    background: #ffffff;
+    border-bottom: 1px solid var(--gray-200);
+    padding: 1.25rem 1.5rem;
+}
+
+.planner-modal .modal-title {
+    color: var(--gray-900);
+    font-weight: 800;
+}
+
+.planner-modal .planner-side {
+    grid-template-columns: minmax(0, 1fr) 360px;
+    align-items: start;
+}
+
+.planner-shell {
+    padding: 1.25rem;
+}
+
+.planner-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.planner-month {
+    margin: 0;
+    color: var(--gray-900);
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.planner-nav {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.planner-nav a {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--gray-300);
+    color: var(--theme-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    transition: all 0.18s ease;
+}
+
+.planner-nav a:hover {
+    background: var(--theme-primary);
+    color: white;
+    border-color: var(--theme-primary);
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.calendar-weekday,
+.calendar-day {
+    min-width: 0;
+    border-right: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.calendar-weekday:nth-child(7n),
+.calendar-day:nth-child(7n) {
+    border-right: none;
+}
+
+.calendar-day:nth-last-child(-n + 7) {
+    border-bottom: none;
+}
+
+.calendar-weekday {
+    background: var(--gray-50);
+    color: var(--gray-600);
+    padding: 0.65rem 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.calendar-day {
+    min-height: 96px;
+    background: white;
+    padding: 0.55rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+
+.calendar-day:hover {
+    background: #f3faff;
+}
+
+.calendar-day.is-muted {
+    background: #fbfcfd;
+    color: #adb5bd;
+}
+
+.calendar-day.is-today {
+    box-shadow: inset 0 0 0 2px rgba(31, 99, 146, 0.35);
+}
+
+.calendar-day.is-selected {
+    background: #eef8ff;
+}
+
+.calendar-date {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--gray-900);
+}
+
+.calendar-day.is-muted .calendar-date {
+    color: #adb5bd;
+}
+
+.calendar-plan-chip {
+    width: 100%;
+    border: 0;
+    border-radius: 8px;
+    padding: 0.25rem 0.4rem;
+    color: white;
+    font-size: 0.68rem;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.calendar-more {
+    color: var(--gray-600);
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+.planner-side {
+    display: grid;
+    gap: 1rem;
+}
+
+.planner-panel {
+    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    padding: 1rem;
+    background: var(--gray-50);
+}
+
+.planner-panel h6 {
+    margin: 0 0 0.8rem;
+    color: var(--gray-900);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.planner-form-grid {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.planner-form-grid .form-control,
+.planner-form-grid .form-select {
+    border-radius: 12px;
+    font-size: 0.85rem;
+}
+
+.plan-list {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.plan-item {
+    display: grid;
+    grid-template-columns: 4px minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: start;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 0.75rem;
+}
+
+.plan-color {
+    width: 4px;
+    height: 100%;
+    min-height: 42px;
+    border-radius: 999px;
+}
+
+.plan-title {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: 0.2rem;
+}
+
+.plan-meta {
+    color: var(--gray-600);
+    font-size: 0.72rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+.plan-delete {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 8px;
+    color: #dc2626;
+    background: #fee2e2;
+}
+
+.plan-delete:hover {
+    background: #dc2626;
+    color: white;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .stats-grid {
@@ -448,6 +943,19 @@ include '../../includes/navbar.php';
     
     .stat-card-modern .stat-number {
         font-size: 2rem;
+    }
+
+    .calendar-weekday {
+        font-size: 0.62rem;
+    }
+
+    .calendar-day {
+        min-height: 78px;
+        padding: 0.4rem;
+    }
+
+    .planner-modal .planner-side {
+        grid-template-columns: 1fr;
     }
 }
 </style>
@@ -543,7 +1051,7 @@ include '../../includes/navbar.php';
 
     <!-- Lists Row -->
     <div class="row g-4">
-        <div class="col-md-6">
+        <div class="col-lg-7">
             <div class="list-card">
                 <div class="card-header">
                     <h5>
@@ -583,17 +1091,183 @@ include '../../includes/navbar.php';
                 </div>
             </div>
         </div>
-        
-        <div class="col-md-6">
+
+        <div class="col-lg-5">
             <div class="list-card">
-                <div class="card-header">
-                    <h5>
-                        <i class="fas fa-calendar-alt"></i>
-                        Upcoming Schedule
-                    </h5>
-                </div>
                 <div class="card-body">
                     <?php renderScheduleCalendar($schedules); ?>
+                    <div class="agenda-preview">
+                        <div class="agenda-header">
+                            <h5 class="agenda-title">Calendar</h5>
+                            <button type="button" class="agenda-open-btn" data-bs-toggle="modal" data-bs-target="#salesPlannerModal" aria-label="Open sales planner">
+                                <i class="far fa-calendar-alt"></i>
+                            </button>
+                        </div>
+
+                        <?php if ($upcomingPlans): ?>
+                            <?php
+                            $agendaGroups = [];
+                            foreach ($upcomingPlans as $plan) {
+                                $groupDate = (string) ($plan['start_date'] ?? date('Y-m-d'));
+                                $agendaGroups[$groupDate][] = $plan;
+                            }
+                            ?>
+                            <?php foreach ($agendaGroups as $groupDate => $plans): ?>
+                                <div class="agenda-date-group">
+                                    <div class="agenda-date-row">
+                                        <span class="agenda-date-label"><?php echo htmlspecialchars(date('d F', strtotime($groupDate))); ?></span>
+                                        <button type="button" class="agenda-more-btn" data-bs-toggle="modal" data-bs-target="#salesPlannerModal" aria-label="View date plans">
+                                            <i class="fas fa-ellipsis-h"></i>
+                                        </button>
+                                    </div>
+                                    <?php foreach ($plans as $plan): ?>
+                                        <div class="agenda-item">
+                                            <div class="agenda-time"><?php echo htmlspecialchars(date('H:i', strtotime((string) ($plan['start_time'] ?? '09:00')))); ?></div>
+                                            <span class="agenda-color" style="background: <?php echo htmlspecialchars((string) ($plan['color_code'] ?? '#1f6392')); ?>;"></span>
+                                            <div>
+                                                <div class="agenda-kicker"><?php echo htmlspecialchars(ucfirst((string) ($plan['schedule_type'] ?? 'Plan'))); ?></div>
+                                                <div class="agenda-text"><?php echo htmlspecialchars((string) ($plan['title'] ?? 'Plan')); ?></div>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <div class="empty-state-modern" style="padding: 2rem 1rem;">
+                                <i class="fas fa-calendar-week"></i>
+                                <p>No upcoming plans</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade planner-modal" id="salesPlannerModal" tabindex="-1" aria-labelledby="salesPlannerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="salesPlannerModalLabel">
+                    <i class="fas fa-calendar-alt me-2" style="color: var(--theme-primary);"></i>
+                    Sales Planner
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="planner-shell">
+                    <div class="planner-toolbar">
+                        <h5 class="planner-month"><?php echo htmlspecialchars($calendarStart->format('F Y')); ?></h5>
+                        <div class="planner-nav">
+                            <a href="dashboard.php?calendar_month=<?php echo urlencode($previousMonth); ?>" aria-label="Previous month">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                            <a href="dashboard.php?calendar_month=<?php echo urlencode(date('Y-m')); ?>" aria-label="Current month">
+                                <i class="fas fa-circle"></i>
+                            </a>
+                            <a href="dashboard.php?calendar_month=<?php echo urlencode($nextMonth); ?>" aria-label="Next month">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="calendar-grid mb-3">
+                        <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $weekday): ?>
+                            <div class="calendar-weekday"><?php echo $weekday; ?></div>
+                        <?php endforeach; ?>
+
+                        <?php
+                        $cursorDate = clone $firstCalendarDay;
+                        while ($cursorDate <= $lastCalendarDay):
+                            $dateString = $cursorDate->format('Y-m-d');
+                            $datePlans = $plansByDate[$dateString] ?? [];
+                            $isCurrentMonth = $cursorDate->format('Y-m') === $calendarMonth;
+                            $isToday = $dateString === date('Y-m-d');
+                        ?>
+                            <div
+                                class="calendar-day <?php echo !$isCurrentMonth ? 'is-muted' : ''; ?> <?php echo $isToday ? 'is-today' : ''; ?>"
+                                data-plan-date="<?php echo htmlspecialchars($dateString); ?>"
+                            >
+                                <span class="calendar-date"><?php echo htmlspecialchars($cursorDate->format('j')); ?></span>
+                                <?php foreach (array_slice($datePlans, 0, 2) as $plan): ?>
+                                    <button
+                                        type="button"
+                                        class="calendar-plan-chip"
+                                        style="background: <?php echo htmlspecialchars((string) ($plan['color_code'] ?? '#1f6392')); ?>;"
+                                        title="<?php echo htmlspecialchars((string) ($plan['title'] ?? 'Plan')); ?>"
+                                    >
+                                        <?php echo htmlspecialchars((string) ($plan['title'] ?? 'Plan')); ?>
+                                    </button>
+                                <?php endforeach; ?>
+                                <?php if (count($datePlans) > 2): ?>
+                                    <span class="calendar-more">+<?php echo count($datePlans) - 2; ?> more</span>
+                                <?php endif; ?>
+                            </div>
+                        <?php
+                            $cursorDate->modify('+1 day');
+                        endwhile;
+                        ?>
+                    </div>
+
+                    <div class="planner-side">
+                        <div class="planner-panel">
+                            <h6><i class="fas fa-plus me-1" style="color: var(--theme-primary);"></i>Add Sales Plan</h6>
+                            <form method="POST" class="planner-form-grid">
+                                <input type="hidden" name="calendar_month" value="<?php echo htmlspecialchars($calendarMonth); ?>">
+                                <input type="date" name="plan_date" id="planDate" class="form-control" value="<?php echo htmlspecialchars(date('Y-m-d')); ?>" required>
+                                <input type="time" name="plan_time" class="form-control" value="09:00" required>
+                                <input type="text" name="plan_title" class="form-control" placeholder="Plan title, e.g. Client follow-up" required>
+                                <select name="plan_type" class="form-select">
+                                    <option value="meeting">Meeting</option>
+                                    <option value="deadline">Deadline</option>
+                                    <option value="milestone">Milestone</option>
+                                    <option value="review">Review</option>
+                                    <option value="personal">Personal</option>
+                                </select>
+                                <input type="text" name="plan_location" class="form-control" placeholder="Location or meeting link">
+                                <textarea name="plan_description" class="form-control" rows="2" placeholder="Notes or plan details"></textarea>
+                                <button type="submit" name="create_plan" class="btn btn-primary w-100">
+                                    <i class="fas fa-calendar-plus me-1"></i> Add to Calendar
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="planner-panel">
+                            <h6><i class="fas fa-list me-1" style="color: var(--theme-primary);"></i>Upcoming Plans</h6>
+                            <?php if ($upcomingPlans): ?>
+                                <div class="plan-list">
+                                    <?php foreach ($upcomingPlans as $plan): ?>
+                                        <div class="plan-item">
+                                            <span class="plan-color" style="background: <?php echo htmlspecialchars((string) ($plan['color_code'] ?? '#1f6392')); ?>;"></span>
+                                            <div>
+                                                <div class="plan-title"><?php echo htmlspecialchars((string) ($plan['title'] ?? 'Plan')); ?></div>
+                                                <div class="plan-meta">
+                                                    <span><i class="far fa-calendar"></i> <?php echo htmlspecialchars(date('M d, Y', strtotime((string) ($plan['start_date'] ?? date('Y-m-d'))))); ?></span>
+                                                    <span><i class="far fa-clock"></i> <?php echo htmlspecialchars(date('h:i A', strtotime((string) ($plan['start_time'] ?? '09:00')))); ?></span>
+                                                    <?php if (!empty($plan['location'])): ?>
+                                                        <span><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars((string) $plan['location']); ?></span>
+                                                    <?php endif; ?>
+                                                </div>
+                                            </div>
+                                            <form method="POST" onsubmit="return confirm('Remove this plan?');">
+                                                <input type="hidden" name="plan_id" value="<?php echo (int) ($plan['id'] ?? 0); ?>">
+                                                <input type="hidden" name="calendar_month" value="<?php echo htmlspecialchars($calendarMonth); ?>">
+                                                <button type="submit" name="delete_plan" class="plan-delete" aria-label="Delete plan">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php else: ?>
+                                <div class="empty-state-modern" style="padding: 1rem;">
+                                    <i class="fas fa-calendar-week"></i>
+                                    <p>No upcoming plans</p>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -765,6 +1439,25 @@ new Chart(statusCtx, {
             }
         }
     }
+});
+
+document.querySelectorAll('.calendar-day').forEach((day) => {
+    day.addEventListener('click', () => {
+        const selectedDate = day.dataset.planDate;
+        const planDateInput = document.getElementById('planDate');
+
+        if (!selectedDate || !planDateInput) {
+            return;
+        }
+
+        document.querySelectorAll('.calendar-day.is-selected').forEach((selectedDay) => {
+            selectedDay.classList.remove('is-selected');
+        });
+
+        day.classList.add('is-selected');
+        planDateInput.value = selectedDate;
+        planDateInput.focus();
+    });
 });
 </script>
 

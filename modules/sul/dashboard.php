@@ -5,6 +5,10 @@ requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
+$hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_days');
+$salesApprovalCondition = $hasSalesApproval ? "t.sales_approved = 1" : "1 = 1";
+$salesChoiceCondition = $hasSalesChoice ? "t.sales_estimate_days IS NOT NULL" : "1 = 1";
 
 // Get statistics
 $totalExperts = $conn->query("SELECT COUNT(*) as count FROM users WHERE role = 'expert' OR role = 'developer'")->fetch_assoc()['count'];
@@ -48,6 +52,57 @@ $projectsNeedingAllocation = $conn->query("
       )
     GROUP BY p.id
     ORDER BY p.created_at DESC
+// Get projects that need SUL task allocation/action
+$projectsNeedingAllocation = $conn->query("
+    SELECT
+        p.*,
+        c.name as client_name,
+        COALESCE(ta.total_tasks, 0) as total_tasks,
+        COALESCE(ta.needs_expert_count, 0) as needs_expert_count,
+        COALESCE(ta.review_count, 0) as review_count,
+        COALESCE(ta.ready_dev_count, 0) as ready_dev_count
+    FROM projects p
+    JOIN clients c ON p.client_id = c.id
+    LEFT JOIN (
+        SELECT
+            t.project_id,
+            COUNT(t.id) as total_tasks,
+            SUM(CASE
+                WHEN (t.assigned_to IS NULL OR t.assigned_to = 0) AND t.status = 'todo'
+                THEN 1 ELSE 0
+            END) as needs_expert_count,
+            SUM(CASE
+                WHEN t.status = 'review' AND {$salesApprovalCondition} AND {$salesChoiceCondition}
+                THEN 1 ELSE 0
+            END) as review_count,
+            SUM(CASE
+                WHEN t.status = 'todo'
+                  AND t.assigned_to IS NOT NULL
+                  AND t.assigned_to != 0
+                  AND EXISTS (
+                      SELECT 1
+                      FROM feature_estimations fe
+                      WHERE fe.task_id = t.id AND fe.status = 'completed'
+                  )
+                  AND {$salesApprovalCondition}
+                  AND {$salesChoiceCondition}
+                THEN 1 ELSE 0
+            END) as ready_dev_count
+        FROM tasks t
+        GROUP BY t.project_id
+    ) ta ON ta.project_id = p.id
+    WHERE p.status != 'completed'
+      AND (
+        COALESCE(ta.total_tasks, 0) = 0
+        OR COALESCE(ta.needs_expert_count, 0) > 0
+        OR COALESCE(ta.review_count, 0) > 0
+        OR COALESCE(ta.ready_dev_count, 0) > 0
+      )
+    ORDER BY (
+        COALESCE(ta.needs_expert_count, 0)
+        + COALESCE(ta.review_count, 0)
+        + COALESCE(ta.ready_dev_count, 0)
+    ) DESC, p.created_at DESC
     LIMIT 5
 ");
 
@@ -60,6 +115,99 @@ $recentTasks = $conn->query("
     ORDER BY t.created_at DESC
     LIMIT 10
 ");
+
+// Build SUL agenda from manual schedules, upcoming deadlines, and allocation actions
+$upcomingAgenda = [];
+
+$scheduleRows = $conn->query("
+    SELECT title, description, start_date, start_time, schedule_type
+    FROM schedules
+    WHERE user_id = {$user['id']}
+      AND start_date IS NOT NULL
+      AND start_date >= CURDATE()
+    ORDER BY start_date ASC, start_time ASC
+    LIMIT 5
+");
+while ($schedule = $scheduleRows->fetch_assoc()) {
+    $agendaDate = trim((string) ($schedule['start_date'] ?? ''));
+    $agendaTime = trim((string) ($schedule['start_time'] ?? ''));
+    $upcomingAgenda[] = [
+        'title' => (string) ($schedule['title'] ?? 'Scheduled item'),
+        'description' => (string) ($schedule['description'] ?? ''),
+        'date' => $agendaDate . ($agendaTime !== '' ? ' ' . $agendaTime : ''),
+        'type' => ucfirst((string) ($schedule['schedule_type'] ?? 'Schedule')),
+        'icon' => 'calendar-alt',
+        'url' => '',
+    ];
+}
+
+$deadlineRows = $conn->query("
+    SELECT t.id, t.title, t.deadline, t.status, p.name AS project_name
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE t.status != 'completed'
+      AND t.deadline IS NOT NULL
+      AND t.deadline >= NOW()
+    ORDER BY t.deadline ASC
+    LIMIT 5
+");
+while ($task = $deadlineRows->fetch_assoc()) {
+    $upcomingAgenda[] = [
+        'title' => (string) ($task['title'] ?? 'Task deadline'),
+        'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
+        'date' => (string) ($task['deadline'] ?? ''),
+        'type' => 'Deadline',
+        'icon' => 'flag-checkered',
+        'url' => 'task-allocation.php?task_id=' . (int) ($task['id'] ?? 0),
+    ];
+}
+
+$actionRows = $conn->query("
+    SELECT
+        t.id,
+        t.title,
+        t.deadline,
+        p.name AS project_name,
+        CASE
+            WHEN (t.assigned_to IS NULL OR t.assigned_to = 0) AND t.status = 'todo'
+                THEN 'Assign Expert'
+            WHEN t.status = 'review' AND {$salesApprovalCondition} AND {$salesChoiceCondition}
+                THEN 'Review Estimation'
+            WHEN t.status = 'todo'
+              AND t.assigned_to IS NOT NULL
+              AND t.assigned_to != 0
+              AND EXISTS (
+                  SELECT 1
+                  FROM feature_estimations fe
+                  WHERE fe.task_id = t.id AND fe.status = 'completed'
+              )
+              AND {$salesApprovalCondition}
+              AND {$salesChoiceCondition}
+                THEN 'Assign Developer'
+            ELSE ''
+        END AS action_label
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE t.status != 'completed'
+    HAVING action_label != ''
+    ORDER BY COALESCE(t.deadline, NOW()) ASC
+    LIMIT 5
+");
+while ($task = $actionRows->fetch_assoc()) {
+    $upcomingAgenda[] = [
+        'title' => (string) ($task['title'] ?? 'Task action'),
+        'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
+        'date' => (string) ($task['deadline'] ?? date('Y-m-d H:i:s')),
+        'type' => (string) ($task['action_label'] ?? 'Action'),
+        'icon' => 'tasks',
+        'url' => 'task-allocation.php?task_id=' . (int) ($task['id'] ?? 0),
+    ];
+}
+
+usort($upcomingAgenda, static function (array $left, array $right): int {
+    return strtotime((string) ($left['date'] ?? '')) <=> strtotime((string) ($right['date'] ?? ''));
+});
+$upcomingAgenda = array_slice($upcomingAgenda, 0, 5);
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -429,6 +577,32 @@ include '../../includes/navbar.php';
     margin: 0;
 }
 
+.allocation-status-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+.allocation-status-tag {
+    border-radius: 999px;
+    padding: 0.22rem 0.55rem;
+    background: #eef6ff;
+    color: var(--theme-primary);
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+.allocation-status-tag.warning {
+    background: #fff7df;
+    color: #a16207;
+}
+
+.allocation-status-tag.success {
+    background: #e7f8ef;
+    color: #047857;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .welcome-banner {
@@ -519,6 +693,45 @@ include '../../includes/navbar.php';
         </div>
         
         <div class="col-xl-5">
+            <!-- Upcoming Schedule -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
+                </div>
+                <div class="card-body">
+                    <?php if($upcomingAgenda): ?>
+                        <?php foreach($upcomingAgenda as $agendaItem): ?>
+                        <div class="timeline-item mb-3">
+                            <h6 class="mb-1">
+                                <?php if(!empty($agendaItem['url'])): ?>
+                                    <a href="<?php echo htmlspecialchars($agendaItem['url']); ?>" class="text-decoration-none text-dark">
+                                        <?php echo htmlspecialchars($agendaItem['title']); ?>
+                                    </a>
+                                <?php else: ?>
+                                    <?php echo htmlspecialchars($agendaItem['title']); ?>
+                                <?php endif; ?>
+                            </h6>
+                            <small class="text-muted">
+                                <i class="fas fa-<?php echo htmlspecialchars($agendaItem['icon']); ?> me-1"></i>
+                                <?php echo htmlspecialchars($agendaItem['type']); ?>
+                                <span class="mx-1">-</span>
+                                <i class="far fa-clock me-1"></i>
+                                <?php echo date('M d, Y h:i A', strtotime((string) $agendaItem['date'])); ?>
+                            </small>
+                            <?php if(!empty($agendaItem['description'])): ?>
+                            <p class="mb-0 small text-muted mt-1"><?php echo htmlspecialchars($agendaItem['description']); ?></p>
+                            <?php endif; ?>
+                        </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="empty-state-mini">
+                            <i class="fas fa-calendar-week"></i>
+                            <p>No upcoming agenda items</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+            
             <!-- Projects Needing Allocation -->
             <div class="card">
                 <div class="card-header">
@@ -527,6 +740,12 @@ include '../../includes/navbar.php';
                 <div class="card-body p-0">
                     <?php if($projectsNeedingAllocation->num_rows > 0): ?>
                         <?php while($project = $projectsNeedingAllocation->fetch_assoc()): ?>
+                        <?php
+                            $totalTasksForProject = (int) ($project['total_tasks'] ?? 0);
+                            $needsExpertCount = (int) ($project['needs_expert_count'] ?? 0);
+                            $reviewCount = (int) ($project['review_count'] ?? 0);
+                            $readyDevCount = (int) ($project['ready_dev_count'] ?? 0);
+                        ?>
                         <div class="list-group-item">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
@@ -546,6 +765,19 @@ include '../../includes/navbar.php';
                                             <i class="fas fa-tasks me-1"></i>
                                             Pending tasks: <?php echo (int) $project['pending_task_count']; ?>
                                         </small>
+                                    <div class="allocation-status-tags">
+                                        <?php if($totalTasksForProject === 0): ?>
+                                            <span class="allocation-status-tag warning">No tasks yet</span>
+                                        <?php endif; ?>
+                                        <?php if($needsExpertCount > 0): ?>
+                                            <span class="allocation-status-tag warning"><?php echo $needsExpertCount; ?> need expert</span>
+                                        <?php endif; ?>
+                                        <?php if($reviewCount > 0): ?>
+                                            <span class="allocation-status-tag"><?php echo $reviewCount; ?> for review</span>
+                                        <?php endif; ?>
+                                        <?php if($readyDevCount > 0): ?>
+                                            <span class="allocation-status-tag success"><?php echo $readyDevCount; ?> ready for dev</span>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 <a href="task-allocation.php?project_id=<?php echo $project['id']; ?>" class="btn-primary-modern">
