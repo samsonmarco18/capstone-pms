@@ -7,6 +7,10 @@ requireRole('sales');
 $conn = getConnection();
 $user = getCurrentUser();
 $currentUserId = (int) $user['id'];
+$hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
+$hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
+$projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
+$projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_plan'])) {
@@ -128,19 +132,40 @@ $schedules = $conn->query("
             )
         UNION ALL
         SELECT
+            CONCAT('Project start: ', p.name) AS title,
+            CONCAT('Client: ', c.name) AS description,
+            'milestone' AS schedule_type,
+            p.timeline_start AS start_date,
+            {$projectStartTimeSql} AS start_time,
+            p.status,
+            p.id AS project_id
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id
+        WHERE p.timeline_start IS NOT NULL
+            AND (
+                p.timeline_start > CURDATE()
+                OR (p.timeline_start = CURDATE() AND {$projectStartTimeSql} >= CURTIME())
+            )
+            AND p.status NOT IN ('completed', 'cancelled')
+            AND (p.created_by = {$user['id']} OR c.created_by = {$user['id']})
+        UNION ALL
+        SELECT
             CONCAT('Project deadline: ', p.name) AS title,
             CONCAT('Client: ', c.name) AS description,
             'deadline' AS schedule_type,
             p.timeline_end AS start_date,
-            '17:00:00' AS start_time,
+            {$projectEndTimeSql} AS start_time,
             p.status,
             p.id AS project_id
         FROM projects p
         JOIN clients c ON c.id = p.client_id
         WHERE p.timeline_end IS NOT NULL
-            AND p.timeline_end >= CURDATE()
+            AND (
+                p.timeline_end > CURDATE()
+                OR (p.timeline_end = CURDATE() AND {$projectEndTimeSql} >= CURTIME())
+            )
             AND p.status NOT IN ('completed', 'cancelled')
-            AND c.created_by = {$user['id']}
+            AND (p.created_by = {$user['id']} OR c.created_by = {$user['id']})
         UNION ALL
         SELECT
             CONCAT('Client deadline: ', c.name) AS title,

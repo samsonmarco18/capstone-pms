@@ -6,6 +6,10 @@ requireRole('expert');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
+$hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
+$projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
+$projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 // Get estimation statistics
 $totalEstimations = $conn->query("SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']}")->fetch_assoc()['count'];
@@ -57,14 +61,81 @@ $recentFeatureEstimates = $conn->query("
 
 // Get user's schedule
 $schedules = $conn->query("
-    SELECT * FROM schedules 
-    WHERE user_id = {$user['id']} 
-    AND status <> 'cancelled'
-    AND (
-        start_date > CURDATE()
-        OR (start_date = CURDATE() AND COALESCE(start_time, '00:00:00') >= CURTIME())
-    )
-    ORDER BY start_date, start_time 
+    SELECT title, description, schedule_type, start_date, start_time, status, project_id
+    FROM (
+        SELECT
+            s.title,
+            s.description,
+            s.schedule_type,
+            s.start_date,
+            COALESCE(s.start_time, '00:00:00') AS start_time,
+            s.status,
+            s.project_id
+        FROM schedules s
+        WHERE s.user_id = {$user['id']}
+          AND s.status <> 'cancelled'
+          AND (
+              s.start_date > CURDATE()
+              OR (s.start_date = CURDATE() AND COALESCE(s.start_time, '00:00:00') >= CURTIME())
+          )
+        UNION ALL
+        SELECT DISTINCT
+            CONCAT('Project start: ', p.name) AS title,
+            CONCAT('Client: ', c.name) AS description,
+            'milestone' AS schedule_type,
+            p.timeline_start AS start_date,
+            {$projectStartTimeSql} AS start_time,
+            p.status,
+            p.id AS project_id
+        FROM tasks t
+        JOIN projects p ON p.id = t.project_id
+        JOIN clients c ON c.id = p.client_id
+        WHERE t.assigned_to = {$user['id']}
+          AND t.status != 'completed'
+          AND p.timeline_start IS NOT NULL
+          AND (
+              p.timeline_start > CURDATE()
+              OR (p.timeline_start = CURDATE() AND {$projectStartTimeSql} >= CURTIME())
+          )
+          AND p.status NOT IN ('completed', 'cancelled')
+        UNION ALL
+        SELECT DISTINCT
+            CONCAT('Project deadline: ', p.name) AS title,
+            CONCAT('Client: ', c.name) AS description,
+            'deadline' AS schedule_type,
+            p.timeline_end AS start_date,
+            {$projectEndTimeSql} AS start_time,
+            p.status,
+            p.id AS project_id
+        FROM tasks t
+        JOIN projects p ON p.id = t.project_id
+        JOIN clients c ON c.id = p.client_id
+        WHERE t.assigned_to = {$user['id']}
+          AND t.status != 'completed'
+          AND p.timeline_end IS NOT NULL
+          AND (
+              p.timeline_end > CURDATE()
+              OR (p.timeline_end = CURDATE() AND {$projectEndTimeSql} >= CURTIME())
+          )
+          AND p.status NOT IN ('completed', 'cancelled')
+        UNION ALL
+        SELECT
+            CONCAT('Task deadline: ', t.title) AS title,
+            CONCAT('Project: ', p.name) AS description,
+            'deadline' AS schedule_type,
+            t.deadline AS start_date,
+            '17:00:00' AS start_time,
+            t.status,
+            t.project_id
+        FROM tasks t
+        JOIN projects p ON p.id = t.project_id
+        WHERE t.assigned_to = {$user['id']}
+          AND t.status != 'completed'
+          AND t.deadline IS NOT NULL
+          AND t.deadline >= CURDATE()
+    ) upcoming
+    ORDER BY start_date, start_time
+    LIMIT 5
 ");
 // Build Expert agenda from manual schedules, pending estimates, and upcoming assigned deadlines
 $expertAgenda = [];

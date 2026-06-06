@@ -6,6 +6,10 @@ requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
+$hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
+$projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
+$projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 // Get statistics
 $totalProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE architect_id = {$user['id']} OR architect_id IS NULL")->fetch_assoc()['count'];
@@ -30,14 +34,62 @@ $reviewProjects = $conn->query("
 
 // Get user's schedule
 $schedules = $conn->query("
-    SELECT * FROM schedules 
-    WHERE user_id = {$user['id']} 
-    AND status <> 'cancelled'
-    AND (
-        start_date > CURDATE()
-        OR (start_date = CURDATE() AND COALESCE(start_time, '00:00:00') >= CURTIME())
-    )
-    ORDER BY start_date, start_time 
+    SELECT title, description, schedule_type, start_date, start_time, status, project_id
+    FROM (
+        SELECT
+            s.title,
+            s.description,
+            s.schedule_type,
+            s.start_date,
+            COALESCE(s.start_time, '00:00:00') AS start_time,
+            s.status,
+            s.project_id
+        FROM schedules s
+        WHERE s.user_id = {$user['id']}
+          AND s.status <> 'cancelled'
+          AND (
+              s.start_date > CURDATE()
+              OR (s.start_date = CURDATE() AND COALESCE(s.start_time, '00:00:00') >= CURTIME())
+          )
+        UNION ALL
+        SELECT
+            CONCAT('Project start: ', p.name) AS title,
+            CONCAT('Client: ', c.name) AS description,
+            'milestone' AS schedule_type,
+            p.timeline_start AS start_date,
+            {$projectStartTimeSql} AS start_time,
+            p.status,
+            p.id AS project_id
+        FROM projects p
+        JOIN clients c ON p.client_id = c.id
+        WHERE (p.architect_id = {$user['id']} OR p.architect_id IS NULL)
+          AND p.timeline_start IS NOT NULL
+          AND (
+              p.timeline_start > CURDATE()
+              OR (p.timeline_start = CURDATE() AND {$projectStartTimeSql} >= CURTIME())
+          )
+          AND p.status NOT IN ('completed', 'cancelled')
+        UNION ALL
+        SELECT
+            CONCAT('Project deadline: ', p.name) AS title,
+            CONCAT('Client: ', c.name) AS description,
+            'deadline' AS schedule_type,
+            p.timeline_end AS start_date,
+            {$projectEndTimeSql} AS start_time,
+            p.status,
+            p.id AS project_id
+        FROM projects p
+        JOIN clients c ON p.client_id = c.id
+        WHERE (p.architect_id = {$user['id']} OR p.architect_id IS NULL)
+          AND p.timeline_end IS NOT NULL
+          AND (
+              p.timeline_end > CURDATE()
+              OR (p.timeline_end = CURDATE() AND {$projectEndTimeSql} >= CURTIME())
+          )
+          AND p.status NOT IN ('completed', 'cancelled')
+    ) upcoming
+    ORDER BY start_date, start_time
+    LIMIT 5
 ");
 // Build Architect agenda from manual schedules and project deadlines
 $architectAgenda = [];
@@ -66,7 +118,7 @@ while ($schedule = $scheduleRows->fetch_assoc()) {
 }
 
 $projectMilestones = $conn->query("
-    SELECT p.id, p.name, p.status, p.timeline_end, c.name as client_name
+    SELECT p.id, p.name, p.status, p.timeline_end, {$projectEndTimeSql} AS timeline_end_time, c.name as client_name
     FROM projects p
     JOIN clients c ON p.client_id = c.id
     WHERE (p.architect_id = {$user['id']} OR p.architect_id IS NULL)
@@ -80,7 +132,7 @@ while ($project = $projectMilestones->fetch_assoc()) {
     $architectAgenda[] = [
         'title' => (string) ($project['name'] ?? 'Project milestone'),
         'description' => 'Client: ' . (string) ($project['client_name'] ?? 'Client'),
-        'date' => (string) ($project['timeline_end'] ?? ''),
+        'date' => trim((string) ($project['timeline_end'] ?? '') . ' ' . (string) ($project['timeline_end_time'] ?? '17:00:00')),
         'type' => 'Project Deadline',
         'icon' => 'flag-checkered',
         'url' => 'projects.php',

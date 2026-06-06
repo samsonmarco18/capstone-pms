@@ -9,6 +9,10 @@ $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 $hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_days');
 $salesApprovalCondition = $hasSalesApproval ? "t.sales_approved = 1" : "1 = 1";
 $salesChoiceCondition = $hasSalesChoice ? "t.sales_estimate_days IS NOT NULL" : "1 = 1";
+$hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
+$hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
+$projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
+$projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 // Get statistics
 $totalExperts = $conn->query("SELECT COUNT(*) as count FROM users WHERE role = 'expert' OR role = 'developer'")->fetch_assoc()['count'];
@@ -126,13 +130,51 @@ while ($schedule = $scheduleRows->fetch_assoc()) {
     ];
 }
 
+$projectScheduleRows = $conn->query("
+    SELECT p.id, p.name, p.timeline_start, {$projectStartTimeSql} AS timeline_start_time, p.timeline_end, {$projectEndTimeSql} AS timeline_end_time, c.name AS client_name
+    FROM projects p
+    JOIN clients c ON c.id = p.client_id
+    WHERE (p.sul_id = {$user['id']} OR p.sul_id IS NULL)
+      AND p.status NOT IN ('completed', 'cancelled')
+      AND (
+        (p.timeline_start IS NOT NULL AND (p.timeline_start > CURDATE() OR (p.timeline_start = CURDATE() AND {$projectStartTimeSql} >= CURTIME())))
+        OR (p.timeline_end IS NOT NULL AND (p.timeline_end > CURDATE() OR (p.timeline_end = CURDATE() AND {$projectEndTimeSql} >= CURTIME())))
+      )
+    ORDER BY COALESCE(p.timeline_end, p.timeline_start) ASC
+    LIMIT 8
+");
+while ($project = $projectScheduleRows->fetch_assoc()) {
+    $clientDescription = 'Client: ' . (string) ($project['client_name'] ?? 'Client');
+    if (!empty($project['timeline_start'])) {
+        $upcomingAgenda[] = [
+            'title' => 'Project start: ' . (string) ($project['name'] ?? 'Project'),
+            'description' => $clientDescription,
+            'date' => trim((string) ($project['timeline_start'] ?? '') . ' ' . (string) ($project['timeline_start_time'] ?? '09:00:00')),
+            'type' => 'Project Start',
+            'icon' => 'play-circle',
+            'url' => 'task-allocation.php?project_id=' . (int) ($project['id'] ?? 0),
+        ];
+    }
+
+    if (!empty($project['timeline_end'])) {
+        $upcomingAgenda[] = [
+            'title' => 'Project deadline: ' . (string) ($project['name'] ?? 'Project'),
+            'description' => $clientDescription,
+            'date' => trim((string) ($project['timeline_end'] ?? '') . ' ' . (string) ($project['timeline_end_time'] ?? '17:00:00')),
+            'type' => 'Project Deadline',
+            'icon' => 'flag-checkered',
+            'url' => 'task-allocation.php?project_id=' . (int) ($project['id'] ?? 0),
+        ];
+    }
+}
+
 $deadlineRows = $conn->query("
     SELECT t.id, t.title, t.deadline, t.status, p.name AS project_name
     FROM tasks t
     JOIN projects p ON p.id = t.project_id
     WHERE t.status != 'completed'
       AND t.deadline IS NOT NULL
-      AND t.deadline >= NOW()
+      AND t.deadline >= CURDATE()
     ORDER BY t.deadline ASC
     LIMIT 5
 ");
@@ -140,7 +182,7 @@ while ($task = $deadlineRows->fetch_assoc()) {
     $upcomingAgenda[] = [
         'title' => (string) ($task['title'] ?? 'Task deadline'),
         'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
-        'date' => (string) ($task['deadline'] ?? ''),
+        'date' => trim((string) ($task['deadline'] ?? '') . ' 17:00:00'),
         'type' => 'Deadline',
         'icon' => 'flag-checkered',
         'url' => 'task-allocation.php?task_id=' . (int) ($task['id'] ?? 0),
