@@ -1,11 +1,16 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
+require_once '../../includes/schedule-calendar.php';
 requireRole('sales');
 
 $conn = getConnection();
 $user = getCurrentUser();
 $currentUserId = (int) $user['id'];
+$hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
+$hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
+$projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
+$projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_plan'])) {
@@ -106,6 +111,79 @@ $projectStatus = $conn->query("
     GROUP BY status
 ");
 
+// Get user's schedule and related project/client deadlines
+$schedules = $conn->query("
+    SELECT title, description, schedule_type, start_date, start_time, status, project_id
+    FROM (
+        SELECT
+            s.title,
+            s.description,
+            s.schedule_type,
+            s.start_date,
+            COALESCE(s.start_time, '00:00:00') AS start_time,
+            s.status,
+            s.project_id
+        FROM schedules s
+        WHERE s.user_id = {$user['id']}
+            AND s.status <> 'cancelled'
+            AND (
+                s.start_date > CURDATE()
+                OR (s.start_date = CURDATE() AND COALESCE(s.start_time, '00:00:00') >= CURTIME())
+            )
+        UNION ALL
+        SELECT
+            CONCAT('Project start: ', p.name) AS title,
+            CONCAT('Client: ', c.name) AS description,
+            'milestone' AS schedule_type,
+            p.timeline_start AS start_date,
+            {$projectStartTimeSql} AS start_time,
+            p.status,
+            p.id AS project_id
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id
+        WHERE p.timeline_start IS NOT NULL
+            AND (
+                p.timeline_start > CURDATE()
+                OR (p.timeline_start = CURDATE() AND {$projectStartTimeSql} >= CURTIME())
+            )
+            AND p.status NOT IN ('completed', 'cancelled')
+            AND (p.created_by = {$user['id']} OR c.created_by = {$user['id']})
+        UNION ALL
+        SELECT
+            CONCAT('Project deadline: ', p.name) AS title,
+            CONCAT('Client: ', c.name) AS description,
+            'deadline' AS schedule_type,
+            p.timeline_end AS start_date,
+            {$projectEndTimeSql} AS start_time,
+            p.status,
+            p.id AS project_id
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id
+        WHERE p.timeline_end IS NOT NULL
+            AND (
+                p.timeline_end > CURDATE()
+                OR (p.timeline_end = CURDATE() AND {$projectEndTimeSql} >= CURTIME())
+            )
+            AND p.status NOT IN ('completed', 'cancelled')
+            AND (p.created_by = {$user['id']} OR c.created_by = {$user['id']})
+        UNION ALL
+        SELECT
+            CONCAT('Client deadline: ', c.name) AS title,
+            c.contact_person AS description,
+            'deadline' AS schedule_type,
+            c.deadline AS start_date,
+            '17:00:00' AS start_time,
+            c.status,
+            NULL AS project_id
+        FROM clients c
+        WHERE c.deadline IS NOT NULL
+            AND c.deadline >= CURDATE()
+            AND c.status <> 'inactive'
+            AND c.created_by = {$user['id']}
+    ) upcoming
+    ORDER BY start_date, start_time
+    LIMIT 5
+");
 $calendarMonthInput = trim((string) ($_GET['calendar_month'] ?? date('Y-m')));
 if (!preg_match('/^\d{4}-\d{2}$/', $calendarMonthInput)) {
     $calendarMonthInput = date('Y-m');
@@ -522,7 +600,7 @@ include '../../includes/navbar.php';
 
 /* Sales Planner */
 .agenda-preview {
-    padding: 1.35rem 1.5rem;
+    padding: 1.15rem 1.25rem;
 }
 
 .agenda-header {
@@ -530,7 +608,7 @@ include '../../includes/navbar.php';
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.25rem;
 }
 
 .agenda-title {
@@ -560,7 +638,12 @@ include '../../includes/navbar.php';
 }
 
 .agenda-date-group {
-    margin-bottom: 1.6rem;
+    min-width: 0;
+    margin-bottom: 1rem;
+    padding: 0.75rem 0.85rem;
+    border: 1px solid var(--gray-100);
+    border-radius: 14px;
+    background: #ffffff;
 }
 
 .agenda-date-row {
@@ -568,7 +651,7 @@ include '../../includes/navbar.php';
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0.85rem;
 }
 
 .agenda-date-label {
@@ -586,10 +669,10 @@ include '../../includes/navbar.php';
 
 .agenda-item {
     display: grid;
-    grid-template-columns: 74px 6px minmax(0, 1fr);
-    gap: 1.25rem;
+    grid-template-columns: 66px 6px minmax(0, 1fr);
+    gap: 1rem;
     align-items: center;
-    padding: 0.65rem 0;
+    padding: 0.55rem 0;
 }
 
 .agenda-time {
@@ -993,7 +1076,7 @@ include '../../includes/navbar.php';
 
     <!-- Lists Row -->
     <div class="row g-4">
-        <div class="col-lg-4">
+        <div class="col-lg-7">
             <div class="list-card">
                 <div class="card-header">
                     <h5>
@@ -1018,7 +1101,7 @@ include '../../includes/navbar.php';
                                         </span>
                                     </div>
                                 </div>
-                                <a href="clients.php?id=<?php echo $client['id']; ?>" class="btn-view">
+                                <a href="clients.php?view=<?php echo $client['id']; ?>" class="btn-view">
                                     <i class="fas fa-eye"></i> View
                                 </a>
                             </div>
@@ -1034,9 +1117,10 @@ include '../../includes/navbar.php';
             </div>
         </div>
 
-        <div class="col-lg-8">
+        <div class="col-lg-5">
             <div class="list-card">
                 <div class="card-body">
+                    <?php renderScheduleCalendar($schedules); ?>
                     <div class="agenda-preview">
                         <div class="agenda-header">
                             <h5 class="agenda-title">Calendar</h5>

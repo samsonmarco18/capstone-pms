@@ -23,6 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $password = trim($_POST['password'] ?? '');
     $selectedRole = trim($_POST['role'] ?? '');
+    $securitySettings = getSecuritySettings();
+    $maxLoginAttempts = (int) ($securitySettings['max_login_attempts'] ?? 5);
 
     if ($email === '') {
         $error = 'Email address is required.';
@@ -33,64 +35,97 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $conn = getConnection();
         $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+        $stmt = $conn->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
+        $stmt->bind_param('s', $email);
+        $stmt->execute();
+        $result = $stmt->get_result();
 
-        $attemptStmt = $conn->prepare("SELECT COUNT(*) AS attempts FROM audit_logs WHERE action = 'login_failed' AND ip_address = ? AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)");
-        $attemptStmt->bind_param('s', $ipAddress);
-        $attemptStmt->execute();
-        $attempts = (int) ($attemptStmt->get_result()->fetch_assoc()['attempts'] ?? 0);
-        $attemptStmt->close();
+        if ($user = $result->fetch_assoc()) {
+            $attemptStmt = $conn->prepare(
+                "SELECT COUNT(*) AS attempts
+                 FROM audit_logs
+                 WHERE user_id = ?
+                   AND action IN ('login_failed_wrong_password', 'login_failed_inactive', 'login_failed_locked', 'login_failed_user_not_found')
+                   AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
+            );
+            $attemptStmt->bind_param('i', $user['id']);
+            $attemptStmt->execute();
+            $attempts = (int) ($attemptStmt->get_result()->fetch_assoc()['attempts'] ?? 0);
+            $attemptStmt->close();
 
-        if ($attempts >= 5) {
-            $error = 'Too many failed login attempts. Please try again after 15 minutes.';
-        } else {
-            $stmt = $conn->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
-            $stmt->bind_param('s', $email);
-            $stmt->execute();
-            $result = $stmt->get_result();
+            if ($attempts >= $maxLoginAttempts) {
+                $error = 'Too many failed login attempts. Please try again later.';
+                logActivity((int) $user['id'], 'login_failed_locked', 'users', (int) $user['id'], null, ['email' => $email], 'failed');
+            } elseif ($user['status'] !== 'active') {
+                $error = 'Your account is ' . $user['status'] . '. Please contact the administrator.';
+                logActivity((int) $user['id'], 'login_failed_inactive', 'users', (int) $user['id'], null, null, 'failed');
+            } elseif (!password_verify($password, $user['password'])) {
+                $error = 'Invalid email or password.';
+                logActivity((int) $user['id'], 'login_failed_wrong_password', 'users', (int) $user['id'], null, null, 'failed');
+            } elseif ($selectedRole !== '' && $user['role'] !== $selectedRole) {
+                $error = 'The selected role does not match this account.';
+            } else {
+                session_regenerate_id(true);
 
-            if ($user = $result->fetch_assoc()) {
-                if ($user['status'] !== 'active') {
-                    $error = 'Your account is ' . $user['status'] . '. Please contact the administrator.';
-                    logActivity((int) $user['id'], 'login_failed_inactive', 'users', (int) $user['id'], null, null, 'failed');
-                } elseif (!password_verify($password, $user['password'])) {
-                    $error = 'Invalid email or password.';
-                    logActivity((int) $user['id'], 'login_failed_wrong_password', 'users', (int) $user['id'], null, null, 'failed');
-                } elseif ($selectedRole !== '' && $user['role'] !== $selectedRole) {
-                    $error = 'The selected role does not match this account.';
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user_role'] = $user['role'];
+                $_SESSION['user_name'] = $user['full_name'];
+                $_SESSION['user_email'] = $user['email'];
+                $_SESSION['login_time'] = time();
+                $_SESSION['last_activity'] = time();
+                $_SESSION['ip_address'] = $ipAddress;
+
+                $updateStmt = $conn->prepare('UPDATE users SET last_login = NOW() WHERE id = ?');
+                $updateStmt->bind_param('i', $user['id']);
+                $updateStmt->execute();
+                $updateStmt->close();
+
+                $forcePasswordChange = isPasswordExpiredForUser($user);
+                if ($forcePasswordChange) {
+                    $_SESSION['force_password_change'] = true;
+                    logActivity((int) $user['id'], 'login_password_expired', 'users', (int) $user['id'], null, ['email' => $email], 'warning');
                 } else {
-                    session_regenerate_id(true);
+                    unset($_SESSION['force_password_change']);
+                }
 
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['user_role'] = $user['role'];
-                    $_SESSION['user_name'] = $user['full_name'];
-                    $_SESSION['user_email'] = $user['email'];
-                    $_SESSION['login_time'] = time();
-                    $_SESSION['ip_address'] = $ipAddress;
+                logActivity((int) $user['id'], 'login_success', 'users', (int) $user['id']);
 
-                    $updateStmt = $conn->prepare('UPDATE users SET last_login = NOW() WHERE id = ?');
-                    $updateStmt->bind_param('i', $user['id']);
-                    $updateStmt->execute();
-                    $updateStmt->close();
-
-                    logActivity((int) $user['id'], 'login_success', 'users', (int) $user['id']);
-
-                    switch ($user['role']) {
-                        case 'admin': header('Location: modules/admin/dashboard.php'); break;
-                        case 'sales': header('Location: modules/sales/dashboard.php'); break;
-                        case 'architect': header('Location: modules/architect/dashboard.php'); break;
-                        case 'sul': header('Location: modules/sul/dashboard.php'); break;
-                        case 'expert': header('Location: modules/expert/dashboard.php'); break;
-                        case 'developer': header('Location: modules/developer/dashboard.php'); break;
-                        default: header('Location: index.php');
-                    }
+                if ($forcePasswordChange) {
+                    header('Location: settings.php');
                     exit();
                 }
+
+                switch ($user['role']) {
+                    case 'admin': header('Location: modules/admin/dashboard.php'); break;
+                    case 'sales': header('Location: modules/sales/dashboard.php'); break;
+                    case 'architect': header('Location: modules/architect/dashboard.php'); break;
+                    case 'sul': header('Location: modules/sul/dashboard.php'); break;
+                    case 'expert': header('Location: modules/expert/dashboard.php'); break;
+                    case 'developer': header('Location: modules/developer/dashboard.php'); break;
+                    default: header('Location: index.php');
+                }
+                exit();
+            }
+        } else {
+            $attemptStmt = $conn->prepare(
+                "SELECT COUNT(*) AS attempts
+                 FROM audit_logs
+                 WHERE ip_address = ?
+                   AND action LIKE 'login_failed%'
+                   AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
+            );
+            $attemptStmt->bind_param('s', $ipAddress);
+            $attemptStmt->execute();
+            $attempts = (int) ($attemptStmt->get_result()->fetch_assoc()['attempts'] ?? 0);
+            $attemptStmt->close();
+
+            if ($attempts >= $maxLoginAttempts) {
+                $error = 'Too many failed login attempts. Please try again later.';
             } else {
                 $error = 'Invalid email or password.';
-                logActivity(null, 'login_failed_user_not_found', 'users', null, null, ['email' => $email], 'failed');
             }
 
-            $stmt->close();
+            logActivity(null, 'login_failed_user_not_found', 'users', null, null, ['email' => $email], 'failed');
         }
     }
 }

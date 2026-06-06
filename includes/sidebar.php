@@ -9,6 +9,7 @@ $role = $user['role'] ?? 'guest';
 $menuItems = [
     'admin' => [
         ['label' => 'Dashboard', 'url' => '/modules/admin/dashboard.php', 'icon' => 'tachometer-alt'],
+        ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
         ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Tech Stack', 'url' => '/modules/admin/techstack.php', 'icon' => 'microchip'],
         ['label' => 'User Management', 'url' => '/modules/admin/user-management.php', 'icon' => 'users', 'matches' => ['/modules/admin/edit-user.php', '/modules/admin/view-user.php']],
@@ -18,6 +19,7 @@ $menuItems = [
     ],
     'sales' => [
         ['label' => 'Dashboard', 'url' => '/modules/sales/dashboard.php', 'icon' => 'chart-line'],
+        ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
         ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Clients', 'url' => '/modules/sales/clients.php', 'icon' => 'building'],
         ['label' => 'Estimation Approval', 'url' => '/modules/sales/estimation-approval.php', 'icon' => 'clipboard-check'],
@@ -26,6 +28,7 @@ $menuItems = [
     ],
     'architect' => [
         ['label' => 'Dashboard', 'url' => '/modules/architect/dashboard.php', 'icon' => 'drafting-compass'],
+        ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
         ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         [
             'label' => 'Projects',
@@ -44,6 +47,7 @@ $menuItems = [
     ],
     'sul' => [
         ['label' => 'Dashboard', 'url' => '/modules/sul/dashboard.php', 'icon' => 'chart-pie'],
+        ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
         ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Task Allocation', 'url' => '/modules/sul/task-allocation.php', 'icon' => 'tasks'],
         ['label' => 'Resource Management', 'url' => '/modules/sul/resource-management.php', 'icon' => 'users-cog'],
@@ -52,6 +56,7 @@ $menuItems = [
     ],
     'expert' => [
         ['label' => 'Dashboard', 'url' => '/modules/expert/dashboard.php', 'icon' => 'clipboard-list'],
+        ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
         ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         [
             'label' => 'Feature Estimation',
@@ -65,6 +70,7 @@ $menuItems = [
     ],
     'developer' => [
         ['label' => 'Dashboard', 'url' => '/modules/developer/dashboard.php', 'icon' => 'code'],
+        ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
         ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Task', 'url' => '/modules/developer/task.php', 'icon' => 'tasks'],
         ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],

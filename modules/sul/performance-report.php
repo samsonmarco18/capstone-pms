@@ -6,9 +6,22 @@ $conn = getConnection();
 $user = getCurrentUser();
 
 // Get date filters
-$dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : date('Y-m-d', strtotime('-30 days'));
-$dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : date('Y-m-d');
-$reportType = isset($_GET['report_type']) ? $_GET['report_type'] : 'team';
+$dateFrom = isset($_GET['date_from']) ? (string) $_GET['date_from'] : date('Y-m-d', strtotime('-30 days'));
+$dateTo = isset($_GET['date_to']) ? (string) $_GET['date_to'] : date('Y-m-d');
+$reportType = isset($_GET['report_type']) ? (string) $_GET['report_type'] : 'team';
+
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom) || !strtotime($dateFrom)) {
+    $dateFrom = date('Y-m-d', strtotime('-30 days'));
+}
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo) || !strtotime($dateTo)) {
+    $dateTo = date('Y-m-d');
+}
+if ($dateFrom > $dateTo) {
+    [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+}
+if (!in_array($reportType, ['team', 'individual', 'project'], true)) {
+    $reportType = 'team';
+}
 
 // Get team performance metrics
 $teamMetrics = $conn->query("
@@ -24,12 +37,21 @@ $teamMetrics = $conn->query("
         SUM(CASE WHEN t.priority = 'high' AND t.status != 'completed' THEN 1 ELSE 0 END) as high_priority_active,
         SUM(CASE WHEN t.priority = 'critical' AND t.status != 'completed' THEN 1 ELSE 0 END) as critical_active
     FROM users u
-    LEFT JOIN tasks t ON u.id = t.assigned_to
+    LEFT JOIN tasks t ON u.id = t.assigned_to AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
     WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
-    AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
 ");
 
-$metrics = $teamMetrics->fetch_assoc();
+$metrics = $teamMetrics->fetch_assoc() ?: [];
+$metrics = array_merge([
+    'total_members' => 0,
+    'total_tasks' => 0,
+    'completed_tasks' => 0,
+    'active_tasks' => 0,
+    'overdue_tasks' => 0,
+    'avg_completion_days' => 0,
+    'high_priority_active' => 0,
+    'critical_active' => 0,
+], $metrics);
 
 // Get individual performance
 $individualPerformance = $conn->query("
@@ -44,13 +66,12 @@ $individualPerformance = $conn->query("
         ROUND(AVG(CASE WHEN t.status = 'completed' AND t.completed_at IS NOT NULL 
             THEN TIMESTAMPDIFF(DAY, t.created_at, t.completed_at) 
             ELSE NULL END), 1) as avg_completion_days,
-        ROUND((SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(t.id), 0)) * 100, 1) as completion_rate,
+        COALESCE(ROUND((SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(t.id), 0)) * 100, 1), 0) as completion_rate,
         SUM(CASE WHEN t.priority = 'high' AND t.status = 'completed' THEN 1 ELSE 0 END) as high_priority_completed,
         SUM(CASE WHEN t.priority = 'critical' AND t.status = 'completed' THEN 1 ELSE 0 END) as critical_completed
     FROM users u
-    LEFT JOIN tasks t ON u.id = t.assigned_to
+    LEFT JOIN tasks t ON u.id = t.assigned_to AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
     WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
-    AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
     GROUP BY u.id
     ORDER BY completion_rate DESC, completed_tasks DESC
 ");
@@ -91,7 +112,7 @@ $projectPerformance = $conn->query("
         p.status,
         COUNT(t.id) as total_tasks,
         SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-        ROUND((SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(t.id), 0)) * 100, 1) as completion_rate,
+        COALESCE(ROUND((SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(t.id), 0)) * 100, 1), 0) as completion_rate,
         DATEDIFF(p.timeline_end, NOW()) as days_remaining
     FROM projects p
     LEFT JOIN tasks t ON p.id = t.project_id

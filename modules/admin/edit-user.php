@@ -5,24 +5,70 @@ requireRole('admin');
 $conn = getConnection();
 $admin = getCurrentUser();
 $userId = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
+$departments = getDepartmentOptions();
+$errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId > 0) {
-    $stmt = $conn->prepare('UPDATE users SET full_name = ?, department = ?, role = ?, status = ?, designation = ? WHERE id = ?');
-    $stmt->bind_param(
-        'sssssi',
-        $_POST['full_name'],
-        $_POST['department'],
-        $_POST['role'],
-        $_POST['status'],
-        $_POST['designation'],
-        $userId
-    );
-    $stmt->execute();
-    $stmt->close();
+    $fullName = trim((string) ($_POST['full_name'] ?? ''));
+    $username = trim((string) ($_POST['username'] ?? ''));
+    $email = trim((string) ($_POST['email'] ?? ''));
+    $department = trim((string) ($_POST['department'] ?? ''));
+    $role = trim((string) ($_POST['role'] ?? ''));
+    $status = trim((string) ($_POST['status'] ?? ''));
+    $designation = trim((string) ($_POST['designation'] ?? ''));
 
-    logActivity((int) $admin['id'], 'edit_user', 'users', $userId, null, $_POST);
-    header('Location: view-user.php?id=' . $userId);
-    exit();
+    if ($fullName === '') {
+        $errors[] = 'Full name is required.';
+    }
+    if ($username === '') {
+        $errors[] = 'Username is required.';
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'A valid email address is required.';
+    }
+    if (!in_array($role, ['admin', 'sales', 'architect', 'sul', 'expert', 'developer'], true)) {
+        $errors[] = 'Please select a valid role.';
+    }
+    if (!in_array($status, ['active', 'inactive', 'suspended'], true)) {
+        $errors[] = 'Please select a valid status.';
+    }
+
+    $uniqueStmt = $conn->prepare('SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ? LIMIT 1');
+    $uniqueStmt->bind_param('ssi', $username, $email, $userId);
+    $uniqueStmt->execute();
+    if ($uniqueStmt->get_result()->num_rows > 0) {
+        $errors[] = 'Username or email is already used by another account.';
+    }
+    $uniqueStmt->close();
+
+    if (!$errors) {
+        $stmt = $conn->prepare('UPDATE users SET full_name = ?, username = ?, email = ?, department = ?, role = ?, status = ?, designation = ? WHERE id = ?');
+        $stmt->bind_param(
+            'sssssssi',
+            $fullName,
+            $username,
+            $email,
+            $department,
+            $role,
+            $status,
+            $designation,
+            $userId
+        );
+        $stmt->execute();
+        $stmt->close();
+
+        logActivity((int) $admin['id'], 'edit_user', 'users', $userId, null, [
+            'full_name' => $fullName,
+            'username' => $username,
+            'email' => $email,
+            'department' => $department,
+            'role' => $role,
+            'status' => $status,
+            'designation' => $designation,
+        ]);
+        header('Location: view-user.php?id=' . $userId);
+        exit();
+    }
 }
 
 $stmt = $conn->prepare('SELECT * FROM users WHERE id = ?');
@@ -48,22 +94,51 @@ include '../../includes/navbar.php';
                 <h5 class="mb-0">Edit User</h5>
             </div>
             <div class="card-body">
+                <?php if ($errors): ?>
+                    <div class="alert alert-danger">
+                        <?php foreach ($errors as $error): ?>
+                            <div><?php echo htmlspecialchars($error); ?></div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
                 <form method="POST">
                     <input type="hidden" name="id" value="<?php echo (int) $selectedUser['id']; ?>">
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Full Name</label>
-                            <input type="text" name="full_name" class="form-control" value="<?php echo htmlspecialchars($selectedUser['full_name']); ?>" required>
+                            <input type="text" name="full_name" class="form-control" value="<?php echo htmlspecialchars($_POST['full_name'] ?? $selectedUser['full_name']); ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Username</label>
+                            <input type="text" name="username" class="form-control" value="<?php echo htmlspecialchars($_POST['username'] ?? $selectedUser['username']); ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" name="email" class="form-control" value="<?php echo htmlspecialchars($_POST['email'] ?? $selectedUser['email']); ?>" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Department</label>
-                            <input type="text" name="department" class="form-control" value="<?php echo htmlspecialchars($selectedUser['department']); ?>">
+                            <select name="department" class="form-select">
+                                <option value="">Select department</option>
+                                <?php $selectedDepartment = (string) ($_POST['department'] ?? $selectedUser['department']); ?>
+                                <?php foreach ($departments as $department): ?>
+                                    <option value="<?php echo htmlspecialchars($department); ?>" <?php echo $selectedDepartment === $department ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($department); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                                <?php if ($selectedDepartment && !in_array($selectedDepartment, $departments, true)): ?>
+                                    <option value="<?php echo htmlspecialchars($selectedDepartment); ?>" selected>
+                                        <?php echo htmlspecialchars($selectedDepartment); ?>
+                                    </option>
+                                <?php endif; ?>
+                            </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Role</label>
                             <select name="role" class="form-select">
+                                <?php $selectedRole = (string) ($_POST['role'] ?? $selectedUser['role']); ?>
                                 <?php foreach (['admin', 'sales', 'architect', 'sul', 'expert', 'developer'] as $role): ?>
-                                    <option value="<?php echo $role; ?>" <?php echo $selectedUser['role'] === $role ? 'selected' : ''; ?>>
+                                    <option value="<?php echo $role; ?>" <?php echo $selectedRole === $role ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars(getRoleDisplayName($role)); ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -72,8 +147,9 @@ include '../../includes/navbar.php';
                         <div class="col-md-6">
                             <label class="form-label">Status</label>
                             <select name="status" class="form-select">
+                                <?php $selectedStatus = (string) ($_POST['status'] ?? $selectedUser['status']); ?>
                                 <?php foreach (['active', 'inactive', 'suspended'] as $status): ?>
-                                    <option value="<?php echo $status; ?>" <?php echo $selectedUser['status'] === $status ? 'selected' : ''; ?>>
+                                    <option value="<?php echo $status; ?>" <?php echo $selectedStatus === $status ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars(ucfirst($status)); ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -81,7 +157,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-12">
                             <label class="form-label">Designation</label>
-                            <input type="text" name="designation" class="form-control" value="<?php echo htmlspecialchars($selectedUser['designation']); ?>">
+                            <input type="text" name="designation" class="form-control" value="<?php echo htmlspecialchars($_POST['designation'] ?? $selectedUser['designation']); ?>">
                         </div>
                     </div>
                     <div class="mt-4">

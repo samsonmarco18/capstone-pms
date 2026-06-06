@@ -541,6 +541,11 @@ unset($_SESSION['success'], $_SESSION['error']);
     border: none;
 }
 
+.modal-modern .modal-header .modal-title,
+.modal-modern .modal-header .modal-title i {
+    color: #ffffff !important;
+}
+
 .modal-modern .modal-header .btn-close {
     filter: brightness(0) invert(1);
 }

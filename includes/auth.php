@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/app-settings.php';
 require_once __DIR__ . '/mailer.php';
 
 function isLoggedIn(): bool
@@ -66,6 +67,80 @@ function hasAllRoles(array $roles): bool
     return count(array_unique($roles)) === 1 && $user['role'] === $roles[0];
 }
 
+function getSecuritySettings(): array
+{
+    static $cache = null;
+
+    if ($cache !== null) {
+        return $cache;
+    }
+
+    $cache = [
+        'session_timeout' => max(5, (int) getAppSetting('session_timeout', '30')),
+        'password_expiry' => max(0, (int) getAppSetting('password_expiry', '90')),
+        'max_login_attempts' => max(3, (int) getAppSetting('max_login_attempts', '5')),
+    ];
+
+    return $cache;
+}
+
+function ensureUserPasswordSecurityColumns(): bool
+{
+    static $ensured = null;
+
+    if ($ensured !== null) {
+        return $ensured;
+    }
+
+    try {
+        $conn = getConnection();
+
+        if (dbColumnExists($conn, 'users', 'password_changed_at')) {
+            $ensured = true;
+            return true;
+        }
+
+        $sql = DB_DRIVER === 'pgsql'
+            ? 'ALTER TABLE users ADD COLUMN password_changed_at TIMESTAMP NULL'
+            : 'ALTER TABLE users ADD COLUMN password_changed_at DATETIME NULL AFTER designation';
+
+        if ($conn->query($sql) === false) {
+            error_log('ensureUserPasswordSecurityColumns failed: ' . ($conn->error ?? 'unknown error'));
+            $ensured = false;
+            return false;
+        }
+
+        $ensured = true;
+        return true;
+    } catch (Throwable $e) {
+        error_log('ensureUserPasswordSecurityColumns error: ' . $e->getMessage());
+        $ensured = false;
+        return false;
+    }
+}
+
+function isPasswordExpiredForUser(array $user): bool
+{
+    $securitySettings = getSecuritySettings();
+    $passwordExpiryDays = (int) ($securitySettings['password_expiry'] ?? 0);
+
+    if ($passwordExpiryDays <= 0) {
+        return false;
+    }
+
+    $referenceValue = trim((string) ($user['password_changed_at'] ?? $user['created_at'] ?? ''));
+    if ($referenceValue === '') {
+        return false;
+    }
+
+    $referenceTimestamp = strtotime($referenceValue);
+    if ($referenceTimestamp === false) {
+        return false;
+    }
+
+    return (time() - $referenceTimestamp) >= ($passwordExpiryDays * 86400);
+}
+
 function requireLogin(): void
 {
     if (!isLoggedIn()) {
@@ -73,6 +148,37 @@ function requireLogin(): void
         $_SESSION['redirect_after_login'] = $_SERVER['REQUEST_URI'] ?? BASE_URL;
         header('Location: ' . BASE_URL . 'login.php');
         exit();
+    }
+
+    $user = getCurrentUser();
+    if (!$user) {
+        logoutUser();
+    }
+
+    $currentScript = basename((string) ($_SERVER['PHP_SELF'] ?? ''));
+
+    $securitySettings = getSecuritySettings();
+    $sessionTimeoutMinutes = (int) ($securitySettings['session_timeout'] ?? 30);
+    $lastActivity = (int) ($_SESSION['last_activity'] ?? $_SESSION['login_time'] ?? time());
+
+    if ($sessionTimeoutMinutes > 0 && (time() - $lastActivity) > ($sessionTimeoutMinutes * 60)) {
+        logoutUser();
+    }
+
+    $_SESSION['last_activity'] = time();
+
+    if (!empty($_SESSION['force_password_change']) && $currentScript !== 'settings.php' && $currentScript !== 'logout.php') {
+        header('Location: ' . BASE_URL . 'settings.php');
+        exit();
+    }
+
+    if (isPasswordExpiredForUser($user)) {
+        $_SESSION['force_password_change'] = true;
+
+        if ($currentScript !== 'settings.php' && $currentScript !== 'logout.php') {
+            header('Location: ' . BASE_URL . 'settings.php');
+            exit();
+        }
     }
 }
 
@@ -251,6 +357,19 @@ function getRoleDisplayName(string $role): string
     ];
 
     return $roleNames[$role] ?? ucfirst($role);
+}
+
+function getDepartmentOptions(): array
+{
+    return [
+        'Frontend Developer',
+        'Backend Developer',
+        'Full Stack Developer',
+        'QA Engineer',
+        'UI/UX Designer',
+        'DevOps Engineer',
+        'Database Administrator',
+    ];
 }
 
 function isAdmin(): bool { return hasRole('admin'); }

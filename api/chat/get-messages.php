@@ -18,6 +18,19 @@ $groupId = isset($_GET['group_id']) ? (int) $_GET['group_id'] : 0;
 $limit = isset($_GET['limit']) ? max(1, (int) $_GET['limit']) : 50;
 
 if ($groupId > 0) {
+    $memberStmt = $conn->prepare('SELECT id FROM chat_group_members WHERE group_id = ? AND user_id = ? AND left_at IS NULL LIMIT 1');
+    $memberStmt->bind_param('ii', $groupId, $user['id']);
+    $memberStmt->execute();
+    $memberResult = $memberStmt->get_result();
+    $isMember = $memberResult && $memberResult->num_rows > 0;
+    $memberStmt->close();
+
+    if (!$isMember) {
+        http_response_code(403);
+        echo json_encode(['error' => 'You are not a member of this group.']);
+        exit();
+    }
+
     $stmt = $conn->prepare(
         'SELECT m.id, m.sender_id, m.message, m.created_at, u.full_name AS sender_name
          FROM messages m

@@ -41,6 +41,11 @@ if ($documents) {
     }
     $documents->data_seek(0);
 }
+$requiredDocumentTypes = ['architecture_plan', 'workflow_diagram'];
+$hasArchitecturePlan = in_array('architecture_plan', $uploadedDocumentTypes, true);
+$hasWorkflowDiagram = in_array('workflow_diagram', $uploadedDocumentTypes, true);
+$hasSupportingTechnicalDoc = count(array_diff(array_unique($uploadedDocumentTypes), $requiredDocumentTypes)) > 0;
+$checklistReadyForSummary = $hasArchitecturePlan && $hasWorkflowDiagram;
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $docType = normalizeArchitectureDocumentType($_POST['document_type'] ?? '');
@@ -520,7 +525,7 @@ a.progress-step:hover {
                         
                         <div class="d-flex justify-content-between align-items-center mt-4">
                             <button type="submit" class="btn-upload"><i class="fas fa-upload"></i> Upload Document</button>
-                            <a href="summary.php?id=<?php echo $projectId; ?>" class="btn-success-modern"><i class="fas fa-check"></i> Proceed to Summary</a>
+                            <a href="summary.php?id=<?php echo $projectId; ?>" class="btn-success-modern <?php echo $checklistReadyForSummary ? '' : 'disabled'; ?>" <?php echo $checklistReadyForSummary ? '' : 'aria-disabled="true" tabindex="-1"'; ?>><i class="fas fa-check"></i> Proceed to Summary</a>
                         </div>
                     </form>
                 </div>
@@ -576,11 +581,16 @@ a.progress-step:hover {
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check1" <?php echo in_array('architecture_plan', $uploadedDocumentTypes, true) ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check1">Architecture Plan Uploaded</label></div></div></div>
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check2" <?php echo in_array('workflow_diagram', $uploadedDocumentTypes, true) ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check2">Workflow Diagram Uploaded</label></div></div></div>
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check3" <?php echo count($uploadedDocumentTypes) >= 3 ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check3">Technical Documentation Complete</label></div></div></div>
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check4" <?php echo count($uploadedDocumentTypes) > 0 ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check4">Ready for SUL Review</label></div></div></div>
+                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check1" <?php echo $hasArchitecturePlan ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check1">Architecture Plan Uploaded</label></div></div></div>
+                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check2" <?php echo $hasWorkflowDiagram ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check2">Workflow Diagram Uploaded</label></div></div></div>
+                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check3" <?php echo $hasSupportingTechnicalDoc ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check3">Supporting Technical Doc Uploaded</label></div></div></div>
+                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check4" <?php echo $checklistReadyForSummary ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check4">Ready for Summary</label></div></div></div>
                     </div>
+                    <?php if (!$checklistReadyForSummary): ?>
+                        <div class="alert alert-warning small mb-0 mt-3">
+                            Upload both an Architecture Plan and a Workflow Diagram before proceeding to Summary.
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

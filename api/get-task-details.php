@@ -31,10 +31,16 @@ $stmt = $conn->prepare("
     LEFT JOIN clients c ON p.client_id = c.id
     LEFT JOIN users u ON t.assigned_to = u.id
     LEFT JOIN users au ON t.assigned_by = au.id
-    LEFT JOIN feature_estimations fe ON t.id = fe.task_id AND fe.expert_id = ?
+    LEFT JOIN feature_estimations fe ON fe.id = (
+        SELECT fe_latest.id
+        FROM feature_estimations fe_latest
+        WHERE fe_latest.task_id = t.id AND fe_latest.status = 'completed'
+        ORDER BY fe_latest.submitted_at DESC, fe_latest.id DESC
+        LIMIT 1
+    )
     WHERE t.id = ?
 ");
-$stmt->bind_param("ii", $user['id'], $taskId);
+$stmt->bind_param("i", $taskId);
 $stmt->execute();
 $result = $stmt->get_result();
 

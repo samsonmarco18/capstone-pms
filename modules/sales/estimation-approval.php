@@ -615,6 +615,12 @@ include '../../includes/navbar.php';
     color: white;
 }
 
+.btn-approve:disabled {
+    background: #adb5bd;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
 .btn-reject {
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     color: white;
@@ -959,6 +965,16 @@ include '../../includes/navbar.php';
                         </div>
                         <div id="salesGantt_<?php echo (int) $pid; ?>"></div>
                     </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn-action btn-view" onclick="openGanttModal(<?php echo (int) $task['project_id']; ?>)">
+                            <i class="fas fa-stream me-1"></i> View Gantt
+                        </button>
+                        <button class="btn-action btn-approve" id="approveBtn_<?php echo (int) $task['id']; ?>" onclick="approveEstimation(<?php echo (int) $task['id']; ?>)" disabled>
+                            <i class="fas fa-check me-1"></i> Approve
+                        </button>
+                        <button class="btn-action btn-reject" onclick="openRejectModal(<?php echo (int) $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
+                            <i class="fas fa-times me-1"></i> Reject
+                        </button>
 
                     <div class="project-feature-stack">
                         <?php foreach ($projectTasks as $task): ?>
@@ -1346,6 +1362,7 @@ function renderThreePointGantt(targetSelector, tasks, chartKey) {
 function updateTaskChoiceStatus(taskId) {
     const choiceInput = document.querySelector(`input[name="estimate_choice_${taskId}"]:checked`);
     const status = document.getElementById(`salesChoiceStatus_${taskId}`);
+    const approveButton = document.getElementById(`approveBtn_${taskId}`);
     const preview = document.querySelector(`.gantt-preview[data-task-id="${taskId}"]`);
     if (!status || !preview) {
         return;
@@ -1357,6 +1374,7 @@ function updateTaskChoiceStatus(taskId) {
 
     if (!choiceInput) {
         status.textContent = 'Showing all expert scenarios. Pick one to finalize the timeline.';
+        if (approveButton) approveButton.disabled = true;
         if (minBar) minBar.style.width = minBar.dataset.originalWidth || minBar.style.width;
         if (likelyBar) likelyBar.style.width = likelyBar.dataset.originalWidth || likelyBar.style.width;
         if (maxBar) maxBar.style.width = maxBar.dataset.originalWidth || maxBar.style.width;
@@ -1366,6 +1384,7 @@ function updateTaskChoiceStatus(taskId) {
     const choice = choiceInput.value;
     const days = parseInt(choiceInput.dataset.days || '0', 10) || 0;
     status.textContent = `Selected timeline: ${choice.charAt(0).toUpperCase() + choice.slice(1)} - ${days} day${days === 1 ? '' : 's'}`;
+    if (approveButton) approveButton.disabled = !(days > 0);
 
     if (minBar) minBar.style.width = choice === 'min' ? '100%' : '0%';
     if (likelyBar) likelyBar.style.width = choice === 'likely' ? '100%' : '0%';
@@ -1390,7 +1409,6 @@ function syncSalesSelection(taskId) {
 }
 
 function approveEstimation(taskId) {
-    if (!confirm('Approve this estimation and send to SUL?')) return;
     const choiceInput = document.querySelector(`input[name="estimate_choice_${taskId}"]:checked`);
     const estimateChoice = choiceInput?.value || '';
     const daysValue = parseInt(choiceInput?.dataset?.days || '0', 10);
@@ -1398,6 +1416,7 @@ function approveEstimation(taskId) {
         alert('Please choose Minimum, Most Likely, or Maximum before approving.');
         return;
     }
+    if (!confirm('Approve this estimation and send to SUL?')) return;
     const form = document.createElement('form');
     form.method = 'POST';
     form.innerHTML = `<input type="hidden" name="approve_estimation" value="1"><input type="hidden" name="task_id" value="${taskId}"><input type="hidden" name="estimate_choice" value="${estimateChoice}"><input type="hidden" name="estimate_days" value="${daysValue}">`;

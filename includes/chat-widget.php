@@ -52,6 +52,9 @@ if (!$user) {
                     <strong id="chatThreadName">Conversation</strong>
                     <small id="chatThreadSubtitle">Select a conversation</small>
                 </div>
+                <button type="button" class="btn btn-link p-0 chat-thread-info-btn d-none" id="chatGroupInfoBtn" title="Group info" aria-label="Group info">
+                    <i class="fas fa-users"></i>
+                </button>
             </div>
 
             <div id="chatMessages" class="chat-messages">
@@ -67,6 +70,26 @@ if (!$user) {
                     <button class="btn btn-primary" type="button" id="sendMessageBtn">
                         <i class="fas fa-paper-plane"></i>
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="chatGroupInfoView" class="chat-group-info-view d-none">
+            <div class="chat-thread-top">
+                <button type="button" class="btn btn-link p-0 chat-back-btn" id="chatGroupInfoBackBtn" title="Back">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <div class="chat-thread-avatar" id="chatGroupInfoAvatar">G</div>
+                <div class="chat-thread-meta">
+                    <strong id="chatGroupInfoTitle">Group Info</strong>
+                    <small id="chatGroupInfoSubtitle">Members and settings</small>
+                </div>
+            </div>
+
+            <div id="chatGroupInfoContent" class="chat-group-info-content">
+                <div class="chat-list-empty">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <div>Loading group info...</div>
                 </div>
             </div>
         </div>

@@ -8,9 +8,41 @@ $conn = getConnection();
 $user = getCurrentUser();
 $generalSettings = getAppSettings(['company_name', 'notification_email', 'timezone']);
 
+function getSettingValue($conn, string $key, string $default = ''): string
+{
+    $stmt = $conn->prepare('SELECT setting_value FROM settings WHERE setting_key = ? LIMIT 1');
+    $stmt->bind_param('s', $key);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    return (string) ($row['setting_value'] ?? $default);
+}
+
+function saveSettingValue($conn, string $key, string $value, string $description): void
+{
+    $sql = DB_DRIVER === 'pgsql'
+        ? "INSERT INTO settings (setting_key, setting_value, description, setting_type)
+           VALUES (?, ?, ?, 'system')
+           ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, description = EXCLUDED.description, updated_at = NOW()"
+        : 'INSERT INTO settings (setting_key, setting_value, description, setting_type)
+           VALUES (?, ?, ?, \'system\')
+           ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), description = VALUES(description), updated_at = NOW()';
+
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param('sss', $key, $value, $description);
+    $stmt->execute();
+    $stmt->close();
+}
+
 // Handle settings updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['update_general'])) {
+        $siteName = $_POST['site_name'];
+        $timezone = $_POST['timezone'];
+        
+        $_SESSION['site_name'] = $siteName;
+        
         $siteName = trim((string) ($_POST['site_name'] ?? 'ERNI PMS'));
         $siteEmail = trim((string) ($_POST['site_email'] ?? ''));
         $timezone = trim((string) ($_POST['timezone'] ?? 'Asia/Manila'));
@@ -22,6 +54,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         setAppSetting('notification_email', $siteEmail, 'System notification email', 'system');
         setAppSetting('timezone', $timezone, 'Default system timezone', 'system');
         date_default_timezone_set($timezone);
+        saveSettingValue($conn, 'company_name', $siteName, 'Company official name');
+        saveSettingValue($conn, 'timezone', $timezone, 'Default system timezone');
         
         logActivity($user['id'], 'update_general_settings', 'settings', 0, null, $_POST);
         $_SESSION['success'] = "General settings updated successfully";
@@ -34,18 +68,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         $_SESSION['session_timeout'] = $sessionTimeout;
         $_SESSION['password_expiry'] = $passwordExpiry;
+        $_SESSION['max_login_attempts'] = $maxLoginAttempts;
+
+        saveSettingValue($conn, 'session_timeout', (string) $sessionTimeout, 'Minutes before inactive users are logged out');
+        saveSettingValue($conn, 'password_expiry', (string) $passwordExpiry, 'Days before passwords expire; 0 means never');
+        saveSettingValue($conn, 'max_login_attempts', (string) $maxLoginAttempts, 'Failed attempts before account lockout');
         
         logActivity($user['id'], 'update_security_settings', 'settings', 0, null, $_POST);
         $_SESSION['success'] = "Security settings updated successfully";
     }
     
     if (isset($_POST['update_notifications'])) {
-        $emailNotifications = isset($_POST['email_notifications']) ? 1 : 0;
         $taskReminders = isset($_POST['task_reminders']) ? 1 : 0;
         $projectUpdates = isset($_POST['project_updates']) ? 1 : 0;
         
-        $stmt = $conn->prepare("UPDATE users SET email_notifications=?, task_reminders=?, project_updates=? WHERE id=?");
-        $stmt->bind_param("iiii", $emailNotifications, $taskReminders, $projectUpdates, $user['id']);
+        $stmt = $conn->prepare("UPDATE users SET task_reminders=?, project_updates=? WHERE id=?");
+        $stmt->bind_param("iii", $taskReminders, $projectUpdates, $user['id']);
         $stmt->execute();
         
         logActivity($user['id'], 'update_notification_settings', 'users', $user['id'], null, $_POST);
@@ -129,6 +167,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 }
 
 // Get current settings
+$siteName = getSettingValue($conn, 'company_name', 'ERNI PMS');
+$currentTimezone = getSettingValue($conn, 'timezone', date_default_timezone_get());
+$sessionTimeout = getSettingValue($conn, 'session_timeout', '30');
+$passwordExpiry = getSettingValue($conn, 'password_expiry', '90');
+$maxLoginAttempts = getSettingValue($conn, 'max_login_attempts', '5');
+$notificationSettings = $conn->query("SELECT task_reminders, project_updates FROM users WHERE id = {$user['id']}")->fetch_assoc();
 $currentTimezone = $generalSettings['timezone'] ?? date_default_timezone_get();
 $emailNotifications = $conn->query("SELECT email_notifications, task_reminders, project_updates FROM users WHERE id = {$user['id']}")->fetch_assoc();
 $activeMailConfig = getMailConfig();
@@ -676,6 +720,7 @@ input:checked + .switch-slider:before {
                     <div class="settings-form-grid">
                     <div class="form-group">
                         <label class="form-label">Site Name</label>
+                        <input type="text" name="site_name" class="form-control-modern" value="<?php echo htmlspecialchars($siteName); ?>" required>
                         <input type="text" name="site_name" class="form-control-modern" value="<?php echo htmlspecialchars($generalSettings['company_name'] ?? 'ERNI PMS'); ?>" required>
                     </div>
                     <div class="form-group">
@@ -715,17 +760,17 @@ input:checked + .switch-slider:before {
                     <div class="settings-form-grid">
                     <div class="form-group">
                         <label class="form-label">Session Timeout (minutes)</label>
-                        <input type="number" name="session_timeout" class="form-control-modern" value="30" min="5" max="480">
+                        <input type="number" name="session_timeout" class="form-control-modern" value="<?php echo htmlspecialchars($sessionTimeout); ?>" min="5" max="480">
                         <span class="form-text">Time before inactive users are logged out</span>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Password Expiry (days)</label>
-                        <input type="number" name="password_expiry" class="form-control-modern" value="90" min="0" max="365">
+                        <input type="number" name="password_expiry" class="form-control-modern" value="<?php echo htmlspecialchars($passwordExpiry); ?>" min="0" max="365">
                         <span class="form-text">0 = never expire</span>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Max Login Attempts</label>
-                        <input type="number" name="max_login_attempts" class="form-control-modern" value="5" min="3" max="10">
+                        <input type="number" name="max_login_attempts" class="form-control-modern" value="<?php echo htmlspecialchars($maxLoginAttempts); ?>" min="3" max="10">
                         <span class="form-text">Failed attempts before account lockout</span>
                     </div>
                     </div>
@@ -838,22 +883,11 @@ input:checked + .switch-slider:before {
                 <form method="POST">
                     <div class="switch-wrapper">
                         <div class="switch-info">
-                            <label>Email Notifications</label>
-                            <small>Receive email notifications for important updates</small>
-                        </div>
-                        <label class="form-switch-modern">
-                            <input type="checkbox" name="email_notifications" <?php echo ($emailNotifications['email_notifications'] ?? 1) ? 'checked' : ''; ?>>
-                            <span class="switch-slider"></span>
-                        </label>
-                    </div>
-                    
-                    <div class="switch-wrapper">
-                        <div class="switch-info">
                             <label>Task Reminders</label>
                             <small>Receive reminders for upcoming tasks</small>
                         </div>
                         <label class="form-switch-modern">
-                            <input type="checkbox" name="task_reminders" <?php echo ($emailNotifications['task_reminders'] ?? 1) ? 'checked' : ''; ?>>
+                            <input type="checkbox" name="task_reminders" <?php echo ($notificationSettings['task_reminders'] ?? 1) ? 'checked' : ''; ?>>
                             <span class="switch-slider"></span>
                         </label>
                     </div>
@@ -864,7 +898,7 @@ input:checked + .switch-slider:before {
                             <small>Receive notifications for project status changes</small>
                         </div>
                         <label class="form-switch-modern">
-                            <input type="checkbox" name="project_updates" <?php echo ($emailNotifications['project_updates'] ?? 1) ? 'checked' : ''; ?>>
+                            <input type="checkbox" name="project_updates" <?php echo ($notificationSettings['project_updates'] ?? 1) ? 'checked' : ''; ?>>
                             <span class="switch-slider"></span>
                         </label>
                     </div>

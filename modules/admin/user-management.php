@@ -14,8 +14,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $full_name = $_POST['full_name'];
         $department = $_POST['department'];
         $role = $_POST['role'];
+        $hasPasswordChangedAt = ensureUserPasswordSecurityColumns();
         
-        $stmt = $conn->prepare("INSERT INTO users (username, email, password, full_name, department, role) VALUES (?, ?, ?, ?, ?, ?)");
+        $sql = $hasPasswordChangedAt
+            ? "INSERT INTO users (username, email, password, full_name, department, role, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+            : "INSERT INTO users (username, email, password, full_name, department, role) VALUES (?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
         $stmt->bind_param("ssssss", $username, $email, $password, $full_name, $department, $role);
         
         if ($stmt->execute()) {
@@ -793,13 +797,11 @@ include '../../includes/navbar.php';
                             <label class="form-label">Department</label>
                             <select name="department" class="form-select">
                                 <option value="">Select Department</option>
-                                <option value="Frontend Developer">Frontend Developer</option>
-                                <option value="Backend Developer">Backend Developer</option>
-                                <option value="Full Stack Developer">Full Stack Developer</option>
-                                <option value="QA Engineer">QA Engineer</option>
-                                <option value="UI/UX Designer">UI/UX Designer</option>
-                                <option value="DevOps Engineer">DevOps Engineer</option>
-                                <option value="Database Administrator">Database Administrator</option>
+                                <?php foreach (getDepartmentOptions() as $department): ?>
+                                    <option value="<?php echo htmlspecialchars($department); ?>">
+                                        <?php echo htmlspecialchars($department); ?>
+                                    </option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-md-6">

@@ -5,6 +5,14 @@ requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
+$hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_days');
+$salesApprovalCondition = $hasSalesApproval ? "t.sales_approved = 1" : "1 = 1";
+$salesChoiceCondition = $hasSalesChoice ? "t.sales_estimate_days IS NOT NULL" : "1 = 1";
+$hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
+$hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
+$projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
+$projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 // Get statistics
 $totalExperts = $conn->query("SELECT COUNT(*) as count FROM users WHERE role = 'expert' OR role = 'developer'")->fetch_assoc()['count'];
@@ -33,14 +41,57 @@ $expertAvailability = $conn->query("
     ORDER BY active_tasks ASC
 ");
 
-// Get projects that need task allocation
+// Get projects that need SUL task allocation/action
 $projectsNeedingAllocation = $conn->query("
-    SELECT p.*, c.name as client_name
+    SELECT
+        p.*,
+        c.name as client_name,
+        COALESCE(ta.total_tasks, 0) as total_tasks,
+        COALESCE(ta.needs_expert_count, 0) as needs_expert_count,
+        COALESCE(ta.review_count, 0) as review_count,
+        COALESCE(ta.ready_dev_count, 0) as ready_dev_count
     FROM projects p
     JOIN clients c ON p.client_id = c.id
-    WHERE p.status = 'in_progress'
-    AND p.id NOT IN (SELECT DISTINCT project_id FROM tasks)
-    ORDER BY p.created_at DESC
+    LEFT JOIN (
+        SELECT
+            t.project_id,
+            COUNT(t.id) as total_tasks,
+            SUM(CASE
+                WHEN (t.assigned_to IS NULL OR t.assigned_to = 0) AND t.status = 'todo'
+                THEN 1 ELSE 0
+            END) as needs_expert_count,
+            SUM(CASE
+                WHEN t.status = 'review' AND {$salesApprovalCondition} AND {$salesChoiceCondition}
+                THEN 1 ELSE 0
+            END) as review_count,
+            SUM(CASE
+                WHEN t.status = 'todo'
+                  AND t.assigned_to IS NOT NULL
+                  AND t.assigned_to != 0
+                  AND EXISTS (
+                      SELECT 1
+                      FROM feature_estimations fe
+                      WHERE fe.task_id = t.id AND fe.status = 'completed'
+                  )
+                  AND {$salesApprovalCondition}
+                  AND {$salesChoiceCondition}
+                THEN 1 ELSE 0
+            END) as ready_dev_count
+        FROM tasks t
+        GROUP BY t.project_id
+    ) ta ON ta.project_id = p.id
+    WHERE p.status != 'completed'
+      AND (
+        COALESCE(ta.total_tasks, 0) = 0
+        OR COALESCE(ta.needs_expert_count, 0) > 0
+        OR COALESCE(ta.review_count, 0) > 0
+        OR COALESCE(ta.ready_dev_count, 0) > 0
+      )
+    ORDER BY (
+        COALESCE(ta.needs_expert_count, 0)
+        + COALESCE(ta.review_count, 0)
+        + COALESCE(ta.ready_dev_count, 0)
+    ) DESC, p.created_at DESC
     LIMIT 5
 ");
 
@@ -54,14 +105,136 @@ $recentTasks = $conn->query("
     LIMIT 10
 ");
 
-// Get user's schedule
-$schedules = $conn->query("
-    SELECT * FROM schedules 
-    WHERE user_id = {$user['id']} 
-    AND start_time >= NOW() 
-    ORDER BY start_time 
+// Build SUL agenda from manual schedules, upcoming deadlines, and allocation actions
+$upcomingAgenda = [];
+
+$scheduleRows = $conn->query("
+    SELECT title, description, start_date, start_time, schedule_type
+    FROM schedules
+    WHERE user_id = {$user['id']}
+      AND start_date IS NOT NULL
+      AND start_date >= CURDATE()
+    ORDER BY start_date ASC, start_time ASC
     LIMIT 5
 ");
+while ($schedule = $scheduleRows->fetch_assoc()) {
+    $agendaDate = trim((string) ($schedule['start_date'] ?? ''));
+    $agendaTime = trim((string) ($schedule['start_time'] ?? ''));
+    $upcomingAgenda[] = [
+        'title' => (string) ($schedule['title'] ?? 'Scheduled item'),
+        'description' => (string) ($schedule['description'] ?? ''),
+        'date' => $agendaDate . ($agendaTime !== '' ? ' ' . $agendaTime : ''),
+        'type' => ucfirst((string) ($schedule['schedule_type'] ?? 'Schedule')),
+        'icon' => 'calendar-alt',
+        'url' => '',
+    ];
+}
+
+$projectScheduleRows = $conn->query("
+    SELECT p.id, p.name, p.timeline_start, {$projectStartTimeSql} AS timeline_start_time, p.timeline_end, {$projectEndTimeSql} AS timeline_end_time, c.name AS client_name
+    FROM projects p
+    JOIN clients c ON c.id = p.client_id
+    WHERE (p.sul_id = {$user['id']} OR p.sul_id IS NULL)
+      AND p.status NOT IN ('completed', 'cancelled')
+      AND (
+        (p.timeline_start IS NOT NULL AND (p.timeline_start > CURDATE() OR (p.timeline_start = CURDATE() AND {$projectStartTimeSql} >= CURTIME())))
+        OR (p.timeline_end IS NOT NULL AND (p.timeline_end > CURDATE() OR (p.timeline_end = CURDATE() AND {$projectEndTimeSql} >= CURTIME())))
+      )
+    ORDER BY COALESCE(p.timeline_end, p.timeline_start) ASC
+    LIMIT 8
+");
+while ($project = $projectScheduleRows->fetch_assoc()) {
+    $clientDescription = 'Client: ' . (string) ($project['client_name'] ?? 'Client');
+    if (!empty($project['timeline_start'])) {
+        $upcomingAgenda[] = [
+            'title' => 'Project start: ' . (string) ($project['name'] ?? 'Project'),
+            'description' => $clientDescription,
+            'date' => trim((string) ($project['timeline_start'] ?? '') . ' ' . (string) ($project['timeline_start_time'] ?? '09:00:00')),
+            'type' => 'Project Start',
+            'icon' => 'play-circle',
+            'url' => 'task-allocation.php?project_id=' . (int) ($project['id'] ?? 0),
+        ];
+    }
+
+    if (!empty($project['timeline_end'])) {
+        $upcomingAgenda[] = [
+            'title' => 'Project deadline: ' . (string) ($project['name'] ?? 'Project'),
+            'description' => $clientDescription,
+            'date' => trim((string) ($project['timeline_end'] ?? '') . ' ' . (string) ($project['timeline_end_time'] ?? '17:00:00')),
+            'type' => 'Project Deadline',
+            'icon' => 'flag-checkered',
+            'url' => 'task-allocation.php?project_id=' . (int) ($project['id'] ?? 0),
+        ];
+    }
+}
+
+$deadlineRows = $conn->query("
+    SELECT t.id, t.title, t.deadline, t.status, p.name AS project_name
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE t.status != 'completed'
+      AND t.deadline IS NOT NULL
+      AND t.deadline >= CURDATE()
+    ORDER BY t.deadline ASC
+    LIMIT 5
+");
+while ($task = $deadlineRows->fetch_assoc()) {
+    $upcomingAgenda[] = [
+        'title' => (string) ($task['title'] ?? 'Task deadline'),
+        'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
+        'date' => trim((string) ($task['deadline'] ?? '') . ' 17:00:00'),
+        'type' => 'Deadline',
+        'icon' => 'flag-checkered',
+        'url' => 'task-allocation.php?task_id=' . (int) ($task['id'] ?? 0),
+    ];
+}
+
+$actionRows = $conn->query("
+    SELECT
+        t.id,
+        t.title,
+        t.deadline,
+        p.name AS project_name,
+        CASE
+            WHEN (t.assigned_to IS NULL OR t.assigned_to = 0) AND t.status = 'todo'
+                THEN 'Assign Expert'
+            WHEN t.status = 'review' AND {$salesApprovalCondition} AND {$salesChoiceCondition}
+                THEN 'Review Estimation'
+            WHEN t.status = 'todo'
+              AND t.assigned_to IS NOT NULL
+              AND t.assigned_to != 0
+              AND EXISTS (
+                  SELECT 1
+                  FROM feature_estimations fe
+                  WHERE fe.task_id = t.id AND fe.status = 'completed'
+              )
+              AND {$salesApprovalCondition}
+              AND {$salesChoiceCondition}
+                THEN 'Assign Developer'
+            ELSE ''
+        END AS action_label
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE t.status != 'completed'
+    HAVING action_label != ''
+    ORDER BY COALESCE(t.deadline, NOW()) ASC
+    LIMIT 5
+");
+while ($task = $actionRows->fetch_assoc()) {
+    $upcomingAgenda[] = [
+        'title' => (string) ($task['title'] ?? 'Task action'),
+        'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
+        'date' => (string) ($task['deadline'] ?? date('Y-m-d H:i:s')),
+        'type' => (string) ($task['action_label'] ?? 'Action'),
+        'icon' => 'tasks',
+        'url' => 'task-allocation.php?task_id=' . (int) ($task['id'] ?? 0),
+    ];
+}
+
+usort($upcomingAgenda, static function (array $left, array $right): int {
+    return strtotime((string) ($left['date'] ?? '')) <=> strtotime((string) ($right['date'] ?? ''));
+});
+$upcomingAgenda = array_slice($upcomingAgenda, 0, 5);
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -431,6 +604,32 @@ include '../../includes/navbar.php';
     margin: 0;
 }
 
+.allocation-status-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+.allocation-status-tag {
+    border-radius: 999px;
+    padding: 0.22rem 0.55rem;
+    background: #eef6ff;
+    color: var(--theme-primary);
+    font-size: 0.68rem;
+    font-weight: 700;
+}
+
+.allocation-status-tag.warning {
+    background: #fff7df;
+    color: #a16207;
+}
+
+.allocation-status-tag.success {
+    background: #e7f8ef;
+    color: #047857;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .welcome-banner {
@@ -507,7 +706,7 @@ include '../../includes/navbar.php';
     ]);
     ?>
 
-    <!-- Row 1: Task Status + Upcoming Schedule + Projects Needing Allocation -->
+    <!-- Row 1: Task Status + Projects Needing Allocation -->
     <div class="row g-3 mb-4">
         <div class="col-xl-7">
             <div class="card">
@@ -527,22 +726,34 @@ include '../../includes/navbar.php';
                     <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
                 </div>
                 <div class="card-body">
-                    <?php if($schedules->num_rows > 0): ?>
-                        <?php while($schedule = $schedules->fetch_assoc()): ?>
+                    <?php if($upcomingAgenda): ?>
+                        <?php foreach($upcomingAgenda as $agendaItem): ?>
                         <div class="timeline-item mb-3">
-                            <h6 class="mb-1"><?php echo htmlspecialchars($schedule['title']); ?></h6>
+                            <h6 class="mb-1">
+                                <?php if(!empty($agendaItem['url'])): ?>
+                                    <a href="<?php echo htmlspecialchars($agendaItem['url']); ?>" class="text-decoration-none text-dark">
+                                        <?php echo htmlspecialchars($agendaItem['title']); ?>
+                                    </a>
+                                <?php else: ?>
+                                    <?php echo htmlspecialchars($agendaItem['title']); ?>
+                                <?php endif; ?>
+                            </h6>
                             <small class="text-muted">
-                                <i class="far fa-clock"></i> <?php echo date('M d, Y h:i A', strtotime($schedule['start_time'])); ?>
+                                <i class="fas fa-<?php echo htmlspecialchars($agendaItem['icon']); ?> me-1"></i>
+                                <?php echo htmlspecialchars($agendaItem['type']); ?>
+                                <span class="mx-1">-</span>
+                                <i class="far fa-clock me-1"></i>
+                                <?php echo date('M d, Y h:i A', strtotime((string) $agendaItem['date'])); ?>
                             </small>
-                            <?php if(!empty($schedule['description'])): ?>
-                            <p class="mb-0 small text-muted mt-1"><?php echo htmlspecialchars($schedule['description']); ?></p>
+                            <?php if(!empty($agendaItem['description'])): ?>
+                            <p class="mb-0 small text-muted mt-1"><?php echo htmlspecialchars($agendaItem['description']); ?></p>
                             <?php endif; ?>
                         </div>
-                        <?php endwhile; ?>
+                        <?php endforeach; ?>
                     <?php else: ?>
                         <div class="empty-state-mini">
                             <i class="fas fa-calendar-week"></i>
-                            <p>No upcoming schedules</p>
+                            <p>No upcoming agenda items</p>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -556,6 +767,12 @@ include '../../includes/navbar.php';
                 <div class="card-body p-0">
                     <?php if($projectsNeedingAllocation->num_rows > 0): ?>
                         <?php while($project = $projectsNeedingAllocation->fetch_assoc()): ?>
+                        <?php
+                            $totalTasksForProject = (int) ($project['total_tasks'] ?? 0);
+                            $needsExpertCount = (int) ($project['needs_expert_count'] ?? 0);
+                            $reviewCount = (int) ($project['review_count'] ?? 0);
+                            $readyDevCount = (int) ($project['ready_dev_count'] ?? 0);
+                        ?>
                         <div class="list-group-item">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
@@ -569,6 +786,25 @@ include '../../includes/navbar.php';
                                             <i class="far fa-calendar-alt me-1"></i>
                                             Timeline: <?php echo date('M d', strtotime($project['timeline_start'])); ?> - <?php echo date('M d, Y', strtotime($project['timeline_end'])); ?>
                                         </small>
+                                    </div>
+                                    <div class="mt-1">
+                                        <small class="text-muted">
+                                            <i class="fas fa-tasks me-1"></i>
+                                            Pending tasks: <?php echo (int) $project['pending_task_count']; ?>
+                                        </small>
+                                    <div class="allocation-status-tags">
+                                        <?php if($totalTasksForProject === 0): ?>
+                                            <span class="allocation-status-tag warning">No tasks yet</span>
+                                        <?php endif; ?>
+                                        <?php if($needsExpertCount > 0): ?>
+                                            <span class="allocation-status-tag warning"><?php echo $needsExpertCount; ?> need expert</span>
+                                        <?php endif; ?>
+                                        <?php if($reviewCount > 0): ?>
+                                            <span class="allocation-status-tag"><?php echo $reviewCount; ?> for review</span>
+                                        <?php endif; ?>
+                                        <?php if($readyDevCount > 0): ?>
+                                            <span class="allocation-status-tag success"><?php echo $readyDevCount; ?> ready for dev</span>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 <a href="task-allocation.php?project_id=<?php echo $project['id']; ?>" class="btn-primary-modern">
@@ -668,6 +904,7 @@ include '../../includes/navbar.php';
                             <?php while($task = $recentTasks->fetch_assoc()): 
                                 $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
                             ?>
+                            <tr>
                                 <td>
                                     <div class="fw-semibold"><?php echo htmlspecialchars($task['title']); ?></div>
                                     <small class="text-muted"><?php echo htmlspecialchars(substr($task['description'], 0, 50)); ?></small>
@@ -740,6 +977,25 @@ include '../../includes/navbar.php';
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn-primary-modern" onclick="confirmAssign()">Assign Task</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Details Modal -->
+<div class="modal fade modal-modern" id="taskDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-info-circle me-2"></i> Task Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="taskDetailsContent">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -827,8 +1083,9 @@ function assignTask(userId, userName) {
     $.ajax({
         url: '../../api/get-unassigned-tasks.php',
         method: 'GET',
+        dataType: 'json',
         success: function(response) {
-            const tasks = JSON.parse(response);
+            const tasks = response;
             let html = '<div class="list-group">';
             tasks.forEach(task => {
                 html += `
@@ -850,9 +1107,10 @@ function selectTaskForUser(taskId, userId, taskTitle) {
         $.ajax({
             url: '../../api/assign-task.php',
             method: 'POST',
+            dataType: 'json',
             data: { task_id: taskId, user_id: userId, send_email: true },
             success: function(response) {
-                const result = JSON.parse(response);
+                const result = response;
                 if(result.success) {
                     alert('✓ Task assigned successfully');
                     setTimeout(() => location.reload(), 1500);
@@ -869,9 +1127,10 @@ function assignTaskTo(taskId) {
     $.ajax({
         url: '../../api/get-task-details.php',
         method: 'GET',
+        dataType: 'json',
         data: { id: taskId },
         success: function(response) {
-            const task = JSON.parse(response);
+            const task = response;
             $('#assignTaskTitle').text(task.title);
             $('#assignTaskModal').modal('show');
         }
@@ -890,9 +1149,10 @@ function confirmAssign() {
     $.ajax({
         url: '../../api/assign-task.php',
         method: 'POST',
+        dataType: 'json',
         data: { task_id: currentTaskId, user_id: userId, send_email: sendEmail },
         success: function(response) {
-            const result = JSON.parse(response);
+            const result = response;
             if(result.success) {
                 alert('✓ Task assigned successfully');
                 $('#assignTaskModal').modal('hide');
@@ -905,7 +1165,56 @@ function confirmAssign() {
 }
 
 function viewTask(taskId) {
-    window.location.href = '../../modules/developer/task.php?id=' + taskId;
+    $('#taskDetailsContent').html(`
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    `);
+
+    $.ajax({
+        url: '../../api/get-task-details.php',
+        method: 'GET',
+        dataType: 'json',
+        data: { id: taskId },
+        success: function(response) {
+            const task = response;
+            if (task.error) {
+                $('#taskDetailsContent').html(`<div class="alert alert-danger mb-0">${escapeHtml(task.error)}</div>`);
+            } else {
+                $('#taskDetailsContent').html(`
+                    <div class="row g-4">
+                        <div class="col-md-8">
+                            <h5 class="mb-3">${escapeHtml(task.title || '')}</h5>
+                            <p class="text-muted">${escapeHtml(task.description || 'No description provided.')}</p>
+                            <div class="mb-2"><strong>Project:</strong> ${escapeHtml(task.project_name || 'No project')}</div>
+                            <div class="mb-2"><strong>Client:</strong> ${escapeHtml(task.client_name || 'No client')}</div>
+                            <div class="mb-2"><strong>Deadline:</strong> ${task.deadline ? new Date(task.deadline).toLocaleDateString() : 'Not set'}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 bg-light rounded-3">
+                                <p class="mb-2"><strong>Status:</strong> ${escapeHtml((task.status || '').replaceAll('_', ' '))}</p>
+                                <p class="mb-2"><strong>Priority:</strong> ${escapeHtml(task.priority || '')}</p>
+                                <p class="mb-0"><strong>Assigned To:</strong> ${escapeHtml(task.assigned_to_name || 'Unassigned')}</p>
+                            </div>
+                        </div>
+                    </div>
+                `);
+            }
+            new bootstrap.Modal(document.getElementById('taskDetailsModal')).show();
+        },
+        error: function() {
+            $('#taskDetailsContent').html('<div class="alert alert-danger mb-0">Unable to load task details.</div>');
+            new bootstrap.Modal(document.getElementById('taskDetailsModal')).show();
+        }
+    });
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text ?? '';
+    return div.innerHTML;
 }
 </script>
 

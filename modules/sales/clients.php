@@ -5,6 +5,24 @@ requireRole('sales');
 $conn = getConnection();
 $user = getCurrentUser();
 $hasSalesBudget = dbColumnExists($conn, 'projects', 'sales_budget');
+$hasTimelineStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
+$hasTimelineEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
+
+if (!$hasTimelineStartTime) {
+    $conn->query(DB_DRIVER === 'pgsql'
+        ? 'ALTER TABLE projects ADD COLUMN timeline_start_time TIME NULL'
+        : 'ALTER TABLE projects ADD COLUMN timeline_start_time TIME NULL AFTER timeline_start'
+    );
+    $hasTimelineStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
+}
+
+if (!$hasTimelineEndTime) {
+    $conn->query(DB_DRIVER === 'pgsql'
+        ? 'ALTER TABLE projects ADD COLUMN timeline_end_time TIME NULL'
+        : 'ALTER TABLE projects ADD COLUMN timeline_end_time TIME NULL AFTER timeline_end'
+    );
+    $hasTimelineEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
+}
 
 function parseSalesBudgetInput(string $value): ?float
 {
@@ -19,6 +37,21 @@ function parseSalesBudgetInput(string $value): ?float
     }
 
     return (float) $normalized;
+}
+
+function parseSalesTimeInput(string $value): ?string
+{
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    $parsed = DateTime::createFromFormat('H:i', $trimmed);
+    if (!$parsed || $parsed->format('H:i') !== $trimmed) {
+        return null;
+    }
+
+    return $trimmed . ':00';
 }
 
 // Handle client operations (same logic as before)
@@ -41,6 +74,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $salesBudget = parseSalesBudgetInput($salesBudgetInput);
         $timelineStart = $_POST['timeline_start'] ?: null;
         $timelineEnd = $_POST['timeline_end'] ?: ($deadline ?: null);
+        $timelineStartTimeInput = trim((string) ($_POST['timeline_start_time'] ?? ''));
+        $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ($_POST['deadline_time'] ?? '')));
+        $timelineStartTime = parseSalesTimeInput($timelineStartTimeInput);
+        $timelineEndTime = parseSalesTimeInput($timelineEndTimeInput);
 
         $requirementsSummary = $requestedFeatures;
         if ($additionalRequirements !== '') {
@@ -54,6 +91,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['error'] = 'Client name is required.';
         } elseif ($salesBudgetInput !== '' && $salesBudget === null) {
             $_SESSION['error'] = 'Budget must be a valid number.';
+        } elseif ($timelineStartTimeInput !== '' && $timelineStartTime === null) {
+            $_SESSION['error'] = 'Timeline start time must be valid.';
+        } elseif ($timelineEndTimeInput !== '' && $timelineEndTime === null) {
+            $_SESSION['error'] = 'Project deadline time must be valid.';
         } else {
             $conn->begin_transaction();
 
@@ -87,45 +128,92 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $projectId = null;
                 if ($projectName !== '') {
                     if ($hasSalesBudget) {
+                        $timeColumns = $hasTimelineStartTime && $hasTimelineEndTime
+                            ? ', timeline_start_time, timeline_end_time'
+                            : '';
+                        $timePlaceholders = $hasTimelineStartTime && $hasTimelineEndTime
+                            ? ', ?, ?'
+                            : '';
                         $projectStmt = $conn->prepare("
                             INSERT INTO projects (
                                 client_id, name, description, status, timeline_start, timeline_end,
-                                meeting_notes, mom, requested_features, sales_budget, created_by, architect_id
-                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULLIF(?, ''), ?, NULL)
+                                meeting_notes, mom, requested_features, sales_budget{$timeColumns}, created_by, architect_id
+                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULLIF(?, ''){$timePlaceholders}, ?, NULL)
                         ");
                         $projectBudget = $salesBudget === null ? '' : number_format($salesBudget, 2, '.', '');
-                        $projectStmt->bind_param(
-                            'issssssssi',
-                            $clientId,
-                            $projectName,
-                            $projectDescription,
-                            $timelineStart,
-                            $timelineEnd,
-                            $meetingNotes,
-                            $mom,
-                            $requirementsSummary,
-                            $projectBudget,
-                            $user['id']
-                        );
+                        if ($hasTimelineStartTime && $hasTimelineEndTime) {
+                            $projectStmt->bind_param(
+                                'issssssssssi',
+                                $clientId,
+                                $projectName,
+                                $projectDescription,
+                                $timelineStart,
+                                $timelineEnd,
+                                $meetingNotes,
+                                $mom,
+                                $requirementsSummary,
+                                $projectBudget,
+                                $timelineStartTime,
+                                $timelineEndTime,
+                                $user['id']
+                            );
+                        } else {
+                            $projectStmt->bind_param(
+                                'issssssssi',
+                                $clientId,
+                                $projectName,
+                                $projectDescription,
+                                $timelineStart,
+                                $timelineEnd,
+                                $meetingNotes,
+                                $mom,
+                                $requirementsSummary,
+                                $projectBudget,
+                                $user['id']
+                            );
+                        }
                     } else {
+                        $timeColumns = $hasTimelineStartTime && $hasTimelineEndTime
+                            ? ', timeline_start_time, timeline_end_time'
+                            : '';
+                        $timePlaceholders = $hasTimelineStartTime && $hasTimelineEndTime
+                            ? ', ?, ?'
+                            : '';
                         $projectStmt = $conn->prepare("
                             INSERT INTO projects (
                                 client_id, name, description, status, timeline_start, timeline_end,
-                                meeting_notes, mom, requested_features, created_by, architect_id
-                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, NULL)
+                                meeting_notes, mom, requested_features{$timeColumns}, created_by, architect_id
+                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?{$timePlaceholders}, ?, NULL)
                         ");
-                        $projectStmt->bind_param(
-                            'isssssssi',
-                            $clientId,
-                            $projectName,
-                            $projectDescription,
-                            $timelineStart,
-                            $timelineEnd,
-                            $meetingNotes,
-                            $mom,
-                            $requirementsSummary,
-                            $user['id']
-                        );
+                        if ($hasTimelineStartTime && $hasTimelineEndTime) {
+                            $projectStmt->bind_param(
+                                'isssssssssi',
+                                $clientId,
+                                $projectName,
+                                $projectDescription,
+                                $timelineStart,
+                                $timelineEnd,
+                                $meetingNotes,
+                                $mom,
+                                $requirementsSummary,
+                                $timelineStartTime,
+                                $timelineEndTime,
+                                $user['id']
+                            );
+                        } else {
+                            $projectStmt->bind_param(
+                                'isssssssi',
+                                $clientId,
+                                $projectName,
+                                $projectDescription,
+                                $timelineStart,
+                                $timelineEnd,
+                                $meetingNotes,
+                                $mom,
+                                $requirementsSummary,
+                                $user['id']
+                            );
+                        }
                     }
                     $projectStmt->execute();
                     $projectId = $projectStmt->insert_id;
@@ -959,7 +1047,7 @@ include '../../includes/navbar.php';
                             <textarea name="address" class="form-control" rows="2"></textarea>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Project Deadline</label>
+                            <label class="form-label">Client Deadline</label>
                             <input type="date" name="deadline" class="form-control">
                         </div>
                         <div class="col-12">
@@ -970,9 +1058,21 @@ include '../../includes/navbar.php';
                             <label class="form-label">Project Name</label>
                             <input type="text" name="project_name" class="form-control" required>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-3 mb-3">
                             <label class="form-label">Requested Timeline Start</label>
                             <input type="date" name="timeline_start" class="form-control">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Start Time</label>
+                            <input type="time" name="timeline_start_time" class="form-control">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Project Deadline</label>
+                            <input type="date" name="timeline_end" class="form-control">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Deadline Time</label>
+                            <input type="time" name="timeline_end_time" class="form-control">
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Budget</label>
@@ -1128,7 +1228,11 @@ function viewClient(id) {
         method: 'GET',
         data: { id: id },
         success: function(response) {
-            const client = JSON.parse(response);
+            const client = typeof response === 'string' ? JSON.parse(response) : response;
+            if (client.error) {
+                alert(client.error);
+                return;
+            }
             let html = `
                 <div class="row g-4">
                     <div class="col-md-6">
@@ -1169,7 +1273,7 @@ function viewClient(id) {
                 method: 'GET',
                 data: { client_id: id },
                 success: function(projectsResponse) {
-                    const projects = JSON.parse(projectsResponse);
+                    const projects = typeof projectsResponse === 'string' ? JSON.parse(projectsResponse) : projectsResponse;
                     if(projects.length > 0) {
                         let projectsHtml = '<div class="list-group">';
                         projects.forEach(project => {
@@ -1192,6 +1296,13 @@ function viewClient(id) {
             });
             
             new bootstrap.Modal(document.getElementById('viewClientModal')).show();
+        },
+        error: function(xhr) {
+            let message = 'Unable to load client details';
+            try {
+                message = JSON.parse(xhr.responseText).error || message;
+            } catch (error) {}
+            alert(message);
         }
     });
 }
@@ -1213,6 +1324,14 @@ function deleteClient(id, name) {
 document.getElementById('searchInput').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         applyFilters();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const params = new URLSearchParams(window.location.search);
+    const clientId = params.get('view') || params.get('id');
+    if (clientId) {
+        viewClient(clientId);
     }
 });
 </script>

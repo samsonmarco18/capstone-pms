@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/password-reset.php';
 require_once '../../includes/project-delay-insights.php';
 requireRole('admin');
 
@@ -10,6 +11,8 @@ $conn = getConnection();
 $techCount = $conn->query("SELECT COUNT(*) as count FROM technologies")->fetch_assoc()['count'];
 $userCount = $conn->query("SELECT COUNT(*) as count FROM users")->fetch_assoc()['count'];
 $securityReports = $conn->query("SELECT COUNT(*) as count FROM audit_logs WHERE action LIKE '%security%'")->fetch_assoc()['count'];
+$passwordResetCounts = getPasswordResetRequestCounts();
+$passwordResetPending = (int) ($passwordResetCounts['pending'] ?? 0);
 
 // Get data for charts
 $techStatus = $conn->query("SELECT status, COUNT(*) as count FROM technologies GROUP BY status");
@@ -90,12 +93,10 @@ include '../../includes/navbar.php';
                                 <div class="card bg-white" style="flex: 1; border: 1px solid #1f6392 !important;">
                                     <div class="card-body p-3">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
-                                            <div class="text-muted small text-uppercase fw-semibold">Platform Health</div>
+                                            <div class="text-muted small text-uppercase fw-semibold">Password Requests</div>
                                             <i class="fas fa-heartbeat" style="font-size: 20px; color: var(--theme-primary); opacity: 0.65;"></i>
                                         </div>
-                                        <div class="fw-bold <?php echo $securityReports === 0 ? 'text-success' : 'text-warning'; ?> fs-5">
-                                            <?php echo $securityReports === 0 ? 'Stable' : 'Attention Needed'; ?>
-                                        </div>
+                                        <div class="fw-bold fs-2" style="color: #1f6392;"><?php echo $passwordResetPending; ?></div>
                                     </div>
                                 </div>
                                 <div class="card bg-white" style="flex: 1; border: 1px solid #1f6392 !important;">

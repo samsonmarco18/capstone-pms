@@ -264,23 +264,37 @@ $developers = $conn->query("
     ORDER BY assigned_tasks ASC
 ");
 
-// Get projects for dropdown
-$projects = $conn->query("
-    SELECT p.id, p.name, c.name as client_name
-    FROM projects p
-    JOIN clients c ON p.client_id = c.id
-    WHERE p.status != 'completed'
-    ORDER BY p.created_at DESC
-");
-
 // Handle task operations
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    
     // Assign task to expert
     if (isset($_POST['assign_to_expert'])) {
-        $taskId = $_POST['task_id'];
-        $expertId = $_POST['expert_id'];
-        
+        $taskId = (int) ($_POST['task_id'] ?? 0);
+        $expertId = (int) ($_POST['expert_id'] ?? 0);
+
+        if ($taskId <= 0 || $expertId <= 0) {
+            $_SESSION['error'] = "Please select a valid task and expert.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $expertCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'expert' AND status = 'active'");
+        $expertCheck->bind_param("i", $expertId);
+        $expertCheck->execute();
+        $validExpert = $expertCheck->get_result()->num_rows > 0;
+        $expertCheck->close();
+
+        $taskCheck = $conn->prepare("SELECT id FROM tasks WHERE id = ? AND status = 'todo' AND (assigned_to IS NULL OR assigned_to = 0)");
+        $taskCheck->bind_param("i", $taskId);
+        $taskCheck->execute();
+        $validTask = $taskCheck->get_result()->num_rows > 0;
+        $taskCheck->close();
+
+        if (!$validExpert || !$validTask) {
+            $_SESSION['error'] = "Assignment cannot proceed. Check the selected task and expert.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $stmt = $conn->prepare("UPDATE tasks SET assigned_to = ?, status = 'todo' WHERE id = ?");
         $stmt->bind_param("ii", $expertId, $taskId);
         
@@ -309,6 +323,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['assign_project_to_expert'])) {
         $projectId = (int) ($_POST['project_id'] ?? 0);
         $expertId = (int) ($_POST['expert_id'] ?? 0);
+        if ($projectId <= 0 || $expertId <= 0) {
+            $_SESSION['error'] = "Please select a valid project and expert.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $expertCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'expert' AND status = 'active'");
+        $expertCheck->bind_param("i", $expertId);
+        $expertCheck->execute();
+        $validExpert = $expertCheck->get_result()->num_rows > 0;
+        $expertCheck->close();
+
+        if (!$validExpert) {
+            $_SESSION['error'] = "Please select an active expert.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         if ($projectId > 0 && $expertId > 0) {
             $stmt = $conn->prepare("
                 UPDATE tasks 
@@ -342,8 +374,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Assign task to developer (after estimation approved)
     if (isset($_POST['assign_to_developer'])) {
-        $taskId = $_POST['task_id'];
-        $developerId = $_POST['developer_id'];
+        $taskId = (int) ($_POST['task_id'] ?? 0);
+        $developerId = (int) ($_POST['developer_id'] ?? 0);
+
+        if ($taskId <= 0 || $developerId <= 0) {
+            $_SESSION['error'] = "Please select a valid task and developer.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $developerCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'developer' AND status = 'active'");
+        $developerCheck->bind_param("i", $developerId);
+        $developerCheck->execute();
+        $validDeveloper = $developerCheck->get_result()->num_rows > 0;
+        $developerCheck->close();
+
+        $approvalSql = $hasSalesApproval ? " AND sales_approved = 1" : "";
+        $choiceSql = $hasSalesChoice ? " AND sales_estimate_days IS NOT NULL" : "";
+        $taskCheck = $conn->prepare("
+            SELECT id
+            FROM tasks
+            WHERE id = ?
+              AND status = 'todo'
+              AND assigned_to IS NOT NULL
+              AND assigned_to != 0
+              {$approvalSql}{$choiceSql}
+        ");
+        $taskCheck->bind_param("i", $taskId);
+        $taskCheck->execute();
+        $validTask = $taskCheck->get_result()->num_rows > 0;
+        $taskCheck->close();
+
+        if (!$validDeveloper || !$validTask) {
+            $_SESSION['error'] = "Developer assignment cannot proceed. Check approval status and selected developer.";
+            header("Location: task-allocation.php");
+            exit();
+        }
         
         $stmt = $conn->prepare("UPDATE tasks SET assigned_to = ?, status = 'todo' WHERE id = ?");
         $stmt->bind_param("ii", $developerId, $taskId);
@@ -371,7 +437,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Approve estimation and move to ready for dev
     if (isset($_POST['approve_estimation'])) {
-        $taskId = $_POST['task_id'];
+        $taskId = (int) ($_POST['task_id'] ?? 0);
+
+        if ($taskId <= 0) {
+            $_SESSION['error'] = "Invalid task selected.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $approvalSql = $hasSalesApproval ? " AND t.sales_approved = 1" : "";
+        $choiceSql = $hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "";
+        $taskCheck = $conn->prepare("
+            SELECT t.id
+            FROM tasks t
+            INNER JOIN feature_estimations fe ON fe.task_id = t.id AND fe.status = 'completed'
+            WHERE t.id = ?
+              AND t.status = 'review'
+              {$approvalSql}{$choiceSql}
+        ");
+        $taskCheck->bind_param("i", $taskId);
+        $taskCheck->execute();
+        $validTask = $taskCheck->get_result()->num_rows > 0;
+        $taskCheck->close();
+
+        if (!$validTask) {
+            $_SESSION['error'] = "Approval cannot proceed until Sales approval and selected days are complete.";
+            header("Location: task-allocation.php");
+            exit();
+        }
         
         $stmt = $conn->prepare("UPDATE tasks SET status = 'todo' WHERE id = ?");
         $stmt->bind_param("i", $taskId);
@@ -387,8 +480,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Reject estimation
     if (isset($_POST['reject_estimation'])) {
-        $taskId = $_POST['task_id'];
-        $rejectionReason = trim($_POST['rejection_reason']);
+        $taskId = (int) ($_POST['task_id'] ?? 0);
+        $rejectionReason = trim((string) ($_POST['rejection_reason'] ?? ''));
+
+        if ($taskId <= 0 || $rejectionReason === '') {
+            $_SESSION['error'] = "Please provide a task and rejection reason.";
+            header("Location: task-allocation.php");
+            exit();
+        }
         
         // Get task details for notification
         $task = $conn->query("SELECT assigned_to, title FROM tasks WHERE id = $taskId")->fetch_assoc();
@@ -691,6 +790,11 @@ include '../../includes/navbar.php';
     color: white;
     padding: 1rem 1.5rem;
     border: none;
+}
+
+.modal-modern .modal-header .modal-title,
+.modal-modern .modal-header .modal-title i {
+    color: #ffffff !important;
 }
 
 .modal-modern .modal-header .btn-close {
@@ -1170,63 +1274,6 @@ include '../../includes/navbar.php';
         <!-- End Tab Content -->
     </div>
 
-<!-- Create Task Modal -->
-<div class="modal fade modal-modern" id="createTaskModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-plus me-2"></i>Create New Task</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Project *</label>
-                        <select name="project_id" class="form-select-custom" required>
-                            <option value="">Select Project</option>
-                            <?php 
-                            $projects->data_seek(0);
-                            while($proj = $projects->fetch_assoc()): 
-                            ?>
-                            <option value="<?php echo $proj['id']; ?>">
-                                <?php echo htmlspecialchars($proj['name']); ?>
-                            </option>
-                            <?php endwhile; ?>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Task Title *</label>
-                        <input type="text" name="title" class="form-control-custom" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Description *</label>
-                        <textarea name="description" class="form-control-custom" rows="3" required></textarea>
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <label class="form-label">Priority *</label>
-                            <select name="priority" class="form-select-custom" required>
-                                <option value="low">Low</option>
-                                <option value="medium">Medium</option>
-                                <option value="high">High</option>
-                                <option value="critical">Critical</option>
-                            </select>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Deadline *</label>
-                            <input type="date" name="deadline" class="form-control-custom" required>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="create_task" class="btn-primary-modern">Create Task</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <!-- Assign to Expert Modal -->
 <div class="modal fade modal-modern" id="assignExpertModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -1376,9 +1423,10 @@ function viewTaskDetails(taskId) {
     $.ajax({
         url: '../../api/get-task-details.php',
         method: 'GET',
+        dataType: 'json',
         data: { id: taskId },
         success: function(response) {
-            const task = JSON.parse(response);
+            const task = response;
             let html = `
                 <div class="row g-4">
                     <div class="col-md-8">
