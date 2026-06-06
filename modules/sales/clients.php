@@ -433,6 +433,124 @@ include '../../includes/navbar.php';
     border-bottom: 1px solid var(--gray-200);
 }
 
+.client-tabs {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem 2rem 0;
+    background: #ffffff;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.client-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: none;
+    background: transparent;
+    color: var(--gray-600);
+    padding: 0.75rem 0.9rem;
+    border-bottom: 2px solid transparent;
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.client-tab-btn.is-active {
+    color: var(--theme-primary);
+    border-bottom-color: var(--theme-primary);
+}
+
+.client-tab-badge {
+    display: none;
+    min-width: 20px;
+    height: 20px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--theme-primary);
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.client-tab-badge.is-visible {
+    display: inline-flex;
+}
+
+.client-tab-panel[hidden] {
+    display: none;
+}
+
+.client-drafts-panel {
+    padding: 1.5rem 2rem 2rem;
+    background: var(--gray-50);
+}
+
+.client-draft-list {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.client-draft-card {
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 18px;
+    padding: 1.25rem 1.5rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+}
+
+.client-draft-card__meta {
+    flex: 1;
+    min-width: 0;
+}
+
+.client-draft-card__title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: 0.3rem;
+    word-break: break-word;
+}
+
+.client-draft-card__subtitle {
+    font-size: 0.82rem;
+    color: var(--gray-600);
+    margin-bottom: 0.7rem;
+}
+
+.client-draft-card__summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.client-draft-card__summary span {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.55rem;
+    border-radius: 999px;
+    background: var(--gray-100);
+    color: var(--gray-700);
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+.client-draft-card__actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.client-draft-card__actions .btn {
+    border-radius: 999px;
+    font-weight: 600;
+}
+
 .filter-group {
     display: flex;
     gap: 1rem;
@@ -744,6 +862,374 @@ include '../../includes/navbar.php';
     overflow-y: auto;
 }
 
+.modal-modern.add-client-modal .modal-dialog {
+    max-width: 900px;
+}
+
+.modal-modern.add-client-modal .modal-content {
+    background: #f8fafc;
+}
+
+.modal-modern.add-client-modal .modal-body {
+    padding: 1.5rem;
+}
+
+.modal-modern.add-client-modal .add-client-layout {
+    display: grid;
+    gap: 1rem;
+}
+
+.modal-modern.add-client-modal .add-client-stepper {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.modal-modern.add-client-modal .stepper-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    padding: 0.75rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    background: #ffffff;
+    color: var(--gray-600);
+    text-align: left;
+    transition: all 0.18s ease;
+}
+
+.modal-modern.add-client-modal .stepper-item:disabled {
+    cursor: default;
+    opacity: 1;
+}
+
+.modal-modern.add-client-modal .stepper-item span {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    background: var(--gray-100);
+    color: var(--gray-600);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.modal-modern.add-client-modal .stepper-item strong {
+    display: block;
+    color: inherit;
+    font-size: 0.84rem;
+    font-weight: 700;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.modal-modern.add-client-modal .stepper-item.is-active {
+    border-color: rgba(31, 99, 146, 0.35);
+    color: var(--theme-primary);
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.08);
+}
+
+.modal-modern.add-client-modal .stepper-item.is-active span {
+    background: var(--theme-primary);
+    color: #ffffff;
+}
+
+.modal-modern.add-client-modal .stepper-item.is-complete {
+    border-color: rgba(5, 150, 105, 0.25);
+    color: #047857;
+}
+
+.modal-modern.add-client-modal .stepper-item.is-complete span {
+    background: #d1fae5;
+    color: #047857;
+}
+
+.modal-modern.add-client-modal .add-client-step[hidden] {
+    display: none;
+}
+
+.modal-modern.add-client-modal .section-title {
+    margin: 0 0 1rem;
+    color: var(--gray-900);
+    font-size: 0.92rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.modal-modern.add-client-modal .section-title i {
+    color: var(--theme-primary);
+}
+
+.modal-modern.add-client-modal .field-group {
+    padding: 1.15rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    background: #ffffff;
+    margin-bottom: 0;
+    height: 390px;
+    overflow-y: auto;
+}
+
+.modal-modern.add-client-modal .field-group:last-child {
+    margin-bottom: 0;
+}
+
+.modal-modern.add-client-modal .mini-note {
+    margin-top: 0.5rem;
+    color: var(--gray-500);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.modal-modern.add-client-modal .info-card {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.8rem 0.9rem;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px solid var(--gray-100);
+    margin-top: 1rem;
+}
+
+.modal-modern.add-client-modal .info-card span {
+    color: var(--gray-500);
+    font-size: 0.74rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.modal-modern.add-client-modal .info-card strong {
+    color: var(--gray-900);
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.modal-modern.add-client-modal .form-label {
+    font-weight: 600;
+    color: var(--gray-700);
+}
+
+.modal-modern.add-client-modal .form-control,
+.modal-modern.add-client-modal .form-select,
+.modal-modern.add-client-modal textarea {
+    border-radius: 10px;
+    background: #ffffff;
+}
+
+.modal-modern.add-client-modal .add-client-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.modal-modern.add-client-modal .draft-status {
+    color: var(--gray-500);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.modal-modern.add-client-modal [data-save-draft]:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.modal-modern.add-client-modal .unsaved-close-panel {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border: 1px solid rgba(217, 119, 6, 0.25);
+    border-radius: 12px;
+    background: #fffbeb;
+}
+
+.modal-modern.add-client-modal .unsaved-close-panel.is-visible {
+    display: flex;
+}
+
+.modal-modern.add-client-modal .add-client-footer.has-close-panel .draft-status,
+.modal-modern.add-client-modal .add-client-footer.has-close-panel .add-client-actions {
+    display: none;
+}
+
+.modal-modern.add-client-modal .unsaved-close-panel__text {
+    display: grid;
+    gap: 0.15rem;
+    color: #92400e;
+    font-size: 0.84rem;
+}
+
+.modal-modern.add-client-modal .unsaved-close-panel__text strong {
+    color: #78350f;
+    font-size: 0.92rem;
+}
+
+.modal-modern.add-client-modal .unsaved-close-panel__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: 0 0 auto;
+}
+
+.client-draft-empty {
+    padding: 2.25rem 1.5rem;
+    border: 1px dashed var(--gray-300);
+    border-radius: 12px;
+    background: #ffffff;
+    text-align: center;
+    color: var(--gray-600);
+}
+
+.client-draft-empty i {
+    display: block;
+    margin-bottom: 0.75rem;
+    color: var(--gray-300);
+    font-size: 2rem;
+}
+
+.client-draft-empty strong {
+    display: block;
+    color: var(--gray-900);
+    margin-bottom: 0.25rem;
+}
+
+.client-draft-banner.is-visible {
+    display: flex;
+}
+
+.client-draft-banner__icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(31, 99, 146, 0.12);
+    color: var(--theme-primary);
+    flex: 0 0 auto;
+}
+
+.client-draft-banner__text {
+    display: grid;
+    gap: 0.15rem;
+    color: var(--gray-700);
+    font-size: 0.86rem;
+}
+
+.client-draft-banner__text strong {
+    color: var(--gray-900);
+    font-size: 0.95rem;
+}
+
+.client-draft-banner__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 0 0 auto;
+}
+
+.client-draft-banner__actions .btn-add-modern {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 80%);
+    border: 1px solid transparent;
+    color: #ffffff !important;
+    box-shadow: 0 8px 16px rgba(31, 99, 146, 0.14);
+}
+
+.client-draft-banner__actions .btn-add-modern:hover {
+    background: var(--theme-primary-dark);
+    color: #ffffff !important;
+    border-color: transparent;
+}
+
+.client-draft-banner__actions .btn-add-modern i {
+    color: #ffffff !important;
+}
+
+.client-draft-banner__body {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    min-width: 0;
+}
+
+.client-draft-banner__text span {
+    color: var(--gray-600);
+}
+
+.client-draft-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.35rem;
+}
+
+.client-draft-summary span {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(31, 99, 146, 0.08);
+    color: var(--theme-primary);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.modal-modern.add-client-modal .add-client-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+@media (max-width: 768px) {
+    .modal-modern.add-client-modal .add-client-stepper {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-modern.add-client-modal .add-client-footer {
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+
+    .modal-modern.add-client-modal .add-client-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .modal-modern.add-client-modal .unsaved-close-panel {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .modal-modern.add-client-modal .unsaved-close-panel__actions {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .client-draft-banner {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .client-draft-banner__actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+}
+
 .modal-modern .modal-footer {
     padding: 1rem 2rem 2rem;
     border-top: 1px solid var(--gray-200);
@@ -807,6 +1293,15 @@ include '../../includes/navbar.php';
     
     .filter-group {
         flex-direction: column;
+    }
+
+    .client-tabs {
+        padding: 0.85rem 1rem 0;
+        overflow-x: auto;
+    }
+
+    .client-drafts-panel {
+        padding: 1rem;
     }
     
     .filter-input {
@@ -878,7 +1373,28 @@ include '../../includes/navbar.php';
                 <span class="text-muted small">Showing <?php echo $clients->num_rows; ?> clients</span>
             </div>
         </div>
-        
+
+        <div class="client-tabs" role="tablist" aria-label="Client management views">
+            <button type="button" class="client-tab-btn is-active" data-client-tab="clients" role="tab" aria-selected="true">
+                <i class="fas fa-users"></i> Clients
+            </button>
+            <button type="button" class="client-tab-btn" data-client-tab="drafts" role="tab" aria-selected="false">
+                <i class="fas fa-file-alt"></i> Drafts
+                <span class="client-tab-badge" id="draftTabBadge">1</span>
+            </button>
+        </div>
+
+        <div class="client-tab-panel client-drafts-panel" data-client-panel="drafts" role="tabpanel" hidden>
+            <div class="client-draft-list" id="clientDraftList"></div>
+            <div class="client-draft-empty" id="clientDraftEmpty">
+                <i class="fas fa-file-alt"></i>
+                <strong>No saved client drafts</strong>
+                <span>Drafts you save from the Add New Client form will appear here.</span>
+            </div>
+        </div>
+
+        <div class="client-tab-panel" data-client-panel="clients" role="tabpanel">
+
         <!-- Filter Section -->
         <div class="filter-section">
             <div class="filter-group">
@@ -979,103 +1495,153 @@ include '../../includes/navbar.php';
             </div>
             <?php endif; ?>
         </div>
+        </div>
     </div>
 </div>
 
 <!-- Add Client Modal (same content as before) -->
-<div class="modal fade modal-modern" id="addClientModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+<div class="modal fade modal-modern add-client-modal" id="addClientModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="fas fa-user-plus me-2"></i> Add New Client
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close add-client-close" aria-label="Close"></button>
             </div>
-            <form method="POST">
+            <form method="POST" id="addClientForm" novalidate>
                 <div class="modal-body">
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Company Name</label>
-                            <input type="text" name="name" class="form-control" required>
+                    <div class="add-client-stepper" aria-label="Add client progress">
+                        <button type="button" class="stepper-item is-active" data-step-target="0" aria-current="step" disabled>
+                            <span>1</span>
+                            <strong>Client Profile</strong>
+                        </button>
+                        <button type="button" class="stepper-item" data-step-target="1" disabled>
+                            <span>2</span>
+                            <strong>Project Intake</strong>
+                        </button>
+                        <button type="button" class="stepper-item" data-step-target="2" disabled>
+                            <span>3</span>
+                            <strong>Timeline & Budget</strong>
+                        </button>
+                    </div>
+
+                    <div class="add-client-layout">
+                        <div class="field-group add-client-step" data-client-step="0">
+                            <div class="section-title"><i class="fas fa-id-card"></i> Client Profile</div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Company Name</label>
+                                    <input type="text" name="name" class="form-control" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Contact Person</label>
+                                    <input type="text" name="contact_person" class="form-control" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Email</label>
+                                    <input type="email" name="email" class="form-control" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Phone</label>
+                                    <input type="text" name="phone" class="form-control" required>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Address</label>
+                                    <textarea name="address" class="form-control" rows="2"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Client Deadline</label>
+                                    <input type="date" name="deadline" class="form-control">
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Contact Person</label>
-                            <input type="text" name="contact_person" class="form-control" required>
+
+                        <div class="field-group add-client-step" data-client-step="1" hidden>
+                            <div class="section-title"><i class="fas fa-clipboard-list"></i> Project Intake</div>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label class="form-label">Project Name</label>
+                                    <input type="text" name="project_name" class="form-control" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Project Description</label>
+                                    <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Requested System Features</label>
+                                    <textarea name="requested_features" class="form-control" rows="3" placeholder="List requested features, one per line"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Meeting Notes</label>
+                                    <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Minutes of the Meeting (MOM)</label>
+                                    <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Additional Requirements</label>
+                                    <textarea name="additional_requirements" class="form-control" rows="3" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Email</label>
-                            <input type="email" name="email" class="form-control" required>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Phone</label>
-                            <input type="text" name="phone" class="form-control" required>
-                        </div>
-                        <div class="col-12 mb-3">
-                            <label class="form-label">Address</label>
-                            <textarea name="address" class="form-control" rows="2"></textarea>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Client Deadline</label>
-                            <input type="date" name="deadline" class="form-control">
-                        </div>
-                        <div class="col-12">
-                            <hr>
-                            <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-clipboard-list me-2"></i>Requirement Gathering for Architect Review</h6>
-                        </div>
-                        <div class="col-md-8 mb-3">
-                            <label class="form-label">Project Name</label>
-                            <input type="text" name="project_name" class="form-control" required>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Requested Timeline Start</label>
-                            <input type="date" name="timeline_start" class="form-control">
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Start Time</label>
-                            <input type="time" name="timeline_start_time" class="form-control">
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Project Deadline</label>
-                            <input type="date" name="timeline_end" class="form-control">
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Deadline Time</label>
-                            <input type="time" name="timeline_end_time" class="form-control">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Budget</label>
-                            <input type="number" name="sales_budget" class="form-control" min="0" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00">
-                            <small class="text-muted">Used as the decision insight budget baseline when provided.</small>
-                        </div>
-                        <div class="col-12 mb-3">
-                            <label class="form-label">Project Description</label>
-                            <textarea name="project_description" class="form-control" rows="2" placeholder="Short overview of the requested system or solution"></textarea>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Meeting Notes</label>
-                            <textarea name="meeting_notes" class="form-control" rows="4" placeholder="Important notes from discovery meetings"></textarea>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Minutes of the Meeting (MOM)</label>
-                            <textarea name="mom" class="form-control" rows="4" placeholder="Formal MOM summary for the architect"></textarea>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Requested System Features</label>
-                            <textarea name="requested_features" class="form-control" rows="5" placeholder="List requested features, one per line"></textarea>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Additional Requirements</label>
-                            <textarea name="additional_requirements" class="form-control" rows="5" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
-                        </div>
-                        <div class="col-12">
-                            <small class="text-muted"><i class="fas fa-info-circle me-1"></i>Once saved, this client intake will automatically create a project and place it in the Architect review queue.</small>
+
+                        <div class="field-group add-client-step" data-client-step="2" hidden>
+                            <div class="section-title"><i class="fas fa-calendar-check"></i> Timeline & Budget</div>
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label">Timeline Start</label>
+                                    <input type="date" name="timeline_start" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Start Time</label>
+                                    <input type="time" name="timeline_start_time" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Project Deadline</label>
+                                    <input type="date" name="timeline_end" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Deadline Time</label>
+                                    <input type="time" name="timeline_end_time" class="form-control">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Budget</label>
+                                    <input type="number" name="sales_budget" class="form-control" min="0" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00">
+                                    <div class="mini-note">Used as the decision insight budget baseline when provided.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-card">
+                                        <span>Outcome</span>
+                                        <strong>Creates the client and sends the project to Architect review</strong>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="add_client" class="btn-add-modern">Add Client</button>
+                <div class="modal-footer add-client-footer">
+                    <span class="draft-status" data-draft-status>Draft not started</span>
+                    <div class="add-client-actions">
+                        <button type="button" class="btn btn-outline-primary" data-save-draft disabled>Save Draft</button>
+                        <button type="button" class="btn btn-outline-secondary" data-client-prev hidden>Previous</button>
+                        <button type="button" class="btn-add-modern" data-client-next>Next</button>
+                        <button type="submit" name="add_client" class="btn-add-modern" data-client-submit hidden>Add Client</button>
+                    </div>
+                    <div class="unsaved-close-panel" data-unsaved-close-panel>
+                        <div class="unsaved-close-panel__text">
+                            <strong>Save this client intake before closing?</strong>
+                            <span>You have entered details that are not saved yet.</span>
+                        </div>
+                        <div class="unsaved-close-panel__actions">
+                            <button type="button" class="btn btn-light" data-keep-editing>Keep Editing</button>
+                            <button type="button" class="btn btn-outline-danger" data-discard-unsaved>Discard</button>
+                            <button type="button" class="btn-add-modern" data-save-close-draft>
+                                <i class="fas fa-save me-1"></i> Save Draft
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </form>
         </div>
@@ -1287,6 +1853,510 @@ function deleteClient(id, name) {
         document.body.appendChild(form);
         form.submit();
     }
+}
+
+const addClientModalElement = document.getElementById('addClientModal');
+const addClientForm = document.getElementById('addClientForm');
+
+if (addClientModalElement && addClientForm) {
+    const addClientDraftsKey = 'erniPms.sales.addClientDrafts.v1';
+    const legacyDraftKeys = [
+        'erniPms.sales.addClientDraft.v2',
+        'erniPms.sales.addClientDraft'
+    ];
+    const addClientModal = bootstrap.Modal.getOrCreateInstance(addClientModalElement);
+    const clientTabButtons = Array.from(document.querySelectorAll('[data-client-tab]'));
+    const clientTabPanels = Array.from(document.querySelectorAll('[data-client-panel]'));
+    const draftList = document.getElementById('clientDraftList');
+    const draftEmpty = document.getElementById('clientDraftEmpty');
+    const draftTabBadge = document.getElementById('draftTabBadge');
+    const stepButtons = Array.from(addClientModalElement.querySelectorAll('[data-step-target]'));
+    const stepPanels = Array.from(addClientModalElement.querySelectorAll('[data-client-step]'));
+    const previousButton = addClientModalElement.querySelector('[data-client-prev]');
+    const nextButton = addClientModalElement.querySelector('[data-client-next]');
+    const submitButton = addClientModalElement.querySelector('[data-client-submit]');
+    const saveDraftButton = addClientModalElement.querySelector('[data-save-draft]');
+    const closeButtons = Array.from(addClientModalElement.querySelectorAll('.add-client-close'));
+    const draftStatus = addClientModalElement.querySelector('[data-draft-status]');
+    const addClientFooter = addClientModalElement.querySelector('.add-client-footer');
+    const unsavedClosePanel = addClientModalElement.querySelector('[data-unsaved-close-panel]');
+    const keepEditingButton = addClientModalElement.querySelector('[data-keep-editing]');
+    const discardUnsavedButton = addClientModalElement.querySelector('[data-discard-unsaved]');
+    const saveCloseDraftButton = addClientModalElement.querySelector('[data-save-close-draft]');
+    let currentStep = 0;
+    let formTouched = false;
+    let activeDraftLoaded = false;
+    let activeDraftId = null;
+
+    function getDraftData() {
+        return Object.fromEntries(new FormData(addClientForm).entries());
+    }
+
+    function hasDraftValues(data = getDraftData()) {
+        return Object.entries(data).some(([key, value]) => !key.startsWith('_') && String(value).trim() !== '');
+    }
+
+    function createDraftId() {
+        return 'draft-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+    }
+
+    function normalizeDraftEntry(entry) {
+        if (!entry || typeof entry !== 'object') {
+            return null;
+        }
+
+        try {
+            const id = String(entry.id || '').trim() || createDraftId();
+            const savedAt = String(entry.savedAt || entry._savedAt || '').trim() || new Date().toISOString();
+            const data = entry.data && typeof entry.data === 'object'
+                ? entry.data
+                : Object.fromEntries(Object.entries(entry).filter(([key]) => !key.startsWith('_') && key !== 'id' && key !== 'savedAt' && key !== 'data'));
+
+            return hasDraftValues(data) ? { id, savedAt, data } : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function getStoredDrafts() {
+        let drafts = [];
+
+        const rawDrafts = localStorage.getItem(addClientDraftsKey);
+        if (rawDrafts) {
+            try {
+                const parsed = JSON.parse(rawDrafts);
+                if (Array.isArray(parsed)) {
+                    drafts = parsed.map(normalizeDraftEntry).filter(Boolean);
+                }
+            } catch (error) {
+                drafts = [];
+            }
+        }
+
+        if (drafts.length === 0) {
+            legacyDraftKeys.forEach((legacyKey) => {
+                const rawLegacyDraft = localStorage.getItem(legacyKey);
+                if (!rawLegacyDraft) {
+                    return;
+                }
+
+                try {
+                    const parsedLegacy = JSON.parse(rawLegacyDraft);
+                    const legacyEntry = normalizeDraftEntry(parsedLegacy);
+                    if (legacyEntry) {
+                        drafts.push(legacyEntry);
+                    }
+                } catch (error) {
+                    // Ignore legacy corruption and move on.
+                }
+            });
+        }
+
+        drafts.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+        return drafts;
+    }
+
+    function saveStoredDrafts(drafts) {
+        localStorage.setItem(addClientDraftsKey, JSON.stringify(drafts));
+        legacyDraftKeys.forEach((legacyKey) => localStorage.removeItem(legacyKey));
+    }
+
+    function hasStoredDraft() {
+        return getStoredDrafts().length > 0;
+    }
+
+    function formatDraftDate(value) {
+        if (!value) {
+            return 'Saved recently';
+        }
+
+        const savedDate = new Date(value);
+        if (Number.isNaN(savedDate.getTime())) {
+            return 'Saved recently';
+        }
+
+        return 'Saved ' + savedDate.toLocaleString([], {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    }
+
+    function renderDraftList(drafts = getStoredDrafts()) {
+        if (!draftList) {
+            return;
+        }
+
+        if (draftTabBadge) {
+            draftTabBadge.textContent = String(drafts.length);
+            draftTabBadge.classList.toggle('is-visible', drafts.length > 0);
+        }
+        if (draftEmpty) {
+            draftEmpty.hidden = drafts.length > 0;
+        }
+
+        if (drafts.length === 0) {
+            draftList.innerHTML = '';
+            return;
+        }
+
+        draftList.innerHTML = drafts.map((draft) => {
+            const companyName = String(draft.data?.name || '').trim();
+            const contactPerson = String(draft.data?.contact_person || '').trim();
+            const projectName = String(draft.data?.project_name || '').trim();
+            const summaryBits = [
+                companyName ? 'Company: ' + escapeHtml(companyName) : '',
+                contactPerson ? 'Contact: ' + escapeHtml(contactPerson) : '',
+                projectName ? 'Project: ' + escapeHtml(projectName) : ''
+            ].filter(Boolean);
+
+            return `
+                <div class="client-draft-card" data-draft-id="${escapeHtml(draft.id)}">
+                    <div class="client-draft-card__meta">
+                        <div class="client-draft-card__title">${companyName ? escapeHtml(companyName) : 'Untitled draft'}</div>
+                        <div class="client-draft-card__subtitle">${escapeHtml(formatDraftDate(draft.savedAt))}</div>
+                        <div class="client-draft-card__summary">
+                            ${summaryBits.map((item) => `<span>${item}</span>`).join('')}
+                        </div>
+                    </div>
+                    <div class="client-draft-card__actions">
+                        <button type="button" class="btn btn-outline-primary btn-sm" data-draft-action="continue">Continue</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" data-draft-action="delete">Delete</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function showClientTab(tabName) {
+        clientTabButtons.forEach((button) => {
+            const isActive = button.dataset.clientTab === tabName;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+
+        clientTabPanels.forEach((panel) => {
+            panel.hidden = panel.dataset.clientPanel !== tabName;
+        });
+    }
+
+    function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = value;
+        return div.innerHTML;
+    }
+
+    function hideUnsavedClosePanel() {
+        if (unsavedClosePanel) {
+            unsavedClosePanel.classList.remove('is-visible');
+        }
+        if (addClientFooter) {
+            addClientFooter.classList.remove('has-close-panel');
+        }
+    }
+
+    function showUnsavedClosePanel() {
+        if (unsavedClosePanel) {
+            unsavedClosePanel.classList.add('is-visible');
+        }
+        if (addClientFooter) {
+            addClientFooter.classList.add('has-close-panel');
+        }
+    }
+
+    function updateSaveDraftButton() {
+        if (saveDraftButton) {
+            saveDraftButton.disabled = !hasDraftValues();
+        }
+    }
+
+    function updateDraftStatus(hasDraft = hasDraftValues()) {
+        if (draftStatus) {
+            draftStatus.textContent = hasDraft ? 'Draft saved on this browser' : (formTouched ? 'Unsaved changes' : 'Draft not started');
+        }
+        updateSaveDraftButton();
+        renderDraftList();
+    }
+
+    function saveAddClientDraft() {
+        const draftData = getDraftData();
+        if (!hasDraftValues(draftData)) {
+            if (activeDraftId) {
+                const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== activeDraftId);
+                saveStoredDrafts(remainingDrafts);
+                activeDraftId = null;
+            }
+            updateDraftStatus(false);
+            return;
+        }
+
+        const drafts = getStoredDrafts();
+        const now = new Date().toISOString();
+        const nextDraft = {
+            id: activeDraftId || createDraftId(),
+            savedAt: now,
+            data: { ...draftData }
+        };
+
+        const existingIndex = drafts.findIndex((draft) => draft.id === nextDraft.id);
+        if (existingIndex >= 0) {
+            drafts[existingIndex] = nextDraft;
+        } else {
+            drafts.unshift(nextDraft);
+        }
+
+        saveStoredDrafts(drafts);
+        activeDraftId = nextDraft.id;
+        activeDraftLoaded = true;
+        updateDraftStatus(true);
+    }
+
+    function loadAddClientDraft(draftId = null) {
+        const draftData = getStoredDrafts().find((draft) => draft.id === draftId) || null;
+        if (!draftData) {
+            updateDraftStatus(false);
+            return;
+        }
+
+        addClientForm.reset();
+        Object.entries(draftData.data || {}).forEach(([name, value]) => {
+            const field = addClientForm.elements[name];
+            if (field) {
+                field.value = value;
+            }
+        });
+        formTouched = false;
+        activeDraftLoaded = true;
+        activeDraftId = draftData.id;
+        hideUnsavedClosePanel();
+        updateDraftStatus(true);
+    }
+
+    function clearAddClientDraft() {
+        saveStoredDrafts([]);
+        addClientForm.reset();
+        formTouched = false;
+        activeDraftLoaded = false;
+        activeDraftId = null;
+        hideUnsavedClosePanel();
+        updateDraftStatus(false);
+        showClientStep(0);
+    }
+
+    function resetCurrentClientInput() {
+        addClientForm.reset();
+        formTouched = false;
+        activeDraftLoaded = false;
+        activeDraftId = null;
+        hideUnsavedClosePanel();
+        updateDraftStatus(false);
+        showClientStep(0);
+    }
+
+    function validateClientStep(stepIndex, shouldReport = true) {
+        const panel = stepPanels[stepIndex];
+        if (!panel) {
+            return true;
+        }
+
+        const fields = Array.from(panel.querySelectorAll('input, select, textarea'));
+        for (const field of fields) {
+            if (!field.checkValidity()) {
+                if (shouldReport) {
+                    field.reportValidity();
+                }
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function showClientStep(stepIndex) {
+        currentStep = Math.max(0, Math.min(stepIndex, stepPanels.length - 1));
+
+        stepPanels.forEach((panel, index) => {
+            panel.hidden = index !== currentStep;
+        });
+
+        stepButtons.forEach((button, index) => {
+            button.classList.toggle('is-active', index === currentStep);
+            button.classList.toggle('is-complete', index < currentStep);
+            button.setAttribute('aria-current', index === currentStep ? 'step' : 'false');
+        });
+
+        if (previousButton) {
+            previousButton.hidden = currentStep === 0;
+        }
+        if (nextButton) {
+            nextButton.hidden = currentStep === stepPanels.length - 1;
+        }
+        if (submitButton) {
+            submitButton.hidden = currentStep !== stepPanels.length - 1;
+        }
+    }
+
+    function requestAddClientClose() {
+        if (!hasDraftValues()) {
+            resetCurrentClientInput();
+            addClientModal.hide();
+            return;
+        }
+
+        showUnsavedClosePanel();
+    }
+
+    addClientForm.addEventListener('input', () => {
+        formTouched = true;
+        hideUnsavedClosePanel();
+        updateDraftStatus(false);
+    });
+
+    addClientForm.addEventListener('change', () => {
+        formTouched = true;
+        hideUnsavedClosePanel();
+        updateDraftStatus(false);
+    });
+
+    closeButtons.forEach((button) => {
+        button.addEventListener('click', requestAddClientClose);
+    });
+
+    if (saveDraftButton) {
+        saveDraftButton.addEventListener('click', () => {
+            if (!hasDraftValues()) {
+                if (activeDraftId) {
+                    const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== activeDraftId);
+                    saveStoredDrafts(remainingDrafts);
+                    activeDraftId = null;
+                }
+                formTouched = false;
+                updateDraftStatus(false);
+                return;
+            }
+
+            saveAddClientDraft();
+            formTouched = false;
+            hideUnsavedClosePanel();
+        });
+    }
+
+    if (keepEditingButton) {
+        keepEditingButton.addEventListener('click', hideUnsavedClosePanel);
+    }
+
+    if (discardUnsavedButton) {
+        discardUnsavedButton.addEventListener('click', () => {
+            resetCurrentClientInput();
+            addClientModal.hide();
+        });
+    }
+
+    if (saveCloseDraftButton) {
+        saveCloseDraftButton.addEventListener('click', () => {
+            saveAddClientDraft();
+            resetCurrentClientInput();
+            addClientModal.hide();
+            showClientTab('drafts');
+        });
+    }
+
+    if (nextButton) {
+        nextButton.addEventListener('click', () => {
+            if (validateClientStep(currentStep, true)) {
+                showClientStep(currentStep + 1);
+            }
+        });
+    }
+
+    if (previousButton) {
+        previousButton.addEventListener('click', () => {
+            showClientStep(currentStep - 1);
+        });
+    }
+
+    stepButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const targetStep = Number(button.dataset.stepTarget);
+            if (targetStep <= currentStep) {
+                showClientStep(targetStep);
+            }
+        });
+    });
+
+        addClientForm.addEventListener('submit', (event) => {
+        for (let stepIndex = 0; stepIndex < stepPanels.length; stepIndex++) {
+            if (!validateClientStep(stepIndex, false)) {
+                event.preventDefault();
+                showClientStep(stepIndex);
+                validateClientStep(stepIndex, true);
+                return;
+            }
+        }
+
+        if (activeDraftId) {
+            const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== activeDraftId);
+            saveStoredDrafts(remainingDrafts);
+        }
+        formTouched = false;
+    });
+
+    if (draftList) {
+        draftList.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-draft-action]');
+            const card = event.target.closest('[data-draft-id]');
+            if (!button || !card) {
+                return;
+            }
+
+            const draftId = card.dataset.draftId;
+            const action = button.dataset.draftAction;
+            if (!draftId || !action) {
+                return;
+            }
+
+            if (action === 'continue') {
+                loadAddClientDraft(draftId);
+                addClientModal.show();
+                return;
+            }
+
+            if (action === 'delete' && confirm('Delete this saved draft?')) {
+                const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== draftId);
+                saveStoredDrafts(remainingDrafts);
+                if (activeDraftId === draftId) {
+                    resetCurrentClientInput();
+                }
+                updateDraftStatus(hasStoredDraft());
+            }
+        });
+    }
+
+    clientTabButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            showClientTab(button.dataset.clientTab || 'clients');
+        });
+    });
+
+    addClientModalElement.addEventListener('show.bs.modal', () => {
+        if (!activeDraftLoaded) {
+            resetCurrentClientInput();
+        }
+    });
+
+    addClientModalElement.addEventListener('hidden.bs.modal', () => {
+        showClientStep(0);
+        hideUnsavedClosePanel();
+        activeDraftLoaded = false;
+        activeDraftId = null;
+        updateDraftStatus(hasStoredDraft());
+    });
+
+    showClientStep(0);
+    showClientTab('clients');
+    renderDraftList();
+    updateDraftStatus(hasStoredDraft());
 }
 
 // Auto-submit on enter in search
