@@ -811,9 +811,9 @@ include '../../includes/navbar.php';
                                 <td><?php echo $expert['active_tasks']; ?></td>
                                 <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
                                 <td>
-                                    <button class="btn-primary-modern" onclick="assignTask(<?php echo $expert['id']; ?>, '<?php echo htmlspecialchars($expert['full_name']); ?>')">
+                                    <a href="task-allocation.php" class="btn-primary-modern">
                                         <i class="fas fa-tasks"></i> Assign
-                                    </button>
+                                    </a>
                                 </td>
                             </tr>
                             <?php endwhile; ?>
@@ -887,9 +887,9 @@ include '../../includes/navbar.php';
                                             <i class="fas fa-eye"></i>
                                         </button>
                                         <?php if(!$task['assigned_to']): ?>
-                                        <button class="btn-primary-modern btn-sm-modern" onclick="assignTaskTo(<?php echo $task['id']; ?>)">
+                                        <a href="task-allocation.php?task_id=<?php echo (int) $task['id']; ?>" class="btn-primary-modern btn-sm-modern" title="Assign task">
                                             <i class="fas fa-user-plus"></i>
-                                        </button>
+                                        </a>
                                         <?php endif; ?>
                                     </div>
                                 </td>

@@ -23,6 +23,13 @@ if (!in_array($reportType, ['team', 'individual', 'project'], true)) {
     $reportType = 'team';
 }
 
+$reportLabels = [
+    'team' => 'Team Performance',
+    'individual' => 'Individual Performance',
+    'project' => 'Project Performance',
+];
+$reportTitle = $reportLabels[$reportType] ?? $reportLabels['team'];
+
 // Get team performance metrics
 $teamMetrics = $conn->query("
     SELECT 
@@ -72,7 +79,7 @@ $individualPerformance = $conn->query("
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
     WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
-    GROUP BY u.id
+    GROUP BY u.id, u.full_name, u.role
     ORDER BY completion_rate DESC, completed_tasks DESC
 ");
 
@@ -115,12 +122,111 @@ $projectPerformance = $conn->query("
         COALESCE(ROUND((SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(t.id), 0)) * 100, 1), 0) as completion_rate,
         DATEDIFF(p.timeline_end, NOW()) as days_remaining
     FROM projects p
-    LEFT JOIN tasks t ON p.id = t.project_id
+    LEFT JOIN tasks t ON p.id = t.project_id AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
     WHERE p.status != 'completed'
-    GROUP BY p.id
+    GROUP BY p.id, p.name, p.status, p.timeline_end
     ORDER BY completion_rate ASC
     LIMIT 5
 ");
+
+if (isset($_GET['download'])) {
+    $safeReportType = preg_replace('/[^a-z0-9_-]/i', '', $reportType);
+    $filename = $safeReportType . '_performance_report_' . $dateFrom . '_to_' . $dateTo . '.xls';
+
+    header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+
+    $cell = static function ($value): string {
+        return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+    };
+
+    echo "\xEF\xBB\xBF";
+    echo '<!DOCTYPE html><html><head><meta charset="UTF-8">';
+    echo '<style>';
+    echo 'table{border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;}';
+    echo 'th{background:#1f6392;color:#fff;font-weight:bold;}';
+    echo 'th,td{border:1px solid #b7c9d6;padding:6px 8px;mso-number-format:"\@";}';
+    echo '.title{font-size:18px;font-weight:bold;background:#eaf3f8;color:#123;}';
+    echo '.section{font-weight:bold;background:#f1f5f9;}';
+    echo '</style></head><body>';
+    echo '<table>';
+    echo '<tr><td class="title" colspan="10">' . $cell($reportTitle . ' Report') . '</td></tr>';
+    echo '<tr><td class="section">Date From</td><td>' . $cell($dateFrom) . '</td></tr>';
+    echo '<tr><td class="section">Date To</td><td>' . $cell($dateTo) . '</td></tr>';
+    echo '<tr><td colspan="10"></td></tr>';
+
+    if ($reportType === 'project') {
+        echo '<tr>';
+        foreach (['Project', 'Status', 'Total Tasks', 'Completed', 'Completion Rate', 'Days Remaining', 'Risk Level'] as $heading) {
+            echo '<th>' . $cell($heading) . '</th>';
+        }
+        echo '</tr>';
+
+        while ($project = $projectPerformance->fetch_assoc()) {
+            $completionRateValue = (float) ($project['completion_rate'] ?? 0);
+            $daysRemainingValue = (int) ($project['days_remaining'] ?? 0);
+            $riskColor = $completionRateValue < 30 && $daysRemainingValue < 30 ? 'danger' : ($completionRateValue < 60 && $daysRemainingValue < 60 ? 'warning' : ($completionRateValue < 80 ? 'info' : 'success'));
+            $riskLevel = $riskColor == 'danger' ? 'Critical' : ($riskColor == 'warning' ? 'High' : ($riskColor == 'info' ? 'Medium' : 'Low'));
+
+            echo '<tr>';
+            foreach ([
+                $project['name'] ?? '',
+                $project['status'] ?? '',
+                (int) ($project['total_tasks'] ?? 0),
+                (int) ($project['completed_tasks'] ?? 0),
+                $completionRateValue . '%',
+                max(0, $daysRemainingValue),
+                $riskLevel . ' Risk',
+            ] as $value) {
+                echo '<td>' . $cell($value) . '</td>';
+            }
+            echo '</tr>';
+        }
+    } else {
+        $completionRate = $metrics['total_tasks'] > 0 ? round(($metrics['completed_tasks'] / $metrics['total_tasks']) * 100) : 0;
+        echo '<tr><td class="section" colspan="10">Summary</td></tr>';
+        foreach ([
+            ['Completion Rate', $completionRate . '%'],
+            ['Completed Tasks', (int) $metrics['completed_tasks']],
+            ['Total Tasks', (int) $metrics['total_tasks']],
+            ['Average Completion Days', round((float) ($metrics['avg_completion_days'] ?? 0), 1)],
+            ['Active Tasks', (int) $metrics['active_tasks']],
+            ['Overdue Tasks', (int) $metrics['overdue_tasks']],
+        ] as $summaryRow) {
+            echo '<tr><td>' . $cell($summaryRow[0]) . '</td><td>' . $cell($summaryRow[1]) . '</td></tr>';
+        }
+        echo '<tr><td colspan="10"></td></tr>';
+        echo '<tr>';
+        foreach (['Resource', 'Role', 'Total Tasks', 'Completed', 'Completion Rate', 'Active', 'Overdue', 'Avg Days', 'High Priority', 'Critical'] as $heading) {
+            echo '<th>' . $cell($heading) . '</th>';
+        }
+        echo '</tr>';
+
+        while ($member = $individualPerformance->fetch_assoc()) {
+            echo '<tr>';
+            foreach ([
+                $member['full_name'] ?? '',
+                strtoupper((string) ($member['role'] ?? '')),
+                (int) ($member['total_tasks'] ?? 0),
+                (int) ($member['completed_tasks'] ?? 0),
+                (float) ($member['completion_rate'] ?? 0) . '%',
+                (int) ($member['active_tasks'] ?? 0),
+                (int) ($member['overdue_tasks'] ?? 0),
+                $member['avg_completion_days'] ?? 'N/A',
+                (int) ($member['high_priority_completed'] ?? 0),
+                (int) ($member['critical_completed'] ?? 0),
+            ] as $value) {
+                echo '<td>' . $cell($value) . '</td>';
+            }
+            echo '</tr>';
+        }
+    }
+
+    echo '</table></body></html>';
+    exit();
+}
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -421,7 +527,7 @@ include '../../includes/navbar.php';
     <!-- Date Filter -->
     <div class="filter-card">
         <div class="card-body">
-            <form method="GET" class="row g-3">
+            <form method="GET" action="performance-report.php" class="row g-3">
                 <div class="col-md-3">
                     <label class="form-label">Date From</label>
                     <input type="date" name="date_from" class="form-control" value="<?php echo $dateFrom; ?>">
@@ -440,8 +546,8 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">&nbsp;</label>
-                    <button type="submit" class="btn-primary-modern w-100">
-                        <i class="fas fa-chart-line"></i> Generate Report
+                    <button type="submit" name="download" value="1" class="btn-primary-modern w-100">
+                        <i class="fas fa-download"></i> Generate Report
                     </button>
                 </div>
             </form>
@@ -521,15 +627,16 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
+    <?php if($reportType == 'individual' || $reportType == 'team'): ?>
     <!-- Individual Performance Table -->
     <div class="card">
         <div class="card-header">
-            <h5><i class="fas fa-users me-2"></i>Individual Performance Report</h5>
+            <h5><i class="fas fa-users me-2"></i><?php echo $reportType == 'team' ? 'Team Member Breakdown' : 'Individual Performance Report'; ?></h5>
             <div class="mt-2">
-                <button class="btn-secondary-modern btn-sm" onclick="exportReport()">
-                    <i class="fas fa-download"></i> Export to CSV
+                <button class="btn-secondary-modern btn-sm" onclick="exportReport('performanceTable')">
+                    <i class="fas fa-download"></i> Export to Excel
                 </button>
-                <button class="btn-secondary-modern btn-sm ms-2" onclick="printReport()">
+                <button class="btn-secondary-modern btn-sm ms-2" onclick="printReport('performanceTable')">
                     <i class="fas fa-print"></i> Print Report
                 </button>
             </div>
@@ -574,15 +681,24 @@ include '../../includes/navbar.php';
             </table>
         </div>
     </div>
+    <?php endif; ?>
 
     <!-- Project Performance (if report type is project) -->
-    <?php if($reportType == 'project' && $projectPerformance->num_rows > 0): ?>
+    <?php if($reportType == 'project'): ?>
     <div class="card mt-4">
         <div class="card-header">
             <h5><i class="fas fa-project-diagram me-2"></i>Project Performance - At Risk Projects</h5>
+            <div class="mt-2">
+                <button class="btn-secondary-modern btn-sm" onclick="exportReport('projectPerformanceTable')">
+                    <i class="fas fa-download"></i> Export to Excel
+                </button>
+                <button class="btn-secondary-modern btn-sm ms-2" onclick="printReport('projectPerformanceTable')">
+                    <i class="fas fa-print"></i> Print Report
+                </button>
+            </div>
         </div>
         <div class="table-container">
-            <table class="data-table">
+            <table class="data-table" id="projectPerformanceTable">
                 <thead>
                     <th>Project</th>
                     <th>Status</th>
@@ -593,6 +709,7 @@ include '../../includes/navbar.php';
                     <th>Risk Level</th>
                 </thead>
                 <tbody>
+                    <?php if($projectPerformance->num_rows > 0): ?>
                     <?php while($project = $projectPerformance->fetch_assoc()): 
                         $riskColor = $project['completion_rate'] < 30 && $project['days_remaining'] < 30 ? 'danger' : ($project['completion_rate'] < 60 && $project['days_remaining'] < 60 ? 'warning' : ($project['completion_rate'] < 80 ? 'info' : 'success'));
                         $riskLevel = $riskColor == 'danger' ? 'Critical' : ($riskColor == 'warning' ? 'High' : ($riskColor == 'info' ? 'Medium' : 'Low'));
@@ -614,6 +731,11 @@ include '../../includes/navbar.php';
                         <td><span class="badge-status-<?php echo $riskColor; ?>"><?php echo $riskLevel; ?> Risk</span></td>
                     </tr>
                     <?php endwhile; ?>
+                    <?php else: ?>
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">No active project performance data for this date range.</td>
+                    </tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -636,23 +758,31 @@ const trendsData = <?php
     echo json_encode(['dates' => $dates, 'created' => $created, 'completed' => $completed]);
 ?>;
 
-const trendsCtx = document.getElementById('trendsChart').getContext('2d');
-new Chart(trendsCtx, {
-    type: 'line',
-    data: {
-        labels: trendsData.dates,
-        datasets: [
-            { label: 'Tasks Created', data: trendsData.created, borderColor: '#1f6392', backgroundColor: 'rgba(31, 99, 146, 0.1)', fill: true, tension: 0.4 },
-            { label: 'Tasks Completed', data: trendsData.completed, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, tension: 0.4 }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        scales: { y: { beginAtZero: true, title: { display: true, text: 'Number of Tasks' } } },
-        plugins: { legend: { position: 'top' } }
-    }
-});
+const trendsCanvas = document.getElementById('trendsChart');
+if (window.Chart && trendsCanvas) {
+    const trendsCtx = trendsCanvas.getContext('2d');
+    new Chart(trendsCtx, {
+        type: 'line',
+        data: {
+            labels: trendsData.dates,
+            datasets: [
+                { label: 'Tasks Created', data: trendsData.created, borderColor: '#1f6392', backgroundColor: 'rgba(31, 99, 146, 0.1)', fill: true, tension: 0.4 },
+                { label: 'Tasks Completed', data: trendsData.completed, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, tension: 0.4 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'Number of Tasks' } } },
+            plugins: { legend: { position: 'top' } }
+        }
+    });
+} else if (trendsCanvas) {
+    trendsCanvas.replaceWith(Object.assign(document.createElement('div'), {
+        className: 'text-muted text-center py-4',
+        textContent: 'Chart preview is unavailable, but the generated report table is ready below.'
+    }));
+}
 
 // Priority Performance Chart
 const priorityData = <?php 
@@ -666,45 +796,66 @@ const priorityData = <?php
     echo json_encode(['priorities' => $priorities, 'rates' => $completionRates]);
 ?>;
 
-const priorityCtx = document.getElementById('priorityChart').getContext('2d');
-new Chart(priorityCtx, {
-    type: 'bar',
-    data: {
-        labels: priorityData.priorities,
-        datasets: [{ label: 'Completion Rate (%)', data: priorityData.rates, backgroundColor: ['#dc2626', '#f59e0b', '#2563eb', '#10b981'], borderRadius: 8 }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        scales: { y: { min: 0, max: 100, title: { display: true, text: 'Completion Rate (%)' } } },
-        plugins: { legend: { display: false } }
-    }
-});
-
-function exportReport() {
-    const table = document.getElementById('performanceTable');
-    let csv = [];
-    let headers = [];
-    table.querySelectorAll('thead th').forEach(th => headers.push(th.textContent.trim()));
-    csv.push(headers.join(','));
-    table.querySelectorAll('tbody tr').forEach(row => {
-        let rowData = [];
-        row.querySelectorAll('td').forEach(td => rowData.push('"' + td.textContent.trim().replace(/"/g, '""') + '"'));
-        csv.push(rowData.join(','));
+const priorityCanvas = document.getElementById('priorityChart');
+if (window.Chart && priorityCanvas) {
+    const priorityCtx = priorityCanvas.getContext('2d');
+    new Chart(priorityCtx, {
+        type: 'bar',
+        data: {
+            labels: priorityData.priorities,
+            datasets: [{ label: 'Completion Rate (%)', data: priorityData.rates, backgroundColor: ['#dc2626', '#f59e0b', '#2563eb', '#10b981'], borderRadius: 8 }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: { y: { min: 0, max: 100, title: { display: true, text: 'Completion Rate (%)' } } },
+            plugins: { legend: { display: false } }
+        }
     });
-    const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+} else if (priorityCanvas) {
+    priorityCanvas.replaceWith(Object.assign(document.createElement('div'), {
+        className: 'text-muted text-center py-4',
+        textContent: 'Priority chart is unavailable.'
+    }));
+}
+
+function exportReport(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) {
+        alert('No report table is available to export.');
+        return;
+    }
+    const html = `
+        <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    table { border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
+                    th { background: #1f6392; color: #fff; font-weight: bold; }
+                    th, td { border: 1px solid #b7c9d6; padding: 6px 8px; mso-number-format: "\\@"; }
+                </style>
+            </head>
+            <body>${table.outerHTML}</body>
+        </html>
+    `;
+    const blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `performance_report_${new Date().toISOString().slice(0,19)}.csv`;
+    a.download = `<?php echo $reportType; ?>_performance_report_${new Date().toISOString().slice(0,19)}.xls`;
     a.click();
     window.URL.revokeObjectURL(url);
 }
 
-function printReport() {
-    const printContent = document.getElementById('performanceTable').outerHTML;
+function printReport(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) {
+        alert('No report table is available to print.');
+        return;
+    }
+    const printContent = table.outerHTML;
     const originalContents = document.body.innerHTML;
-    document.body.innerHTML = `<div class="container mt-4"><h2>Performance Report</h2><p>Generated on: ${new Date().toLocaleString()}</p><p>Period: ${document.querySelector('input[name="date_from"]').value} to ${document.querySelector('input[name="date_to"]').value}</p>${printContent}</div>`;
+    document.body.innerHTML = `<div class="container mt-4"><h2><?php echo htmlspecialchars($reportTitle, ENT_QUOTES, 'UTF-8'); ?> Report</h2><p>Generated on: ${new Date().toLocaleString()}</p><p>Period: ${document.querySelector('input[name="date_from"]').value} to ${document.querySelector('input[name="date_to"]').value}</p>${printContent}</div>`;
     window.print();
     document.body.innerHTML = originalContents;
     location.reload();
