@@ -3,6 +3,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/project-folder-context.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -11,6 +12,7 @@ if (!isLoggedIn()) {
 }
 
 $conn = getConnection();
+$user = getCurrentUser();
 $folderId = isset($_GET['folder_id']) ? (int) $_GET['folder_id'] : 0;
 
 if ($folderId <= 0) {
@@ -94,10 +96,18 @@ $fileStmt->execute();
 $files = $fileStmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $fileStmt->close();
 
+$projectContext = null;
+$projectId = resolveFolderProjectId($conn, $currentFolder);
+if ($projectId > 0) {
+    $projectContext = fetchProjectContext($conn, $projectId, $user);
+}
+
 echo json_encode([
     'folders' => $folders,
     'files' => $files,
     'current_folder' => $currentFolder,
     'breadcrumb' => getFolderBreadcrumb($conn, $folderId),
+    'project_context' => $projectContext,
+    'project_details' => $projectContext,
+    'project_id' => $projectId > 0 ? $projectId : null,
 ]);
-?>
