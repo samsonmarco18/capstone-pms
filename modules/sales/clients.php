@@ -105,6 +105,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $clientId = $stmt->insert_id;
                 $stmt->close();
 
+                $clientFolderStmt = $conn->prepare(
+                    "SELECT id FROM folders WHERE client_id = ? AND parent_id IS NULL AND folder_type = 'client' LIMIT 1"
+                );
+                $clientFolderStmt->bind_param('i', $clientId);
+                $clientFolderStmt->execute();
+                $clientFolderResult = $clientFolderStmt->get_result()->fetch_assoc();
+                $clientFolderId = $clientFolderResult['id'] ?? null;
+                $clientFolderStmt->close();
+
+                if (!$clientFolderId) {
+                    $createClientFolderStmt = $conn->prepare(
+                        "INSERT INTO folders (name, folder_type, client_id, parent_id, role, created_by)
+                         VALUES (?, 'client', ?, NULL, NULL, ?)"
+                    );
+                    $createClientFolderStmt->bind_param('sii', $name, $clientId, $user['id']);
+                    $createClientFolderStmt->execute();
+                    $clientFolderId = $createClientFolderStmt->insert_id;
+                    $createClientFolderStmt->close();
+                }
+
                 $projectId = null;
                 if ($projectName !== '') {
                     if ($hasSalesBudget) {
@@ -199,6 +219,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $projectId = $projectStmt->insert_id;
                     $projectStmt->close();
 
+                    // Create shared project folder under client folder
+                    $sharedFolderName = "Shared - " . $projectName;
+                    $sharedFolderStmt = $conn->prepare(
+                        "INSERT INTO folders (name, folder_type, client_id, project_id, parent_id, role, created_by) 
+                         VALUES (?, 'project', ?, ?, ?, NULL, ?)"
+                    );
+                    $sharedFolderStmt->bind_param('siiii', $sharedFolderName, $clientId, $projectId, $clientFolderId, $user['id']);
+                    $sharedFolderStmt->execute();
+                    $sharedFolderId = $sharedFolderStmt->insert_id;
+                    $sharedFolderStmt->close();
+
                     $architects = $conn->query("SELECT id FROM users WHERE role = 'architect' AND status = 'active'");
                     while ($architect = $architects->fetch_assoc()) {
                         createNotification(
@@ -217,9 +248,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 logActivity($user['id'], 'add_client', 'clients', $clientId, null, $_POST);
                 if ($projectId) {
                     logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);
-                    $_SESSION['success'] = "Client added and project sent to Architect for review.";
+                    $_SESSION['success'] = "Client added, shared project folder created, and project details are available to all roles.";
                 } else {
-                    $_SESSION['success'] = "Client added. No project created because project name was empty.";
+                    $_SESSION['success'] = "Client added and shared client folder created. No project created because project name was empty.";
                 }
             } catch (Throwable $e) {
                 $conn->rollback();
