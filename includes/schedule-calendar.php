@@ -258,7 +258,7 @@ if (!function_exists('renderScheduleCalendar')) {
                     <h6 class="schedule-calendar__month-title"><?php echo $baseDate->format('F Y'); ?></h6>
                     <span class="schedule-calendar__count">
                         <i class="far fa-calendar-alt"></i>
-                        <?php echo count($events); ?> scheduled
+                        <?php echo count($events); ?> item<?php echo count($events) === 1 ? '' : 's'; ?>
                     </span>
                 </div>
                 <?php if ($showFullCalendarButton): ?>
@@ -294,7 +294,7 @@ if (!function_exists('renderScheduleCalendar')) {
                         $classes[] = 'has-event';
                     }
                 ?>
-                    <div class="<?php echo implode(' ', $classes); ?>" title="<?php echo !empty($dateEvents) ? htmlspecialchars(count($dateEvents) . ' schedule(s)') : ''; ?>">
+                    <div class="<?php echo implode(' ', $classes); ?>" title="<?php echo !empty($dateEvents) ? htmlspecialchars(count($dateEvents) . ' item(s)') : ''; ?>">
                         <?php echo $day; ?>
                         <?php if (!empty($dateEvents)): ?>
                             <div class="schedule-calendar__dots">
@@ -332,7 +332,7 @@ if (!function_exists('renderScheduleCalendar')) {
                 <div class="schedule-calendar__empty">
                     <div>
                         <i class="fas fa-calendar-week"></i>
-                        <p>No upcoming schedules</p>
+                        <p>No upcoming schedules or deadlines</p>
                     </div>
                 </div>
             <?php endif; ?>

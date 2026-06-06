@@ -274,6 +274,10 @@ $conn = getConnection();
     background: var(--gray-50);
 }
 
+.folder-row {
+    cursor: pointer;
+}
+
 .file-link {
     color: var(--theme-primary);
     text-decoration: none;
@@ -300,6 +304,270 @@ $conn = getConnection();
     border-radius: 20px;
     font-size: 0.65rem;
     font-weight: 600;
+}
+
+/* Project Details Panel */
+.project-details-panel {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    color: var(--gray-800);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-md);
+}
+
+.project-context-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.project-context-header h5,
+.project-context-section h6 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.project-context-header p {
+    color: var(--gray-600);
+    margin: 0.35rem 0 0;
+    font-size: 0.85rem;
+}
+
+.project-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.project-detail-item {
+    background: var(--gray-50);
+    padding: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--gray-200);
+}
+
+.project-detail-item label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--gray-500);
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.project-detail-item .value {
+    font-size: 0.95rem;
+    color: var(--gray-800);
+    word-wrap: break-word;
+}
+
+.project-detail-full {
+    grid-column: 1 / -1;
+}
+
+.project-detail-full .value {
+    background: white;
+    padding: 0.75rem;
+    border-radius: 6px;
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.35rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--theme-dark);
+    background: rgba(31, 99, 146, 0.1);
+    border: 1px solid rgba(31, 99, 146, 0.18);
+    white-space: nowrap;
+}
+
+.project-context-section {
+    border-top: 1px solid var(--gray-200);
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+}
+
+.project-context-section h6 {
+    font-size: 0.95rem;
+    margin-bottom: 1rem;
+}
+
+.project-context-text {
+    white-space: pre-line;
+}
+
+.project-context-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.project-context-metric {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 0.75rem;
+}
+
+.project-context-metric span,
+.project-context-list label {
+    display: block;
+    color: var(--gray-500);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 0.35rem;
+}
+
+.project-context-metric strong {
+    color: var(--gray-900);
+    font-size: 1.1rem;
+}
+
+.project-context-list {
+    margin-top: 1rem;
+}
+
+.project-context-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.project-context-pills span,
+.project-context-row,
+.project-context-empty {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    color: var(--gray-700);
+    font-size: 0.85rem;
+}
+
+.project-context-pills span {
+    padding: 0.4rem 0.65rem;
+}
+
+.project-context-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.65rem 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.project-context-row small {
+    color: var(--gray-500);
+    text-align: right;
+}
+
+.project-context-empty {
+    padding: 0.75rem;
+}
+
+.project-info-card {
+    display: none;
+}
+
+.project-info-card.is-visible {
+    display: block;
+}
+
+.project-info-body {
+    max-height: 65vh;
+    overflow-y: auto;
+    padding: 1.25rem;
+}
+
+.project-info-body .project-details-panel {
+    margin-bottom: 0;
+}
+
+.project-details-summary {
+    margin-bottom: 1rem;
+}
+
+.project-gantt-chart {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.project-gantt-range {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}
+
+.project-gantt-row {
+    display: grid;
+    grid-template-columns: minmax(160px, 220px) 1fr;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.project-gantt-label {
+    display: grid;
+    gap: 0.15rem;
+    font-size: 0.8rem;
+}
+
+.project-gantt-label small {
+    color: var(--gray-500);
+}
+
+.project-gantt-track {
+    position: relative;
+    height: 28px;
+    background: var(--gray-100);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.project-gantt-bar {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    border-radius: 999px;
+}
+
+.project-gantt-bar-phase {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+}
+
+.project-gantt-bar-task {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+}
+
+.folder-item.is-active {
+    background: white;
+    box-shadow: var(--shadow-sm);
+    border-left: 3px solid var(--theme-primary);
+}
+
+.folder-client-label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--gray-500);
+    margin-top: 0.1rem;
 }
 
 /* Modal */
@@ -351,7 +619,7 @@ $conn = getConnection();
                 <i class="fas fa-folder-tree me-2"></i> 
                 Project Folders & Files
             </h2>
-            <p>Organized by Client > Role > User - Secure file collaboration</p>
+            <p>Browse shared project folders and role-specific project details in one place</p>
         </div>
     </div>
 
@@ -383,16 +651,29 @@ $conn = getConnection();
             <div class="breadcrumb-modern" id="folderBreadcrumbs">
                 <nav aria-label="breadcrumb">
                     <ol class="breadcrumb">
-                        <li class="breadcrumb-item active">All Clients</li>
+                        <li class="breadcrumb-item active">Shared Projects</li>
                     </ol>
                 </nav>
+            </div>
+
+            <!-- Project Information -->
+            <div class="main-card project-info-card mb-3" id="projectDetailsCard">
+                <div class="card-header">
+                    <h6><i class="fas fa-info-circle me-2"></i>Project Information</h6>
+                </div>
+                <div class="project-info-body" id="projectDetailsPanel">
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-mouse-pointer fa-2x mb-2"></i>
+                        <p class="mb-0">Select a shared project below to view all role submissions.</p>
+                    </div>
+                </div>
             </div>
 
             <!-- Files and Folders Card -->
             <div class="main-card">
                 <div class="card-header">
                     <h6 id="currentFolderTitle">
-                        <i class="fas fa-folder-open me-2"></i>Root Folders
+                        <i class="fas fa-folder-open me-2"></i>Shared Projects
                     </h6>
                     <div class="d-flex gap-2">
                         <button class="btn-primary-modern" onclick="createFolderInCurrent()">
@@ -429,7 +710,7 @@ $conn = getConnection();
                             <tr>
                                 <td colspan="7" class="text-center text-muted py-5">
                                     <i class="fas fa-folder-open fa-2x mb-2"></i>
-                                    <p>Select a folder to view contents</p>
+                                    <p>Click a shared project to open it directly</p>
                                 </td>
                             </tr>
                         </tbody>
@@ -466,34 +747,120 @@ $conn = getConnection();
     </div>
 </div>
 
+<script src="<?php echo BASE_URL; ?>js/project-details-panel.js?v=<?php echo (int) filemtime(__DIR__ . '/js/project-details-panel.js'); ?>"></script>
 <script>
 // Global variables
 let currentFolderId = 0;
 let selectedFiles = [];
 let folderStructure = {};
 let currentBreadcrumb = [];
+let sharedFolderRoots = [];
+const SHARED_FOLDERS_ID = 'shared-folders';
+const CURRENT_USER_ROLE = '<?php echo htmlspecialchars($user['role'] ?? '', ENT_QUOTES, 'UTF-8'); ?>';
 
 // Initialize folders page
 $(document).ready(function() {
-    loadRootFolders();
+    loadSharedFolders();
     initBulkActions();
+    initEntryEvents();
+
+    const params = new URLSearchParams(window.location.search);
+    const folderParam = parseInt(params.get('folder_id') || '0', 10);
+    if (folderParam > 0) {
+        openFolderById(folderParam);
+    }
 });
 
-// Load root folders (clients)
+// Load shared projects list
 function loadRootFolders() {
-    currentFolderId = 0;
-    currentBreadcrumb = [];
-    renderBreadcrumbs([]);
-    $('#currentFolderTitle').html('<i class="fas fa-folder-open me-2"></i>All Clients');
-    
+    loadSharedFolders();
+}
+
+function hideProjectPanel() {
+    $('#projectDetailsCard').removeClass('is-visible');
+    $('#projectDetailsPanel').html(
+        '<div class="text-center text-muted py-4"><i class="fas fa-mouse-pointer fa-2x mb-2"></i><p class="mb-0">Select a shared project below to view all role submissions.</p></div>'
+    );
+}
+
+function showProjectPanel(projectContext, folderId, projectId) {
+    const renderPanel = function(context) {
+        if (!context) {
+            hideProjectPanel();
+            return;
+        }
+
+        if (typeof renderProjectDetailsPanel === 'function') {
+            renderProjectDetailsPanel(context);
+        } else {
+            $('#projectDetailsPanel').html('<div class="alert alert-warning mb-0">Unable to load project details view.</div>');
+        }
+
+        $('#projectDetailsCard').addClass('is-visible');
+        document.getElementById('projectDetailsCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    if (projectContext) {
+        renderPanel(projectContext);
+        return;
+    }
+
+    const query = projectId > 0
+        ? `project_id=${projectId}`
+        : `folder_id=${folderId}`;
+
     $.ajax({
-        url: `<?php echo BASE_URL; ?>api/folders/get-tree.php?folder_id=0&role=<?php echo $user['role']; ?>`,
+        url: `<?php echo BASE_URL; ?>api/folders/get-project-context.php?${query}`,
         dataType: 'json',
         success: function(data) {
-            renderFolderTree(data.folders);
-            renderEntries(data.folders || [], []);
+            renderPanel(data.project_context || data.project_details || null);
+        },
+        error: function() {
+            hideProjectPanel();
         }
     });
+}
+
+function loadSharedFolders() {
+    currentFolderId = 0;
+    currentBreadcrumb = [{
+        id: SHARED_FOLDERS_ID,
+        name: 'Shared Projects',
+        virtual: true
+    }];
+    hideProjectPanel();
+    $('#currentFolderTitle').html('<i class="fas fa-folder-open me-2"></i>Shared Projects');
+
+    $.ajax({
+        url: `<?php echo BASE_URL; ?>api/folders/get-tree.php?folder_id=0&role=${encodeURIComponent(CURRENT_USER_ROLE)}`,
+        dataType: 'json',
+        success: function(data) {
+            sharedFolderRoots = data.folders || [];
+            renderBreadcrumbs(currentBreadcrumb);
+            renderFullSharedFolderTree();
+            renderProjectEntries(sharedFolderRoots, []);
+
+            const params = new URLSearchParams(window.location.search);
+            if (!params.get('folder_id') && sharedFolderRoots.length === 1) {
+                openFolderById(sharedFolderRoots[0].id);
+            }
+        },
+        error: function() {
+            alert('Failed to load shared projects');
+        }
+    });
+}
+
+function openFolderById(folderId) {
+    if (String(folderId) === SHARED_FOLDERS_ID) {
+        loadSharedFolders();
+        return;
+    }
+
+    const numericFolderId = parseInt(folderId, 10);
+    if (numericFolderId > 0) {
+        loadFolderContents(numericFolderId);
+    }
 }
 
 // Load folder tree
@@ -502,20 +869,28 @@ function renderFolderTree(folders, parentId = 0, renderToDom = true) {
     
     let html = '';
     folders.forEach(folder => {
-        const icon = folder.folder_type === 'client' ? 'fa-building' : 
+        const hasChildren = Boolean(folder.children && folder.children.length);
+        const childrenDisplay = folder.expanded ? 'block' : 'none';
+        const expandIcon = folder.expanded ? 'fa-chevron-down' : 'fa-chevron-right';
+        const icon = folder.folder_type === 'shared_root' ? 'fa-folder-tree' :
+                    folder.folder_type === 'client' ? 'fa-building' :
+                    folder.folder_type === 'project' ? 'fa-diagram-project' :
                     folder.folder_type === 'role' ? 'fa-users' :
                     folder.folder_type === 'user' ? 'fa-user' : 'fa-folder';
+        const clientLabel = folder.client_name && folder.folder_type === 'project'
+            ? `<span class="folder-client-label">${escapeHtml(folder.client_name)}</span>`
+            : '';
         
         html += `
-            <div class="folder-item" data-folder-id="${folder.id}">
+            <div class="folder-item${Number(folder.id) === Number(currentFolderId) ? ' is-active' : ''}" data-folder-id="${escapeHtml(String(folder.id))}">
                 <i class="fas ${icon} folder-icon"></i>
-                <span class="folder-name">${escapeHtml(folder.name)}</span>
-                <i class="fas fa-chevron-right folder-expand"></i>
+                <span class="folder-name">${escapeHtml(folder.name)}${clientLabel}</span>
+                ${hasChildren ? `<i class="fas ${expandIcon} folder-expand"></i>` : '<span class="folder-expand"></span>'}
             </div>
         `;
         
-        if (folder.children && folder.children.length) {
-            html += `<div class="folder-children" style="display: none;">${renderFolderTree(folder.children, folder.id, false)}</div>`;
+        if (hasChildren) {
+            html += `<div class="folder-children" style="display: ${childrenDisplay};">${renderFolderTree(folder.children, folder.id, false)}</div>`;
         }
     });
     
@@ -526,18 +901,58 @@ function renderFolderTree(folders, parentId = 0, renderToDom = true) {
     return html;
 }
 
+function renderFullSharedFolderTree() {
+    renderFolderTree([{
+        id: SHARED_FOLDERS_ID,
+        name: 'Shared Projects',
+        folder_type: 'shared_root',
+        expanded: true,
+        children: sharedFolderRoots.map(folder => ({
+            ...folder,
+            expanded: Number(folder.id) === Number(currentFolderId),
+            children: Number(folder.id) === Number(currentFolderId) ? (folderStructure[folder.id] || []) : []
+        }))
+    }]);
+}
+
+function renderScopedProjectTree(folderBreadcrumb, childFolders) {
+    const projectFolder = [...(folderBreadcrumb || [])].reverse().find(folder => folder.folder_type === 'project')
+        || (folderBreadcrumb || [])[folderBreadcrumb.length - 1];
+
+    if (!projectFolder) {
+        renderFullSharedFolderTree();
+        return;
+    }
+
+    renderFolderTree([{
+        id: SHARED_FOLDERS_ID,
+        name: 'Shared Projects',
+        folder_type: 'shared_root',
+        expanded: true,
+        children: sharedFolderRoots.map(folder => ({
+            ...folder,
+            expanded: Number(folder.id) === Number(projectFolder.id),
+            children: Number(folder.id) === Number(projectFolder.id) ? (childFolders || []) : []
+        }))
+    }]);
+}
+
 function initTreeEvents() {
     $('.folder-item').off('click').on('click', function(e) {
         e.stopPropagation();
         const folderId = $(this).data('folder-id');
         const children = $(this).next('.folder-children');
-        
+
         if (children.length) {
             children.slideToggle();
             $(this).find('.folder-expand').toggleClass('fa-chevron-down fa-chevron-right');
         }
-        
-        loadFolderContents(folderId);
+
+        if (String(folderId) !== SHARED_FOLDERS_ID) {
+            openFolderById(folderId);
+        } else {
+            loadSharedFolders();
+        }
     });
 }
 
@@ -551,12 +966,30 @@ function loadFolderContents(folderId) {
         dataType: 'json',
         success: function(data) {
             hideLoading();
-            renderEntries(data.folders || [], data.files || []);
-            currentBreadcrumb = Array.isArray(data.breadcrumb) ? data.breadcrumb : [];
+            renderProjectEntries(data.folders || [], data.files || []);
+            const folderBreadcrumb = Array.isArray(data.breadcrumb)
+                ? data.breadcrumb.filter(folder => folder.folder_type !== 'client')
+                : [];
+            currentBreadcrumb = [{
+                id: SHARED_FOLDERS_ID,
+                name: 'Shared Projects',
+                virtual: true
+            }, ...folderBreadcrumb];
             renderBreadcrumbs(currentBreadcrumb);
-            
+
             const folder = data.current_folder || findFolderById(folderId);
             $('#currentFolderTitle').html(`<i class="fas fa-folder-open me-2"></i>${folder ? escapeHtml(folder.name) : 'Files'}`);
+
+            const resolvedProjectId = Number(data.project_id || folder?.project_id || 0);
+            if (resolvedProjectId > 0 && folder) {
+                folderStructure[folder.id] = data.folders || [];
+                renderScopedProjectTree(folderBreadcrumb, data.folders || []);
+            } else {
+                renderFullSharedFolderTree();
+            }
+            
+            const projectContext = data.project_context || data.project_details;
+            showProjectPanel(projectContext, folderId, resolvedProjectId);
         },
         error: function() {
             hideLoading();
@@ -565,43 +998,51 @@ function loadFolderContents(folderId) {
     });
 }
 
-function renderEntries(folders, files) {
+function renderProjectEntries(folders, files) {
     const tbody = $('#fileTableBody');
     tbody.empty();
-    
+
     if (folders.length === 0 && files.length === 0) {
         tbody.html('<tr><td colspan="7" class="text-center text-muted py-5"><i class="fas fa-folder-open fa-2x mb-2"></i><p>No files or folders here yet</p></td></tr>');
         return;
     }
-    
+
     folders.forEach(folder => {
+        const folderId = escapeHtml(String(folder.id));
+        const clientLabel = folder.client_name
+            ? `<small class="folder-client-label">${escapeHtml(folder.client_name)}</small>`
+            : '';
+        const projectIdAttr = folder.project_id ? ` data-project-id="${escapeHtml(String(folder.project_id))}"` : '';
         tbody.append(`
-            <tr class="folder-row" data-folder-id="${folder.id}">
+            <tr class="folder-row" data-folder-id="${folderId}"${projectIdAttr}>
                 <td></td>
                 <td>
                     <div class="d-flex align-items-center">
                         <i class="fas fa-folder text-warning me-2" style="font-size: 18px;"></i>
-                        <a href="#" onclick="loadFolderContents(${folder.id}); return false;" class="file-link">${escapeHtml(folder.name)}</a>
+                        <div>
+                            <a href="#" class="file-link folder-open-link" data-folder-id="${folderId}">${escapeHtml(folder.name)}</a>
+                            ${clientLabel}
+                        </div>
                     </div>
                 </td>
                 <td>—</td>
                 <td>${folder.updated_at ? new Date(folder.updated_at).toLocaleDateString() : '-'}</td>
                 <td>${escapeHtml(folder.owner_name || 'System')}</td>
-                <td><span class="badge-folder">Folder</span></td>
+                <td><span class="badge-folder">${folder.folder_type === 'project' ? 'Project' : 'Folder'}</span></td>
                 <td>
-                    <button class="btn-outline-modern btn-sm" onclick="loadFolderContents(${folder.id})" style="padding: 0.2rem 0.5rem;">
+                    <button class="btn-outline-modern btn-sm folder-open-button" data-folder-id="${folderId}" style="padding: 0.2rem 0.5rem;">
                         <i class="fas fa-folder-open"></i>
                     </button>
                 </td>
             </tr>
         `);
     });
-    
+
     files.forEach(file => {
         const icon = getFileIcon(file.file_type);
         const size = formatFileSize(file.file_size);
         const modified = new Date(file.updated_at).toLocaleDateString();
-        
+
         tbody.append(`
             <tr class="file-row" data-file-id="${file.id}">
                 <td><input type="checkbox" class="file-checkbox form-check-input"></td>
@@ -628,30 +1069,48 @@ function renderEntries(folders, files) {
             </tr>
         `);
     });
-    
+
     selectedFiles = [];
     updateBulkSelection();
 }
 
+function renderEntries(folders, files) {
+    renderProjectEntries(folders, files);
+}
+
+function initEntryEvents() {
+    $(document).off('click', '.folder-open-link, .folder-open-button, .folder-row').on('click', '.folder-open-link, .folder-open-button, .folder-row', function(e) {
+        if ($(e.target).closest('input, button, a[download]').length) {
+            return;
+        }
+
+        e.preventDefault();
+        const row = $(this).closest('.folder-row').length ? $(this).closest('.folder-row') : $(this);
+        openFolderById(row.data('folder-id'));
+    });
+}
+
 function renderBreadcrumbs(path) {
     const container = $('#folderBreadcrumbs nav ol');
-    let html = '<li class="breadcrumb-item"><a href="#" onclick="loadRootFolders(); return false;"><i class="fas fa-home me-1"></i>All Clients</a></li>';
-    
+    let html = '<li class="breadcrumb-item"><a href="#" onclick="loadSharedFolders(); return false;"><i class="fas fa-home me-1"></i>Shared Projects</a></li>';
+
     if (!Array.isArray(path) || path.length === 0) {
-        html = '<li class="breadcrumb-item active">All Clients</li>';
+        html = '<li class="breadcrumb-item active">Shared Projects</li>';
         container.html(html);
         return;
     }
-    
+
     path.forEach((folder, index) => {
         const isLast = index === path.length - 1;
         if (isLast) {
             html += `<li class="breadcrumb-item active">${escapeHtml(folder.name)}</li>`;
+        } else if (folder.virtual) {
+            html += `<li class="breadcrumb-item"><a href="#" onclick="openFolderById('${SHARED_FOLDERS_ID}'); return false;">${escapeHtml(folder.name)}</a></li>`;
         } else {
             html += `<li class="breadcrumb-item"><a href="#" onclick="loadFolderContents(${folder.id}); return false;">${escapeHtml(folder.name)}</a></li>`;
         }
     });
-    
+
     container.html(html);
 }
 
@@ -675,11 +1134,8 @@ function getFileIcon(type) {
         'zip': 'fas fa-file-archive text-warning',
         'js': 'fas fa-file-code text-secondary'
     };
-    
-    for (let key in icons) {
-        if (type.toLowerCase().includes(key)) return icons[key];
-    }
-    return 'fas fa-file text-muted';
+
+    return icons[type.toLowerCase()] || 'fas fa-file text-muted';
 }
 
 function formatFileSize(bytes) {
@@ -746,6 +1202,11 @@ function deleteFile(fileId) {
 }
 
 function createFolderInCurrent() {
+    if (currentFolderId <= 0) {
+        alert('Please open a client or shared project folder before creating a folder.');
+        return;
+    }
+
     const name = prompt('Folder name:');
     if (name) {
         $.ajax({
@@ -788,7 +1249,7 @@ function exportCurrentFolder() {
 }
 
 function refreshFolder() {
-    currentFolderId > 0 ? loadFolderContents(currentFolderId) : loadRootFolders();
+    currentFolderId > 0 ? loadFolderContents(currentFolderId) : loadSharedFolders();
 }
 
 function showLoading() {
@@ -806,6 +1267,6 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
-</script>
 
+</script>
 <?php include 'includes/footer.php'; ?>

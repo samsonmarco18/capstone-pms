@@ -7,6 +7,10 @@ requireRole('sales');
 $conn = getConnection();
 $user = getCurrentUser();
 $currentUserId = (int) $user['id'];
+$hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
+$hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
+$projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
+$projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['create_plan'])) {
@@ -128,19 +132,40 @@ $schedules = $conn->query("
             )
         UNION ALL
         SELECT
+            CONCAT('Project start: ', p.name) AS title,
+            CONCAT('Client: ', c.name) AS description,
+            'milestone' AS schedule_type,
+            p.timeline_start AS start_date,
+            {$projectStartTimeSql} AS start_time,
+            p.status,
+            p.id AS project_id
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id
+        WHERE p.timeline_start IS NOT NULL
+            AND (
+                p.timeline_start > CURDATE()
+                OR (p.timeline_start = CURDATE() AND {$projectStartTimeSql} >= CURTIME())
+            )
+            AND p.status NOT IN ('completed', 'cancelled')
+            AND (p.created_by = {$user['id']} OR c.created_by = {$user['id']})
+        UNION ALL
+        SELECT
             CONCAT('Project deadline: ', p.name) AS title,
             CONCAT('Client: ', c.name) AS description,
             'deadline' AS schedule_type,
             p.timeline_end AS start_date,
-            '17:00:00' AS start_time,
+            {$projectEndTimeSql} AS start_time,
             p.status,
             p.id AS project_id
         FROM projects p
         JOIN clients c ON c.id = p.client_id
         WHERE p.timeline_end IS NOT NULL
-            AND p.timeline_end >= CURDATE()
+            AND (
+                p.timeline_end > CURDATE()
+                OR (p.timeline_end = CURDATE() AND {$projectEndTimeSql} >= CURTIME())
+            )
             AND p.status NOT IN ('completed', 'cancelled')
-            AND c.created_by = {$user['id']}
+            AND (p.created_by = {$user['id']} OR c.created_by = {$user['id']})
         UNION ALL
         SELECT
             CONCAT('Client deadline: ', c.name) AS title,
@@ -159,6 +184,21 @@ $schedules = $conn->query("
     ORDER BY start_date, start_time
     LIMIT 5
 ");
+
+$dashboardScheduleEvents = [];
+if ($schedules && $schedules->num_rows > 0) {
+    while ($schedule = $schedules->fetch_assoc()) {
+        $dashboardScheduleEvents[] = [
+            'title' => $schedule['title'] ?? 'Schedule',
+            'description' => $schedule['description'] ?? '',
+            'type' => $schedule['schedule_type'] ?? 'schedule',
+            'datetime' => normalizeScheduleDateTime($schedule),
+        ];
+    }
+}
+
+$nextDashboardEvent = $dashboardScheduleEvents[0] ?? null;
+
 $calendarMonthInput = trim((string) ($_GET['calendar_month'] ?? date('Y-m')));
 if (!preg_match('/^\d{4}-\d{2}$/', $calendarMonthInput)) {
     $calendarMonthInput = date('Y-m');
@@ -575,6 +615,8 @@ include '../../includes/navbar.php';
 
 /* Sales Planner */
 .agenda-preview {
+    display: grid;
+    gap: 1rem;
     padding: 1.15rem 1.25rem;
 }
 
@@ -583,41 +625,113 @@ include '../../includes/navbar.php';
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 1.25rem;
 }
 
 .agenda-title {
     margin: 0;
     color: var(--gray-900);
-    font-size: 1.35rem;
-    font-weight: 600;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.agenda-subtitle {
+    margin: 0.15rem 0 0;
+    color: var(--gray-500);
+    font-size: 0.78rem;
+    font-weight: 500;
 }
 
 .agenda-open-btn {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    border: 0;
-    background: var(--theme-primary);
-    color: white;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    border: 1px solid rgba(31, 99, 146, 0.18);
+    background: rgba(31, 99, 146, 0.08);
+    color: var(--theme-primary);
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 12px 24px rgba(31, 99, 146, 0.22);
     transition: all 0.18s ease;
 }
 
 .agenda-open-btn:hover {
     transform: translateY(-1px);
-    background: var(--theme-primary-dark);
+    background: var(--theme-primary);
+    color: #ffffff;
+}
+
+.agenda-summary {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    gap: 0.9rem;
+    align-items: stretch;
+    padding: 0.85rem;
+    border: 1px solid rgba(31, 99, 146, 0.08);
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.agenda-today-badge {
+    display: grid;
+    place-items: center;
+    min-height: 82px;
+    border-radius: 8px;
+    background: #ffffff;
+    border: 1px solid rgba(31, 99, 146, 0.08);
+    text-align: center;
+}
+
+.agenda-today-badge span {
+    color: var(--gray-500);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.agenda-today-badge strong {
+    display: block;
+    color: var(--theme-primary);
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.agenda-next {
+    min-width: 0;
+    display: grid;
+    align-content: center;
+}
+
+.agenda-next-label {
+    color: var(--gray-500);
+    font-size: 0.72rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+}
+
+.agenda-next-title {
+    color: var(--gray-900);
+    font-size: 0.96rem;
+    font-weight: 600;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.agenda-next-meta {
+    color: var(--gray-600);
+    font-size: 0.78rem;
+    font-weight: 500;
+    margin-top: 0.35rem;
 }
 
 .agenda-date-group {
     min-width: 0;
-    margin-bottom: 1rem;
-    padding: 0.75rem 0.85rem;
+    padding: 0.75rem;
     border: 1px solid var(--gray-100);
-    border-radius: 14px;
+    border-radius: 8px;
     background: #ffffff;
 }
 
@@ -626,13 +740,13 @@ include '../../includes/navbar.php';
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 0.85rem;
+    margin-bottom: 0.55rem;
 }
 
 .agenda-date-label {
-    color: #9ca3af;
-    font-size: 0.98rem;
-    font-weight: 500;
+    color: var(--gray-700);
+    font-size: 0.82rem;
+    font-weight: 600;
 }
 
 .agenda-more-btn {
@@ -640,26 +754,27 @@ include '../../includes/navbar.php';
     background: transparent;
     color: #9ca3af;
     padding: 0;
+    text-decoration: none;
 }
 
 .agenda-item {
     display: grid;
-    grid-template-columns: 66px 6px minmax(0, 1fr);
-    gap: 1rem;
+    grid-template-columns: 52px 4px minmax(0, 1fr);
+    gap: 0.75rem;
     align-items: center;
     padding: 0.55rem 0;
 }
 
 .agenda-time {
     color: #111827;
-    font-size: 1.2rem;
+    font-size: 0.86rem;
     font-weight: 600;
     line-height: 1;
 }
 
 .agenda-color {
-    width: 6px;
-    height: 48px;
+    width: 4px;
+    height: 38px;
     border-radius: 999px;
 }
 
@@ -673,12 +788,17 @@ include '../../includes/navbar.php';
 
 .agenda-text {
     color: #7b8190;
-    font-size: 0.98rem;
-    font-weight: 600;
+    font-size: 0.9rem;
+    font-weight: 500;
     line-height: 1.25;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.agenda-list {
+    display: grid;
+    gap: 0.65rem;
 }
 
 .planner-modal .modal-dialog {
@@ -1095,47 +1215,74 @@ include '../../includes/navbar.php';
         <div class="col-lg-5">
             <div class="list-card">
                 <div class="card-body">
-                    <?php renderScheduleCalendar($schedules); ?>
                     <div class="agenda-preview">
                         <div class="agenda-header">
-                            <h5 class="agenda-title">Calendar</h5>
-                            <button type="button" class="agenda-open-btn" data-bs-toggle="modal" data-bs-target="#salesPlannerModal" aria-label="Open sales planner">
+                            <div>
+                                <h5 class="agenda-title">Calendar</h5>
+                                <p class="agenda-subtitle"><?php echo count($dashboardScheduleEvents); ?> upcoming item<?php echo count($dashboardScheduleEvents) === 1 ? '' : 's'; ?></p>
+                            </div>
+                            <a href="<?php echo htmlspecialchars(BASE_URL . 'calendar.php'); ?>" class="agenda-open-btn" aria-label="Open calendar page">
                                 <i class="far fa-calendar-alt"></i>
-                            </button>
+                            </a>
                         </div>
 
-                        <?php if ($upcomingPlans): ?>
-                            <?php
-                            $agendaGroups = [];
-                            foreach ($upcomingPlans as $plan) {
-                                $groupDate = (string) ($plan['start_date'] ?? date('Y-m-d'));
-                                $agendaGroups[$groupDate][] = $plan;
-                            }
-                            ?>
-                            <?php foreach ($agendaGroups as $groupDate => $plans): ?>
-                                <div class="agenda-date-group">
-                                    <div class="agenda-date-row">
-                                        <span class="agenda-date-label"><?php echo htmlspecialchars(date('d F', strtotime($groupDate))); ?></span>
-                                        <button type="button" class="agenda-more-btn" data-bs-toggle="modal" data-bs-target="#salesPlannerModal" aria-label="View date plans">
-                                            <i class="fas fa-ellipsis-h"></i>
-                                        </button>
+                        <div class="agenda-summary">
+                            <div class="agenda-today-badge">
+                                <div>
+                                    <span><?php echo htmlspecialchars(date('M')); ?></span>
+                                    <strong><?php echo htmlspecialchars(date('d')); ?></strong>
+                                </div>
+                            </div>
+                            <div class="agenda-next">
+                                <div class="agenda-next-label">Next Schedule</div>
+                                <?php if ($nextDashboardEvent): ?>
+                                    <div class="agenda-next-title"><?php echo htmlspecialchars((string) $nextDashboardEvent['title']); ?></div>
+                                    <div class="agenda-next-meta">
+                                        <i class="far fa-clock me-1"></i>
+                                        <?php echo htmlspecialchars($nextDashboardEvent['datetime']->format('M d, h:i A')); ?>
                                     </div>
-                                    <?php foreach ($plans as $plan): ?>
+                                <?php else: ?>
+                                    <div class="agenda-next-title">No upcoming schedule</div>
+                                    <div class="agenda-next-meta">Your next items will appear here.</div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <?php if ($dashboardScheduleEvents): ?>
+                            <div class="agenda-list">
+                                <?php foreach ($dashboardScheduleEvents as $event): ?>
+                                    <?php
+                                    $eventType = strtolower((string) ($event['type'] ?? 'schedule'));
+                                    $eventColor = match ($eventType) {
+                                        'deadline' => '#dc2626',
+                                        'milestone' => '#7c3aed',
+                                        'review' => '#d97706',
+                                        'personal' => '#64748b',
+                                        default => '#1f6392',
+                                    };
+                                    ?>
+                                    <div class="agenda-date-group">
+                                        <div class="agenda-date-row">
+                                            <span class="agenda-date-label"><?php echo htmlspecialchars($event['datetime']->format('D, M d')); ?></span>
+                                            <a href="<?php echo htmlspecialchars(BASE_URL . 'calendar.php'); ?>" class="agenda-more-btn" aria-label="Open calendar page">
+                                                <i class="fas fa-ellipsis-h"></i>
+                                            </a>
+                                        </div>
                                         <div class="agenda-item">
-                                            <div class="agenda-time"><?php echo htmlspecialchars(date('H:i', strtotime((string) ($plan['start_time'] ?? '09:00')))); ?></div>
-                                            <span class="agenda-color" style="background: <?php echo htmlspecialchars((string) ($plan['color_code'] ?? '#1f6392')); ?>;"></span>
+                                            <div class="agenda-time"><?php echo htmlspecialchars($event['datetime']->format('H:i')); ?></div>
+                                            <span class="agenda-color" style="background: <?php echo htmlspecialchars($eventColor); ?>;"></span>
                                             <div>
-                                                <div class="agenda-kicker"><?php echo htmlspecialchars(ucfirst((string) ($plan['schedule_type'] ?? 'Plan'))); ?></div>
-                                                <div class="agenda-text"><?php echo htmlspecialchars((string) ($plan['title'] ?? 'Plan')); ?></div>
+                                                <div class="agenda-kicker"><?php echo htmlspecialchars(ucfirst($eventType)); ?></div>
+                                                <div class="agenda-text"><?php echo htmlspecialchars((string) $event['title']); ?></div>
                                             </div>
                                         </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php endforeach; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
                         <?php else: ?>
                             <div class="empty-state-modern" style="padding: 2rem 1rem;">
                                 <i class="fas fa-calendar-week"></i>
-                                <p>No upcoming plans</p>
+                                <p>No upcoming schedules</p>
                             </div>
                         <?php endif; ?>
                     </div>
