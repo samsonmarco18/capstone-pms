@@ -2,10 +2,13 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
 require_once '../../includes/schedule-calendar.php';
+require_once '../../includes/dashboard-planner.php';
 requireRole('expert');
 
 $conn = getConnection();
 $user = getCurrentUser();
+dashboardPlannerHandleRequest($conn, (int) $user['id']);
+$dashboardPlanner = dashboardPlannerBuild($conn, (int) $user['id']);
 $hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
 $projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
@@ -59,108 +62,21 @@ $recentFeatureEstimates = $conn->query("
     LIMIT 5
 ");
 
-// Get user's schedule
+// Get this expert's own manual schedule. Assigned work deadlines are listed in the agenda below.
 $schedules = $conn->query("
     SELECT title, description, schedule_type, start_date, start_time, status, project_id
-    FROM (
-        SELECT
-            s.title,
-            s.description,
-            s.schedule_type,
-            s.start_date,
-            COALESCE(s.start_time, '00:00:00') AS start_time,
-            s.status,
-            s.project_id
-        FROM schedules s
-        WHERE s.user_id = {$user['id']}
-          AND s.status <> 'cancelled'
-          AND (
-              s.start_date > CURDATE()
-              OR (s.start_date = CURDATE() AND COALESCE(s.start_time, '00:00:00') >= CURTIME())
-          )
-        UNION ALL
-        SELECT DISTINCT
-            CONCAT('Project start: ', p.name) AS title,
-            CONCAT('Client: ', c.name) AS description,
-            'milestone' AS schedule_type,
-            p.timeline_start AS start_date,
-            {$projectStartTimeSql} AS start_time,
-            p.status,
-            p.id AS project_id
-        FROM tasks t
-        JOIN projects p ON p.id = t.project_id
-        JOIN clients c ON c.id = p.client_id
-        WHERE t.assigned_to = {$user['id']}
-          AND t.status != 'completed'
-          AND p.timeline_start IS NOT NULL
-          AND (
-              p.timeline_start > CURDATE()
-              OR (p.timeline_start = CURDATE() AND {$projectStartTimeSql} >= CURTIME())
-          )
-          AND p.status NOT IN ('completed', 'cancelled')
-        UNION ALL
-        SELECT DISTINCT
-            CONCAT('Project deadline: ', p.name) AS title,
-            CONCAT('Client: ', c.name) AS description,
-            'deadline' AS schedule_type,
-            p.timeline_end AS start_date,
-            {$projectEndTimeSql} AS start_time,
-            p.status,
-            p.id AS project_id
-        FROM tasks t
-        JOIN projects p ON p.id = t.project_id
-        JOIN clients c ON c.id = p.client_id
-        WHERE t.assigned_to = {$user['id']}
-          AND t.status != 'completed'
-          AND p.timeline_end IS NOT NULL
-          AND (
-              p.timeline_end > CURDATE()
-              OR (p.timeline_end = CURDATE() AND {$projectEndTimeSql} >= CURTIME())
-          )
-          AND p.status NOT IN ('completed', 'cancelled')
-        UNION ALL
-        SELECT
-            CONCAT('Task deadline: ', t.title) AS title,
-            CONCAT('Project: ', p.name) AS description,
-            'deadline' AS schedule_type,
-            t.deadline AS start_date,
-            '17:00:00' AS start_time,
-            t.status,
-            t.project_id
-        FROM tasks t
-        JOIN projects p ON p.id = t.project_id
-        WHERE t.assigned_to = {$user['id']}
-          AND t.status != 'completed'
-          AND t.deadline IS NOT NULL
-          AND t.deadline >= CURDATE()
-    ) upcoming
+    FROM schedules
+    WHERE user_id = {$user['id']}
+      AND status <> 'cancelled'
+      AND (
+          start_date > CURDATE()
+          OR (start_date = CURDATE() AND COALESCE(start_time, '00:00:00') >= CURTIME())
+      )
     ORDER BY start_date, start_time
     LIMIT 5
 ");
-// Build Expert agenda from manual schedules, pending estimates, and upcoming assigned deadlines
+// Build Expert agenda from assigned estimation tasks and deadlines.
 $expertAgenda = [];
-
-$scheduleRows = $conn->query("
-    SELECT title, description, start_date, start_time, schedule_type
-    FROM schedules
-    WHERE user_id = {$user['id']}
-      AND start_date IS NOT NULL
-      AND start_date >= CURDATE()
-    ORDER BY start_date ASC, start_time ASC
-    LIMIT 5
-");
-while ($schedule = $scheduleRows->fetch_assoc()) {
-    $agendaDate = trim((string) ($schedule['start_date'] ?? ''));
-    $agendaTime = trim((string) ($schedule['start_time'] ?? ''));
-    $expertAgenda[] = [
-        'title' => (string) ($schedule['title'] ?? 'Scheduled item'),
-        'description' => (string) ($schedule['description'] ?? ''),
-        'date' => $agendaDate . ($agendaTime !== '' ? ' ' . $agendaTime : ''),
-        'type' => ucfirst((string) ($schedule['schedule_type'] ?? 'Schedule')),
-        'icon' => 'calendar-alt',
-        'url' => '',
-    ];
-}
 
 $agendaTaskRows = $conn->query("
     SELECT t.id, t.title, t.description, t.deadline, t.status, p.name AS project_name
@@ -730,36 +646,8 @@ include '../../includes/navbar.php';
                 <div class="card-header">
                     <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
                 </div>
-                <div class="card-body">
-                    <?php renderScheduleCalendar($schedules); ?>
-                    <?php if($expertAgenda): ?>
-                        <?php foreach($expertAgenda as $agendaItem): ?>
-                        <div class="timeline-item mb-3">
-                            <h6>
-                                <i class="fas fa-<?php echo htmlspecialchars($agendaItem['icon']); ?> me-1"></i>
-                                <?php echo htmlspecialchars($agendaItem['title']); ?>
-                            </h6>
-                            <small>
-                                <span class="badge bg-light text-dark me-2"><?php echo htmlspecialchars($agendaItem['type']); ?></span>
-                                <i class="far fa-clock"></i>
-                                <?php echo date('M d, Y h:i A', strtotime((string) $agendaItem['date'])); ?>
-                            </small>
-                            <?php if(!empty($agendaItem['description'])): ?>
-                            <p><?php echo htmlspecialchars($agendaItem['description']); ?></p>
-                            <?php endif; ?>
-                            <?php if(!empty($agendaItem['url'])): ?>
-                            <a href="<?php echo htmlspecialchars($agendaItem['url']); ?>" class="btn-estimate mt-2">
-                                Open
-                            </a>
-                            <?php endif; ?>
-                        </div>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <div class="empty-state">
-                            <i class="fas fa-calendar-week"></i>
-                            <p>No upcoming schedule items</p>
-                        </div>
-                    <?php endif; ?>
+                <div class="card-body p-0">
+                    <?php renderScheduleAgendaPreview($schedules, $expertAgenda, 'Calendar'); ?>
                 </div>
             </div>
             

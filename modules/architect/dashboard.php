@@ -32,90 +32,21 @@ $reviewProjects = $conn->query("
     LIMIT 5
 ");
 
-// Get user's schedule
+// Get this architect's own manual schedule. Architecture project deadlines are listed in the agenda below.
 $schedules = $conn->query("
     SELECT title, description, schedule_type, start_date, start_time, status, project_id
-    FROM (
-        SELECT
-            s.title,
-            s.description,
-            s.schedule_type,
-            s.start_date,
-            COALESCE(s.start_time, '00:00:00') AS start_time,
-            s.status,
-            s.project_id
-        FROM schedules s
-        WHERE s.user_id = {$user['id']}
-          AND s.status <> 'cancelled'
-          AND (
-              s.start_date > CURDATE()
-              OR (s.start_date = CURDATE() AND COALESCE(s.start_time, '00:00:00') >= CURTIME())
-          )
-        UNION ALL
-        SELECT
-            CONCAT('Project start: ', p.name) AS title,
-            CONCAT('Client: ', c.name) AS description,
-            'milestone' AS schedule_type,
-            p.timeline_start AS start_date,
-            {$projectStartTimeSql} AS start_time,
-            p.status,
-            p.id AS project_id
-        FROM projects p
-        JOIN clients c ON p.client_id = c.id
-        WHERE (p.architect_id = {$user['id']} OR p.architect_id IS NULL)
-          AND p.timeline_start IS NOT NULL
-          AND (
-              p.timeline_start > CURDATE()
-              OR (p.timeline_start = CURDATE() AND {$projectStartTimeSql} >= CURTIME())
-          )
-          AND p.status NOT IN ('completed', 'cancelled')
-        UNION ALL
-        SELECT
-            CONCAT('Project deadline: ', p.name) AS title,
-            CONCAT('Client: ', c.name) AS description,
-            'deadline' AS schedule_type,
-            p.timeline_end AS start_date,
-            {$projectEndTimeSql} AS start_time,
-            p.status,
-            p.id AS project_id
-        FROM projects p
-        JOIN clients c ON p.client_id = c.id
-        WHERE (p.architect_id = {$user['id']} OR p.architect_id IS NULL)
-          AND p.timeline_end IS NOT NULL
-          AND (
-              p.timeline_end > CURDATE()
-              OR (p.timeline_end = CURDATE() AND {$projectEndTimeSql} >= CURTIME())
-          )
-          AND p.status NOT IN ('completed', 'cancelled')
-    ) upcoming
+    FROM schedules
+    WHERE user_id = {$user['id']}
+      AND status <> 'cancelled'
+      AND (
+          start_date > CURDATE()
+          OR (start_date = CURDATE() AND COALESCE(start_time, '00:00:00') >= CURTIME())
+      )
     ORDER BY start_date, start_time
     LIMIT 5
 ");
-// Build Architect agenda from manual schedules and project deadlines
+// Build Architect agenda from architecture-stage project deadlines.
 $architectAgenda = [];
-
-$scheduleRows = $conn->query("
-    SELECT title, description, start_date, start_time, schedule_type
-    FROM schedules
-    WHERE user_id = {$user['id']}
-      AND start_date IS NOT NULL
-      AND start_date >= CURDATE()
-      AND status IN ('scheduled', 'in_progress')
-    ORDER BY start_date ASC, start_time ASC
-    LIMIT 5
-");
-while ($schedule = $scheduleRows->fetch_assoc()) {
-    $agendaDate = trim((string) ($schedule['start_date'] ?? ''));
-    $agendaTime = trim((string) ($schedule['start_time'] ?? ''));
-    $architectAgenda[] = [
-        'title' => (string) ($schedule['title'] ?? 'Scheduled item'),
-        'description' => (string) ($schedule['description'] ?? ''),
-        'date' => $agendaDate . ($agendaTime !== '' ? ' ' . $agendaTime : ''),
-        'type' => ucfirst((string) ($schedule['schedule_type'] ?? 'Schedule')),
-        'icon' => 'calendar-alt',
-        'url' => '',
-    ];
-}
 
 $projectMilestones = $conn->query("
     SELECT p.id, p.name, p.status, p.timeline_end, {$projectEndTimeSql} AS timeline_end_time, c.name as client_name
@@ -413,38 +344,8 @@ include '../../includes/navbar.php';
                 <div class="card-header bg-white border-0 pt-4 px-4">
                     <h5 class="mb-0 fw-semibold" style="color: #1f6392;">Upcoming Schedule</h5>
                 </div>
-                <div class="card-body p-4">
-                    <?php renderScheduleCalendar($schedules); ?>
-                    <?php if($architectAgenda): ?>
-                        <?php foreach($architectAgenda as $agendaItem): ?>
-                        <div class="timeline-item mb-3">
-                            <div class="timeline-title">
-                                <i class="fas fa-<?php echo htmlspecialchars($agendaItem['icon']); ?> me-1"></i>
-                                <?php echo htmlspecialchars($agendaItem['title']); ?>
-                            </div>
-                            <div class="timeline-time">
-                                <span class="badge bg-light text-dark me-2"><?php echo htmlspecialchars($agendaItem['type']); ?></span>
-                                <i class="far fa-clock"></i>
-                                <?php echo date('M d, Y h:i A', strtotime((string) $agendaItem['date'])); ?>
-                            </div>
-                            <?php if(!empty($agendaItem['description'])): ?>
-                            <div class="timeline-desc">
-                                <?php echo htmlspecialchars($agendaItem['description']); ?>
-                            </div>
-                            <?php endif; ?>
-                            <?php if(!empty($agendaItem['url'])): ?>
-                            <a href="<?php echo htmlspecialchars($agendaItem['url']); ?>" class="btn-review mt-2">
-                                <i class="fas fa-arrow-right"></i> Open
-                            </a>
-                            <?php endif; ?>
-                        </div>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <div class="empty-state-mini">
-                            <i class="fas fa-calendar-week"></i>
-                            <p>No upcoming agenda items</p>
-                        </div>
-                    <?php endif; ?>
+                <div class="card-body p-0">
+                    <?php renderScheduleAgendaPreview($schedules, $architectAgenda, 'Calendar'); ?>
                 </div>
             </div>
         </div>

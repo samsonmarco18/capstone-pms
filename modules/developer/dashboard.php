@@ -27,7 +27,8 @@ $upcomingTasks = $conn->query("
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
     WHERE t.assigned_to = {$user['id']}
-    AND t.status != 'completed'
+    AND t.status NOT IN ('completed', 'cancelled')
+    AND p.status NOT IN ('completed', 'cancelled')
     AND t.deadline IS NOT NULL
     ORDER BY 
         CASE WHEN t.deadline < CURDATE() THEN 0 ELSE 1 END,
@@ -46,6 +47,29 @@ $schedules = $conn->query("
     )
     ORDER BY start_date, start_time 
 ");
+
+$developerAgenda = [];
+$developerAgendaRows = $conn->query("
+    SELECT t.id, t.title, t.description, t.deadline, t.priority, p.name AS project_name
+    FROM tasks t
+    JOIN projects p ON t.project_id = p.id
+    WHERE t.assigned_to = {$user['id']}
+      AND t.status NOT IN ('completed', 'cancelled')
+      AND p.status NOT IN ('completed', 'cancelled')
+      AND t.deadline IS NOT NULL
+      AND t.deadline >= CURDATE()
+    ORDER BY t.deadline ASC
+    LIMIT 8
+");
+while ($task = $developerAgendaRows->fetch_assoc()) {
+    $developerAgenda[] = [
+        'title' => (string) ($task['title'] ?? 'Task deadline'),
+        'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
+        'date' => trim((string) ($task['deadline'] ?? '') . ' 17:00:00'),
+        'type' => ucfirst((string) ($task['priority'] ?? 'Task')) . ' Priority',
+        'url' => 'task.php?id=' . (int) ($task['id'] ?? 0),
+    ];
+}
 // Get tasks that need developer attention beyond calendar deadlines
 $attentionTasks = $conn->query("
     SELECT t.*, p.name as project_name
@@ -617,9 +641,9 @@ include '../../includes/navbar.php';
     ]);
     ?>
 
-    <div class="row g-4 mb-4">
-        <div class="col-xl-7">
-            <div class="card">
+    <div class="row g-4 mb-4 align-items-stretch">
+        <div class="col-xl-6">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5><i class="fas fa-chart-pie"></i> Performance Overview</h5>
                 </div>
@@ -634,9 +658,22 @@ include '../../includes/navbar.php';
                 </div>
             </div>
         </div>
-        
-        <div class="col-xl-5">
-            <div class="card">
+
+        <div class="col-xl-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
+                </div>
+                <div class="card-body p-0">
+                    <?php renderScheduleAgendaPreview($schedules, $developerAgenda, 'Calendar'); ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-6">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5><i class="fas fa-chart-bar"></i> Task Priority Distribution</h5>
                 </div>
@@ -650,57 +687,9 @@ include '../../includes/navbar.php';
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="row g-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-calendar-alt"></i> Upcoming Deadlines</h5>
-                </div>
-                <div>
-                    <?php while($task = $upcomingTasks->fetch_assoc()): 
-                        $daysLeft = (int) ceil((strtotime($task['deadline']) - strtotime(date('Y-m-d'))) / (60 * 60 * 24));
-                        $badgeClass = $daysLeft < 0 ? 'urgent' : ($daysLeft <= 2 ? 'urgent' : ($daysLeft <= 5 ? 'warning' : 'normal'));
-                        $deadlineLabel = $daysLeft < 0
-                            ? abs($daysLeft) . ' day' . (abs($daysLeft) === 1 ? '' : 's') . ' overdue'
-                            : ($daysLeft === 0 ? 'Due today' : $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's') . ' left');
-                    ?>
-                    <div class="list-group-item-custom">
-                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
-                                <small class="text-muted"><?php echo htmlspecialchars($task['project_name']); ?></small>
-                                <?php if(!empty($task['description'])): ?>
-                                <div><small class="text-muted"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></small></div>
-                                <?php endif; ?>
-                                <div class="mt-1">
-                                    <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></small>
-                                </div>
-                            </div>
-                            <span class="badge-days <?php echo $badgeClass; ?>">
-                                <?php echo htmlspecialchars($deadlineLabel); ?>
-                            </span>
-                        </div>
-                        <div class="mt-2">
-                            <a href="task.php?id=<?php echo $task['id']; ?>" class="btn-view">
-                                <i class="fas fa-tasks"></i> View Task
-                            </a>
-                        </div>
-                    </div>
-                    <?php endwhile; ?>
-                    <?php if($upcomingTasks->num_rows == 0): ?>
-                    <div class="empty-state">
-                        <i class="fas fa-check-circle"></i>
-                        <p>No upcoming tasks</p>
-                    </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-        
         <div class="col-xl-6">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5><i class="fas fa-exclamation-circle"></i> Needs Attention</h5>
                 </div>

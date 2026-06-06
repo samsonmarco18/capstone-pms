@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
+require_once '../../includes/schedule-calendar.php';
 requireRole('sul');
 
 $conn = getConnection();
@@ -630,6 +631,70 @@ include '../../includes/navbar.php';
     color: #047857;
 }
 
+.sul-dashboard-grid {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.sul-table-card {
+    min-height: 100%;
+}
+
+.sul-chart-legend {
+    display: grid;
+    gap: 0.65rem;
+    margin-top: 1rem;
+}
+
+.sul-chart-legend span {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 12px;
+    background: var(--gray-50);
+    color: var(--gray-600);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.recent-task-list {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.recent-task-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: start;
+    padding: 1rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    background: #fff;
+}
+
+.recent-task-title {
+    margin: 0 0 0.25rem;
+    color: var(--gray-900);
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.recent-task-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 0.8rem;
+    color: var(--gray-600);
+    font-size: 0.76rem;
+}
+
+.recent-task-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .welcome-banner {
@@ -647,6 +712,10 @@ include '../../includes/navbar.php';
 
     .stat-card-modern .stat-number {
         font-size: 2rem;
+    }
+
+    .recent-task-card {
+        grid-template-columns: 1fr;
     }
 }
 </style>
@@ -706,10 +775,10 @@ include '../../includes/navbar.php';
     ]);
     ?>
 
-    <!-- Row 1: Task Status + Projects Needing Allocation -->
+    <!-- Row 1: Status/Priority + Schedule/Allocation -->
     <div class="row g-3 mb-4">
         <div class="col-xl-7">
-            <div class="card">
+            <div class="card mb-3">
                 <div class="card-header">
                     <h5><i class="fas fa-chart-pie"></i> Task Status Overview</h5>
                 </div>
@@ -717,49 +786,33 @@ include '../../includes/navbar.php';
                     <canvas id="taskStatusChart" style="height: 280px; width: 100%;"></canvas>
                 </div>
             </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar"></i> Priority Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="priorityChart" style="height: 220px; width: 100%;"></canvas>
+                    <div class="sul-chart-legend">
+                        <span><span class="badge-priority-high">High</span> <?php echo $highPriority; ?> tasks</span>
+                        <span><span class="badge-priority-medium">Medium</span> <?php echo $mediumPriority; ?> tasks</span>
+                        <span><span class="badge-priority-low">Low</span> <?php echo $lowPriority; ?> tasks</span>
+                    </div>
+                </div>
+            </div>
         </div>
-        
+
         <div class="col-xl-5">
             <!-- Upcoming Schedule -->
             <div class="card mb-3">
                 <div class="card-header">
                     <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
                 </div>
-                <div class="card-body">
-                    <?php if($upcomingAgenda): ?>
-                        <?php foreach($upcomingAgenda as $agendaItem): ?>
-                        <div class="timeline-item mb-3">
-                            <h6 class="mb-1">
-                                <?php if(!empty($agendaItem['url'])): ?>
-                                    <a href="<?php echo htmlspecialchars($agendaItem['url']); ?>" class="text-decoration-none text-dark">
-                                        <?php echo htmlspecialchars($agendaItem['title']); ?>
-                                    </a>
-                                <?php else: ?>
-                                    <?php echo htmlspecialchars($agendaItem['title']); ?>
-                                <?php endif; ?>
-                            </h6>
-                            <small class="text-muted">
-                                <i class="fas fa-<?php echo htmlspecialchars($agendaItem['icon']); ?> me-1"></i>
-                                <?php echo htmlspecialchars($agendaItem['type']); ?>
-                                <span class="mx-1">-</span>
-                                <i class="far fa-clock me-1"></i>
-                                <?php echo date('M d, Y h:i A', strtotime((string) $agendaItem['date'])); ?>
-                            </small>
-                            <?php if(!empty($agendaItem['description'])): ?>
-                            <p class="mb-0 small text-muted mt-1"><?php echo htmlspecialchars($agendaItem['description']); ?></p>
-                            <?php endif; ?>
-                        </div>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <div class="empty-state-mini">
-                            <i class="fas fa-calendar-week"></i>
-                            <p>No upcoming agenda items</p>
-                        </div>
-                    <?php endif; ?>
+                <div class="card-body p-0">
+                    <?php renderScheduleAgendaPreview([], $upcomingAgenda, 'Calendar'); ?>
                 </div>
             </div>
-            
-            <!-- Projects Needing Allocation -->
+
             <div class="card">
                 <div class="card-header">
                     <h5><i class="fas fa-project-diagram"></i> Projects Needing Task Allocation</h5>
@@ -787,14 +840,15 @@ include '../../includes/navbar.php';
                                             Timeline: <?php echo date('M d', strtotime($project['timeline_start'])); ?> - <?php echo date('M d, Y', strtotime($project['timeline_end'])); ?>
                                         </small>
                                     </div>
-                                    <div class="mt-1">
-                                        <small class="text-muted">
-                                            <i class="fas fa-tasks me-1"></i>
-                                            Pending tasks: <?php echo (int) $project['pending_task_count']; ?>
-                                        </small>
-                                    <div class="allocation-status-tags">
-                                        <?php if($totalTasksForProject === 0): ?>
-                                            <span class="allocation-status-tag warning">No tasks yet</span>
+                                     <div class="mt-1">
+                                         <small class="text-muted">
+                                             <i class="fas fa-tasks me-1"></i>
+                                             Pending tasks: <?php echo $totalTasksForProject; ?>
+                                         </small>
+                                    </div>
+                                     <div class="allocation-status-tags">
+                                         <?php if($totalTasksForProject === 0): ?>
+                                             <span class="allocation-status-tag warning">No tasks yet</span>
                                         <?php endif; ?>
                                         <?php if($needsExpertCount > 0): ?>
                                             <span class="allocation-status-tag warning"><?php echo $needsExpertCount; ?> need expert</span>
@@ -824,23 +878,24 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
-    <!-- Row 2: Team Availability + Priority Distribution -->
+    <!-- Row 3: Team Availability + Recent Tasks -->
     <div class="row g-3 mb-4">
-        <!-- Team Availability -->
-        <div class="col-xl-6">
-            <div class="card">
+        <div class="col-xl-7">
+            <div class="card sul-table-card">
                 <div class="card-header">
                     <h5><i class="fas fa-users"></i> Team Availability & Workload</h5>
                 </div>
                 <div class="table-container">
                     <table class="data-table">
                         <thead>
+                            <tr>
                                 <th>Name</th>
                                 <th>Role</th>
                                 <th>Active Tasks</th>
                                 <th>Status</th>
                                 <th>Actions</th>
-                            </thead>
+                            </tr>
+                        </thead>
                         <tbody>
                             <?php while($expert = $expertAvailability->fetch_assoc()): ?>
                             <?php
@@ -864,81 +919,61 @@ include '../../includes/navbar.php';
                 </div>
             </div>
         </div>
-        
-        <div class="col-xl-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-chart-bar"></i> Priority Distribution</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="priorityChart" style="height: 220px; width: 100%;"></canvas>
-                    <div class="mt-3 d-flex justify-content-between gap-2 flex-wrap">
-                        <span><span class="badge-priority-high">High</span> <?php echo $highPriority; ?> tasks</span>
-                        <span><span class="badge-priority-medium">Medium</span> <?php echo $mediumPriority; ?> tasks</span>
-                        <span><span class="badge-priority-low">Low</span> <?php echo $lowPriority; ?> tasks</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Recent Tasks -->
-    <div class="row mt-3">
-        <div class="col-12">
-            <div class="card">
+        <div class="col-xl-5">
+            <div class="card sul-table-card">
                 <div class="card-header">
                     <h5><i class="fas fa-history"></i> Recent Tasks</h5>
                 </div>
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead>
-                                <th>Task</th>
-                                <th>Project</th>
-                                <th>Assigned To</th>
-                                <th>Priority</th>
-                                <th>Status</th>
-                                <th>Deadline</th>
-                                <th>Actions</th>
-                            </thead>
-                        <tbody>
-                            <?php while($task = $recentTasks->fetch_assoc()): 
-                                $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
-                            ?>
-                            <tr>
-                                <td>
-                                    <div class="fw-semibold"><?php echo htmlspecialchars($task['title']); ?></div>
-                                    <small class="text-muted"><?php echo htmlspecialchars(substr($task['description'], 0, 50)); ?></small>
-                                </td>
-                                <td><?php echo htmlspecialchars($task['project_name']); ?></td>
-                                <td><?php echo htmlspecialchars($task['assigned_to_name'] ?? 'Unassigned'); ?></td>
-                                <td><span class="badge-priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span></td>
-                                <td>
-                                    <span class="badge-status-<?php echo $task['status']; ?>">
-                                        <?php echo ucfirst(str_replace('_', ' ', $task['status'])); ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <?php echo date('M d, Y', strtotime($task['deadline'])); ?>
-                                    <?php if($daysLeft <= 2 && $task['status'] != 'completed'): ?>
-                                        <br><small class="text-danger"><?php echo $daysLeft; ?> days left</small>
+                <div class="card-body">
+                    <div class="recent-task-list">
+                        <?php if($recentTasks->num_rows > 0): ?>
+                        <?php while($task = $recentTasks->fetch_assoc()): 
+                            $deadlineTimestamp = !empty($task['deadline']) ? strtotime((string) $task['deadline']) : false;
+                            $daysLeft = $deadlineTimestamp ? ceil(($deadlineTimestamp - time()) / (60 * 60 * 24)) : null;
+                        ?>
+                        <div class="recent-task-card">
+                            <div>
+                                <h6 class="recent-task-title"><?php echo htmlspecialchars($task['title']); ?></h6>
+                                <?php if(!empty($task['description'])): ?>
+                                    <div class="text-muted small mb-2"><?php echo htmlspecialchars(substr((string) $task['description'], 0, 90)); ?></div>
+                                <?php endif; ?>
+                                <div class="recent-task-meta">
+                                    <span><i class="fas fa-folder me-1"></i><?php echo htmlspecialchars($task['project_name'] ?? 'No project'); ?></span>
+                                    <span><i class="fas fa-user me-1"></i><?php echo htmlspecialchars($task['assigned_to_name'] ?? 'Unassigned'); ?></span>
+                                    <?php if($deadlineTimestamp): ?>
+                                        <span><i class="far fa-calendar-alt me-1"></i><?php echo date('M d, Y', $deadlineTimestamp); ?></span>
                                     <?php endif; ?>
-                                </td>
-                                <td>
-                                    <div class="d-flex gap-2">
-                                        <button class="btn-primary-modern btn-sm-modern" onclick="viewTask(<?php echo $task['id']; ?>)">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <?php if(!$task['assigned_to']): ?>
-                                        <button class="btn-primary-modern btn-sm-modern" onclick="assignTaskTo(<?php echo $task['id']; ?>)">
-                                            <i class="fas fa-user-plus"></i>
-                                        </button>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                            </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
+                                </div>
+                                <div class="mt-2 d-flex flex-wrap gap-2">
+                                    <span class="badge-priority-<?php echo htmlspecialchars((string) $task['priority']); ?>"><?php echo ucfirst((string) $task['priority']); ?></span>
+                                    <span class="badge-status-<?php echo htmlspecialchars((string) $task['status']); ?>">
+                                        <?php echo ucfirst(str_replace('_', ' ', (string) $task['status'])); ?>
+                                    </span>
+                                    <?php if($daysLeft !== null && $daysLeft <= 2 && $task['status'] != 'completed'): ?>
+                                        <small class="text-danger fw-semibold"><?php echo $daysLeft; ?> days left</small>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="recent-task-actions">
+                                <button class="btn-primary-modern btn-sm-modern" onclick="viewTask(<?php echo $task['id']; ?>)">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <?php if(!$task['assigned_to']): ?>
+                                <button class="btn-primary-modern btn-sm-modern" onclick="assignTaskTo(<?php echo $task['id']; ?>)">
+                                    <i class="fas fa-user-plus"></i>
+                                </button>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php endwhile; ?>
+                        <?php else: ?>
+                            <div class="empty-state-mini">
+                                <i class="fas fa-check-circle"></i>
+                                <p>No recent tasks found</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
         </div>
