@@ -98,10 +98,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         exit();
     }
 
-    $taskCheck = $conn->prepare("SELECT id FROM tasks WHERE id = ? AND assigned_to = ?");
+    $taskCheck = $conn->prepare("
+        SELECT t.id, t.title, t.status, t.assigned_by, p.name AS project_name, p.sul_id
+        FROM tasks t
+        LEFT JOIN projects p ON p.id = t.project_id
+        WHERE t.id = ? AND t.assigned_to = ?
+        LIMIT 1
+    ");
     $taskCheck->bind_param("ii", $taskId, $user['id']);
     $taskCheck->execute();
-    $validTask = $taskCheck->get_result()->num_rows > 0;
+    $task = $taskCheck->get_result()->fetch_assoc();
+    $validTask = (bool) $task;
     $taskCheck->close();
 
     if (!$validTask) {
@@ -114,6 +121,38 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = ? WHERE id = ?");
     $stmt->bind_param("ssi", $newStatus, $completedAt, $taskId);
     $stmt->execute();
+
+    if ($newStatus === 'completed' && ($task['status'] ?? '') !== 'completed') {
+        $recipientIds = [];
+        if (!empty($task['sul_id'])) {
+            $recipientIds[] = (int) $task['sul_id'];
+        }
+        if (!empty($task['assigned_by'])) {
+            $recipientIds[] = (int) $task['assigned_by'];
+        }
+
+        if (empty(array_filter($recipientIds))) {
+            $sulUsers = $conn->query("SELECT id FROM users WHERE role = 'sul' AND status = 'active'");
+            if ($sulUsers) {
+                while ($sul = $sulUsers->fetch_assoc()) {
+                    $recipientIds[] = (int) $sul['id'];
+                }
+            }
+        }
+
+        foreach (array_unique(array_filter($recipientIds)) as $recipientId) {
+            createNotification(
+                $recipientId,
+                'Task Completed: ' . ($task['title'] ?? 'Developer task'),
+                'Developer ' . ($user['full_name'] ?? 'Developer') . ' completed a task'
+                    . (!empty($task['project_name']) ? ' for ' . $task['project_name'] : '') . '.',
+                'task',
+                'tasks',
+                $taskId,
+                BASE_URL . 'modules/sul/task-allocation.php?task_id=' . $taskId
+            );
+        }
+    }
     
     logActivity($user['id'], 'update_task_status', 'tasks', $taskId, null, ['status' => $newStatus]);
     $_SESSION['success'] = "Task status updated";

@@ -34,6 +34,31 @@ if (!$hasSalesChoice) {
 
 $hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
 
+// If a dashboard link points to a specific task, open that task's project context.
+if (!$projectId && $taskId > 0) {
+    $taskProject = $conn->prepare("SELECT project_id FROM tasks WHERE id = ? LIMIT 1");
+    $taskProject->bind_param("i", $taskId);
+    $taskProject->execute();
+    $taskProjectRow = $taskProject->get_result()->fetch_assoc();
+    $taskProject->close();
+    $projectId = (int) ($taskProjectRow['project_id'] ?? 0);
+}
+
+$ganttProjectOptions = $conn->query("
+    SELECT p.id, p.name,
+           COUNT(CASE
+               WHEN " . ($hasSalesApproval ? "t.sales_approved = 1" : "1 = 1") . "
+                " . ($hasSalesChoice ? "AND t.sales_estimate_days IS NOT NULL" : "") . "
+               THEN t.id
+               ELSE NULL
+           END) AS approved_task_count
+    FROM projects p
+    LEFT JOIN tasks t ON t.project_id = p.id
+    WHERE p.status != 'completed'
+    GROUP BY p.id, p.name
+    ORDER BY p.created_at DESC
+");
+
 // Default to first available project if none selected
 if (!$projectId) {
     $firstProject = $conn->query("
@@ -90,7 +115,9 @@ if ($projectId && $project) {
             }
         }
 
-        $taskRows = $conn->query("SELECT id, title, started_at, deadline, estimated_days_min, estimated_days_likely, estimated_days_max, sales_estimate_choice, sales_estimate_days FROM tasks WHERE project_id = $projectId");
+        $taskApprovalFilter = $hasSalesApproval ? " AND sales_approved = 1" : "";
+        $taskChoiceFilter = $hasSalesChoice ? " AND sales_estimate_days IS NOT NULL" : "";
+        $taskRows = $conn->query("SELECT id, title, started_at, deadline, estimated_days_min, estimated_days_likely, estimated_days_max, sales_estimate_choice, sales_estimate_days FROM tasks WHERE project_id = $projectId{$taskApprovalFilter}{$taskChoiceFilter}");
         while ($task = $taskRows->fetch_assoc()) {
             $startRaw = $task['started_at'] ?? null;
             $endRaw = $task['deadline'] ?? null;
@@ -376,9 +403,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['assign_to_developer'])) {
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $developerId = (int) ($_POST['developer_id'] ?? 0);
+        $deadline = trim((string) ($_POST['deadline'] ?? ''));
 
-        if ($taskId <= 0 || $developerId <= 0) {
-            $_SESSION['error'] = "Please select a valid task and developer.";
+        if ($taskId <= 0 || $developerId <= 0 || $deadline === '') {
+            $_SESSION['error'] = "Please select a valid task, developer, and deadline.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $deadlineDate = DateTime::createFromFormat('Y-m-d', $deadline);
+        $deadlineErrors = DateTime::getLastErrors();
+        if (
+            !$deadlineDate
+            || ($deadlineErrors !== false && ($deadlineErrors['warning_count'] > 0 || $deadlineErrors['error_count'] > 0))
+            || $deadlineDate->format('Y-m-d') !== $deadline
+        ) {
+            $_SESSION['error'] = "Please enter a valid assignment deadline.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -411,8 +451,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         }
         
-        $stmt = $conn->prepare("UPDATE tasks SET assigned_to = ?, status = 'todo' WHERE id = ?");
-        $stmt->bind_param("ii", $developerId, $taskId);
+        $stmt = $conn->prepare("UPDATE tasks SET assigned_to = ?, status = 'todo', deadline = ? WHERE id = ?");
+        $stmt->bind_param("isi", $developerId, $deadline, $taskId);
         
         if ($stmt->execute()) {
             $taskDetails = $conn->query("SELECT title, deadline FROM tasks WHERE id = $taskId")->fetch_assoc();
@@ -432,6 +472,58 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         } else {
             $_SESSION['error'] = "Failed to assign task";
+        }
+    }
+
+    // Send a completed task back to the developer for revision
+    if (isset($_POST['revise_completed_task'])) {
+        $taskId = (int) ($_POST['task_id'] ?? 0);
+        $revisionReason = trim((string) ($_POST['revision_reason'] ?? ''));
+
+        if ($taskId <= 0 || $revisionReason === '') {
+            $_SESSION['error'] = "Please provide a task and revision reason.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $taskStmt = $conn->prepare("
+            SELECT id, title, assigned_to
+            FROM tasks
+            WHERE id = ?
+              AND status = 'completed'
+              AND assigned_to IS NOT NULL
+              AND assigned_to != 0
+            LIMIT 1
+        ");
+        $taskStmt->bind_param("i", $taskId);
+        $taskStmt->execute();
+        $task = $taskStmt->get_result()->fetch_assoc();
+        $taskStmt->close();
+
+        if (!$task) {
+            $_SESSION['error'] = "Only completed assigned tasks can be sent for revision.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $stmt = $conn->prepare("UPDATE tasks SET status = 'in_progress', completed_at = NULL WHERE id = ?");
+        $stmt->bind_param("i", $taskId);
+
+        if ($stmt->execute()) {
+            createNotification(
+                (int) $task['assigned_to'],
+                "Task Revision Requested: " . $task['title'],
+                "SUL requested revisions. Reason: " . $revisionReason,
+                'task',
+                'tasks',
+                (int) $taskId,
+                BASE_URL . 'modules/developer/task.php?id=' . $taskId
+            );
+            $_SESSION['success'] = "Task sent back to the developer for revision.";
+            header("Location: task-allocation.php");
+            exit();
+        } else {
+            $_SESSION['error'] = "Failed to send task for revision.";
         }
     }
     
@@ -973,10 +1065,27 @@ include '../../includes/navbar.php';
             <?php if ($projectId && $project): ?>
             <div class="section-card">
                 <div class="section-header">
-                    <h5>
-                        <i class="fas fa-stream"></i>
-                        Project Gantt Chart
-                    </h5>
+                    <div>
+                        <h5>
+                            <i class="fas fa-stream"></i>
+                            Project Gantt Chart
+                        </h5>
+                        <small class="text-muted"><?php echo htmlspecialchars($project['name']); ?></small>
+                    </div>
+                    <?php if ($ganttProjectOptions && $ganttProjectOptions->num_rows > 0): ?>
+                    <form method="GET" class="d-flex align-items-center gap-2">
+                        <select name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for Gantt chart">
+                            <?php while($ganttProjectOption = $ganttProjectOptions->fetch_assoc()): ?>
+                                <option value="<?php echo (int) $ganttProjectOption['id']; ?>" <?php echo (int) $ganttProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($ganttProjectOption['name']); ?>
+                                    <?php if ((int) $ganttProjectOption['approved_task_count'] > 0): ?>
+                                        (<?php echo (int) $ganttProjectOption['approved_task_count']; ?> approved)
+                                    <?php endif; ?>
+                                </option>
+                            <?php endwhile; ?>
+                        </select>
+                    </form>
+                    <?php endif; ?>
                 </div>
                 <div class="p-3">
                     <?php if (!$canShowGantt): ?>
@@ -1171,7 +1280,7 @@ include '../../includes/navbar.php';
                                     <?php endif; ?>
                                 </div>
                             </div>
-                            <button class="btn-primary-modern" onclick="openAssignDeveloperModal(<?php echo $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
+                            <button class="btn-primary-modern" onclick="openAssignDeveloperModal(<?php echo $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'), '<?php echo htmlspecialchars((string) $task['deadline'], ENT_QUOTES); ?>')">
                                 <i class="fas fa-user-plus"></i> Assign to Developer
                             </button>
                         </div>
@@ -1214,9 +1323,11 @@ include '../../includes/navbar.php';
                                     <span class="text-<?php echo $daysLeft <= 2 ? 'danger' : 'muted'; ?>"><?php echo $daysLeft; ?> days left</span>
                                 </div>
                             </div>
-                            <button class="btn-outline-modern" onclick="viewTaskDetails(<?php echo $task['id']; ?>)">
-                                <i class="fas fa-eye"></i> View
-                            </button>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn-outline-modern" onclick="viewTaskDetails(<?php echo $task['id']; ?>)">
+                                    <i class="fas fa-eye"></i> View
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <?php endwhile; ?>
@@ -1253,9 +1364,14 @@ include '../../includes/navbar.php';
                                     <span><i class="fas fa-check-circle text-success"></i> Completed: <?php echo date('M d, Y', strtotime($task['completed_at'])); ?></span>
                                 </div>
                             </div>
-                            <button class="btn-outline-modern" onclick="viewTaskDetails(<?php echo $task['id']; ?>)">
-                                <i class="fas fa-eye"></i> View
-                            </button>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button class="btn-outline-modern" onclick="viewTaskDetails(<?php echo $task['id']; ?>)">
+                                    <i class="fas fa-eye"></i> View
+                                </button>
+                                <button class="btn-warning-modern" onclick="openReviseCompletedModal(<?php echo $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))">
+                                    <i class="fas fa-undo"></i> Revise
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <?php endwhile; ?>
@@ -1335,10 +1451,40 @@ include '../../includes/navbar.php';
                             <?php endwhile; ?>
                         </select>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">Deadline</label>
+                        <input type="date" name="deadline" id="devDeadline" class="form-control-custom" required>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" name="assign_to_developer" class="btn-primary-modern">Assign to Developer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Revise Completed Task Modal -->
+<div class="modal fade modal-modern" id="reviseCompletedModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-undo me-2"></i>Request Revision</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="task_id" id="reviseTaskId">
+                    <p><strong>Task:</strong> <span id="reviseTaskTitle"></span></p>
+                    <div class="mb-3">
+                        <label class="form-label">Revision Notes</label>
+                        <textarea name="revision_reason" class="form-control-custom" rows="3" required placeholder="Describe what the developer should revise..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="revise_completed_task" class="btn-warning-modern">Send for Revision</button>
                 </div>
             </form>
         </div>
@@ -1397,9 +1543,10 @@ function openAssignExpertModal(taskId, taskTitle) {
     new bootstrap.Modal(document.getElementById('assignExpertModal')).show();
 }
 
-function openAssignDeveloperModal(taskId, taskTitle) {
+function openAssignDeveloperModal(taskId, taskTitle, deadline) {
     document.getElementById('devTaskId').value = taskId;
     document.getElementById('devTaskTitle').textContent = taskTitle;
+    document.getElementById('devDeadline').value = deadline || '';
     new bootstrap.Modal(document.getElementById('assignDeveloperModal')).show();
 }
 
@@ -1417,6 +1564,12 @@ function openRejectModal(taskId, taskTitle) {
     document.getElementById('rejectTaskId').value = taskId;
     document.getElementById('rejectTaskTitle').textContent = taskTitle;
     new bootstrap.Modal(document.getElementById('rejectModal')).show();
+}
+
+function openReviseCompletedModal(taskId, taskTitle) {
+    document.getElementById('reviseTaskId').value = taskId;
+    document.getElementById('reviseTaskTitle').textContent = taskTitle;
+    new bootstrap.Modal(document.getElementById('reviseCompletedModal')).show();
 }
 
 function viewTaskDetails(taskId) {
@@ -1491,22 +1644,33 @@ function normalizeSulGanttRows(tasks) {
         const likelyDays = Math.max(minDays, parseInt(task.likely_days || '0', 10));
         const maxDays = Math.max(likelyDays, parseInt(task.max_days || '0', 10));
         const committedDays = Math.max(0, parseInt(task.sales_estimate_days || '0', 10));
-        const totalDays = isPhase ? dateDuration : Math.max(maxDays, committedDays, dateDuration, 1);
+        const committedChoice = task.sales_estimate_choice || '';
+        const totalDays = isPhase ? dateDuration : Math.max(committedDays || dateDuration || maxDays, 1);
+
+        let minSegment = isPhase ? 0 : Math.min(minDays, totalDays);
+        let likelySegment = isPhase ? 0 : Math.max(Math.min(likelyDays, totalDays) - Math.min(minDays, totalDays), 0);
+        let maxSegment = isPhase ? 0 : Math.max(totalDays - Math.max(Math.min(likelyDays, totalDays), Math.min(minDays, totalDays)), 0);
+
+        if (!isPhase && committedChoice && committedDays > 0) {
+            minSegment = committedChoice === 'min' ? totalDays : 0;
+            likelySegment = committedChoice === 'likely' ? totalDays : 0;
+            maxSegment = committedChoice === 'max' ? totalDays : 0;
+        }
 
         return {
             name: task.name,
             startDate,
             isPhase,
             phaseDuration: isPhase ? totalDays : 0,
-            minSegment: isPhase ? 0 : Math.min(minDays, totalDays),
-            likelySegment: isPhase ? 0 : Math.max(Math.min(likelyDays, totalDays) - Math.min(minDays, totalDays), 0),
-            maxSegment: isPhase ? 0 : Math.max(totalDays - Math.max(Math.min(likelyDays, totalDays), Math.min(minDays, totalDays)), 0),
+            minSegment,
+            likelySegment,
+            maxSegment,
             tooltip: {
                 minDays,
                 likelyDays,
                 maxDays,
                 committedDays,
-                committedChoice: task.sales_estimate_choice || ''
+                committedChoice
             }
         };
     }).filter(Boolean);
