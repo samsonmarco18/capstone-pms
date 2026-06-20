@@ -973,11 +973,6 @@ include '../../includes/navbar.php';
                                 <i class="fas fa-clipboard-list"></i>
                                 <p>No recent tasks yet</p>
                             </div>
-                        <?php endwhile; ?>
-                        <?php else: ?>
-                        <div class="empty-state compact">
-                            <i class="fas fa-clipboard-list"></i>  No recent tasks yet.
-                        </div>
                         <?php endif; ?>
                     </div>
                 </div>
