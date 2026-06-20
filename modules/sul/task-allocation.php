@@ -1508,6 +1508,11 @@ include '../../includes/navbar.php';
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="developer-review-tab" data-bs-toggle="tab" data-bs-target="#developer-review-panel" type="button" role="tab" aria-controls="developer-review-panel" aria-selected="false">
+                        <i class="fas fa-code-pull-request"></i> SUL Code Review <span class="badge-count"><?php echo $codeReviewTasks->num_rows; ?></span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
                     <button class="nav-link" id="developer-completed-tab" data-bs-toggle="tab" data-bs-target="#developer-completed-panel" type="button" role="tab" aria-controls="developer-completed-panel" aria-selected="false">
                         <i class="fas fa-check-double"></i> Recently Completed <span class="badge-count"><?php echo $completedTasks->num_rows; ?></span>
                     </button>
@@ -1608,7 +1613,7 @@ include '../../includes/navbar.php';
             </div>
 
             <!-- Section 6: SUL Code Review -->
-            <div class="section-card">
+            <div class="tab-pane fade section-card allocation-column" id="developer-review-panel" role="tabpanel" aria-labelledby="developer-review-tab">
                 <div class="section-header">
                     <h5>
                         <i class="fas fa-code-pull-request"></i>
@@ -1669,8 +1674,6 @@ include '../../includes/navbar.php';
             </div>
 
             <!-- Section 7: Recently Completed -->
-            <div class="section-card">
-            <!-- Section 6: Recently Completed -->
             <div class="tab-pane fade section-card allocation-column" id="developer-completed-panel" role="tabpanel" aria-labelledby="developer-completed-tab">
                 <div class="section-header">
                     <h5>
