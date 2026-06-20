@@ -281,7 +281,7 @@ include __DIR__ . '/includes/navbar.php';
     gap: 1rem;
     padding: 1.45rem 1.55rem;
     border-radius: 18px;
-    background: linear-gradient(135deg, #1f6392 0%, #184f73 72%, #1d7a6f 100%);
+    background: linear-gradient(#184f73 72%);
     color: #fff;
     box-shadow: 0 20px 45px rgba(31, 99, 146, 0.2);
 }

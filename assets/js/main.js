@@ -9,8 +9,14 @@ function initSidebar() {
     const sidebar = $('#sidebar-wrapper');
     const content = $('#page-content-wrapper');
     const overlay = $('.sidebar-overlay');
+    const toggle = $('#menu-toggle');
     const desktopStateKey = 'erni.sidebar.collapsed';
     const mobileStateKey = 'erni.sidebar.mobile_open';
+
+    function updateToggleState() {
+        const isActive = window.innerWidth <= 992 ? sidebar.hasClass('active') : sidebar.hasClass('collapsed');
+        toggle.toggleClass('is-active', isActive);
+    }
 
     function applySidebarState() {
         if (window.innerWidth <= 992) {
@@ -19,6 +25,7 @@ function initSidebar() {
             content.removeClass('sidebar-collapsed');
             sidebar.toggleClass('active', isMobileOpen);
             overlay.toggleClass('active', isMobileOpen);
+            updateToggleState();
             return;
         }
 
@@ -27,6 +34,7 @@ function initSidebar() {
         overlay.removeClass('active');
         sidebar.toggleClass('collapsed', isCollapsed);
         content.toggleClass('sidebar-collapsed', isCollapsed);
+        updateToggleState();
     }
 
     applySidebarState();
@@ -39,6 +47,7 @@ function initSidebar() {
             sidebar.toggleClass('active', nextOpenState);
             overlay.toggleClass('active', nextOpenState);
             localStorage.setItem(mobileStateKey, String(nextOpenState));
+            updateToggleState();
             return;
         }
 
@@ -46,12 +55,14 @@ function initSidebar() {
         sidebar.toggleClass('collapsed', nextCollapsedState);
         content.toggleClass('sidebar-collapsed', nextCollapsedState);
         localStorage.setItem(desktopStateKey, String(nextCollapsedState));
+        updateToggleState();
     });
 
     overlay.on('click', function () {
         sidebar.removeClass('active');
         overlay.removeClass('active');
         localStorage.setItem(mobileStateKey, 'false');
+        updateToggleState();
     });
 
     $(window).on('resize', debounce(function () {
