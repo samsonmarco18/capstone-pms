@@ -917,7 +917,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                         </div>
                         <?php endif; ?>
 
-                        <?php if (in_array($user['role'], ['sul', 'architect'], true)): ?>
+                        <?php if (in_array($user['role'], ['admin', 'architect'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#mergeAction">Merge</button></h2>
                             <div id="mergeAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">

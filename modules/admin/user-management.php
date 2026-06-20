@@ -1,8 +1,10 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/workflow.php';
 requireRole('admin');
 
 $conn = getConnection();
+workflowEnsureSchema($conn);
 $user = getCurrentUser();
 
 // Handle user creation
@@ -370,6 +372,11 @@ include '../../includes/navbar.php';
     color: #d97706;
 }
 
+.badge-role.qa {
+    background: #cffafe;
+    color: #0e7490;
+}
+
 .badge-role.expert {
     background: #d1fae5;
     color: #059669;
@@ -680,6 +687,7 @@ include '../../includes/navbar.php';
                         <option value="sales" <?php echo $roleFilter == 'sales' ? 'selected' : ''; ?>>Sales</option>
                         <option value="architect" <?php echo $roleFilter == 'architect' ? 'selected' : ''; ?>>Architect</option>
                         <option value="sul" <?php echo $roleFilter == 'sul' ? 'selected' : ''; ?>>SUL</option>
+                        <option value="qa" <?php echo $roleFilter == 'qa' ? 'selected' : ''; ?>>QA</option>
                         <option value="expert" <?php echo $roleFilter == 'expert' ? 'selected' : ''; ?>>Expert/Senior</option>
                         <option value="developer" <?php echo $roleFilter == 'developer' ? 'selected' : ''; ?>>Developer</option>
                     </select>
@@ -810,6 +818,7 @@ include '../../includes/navbar.php';
                                 <option value="sales">Sales</option>
                                 <option value="architect">Architect</option>
                                 <option value="sul">Service Unit Leader</option>
+                                <option value="qa">QA</option>
                                 <option value="expert">Expert/Senior</option>
                                 <option value="developer">Developer</option>
                             </select>

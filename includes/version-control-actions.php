@@ -13,8 +13,8 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
         return ['project_id' => $projectId, 'repository_id' => $repositoryId];
     }
 
-    if ($user['role'] === 'sul' && $action !== 'merge_branches') {
-        throw new RuntimeException('SUL is only allowed to merge branches in version control.');
+    if ($user['role'] === 'sul') {
+        throw new RuntimeException('SUL can review Pull Requests only. Final merge is restricted to Architect.');
     }
 
     if ($user['role'] === 'architect' && !in_array($action, ['merge_branches', 'create_repository', 'fork_repository', 'create_branch', 'delete_branch', 'protect_branch', 'log_sync', 'create_working_folder', 'delete_repository'], true)) {

@@ -12,6 +12,7 @@ if (isLoggedIn()) {
         case 'sales': header('Location: modules/sales/dashboard.php'); break;
         case 'architect': header('Location: modules/architect/dashboard.php'); break;
         case 'sul': header('Location: modules/sul/dashboard.php'); break;
+        case 'qa': header('Location: modules/qa/dashboard.php'); break;
         case 'expert': header('Location: modules/expert/dashboard.php'); break;
         case 'developer': header('Location: modules/developer/dashboard.php'); break;
         default: header('Location: index.php');
@@ -100,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     case 'sales': header('Location: modules/sales/dashboard.php'); break;
                     case 'architect': header('Location: modules/architect/dashboard.php'); break;
                     case 'sul': header('Location: modules/sul/dashboard.php'); break;
+                    case 'qa': header('Location: modules/qa/dashboard.php'); break;
                     case 'expert': header('Location: modules/expert/dashboard.php'); break;
                     case 'developer': header('Location: modules/developer/dashboard.php'); break;
                     default: header('Location: index.php');

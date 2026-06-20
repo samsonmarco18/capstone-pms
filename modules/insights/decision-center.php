@@ -3,7 +3,7 @@ require_once '../../includes/auth.php';
 require_once '../../includes/decision-insights.php';
 require_once '../../includes/project-delay-insights.php';
 
-requireRole(['admin', 'sales', 'architect', 'sul', 'expert', 'developer']);
+requireRole(['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer']);
 
 $conn = getConnection();
 $user = getCurrentUser();

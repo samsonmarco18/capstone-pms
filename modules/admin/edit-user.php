@@ -1,8 +1,10 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/workflow.php';
 requireRole('admin');
 
 $conn = getConnection();
+workflowEnsureSchema($conn);
 $admin = getCurrentUser();
 $userId = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
 $departments = getDepartmentOptions();
@@ -26,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId > 0) {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'A valid email address is required.';
     }
-    if (!in_array($role, ['admin', 'sales', 'architect', 'sul', 'expert', 'developer'], true)) {
+    if (!in_array($role, ['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'], true)) {
         $errors[] = 'Please select a valid role.';
     }
     if (!in_array($status, ['active', 'inactive', 'suspended'], true)) {
@@ -137,7 +139,7 @@ include '../../includes/navbar.php';
                             <label class="form-label">Role</label>
                             <select name="role" class="form-select">
                                 <?php $selectedRole = (string) ($_POST['role'] ?? $selectedUser['role']); ?>
-                                <?php foreach (['admin', 'sales', 'architect', 'sul', 'expert', 'developer'] as $role): ?>
+                                <?php foreach (['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'] as $role): ?>
                                     <option value="<?php echo $role; ?>" <?php echo $selectedRole === $role ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars(getRoleDisplayName($role)); ?>
                                     </option>

@@ -1,9 +1,11 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/workflow.php';
 requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+workflowEnsureSchema($conn);
 
 $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
 $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
@@ -246,6 +248,24 @@ $inProgressTasks = $conn->query("
     ORDER BY t.deadline ASC
 ");
 
+// Get developer Pull Requests waiting for SUL code review
+$codeReviewTasks = $conn->query("
+    SELECT t.*, u.full_name as developer_name, p.name as project_name,
+           latest_git.branch_name, latest_git.commit_hash, latest_git.pull_request_url, latest_git.repository_url, latest_git.notes AS git_notes
+    FROM tasks t
+    JOIN users u ON t.assigned_to = u.id
+    JOIN projects p ON t.project_id = p.id
+    LEFT JOIN task_git_updates latest_git ON latest_git.id = (
+        SELECT tgu.id
+        FROM task_git_updates tgu
+        WHERE tgu.task_id = t.id
+        ORDER BY tgu.created_at DESC, tgu.id DESC
+        LIMIT 1
+    )
+    WHERE t.status = 'for_review'
+    ORDER BY t.pr_submitted_at ASC, t.updated_at ASC
+");
+
 // Get completed tasks
 $completedTasks = $conn->query("
     SELECT t.*, u.full_name as assigned_to_name, p.name as project_name
@@ -475,6 +495,76 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
 
+    // Review developer Pull Request and move to QA or back to Developer
+    if (isset($_POST['sul_approve_pr']) || isset($_POST['sul_request_revision'])) {
+        $taskId = (int) ($_POST['task_id'] ?? 0);
+        $reviewComment = trim((string) ($_POST['review_comment'] ?? ''));
+        $isApproval = isset($_POST['sul_approve_pr']);
+
+        if ($taskId <= 0 || (!$isApproval && $reviewComment === '')) {
+            $_SESSION['error'] = $isApproval ? "Invalid task selected." : "Please provide revision comments.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $taskStmt = $conn->prepare("
+            SELECT t.id, t.title, t.status, t.assigned_to, p.name AS project_name
+            FROM tasks t
+            JOIN projects p ON p.id = t.project_id
+            WHERE t.id = ? AND t.status = 'for_review'
+            LIMIT 1
+        ");
+        $taskStmt->bind_param("i", $taskId);
+        $taskStmt->execute();
+        $reviewTask = $taskStmt->get_result()->fetch_assoc();
+        $taskStmt->close();
+
+        if (!$reviewTask) {
+            $_SESSION['error'] = "Only tasks marked For Review can be reviewed by SUL.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        if ($isApproval) {
+            $stmt = $conn->prepare("UPDATE tasks SET status = 'qa_testing', sul_reviewed_by = ?, sul_reviewed_at = NOW() WHERE id = ?");
+            $stmt->bind_param("ii", $user['id'], $taskId);
+            if ($stmt->execute()) {
+                workflowLogStatusChange((int) $user['id'], $taskId, 'for_review', 'qa_testing', 'sul_approve_pull_request', $reviewComment);
+                workflowAddTaskComment($conn, $taskId, (int) $user['id'], $reviewComment !== '' ? "SUL approved PR: {$reviewComment}" : 'SUL approved PR for QA testing.');
+                workflowNotifyRoles(
+                    $conn,
+                    ['qa'],
+                    'PR Approved for QA: ' . $reviewTask['title'],
+                    'SUL approved the Pull Request. QA testing can begin.',
+                    BASE_URL . 'modules/qa/dashboard.php?task_id=' . $taskId,
+                    $taskId
+                );
+                $_SESSION['success'] = "Pull Request approved and moved to QA Testing.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+            $_SESSION['error'] = "Failed to approve Pull Request.";
+        } else {
+            $stmt = $conn->prepare("UPDATE tasks SET status = 'sul_revision', completed_at = NULL, sul_reviewed_by = ?, sul_reviewed_at = NOW() WHERE id = ?");
+            $stmt->bind_param("ii", $user['id'], $taskId);
+            if ($stmt->execute()) {
+                workflowAddTaskComment($conn, $taskId, (int) $user['id'], 'SUL requested revision: ' . $reviewComment);
+                workflowLogStatusChange((int) $user['id'], $taskId, 'for_review', 'sul_revision', 'sul_request_pull_request_revision', $reviewComment);
+                workflowNotifyUser(
+                    (int) $reviewTask['assigned_to'],
+                    'PR Revision Requested: ' . $reviewTask['title'],
+                    'SUL requested revisions before QA. Comment: ' . $reviewComment,
+                    BASE_URL . 'modules/developer/task.php?id=' . $taskId,
+                    $taskId
+                );
+                $_SESSION['success'] = "Pull Request returned to Developer for revision.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+            $_SESSION['error'] = "Failed to request revision.";
+        }
+    }
+
     // Send a completed task back to the developer for revision
     if (isset($_POST['revise_completed_task'])) {
         $taskId = (int) ($_POST['task_id'] ?? 0);
@@ -487,10 +577,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $taskStmt = $conn->prepare("
-            SELECT id, title, assigned_to
+            SELECT id, title, assigned_to, architect_reviewed_at
             FROM tasks
             WHERE id = ?
               AND status = 'completed'
+              AND architect_reviewed_at IS NULL
               AND assigned_to IS NOT NULL
               AND assigned_to != 0
             LIMIT 1
@@ -501,7 +592,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $taskStmt->close();
 
         if (!$task) {
-            $_SESSION['error'] = "Only completed assigned tasks can be sent for revision.";
+            $_SESSION['error'] = "Only pre-merge completed tasks can be sent for revision by SUL.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -1003,7 +1094,7 @@ include '../../includes/navbar.php';
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="developer-tab" data-bs-toggle="tab" data-bs-target="#developer-panel" type="button" role="tab">
                 <i class="fas fa-code me-2"></i>Developer
-                <span class="badge bg-primary ms-2"><?php echo $readyForDevTasks->num_rows + $inProgressTasks->num_rows; ?></span>
+                <span class="badge bg-primary ms-2"><?php echo $readyForDevTasks->num_rows + $inProgressTasks->num_rows + $codeReviewTasks->num_rows; ?></span>
             </button>
         </li>
     </ul>
@@ -1340,7 +1431,68 @@ include '../../includes/navbar.php';
                 </div>
             </div>
 
-            <!-- Section 6: Recently Completed -->
+            <!-- Section 6: SUL Code Review -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-code-pull-request"></i>
+                        SUL Code Review
+                        <span class="badge-count"><?php echo $codeReviewTasks->num_rows; ?> PRs</span>
+                    </h5>
+                </div>
+                <div class="p-3">
+                <?php if($codeReviewTasks->num_rows > 0): ?>
+                    <?php while($task = $codeReviewTasks->fetch_assoc()): ?>
+                    <div class="task-card">
+                        <form method="POST">
+                            <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="task-priority priority-<?php echo htmlspecialchars((string) $task['priority']); ?>"><?php echo ucfirst((string) $task['priority']); ?></span>
+                                        <span class="task-title"><?php echo htmlspecialchars((string) $task['title']); ?></span>
+                                    </div>
+                                    <div class="task-meta">
+                                        <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars((string) $task['project_name']); ?></span>
+                                        <span><i class="fas fa-user"></i> Developer: <?php echo htmlspecialchars((string) $task['developer_name']); ?></span>
+                                        <?php if (!empty($task['branch_name'])): ?><span><i class="fas fa-code-branch"></i> <?php echo htmlspecialchars((string) $task['branch_name']); ?></span><?php endif; ?>
+                                        <?php if (!empty($task['commit_hash'])): ?><span><i class="fas fa-hashtag"></i> <?php echo htmlspecialchars(substr((string) $task['commit_hash'], 0, 7)); ?></span><?php endif; ?>
+                                    </div>
+                                    <div class="d-flex gap-2 flex-wrap mt-2">
+                                        <?php if (!empty($task['pull_request_url'])): ?>
+                                            <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['pull_request_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-code-pull-request"></i> Pull Request</a>
+                                        <?php endif; ?>
+                                        <?php if (!empty($task['repository_url'])): ?>
+                                            <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['repository_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-link"></i> Repository</a>
+                                        <?php endif; ?>
+                                        <button type="button" class="btn-outline-modern" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                    </div>
+                                    <textarea name="review_comment" class="form-control-custom mt-3" rows="2" placeholder="Approval note or revision comments"></textarea>
+                                </div>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <button type="submit" name="sul_approve_pr" class="btn-success-modern">
+                                        <i class="fas fa-check"></i> Approve
+                                    </button>
+                                    <button type="submit" name="sul_request_revision" class="btn-warning-modern">
+                                        <i class="fas fa-undo"></i> Request Revision
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <?php endwhile; ?>
+                <?php else: ?>
+                    <div class="empty-state">
+                        <i class="fas fa-code-branch"></i>
+                        <p>No Pull Requests waiting for SUL review</p>
+                    </div>
+                <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- Section 7: Recently Completed -->
             <div class="section-card">
                 <div class="section-header">
                     <h5>
@@ -1368,9 +1520,11 @@ include '../../includes/navbar.php';
                                 <button class="btn-outline-modern" onclick="viewTaskDetails(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-eye"></i> View
                                 </button>
-                                <button class="btn-warning-modern" onclick="openReviseCompletedModal(<?php echo $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))">
-                                    <i class="fas fa-undo"></i> Revise
-                                </button>
+                                <?php if (empty($task['architect_reviewed_at'])): ?>
+                                    <button class="btn-warning-modern" onclick="openReviseCompletedModal(<?php echo $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))">
+                                        <i class="fas fa-undo"></i> Revise
+                                    </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>

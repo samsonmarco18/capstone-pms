@@ -13,7 +13,7 @@ CREATE TABLE users (
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     department VARCHAR(100),
-    role ENUM('admin', 'sales', 'architect', 'sul', 'expert', 'developer') NOT NULL,
+    role ENUM('admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer') NOT NULL,
     status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
     profile_pic VARCHAR(255),
     phone VARCHAR(20),
@@ -199,7 +199,7 @@ CREATE TABLE tasks (
     task_type ENUM('feature', 'bug_fix', 'enhancement', 'documentation') DEFAULT 'feature',
     assigned_to INT,
     assigned_by INT,
-    status ENUM('todo', 'in_progress', 'in_review', 'review', 'completed', 'overdue', 'blocked') DEFAULT 'todo',
+    status ENUM('todo', 'in_progress', 'in_review', 'review', 'for_review', 'sul_revision', 'qa_testing', 'qa_failed', 'qa_passed', 'architect_review', 'merged', 'ready_for_release', 'completed', 'overdue', 'blocked') DEFAULT 'todo',
     priority ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
     estimated_days_min INT,
     estimated_days_likely INT,
@@ -215,6 +215,15 @@ CREATE TABLE tasks (
     sales_approved_at DATETIME,
     sales_estimate_choice ENUM('min','likely','max') DEFAULT NULL,
     sales_estimate_days INT DEFAULT NULL,
+    pr_submitted_at DATETIME NULL,
+    sul_reviewed_by INT NULL,
+    sul_reviewed_at DATETIME NULL,
+    qa_reviewed_by INT NULL,
+    qa_reviewed_at DATETIME NULL,
+    architect_reviewed_by INT NULL,
+    architect_reviewed_at DATETIME NULL,
+    merged_at DATETIME NULL,
+    release_notified_at DATETIME NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -612,6 +621,28 @@ CREATE TABLE task_comments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- QA CHECKLIST ITEMS TABLE
+-- =====================================================
+CREATE TABLE qa_checklist_items (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    task_id INT NOT NULL,
+    feature_name VARCHAR(150) NOT NULL,
+    item_text VARCHAR(255) NOT NULL,
+    status ENUM('pending', 'passed', 'failed', 'needs_revision') DEFAULT 'pending',
+    notes TEXT,
+    developer_id INT NULL,
+    qa_user_id INT NULL,
+    reviewed_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (developer_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (qa_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_task_id (task_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- TASK GIT UPDATES TABLE
 -- =====================================================
 CREATE TABLE task_git_updates (
@@ -797,6 +828,7 @@ INSERT INTO users (username, email, password, full_name, department, role, statu
 ('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', 'Sales', 'sales', 'active', 'Sales Manager'),
 ('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', 'Architecture', 'architect', 'active', 'System Architect'),
 ('sul_user', 'sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Robert SUL', 'Service Unit', 'sul', 'active', 'Service Unit Leader'),
+('qa_user', 'qa@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Quinn QA Engineer', 'Quality Assurance', 'qa', 'active', 'QA Engineer'),
 ('expert', 'expert@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Dr. Expert Senior', 'Development', 'expert', 'active', 'Senior Expert'),
 ('developer', 'developer@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'David Developer', 'Development', 'developer', 'active', 'Software Developer');
 

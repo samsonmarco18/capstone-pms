@@ -953,23 +953,27 @@ include '../../includes/navbar.php';
                                     <?php if($daysLeft !== null && $daysLeft <= 2 && $task['status'] != 'completed'): ?>
                                         <small class="text-danger fw-semibold"><?php echo $daysLeft; ?> days left</small>
                                     <?php endif; ?>
-                                </td>
-                                <td>
-                                    <div class="d-flex gap-2">
-                                        <button class="btn-primary-modern btn-sm-modern" onclick="viewTask(<?php echo $task['id']; ?>)">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        <?php if(!$task['assigned_to']): ?>
-                                        <button class="btn-primary-modern btn-sm-modern" onclick="assignTaskTo(<?php echo $task['id']; ?>)">
-                                            <i class="fas fa-user-plus"></i>
-                                        </button>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                            </tr>
+                                </div>
+                            </div>
+                            <div class="recent-task-actions">
+                                <button class="btn-primary-modern btn-sm-modern" onclick="viewTask(<?php echo $task['id']; ?>)">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <?php if(!$task['assigned_to']): ?>
+                                <button class="btn-primary-modern btn-sm-modern" onclick="assignTaskTo(<?php echo $task['id']; ?>)">
+                                    <i class="fas fa-user-plus"></i>
+                                </button>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                             <?php endwhile; ?>
-                        </tbody>
-                    </table>
+                        <?php else: ?>
+                            <div class="empty-state-mini">
+                                <i class="fas fa-clipboard-list"></i>
+                                <p>No recent tasks yet</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
         </div>
