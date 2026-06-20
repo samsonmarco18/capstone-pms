@@ -23,6 +23,7 @@ $menuItems = [
         ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Clients', 'url' => '/modules/sales/clients.php', 'icon' => 'building'],
         ['label' => 'Estimation Approval', 'url' => '/modules/sales/estimation-approval.php', 'icon' => 'clipboard-check'],
+        ['label' => 'Release Status', 'url' => '/modules/sales/release-status.php', 'icon' => 'bullhorn'],
         ['label' => 'Report', 'url' => '/modules/sales/report.php', 'icon' => 'file-invoice-dollar'],
         ['label' => 'Receipt', 'url' => '/modules/sales/receipt.php', 'icon' => 'receipt'],
     ],
@@ -43,6 +44,7 @@ $menuItems = [
                 '/modules/architect/summary.php',
             ],
         ],
+        ['label' => 'Final Approval', 'url' => '/modules/architect/final-approval.php', 'icon' => 'code-merge'],
         ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
     ],
     'sul' => [
@@ -53,6 +55,11 @@ $menuItems = [
         ['label' => 'Resource Management', 'url' => '/modules/sul/resource-management.php', 'icon' => 'users-cog'],
         ['label' => 'Performance / Report', 'url' => '/modules/sul/performance-report.php', 'icon' => 'chart-bar'],
         ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
+    ],
+    'qa' => [
+        ['label' => 'Testing Dashboard', 'url' => '/modules/qa/dashboard.php', 'icon' => 'clipboard-check'],
+        ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
+        ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
     ],
     'expert' => [
         ['label' => 'Dashboard', 'url' => '/modules/expert/dashboard.php', 'icon' => 'clipboard-list'],

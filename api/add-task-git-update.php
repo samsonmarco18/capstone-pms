@@ -3,6 +3,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/workflow.php';
 
 requireLogin();
 
@@ -39,9 +40,22 @@ if (!in_array($gitAction, $allowedActions, true) || !in_array($status, $allowedS
     exit();
 }
 
-$conn = getConnection();
+if ($user['role'] === 'developer' && (in_array($gitAction, ['merged', 'deployed'], true) || $status === 'merged')) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Only Architect can perform final merge/release workflow actions']);
+    exit();
+}
 
-$taskStmt = $conn->prepare('SELECT id, title, assigned_to FROM tasks WHERE id = ? LIMIT 1');
+$conn = getConnection();
+workflowEnsureSchema($conn);
+
+$taskStmt = $conn->prepare(
+    'SELECT t.id, t.title, t.status, t.assigned_to, t.assigned_by, p.name AS project_name, p.sul_id
+     FROM tasks t
+     LEFT JOIN projects p ON p.id = t.project_id
+     WHERE t.id = ?
+     LIMIT 1'
+);
 $taskStmt->bind_param('i', $taskId);
 $taskStmt->execute();
 $task = $taskStmt->get_result()->fetch_assoc();
@@ -64,6 +78,18 @@ $commitHash = $commitHash !== '' ? substr($commitHash, 0, 64) : null;
 $commitMessage = $commitMessage !== '' ? $commitMessage : null;
 $pullRequestUrl = $pullRequestUrl !== '' ? $pullRequestUrl : null;
 $notes = $notes !== '' ? $notes : null;
+
+$isPullRequestSubmission = $gitAction === 'pull_request_opened' || $pullRequestUrl !== null || $status === 'in_review';
+if ($isPullRequestSubmission) {
+    $currentStatus = (string) ($task['status'] ?? '');
+    $developerOwnedStatuses = ['todo', 'in_progress', 'sul_revision', 'qa_failed', 'blocked'];
+
+    if (!in_array($currentStatus, $developerOwnedStatuses, true)) {
+        http_response_code(409);
+        echo json_encode(['error' => 'This task is already in review/testing and cannot be resubmitted by Developer.']);
+        exit();
+    }
+}
 
 $stmt = $conn->prepare(
     'INSERT INTO task_git_updates (
@@ -93,6 +119,53 @@ if (!$stmt->execute()) {
 
 $updateId = $stmt->insert_id;
 $stmt->close();
+
+if ($isPullRequestSubmission) {
+    $currentStatus = (string) ($task['status'] ?? '');
+
+    $updateStmt = $conn->prepare("UPDATE tasks SET status = 'for_review', completed_at = NULL, pr_submitted_at = NOW() WHERE id = ?");
+    if ($updateStmt !== false) {
+        $updateStmt->bind_param('i', $taskId);
+        $updateStmt->execute();
+        $updateStmt->close();
+    }
+
+    workflowLogStatusChange((int) $user['id'], $taskId, $currentStatus, 'for_review', 'developer_submit_pull_request', $notes);
+    workflowAddTaskComment(
+        $conn,
+        $taskId,
+        (int) $user['id'],
+        'Pull Request submitted for SUL review' . ($pullRequestUrl ? ': ' . $pullRequestUrl : '.')
+    );
+
+    $recipientIds = [];
+    if (!empty($task['sul_id'])) {
+        $recipientIds[] = (int) $task['sul_id'];
+    }
+    if (!empty($task['assigned_by'])) {
+        $recipientIds[] = (int) $task['assigned_by'];
+    }
+
+    foreach (array_unique(array_filter($recipientIds)) as $recipientId) {
+        workflowNotifyUser(
+            $recipientId,
+            'Pull Request For Review: ' . ($task['title'] ?? 'Developer task'),
+            'Developer ' . ($user['full_name'] ?? 'Developer') . ' submitted a Pull Request'
+                . (!empty($task['project_name']) ? ' for ' . $task['project_name'] : '') . '.',
+            BASE_URL . 'modules/sul/task-allocation.php?task_id=' . $taskId,
+            $taskId
+        );
+    }
+
+    workflowNotifyRoles(
+        $conn,
+        ['sul'],
+        'Pull Request For Review: ' . ($task['title'] ?? 'Developer task'),
+        'A developer submitted a Pull Request and it is waiting for SUL approval.',
+        BASE_URL . 'modules/sul/task-allocation.php?task_id=' . $taskId,
+        $taskId
+    );
+}
 
 logActivity(
     (int) $user['id'],

@@ -61,6 +61,13 @@ $summaryReadyForSubmit = $featureCount > 0 && $techRecommendationCount > 0 && $a
 
 // Handle submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Check if confirmation checkbox is checked
+    if (empty($_POST['confirmCheck'])) {
+        $_SESSION['error'] = 'Please confirm that all information is accurate and complete before submitting.';
+        header('Location: summary.php?id=' . $projectId);
+        exit();
+    }
+
     if ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || !$hasRequiredDocuments) {
         $_SESSION['error'] = 'Please complete every architect step and upload the Architecture Plan plus Workflow Diagram before submitting to SUL.';
         header('Location: summary.php?id=' . $projectId);
@@ -596,8 +603,8 @@ a.progress-step:hover {
                     </div>
                     <?php endif; ?>
                     <div class="alert-info-modern"><i class="fas fa-info-circle me-2"></i>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</div>
-                    <form method="POST">
-                        <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="confirmCheck" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
+                    <form method="POST" id="summaryForm">
+                        <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="confirmCheck" name="confirmCheck" value="1" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
                         <button type="submit" class="btn-submit" id="submitBtn" disabled><i class="fas fa-paper-plane"></i> Submit to SUL</button>
                     </form>
                 </div>
@@ -607,21 +614,30 @@ a.progress-step:hover {
 </div>
 
 <script>
-const summaryReadyForSubmit = <?php echo $summaryReadyForSubmit ? 'true' : 'false'; ?>;
-
 document.addEventListener('DOMContentLoaded', () => {
     const confirmCheck = document.getElementById('confirmCheck');
     const submitBtn = document.getElementById('submitBtn');
+    const summaryForm = document.getElementById('summaryForm');
 
-    if (!confirmCheck || !submitBtn) {
+    if (!confirmCheck || !submitBtn || !summaryForm) {
         return;
     }
 
     function syncSubmitButton() {
-        submitBtn.disabled = !summaryReadyForSubmit || !confirmCheck.checked;
+        submitBtn.disabled = !confirmCheck.checked;
+    }
+
+    function handleFormSubmit(e) {
+        // Only prevent submission if checkbox is not checked
+        if (!confirmCheck.checked) {
+            e.preventDefault();
+            alert('Please check the confirmation box before submitting.');
+            return false;
+        }
     }
 
     confirmCheck.addEventListener('change', syncSubmitButton);
+    summaryForm.addEventListener('submit', handleFormSubmit);
     syncSubmitButton();
 });
 </script>

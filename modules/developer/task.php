@@ -1,9 +1,11 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/workflow.php';
 requireRole('developer');
 
 $conn = getConnection();
 $user = getCurrentUser();
+workflowEnsureSchema($conn);
 
 $taskBaseQuery = "
     SELECT t.*,
@@ -29,8 +31,8 @@ $hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phase
 
 // Get tasks assigned to this developer
 $todoTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'todo' ORDER BY t.deadline ASC");
-$inProgressTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'in_progress' ORDER BY t.deadline ASC");
-$reviewTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'review' ORDER BY t.deadline ASC");
+$inProgressTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status IN ('in_progress', 'sul_revision', 'qa_failed') ORDER BY t.deadline ASC");
+$reviewTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release') ORDER BY t.deadline ASC");
 $completedTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'completed' ORDER BY t.completed_at DESC LIMIT 10");
 
 // Get projects assigned to this developer (for Gantt modal) - ONLY projects with assigned tasks
@@ -90,7 +92,7 @@ if ($developerProjects && $developerProjects->num_rows > 0) {
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $taskId = (int) ($_POST['task_id'] ?? 0);
     $newStatus = (string) ($_POST['new_status'] ?? '');
-    $allowedStatuses = ['todo', 'in_progress', 'review', 'completed'];
+    $allowedStatuses = ['todo', 'in_progress'];
 
     if ($taskId <= 0 || !in_array($newStatus, $allowedStatuses, true)) {
         $_SESSION['error'] = "Invalid task status update.";
@@ -116,45 +118,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         header('Location: task.php');
         exit();
     }
-    
-    $completedAt = $newStatus === 'completed' ? date('Y-m-d H:i:s') : null;
-    $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = ? WHERE id = ?");
-    $stmt->bind_param("ssi", $newStatus, $completedAt, $taskId);
-    $stmt->execute();
 
-    if ($newStatus === 'completed' && ($task['status'] ?? '') !== 'completed') {
-        $recipientIds = [];
-        if (!empty($task['sul_id'])) {
-            $recipientIds[] = (int) $task['sul_id'];
-        }
-        if (!empty($task['assigned_by'])) {
-            $recipientIds[] = (int) $task['assigned_by'];
-        }
-
-        if (empty(array_filter($recipientIds))) {
-            $sulUsers = $conn->query("SELECT id FROM users WHERE role = 'sul' AND status = 'active'");
-            if ($sulUsers) {
-                while ($sul = $sulUsers->fetch_assoc()) {
-                    $recipientIds[] = (int) $sul['id'];
-                }
-            }
-        }
-
-        foreach (array_unique(array_filter($recipientIds)) as $recipientId) {
-            createNotification(
-                $recipientId,
-                'Task Completed: ' . ($task['title'] ?? 'Developer task'),
-                'Developer ' . ($user['full_name'] ?? 'Developer') . ' completed a task'
-                    . (!empty($task['project_name']) ? ' for ' . $task['project_name'] : '') . '.',
-                'task',
-                'tasks',
-                $taskId,
-                BASE_URL . 'modules/sul/task-allocation.php?task_id=' . $taskId
-            );
-        }
+    if (!in_array((string) ($task['status'] ?? ''), ['todo', 'in_progress', 'sul_revision', 'qa_failed', 'blocked'], true)) {
+        $_SESSION['error'] = "This task is already in the controlled review workflow and cannot be moved by Developer.";
+        header('Location: task.php');
+        exit();
     }
     
-    logActivity($user['id'], 'update_task_status', 'tasks', $taskId, null, ['status' => $newStatus]);
+    $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = NULL WHERE id = ?");
+    $stmt->bind_param("si", $newStatus, $taskId);
+    $stmt->execute();
+    
+    workflowLogStatusChange((int) $user['id'], $taskId, (string) ($task['status'] ?? ''), $newStatus, 'developer_update_task_status');
     $_SESSION['success'] = "Task status updated";
     
     header('Location: task.php');
@@ -921,8 +896,8 @@ include '../../includes/navbar.php';
                         <div class="d-flex justify-content-between align-items-center">
                             <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
                             <div>
-                                <button class="btn-action me-1" onclick="completeTask(<?php echo $task['id']; ?>)">
-                                    <i class="fas fa-check"></i> Complete
+                                <button class="btn-action me-1" onclick="viewTask(<?php echo $task['id']; ?>)">
+                                    <i class="fas fa-code-pull-request"></i> Submit PR
                                 </button>
                                 <button class="btn-action me-1" onclick="reviewTask(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-undo"></i> Back
@@ -949,7 +924,7 @@ include '../../includes/navbar.php';
             <div class="kanban-column">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-check-circle text-warning me-2"></i>Review</span>
+                        <span><i class="fas fa-check-circle text-warning me-2"></i>Workflow Review</span>
                         <span class="badge bg-warning"><?php echo $reviewTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -1055,12 +1030,6 @@ include '../../includes/navbar.php';
 <script>
 function startTask(taskId) {
     updateTaskStatus(taskId, 'in_progress');
-}
-
-function completeTask(taskId) {
-    if(confirm('Mark this task as completed?')) {
-        updateTaskStatus(taskId, 'completed');
-    }
 }
 
 function reviewTask(taskId) {
@@ -1408,8 +1377,6 @@ function viewTask(taskId) {
                                     <option value="commit_pushed">Commit Pushed</option>
                                     <option value="branch_created">Branch Created</option>
                                     <option value="pull_request_opened">Pull Request Opened</option>
-                                    <option value="merged">Merged</option>
-                                    <option value="deployed">Deployed</option>
                                     <option value="note">General Note</option>
                                 </select>
                             </div>
@@ -1432,7 +1399,6 @@ function viewTask(taskId) {
                                 <select id="gitStatus" class="form-select form-select-sm">
                                     <option value="active">Active</option>
                                     <option value="in_review">In Review</option>
-                                    <option value="merged">Merged</option>
                                     <option value="closed">Closed</option>
                                 </select>
                             </div>
@@ -1669,13 +1635,16 @@ function handleDrop(e) {
     let newStatus = '';
     if(columnTitle === 'To Do') newStatus = 'todo';
     else if(columnTitle === 'In Progress') newStatus = 'in_progress';
-    else if(columnTitle === 'Review') newStatus = 'review';
-    else if(columnTitle === 'Completed') newStatus = 'completed';
+    else if(columnTitle === 'Workflow Review') {
+        alert('Submit a Pull Request from the task Git update form to move this task For Review.');
+        return;
+    }
+    else if(columnTitle === 'Completed') {
+        alert('Tasks are completed only after SUL review, QA testing, and Architect merge.');
+        return;
+    }
     
     if(newStatus) {
-        if (newStatus === 'completed' && !confirm('Are you sure you want to mark this task as completed?')) {
-            return;
-        }
         updateTaskStatus(taskId, newStatus);
     }
 }

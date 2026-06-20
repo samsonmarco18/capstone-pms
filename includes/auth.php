@@ -352,6 +352,7 @@ function getRoleDisplayName(string $role): string
         'sales' => 'Sales',
         'architect' => 'Architect',
         'sul' => 'Service Unit Leader',
+        'qa' => 'QA',
         'expert' => 'Senior / Expert',
         'developer' => 'Developer',
     ];
@@ -376,6 +377,7 @@ function isAdmin(): bool { return hasRole('admin'); }
 function isSales(): bool { return hasRole('sales'); }
 function isArchitect(): bool { return hasRole('architect'); }
 function isSUL(): bool { return hasRole('sul'); }
+function isQA(): bool { return hasRole('qa'); }
 function isExpert(): bool { return hasRole('expert'); }
 function isDeveloper(): bool { return hasRole('developer'); }
 ?>

@@ -955,6 +955,7 @@ include '../../includes/navbar.php';
                                     <?php endif; ?>
                                 </div>
                             </div>
+                            <div class="recent-task-actions">
                             <div class="d-flex gap-2">
                                 <button class="btn-primary-modern btn-sm-modern" onclick="viewTask(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-eye"></i>
@@ -966,6 +967,12 @@ include '../../includes/navbar.php';
                                 <?php endif; ?>
                             </div>
                         </div>
+                            <?php endwhile; ?>
+                        <?php else: ?>
+                            <div class="empty-state-mini">
+                                <i class="fas fa-clipboard-list"></i>
+                                <p>No recent tasks yet</p>
+                            </div>
                         <?php endwhile; ?>
                         <?php else: ?>
                         <div class="empty-state compact">
