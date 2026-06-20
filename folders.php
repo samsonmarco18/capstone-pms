@@ -670,7 +670,7 @@ $conn = getConnection();
             </div>
 
             <!-- Files and Folders Card -->
-            <div class="main-card">
+            <div class="main-card" id="folderBrowserCard">
                 <div class="card-header">
                     <h6 id="currentFolderTitle">
                         <i class="fas fa-folder-open me-2"></i>Shared Projects
@@ -783,6 +783,14 @@ function hideProjectPanel() {
     );
 }
 
+function showFolderBrowser() {
+    $('#folderBrowserCard').removeClass('d-none');
+}
+
+function hideFolderBrowser() {
+    $('#folderBrowserCard').addClass('d-none');
+}
+
 function showProjectPanel(projectContext, folderId, projectId) {
     const renderPanel = function(context) {
         if (!context) {
@@ -829,6 +837,7 @@ function loadSharedFolders() {
         virtual: true
     }];
     hideProjectPanel();
+    showFolderBrowser();
     $('#currentFolderTitle').html('<i class="fas fa-folder-open me-2"></i>Shared Projects');
 
     $.ajax({
@@ -966,7 +975,6 @@ function loadFolderContents(folderId) {
         dataType: 'json',
         success: function(data) {
             hideLoading();
-            renderProjectEntries(data.folders || [], data.files || []);
             const folderBreadcrumb = Array.isArray(data.breadcrumb)
                 ? data.breadcrumb.filter(folder => folder.folder_type !== 'client')
                 : [];
@@ -981,9 +989,21 @@ function loadFolderContents(folderId) {
             $('#currentFolderTitle').html(`<i class="fas fa-folder-open me-2"></i>${folder ? escapeHtml(folder.name) : 'Files'}`);
 
             const resolvedProjectId = Number(data.project_id || folder?.project_id || 0);
+            const childFolders = resolvedProjectId > 0
+                ? (data.folders || []).filter(child => child.folder_type !== 'project')
+                : (data.folders || []);
+            const isSharedProjectRoot = resolvedProjectId > 0 && folder?.folder_type === 'project';
+
+            if (isSharedProjectRoot) {
+                hideFolderBrowser();
+            } else {
+                showFolderBrowser();
+                renderProjectEntries(childFolders, data.files || []);
+            }
+
             if (resolvedProjectId > 0 && folder) {
-                folderStructure[folder.id] = data.folders || [];
-                renderScopedProjectTree(folderBreadcrumb, data.folders || []);
+                folderStructure[folder.id] = childFolders;
+                renderScopedProjectTree(folderBreadcrumb, childFolders);
             } else {
                 renderFullSharedFolderTree();
             }
