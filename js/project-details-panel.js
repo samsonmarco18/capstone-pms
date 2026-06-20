@@ -302,8 +302,9 @@ function renderSharedFolderFilesSection(project) {
     `;
 }
 
-function renderFullProjectPanel(project) {
+function renderFullProjectPanel(project, options = {}) {
     const tasks = project.task_counts || {};
+    const showSharedFolderFiles = options.showSharedFolderFiles !== false;
 
     return `
         <div class="project-details-panel">
@@ -346,7 +347,7 @@ function renderFullProjectPanel(project) {
             ${renderArchitectSection(project)}
             ${renderSulSection(project)}
             ${renderExpertSection(project)}
-            ${renderSharedFolderFilesSection(project)}
+            ${showSharedFolderFiles ? renderSharedFolderFilesSection(project) : ''}
 
             <div class="project-context-section">
                 <h6><i class="fas fa-tasks"></i> Project Progress</h6>
@@ -362,11 +363,11 @@ function renderFullProjectPanel(project) {
     `;
 }
 
-function renderProjectDetailsPanel(project) {
+function renderProjectDetailsPanel(project, options = {}) {
     if (!project) {
         $('#projectDetailsPanel').html('');
         return;
     }
 
-    $('#projectDetailsPanel').html(renderFullProjectPanel(project));
+    $('#projectDetailsPanel').html(renderFullProjectPanel(project, options));
 }

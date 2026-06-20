@@ -965,17 +965,6 @@ include '../../includes/navbar.php';
                         </div>
                         <div id="salesGantt_<?php echo (int) $pid; ?>"></div>
                     </div>
-                    <div class="d-flex gap-2">
-                        <button class="btn-action btn-view" onclick="openGanttModal(<?php echo (int) $task['project_id']; ?>)">
-                            <i class="fas fa-stream me-1"></i> View Gantt
-                        </button>
-                        <button class="btn-action btn-approve" id="approveBtn_<?php echo (int) $task['id']; ?>" onclick="approveEstimation(<?php echo (int) $task['id']; ?>)" disabled>
-                            <i class="fas fa-check me-1"></i> Approve
-                        </button>
-                        <button class="btn-action btn-reject" onclick="openRejectModal(<?php echo (int) $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
-                            <i class="fas fa-times me-1"></i> Reject
-                        </button>
-
                     <div class="project-feature-stack">
                         <?php foreach ($projectTasks as $task): ?>
                             <?php 
@@ -1078,7 +1067,7 @@ include '../../includes/navbar.php';
 
                                     <div class="approval-actions">
                                         <span class="approval-actions-label">Actions</span>
-                                        <button class="btn-action btn-approve" onclick="approveEstimation(<?php echo (int) $task['id']; ?>)">
+                                        <button class="btn-action btn-approve" id="approveBtn_<?php echo (int) $task['id']; ?>" onclick="approveEstimation(<?php echo (int) $task['id']; ?>)" disabled>
                                             <i class="fas fa-check me-1"></i> Approve
                                         </button>
                                         <button class="btn-action btn-reject" onclick="openRejectModal(<?php echo (int) $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
