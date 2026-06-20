@@ -773,6 +773,105 @@ include '../../includes/navbar.php';
     margin-bottom: 1.5rem;
 }
 
+.expert-utility-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.4fr);
+    gap: 1rem;
+    align-items: stretch;
+}
+
+.expert-utility-grid .section-card,
+.allocation-board .section-card {
+    margin-bottom: 0;
+}
+
+.allocation-board {
+    min-width: 0;
+}
+
+.workflow-layout {
+    display: grid;
+    grid-template-columns: 292px minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+    margin-top: 1rem;
+}
+
+.workflow-tabs {
+    border: 1px solid var(--gray-200);
+    border-radius: 20px;
+    background: #ffffff;
+    gap: 0.5rem;
+    margin: 0;
+    padding: 0.75rem;
+    flex-direction: column;
+    box-shadow: var(--shadow-sm);
+    position: sticky;
+    top: 88px;
+}
+
+.workflow-tabs .nav-link {
+    width: 100%;
+    border: 0;
+    border-radius: 14px;
+    color: var(--gray-600);
+    background: transparent;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.85rem 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    text-align: left;
+}
+
+.workflow-tabs .nav-link:hover {
+    color: var(--theme-primary);
+    background: var(--gray-50);
+}
+
+.workflow-tabs .nav-link.active {
+    color: var(--theme-primary);
+    background: linear-gradient(135deg, #e9f7ff 0%, #f3fbff 100%);
+    box-shadow: inset 0 0 0 1px rgba(31, 99, 146, 0.12);
+}
+
+.workflow-tabs .nav-link i {
+    width: 18px;
+    color: var(--theme-primary);
+    text-align: center;
+}
+
+.workflow-tabs .badge-count {
+    margin-left: auto;
+}
+
+.allocation-column {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.allocation-column-body {
+    max-height: 68vh;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+
+.allocation-column-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.allocation-column-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.allocation-column-body::-webkit-scrollbar-thumb {
+    background: rgba(31, 99, 146, 0.18);
+    border-radius: 999px;
+}
+
 .section-header {
     padding: 1rem 1.5rem;
     background: var(--gray-50);
@@ -1050,6 +1149,27 @@ include '../../includes/navbar.php';
 }
 
 /* Responsive */
+@media (max-width: 1200px) {
+    .expert-utility-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 992px) {
+    .workflow-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .workflow-tabs {
+        position: static;
+    }
+
+    .allocation-column-body {
+        max-height: none;
+        overflow: visible;
+    }
+}
+
 @media (max-width: 768px) {
     .page-header-modern {
         padding: 1.5rem;
@@ -1088,7 +1208,7 @@ include '../../includes/navbar.php';
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="expert-tab" data-bs-toggle="tab" data-bs-target="#expert-panel" type="button" role="tab">
                 <i class="fas fa-user-tie me-2"></i>Expert
-                <span class="badge bg-warning ms-2"><?php echo $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows; ?></span>
+                <span class="badge bg-warning ms-2"><?php echo $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows + $projectsForAllocation->num_rows; ?></span>
             </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -1104,100 +1224,38 @@ include '../../includes/navbar.php';
         
         <!-- Expert Tab Panel -->
         <div class="tab-pane fade show active" id="expert-panel" role="tabpanel">
-            
-            <!-- Project Allocation to Expert -->
-            <div class="section-card">
-                <div class="section-header">
-                    <h5>
-                        <i class="fas fa-user-check"></i>
-                        Assign Project to Expert
-                    </h5>
-                </div>
-                <div class="p-3">
-                    <?php if($projectsForAllocation->num_rows > 0): ?>
-                        <form method="POST" class="row g-3 align-items-end">
-                            <div class="col-md-6">
-                                <label class="form-label">Project</label>
-                                <select name="project_id" class="form-select-custom" required>
-                                    <option value="">Select project</option>
-                                    <?php while($proj = $projectsForAllocation->fetch_assoc()): ?>
-                                        <option value="<?php echo $proj['id']; ?>">
-                                            <?php echo htmlspecialchars($proj['name']); ?> (<?php echo $proj['unassigned_count']; ?> features)
-                                        </option>
-                                    <?php endwhile; ?>
-                                </select>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Expert</label>
-                                <select name="expert_id" class="form-select-custom" required>
-                                    <option value="">Select expert</option>
-                                    <?php $experts->data_seek(0); while($expert = $experts->fetch_assoc()): ?>
-                                        <option value="<?php echo $expert['id']; ?>">
-                                            <?php echo htmlspecialchars($expert['full_name']); ?> (<?php echo $expert['assigned_tasks']; ?> tasks)
-                                        </option>
-                                    <?php endwhile; ?>
-                                </select>
-                            </div>
-                            <div class="col-md-2">
-                                <button type="submit" name="assign_project_to_expert" class="btn-primary-modern w-100">
-                                    <i class="fas fa-share"></i> Assign
-                                </button>
-                            </div>
-                        </form>
-                    <?php else: ?>
-                        <div class="empty-state">
-                            <i class="fas fa-check-circle"></i>
-                            <p>No projects awaiting expert allocation</p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-
-            <?php if ($projectId && $project): ?>
-            <div class="section-card">
-                <div class="section-header">
-                    <div>
-                        <h5>
-                            <i class="fas fa-stream"></i>
-                            Project Gantt Chart
-                        </h5>
-                        <small class="text-muted"><?php echo htmlspecialchars($project['name']); ?></small>
-                    </div>
-                    <?php if ($ganttProjectOptions && $ganttProjectOptions->num_rows > 0): ?>
-                    <form method="GET" class="d-flex align-items-center gap-2">
-                        <select name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for Gantt chart">
-                            <?php while($ganttProjectOption = $ganttProjectOptions->fetch_assoc()): ?>
-                                <option value="<?php echo (int) $ganttProjectOption['id']; ?>" <?php echo (int) $ganttProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($ganttProjectOption['name']); ?>
-                                    <?php if ((int) $ganttProjectOption['approved_task_count'] > 0): ?>
-                                        (<?php echo (int) $ganttProjectOption['approved_task_count']; ?> approved)
-                                    <?php endif; ?>
-                                </option>
-                            <?php endwhile; ?>
-                        </select>
-                    </form>
-                    <?php endif; ?>
-                </div>
-                <div class="p-3">
-                    <?php if (!$canShowGantt): ?>
-                        <div class="empty-state">
-                            <i class="fas fa-lock"></i>
-                            <p>Gantt chart is available after Sales approval.</p>
-                        </div>
-                    <?php elseif (!$ganttProjectData || empty($ganttProjectData['tasks'])): ?>
-                        <div class="empty-state">
-                            <i class="fas fa-stream"></i>
-                            <p>No Gantt data available for this project.</p>
-                        </div>
-                    <?php else: ?>
-                        <div id="sulGanttChart"></div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            <?php endif; ?>
+            <div class="workflow-layout">
+            <ul class="nav workflow-tabs" id="expertWorkflowTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="expert-unassigned-tab" data-bs-toggle="tab" data-bs-target="#expert-unassigned-panel" type="button" role="tab" aria-controls="expert-unassigned-panel" aria-selected="true">
+                        <i class="fas fa-user-plus"></i> Unassigned <span class="badge-count"><?php echo $unassignedTasks->num_rows; ?></span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="expert-pending-tab" data-bs-toggle="tab" data-bs-target="#expert-pending-panel" type="button" role="tab" aria-controls="expert-pending-panel" aria-selected="false">
+                        <i class="fas fa-calculator"></i> Pending Estimation <span class="badge-count"><?php echo $pendingEstimationTasks->num_rows; ?></span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="expert-review-tab" data-bs-toggle="tab" data-bs-target="#expert-review-panel" type="button" role="tab" aria-controls="expert-review-panel" aria-selected="false">
+                        <i class="fas fa-clipboard-list"></i> Ready for Review <span class="badge-count"><?php echo $reviewTasks->num_rows; ?></span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="expert-assign-tab" data-bs-toggle="tab" data-bs-target="#expert-assign-panel" type="button" role="tab" aria-controls="expert-assign-panel" aria-selected="false">
+                        <i class="fas fa-user-check"></i> Assign to Expert <span class="badge-count"><?php echo $projectsForAllocation->num_rows; ?></span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="expert-gantt-tab" data-bs-toggle="tab" data-bs-target="#expert-gantt-panel" type="button" role="tab" aria-controls="expert-gantt-panel" aria-selected="false">
+                        <i class="fas fa-stream"></i> Project Gantt
+                    </button>
+                </li>
+            </ul>
+            <div class="tab-content allocation-board" id="expertWorkflowContent">
 
             <!-- Section 1: Unassigned Tasks - Need Expert Assignment -->
-            <div class="section-card">
+            <div class="tab-pane fade show active section-card allocation-column" id="expert-unassigned-panel" role="tabpanel" aria-labelledby="expert-unassigned-tab">
                 <div class="section-header">
                     <h5>
                         <i class="fas fa-user-plus"></i>
@@ -1206,7 +1264,7 @@ include '../../includes/navbar.php';
                     </h5>
                     
                 </div>
-                <div class="p-3">
+                <div class="p-3 allocation-column-body">
                     <?php if($unassignedTasks->num_rows > 0): ?>
                         <?php while($task = $unassignedTasks->fetch_assoc()): 
                             $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
@@ -1240,7 +1298,7 @@ include '../../includes/navbar.php';
     </div>
 
     <!-- Section 2: Pending Expert Estimation -->
-    <div class="section-card">
+    <div class="tab-pane fade section-card allocation-column" id="expert-pending-panel" role="tabpanel" aria-labelledby="expert-pending-tab">
         <div class="section-header">
             <h5>
                 <i class="fas fa-calculator"></i>
@@ -1248,7 +1306,7 @@ include '../../includes/navbar.php';
                 <span class="badge-count"><?php echo $pendingEstimationTasks->num_rows; ?> tasks</span>
             </h5>
         </div>
-                <div class="p-3">
+                <div class="p-3 allocation-column-body">
                     <?php if($pendingEstimationTasks->num_rows > 0): ?>
                         <?php while($task = $pendingEstimationTasks->fetch_assoc()): 
                             $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
@@ -1283,7 +1341,7 @@ include '../../includes/navbar.php';
             </div>
 
             <!-- Section 3: Ready for Review -->
-            <div class="section-card">
+            <div class="tab-pane fade section-card allocation-column" id="expert-review-panel" role="tabpanel" aria-labelledby="expert-review-tab">
                 <div class="section-header">
                     <h5>
                         <i class="fas fa-clipboard-list"></i>
@@ -1291,7 +1349,7 @@ include '../../includes/navbar.php';
                         <span class="badge-count"><?php echo $reviewTasks->num_rows; ?> tasks</span>
                     </h5>
                 </div>
-                <div class="p-3">
+                <div class="p-3 allocation-column-body">
                     <?php if($reviewTasks->num_rows > 0): ?>
                         <?php while($task = $reviewTasks->fetch_assoc()): 
                             $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
@@ -1333,14 +1391,132 @@ include '../../includes/navbar.php';
                 <?php endif; ?>
                 </div>
             </div>
+            <div class="tab-pane fade section-card allocation-column" id="expert-assign-panel" role="tabpanel" aria-labelledby="expert-assign-tab">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-user-check"></i>
+                        Assign Project to Expert
+                        <span class="badge-count"><?php echo $projectsForAllocation->num_rows; ?> projects</span>
+                    </h5>
+                </div>
+                <div class="p-3 allocation-column-body">
+                    <?php if($projectsForAllocation->num_rows > 0): ?>
+                        <form method="POST" class="row g-3 align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label">Project</label>
+                                <select name="project_id" class="form-select-custom" required>
+                                    <option value="">Select project</option>
+                                    <?php while($proj = $projectsForAllocation->fetch_assoc()): ?>
+                                        <option value="<?php echo $proj['id']; ?>">
+                                            <?php echo htmlspecialchars($proj['name']); ?> (<?php echo $proj['unassigned_count']; ?> features)
+                                        </option>
+                                    <?php endwhile; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Expert</label>
+                                <select name="expert_id" class="form-select-custom" required>
+                                    <option value="">Select expert</option>
+                                    <?php $experts->data_seek(0); while($expert = $experts->fetch_assoc()): ?>
+                                        <option value="<?php echo $expert['id']; ?>">
+                                            <?php echo htmlspecialchars($expert['full_name']); ?> (<?php echo $expert['assigned_tasks']; ?> tasks)
+                                        </option>
+                                    <?php endwhile; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" name="assign_project_to_expert" class="btn-primary-modern w-100">
+                                    <i class="fas fa-share"></i> Assign
+                                </button>
+                            </div>
+                        </form>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="fas fa-check-circle"></i>
+                            <p>No projects awaiting expert allocation</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="tab-pane fade section-card allocation-column" id="expert-gantt-panel" role="tabpanel" aria-labelledby="expert-gantt-tab">
+                <?php if ($projectId && $project): ?>
+                <div class="section-header">
+                    <div>
+                        <h5>
+                            <i class="fas fa-stream"></i>
+                            Project Gantt Chart
+                        </h5>
+                        <small class="text-muted"><?php echo htmlspecialchars($project['name']); ?></small>
+                    </div>
+                    <?php if ($ganttProjectOptions && $ganttProjectOptions->num_rows > 0): ?>
+                    <form method="GET" class="d-flex align-items-center gap-2">
+                        <select name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for Gantt chart">
+                            <?php while($ganttProjectOption = $ganttProjectOptions->fetch_assoc()): ?>
+                                <option value="<?php echo (int) $ganttProjectOption['id']; ?>" <?php echo (int) $ganttProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($ganttProjectOption['name']); ?>
+                                    <?php if ((int) $ganttProjectOption['approved_task_count'] > 0): ?>
+                                        (<?php echo (int) $ganttProjectOption['approved_task_count']; ?> approved)
+                                    <?php endif; ?>
+                                </option>
+                            <?php endwhile; ?>
+                        </select>
+                    </form>
+                    <?php endif; ?>
+                </div>
+                <div class="p-3 allocation-column-body">
+                    <?php if (!$canShowGantt): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-lock"></i>
+                            <p>Gantt chart is available after Sales approval.</p>
+                        </div>
+                    <?php elseif (!$ganttProjectData || empty($ganttProjectData['tasks'])): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-stream"></i>
+                            <p>No Gantt data available for this project.</p>
+                        </div>
+                    <?php else: ?>
+                        <div id="sulGanttChart"></div>
+                    <?php endif; ?>
+                </div>
+                <?php else: ?>
+                <div class="p-3 allocation-column-body">
+                    <div class="empty-state">
+                        <i class="fas fa-stream"></i>
+                        <p>No project selected for Gantt view.</p>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+            </div>
+            </div>
             </div>
             <!-- End Expert Tab Panel -->
             
             <!-- Developer Tab Panel -->
             <div class="tab-pane fade" id="developer-panel" role="tabpanel">
-            
+            <div class="workflow-layout">
+            <ul class="nav workflow-tabs" id="developerWorkflowTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="developer-ready-tab" data-bs-toggle="tab" data-bs-target="#developer-ready-panel" type="button" role="tab" aria-controls="developer-ready-panel" aria-selected="true">
+                        <i class="fas fa-code"></i> Ready for Assignment <span class="badge-count"><?php echo $readyForDevTasks->num_rows; ?></span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="developer-progress-tab" data-bs-toggle="tab" data-bs-target="#developer-progress-panel" type="button" role="tab" aria-controls="developer-progress-panel" aria-selected="false">
+                        <i class="fas fa-spinner"></i> In Progress <span class="badge-count"><?php echo $inProgressTasks->num_rows; ?></span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="developer-completed-tab" data-bs-toggle="tab" data-bs-target="#developer-completed-panel" type="button" role="tab" aria-controls="developer-completed-panel" aria-selected="false">
+                        <i class="fas fa-check-double"></i> Recently Completed <span class="badge-count"><?php echo $completedTasks->num_rows; ?></span>
+                    </button>
+                </li>
+            </ul>
+            <div class="tab-content allocation-board" id="developerWorkflowContent">
+             
             <!-- Section 4: Ready for Developer Assignment -->
-            <div class="section-card">
+            <div class="tab-pane fade show active section-card allocation-column" id="developer-ready-panel" role="tabpanel" aria-labelledby="developer-ready-tab">
                 <div class="section-header">
                     <h5>
                         <i class="fas fa-code"></i>
@@ -1348,7 +1524,7 @@ include '../../includes/navbar.php';
                         <span class="badge-count"><?php echo $readyForDevTasks->num_rows; ?> tasks</span>
                     </h5>
                 </div>
-                <div class="p-3">
+                <div class="p-3 allocation-column-body">
                 <?php if($readyForDevTasks->num_rows > 0): ?>
                     <?php while($task = $readyForDevTasks->fetch_assoc()): 
                         $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
@@ -1387,7 +1563,7 @@ include '../../includes/navbar.php';
             </div>
 
             <!-- Section 5: In Progress -->
-            <div class="section-card">
+            <div class="tab-pane fade section-card allocation-column" id="developer-progress-panel" role="tabpanel" aria-labelledby="developer-progress-tab">
                 <div class="section-header">
                     <h5>
                         <i class="fas fa-spinner fa-pulse"></i>
@@ -1395,7 +1571,7 @@ include '../../includes/navbar.php';
                         <span class="badge-count"><?php echo $inProgressTasks->num_rows; ?> tasks</span>
                     </h5>
                 </div>
-                <div class="p-3">
+                <div class="p-3 allocation-column-body">
                 <?php if($inProgressTasks->num_rows > 0): ?>
                     <?php while($task = $inProgressTasks->fetch_assoc()): 
                         $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
@@ -1494,6 +1670,8 @@ include '../../includes/navbar.php';
 
             <!-- Section 7: Recently Completed -->
             <div class="section-card">
+            <!-- Section 6: Recently Completed -->
+            <div class="tab-pane fade section-card allocation-column" id="developer-completed-panel" role="tabpanel" aria-labelledby="developer-completed-tab">
                 <div class="section-header">
                     <h5>
                         <i class="fas fa-check-double"></i>
@@ -1501,7 +1679,7 @@ include '../../includes/navbar.php';
                         <span class="badge-count"><?php echo $completedTasks->num_rows; ?> tasks</span>
                     </h5>
                 </div>
-                <div class="p-3">
+                <div class="p-3 allocation-column-body">
                 <?php if($completedTasks->num_rows > 0): ?>
                     <?php while($task = $completedTasks->fetch_assoc()): ?>
                     <div class="task-card bg-light">
@@ -1536,6 +1714,8 @@ include '../../includes/navbar.php';
                     </div>
                 <?php endif; ?>
                 </div>
+            </div>
+            </div>
             </div>
             </div>
             <!-- End Developer Tab Panel -->
@@ -1956,12 +2136,22 @@ function renderSulThreePointGantt(target, tasks) {
     });
 }
 
-if (sulGanttProject && Array.isArray(sulGanttProject.tasks) && sulGanttProject.tasks.length > 0) {
+function initSulGanttChart() {
+    if (!sulGanttProject || !Array.isArray(sulGanttProject.tasks) || sulGanttProject.tasks.length === 0) {
+        return;
+    }
+
     const container = document.getElementById('sulGanttChart');
     if (container) {
         renderSulThreePointGantt(container, sulGanttProject.tasks);
     }
 }
+
+if (document.getElementById('expert-gantt-panel')?.classList.contains('active')) {
+    initSulGanttChart();
+}
+
+document.getElementById('expert-gantt-tab')?.addEventListener('shown.bs.tab', initSulGanttChart);
 </script>
 
 <?php include '../../includes/footer.php'; ?>

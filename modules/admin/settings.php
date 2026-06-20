@@ -271,7 +271,7 @@ include '../../includes/navbar.php';
     transition: all 0.18s ease;
 }
 
-.settings-nav-card .nav-link span {
+.settings-nav-card .nav-link span:not(.nav-dot) {
     flex: 1;
 }
 
@@ -372,6 +372,7 @@ include '../../includes/navbar.php';
 .nav-dot {
     width: 8px;
     height: 8px;
+    flex: 0 0 8px;
     border-radius: 50%;
     background: var(--gray-300);
     margin-left: auto;

@@ -22,22 +22,18 @@ if ($user) {
 <div id="page-content-wrapper">
     <nav class="navbar app-navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
         <div class="container-fluid">
-            <div class="d-flex align-items-center gap-3">
-                <button class="btn btn-link btn-sm app-toggle" id="menu-toggle" type="button" aria-label="Toggle sidebar">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <div class="nav-context">
-                    <div class="nav-context-title">ERNI PMS</div>
-                    <small>Decision-Driven Project Management Support System</small>
-                </div>
-            </div>
-
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto align-items-lg-center gap-2">
+                    <li class="nav-item">
+                        <button class="btn btn-link nav-link nav-icon-link app-toggle" id="menu-toggle" type="button" aria-label="Toggle sidebar" title="Toggle sidebar">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                    </li>
+
                     <li class="nav-item dropdown" id="notificationsDropdown">
                         <a class="nav-link position-relative nav-icon-link" href="#" id="navbarNotifications" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-bell"></i>

@@ -130,7 +130,4 @@ function isSidebarItemActive(array $item, string $currentPage, string $currentPa
         <?php endforeach; ?>
     </div>
 
-    <div class="sidebar-footer">
-        <small>Decision-Driven Project Management Support System</small>
-    </div>
 </aside>
