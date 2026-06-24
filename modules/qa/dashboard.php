@@ -172,53 +172,370 @@ $recentResults = $conn->query("
     LIMIT 8
 ");
 
+$qaQueueCount = $queue ? (int) $queue->num_rows : 0;
+$qaPassedCount = (int) $conn->query("SELECT COUNT(*) AS count FROM tasks WHERE status IN ('qa_passed', 'architect_review', 'completed') AND qa_reviewed_at IS NOT NULL")->fetch_assoc()['count'];
+$qaReturnedCount = (int) $conn->query("SELECT COUNT(*) AS count FROM tasks WHERE status = 'qa_failed' AND qa_reviewed_at IS NOT NULL")->fetch_assoc()['count'];
+$qaReviewedThisMonth = (int) $conn->query("SELECT COUNT(*) AS count FROM tasks WHERE qa_reviewed_at IS NOT NULL AND qa_reviewed_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')")->fetch_assoc()['count'];
+$selectedChecklistTotal = 0;
+$selectedChecklistPassed = 0;
+$selectedChecklistIssues = 0;
+foreach ($checklistByFeature as $items) {
+    foreach ($items as $item) {
+        $selectedChecklistTotal++;
+        if ((string) $item['status'] === 'passed') {
+            $selectedChecklistPassed++;
+        }
+        if (in_array((string) $item['status'], ['failed', 'needs_revision'], true)) {
+            $selectedChecklistIssues++;
+        }
+    }
+}
+$selectedChecklistProgress = $selectedChecklistTotal > 0 ? (int) round(($selectedChecklistPassed / $selectedChecklistTotal) * 100) : 0;
+
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
 ?>
 
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-        <div>
-            <h2 class="mb-1"><i class="fas fa-clipboard-check me-2 text-primary"></i>QA Testing Dashboard</h2>
-            <p class="text-muted mb-0">Checklist-based testing after SUL approval. Failed items return to the assigned Developer.</p>
+<style>
+:root {
+    --theme-primary: #1f6392;
+    --theme-dark: #184f73;
+    --gray-50: #f8f9fa;
+    --gray-200: #e9ecef;
+    --gray-300: #dee2e6;
+    --gray-600: #6c757d;
+    --gray-900: #212529;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+}
+
+.qa-dashboard .card {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 20px;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.qa-dashboard .card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.qa-dashboard .card-header {
+    background: #fff;
+    border-bottom: 1px solid var(--gray-200);
+    padding: 1.2rem 1.5rem;
+}
+
+.qa-dashboard .card-header h5 {
+    align-items: center;
+    color: var(--gray-900);
+    display: flex;
+    font-size: 1rem;
+    font-weight: 700;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.qa-dashboard .card-header h5 i,
+.qa-stat-icon {
+    color: var(--theme-primary);
+}
+
+.qa-overview-badge {
+    background-color: var(--theme-primary) !important;
+    color: #fff !important;
+}
+
+.qa-stat-card {
+    min-height: 158px;
+}
+
+.qa-stat-icon {
+    font-size: 2.4rem;
+    opacity: 0.65;
+}
+
+.qa-stat-label {
+    color: var(--gray-600);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    margin-bottom: 0.45rem;
+    text-transform: uppercase;
+}
+
+.qa-stat-number {
+    font-size: 2.45rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 0.35rem;
+}
+
+.qa-stat-sub,
+.qa-meta {
+    color: var(--gray-600);
+    font-size: 0.76rem;
+}
+
+.qa-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.85rem;
+}
+
+.qa-queue-list {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.qa-queue-item {
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    color: inherit;
+    display: block;
+    padding: 1rem;
+    text-decoration: none;
+    transition: all 0.18s ease;
+}
+
+.qa-queue-item:hover,
+.qa-queue-item.active {
+    background: rgba(31, 99, 146, 0.07);
+    border-color: rgba(31, 99, 146, 0.28);
+    color: inherit;
+}
+
+.qa-queue-item.active {
+    box-shadow: inset 4px 0 0 var(--theme-primary);
+}
+
+.qa-queue-title,
+.qa-check-title {
+    color: var(--gray-900);
+    font-weight: 700;
+}
+
+.qa-queue-title {
+    font-size: 0.94rem;
+    margin-bottom: 0.35rem;
+}
+
+.qa-check-summary {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.qa-progress {
+    background: var(--gray-200);
+    border-radius: 999px;
+    height: 8px;
+    overflow: hidden;
+}
+
+.qa-progress-bar {
+    background: linear-gradient(90deg, #10b981 0%, var(--theme-primary) 100%);
+    height: 100%;
+}
+
+.qa-feature-block {
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    overflow: hidden;
+}
+
+.qa-feature-header {
+    align-items: center;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    padding: 0.9rem 1rem;
+}
+
+.qa-feature-title {
+    color: var(--theme-primary);
+    font-size: 0.92rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.qa-check-item {
+    border-bottom: 1px solid var(--gray-200);
+    padding: 1rem;
+}
+
+.qa-check-item:last-child,
+.qa-result-item:last-child {
+    border-bottom: none;
+}
+
+.qa-check-title {
+    font-size: 0.9rem;
+    margin-bottom: 0.75rem;
+}
+
+.qa-result-item {
+    border-bottom: 1px solid var(--gray-200);
+    padding: 0.9rem 0;
+}
+
+.qa-result-item:first-child {
+    padding-top: 0;
+}
+
+.qa-empty {
+    color: var(--gray-600);
+    padding: 2.5rem 1.5rem;
+    text-align: center;
+}
+
+.qa-empty i {
+    color: var(--gray-300);
+    font-size: 2.6rem;
+    margin-bottom: 0.8rem;
+}
+
+.btn-qa-primary,
+.btn-qa-primary:hover {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    border: none;
+    color: #fff;
+}
+
+.btn-qa-primary:hover {
+    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.25);
+    transform: translateY(-1px);
+}
+
+@media (max-width: 767.98px) {
+    .qa-dashboard .card-header,
+    .qa-dashboard .card-body {
+        padding: 1rem;
+    }
+
+    .qa-stat-number {
+        font-size: 2rem;
+    }
+}
+</style>
+
+<div class="container-fluid px-4 py-4 qa-dashboard">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <span class="badge qa-overview-badge mb-2 px-3 py-2">QA Overview</span>
+                    <h1 class="h3 mb-1">Welcome back, <?php echo htmlspecialchars((string) $user['full_name']); ?>!</h1>
+                    <p class="text-muted mb-0 small">Review SUL-approved work, manage checklist coverage, and return clear findings to the right team.</p>
+                </div>
+            </div>
         </div>
-        <span class="badge bg-primary fs-6"><?php echo $queue ? (int) $queue->num_rows : 0; ?> in QA</span>
     </div>
 
     <?php if(isset($_SESSION['success'])): ?><div class="alert alert-success"><?php echo $_SESSION['success']; unset($_SESSION['success']); ?></div><?php endif; ?>
     <?php if(isset($_SESSION['error'])): ?><div class="alert alert-danger"><?php echo $_SESSION['error']; unset($_SESSION['error']); ?></div><?php endif; ?>
 
+    <div class="row g-3 mb-4">
+        <div class="col-xl-3 col-md-6">
+            <div class="card qa-stat-card h-100">
+                <div class="card-body p-4 d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="qa-stat-label">In QA Queue</div>
+                        <div class="qa-stat-number" style="color: #1f6392;"><?php echo $qaQueueCount; ?></div>
+                        <div class="qa-stat-sub">Ready for testing</div>
+                    </div>
+                    <i class="fas fa-clipboard-check qa-stat-icon"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card qa-stat-card h-100">
+                <div class="card-body p-4 d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="qa-stat-label">Passed</div>
+                        <div class="qa-stat-number" style="color: #10b981;"><?php echo $qaPassedCount; ?></div>
+                        <div class="qa-stat-sub">Moved forward after QA</div>
+                    </div>
+                    <i class="fas fa-circle-check qa-stat-icon"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card qa-stat-card h-100">
+                <div class="card-body p-4 d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="qa-stat-label">Returned</div>
+                        <div class="qa-stat-number" style="color: #dc2626;"><?php echo $qaReturnedCount; ?></div>
+                        <div class="qa-stat-sub">Sent back for fixes</div>
+                    </div>
+                    <i class="fas fa-rotate-left qa-stat-icon"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card qa-stat-card h-100">
+                <div class="card-body p-4 d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="qa-stat-label">This Month</div>
+                        <div class="qa-stat-number" style="color: #f59e0b;"><?php echo $qaReviewedThisMonth; ?></div>
+                        <div class="qa-stat-sub">QA decisions recorded</div>
+                    </div>
+                    <i class="fas fa-calendar-check qa-stat-icon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4">
         <div class="col-lg-4">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white fw-semibold">QA Queue</div>
-                <div class="list-group list-group-flush">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-list-check"></i> QA Queue</h5>
+                </div>
+                <div class="card-body">
+                    <div class="qa-queue-list">
                     <?php if($queue && $queue->num_rows > 0): ?>
                         <?php while($task = $queue->fetch_assoc()): ?>
-                            <a href="dashboard.php?task_id=<?php echo (int) $task['id']; ?>" class="list-group-item list-group-item-action <?php echo (int) $task['id'] === $selectedTaskId ? 'active' : ''; ?>">
-                                <div class="fw-semibold"><?php echo htmlspecialchars((string) $task['title']); ?></div>
+                            <a href="dashboard.php?task_id=<?php echo (int) $task['id']; ?>" class="qa-queue-item <?php echo (int) $task['id'] === $selectedTaskId ? 'active' : ''; ?>">
+                                <div class="qa-queue-title"><?php echo htmlspecialchars((string) $task['title']); ?></div>
                                 <small><?php echo htmlspecialchars((string) $task['project_name']); ?> · <?php echo htmlspecialchars((string) ($task['developer_name'] ?? 'Unassigned')); ?></small>
                             </a>
                         <?php endwhile; ?>
                     <?php else: ?>
-                        <div class="p-4 text-center text-muted">No Pull Requests approved for QA yet.</div>
+                        <div class="qa-empty">
+                            <i class="fas fa-check-circle"></i>
+                            <p class="mb-0">No pull requests approved for QA yet.</p>
+                        </div>
                     <?php endif; ?>
+                    </div>
                 </div>
             </div>
 
-            <div class="card border-0 shadow-sm mt-4">
-                <div class="card-header bg-white fw-semibold">Recent QA Results</div>
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-clock-rotate-left"></i> Recent QA Results</h5>
+                </div>
                 <div class="card-body">
                     <?php if($recentResults && $recentResults->num_rows > 0): ?>
                         <?php while($result = $recentResults->fetch_assoc()): ?>
-                            <div class="border-bottom pb-2 mb-2">
+                            <div class="qa-result-item">
                                 <div class="fw-semibold"><?php echo htmlspecialchars((string) $result['title']); ?></div>
                                 <small class="text-muted"><?php echo workflowStatusLabel((string) $result['status']); ?> · <?php echo htmlspecialchars((string) $result['developer_name']); ?></small>
                             </div>
                         <?php endwhile; ?>
                     <?php else: ?>
-                        <p class="text-muted mb-0">No QA results yet.</p>
+                        <div class="qa-empty py-3">
+                            <i class="fas fa-inbox"></i>
+                            <p class="mb-0">No QA results yet.</p>
+                        </div>
                     <?php endif; ?>
                 </div>
             </div>
@@ -226,17 +543,30 @@ include '../../includes/navbar.php';
 
         <div class="col-lg-8">
             <?php if($selectedTask): ?>
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-white">
+                <div class="card">
+                    <div class="card-header">
                         <div class="d-flex justify-content-between flex-wrap gap-2">
                             <div>
-                                <h5 class="mb-1"><?php echo htmlspecialchars((string) $selectedTask['title']); ?></h5>
+                                <h5 class="mb-1"><i class="fas fa-vial-circle-check"></i><?php echo htmlspecialchars((string) $selectedTask['title']); ?></h5>
                                 <small class="text-muted"><?php echo htmlspecialchars((string) $selectedTask['project_name']); ?> · Developer: <?php echo htmlspecialchars((string) ($selectedTask['developer_name'] ?? 'Unassigned')); ?></small>
                             </div>
                             <span class="badge bg-warning text-dark align-self-start">QA Testing</span>
                         </div>
                     </div>
                     <div class="card-body">
+                        <div class="qa-check-summary mb-4">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                <div>
+                                    <div class="fw-bold">Checklist Progress</div>
+                                    <small class="text-muted"><?php echo $selectedChecklistPassed; ?> of <?php echo $selectedChecklistTotal; ?> items passed<?php echo $selectedChecklistIssues > 0 ? ' | ' . $selectedChecklistIssues . ' issue item' . ($selectedChecklistIssues === 1 ? '' : 's') : ''; ?></small>
+                                </div>
+                                <span class="badge bg-primary"><?php echo $selectedChecklistProgress; ?>%</span>
+                            </div>
+                            <div class="qa-progress">
+                                <div class="qa-progress-bar" style="width: <?php echo $selectedChecklistProgress; ?>%;"></div>
+                            </div>
+                        </div>
+
                         <form method="POST">
                             <input type="hidden" name="task_id" value="<?php echo (int) $selectedTask['id']; ?>">
                             <?php foreach($checklistByFeature as $featureName => $items): ?>
