@@ -5,6 +5,18 @@ require_once __DIR__ . '/app-settings.php';
 
 function getMailSetting(string $name, ?string $default = null): string
 {
+    $appSettingKey = null;
+    if (str_starts_with($name, 'MAIL_')) {
+        $appSettingKey = strtolower(substr($name, 5));
+    }
+
+    if ($appSettingKey !== null) {
+        $appValue = getAppSetting($appSettingKey, null);
+        if ($appValue !== null && $appValue !== '') {
+            return trim((string) $appValue);
+        }
+    }
+
     if (function_exists('getEnvOrDefault')) {
         $value = getEnvOrDefault($name, $default ?? '');
         if ($value !== false && $value !== null) {
