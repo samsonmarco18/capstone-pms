@@ -59,7 +59,7 @@ function getMailConfig(): array
         $encryption = 'tls';
     }
 
-    return [
+    $config = [
         'enabled' => in_array($enabledRaw, ['1', 'true', 'yes', 'on'], true),
         'host' => $host,
         'port' => $port,
@@ -69,6 +69,24 @@ function getMailConfig(): array
         'from_email' => $fromEmail,
         'from_name' => $fromName !== '' ? $fromName : 'ERNI PMS',
     ];
+
+    if (shouldDebugMailConfig()) {
+        $debugConfig = $config;
+        $debugConfig['password'] = $debugConfig['password'] !== '' ? '***' : '';
+        error_log('Mail config: ' . json_encode($debugConfig, JSON_UNESCAPED_SLASHES));
+    }
+
+    return $config;
+}
+
+function shouldDebugMailConfig(): bool
+{
+    $debugRaw = getMailSetting('MAIL_DEBUG', '');
+    if ($debugRaw !== '') {
+        return in_array(strtolower($debugRaw), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    return defined('DEBUG_MODE') && DEBUG_MODE;
 }
 
 function isMailConfigured(): bool
