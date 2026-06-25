@@ -3,18 +3,42 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/app-settings.php';
 
+function getMailSetting(string $name, ?string $default = null): string
+{
+    if (function_exists('getEnvOrDefault')) {
+        $value = getEnvOrDefault($name, $default ?? '');
+        if ($value !== false && $value !== null) {
+            $value = (string) $value;
+            if ($value !== '' || $default === null) {
+                return trim($value);
+            }
+        }
+    }
+
+    if (defined($name)) {
+        $value = constant($name);
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        return trim((string) $value);
+    }
+
+    return trim((string) ($default ?? ''));
+}
+
 function getMailConfig(): array
 {
     $companyName = getAppSetting('company_name', 'ERNI PMS') ?? 'ERNI PMS';
     $notificationEmail = getAppSetting('notification_email', '') ?? '';
-    $envEnabled = function_exists('getEnvOrDefault') ? trim((string) getEnvOrDefault('MAIL_ENABLED', '')) : '';
-    $envHost = function_exists('getEnvOrDefault') ? trim((string) getEnvOrDefault('MAIL_HOST', '')) : '';
-    $envPort = function_exists('getEnvOrDefault') ? trim((string) getEnvOrDefault('MAIL_PORT', '')) : '';
-    $envEncryption = function_exists('getEnvOrDefault') ? trim((string) getEnvOrDefault('MAIL_ENCRYPTION', '')) : '';
-    $envUsername = function_exists('getEnvOrDefault') ? trim((string) getEnvOrDefault('MAIL_USERNAME', '')) : '';
-    $envPassword = function_exists('getEnvOrDefault') ? (string) getEnvOrDefault('MAIL_PASSWORD', '') : '';
-    $envFromEmail = function_exists('getEnvOrDefault') ? trim((string) getEnvOrDefault('MAIL_FROM_EMAIL', '')) : '';
-    $envFromName = function_exists('getEnvOrDefault') ? trim((string) getEnvOrDefault('MAIL_FROM_NAME', '')) : '';
+    $envEnabled = getMailSetting('MAIL_ENABLED', '');
+    $envHost = getMailSetting('MAIL_HOST', '');
+    $envPort = getMailSetting('MAIL_PORT', '');
+    $envEncryption = getMailSetting('MAIL_ENCRYPTION', '');
+    $envUsername = getMailSetting('MAIL_USERNAME', '');
+    $envPassword = getMailSetting('MAIL_PASSWORD', '');
+    $envFromEmail = getMailSetting('MAIL_FROM_EMAIL', '');
+    $envFromName = getMailSetting('MAIL_FROM_NAME', '');
 
     $host = $envHost !== '' ? $envHost : trim((string) getAppSetting('mail_host', 'smtp.gmail.com'));
     $port = (int) ($envPort !== '' ? $envPort : (getAppSetting('mail_port', '587') ?? '587'));
