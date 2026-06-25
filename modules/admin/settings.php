@@ -100,6 +100,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $mailFromEmail = trim((string) ($_POST['mail_from_email'] ?? $mailUsername));
         $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'ERNI PMS'));
 
+        error_log('Mail settings save attempt: enabled=' . $mailEnabled . ', host=' . $mailHost . ', user=' . $mailUsername);
+
         $saved = setAppSetting('mail_enabled', $mailEnabled, 'Enable SMTP email delivery', 'system')
             && setAppSetting('mail_host', $mailHost, 'SMTP server host', 'system')
             && setAppSetting('mail_port', $mailPort, 'SMTP server port', 'system')
@@ -111,6 +113,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($mailPassword !== '') {
             $saved = $saved && setAppSetting('mail_password', $mailPassword, 'SMTP app password', 'system');
         }
+
+        error_log('Mail settings save result: ' . ($saved ? 'success' : 'failed'));
 
         logActivity($user['id'], 'update_mail_settings', 'settings', 0, null, [
             'mail_enabled' => $mailEnabled,

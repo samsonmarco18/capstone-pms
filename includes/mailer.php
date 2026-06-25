@@ -390,3 +390,44 @@ function buildNotificationUrl(?string $actionUrl): ?string
 
     return rtrim(BASE_URL, '/') . '/' . ltrim($path, '/');
 }
+
+function getMailConfigDiagnostic(): array
+{
+    $diagnostic = [];
+    
+    try {
+        $conn = getConnection();
+        $keys = ['mail_enabled', 'mail_host', 'mail_port', 'mail_encryption', 'mail_username', 'mail_password', 'mail_from_email', 'mail_from_name'];
+        
+        foreach ($keys as $key) {
+            $stmt = $conn->prepare('SELECT setting_value FROM settings WHERE setting_key = ? LIMIT 1');
+            if ($stmt) {
+                $stmt->bind_param('s', $key);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $row = $result->fetch_assoc();
+                $stmt->close();
+                
+                $value = $row ? (string) $row['setting_value'] : null;
+                $diagnostic['db_' . $key] = $value;
+            }
+        }
+    } catch (Throwable $e) {
+        $diagnostic['db_error'] = $e->getMessage();
+    }
+    
+    $config = getMailConfig();
+    $diagnostic['resolved'] = [
+        'enabled' => $config['enabled'],
+        'host' => $config['host'],
+        'port' => $config['port'],
+        'encryption' => $config['encryption'],
+        'username' => $config['username'],
+        'password' => $config['password'] ? '***' : '',
+        'from_email' => $config['from_email'],
+        'from_name' => $config['from_name'],
+    ];
+    $diagnostic['is_configured'] = isMailConfigured();
+    
+    return $diagnostic;
+}
