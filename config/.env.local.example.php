@@ -10,8 +10,8 @@ return [
     'MAIL_HOST' => 'smtp.gmail.com',
     'MAIL_PORT' => '587',
     'MAIL_ENCRYPTION' => 'tls',
-    'MAIL_USERNAME' => 'yourgmail@gmail.com',
-    'MAIL_PASSWORD' => 'your-google-app-password',
-    'MAIL_FROM_EMAIL' => 'yourgmail@gmail.com',
+    'MAIL_USERNAME' => 'altheapalentinos@gmail.com',
+    'MAIL_PASSWORD' => 'conf mbgy sowb jqix',
+    'MAIL_FROM_EMAIL' => 'altheapalentinos@gmail.com',
     'MAIL_FROM_NAME' => 'ERNI PMS',
 ];

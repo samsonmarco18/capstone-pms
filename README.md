@@ -104,7 +104,7 @@ return [
   'MAIL_PORT' => '587',
   'MAIL_ENCRYPTION' => 'tls',
   'MAIL_USERNAME' => 'altheapalentinos@gmail.com',
-  'MAIL_PASSWORD' => 'huar rcmc lwnb ebck',
+  'MAIL_PASSWORD' => 'your-google-app-password',
   'MAIL_FROM_EMAIL' => 'altheapalentinos@gmail.com',
   'MAIL_FROM_NAME' => 'Erni PMS',
 ];
