@@ -351,10 +351,14 @@ function renderFullProjectPanel(project, options = {}) {
 
             <div class="project-context-section">
                 <h6><i class="fas fa-tasks"></i> Project Progress</h6>
+                <div class="project-gantt-track" style="margin-bottom: 0.75rem;">
+                    <div class="project-gantt-bar project-gantt-bar-task" style="left: 0; width: ${Number(tasks.progress_percent || 0)}%;"></div>
+                </div>
                 <div class="project-context-metrics">
                     ${renderProjectMetric('Total Tasks', tasks.total)}
                     ${renderProjectMetric('Active', tasks.active)}
-                    ${renderProjectMetric('Completed', tasks.completed)}
+                    ${renderProjectMetric('Merged Features', `${tasks.merged_features || 0}/${tasks.total_features || 0}`)}
+                    ${renderProjectMetric('Progress', `${Number(tasks.progress_percent || 0)}%`)}
                     ${renderProjectMetric('Blocked', tasks.blocked)}
                     ${renderProjectMetric('Overdue', tasks.overdue)}
                 </div>

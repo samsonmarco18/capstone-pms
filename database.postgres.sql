@@ -762,16 +762,34 @@ CREATE TABLE repository_operations (
 
 -- Insert default admin user (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('admin', 'admin@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', 'Administration', 'admin', 'active', 'Admin');
+('admin', 'admin@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', NULL, 'admin', 'active', 'Admin');
 
 -- Insert Sample Users for Each Role (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', 'Sales', 'sales', 'active', 'Sales Manager'),
-('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', 'Architecture', 'architect', 'active', 'System Architect'),
-('sul_user', 'sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Robert SUL', 'Service Unit', 'sul', 'active', 'Service Unit Leader'),
+('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', NULL, 'sales', 'active', 'Sales Manager'),
+('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', NULL, 'architect', 'active', 'System Architect'),
+('sul_user', 'sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Robert SUL', 'Web Solutions', 'sul', 'active', 'Service Unit Leader'),
 ('qa_user', 'qa@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Quinn QA Engineer', 'Quality Assurance', 'qa', 'active', 'QA Engineer'),
-('expert', 'expert@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Dr. Expert Senior', 'Development', 'expert', 'active', 'Senior Expert'),
-('developer', 'developer@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'David Developer', 'Development', 'developer', 'active', 'Software Developer');
+('expert', 'expert@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Dr. Expert Senior', 'Web Solutions', 'expert', 'active', 'Senior Expert'),
+('developer', 'developer@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'David Developer', 'Web Solutions', 'developer', 'active', 'Software Developer');
+
+-- Department dummy teams (password: password)
+INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
+('web_sul_2', 'web.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ana Web SUL', 'Web Solutions', 'sul', 'active', 'Service Unit Leader'),
+('web_dev_2', 'web.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Liam Web Developer', 'Web Solutions', 'developer', 'active', 'Frontend Developer'),
+('web_dev_3', 'web.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Mia Web Developer', 'Web Solutions', 'developer', 'active', 'Backend Developer'),
+('mobile_sul_1', 'mobile.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Noel Mobile SUL', 'Mobile Solutions', 'sul', 'active', 'Service Unit Leader'),
+('mobile_sul_2', 'mobile.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Rina Mobile SUL', 'Mobile Solutions', 'sul', 'active', 'Service Unit Leader'),
+('mobile_expert_1', 'mobile.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Elena Mobile Expert', 'Mobile Solutions', 'expert', 'active', 'Mobile Architecture Expert'),
+('mobile_dev_1', 'mobile.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Carlo Mobile Developer', 'Mobile Solutions', 'developer', 'active', 'iOS Developer'),
+('mobile_dev_2', 'mobile.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Jessa Mobile Developer', 'Mobile Solutions', 'developer', 'active', 'Android Developer'),
+('mobile_dev_3', 'mobile.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Paolo Mobile Developer', 'Mobile Solutions', 'developer', 'active', 'Flutter Developer'),
+('data_sul_1', 'data.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Grace Data SUL', 'Data Platforms', 'sul', 'active', 'Service Unit Leader'),
+('data_sul_2', 'data.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Marco Data SUL', 'Data Platforms', 'sul', 'active', 'Service Unit Leader'),
+('data_expert_1', 'data.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Sofia Data Expert', 'Data Platforms', 'expert', 'active', 'Data Platform Expert'),
+('data_dev_1', 'data.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Arvin Data Developer', 'Data Platforms', 'developer', 'active', 'Data Engineer'),
+('data_dev_2', 'data.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Bianca Data Developer', 'Data Platforms', 'developer', 'active', 'Analytics Developer'),
+('data_dev_3', 'data.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ken Data Developer', 'Data Platforms', 'developer', 'active', 'ETL Developer');
 
 -- Insert Technologies
 INSERT INTO technologies (name, category, price, status, expiry_date, renewal_cost, description, created_by) VALUES
@@ -792,6 +810,17 @@ INSERT INTO clients (name, contact_person, email, phone, address, company_type, 
 INSERT INTO projects (client_id, name, description, status, timeline_start, timeline_end, complexity_level, created_by, architect_id, sul_id) VALUES
 (1, 'E-Commerce Platform', 'Complete e-commerce solution with payment gateway', 'requirements_gathering', '2026-03-01', '2026-12-31', 'complex', 1, 3, 4),
 (2, 'Patient Management System', 'Hospital management and patient tracking system', 'pending', '2026-04-01', '2027-03-31', 'complex', 1, NULL, NULL);
+
+-- Sample project feature checklist data
+INSERT INTO tasks (project_id, title, description, task_type, assigned_to, assigned_by, status, priority, deadline, completed_at, architect_reviewed_by, architect_reviewed_at, merged_at, release_notified_at) VALUES
+(1, 'Product Catalog', 'Customer can browse products by category and search terms.', 'feature', (SELECT id FROM users WHERE username = 'developer'), 3, 'completed', 'high', '2026-06-15', NOW(), 3, NOW(), NOW(), NOW()),
+(1, 'Cart and Checkout', 'Customer can manage cart items and complete checkout.', 'feature', (SELECT id FROM users WHERE username = 'web_dev_2'), 3, 'completed', 'critical', '2026-07-15', NOW(), 3, NOW(), NOW(), NOW()),
+(1, 'Payment Gateway Integration', 'Online payment provider integration with transaction logging.', 'feature', (SELECT id FROM users WHERE username = 'web_dev_3'), 3, 'in_progress', 'critical', '2026-08-15', NULL, NULL, NULL, NULL, NULL),
+(1, 'Additional Loyalty Rewards', 'Additional client request: points-based rewards and vouchers.', 'enhancement', (SELECT id FROM users WHERE username = 'developer'), 3, 'qa_passed', 'medium', '2026-09-15', NULL, NULL, NULL, NULL, NULL),
+(2, 'Patient Registration', 'Staff can register patient profiles and emergency contacts.', 'feature', (SELECT id FROM users WHERE username = 'data_dev_1'), 3, 'completed', 'high', '2026-07-20', NOW(), 3, NOW(), NOW(), NOW()),
+(2, 'Appointment Scheduling', 'Clinic staff can create and update appointment schedules.', 'feature', (SELECT id FROM users WHERE username = 'mobile_dev_1'), 3, 'in_progress', 'high', '2026-08-30', NULL, NULL, NULL, NULL, NULL),
+(2, 'Medical Records', 'Secure medical history and consultation notes module.', 'feature', (SELECT id FROM users WHERE username = 'data_dev_2'), 3, 'todo', 'critical', '2026-10-15', NULL, NULL, NULL, NULL, NULL),
+(2, 'Additional Insurance Export', 'Additional architect request: export insurance claim summaries.', 'enhancement', (SELECT id FROM users WHERE username = 'data_dev_3'), 3, 'completed', 'medium', '2026-11-15', NOW(), 3, NOW(), NOW(), NOW());
 
 -- Default Settings
 INSERT INTO settings (setting_key, setting_value, description, setting_type) VALUES

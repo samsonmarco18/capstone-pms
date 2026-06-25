@@ -1,88 +1,781 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
+require_once '../../includes/project-progress.php';
 requireRole('sales');
 
 $conn = getConnection();
 workflowEnsureSchema($conn);
 
 $selectedTaskId = (int) ($_GET['task_id'] ?? 0);
-$filterSql = $selectedTaskId > 0 ? ' AND t.id = ' . $selectedTaskId : '';
+$selectedClientId = (int) ($_GET['client_id'] ?? 0);
+$selectedProjectId = (int) ($_GET['project_id'] ?? 0);
 
-$completedFeatures = $conn->query("
-    SELECT t.id, t.title, t.description, t.completed_at, t.merged_at, t.release_notified_at,
-           p.name AS project_name, c.name AS client_name, u.full_name AS developer_name, architect.full_name AS architect_name
-    FROM tasks t
-    JOIN projects p ON p.id = t.project_id
-    LEFT JOIN clients c ON c.id = p.client_id
-    LEFT JOIN users u ON u.id = t.assigned_to
-    LEFT JOIN users architect ON architect.id = t.architect_reviewed_by
-    WHERE t.status = 'completed'
-      AND t.architect_reviewed_at IS NOT NULL
-      {$filterSql}
-    ORDER BY t.release_notified_at DESC, t.completed_at DESC
+function releaseChecklistIsComplete(array $task): bool
+{
+    $status = (string) ($task['status'] ?? '');
+
+    return !empty($task['merged_at'])
+        || !empty($task['completed_at'])
+        || !empty($task['architect_reviewed_at'])
+        || in_array($status, ['merged', 'ready_for_release', 'completed'], true);
+}
+
+function releaseChecklistSourceLabel(array $task): string
+{
+    $architectName = trim((string) ($task['architect_name'] ?? ''));
+    return $architectName !== '' ? $architectName : 'Architect';
+}
+
+function releaseChecklistStatusLabel(array $task): string
+{
+    if (releaseChecklistIsComplete($task)) {
+        return 'Complete';
+    }
+
+    $status = (string) ($task['status'] ?? 'todo');
+    return ucfirst(str_replace('_', ' ', $status));
+}
+
+$taskProjectLookup = null;
+if ($selectedTaskId > 0) {
+    $taskLookupStmt = $conn->prepare("
+        SELECT t.project_id, p.client_id
+        FROM tasks t
+        JOIN projects p ON p.id = t.project_id
+        WHERE t.id = ?
+        LIMIT 1
+    ");
+    if ($taskLookupStmt !== false) {
+        $taskLookupStmt->bind_param('i', $selectedTaskId);
+        $taskLookupStmt->execute();
+        $taskProjectLookup = $taskLookupStmt->get_result()->fetch_assoc() ?: null;
+        $taskLookupStmt->close();
+    }
+}
+
+if ($selectedTaskId > 0) {
+    $selectedProjectId = (int) ($taskProjectLookup['project_id'] ?? $selectedProjectId);
+    $selectedClientId = (int) ($taskProjectLookup['client_id'] ?? $selectedClientId);
+}
+
+$clientsResult = $conn->query("
+    SELECT c.id, c.name AS client_name, COUNT(p.id) AS project_count
+    FROM clients c
+    JOIN projects p ON p.client_id = c.id
+    GROUP BY c.id, c.name
+    ORDER BY c.name ASC
 ");
+
+$clients = [];
+while ($clientRow = $clientsResult ? $clientsResult->fetch_assoc() : null) {
+    if (!$clientRow) {
+        break;
+    }
+    $clients[] = [
+        'id' => (int) ($clientRow['id'] ?? 0),
+        'name' => (string) ($clientRow['client_name'] ?? 'Client'),
+        'project_count' => (int) ($clientRow['project_count'] ?? 0),
+    ];
+}
+
+if ($selectedClientId <= 0 && $clients) {
+    $selectedClientId = (int) $clients[0]['id'];
+}
+
+$projectOptionsStmt = $conn->prepare("
+    SELECT
+        p.id,
+        p.name,
+        p.status,
+        MAX(p.updated_at) AS updated_at,
+        COUNT(CASE WHEN t.task_type = 'feature' THEN 1 END) AS feature_count,
+        COUNT(CASE WHEN t.task_type = 'enhancement' THEN 1 END) AS additional_count
+    FROM projects p
+    LEFT JOIN tasks t ON t.project_id = p.id AND t.task_type IN ('feature', 'enhancement')
+    WHERE p.client_id = ?
+    GROUP BY p.id, p.name, p.status
+    ORDER BY updated_at DESC, p.id DESC
+");
+
+$projectOptions = [];
+if ($projectOptionsStmt !== false && $selectedClientId > 0) {
+    $projectOptionsStmt->bind_param('i', $selectedClientId);
+    $projectOptionsStmt->execute();
+    $projectOptionsResult = $projectOptionsStmt->get_result();
+    if ($projectOptionsResult) {
+        while ($projectRow = $projectOptionsResult->fetch_assoc()) {
+            $projectOptions[] = [
+                'id' => (int) ($projectRow['id'] ?? 0),
+                'name' => (string) ($projectRow['name'] ?? 'Project'),
+                'status' => (string) ($projectRow['status'] ?? 'pending'),
+                'feature_count' => (int) ($projectRow['feature_count'] ?? 0),
+                'additional_count' => (int) ($projectRow['additional_count'] ?? 0),
+            ];
+        }
+    }
+    $projectOptionsStmt->close();
+}
+
+if ($selectedProjectId <= 0 && $projectOptions) {
+    $selectedProjectId = (int) $projectOptions[0]['id'];
+}
+
+$selectedProject = null;
+if ($selectedProjectId > 0) {
+    $projectStmt = $conn->prepare("
+        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id
+        WHERE p.id = ? AND p.client_id = ?
+        LIMIT 1
+    ");
+    if ($projectStmt !== false) {
+        $projectStmt->bind_param('ii', $selectedProjectId, $selectedClientId);
+        $projectStmt->execute();
+        $selectedProject = $projectStmt->get_result()->fetch_assoc() ?: null;
+        $projectStmt->close();
+    }
+}
+
+if (!$selectedProject && $projectOptions) {
+    $selectedProjectId = (int) $projectOptions[0]['id'];
+    $selectedProject = null;
+    $projectStmt = $conn->prepare("
+        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id
+        WHERE p.id = ? AND p.client_id = ?
+        LIMIT 1
+    ");
+    if ($projectStmt !== false) {
+        $projectStmt->bind_param('ii', $selectedProjectId, $selectedClientId);
+        $projectStmt->execute();
+        $selectedProject = $projectStmt->get_result()->fetch_assoc() ?: null;
+        $projectStmt->close();
+    }
+}
+
+$featureItems = [];
+$additionalItems = [];
+$featureCompleteCount = 0;
+$featurePendingCount = 0;
+$additionalCompleteCount = 0;
+$additionalPendingCount = 0;
+$additionalRequirementsText = '';
+
+if ($selectedProject) {
+    $additionalRequirementsText = trim((string) ($selectedProject['requested_features'] ?? ''));
+
+    $taskStmt = $conn->prepare("
+        SELECT
+            t.id,
+            t.title,
+            t.description,
+            t.task_type,
+            t.status,
+            t.priority,
+            t.completed_at,
+            t.merged_at,
+            t.architect_reviewed_at,
+            t.release_notified_at,
+            t.created_at,
+            architect.full_name AS architect_name,
+            developer.full_name AS developer_name
+        FROM tasks t
+        JOIN users architect ON architect.id = t.assigned_by
+        LEFT JOIN users developer ON developer.id = t.assigned_to
+        WHERE t.project_id = ?
+          AND t.task_type IN ('feature', 'enhancement')
+          AND architect.role = 'architect'
+        ORDER BY CASE WHEN t.task_type = 'feature' THEN 0 ELSE 1 END, t.created_at ASC, t.id ASC
+    ");
+
+    if ($taskStmt !== false) {
+        $taskStmt->bind_param('i', $selectedProjectId);
+        $taskStmt->execute();
+        $taskResult = $taskStmt->get_result();
+        if ($taskResult) {
+            while ($task = $taskResult->fetch_assoc()) {
+                $task['is_complete'] = releaseChecklistIsComplete($task);
+                $task['status_label'] = releaseChecklistStatusLabel($task);
+                $task['source_label'] = releaseChecklistSourceLabel($task);
+
+                $checklistItems[] = $task;
+                if ((string) $task['task_type'] === 'enhancement') {
+                    $additionalItems[] = $task;
+                    if ($task['is_complete']) {
+                        $additionalCompleteCount++;
+                    } else {
+                        $additionalPendingCount++;
+                    }
+                } else {
+                    $featureItems[] = $task;
+                    if ($task['is_complete']) {
+                        $featureCompleteCount++;
+                    } else {
+                        $featurePendingCount++;
+                    }
+                }
+            }
+        }
+        $taskStmt->close();
+    }
+}
+
+$projectFeatureCount = count($featureItems);
+$projectAdditionalCount = count($additionalItems);
+$projectTotalCount = $projectFeatureCount + $projectAdditionalCount;
+$projectCompleteCount = $featureCompleteCount + $additionalCompleteCount;
+$projectProgress = $projectTotalCount > 0 ? (int) round(($projectCompleteCount / $projectTotalCount) * 100) : 0;
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
 ?>
 
+<style>
+:root {
+    --theme-primary: #1f6392;
+    --theme-dark: #184f73;
+    --theme-light: #3a7ca3;
+    --gray-50: #f8f9fa;
+    --gray-100: #f1f3f5;
+    --gray-200: #e9ecef;
+    --gray-300: #dee2e6;
+    --gray-500: #6b7280;
+    --gray-600: #6c757d;
+    --gray-800: #343a40;
+    --gray-900: #212529;
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+}
+
+.page-header-modern {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    color: #fff;
+}
+
+.page-header-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 320px;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12));
+    pointer-events: none;
+}
+
+.page-header-modern h2 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.45rem;
+}
+
+.page-header-modern p {
+    margin-bottom: 0;
+    color: rgba(255,255,255,0.9);
+}
+
+.filter-card,
+.summary-card,
+.checklist-card {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 22px;
+    box-shadow: var(--shadow-sm);
+}
+
+.filter-card {
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.summary-card {
+    padding: 1rem 1.1rem;
+}
+
+.summary-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-500);
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+}
+
+.summary-value {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--theme-primary);
+    line-height: 1;
+}
+
+.summary-sub {
+    margin-top: 0.3rem;
+    font-size: 0.78rem;
+    color: var(--gray-600);
+}
+
+.checklist-card {
+    overflow: hidden;
+}
+
+.checklist-card .card-head {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.checklist-card .card-head h5 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    background: #eef6ff;
+    color: var(--theme-primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.project-meta {
+    display: grid;
+    gap: 0.25rem;
+    font-size: 0.85rem;
+    color: var(--gray-600);
+}
+
+.progress-shell {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.progress-track {
+    height: 10px;
+    border-radius: 999px;
+    background: var(--gray-200);
+    overflow: hidden;
+}
+
+.progress-bar-modern {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.checklist-body {
+    padding: 1.5rem;
+}
+
+.checklist-section {
+    margin-bottom: 1.5rem;
+}
+
+.checklist-section:last-child {
+    margin-bottom: 0;
+}
+
+.section-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.85rem;
+}
+
+.section-title h6 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.section-title small {
+    color: var(--gray-500);
+}
+
+.feature-list {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.feature-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.85rem;
+    align-items: start;
+    padding: 1rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+}
+
+.feature-item.is-complete {
+    border-color: #bbf7d0;
+    background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+}
+
+.feature-item input[type="checkbox"] {
+    margin-top: 0.2rem;
+    width: 1rem;
+    height: 1rem;
+}
+
+.feature-title {
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: 0.2rem;
+}
+
+.feature-description {
+    color: var(--gray-600);
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+.feature-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.55rem;
+}
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.6rem;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1px solid var(--gray-200);
+    color: var(--gray-600);
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.pill.complete {
+    background: #ecfdf5;
+    border-color: #bbf7d0;
+    color: #047857;
+}
+
+.pill.pending {
+    background: #fff7ed;
+    border-color: #fed7aa;
+    color: #c2410c;
+}
+
+.pill.architect {
+    background: #eef6ff;
+    border-color: #dbeafe;
+    color: var(--theme-primary);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: var(--gray-600);
+}
+
+.empty-state i {
+    font-size: 2.3rem;
+    color: var(--gray-300);
+    margin-bottom: 0.75rem;
+}
+
+.requirements-box {
+    background: var(--gray-50);
+    border: 1px dashed var(--gray-200);
+    border-radius: 16px;
+    padding: 1rem;
+    white-space: pre-wrap;
+    line-height: 1.6;
+    color: var(--gray-800);
+}
+
+.checklist-summary-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.checklist-summary-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.7rem;
+    border-radius: 999px;
+    background: #eef6ff;
+    color: var(--theme-primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.checklist-summary-tag.warning {
+    background: #fff7ed;
+    color: #c2410c;
+}
+
+.checklist-summary-tag.success {
+    background: #ecfdf5;
+    color: #047857;
+}
+
+@media (max-width: 992px) {
+    .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .page-header-modern {
+        padding: 1.5rem;
+    }
+
+    .summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .checklist-body {
+        padding: 1rem;
+    }
+
+    .feature-item {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
 <div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-        <div>
-            <h2 class="mb-1"><i class="fas fa-bullhorn me-2 text-primary"></i>Release Status</h2>
-            <p class="text-muted mb-0">Read-only list of features completed after Architect merge.</p>
-        </div>
-        <span class="badge bg-success fs-6"><?php echo $completedFeatures ? (int) $completedFeatures->num_rows : 0; ?> completed</span>
+    <div class="page-header-modern">
+        <h2 class="mb-1"><i class="fas fa-bullhorn me-2"></i>Release Status</h2>
+        <p class="mb-0">Architect-created feature checklist, grouped by client and project, with complete and pending items shown separately.</p>
     </div>
 
-    <div class="card border-0 shadow-sm">
-        <div class="card-body">
-            <?php if($completedFeatures && $completedFeatures->num_rows > 0): ?>
-                <div class="table-responsive">
-                    <table class="table align-middle">
-                        <thead>
-                            <tr>
-                                <th>Feature</th>
-                                <th>Project / Client</th>
-                                <th>Developer</th>
-                                <th>Architect</th>
-                                <th>Release Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php while($feature = $completedFeatures->fetch_assoc()): ?>
-                                <tr>
-                                    <td>
-                                        <div class="fw-semibold"><?php echo htmlspecialchars((string) $feature['title']); ?></div>
-                                        <small class="text-muted"><?php echo htmlspecialchars(substr((string) ($feature['description'] ?? ''), 0, 110)); ?></small>
-                                    </td>
-                                    <td>
-                                        <div><?php echo htmlspecialchars((string) $feature['project_name']); ?></div>
-                                        <small class="text-muted"><?php echo htmlspecialchars((string) ($feature['client_name'] ?? 'No client')); ?></small>
-                                    </td>
-                                    <td><?php echo htmlspecialchars((string) ($feature['developer_name'] ?? 'Unassigned')); ?></td>
-                                    <td><?php echo htmlspecialchars((string) ($feature['architect_name'] ?? 'Architect')); ?></td>
-                                    <td>
-                                        <span class="badge bg-success">Completed</span>
-                                        <div class="small text-muted mt-1">
-                                            Merged: <?php echo !empty($feature['merged_at']) ? date('M d, Y h:i A', strtotime((string) $feature['merged_at'])) : 'n/a'; ?>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php else: ?>
-                <div class="text-center py-5 text-muted">
-                    <i class="fas fa-box-open fa-3x mb-3"></i>
-                    <p class="mb-0">No merged features are ready for Sales yet.</p>
-                </div>
-            <?php endif; ?>
+    <form method="GET" class="filter-card">
+        <div class="row g-3 align-items-end">
+            <div class="col-lg-4">
+                <label class="form-label fw-semibold">Client</label>
+                <select name="client_id" class="form-select" onchange="this.form.submit()">
+                    <?php foreach ($clients as $client): ?>
+                        <option value="<?php echo (int) $client['id']; ?>" <?php echo (int) $client['id'] === (int) $selectedClientId ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($client['name']); ?> (<?php echo (int) $client['project_count']; ?> projects)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="col-lg-5">
+                <label class="form-label fw-semibold">Project</label>
+                <select name="project_id" class="form-select" onchange="this.form.submit()">
+                    <?php if ($projectOptions): ?>
+                        <?php foreach ($projectOptions as $project): ?>
+                            <option value="<?php echo (int) $project['id']; ?>" <?php echo (int) $project['id'] === (int) $selectedProjectId ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($project['name']); ?>
+                                <?php echo $project['feature_count'] > 0 || $project['additional_count'] > 0 ? ' (' . (int) $project['feature_count'] . ' features, ' . (int) $project['additional_count'] . ' additional)' : ''; ?>
+                            </option>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <option value="">No projects available</option>
+                    <?php endif; ?>
+                </select>
+            </div>
+            <div class="col-lg-3">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-filter me-1"></i> Load Checklist
+                </button>
+            </div>
         </div>
-    </div>
+    </form>
+
+    <?php if ($selectedProject): ?>
+        <div class="summary-grid">
+            <div class="summary-card">
+                <div class="summary-label">Completed</div>
+                <div class="summary-value"><?php echo $projectCompleteCount; ?></div>
+                <div class="summary-sub">Checklist items finished</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Pending</div>
+                <div class="summary-value"><?php echo max(0, $projectTotalCount - $projectCompleteCount); ?></div>
+                <div class="summary-sub">Still waiting for release</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Additional Requirements</div>
+                <div class="summary-value"><?php echo $projectAdditionalCount; ?></div>
+                <div class="summary-sub">Architect enhancement items</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-label">Checklist Progress</div>
+                <div class="summary-value"><?php echo $projectProgress; ?>%</div>
+                <div class="summary-sub">Architect checklist completion</div>
+            </div>
+        </div>
+
+        <div class="checklist-card">
+            <div class="card-head">
+                <div>
+                    <h5><i class="fas fa-list-check me-2 text-primary"></i><?php echo htmlspecialchars((string) $selectedProject['name']); ?></h5>
+                    <div class="project-meta">
+                        <span>Client: <?php echo htmlspecialchars((string) $selectedProject['client_name']); ?></span>
+                        <span>Status: <?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', (string) $selectedProject['status']))); ?></span>
+                    </div>
+                </div>
+                <div class="progress-shell" style="min-width: 240px;">
+                <div class="d-flex justify-content-between gap-2">
+                    <small class="text-muted fw-semibold">Architect checklist</small>
+                    <small class="text-muted fw-semibold"><?php echo $projectCompleteCount; ?>/<?php echo $projectTotalCount; ?></small>
+                </div>
+                    <div class="progress-track">
+                        <div class="progress-bar-modern" style="width: <?php echo $projectProgress; ?>%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="checklist-body">
+                <div class="checklist-section">
+                    <div class="section-title">
+                        <h6>Features from Architect</h6>
+                        <small><?php echo $featureCompleteCount; ?> complete, <?php echo $featurePendingCount; ?> pending</small>
+                    </div>
+                    <?php if ($featureItems): ?>
+                        <div class="feature-list">
+                            <?php foreach ($featureItems as $feature): ?>
+                                <div class="feature-item <?php echo $feature['is_complete'] ? 'is-complete' : ''; ?>">
+                                    <input type="checkbox" disabled <?php echo $feature['is_complete'] ? 'checked' : ''; ?>>
+                                    <div>
+                                        <div class="feature-title"><?php echo htmlspecialchars((string) $feature['title']); ?></div>
+                                        <div class="feature-description">
+                                            <?php echo htmlspecialchars((string) ($feature['description'] ?? 'No description provided.')); ?>
+                                        </div>
+                                        <div class="feature-meta">
+                                            <span class="pill <?php echo $feature['is_complete'] ? 'complete' : 'pending'; ?>">
+                                                <i class="fas fa-<?php echo $feature['is_complete'] ? 'check-circle' : 'clock'; ?>"></i>
+                                                <?php echo htmlspecialchars((string) $feature['status_label']); ?>
+                                            </span>
+                                            <span class="pill architect">
+                                                <i class="fas fa-user-gear"></i>
+                                                <?php echo htmlspecialchars((string) $feature['source_label']); ?>
+                                            </span>
+                                            <?php if (!empty($feature['developer_name'])): ?>
+                                                <span class="pill">
+                                                    <i class="fas fa-user"></i>
+                                                    <?php echo htmlspecialchars((string) $feature['developer_name']); ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    <span class="pill <?php echo $feature['is_complete'] ? 'complete' : 'pending'; ?>">
+                                        <?php echo $feature['is_complete'] ? 'Complete' : 'Pending'; ?>
+                                    </span>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="fas fa-clipboard-list"></i>
+                            <p class="mb-0">No architect features have been defined for this project yet.</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="checklist-section">
+                    <div class="section-title">
+                        <h6>Additional Requirements from Architect</h6>
+                        <small><?php echo $additionalCompleteCount; ?> complete, <?php echo $additionalPendingCount; ?> pending</small>
+                    </div>
+
+                    <?php if ($additionalItems): ?>
+                        <div class="feature-list">
+                            <?php foreach ($additionalItems as $feature): ?>
+                                <div class="feature-item <?php echo $feature['is_complete'] ? 'is-complete' : ''; ?>">
+                                    <input type="checkbox" disabled <?php echo $feature['is_complete'] ? 'checked' : ''; ?>>
+                                    <div>
+                                        <div class="feature-title"><?php echo htmlspecialchars((string) $feature['title']); ?></div>
+                                        <div class="feature-description">
+                                            <?php echo htmlspecialchars((string) ($feature['description'] ?? 'No description provided.')); ?>
+                                        </div>
+                                        <div class="feature-meta">
+                                            <span class="pill <?php echo $feature['is_complete'] ? 'complete' : 'pending'; ?>">
+                                                <i class="fas fa-<?php echo $feature['is_complete'] ? 'check-circle' : 'clock'; ?>"></i>
+                                                <?php echo htmlspecialchars((string) $feature['status_label']); ?>
+                                            </span>
+                                            <span class="pill architect">
+                                                <i class="fas fa-user-gear"></i>
+                                                <?php echo htmlspecialchars((string) $feature['source_label']); ?>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <span class="pill <?php echo $feature['is_complete'] ? 'complete' : 'pending'; ?>">
+                                        <?php echo $feature['is_complete'] ? 'Complete' : 'Pending'; ?>
+                                    </span>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php elseif ($additionalRequirementsText !== ''): ?>
+                        <div class="requirements-box"><?php echo htmlspecialchars($additionalRequirementsText); ?></div>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="fas fa-square-minus"></i>
+                            <p class="mb-0">No additional requirements were captured for this project.</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($additionalRequirementsText !== ''): ?>
+                    <div class="checklist-section">
+                        <div class="section-title">
+                            <h6>Additional Requirements Notes</h6>
+                            <small>From Sales intake / project brief</small>
+                        </div>
+                        <div class="requirements-box"><?php echo htmlspecialchars($additionalRequirementsText); ?></div>
+                    </div>
+                <?php endif; ?>
+
+                <div class="checklist-section">
+                    <div class="section-title">
+                        <h6>Release Checklist Snapshot</h6>
+                        <small>Architect items only</small>
+                    </div>
+                    <div class="checklist-summary-tags">
+                        <span class="checklist-summary-tag success"><i class="fas fa-check"></i> <?php echo $projectCompleteCount; ?> complete</span>
+                        <span class="checklist-summary-tag warning"><i class="fas fa-hourglass-half"></i> <?php echo max(0, $projectTotalCount - $projectCompleteCount); ?> pending</span>
+                        <span class="checklist-summary-tag"><i class="fas fa-list-check"></i> <?php echo $projectFeatureCount; ?> features</span>
+                        <span class="checklist-summary-tag"><i class="fas fa-bell-concierge"></i> <?php echo $projectAdditionalCount; ?> additional requirements</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php else: ?>
+        <div class="checklist-card">
+            <div class="empty-state">
+                <i class="fas fa-folder-open"></i>
+                <p class="mb-0">No project checklist is available yet for this client.</p>
+            </div>
+        </div>
+    <?php endif; ?>
 </div>
 
 <?php include '../../includes/footer.php'; ?>

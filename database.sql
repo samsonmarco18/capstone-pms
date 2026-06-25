@@ -821,16 +821,58 @@ CREATE TABLE repository_operations (
 
 -- Insert default admin user (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('admin', 'admin@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', 'Administration', 'admin', 'active', 'Admin');
+('admin', 'admin@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', NULL, 'admin', 'active', 'Admin');
 
 -- Insert Sample Users for Each Role (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', 'Sales', 'sales', 'active', 'Sales Manager'),
-('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', 'Architecture', 'architect', 'active', 'System Architect'),
-('sul_user', 'sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Robert SUL', 'Service Unit', 'sul', 'active', 'Service Unit Leader'),
-('qa_user', 'qa@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Quinn QA Engineer', 'Quality Assurance', 'qa', 'active', 'QA Engineer'),
-('expert', 'expert@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Dr. Expert Senior', 'Development', 'expert', 'active', 'Senior Expert'),
-('developer', 'developer@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'David Developer', 'Development', 'developer', 'active', 'Software Developer');
+('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', NULL, 'sales', 'active', 'Sales Manager'),
+('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', NULL, 'architect', 'active', 'System Architect'),
+('sul_user', 'sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Robert Frontend SUL', 'Frontend Developer', 'sul', 'active', 'Service Unit Leader'),
+('qa_user', 'qa@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Quinn QA Engineer', 'QA Engineer', 'qa', 'active', 'QA Engineer'),
+('expert', 'expert@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Dr. Frontend Expert', 'Frontend Developer', 'expert', 'active', 'Frontend Expert'),
+('developer', 'developer@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'David Frontend Developer', 'Frontend Developer', 'developer', 'active', 'Frontend Developer');
+
+-- Department dummy teams (password: password)
+INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
+('frontend_sul_2', 'frontend.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ana Frontend SUL', 'Frontend Developer', 'sul', 'active', 'Service Unit Leader'),
+('frontend_dev_2', 'frontend.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Liam Frontend Developer', 'Frontend Developer', 'developer', 'active', 'Frontend Developer'),
+('frontend_dev_3', 'frontend.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Mia Frontend Developer', 'Frontend Developer', 'developer', 'active', 'Frontend Developer'),
+('backend_sul_1', 'backend.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Noel Backend SUL', 'Backend Developer', 'sul', 'active', 'Service Unit Leader'),
+('backend_sul_2', 'backend.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Rina Backend SUL', 'Backend Developer', 'sul', 'active', 'Service Unit Leader'),
+('backend_expert_1', 'backend.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Elena Backend Expert', 'Backend Developer', 'expert', 'active', 'Backend Expert'),
+('backend_dev_1', 'backend.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Carlo Backend Developer', 'Backend Developer', 'developer', 'active', 'Backend Developer'),
+('backend_dev_2', 'backend.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Jessa Backend Developer', 'Backend Developer', 'developer', 'active', 'Backend Developer'),
+('backend_dev_3', 'backend.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Paolo Backend Developer', 'Backend Developer', 'developer', 'active', 'Backend Developer'),
+('fullstack_sul_1', 'fullstack.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Grace Full Stack SUL', 'Full Stack Developer', 'sul', 'active', 'Service Unit Leader'),
+('fullstack_sul_2', 'fullstack.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Marco Full Stack SUL', 'Full Stack Developer', 'sul', 'active', 'Service Unit Leader'),
+('fullstack_expert_1', 'fullstack.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Sofia Full Stack Expert', 'Full Stack Developer', 'expert', 'active', 'Full Stack Expert'),
+('fullstack_dev_1', 'fullstack.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Arvin Full Stack Developer', 'Full Stack Developer', 'developer', 'active', 'Full Stack Developer'),
+('fullstack_dev_2', 'fullstack.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Bianca Full Stack Developer', 'Full Stack Developer', 'developer', 'active', 'Full Stack Developer'),
+('fullstack_dev_3', 'fullstack.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ken Full Stack Developer', 'Full Stack Developer', 'developer', 'active', 'Full Stack Developer'),
+('qaeng_sul_1', 'qaeng.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Iris QA SUL', 'QA Engineer', 'sul', 'active', 'Service Unit Leader'),
+('qaeng_sul_2', 'qaeng.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Owen QA SUL', 'QA Engineer', 'sul', 'active', 'Service Unit Leader'),
+('qaeng_expert_1', 'qaeng.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Nina QA Expert', 'QA Engineer', 'expert', 'active', 'QA Expert'),
+('qaeng_dev_1', 'qaeng.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Sam QA Developer', 'QA Engineer', 'developer', 'active', 'QA Automation Developer'),
+('qaeng_dev_2', 'qaeng.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Tara QA Developer', 'QA Engineer', 'developer', 'active', 'QA Automation Developer'),
+('qaeng_dev_3', 'qaeng.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Vince QA Developer', 'QA Engineer', 'developer', 'active', 'QA Automation Developer'),
+('uiux_sul_1', 'uiux.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Lara UI UX SUL', 'UI/UX Designer', 'sul', 'active', 'Service Unit Leader'),
+('uiux_sul_2', 'uiux.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ramon UI UX SUL', 'UI/UX Designer', 'sul', 'active', 'Service Unit Leader'),
+('uiux_expert_1', 'uiux.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Celine UI UX Expert', 'UI/UX Designer', 'expert', 'active', 'UI/UX Expert'),
+('uiux_dev_1', 'uiux.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Diane UI UX Developer', 'UI/UX Designer', 'developer', 'active', 'UI/UX Developer'),
+('uiux_dev_2', 'uiux.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Evan UI UX Developer', 'UI/UX Designer', 'developer', 'active', 'UI/UX Developer'),
+('uiux_dev_3', 'uiux.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Faye UI UX Developer', 'UI/UX Designer', 'developer', 'active', 'UI/UX Developer'),
+('devops_sul_1', 'devops.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Gio DevOps SUL', 'DevOps Engineer', 'sul', 'active', 'Service Unit Leader'),
+('devops_sul_2', 'devops.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Hanna DevOps SUL', 'DevOps Engineer', 'sul', 'active', 'Service Unit Leader'),
+('devops_expert_1', 'devops.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ivan DevOps Expert', 'DevOps Engineer', 'expert', 'active', 'DevOps Expert'),
+('devops_dev_1', 'devops.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Jude DevOps Developer', 'DevOps Engineer', 'developer', 'active', 'DevOps Developer'),
+('devops_dev_2', 'devops.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Kara DevOps Developer', 'DevOps Engineer', 'developer', 'active', 'DevOps Developer'),
+('devops_dev_3', 'devops.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Luis DevOps Developer', 'DevOps Engineer', 'developer', 'active', 'DevOps Developer'),
+('database_sul_1', 'database.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Mara Database SUL', 'Database Administrator', 'sul', 'active', 'Service Unit Leader'),
+('database_sul_2', 'database.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Nico Database SUL', 'Database Administrator', 'sul', 'active', 'Service Unit Leader'),
+('database_expert_1', 'database.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Olive Database Expert', 'Database Administrator', 'expert', 'active', 'Database Expert'),
+('database_dev_1', 'database.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Pia Database Developer', 'Database Administrator', 'developer', 'active', 'Database Developer'),
+('database_dev_2', 'database.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Quincy Database Developer', 'Database Administrator', 'developer', 'active', 'Database Developer'),
+('database_dev_3', 'database.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Reese Database Developer', 'Database Administrator', 'developer', 'active', 'Database Developer');
 
 -- Insert Technologies
 INSERT INTO technologies (name, category, price, status, expiry_date, renewal_cost, description, created_by) VALUES
@@ -851,6 +893,17 @@ INSERT INTO clients (name, contact_person, email, phone, address, company_type, 
 INSERT INTO projects (client_id, name, description, status, timeline_start, timeline_end, complexity_level, created_by, architect_id, sul_id) VALUES
 (1, 'E-Commerce Platform', 'Complete e-commerce solution with payment gateway', 'requirements_gathering', '2026-03-01', '2026-12-31', 'complex', 1, 3, 4),
 (2, 'Patient Management System', 'Hospital management and patient tracking system', 'pending', '2026-04-01', '2027-03-31', 'complex', 1, NULL, NULL);
+
+-- Sample project feature checklist data
+INSERT INTO tasks (project_id, title, description, task_type, assigned_to, assigned_by, status, priority, deadline, completed_at, architect_reviewed_by, architect_reviewed_at, merged_at, release_notified_at) VALUES
+(1, 'Product Catalog', 'Customer can browse products by category and search terms.', 'feature', (SELECT id FROM users WHERE username = 'developer'), 3, 'completed', 'high', '2026-06-15', NOW(), 3, NOW(), NOW(), NOW()),
+(1, 'Cart and Checkout', 'Customer can manage cart items and complete checkout.', 'feature', (SELECT id FROM users WHERE username = 'web_dev_2'), 3, 'completed', 'critical', '2026-07-15', NOW(), 3, NOW(), NOW(), NOW()),
+(1, 'Payment Gateway Integration', 'Online payment provider integration with transaction logging.', 'feature', (SELECT id FROM users WHERE username = 'web_dev_3'), 3, 'in_progress', 'critical', '2026-08-15', NULL, NULL, NULL, NULL, NULL),
+(1, 'Additional Loyalty Rewards', 'Additional client request: points-based rewards and vouchers.', 'enhancement', (SELECT id FROM users WHERE username = 'developer'), 3, 'qa_passed', 'medium', '2026-09-15', NULL, NULL, NULL, NULL, NULL),
+(2, 'Patient Registration', 'Staff can register patient profiles and emergency contacts.', 'feature', (SELECT id FROM users WHERE username = 'data_dev_1'), 3, 'completed', 'high', '2026-07-20', NOW(), 3, NOW(), NOW(), NOW()),
+(2, 'Appointment Scheduling', 'Clinic staff can create and update appointment schedules.', 'feature', (SELECT id FROM users WHERE username = 'mobile_dev_1'), 3, 'in_progress', 'high', '2026-08-30', NULL, NULL, NULL, NULL, NULL),
+(2, 'Medical Records', 'Secure medical history and consultation notes module.', 'feature', (SELECT id FROM users WHERE username = 'data_dev_2'), 3, 'todo', 'critical', '2026-10-15', NULL, NULL, NULL, NULL, NULL),
+(2, 'Additional Insurance Export', 'Additional architect request: export insurance claim summaries.', 'enhancement', (SELECT id FROM users WHERE username = 'data_dev_3'), 3, 'completed', 'medium', '2026-11-15', NOW(), 3, NOW(), NOW(), NOW());
 
 -- Default Settings
 INSERT INTO settings (setting_key, setting_value, description, setting_type) VALUES

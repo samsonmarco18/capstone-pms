@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/project-progress.php';
+
 function resolveFolderProjectId(mysqli|PgsqlMysqliCompatConnection $conn, array $folder): int
 {
     $projectId = (int) ($folder['project_id'] ?? 0);
@@ -219,6 +221,24 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
     $unassignedStmt->execute();
     $taskCounts['unassigned'] = (int) ($unassignedStmt->get_result()->fetch_assoc()['total'] ?? 0);
     $unassignedStmt->close();
+
+    $featureProgressStmt = $conn->prepare(
+        'SELECT
+            COUNT(*) AS total_features,
+            SUM(CASE WHEN ' . projectProgressMergedCondition('t') . ' THEN 1 ELSE 0 END) AS merged_features
+         FROM tasks t
+         WHERE t.project_id = ? AND ' . projectProgressFeatureCondition('t')
+    );
+    if ($featureProgressStmt !== false) {
+        $featureProgressStmt->bind_param('i', $projectId);
+        $featureProgressStmt->execute();
+        $featureProgress = $featureProgressStmt->get_result()->fetch_assoc() ?: [];
+        $featureProgressStmt->close();
+
+        $taskCounts['total_features'] = (int) ($featureProgress['total_features'] ?? 0);
+        $taskCounts['merged_features'] = (int) ($featureProgress['merged_features'] ?? 0);
+        $taskCounts['progress_percent'] = projectProgressPercent($taskCounts['total_features'], $taskCounts['merged_features']);
+    }
 
     $recentTaskStmt = $conn->prepare(
         'SELECT t.id, t.title, t.status, t.priority, t.deadline, u.full_name AS assigned_to_name

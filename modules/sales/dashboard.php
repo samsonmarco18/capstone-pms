@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
+require_once '../../includes/project-progress.php';
 require_once '../../includes/schedule-calendar.php';
 requireRole('sales');
 
@@ -271,6 +272,8 @@ $monthlySales = $conn->query("
     GROUP BY DATE_FORMAT(created_at, '%Y-%m')
     ORDER BY month ASC
 ");
+
+$projectChecklists = fetchSalesProjectChecklists($conn, 5);
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -1044,6 +1047,108 @@ include '../../includes/navbar.php';
     color: white;
 }
 
+/* Project Release Checklist */
+.release-checklist {
+    display: grid;
+    gap: 1rem;
+    padding: 1.25rem;
+}
+
+.release-project {
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 1rem;
+    background: #ffffff;
+}
+
+.release-project-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: flex-start;
+    margin-bottom: 0.85rem;
+}
+
+.release-project-title {
+    margin: 0 0 0.2rem;
+    color: var(--gray-900);
+    font-size: 0.98rem;
+    font-weight: 700;
+}
+
+.release-project-client {
+    color: var(--gray-600);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.release-progress {
+    min-width: 150px;
+    text-align: right;
+}
+
+.release-progress-label {
+    color: var(--gray-600);
+    font-size: 0.74rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+}
+
+.release-progress-track {
+    width: 100%;
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--gray-200);
+}
+
+.release-progress-bar {
+    height: 100%;
+    border-radius: inherit;
+    background: #10b981;
+}
+
+.release-section-title {
+    margin: 0.75rem 0 0.45rem;
+    color: var(--gray-600);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.release-feature-list {
+    display: grid;
+    gap: 0.45rem;
+}
+
+.release-feature {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    gap: 0.55rem;
+    align-items: center;
+    min-width: 0;
+    color: var(--gray-900);
+    font-size: 0.84rem;
+}
+
+.release-feature input {
+    width: 16px;
+    height: 16px;
+    accent-color: #10b981;
+    pointer-events: none;
+}
+
+.release-feature span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.release-feature small {
+    color: var(--gray-600);
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .stats-grid {
@@ -1076,6 +1181,25 @@ include '../../includes/navbar.php';
 
     .planner-modal .planner-side {
         grid-template-columns: 1fr;
+    }
+
+    .release-project-header {
+        flex-direction: column;
+    }
+
+    .release-progress {
+        width: 100%;
+        min-width: 0;
+        text-align: left;
+    }
+
+    .release-feature {
+        grid-template-columns: 18px minmax(0, 1fr);
+    }
+
+    .release-feature small {
+        grid-column: 2;
+        white-space: normal;
     }
 }
 </style>
@@ -1164,6 +1288,74 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="card-body">
                     <canvas id="statusChart" style="height: 280px; width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="list-card">
+                <div class="card-header">
+                    <h5>
+                        <i class="fas fa-list-check"></i>
+                        Project Release Checklist
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <?php if ($projectChecklists): ?>
+                        <div class="release-checklist">
+                            <?php foreach ($projectChecklists as $projectChecklist): ?>
+                                <div class="release-project">
+                                    <div class="release-project-header">
+                                        <div>
+                                            <h6 class="release-project-title"><?php echo htmlspecialchars((string) $projectChecklist['project_name']); ?></h6>
+                                            <div class="release-project-client"><?php echo htmlspecialchars((string) $projectChecklist['client_name']); ?></div>
+                                        </div>
+                                        <div class="release-progress">
+                                            <div class="release-progress-label">
+                                                <?php echo (int) $projectChecklist['merged_features']; ?> / <?php echo (int) $projectChecklist['total_features']; ?> merged
+                                            </div>
+                                            <div class="release-progress-track">
+                                                <div class="release-progress-bar" style="width: <?php echo (int) $projectChecklist['progress']; ?>%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <?php
+                                    $renderFeatureList = static function (array $features): void {
+                                        echo '<div class="release-feature-list">';
+                                        foreach ($features as $feature) {
+                                            $isMerged = !empty($feature['is_merged']);
+                                            $mergedBy = trim((string) ($feature['architect_name'] ?? ''));
+                                            echo '<label class="release-feature">';
+                                            echo '<input type="checkbox" disabled ' . ($isMerged ? 'checked' : '') . '>';
+                                            echo '<span>' . htmlspecialchars((string) ($feature['title'] ?? 'Feature')) . '</span>';
+                                            echo '<small>' . ($isMerged ? 'Merged' . ($mergedBy !== '' ? ' by ' . htmlspecialchars($mergedBy) : '') : 'Waiting') . '</small>';
+                                            echo '</label>';
+                                        }
+                                        echo '</div>';
+                                    };
+                                    ?>
+
+                                    <?php if (!empty($projectChecklist['features'])): ?>
+                                        <div class="release-section-title">Features</div>
+                                        <?php $renderFeatureList($projectChecklist['features']); ?>
+                                    <?php endif; ?>
+
+                                    <?php if (!empty($projectChecklist['additional_features'])): ?>
+                                        <div class="release-section-title">Additional Features</div>
+                                        <?php $renderFeatureList($projectChecklist['additional_features']); ?>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="empty-state-modern">
+                            <i class="fas fa-list-check"></i>
+                            <p>No feature checklist items yet</p>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

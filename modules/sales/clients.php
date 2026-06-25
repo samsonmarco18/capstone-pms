@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-progress.php';
 requireRole('sales');
 
 $conn = getConnection();
@@ -297,14 +298,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 $search = isset($_GET['search']) ? $_GET['search'] : '';
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
 
-$query = "SELECT * FROM clients WHERE 1=1";
+$featureCondition = projectProgressFeatureCondition('t');
+$mergedCondition = projectProgressMergedCondition('t');
+$query = "
+    SELECT
+        c.*,
+        COALESCE(cp.total_features, 0) AS total_features,
+        COALESCE(cp.merged_features, 0) AS merged_features
+    FROM clients c
+    LEFT JOIN (
+        SELECT
+            p.client_id,
+            COUNT(t.id) AS total_features,
+            SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END) AS merged_features
+        FROM projects p
+        LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
+        GROUP BY p.client_id
+    ) cp ON cp.client_id = c.id
+    WHERE 1=1
+";
 if ($search) {
-    $query .= " AND (name LIKE '%$search%' OR email LIKE '%$search%' OR contact_person LIKE '%$search%')";
+    $query .= " AND (c.name LIKE '%$search%' OR c.email LIKE '%$search%' OR c.contact_person LIKE '%$search%')";
 }
 if ($statusFilter) {
-    $query .= " AND status = '$statusFilter'";
+    $query .= " AND c.status = '$statusFilter'";
 }
-$query .= " ORDER BY created_at DESC";
+$query .= " ORDER BY c.created_at DESC";
 
 $clients = $conn->query($query);
 
@@ -1466,6 +1485,7 @@ include '../../includes/navbar.php';
     <?php 
     $daysLeft = $client['deadline'] ? ceil((strtotime($client['deadline']) - time()) / (60 * 60 * 24)) : null;
     $deadlineClass = $daysLeft <= 7 ? 'urgent' : ($daysLeft <= 30 ? 'warning' : 'normal');
+    $featureProgress = projectProgressPercent((int) ($client['total_features'] ?? 0), (int) ($client['merged_features'] ?? 0));
     ?>
     <tr>
         <td>
@@ -1481,9 +1501,9 @@ include '../../includes/navbar.php';
         <td>
             <div class="progress-wrapper">
                 <div class="progress">
-                    <div class="progress-bar" style="width: <?php echo $client['progress']; ?>%"></div>
+                    <div class="progress-bar" style="width: <?php echo $featureProgress; ?>%"></div>
                 </div>
-                <span class="progress-text"><?php echo $client['progress']; ?>% Complete</span>
+                <span class="progress-text"><?php echo $featureProgress; ?>% Complete</span>
             </div>
         </td>
         <td>
