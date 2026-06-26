@@ -186,6 +186,19 @@ $conn = getConnection();
     box-shadow: var(--shadow-sm);
 }
 
+#folderBrowserCard {
+    overflow: visible;
+}
+
+#folderBrowserCard .table-container {
+    border-radius: 0 0 20px 20px;
+}
+
+.folder-actions-dropdown .dropdown-menu {
+    z-index: 1070;
+    min-width: 150px;
+}
+
 .main-card .card-header {
     padding: 1rem 1.25rem;
     background: white;
@@ -682,13 +695,13 @@ $conn = getConnection();
                         <button class="btn-primary-modern" onclick="uploadToCurrentFolder()">
                             <i class="fas fa-upload"></i> Upload
                         </button>
-                        <div class="dropdown">
-                            <button class="btn-outline-modern dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <div class="dropdown folder-actions-dropdown">
+                            <button class="btn-outline-modern dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false">
                                 <i class="fas fa-ellipsis-v"></i>
                             </button>
                             <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="#" onclick="exportCurrentFolder()"><i class="fas fa-download me-2"></i>Export ZIP</a></li>
-                                <li><a class="dropdown-item" href="#" onclick="refreshFolder()"><i class="fas fa-sync-alt me-2"></i>Refresh</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportCurrentFolder(); return false;"><i class="fas fa-download me-2"></i>Export ZIP</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="refreshFolder(); return false;"><i class="fas fa-sync-alt me-2"></i>Refresh</a></li>
                             </ul>
                         </div>
                     </div>
@@ -957,11 +970,11 @@ function initTreeEvents() {
             $(this).find('.folder-expand').toggleClass('fa-chevron-down fa-chevron-right');
         }
 
-        if (String(folderId) !== SHARED_FOLDERS_ID) {
-            openFolderById(folderId);
-        } else {
-            loadSharedFolders();
+        if (String(folderId) === SHARED_FOLDERS_ID) {
+            return;
         }
+
+        openFolderById(folderId);
     });
 }
 

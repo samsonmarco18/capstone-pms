@@ -162,14 +162,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             min-height: 100vh;
             font-family: 'Source Sans 3', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #0b617b;
+            overflow-x: hidden;
         }
 
         .login-shell {
             position: relative;
             min-height: 100vh;
+            min-height: 100svh;
+            min-height: 100dvh;
             display: grid;
             grid-template-columns: 58% 42%;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
             background:
                 linear-gradient(120deg, rgba(7, 70, 90, 0.9), rgba(12, 108, 136, 0.88)),
                 url('assets/img/loginBackground.png');
@@ -433,10 +437,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .role-select {
-            width: 140px;
+            width: 100%;
+            max-width: 100%;
             padding-right: 26px;
             color: #42738b;
-            font-size: 0.78rem;
+            font-size: 0.85rem;
             border: 0 !important;
             border-top: 0 !important;
             border-right: 0 !important;
@@ -474,8 +479,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             .login-brand {
                 justify-content: center;
-                min-height: 44vh;
-                padding: 36px 28px 12px;
+                min-height: auto;
+                padding: 32px 24px 8px;
             }
 
             .brand-panel {
@@ -486,10 +491,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             .brand-logo {
                 transform: translateX(0);
+                width: min(280px, 72vw);
             }
 
             .login-form-wrap {
-                padding: 12px 20px 28px;
+                padding: 16px 20px 32px;
+            }
+
+            .login-card {
+                transform: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .brand-logo {
+                width: min(240px, 68vw);
+                margin-bottom: 18px;
+            }
+
+            .brand-name {
+                font-size: 2.4rem;
+            }
+
+            .brand-subtitle {
+                font-size: 0.95rem;
+            }
+
+            .brand-system {
+                font-size: 0.82rem;
+                max-width: 18rem;
+                text-align: center;
+            }
+
+            .login-form-wrap {
+                padding-top: 8px;
+            }
+
+            .login-card {
+                padding: 26px 22px 22px;
+                border-radius: 18px;
+            }
+
+            .login-row {
+                justify-content: flex-end;
             }
         }
 
@@ -500,9 +544,96 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 padding-right: 18px;
             }
 
+            .login-brand {
+                padding-top: 24px;
+            }
+
+            .brand-logo {
+                width: min(200px, 64vw);
+                margin-bottom: 14px;
+            }
+
+            .brand-name {
+                font-size: 2rem;
+            }
+
+            .brand-lockup {
+                gap: 10px;
+            }
+
+            .brand-subtitle {
+                font-size: 0.88rem;
+                line-height: 1.3;
+            }
+
+            .brand-system {
+                font-size: 0.76rem;
+                max-width: 15rem;
+            }
+
             .login-card {
                 max-width: 100%;
-                padding: 28px 24px 24px;
+                padding: 24px 18px 20px;
+                border-radius: 16px;
+            }
+
+            .login-card h1 {
+                font-size: 1.1rem;
+            }
+
+            .login-card p {
+                font-size: 0.7rem;
+            }
+
+            .form-group {
+                margin-bottom: 18px;
+            }
+
+            .login-row {
+                margin-top: 4px;
+                margin-bottom: 10px;
+            }
+
+            .forgot-password {
+                font-size: 0.76rem;
+            }
+
+            .btn-signin {
+                padding: 12px 18px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .login-form-wrap,
+            .login-brand {
+                padding-left: 14px;
+                padding-right: 14px;
+            }
+
+            .brand-logo {
+                width: min(175px, 60vw);
+            }
+
+            .brand-name {
+                font-size: 1.8rem;
+            }
+
+            .brand-subtitle {
+                font-size: 0.82rem;
+            }
+
+            .login-card {
+                padding: 22px 16px 18px;
+            }
+
+            .password-toggle {
+                width: 24px;
+                height: 24px;
+                right: 0;
+            }
+
+            .input-wrap .form-control {
+                padding-right: 32px;
             }
         }
     </style>

@@ -9,7 +9,7 @@ function initSidebar() {
     const sidebar = $('#sidebar-wrapper');
     const content = $('#page-content-wrapper');
     const overlay = $('.sidebar-overlay');
-    const toggle = $('#menu-toggle');
+    const toggle = $('.sidebar-toggle-btn');
     const desktopStateKey = 'erni.sidebar.collapsed';
     const mobileStateKey = 'erni.sidebar.mobile_open';
 
@@ -39,7 +39,7 @@ function initSidebar() {
 
     applySidebarState();
 
-    $('#menu-toggle').on('click', function (event) {
+    toggle.on('click', function (event) {
         event.preventDefault();
 
         if (window.innerWidth <= 992) {
