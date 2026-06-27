@@ -506,6 +506,13 @@ body.dark-mode .create-group-modal .modal-header {
     border-bottom: 1px solid rgba(138, 210, 255, 0.12) !important;
 }
 
+html[data-theme="dark"] .create-group-modal .btn-close,
+body[data-theme="dark"] .create-group-modal .btn-close,
+body.dark-mode .create-group-modal .btn-close {
+    filter: invert(1) grayscale(100%) brightness(2);
+    opacity: 0.9;
+}
+
 html[data-theme="dark"] .create-group-modal .modal-title,
 body[data-theme="dark"] .create-group-modal .modal-title,
 body.dark-mode .create-group-modal .modal-title {
