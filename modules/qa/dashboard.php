@@ -175,7 +175,10 @@ $recentResults = $conn->query("
 $qaQueueCount = $queue ? (int) $queue->num_rows : 0;
 $qaPassedCount = (int) $conn->query("SELECT COUNT(*) AS count FROM tasks WHERE status IN ('qa_passed', 'architect_review', 'completed') AND qa_reviewed_at IS NOT NULL")->fetch_assoc()['count'];
 $qaReturnedCount = (int) $conn->query("SELECT COUNT(*) AS count FROM tasks WHERE status = 'qa_failed' AND qa_reviewed_at IS NOT NULL")->fetch_assoc()['count'];
-$qaReviewedThisMonth = (int) $conn->query("SELECT COUNT(*) AS count FROM tasks WHERE qa_reviewed_at IS NOT NULL AND qa_reviewed_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')")->fetch_assoc()['count'];
+$qaReviewedThisMonthQuery = (defined('DB_DRIVER') && DB_DRIVER === 'pgsql')
+    ? "SELECT COUNT(*) AS count FROM tasks WHERE qa_reviewed_at IS NOT NULL AND qa_reviewed_at >= DATE_TRUNC('month', CURRENT_DATE)"
+    : "SELECT COUNT(*) AS count FROM tasks WHERE qa_reviewed_at IS NOT NULL AND qa_reviewed_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')";
+$qaReviewedThisMonth = (int) $conn->query($qaReviewedThisMonthQuery)->fetch_assoc()['count'];
 $selectedChecklistTotal = 0;
 $selectedChecklistPassed = 0;
 $selectedChecklistIssues = 0;
