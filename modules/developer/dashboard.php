@@ -508,6 +508,119 @@ include '../../includes/navbar.php';
     margin: 0;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .welcome-banner,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .attention-item {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item-custom:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr:hover {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .welcome-banner h2,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .attention-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .welcome-banner p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card .stat-sub,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .attention-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item-custom,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-custom {
+    background: rgba(157, 182, 207, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-days.normal {
+    background: rgba(37, 99, 235, 0.16);
+    color: #93c5fd;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-days.warning,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .attention-reason.warning {
+    background: rgba(217, 119, 6, 0.16);
+    color: #fbbf24;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-days.urgent,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-urgent,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .attention-reason.urgent {
+    background: rgba(220, 38, 38, 0.16);
+    color: #fca5a5;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .attention-reason {
+    background: rgba(31, 99, 146, 0.16);
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-preview {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-today-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-date-group,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-item {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-date-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-text {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-subtitle,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-today-badge span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-time,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-kicker {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-open-btn,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-more-btn {
+    background: rgba(31, 99, 146, 0.14) !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: var(--theme-primary) !important;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .stats-grid {
@@ -846,6 +959,12 @@ include '../../includes/navbar.php';
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+const developerDarkMode = document.documentElement.dataset.theme === 'dark'
+    || document.body.dataset.theme === 'dark'
+    || document.body.classList.contains('dark-mode');
+const developerChartText = developerDarkMode ? '#9db6cf' : '#6c757d';
+const developerChartGrid = developerDarkMode ? 'rgba(157, 182, 207, 0.16)' : 'rgba(0, 0, 0, 0.05)';
+
 // Performance Chart
 const perfCtx = document.getElementById('performanceChart').getContext('2d');
 new Chart(perfCtx, {
@@ -869,6 +988,7 @@ new Chart(perfCtx, {
                 labels: {
                     usePointStyle: true,
                     boxWidth: 8,
+                    color: developerChartText,
                     font: { size: 11 }
                 }
             }
@@ -896,10 +1016,11 @@ new Chart(priorityCtx, {
         scales: {
             y: {
                 beginAtZero: true,
-                ticks: { stepSize: 1 },
-                grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                ticks: { stepSize: 1, color: developerChartText },
+                grid: { color: developerChartGrid }
             },
             x: {
+                ticks: { color: developerChartText },
                 grid: { display: false }
             }
         },

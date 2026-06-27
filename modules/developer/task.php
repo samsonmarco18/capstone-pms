@@ -758,6 +758,113 @@ include '../../includes/navbar.php';
 .phase-design { background: #06b6d4; }
 .phase-implementation { background: #10b981; }
 .phase-followup { background: #f59e0b; }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-column,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-update-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-modal .modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-hero,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-col,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-month {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-action {
+    background: rgba(31, 99, 146, 0.14) !important;
+    border-color: rgba(31, 99, 146, 0.28) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-panel h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact-value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-latest-value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-project-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-col {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-mini p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-desc,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-latest-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-project-dates,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-month,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-project-detail,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-grid,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-col,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-quarters,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-quarter,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-month {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel .form-select {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel .form-control::placeholder {
+    color: #7f9bb6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-quarter {
+    background: rgba(31, 99, 146, 0.18) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-time-track {
+    background: repeating-linear-gradient(
+        to right,
+        rgba(157, 182, 207, 0.04),
+        rgba(157, 182, 207, 0.04) calc(100% / var(--month-count) - 1px),
+        rgba(31, 99, 146, 0.28) calc(100% / var(--month-count) - 1px),
+        rgba(31, 99, 146, 0.28) calc(100% / var(--month-count))
+    );
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {

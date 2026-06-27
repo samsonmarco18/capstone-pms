@@ -267,6 +267,41 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table th {
     color: #9db6cf !important;
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-preview {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-today-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-date-group,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-item {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-date-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-text {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-subtitle,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-today-badge span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-time,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-kicker {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-open-btn,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-more-btn {
+    background: rgba(31, 99, 146, 0.14) !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: var(--theme-primary) !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-3">

@@ -695,6 +695,98 @@ include '../../includes/navbar.php';
     gap: 0.4rem;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-task-card {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-chart-legend span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-status-tag {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h1,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h2,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h3,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-task-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body strong {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern .stat-sub,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-task-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-chart-legend span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-mini p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
+    background-color: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-today-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-date-group,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-item {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-date-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-text {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-subtitle,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-today-badge span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-time,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-kicker {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-open-btn,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-more-btn {
+    background: rgba(31, 99, 146, 0.14) !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: var(--theme-primary) !important;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .welcome-banner {

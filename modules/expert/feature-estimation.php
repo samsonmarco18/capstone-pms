@@ -1548,6 +1548,175 @@ textarea.form-control-custom {
     margin-bottom: 0;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    background: #071321 !important;
+    border: 1px solid rgba(31, 99, 146, 0.24);
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(31, 99, 146, 0.16));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern h2,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern h2 i {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern p {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-management-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-list,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-card {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-selector,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-section-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table tbody tr:hover td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-list-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-stats span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-save-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-info-custom {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-row.incomplete {
+    background: rgba(245, 158, 11, 0.08) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-row.complete,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-card.is-accepted {
+    background: rgba(16, 185, 129, 0.08) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-section-header h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-role,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-feature-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-list-item strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-panel-header h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-header p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table-header p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-feature-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-list-item span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-empty,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pm-day-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-info-custom small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-panel-header p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-updated,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-subtitle,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-phase,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-expectation,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-stats span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-selector,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-section-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-row {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-name input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-dates input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-input {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-input[disabled],
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom[disabled] {
+    background: rgba(157, 182, 207, 0.08);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom::placeholder,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-input::placeholder {
+    color: #7f9bb6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-bar-track {
+    background: rgba(157, 182, 207, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-phase-tag,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-count,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-tag.history {
+    background: rgba(31, 99, 146, 0.18);
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-tag.manual,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-badge.ready {
+    background: rgba(16, 185, 129, 0.16);
+    color: #86efac;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-badge.pending,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .day-badge.likely {
+    background: rgba(245, 158, 11, 0.16);
+    color: #fbbf24;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pm-inline-btn,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-add-phase {
+    background: rgba(31, 99, 146, 0.12);
+    border-color: rgba(31, 99, 146, 0.3);
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pm-inline-btn.remove,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-remove-phase,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-remove-item {
+    background: rgba(220, 38, 38, 0.16);
+    color: #fca5a5;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
