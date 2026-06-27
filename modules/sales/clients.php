@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-progress.php';
+require_once '../../includes/workflow.php';
 requireRole('sales');
 
 $conn = getConnection();
@@ -274,20 +275,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $sharedFolderId = $sharedFolderStmt->insert_id;
                     $sharedFolderStmt->close();
 
-                    $architects = salesClientsQuery($conn, "SELECT id FROM users WHERE role = 'architect' AND status = 'active'");
-                    if ($architects) {
-                        while ($architect = $architects->fetch_assoc()) {
-                        createNotification(
-                            (int) $architect['id'],
-                            'New Project Requirements Ready',
-                            'Sales submitted a new project for architectural review: ' . $projectName,
-                            'project',
-                            'projects',
-                            $projectId,
-                            BASE_URL . 'modules/architect/project-review.php?id=' . $projectId
-                        );
-                        }
-                    }
+                    workflowNotifyRoles(
+                        $conn,
+                        ['architect'],
+                        'New Project Requirements Ready',
+                        'Sales submitted a new project for architectural review: ' . $projectName,
+                        BASE_URL . 'modules/architect/project-review.php?id=' . $projectId,
+                        (int) $projectId,
+                        'project',
+                        'projects'
+                    );
                 }
 
                 $conn->commit();

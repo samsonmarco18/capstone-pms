@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
+require_once '../../includes/workflow.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -79,18 +80,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $title = "New Architecture Plan Ready for Review";
     $message = "Project: " . $project['name'] . " is ready for SUL review and assignment";
     
-    $sulUsers = $conn->query("SELECT id FROM users WHERE role = 'sul'");
-    while($sul = $sulUsers->fetch_assoc()) {
-        createNotification(
-            (int) $sul['id'],
-            $title,
-            $message,
-            'project',
-            'projects',
-            (int) $projectId,
-            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId
-        );
-    }
+    workflowNotifyRoles(
+        $conn,
+        ['sul'],
+        $title,
+        $message,
+        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
+        $projectId,
+        'project',
+        'projects'
+    );
     
     logActivity($user['id'], 'submit_architecture', 'projects', $projectId);
     $_SESSION['success'] = "Architecture plan submitted to SUL successfully";

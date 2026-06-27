@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/workflow.php';
 requireRole('expert');
 
 $conn = getConnection();
@@ -26,7 +27,7 @@ function featureRecommendationSignature(string $value): string
     return substr($normalized, 0, 190);
 }
 
-function saveRecommendationFeedback(mysqli $conn, int $taskId, string $sourceType, int $sourceId, string $action, int $expertId): void
+function saveRecommendationFeedback(mysqli|PgsqlMysqliCompatConnection $conn, int $taskId, string $sourceType, int $sourceId, string $action, int $expertId): void
 {
     if ($taskId <= 0 || $sourceId <= 0) {
         return;
@@ -36,11 +37,15 @@ function saveRecommendationFeedback(mysqli $conn, int $taskId, string $sourceTyp
         return;
     }
 
-    $stmt = $conn->prepare("
-        INSERT INTO feature_estimation_recommendation_feedback (task_id, source_type, source_id, action, acted_by)
-        VALUES (?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE action = VALUES(action), acted_by = VALUES(acted_by), updated_at = CURRENT_TIMESTAMP
-    ");
+    $upsertSql = DB_DRIVER === 'pgsql'
+        ? "INSERT INTO feature_estimation_recommendation_feedback (task_id, source_type, source_id, action, acted_by)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (task_id, source_type, source_id)
+           DO UPDATE SET action = EXCLUDED.action, acted_by = EXCLUDED.acted_by, updated_at = CURRENT_TIMESTAMP"
+        : "INSERT INTO feature_estimation_recommendation_feedback (task_id, source_type, source_id, action, acted_by)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE action = VALUES(action), acted_by = VALUES(acted_by), updated_at = CURRENT_TIMESTAMP";
+    $stmt = $conn->prepare($upsertSql);
     if (!$stmt) {
         return;
     }
@@ -57,51 +62,76 @@ function decodeRecommendationJson(?string $json): array
 }
 
 // Check if project_phases column exists (auto-create if missing)
-$hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
+$hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 if (!$hasProjectPhases) {
     try {
-        $conn->query("ALTER TABLE projects ADD COLUMN project_phases LONGTEXT NULL");
-        $hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
+        $conn->query("ALTER TABLE projects ADD COLUMN project_phases " . (DB_DRIVER === 'pgsql' ? "TEXT" : "LONGTEXT") . " NULL");
+        $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
     } catch (Throwable $e) {
         // Leave $hasProjectPhases as false; UI will show warning
     }
 }
 
 // Check if phase_name column exists in feature_estimations
-$hasPhaseName = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'phase_name'")->num_rows > 0;
+$hasPhaseName = dbColumnExists($conn, 'feature_estimations', 'phase_name');
 if (!$hasPhaseName) {
     try {
         $conn->query("ALTER TABLE feature_estimations ADD COLUMN phase_name VARCHAR(150) NULL");
-        $hasPhaseName = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'phase_name'")->num_rows > 0;
+        $hasPhaseName = dbColumnExists($conn, 'feature_estimations', 'phase_name');
     } catch (Throwable $e) {
         // Leave $hasPhaseName as false
     }
 }
 
-$hasInvolvementPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'involvement_plan_json'")->num_rows > 0;
+$hasInvolvementPlan = dbColumnExists($conn, 'feature_estimations', 'involvement_plan_json');
 if (!$hasInvolvementPlan) {
     try {
-        $conn->query("ALTER TABLE feature_estimations ADD COLUMN involvement_plan_json LONGTEXT NULL");
-        $hasInvolvementPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'involvement_plan_json'")->num_rows > 0;
+        $conn->query("ALTER TABLE feature_estimations ADD COLUMN involvement_plan_json " . (DB_DRIVER === 'pgsql' ? "TEXT" : "LONGTEXT") . " NULL");
+        $hasInvolvementPlan = dbColumnExists($conn, 'feature_estimations', 'involvement_plan_json');
     } catch (Throwable $e) {
         // Leave $hasInvolvementPlan as false
     }
 }
 
-$hasComponentPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'component_plan_json'")->num_rows > 0;
+$hasComponentPlan = dbColumnExists($conn, 'feature_estimations', 'component_plan_json');
 if (!$hasComponentPlan) {
     try {
-        $conn->query("ALTER TABLE feature_estimations ADD COLUMN component_plan_json LONGTEXT NULL");
-        $hasComponentPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'component_plan_json'")->num_rows > 0;
+        $conn->query("ALTER TABLE feature_estimations ADD COLUMN component_plan_json " . (DB_DRIVER === 'pgsql' ? "TEXT" : "LONGTEXT") . " NULL");
+        $hasComponentPlan = dbColumnExists($conn, 'feature_estimations', 'component_plan_json');
     } catch (Throwable $e) {
         // Leave $hasComponentPlan as false
     }
 }
 
-$hasManualRecommendationTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_manual_recommendations'")->num_rows > 0;
+$hasManualRecommendationTable = dbTableExists($conn, 'feature_estimation_manual_recommendations');
 if (!$hasManualRecommendationTable) {
     try {
-        $conn->query("
+        $manualRecommendationSql = DB_DRIVER === 'pgsql' ? "
+            CREATE TABLE feature_estimation_manual_recommendations (
+                id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                feature_signature VARCHAR(190) NOT NULL,
+                feature_title VARCHAR(255) NOT NULL,
+                recommendation_name VARCHAR(255) NOT NULL,
+                source_project_id INT NULL,
+                source_task_id INT NULL,
+                phase_name VARCHAR(150) NULL,
+                expectation_description TEXT,
+                min_days INT NOT NULL,
+                likely_days INT NOT NULL,
+                max_days INT NOT NULL,
+                involvement_plan_json TEXT NULL,
+                component_plan_json TEXT NULL,
+                created_by INT NOT NULL,
+                updated_by INT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (created_by, feature_signature, recommendation_name),
+                CONSTRAINT fk_manual_recommendation_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+                CONSTRAINT fk_manual_recommendation_updater FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+                CONSTRAINT fk_manual_recommendation_project FOREIGN KEY (source_project_id) REFERENCES projects(id) ON DELETE SET NULL,
+                CONSTRAINT fk_manual_recommendation_task FOREIGN KEY (source_task_id) REFERENCES tasks(id) ON DELETE SET NULL
+            )
+        " : "
             CREATE TABLE feature_estimation_manual_recommendations (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 feature_signature VARCHAR(190) NOT NULL,
@@ -127,17 +157,32 @@ if (!$hasManualRecommendationTable) {
                 CONSTRAINT fk_manual_recommendation_project FOREIGN KEY (source_project_id) REFERENCES projects(id) ON DELETE SET NULL,
                 CONSTRAINT fk_manual_recommendation_task FOREIGN KEY (source_task_id) REFERENCES tasks(id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
-        $hasManualRecommendationTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_manual_recommendations'")->num_rows > 0;
+        ";
+        $conn->query($manualRecommendationSql);
+        $hasManualRecommendationTable = dbTableExists($conn, 'feature_estimation_manual_recommendations');
     } catch (Throwable $e) {
         $hasManualRecommendationTable = false;
     }
 }
 
-$hasRecommendationFeedbackTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_recommendation_feedback'")->num_rows > 0;
+$hasRecommendationFeedbackTable = dbTableExists($conn, 'feature_estimation_recommendation_feedback');
 if (!$hasRecommendationFeedbackTable) {
     try {
-        $conn->query("
+        $feedbackSql = DB_DRIVER === 'pgsql' ? "
+            CREATE TABLE feature_estimation_recommendation_feedback (
+                id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                task_id INT NOT NULL,
+                source_type TEXT NOT NULL,
+                source_id INT NOT NULL,
+                action TEXT NOT NULL,
+                acted_by INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (task_id, source_type, source_id),
+                CONSTRAINT fk_recommendation_feedback_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                CONSTRAINT fk_recommendation_feedback_actor FOREIGN KEY (acted_by) REFERENCES users(id) ON DELETE CASCADE
+            )
+        " : "
             CREATE TABLE feature_estimation_recommendation_feedback (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 task_id INT NOT NULL,
@@ -152,21 +197,22 @@ if (!$hasRecommendationFeedbackTable) {
                 CONSTRAINT fk_recommendation_feedback_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
                 CONSTRAINT fk_recommendation_feedback_actor FOREIGN KEY (acted_by) REFERENCES users(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
-        $hasRecommendationFeedbackTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_recommendation_feedback'")->num_rows > 0;
+        ";
+        $conn->query($feedbackSql);
+        $hasRecommendationFeedbackTable = dbTableExists($conn, 'feature_estimation_recommendation_feedback');
     } catch (Throwable $e) {
         $hasRecommendationFeedbackTable = false;
     }
 }
 
 // Check if sales approval columns exist in tasks (auto-create if missing)
-$hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+$hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 if (!$hasSalesApproval) {
     try {
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved TINYINT(1) DEFAULT 0");
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved " . (DB_DRIVER === 'pgsql' ? "SMALLINT" : "TINYINT(1)") . " DEFAULT 0");
         $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_by INT NULL");
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_at DATETIME NULL");
-        $hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_at " . (DB_DRIVER === 'pgsql' ? "TIMESTAMP" : "DATETIME") . " NULL");
+        $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
     } catch (Throwable $e) {
         // Leave $hasSalesApproval as false; sales approval will be skipped
     }
@@ -253,18 +299,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['project_setup'])) {
             $submitStmt->execute();
             $submitStmt->close();
 
-            $salesUsers = $conn->query("SELECT id FROM users WHERE role = 'sales' AND status = 'active'");
-            while ($sales = $salesUsers->fetch_assoc()) {
-                createNotification(
-                    (int) $sales['id'],
-                    "Estimations Ready for Approval",
-                    "Feature estimations are ready for sales approval.",
-                    'approval',
-                    'projects',
-                    (int) $projectId,
-                    BASE_URL . 'modules/sales/estimation-approval.php'
-                );
-            }
+            workflowNotifyRoles(
+                $conn,
+                ['sales'],
+                'Estimations Ready for Approval',
+                'Feature estimations are ready for sales approval.',
+                BASE_URL . 'modules/sales/estimation-approval.php',
+                (int) $projectId,
+                'approval',
+                'projects'
+            );
 
             $_SESSION['success'] = "Project setup saved and estimations sent to Sales.";
         } else {
@@ -457,7 +501,38 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
 
         if ($hasManualRecommendationTable && $manualRecommendationName !== '') {
             $featureSignature = featureRecommendationSignature($taskTitle);
-            $templateStmt = $conn->prepare("
+            $templateSql = DB_DRIVER === 'pgsql' ? "
+                INSERT INTO feature_estimation_manual_recommendations (
+                    feature_signature,
+                    feature_title,
+                    recommendation_name,
+                    source_project_id,
+                    source_task_id,
+                    phase_name,
+                    expectation_description,
+                    min_days,
+                    likely_days,
+                    max_days,
+                    involvement_plan_json,
+                    component_plan_json,
+                    created_by,
+                    updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (created_by, feature_signature, recommendation_name)
+                DO UPDATE SET
+                    feature_title = EXCLUDED.feature_title,
+                    source_project_id = EXCLUDED.source_project_id,
+                    source_task_id = EXCLUDED.source_task_id,
+                    phase_name = EXCLUDED.phase_name,
+                    expectation_description = EXCLUDED.expectation_description,
+                    min_days = EXCLUDED.min_days,
+                    likely_days = EXCLUDED.likely_days,
+                    max_days = EXCLUDED.max_days,
+                    involvement_plan_json = EXCLUDED.involvement_plan_json,
+                    component_plan_json = EXCLUDED.component_plan_json,
+                    updated_by = EXCLUDED.updated_by,
+                    updated_at = CURRENT_TIMESTAMP
+            " : "
                 INSERT INTO feature_estimation_manual_recommendations (
                     feature_signature,
                     feature_title,
@@ -487,7 +562,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
                     component_plan_json = VALUES(component_plan_json),
                     updated_by = VALUES(updated_by),
                     updated_at = CURRENT_TIMESTAMP
-            ");
+            ";
+            $templateStmt = $conn->prepare($templateSql);
 
             if ($templateStmt) {
                 $expertId = (int) $user['id'];

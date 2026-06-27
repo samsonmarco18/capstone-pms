@@ -27,7 +27,7 @@ $taskBaseQuery = "
 ";
 
 // Check if project_phases column exists
-$hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
+$hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 
 // Get tasks assigned to this developer
 $todoTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'todo' ORDER BY t.deadline ASC");

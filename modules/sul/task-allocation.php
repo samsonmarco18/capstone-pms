@@ -11,30 +11,30 @@ $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
 $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
 
 // Ensure sales approval columns exist
-$hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+$hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 if (!$hasSalesApproval) {
     try {
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved TINYINT(1) DEFAULT 0");
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved " . (DB_DRIVER === 'pgsql' ? "SMALLINT" : "TINYINT(1)") . " DEFAULT 0");
         $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_by INT NULL");
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_at DATETIME NULL");
-        $hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_at " . (DB_DRIVER === 'pgsql' ? "TIMESTAMP" : "DATETIME") . " NULL");
+        $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
     } catch (Throwable $e) {
         // Continue without sales approval columns
     }
 }
 
-$hasSalesChoice = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_estimate_choice'")->num_rows > 0;
+$hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_choice');
 if (!$hasSalesChoice) {
     try {
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_estimate_choice ENUM('min','likely','max') DEFAULT NULL");
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_estimate_choice " . (DB_DRIVER === 'pgsql' ? "TEXT" : "ENUM('min','likely','max')") . " DEFAULT NULL");
         $conn->query("ALTER TABLE tasks ADD COLUMN sales_estimate_days INT DEFAULT NULL");
-        $hasSalesChoice = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_estimate_choice'")->num_rows > 0;
+        $hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_choice');
     } catch (Throwable $e) {
         // Continue without sales choice columns
     }
 }
 
-$hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
+$hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 
 // If a dashboard link points to a specific task, open that task's project context.
 if (!$projectId && $taskId > 0) {

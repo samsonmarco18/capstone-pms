@@ -131,7 +131,9 @@ function workflowNotifyRoles(
     string $title,
     string $message,
     string $actionUrl,
-    int $relatedId
+    int $relatedId,
+    string $notificationType = 'approval',
+    string $relatedTable = 'tasks'
 ): void {
     $safeRoles = array_values(array_filter(array_map(static fn($role): string => trim((string) $role), $roles)));
     if (!$safeRoles) {
@@ -145,7 +147,7 @@ function workflowNotifyRoles(
     }
 
     while ($recipient = $result->fetch_assoc()) {
-        createNotification((int) $recipient['id'], $title, $message, 'approval', 'tasks', $relatedId, $actionUrl);
+        createNotification((int) $recipient['id'], $title, $message, $notificationType, $relatedTable, $relatedId, $actionUrl);
     }
 }
 
