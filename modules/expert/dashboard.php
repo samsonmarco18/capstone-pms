@@ -9,18 +9,36 @@ $conn = getConnection();
 $user = getCurrentUser();
 dashboardPlannerHandleRequest($conn, (int) $user['id']);
 $dashboardPlanner = dashboardPlannerBuild($conn, (int) $user['id']);
+
+function expertDashboardFetchCount($conn, string $sql): int
+{
+    $result = $conn->query($sql);
+    if (!is_object($result) || !method_exists($result, 'fetch_assoc')) {
+        return 0;
+    }
+
+    $row = $result->fetch_assoc() ?: [];
+    return (int) ($row['count'] ?? 0);
+}
+
+function expertDashboardQuery($conn, string $sql)
+{
+    $result = $conn->query($sql);
+    return (is_object($result) && method_exists($result, 'fetch_assoc')) ? $result : null;
+}
+
 $hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
 $projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
 $projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 // Get estimation statistics
-$totalEstimations = $conn->query("SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']}")->fetch_assoc()['count'];
-$pendingEstimations = $conn->query("SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'pending'")->fetch_assoc()['count'];
-$completedEstimations = $conn->query("SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'completed'")->fetch_assoc()['count'];
+$totalEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']}");
+$pendingEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'pending'");
+$completedEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'completed'");
 
 // Get assigned tasks for estimation
-$pendingTasks = $conn->query("
+$pendingTasks = expertDashboardQuery($conn, "
     SELECT t.*, p.name as project_name 
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
@@ -31,7 +49,7 @@ $pendingTasks = $conn->query("
 ");
 
 // Get team composition recommendations
-$teamCompositions = $conn->query("
+$teamCompositions = expertDashboardQuery($conn, "
     SELECT tc.*, p.name as project_name 
     FROM team_compositions tc
     JOIN projects p ON tc.project_id = p.id
@@ -41,7 +59,7 @@ $teamCompositions = $conn->query("
 ");
 
 // Get recent feature estimations for this expert
-$recentFeatureEstimates = $conn->query("
+$recentFeatureEstimates = expertDashboardQuery($conn, "
     SELECT 
         fe.task_id,
         fe.min_days,
@@ -63,7 +81,7 @@ $recentFeatureEstimates = $conn->query("
 ");
 
 // Get this expert's own manual schedule. Assigned work deadlines are listed in the agenda below.
-$schedules = $conn->query("
+$schedules = expertDashboardQuery($conn, "
     SELECT title, description, schedule_type, start_date, start_time, status, project_id
     FROM schedules
     WHERE user_id = {$user['id']}
@@ -78,7 +96,7 @@ $schedules = $conn->query("
 // Build Expert agenda from assigned estimation tasks and deadlines.
 $expertAgenda = [];
 
-$agendaTaskRows = $conn->query("
+$agendaTaskRows = expertDashboardQuery($conn, "
     SELECT t.id, t.title, t.description, t.deadline, t.status, p.name AS project_name
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
@@ -87,16 +105,18 @@ $agendaTaskRows = $conn->query("
     ORDER BY COALESCE(t.deadline, NOW()) ASC
     LIMIT 8
 ");
-while ($task = $agendaTaskRows->fetch_assoc()) {
-    $hasDeadline = !empty($task['deadline']);
-    $expertAgenda[] = [
-        'title' => (string) ($task['title'] ?? 'Assigned task'),
-        'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
-        'date' => $hasDeadline ? (string) $task['deadline'] : date('Y-m-d H:i:s'),
-        'type' => ((string) ($task['status'] ?? '') === 'todo') ? 'Estimate Needed' : 'Assigned Task',
-        'icon' => ((string) ($task['status'] ?? '') === 'todo') ? 'calculator' : 'flag-checkered',
-        'url' => 'feature-estimation.php?task_id=' . (int) ($task['id'] ?? 0),
-    ];
+if ($agendaTaskRows) {
+    while ($task = $agendaTaskRows->fetch_assoc()) {
+        $hasDeadline = !empty($task['deadline']);
+        $expertAgenda[] = [
+            'title' => (string) ($task['title'] ?? 'Assigned task'),
+            'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
+            'date' => $hasDeadline ? (string) $task['deadline'] : date('Y-m-d H:i:s'),
+            'type' => ((string) ($task['status'] ?? '') === 'todo') ? 'Estimate Needed' : 'Assigned Task',
+            'icon' => ((string) ($task['status'] ?? '') === 'todo') ? 'calculator' : 'flag-checkered',
+            'url' => 'feature-estimation.php?task_id=' . (int) ($task['id'] ?? 0),
+        ];
+    }
 }
 
 usort($expertAgenda, static function (array $left, array $right): int {
@@ -627,7 +647,7 @@ include '../../includes/navbar.php';
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">
                             <div class="text-muted text-uppercase small fw-semibold mb-2">Active Projects</div>
-                            <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $pendingTasks->num_rows; ?></div>
+                            <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $pendingTasks ? $pendingTasks->num_rows : 0; ?></div>
                             <small class="text-muted">Currently estimating</small>
                         </div>
                         <div class="ms-3">
@@ -656,7 +676,7 @@ include '../../includes/navbar.php';
                     <h5><i class="fas fa-calculator"></i> Pending Feature Estimations</h5>
                 </div>
                 <div>
-                    <?php if($pendingTasks->num_rows > 0): ?>
+                    <?php if($pendingTasks && $pendingTasks->num_rows > 0): ?>
                         <?php while($task = $pendingTasks->fetch_assoc()): 
                             $deadlineValue = (string) ($task['deadline'] ?? '');
                             $deadlineTimestamp = $deadlineValue !== '' ? strtotime($deadlineValue) : false;
@@ -708,6 +728,7 @@ include '../../includes/navbar.php';
                             </tr>
                         </thead>
                         <tbody>
+                            <?php if($teamCompositions): ?>
                             <?php while($tc = $teamCompositions->fetch_assoc()): ?>
                             <tr>
                                 <td class="fw-semibold"><?php echo htmlspecialchars($tc['project_name']); ?></td>
@@ -724,6 +745,11 @@ include '../../includes/navbar.php';
                             </tr>
                             <?php endwhile; ?>
                             <?php if($teamCompositions->num_rows == 0): ?>
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">No team compositions available</td>
+                            </tr>
+                            <?php endif; ?>
+                            <?php else: ?>
                             <tr>
                                 <td colspan="4" class="text-center text-muted py-4">No team compositions available</td>
                             </tr>
@@ -751,7 +777,7 @@ include '../../includes/navbar.php';
                     <h5><i class="fas fa-chart-line"></i> Recent Feature Estimates</h5>
                 </div>
                 <div>
-                    <?php if($recentFeatureEstimates->num_rows > 0): ?>
+                    <?php if($recentFeatureEstimates && $recentFeatureEstimates->num_rows > 0): ?>
                         <?php while($estimate = $recentFeatureEstimates->fetch_assoc()): ?>
                         <?php
                             $minDays = (int) ($estimate['min_days'] ?? 0);
