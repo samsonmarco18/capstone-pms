@@ -48,7 +48,7 @@ function vcGetAccessibleProjects(mysqli|PgsqlMysqliCompatConnection $conn, array
         return $projects;
     }
 
-    if ($role === 'sul') {
+    if (in_array($role, ['sul', 'qa'], true)) {
         $sql = "
             SELECT p.id, p.name, p.status, c.name AS client_name
             FROM projects p

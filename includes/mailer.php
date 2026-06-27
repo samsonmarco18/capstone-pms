@@ -5,12 +5,24 @@ require_once __DIR__ . '/app-settings.php';
 
 function getMailSetting(string $name, ?string $default = null): string
 {
-    $appSettingKey = null;
-    if (str_starts_with($name, 'MAIL_')) {
-        $appSettingKey = strtolower(substr($name, 5));
+    global $localOverrides;
+
+    if (is_array($localOverrides ?? null) && array_key_exists($name, $localOverrides)) {
+        $value = $localOverrides[$name];
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        return trim((string) $value);
     }
 
-    if ($appSettingKey !== null) {
+    $envValue = getenv($name);
+    if ($envValue !== false && $envValue !== '') {
+        return trim((string) $envValue);
+    }
+
+    if (str_starts_with($name, 'MAIL_')) {
+        $appSettingKey = 'mail_' . strtolower(substr($name, 5));
         $appValue = getAppSetting($appSettingKey, null);
         if ($appValue !== null && $appValue !== '') {
             return trim((string) $appValue);
@@ -175,13 +187,70 @@ function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?s
 
 function smtpSendMessage(array $config, string $fromEmail, array $recipients, string $message): array
 {
+    $errors = [];
+
+    foreach (smtpConnectionCandidates($config) as $candidate) {
+        $result = smtpSendMessageViaConfig($candidate, $fromEmail, $recipients, $message);
+        if ($result['success']) {
+            return $result;
+        }
+
+        $errors[] = $candidate['host'] . ':' . $candidate['port'] . '/' . $candidate['encryption'] . ' - ' . (string) $result['error'];
+
+        if (!smtpErrorLooksLikeConnectionFailure((string) $result['error'])) {
+            break;
+        }
+    }
+
+    return ['success' => false, 'error' => 'SMTP delivery failed: ' . implode('; ', $errors)];
+}
+
+function smtpConnectionCandidates(array $config): array
+{
+    $candidates = [$config];
+    $host = strtolower((string) ($config['host'] ?? ''));
+    $port = (int) ($config['port'] ?? 0);
+    $encryption = strtolower((string) ($config['encryption'] ?? 'tls'));
+
+    if (in_array($host, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true) && !($port === 465 && $encryption === 'ssl')) {
+        $sslConfig = $config;
+        $sslConfig['port'] = 465;
+        $sslConfig['encryption'] = 'ssl';
+        $candidates[] = $sslConfig;
+    }
+
+    return $candidates;
+}
+
+function smtpErrorLooksLikeConnectionFailure(string $error): bool
+{
+    $normalized = strtolower($error);
+
+    return str_contains($normalized, 'connection failed')
+        || str_contains($normalized, 'timed out')
+        || str_contains($normalized, 'connection refused')
+        || str_contains($normalized, 'network is unreachable')
+        || str_contains($normalized, 'no route to host');
+}
+
+function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recipients, string $message): array
+{
     $transport = $config['encryption'] === 'ssl' ? 'ssl://' : 'tcp://';
+    $context = stream_context_create([
+        'ssl' => [
+            'peer_name' => $config['host'],
+            'verify_peer' => true,
+            'verify_peer_name' => true,
+            'SNI_enabled' => true,
+        ],
+    ]);
     $socket = @stream_socket_client(
         $transport . $config['host'] . ':' . $config['port'],
         $errorNumber,
         $errorMessage,
         20,
-        STREAM_CLIENT_CONNECT
+        STREAM_CLIENT_CONNECT,
+        $context
     );
 
     if (!is_resource($socket)) {
@@ -191,8 +260,9 @@ function smtpSendMessage(array $config, string $fromEmail, array $recipients, st
     stream_set_timeout($socket, 20);
 
     try {
+        $ehloHost = parse_url(BASE_URL, PHP_URL_HOST) ?: (gethostname() ?: 'localhost');
         smtpExpect($socket, [220]);
-        smtpCommand($socket, 'EHLO localhost', [250]);
+        smtpCommand($socket, 'EHLO ' . $ehloHost, [250]);
 
         if ($config['encryption'] === 'tls') {
             smtpCommand($socket, 'STARTTLS', [220]);
@@ -200,7 +270,7 @@ function smtpSendMessage(array $config, string $fromEmail, array $recipients, st
             if ($cryptoEnabled !== true) {
                 throw new RuntimeException('Unable to start TLS encryption with Gmail SMTP.');
             }
-            smtpCommand($socket, 'EHLO localhost', [250]);
+            smtpCommand($socket, 'EHLO ' . $ehloHost, [250]);
         }
 
         smtpCommand($socket, 'AUTH LOGIN', [334]);

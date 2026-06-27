@@ -8,10 +8,10 @@ return [
     'APP_URL' => 'http://localhost/erni-pms',
     'MAIL_ENABLED' => '1',
     'MAIL_HOST' => 'smtp.gmail.com',
-    'MAIL_PORT' => '587',
-    'MAIL_ENCRYPTION' => 'tls',
+    'MAIL_PORT' => '465',
+    'MAIL_ENCRYPTION' => 'ssl',
     'MAIL_USERNAME' => 'altheapalentinos@gmail.com',
-    'MAIL_PASSWORD' => 'conf mbgy sowb jqix',
+    'MAIL_PASSWORD' => 'iior nedv wgtx kqcs',
     'MAIL_FROM_EMAIL' => 'altheapalentinos@gmail.com',
     'MAIL_FROM_NAME' => 'ERNI PMS',
 ];

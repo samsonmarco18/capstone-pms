@@ -3,7 +3,7 @@ require_once '../../includes/auth.php';
 require_once '../../includes/version-control.php';
 require_once '../../includes/version-control-actions.php';
 
-requireRole(['admin', 'architect', 'developer', 'sul']);
+requireRole(['admin', 'architect', 'developer', 'sul', 'qa']);
 
 $conn = getConnection();
 $user = getCurrentUser();
@@ -698,7 +698,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 <button type="button" class="btn btn-primary" onclick="copyCloneUrl('<?php echo htmlspecialchars($selectedRepositoryDisplayRemoteUrl, ENT_QUOTES); ?>')">
                                     <i class="fas fa-code-branch me-2"></i>Copy Clone URL
                                 </button>
-                                <?php if (!$selectedRepositoryHasWorkspace && !in_array($user['role'], ['sul'], true)): ?>
+                                <?php if (!$selectedRepositoryHasWorkspace && !in_array($user['role'], ['sul', 'qa'], true)): ?>
                                 <?php if ($execAvailable): ?>
                                 <form method="POST" class="m-0">
                                     <input type="hidden" name="action" value="create_working_folder">
@@ -834,7 +834,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                         <?php endif; ?>
 
                         <?php if ($selectedRepository): ?>
-                        <?php if (!in_array($user['role'], ['sul'], true)): ?>
+                        <?php if (!in_array($user['role'], ['sul', 'qa'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#settingsAction">Sync Settings</button></h2>
                             <div id="settingsAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
@@ -859,7 +859,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                         </div>
 
                         <?php endif; ?>
-                        <?php if (!in_array($user['role'], ['sul'], true)): ?>
+                        <?php if (!in_array($user['role'], ['sul', 'qa'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#branchAction">Create Branch</button></h2>
                             <div id="branchAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
@@ -876,7 +876,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                         </div>
                         <?php endif; ?>
 
-                        <?php if (!in_array($user['role'], ['sul'], true)): ?>
+                        <?php if (!in_array($user['role'], ['sul', 'qa'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#commitAction">Commit</button></h2>
                             <div id="commitAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
@@ -900,7 +900,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                         </div>
                         <?php endif; ?>
 
-                        <?php if (!in_array($user['role'], ['sul'], true)): ?>
+                        <?php if (!in_array($user['role'], ['sul', 'qa'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#syncAction">Push / Pull</button></h2>
                             <div id="syncAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">
@@ -936,7 +936,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                         </div>
                         <?php endif; ?>
 
-                        <?php if (!in_array($user['role'], ['sul'], true)): ?>
+                        <?php if (!in_array($user['role'], ['sul', 'qa'], true)): ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#forkAction">Fork</button></h2>
                             <div id="forkAction" class="accordion-collapse collapse" data-bs-parent="#vcAccordion"><div class="accordion-body">

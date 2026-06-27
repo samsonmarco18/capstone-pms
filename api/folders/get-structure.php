@@ -20,12 +20,12 @@ function ensureClientRootFolders(mysqli|PgsqlMysqliCompatConnection $conn, int $
     $checkStmt = $conn->prepare(
         'SELECT id, name
          FROM folders
-         WHERE parent_id IS NULL AND client_id = ? AND folder_type = "client"
+         WHERE parent_id IS NULL AND client_id = ? AND folder_type = \'client\'
          LIMIT 1'
     );
     $insertStmt = $conn->prepare(
         'INSERT INTO folders (parent_id, name, folder_type, client_id, project_id, role, user_id, created_by)
-         VALUES (NULL, ?, "client", ?, NULL, NULL, NULL, ?)'
+         VALUES (NULL, ?, \'client\', ?, NULL, NULL, NULL, ?)'
     );
     $updateStmt = $conn->prepare('UPDATE folders SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
 
@@ -69,18 +69,18 @@ function ensureProjectSharedFolders(mysqli|PgsqlMysqliCompatConnection $conn, in
     $clientFolderStmt = $conn->prepare(
         'SELECT id
          FROM folders
-         WHERE parent_id IS NULL AND client_id = ? AND folder_type = "client"
+         WHERE parent_id IS NULL AND client_id = ? AND folder_type = \'client\'
          LIMIT 1'
     );
     $existingSharedStmt = $conn->prepare(
         'SELECT id, name, parent_id, role
          FROM folders
-         WHERE project_id = ? AND folder_type = "project"
+         WHERE project_id = ? AND folder_type = \'project\'
          LIMIT 1'
     );
     $insertSharedStmt = $conn->prepare(
         'INSERT INTO folders (parent_id, name, folder_type, client_id, project_id, role, user_id, created_by)
-         VALUES (?, ?, "project", ?, ?, NULL, NULL, ?)'
+         VALUES (?, ?, \'project\', ?, ?, NULL, NULL, ?)'
     );
     $updateSharedStmt = $conn->prepare('UPDATE folders SET name = ?, parent_id = ?, role = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
 
@@ -137,7 +137,7 @@ function getFolderTree(mysqli|PgsqlMysqliCompatConnection $conn, int $parentId, 
                (SELECT COUNT(*) FROM folders child WHERE child.parent_id = f.id) AS child_count
         FROM folders f
         LEFT JOIN users u ON u.id = f.created_by
-        WHERE ' . ($parentId === 0 ? 'f.parent_id IS NULL AND f.folder_type = "client"' : 'f.parent_id = ?');
+        WHERE ' . ($parentId === 0 ? 'f.parent_id IS NULL AND f.folder_type = \'client\'' : 'f.parent_id = ?');
 
     if ($roleFilter !== '') {
         $sql .= ' AND (f.role IS NULL OR f.role = ?)';
@@ -180,7 +180,7 @@ function getSharedProjectFolders(mysqli|PgsqlMysqliCompatConnection $conn, ?stri
         FROM folders f
         LEFT JOIN users u ON u.id = f.created_by
         LEFT JOIN clients c ON c.id = f.client_id
-        WHERE f.folder_type = "project" AND f.project_id IS NOT NULL';
+        WHERE f.folder_type = \'project\' AND f.project_id IS NOT NULL';
 
     if ($roleFilter !== '') {
         $sql .= ' AND (f.role IS NULL OR f.role = ?)';

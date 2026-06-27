@@ -60,6 +60,7 @@ $menuItems = [
         ['label' => 'Testing Dashboard', 'url' => '/modules/qa/dashboard.php', 'icon' => 'clipboard-check'],
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
         ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
+        ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
     ],
     'expert' => [
         ['label' => 'Dashboard', 'url' => '/modules/expert/dashboard.php', 'icon' => 'clipboard-list'],
