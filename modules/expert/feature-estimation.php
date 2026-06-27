@@ -1920,7 +1920,7 @@ textarea.form-control-custom {
                                             <?php echo $recommendation['source_type'] === 'manual' ? 'Manual' : 'Past Project'; ?>
                                         </span>
                                         <?php if (!empty($recommendation['updated_at'])): ?>
-                                            <span class="recommendation-updated">Updated <?php echo htmlspecialchars(date('M d, Y', strtotime($recommendation['updated_at']))); ?></span>
+                                            <span class="recommendation-updated">Updated <?php echo htmlspecialchars(date('M d, Y', strtotime((string) $recommendation['updated_at']))); ?></span>
                                         <?php endif; ?>
                                     </div>
                                     <div class="recommendation-title"><?php echo htmlspecialchars($recommendation['label']); ?></div>
@@ -2007,13 +2007,13 @@ textarea.form-control-custom {
                         <div class="col-md-6">
                             <label class="form-label">Planned Start Date</label>
                             <input type="date" name="planned_start" class="form-control-custom estimate-start" <?php echo $isReadonly ? 'disabled' : ''; ?>
-                                   value="<?php echo $task['started_at'] ? date('Y-m-d', strtotime($task['started_at'])) : ''; ?>">
+                                   value="<?php echo !empty($task['started_at']) ? date('Y-m-d', strtotime((string) $task['started_at'])) : ''; ?>">
                             <small class="text-muted d-block mt-1">Set the task start for Gantt</small>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Planned End Date</label>
                             <input type="date" name="planned_end" class="form-control-custom estimate-end" <?php echo $isReadonly ? 'disabled' : ''; ?>
-                                   value="<?php echo $task['deadline'] ? date('Y-m-d', strtotime($task['deadline'])) : ''; ?>">
+                                   value="<?php echo !empty($task['deadline']) ? date('Y-m-d', strtotime((string) $task['deadline'])) : ''; ?>">
                             <small class="text-muted d-block mt-1">Set the task end for Gantt</small>
                         </div>
                     </div>

@@ -1630,8 +1630,10 @@ include '../../includes/navbar.php';
                 <tbody>
     <?php while($client = $clients->fetch_assoc()): ?>
     <?php 
-    $daysLeft = $client['deadline'] ? ceil((strtotime($client['deadline']) - time()) / (60 * 60 * 24)) : null;
-    $deadlineClass = $daysLeft <= 7 ? 'urgent' : ($daysLeft <= 30 ? 'warning' : 'normal');
+    $clientDeadline = (string) ($client['deadline'] ?? '');
+    $clientDeadlineTimestamp = $clientDeadline !== '' ? strtotime($clientDeadline) : false;
+    $daysLeft = $clientDeadlineTimestamp !== false ? ceil(($clientDeadlineTimestamp - time()) / (60 * 60 * 24)) : null;
+    $deadlineClass = $daysLeft === null ? 'normal' : ($daysLeft <= 7 ? 'urgent' : ($daysLeft <= 30 ? 'warning' : 'normal'));
     $featureProgress = projectProgressPercent((int) ($client['total_features'] ?? 0), (int) ($client['merged_features'] ?? 0));
     ?>
     <tr>
@@ -1656,7 +1658,7 @@ include '../../includes/navbar.php';
         <td>
             <?php if($client['deadline']): ?>
             <div class="deadline-info">
-                <div class="deadline-date"><?php echo date('M d, Y', strtotime($client['deadline'])); ?></div>
+                <div class="deadline-date"><?php echo $clientDeadlineTimestamp !== false ? date('M d, Y', $clientDeadlineTimestamp) : 'No deadline'; ?></div>
                 <span class="deadline-days <?php echo $deadlineClass; ?>">
                     <?php echo $daysLeft; ?> days left
                 </span>

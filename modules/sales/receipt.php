@@ -588,7 +588,7 @@ include '../../includes/navbar.php';
                         <td>
                             <div class="client-name"><?php echo htmlspecialchars($receipt['client_name']); ?></div>
                         </td>
-                        <td><?php echo date('M d, Y', strtotime($receipt['created_at'])); ?></td>
+                        <td><?php echo !empty($receipt['created_at']) ? date('M d, Y', strtotime((string) $receipt['created_at'])) : 'No date'; ?></td>
                         <td class="fw-semibold">$<?php echo number_format($receipt['amount_due'], 2); ?></td>
                         <td>
                             <span class="badge-status <?php echo $receipt['status']; ?>">

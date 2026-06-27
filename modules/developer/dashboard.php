@@ -896,14 +896,14 @@ include '../../includes/navbar.php';
                             <i class="fas fa-code-branch"></i>
                             <?php echo htmlspecialchars($git['branch_name']); ?>
                             <?php if (!empty($git['commit_hash'])): ?>
-                            | <code><?php echo htmlspecialchars(substr($git['commit_hash'], 0, 7)); ?></code>
+                            | <code><?php echo htmlspecialchars(substr((string) ($git['commit_hash'] ?? ''), 0, 7)); ?></code>
                             <?php endif; ?>
                         </small>
                         <p class="mb-1"><?php echo htmlspecialchars($gitActionLabels[$git['git_action']] ?? 'Git Update'); ?> | <?php echo htmlspecialchars($gitStatusLabels[$git['status']] ?? ucfirst($git['status'])); ?></p>
                         <?php if (!empty($git['project_name'])): ?>
                         <p class="mb-1">Project: <?php echo htmlspecialchars($git['project_name']); ?></p>
                         <?php endif; ?>
-                        <small><i class="far fa-clock"></i> <?php echo date('M d, Y h:i A', strtotime($git['created_at'])); ?></small>
+                        <small><i class="far fa-clock"></i> <?php echo !empty($git['created_at']) ? date('M d, Y h:i A', strtotime((string) $git['created_at'])) : 'No date'; ?></small>
                         <div class="mt-2">
                             <a href="task.php?id=<?php echo $git['task_id']; ?>" class="btn-view">
                                 <i class="fas fa-eye"></i> View Task
@@ -939,9 +939,9 @@ include '../../includes/navbar.php';
                             <tr>
                                 <td>
                                     <div class="fw-semibold"><?php echo htmlspecialchars($task['title']); ?></div>
-                                    <small class="text-muted"><?php echo htmlspecialchars(substr($task['description'], 0, 60)); ?></small>
+                                    <small class="text-muted"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 60)); ?></small>
                                 </td>
-                                <td><?php echo date('M d, Y', strtotime($task['completed_at'])); ?></td>
+                                <td><?php echo !empty($task['completed_at']) ? date('M d, Y', strtotime((string) $task['completed_at'])) : 'No date'; ?></td>
                                 <td class="text-center">
                                     <button class="btn-view" onclick="viewTask(<?php echo $task['id']; ?>)">
                                         <i class="fas fa-eye"></i> View

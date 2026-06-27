@@ -943,18 +943,18 @@ include '../../includes/navbar.php';
                     <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
+                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
                         <?php if (!empty($task['git_branch_name'])): ?>
                         <div class="git-snippet">
                             <i class="fas fa-code-branch"></i>
                             <span><?php echo htmlspecialchars($task['git_branch_name']); ?></span>
                             <?php if (!empty($task['git_commit_hash'])): ?>
-                            <code><?php echo htmlspecialchars(substr($task['git_commit_hash'], 0, 7)); ?></code>
+                            <code><?php echo htmlspecialchars(substr((string) ($task['git_commit_hash'] ?? ''), 0, 7)); ?></code>
                             <?php endif; ?>
                         </div>
                         <?php endif; ?>
                         <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
+                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
                             <div>
                                 <button class="btn-action me-1" onclick="startTask(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-play"></i> Start
@@ -990,18 +990,18 @@ include '../../includes/navbar.php';
                     <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
+                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
                         <?php if (!empty($task['git_branch_name'])): ?>
                         <div class="git-snippet">
                             <i class="fas fa-code-branch"></i>
                             <span><?php echo htmlspecialchars($task['git_branch_name']); ?></span>
                             <?php if (!empty($task['git_commit_hash'])): ?>
-                            <code><?php echo htmlspecialchars(substr($task['git_commit_hash'], 0, 7)); ?></code>
+                            <code><?php echo htmlspecialchars(substr((string) ($task['git_commit_hash'] ?? ''), 0, 7)); ?></code>
                             <?php endif; ?>
                         </div>
                         <?php endif; ?>
                         <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
+                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
                             <div>
                                 <button class="btn-action me-1" onclick="viewTask(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-code-pull-request"></i> Submit PR
@@ -1040,18 +1040,18 @@ include '../../includes/navbar.php';
                     <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
+                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
                         <?php if (!empty($task['git_branch_name'])): ?>
                         <div class="git-snippet">
                             <i class="fas fa-code-branch"></i>
                             <span><?php echo htmlspecialchars($task['git_branch_name']); ?></span>
                             <?php if (!empty($task['git_commit_hash'])): ?>
-                            <code><?php echo htmlspecialchars(substr($task['git_commit_hash'], 0, 7)); ?></code>
+                            <code><?php echo htmlspecialchars(substr((string) ($task['git_commit_hash'] ?? ''), 0, 7)); ?></code>
                             <?php endif; ?>
                         </div>
                         <?php endif; ?>
                         <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
+                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
                             <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)">
                                 <i class="fas fa-eye"></i> View
                             </button>
@@ -1082,7 +1082,7 @@ include '../../includes/navbar.php';
                     <div class="completed-card">
                         <div class="d-flex justify-content-between">
                             <small><s><?php echo htmlspecialchars($task['title']); ?></s></small>
-                            <small class="text-muted"><?php echo date('M d', strtotime($task['completed_at'])); ?></small>
+                            <small class="text-muted"><?php echo !empty($task['completed_at']) ? date('M d', strtotime((string) $task['completed_at'])) : 'No date'; ?></small>
                         </div>
                     </div>
                     <?php endwhile; ?>

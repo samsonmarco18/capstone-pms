@@ -658,7 +658,9 @@ include '../../includes/navbar.php';
                 <div>
                     <?php if($pendingTasks->num_rows > 0): ?>
                         <?php while($task = $pendingTasks->fetch_assoc()): 
-                            $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
+                            $deadlineValue = (string) ($task['deadline'] ?? '');
+                            $deadlineTimestamp = $deadlineValue !== '' ? strtotime($deadlineValue) : false;
+                            $daysLeft = $deadlineTimestamp !== false ? ceil(($deadlineTimestamp - time()) / (60 * 60 * 24)) : 999;
                         ?>
                         <div class="list-group-item-custom">
                             <div class="d-flex justify-content-between align-items-start">
@@ -671,9 +673,9 @@ include '../../includes/navbar.php';
                                     </div>
                                     <div class="mb-1">
                                         <small class="text-muted"><i class="fas fa-folder me-1"></i><?php echo htmlspecialchars($task['project_name']); ?></small>
-                                        <small class="text-muted ms-3"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></small>
+                                        <small class="text-muted ms-3"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo $deadlineTimestamp !== false ? date('M d, Y', $deadlineTimestamp) : 'No deadline'; ?></small>
                                     </div>
-                                    <p class="small text-muted mb-0"><?php echo htmlspecialchars(substr($task['description'], 0, 100)); ?></p>
+                                    <p class="small text-muted mb-0"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 100)); ?></p>
                                 </div>
                                 <a href="feature-estimation.php?task_id=<?php echo $task['id']; ?>" class="btn-estimate ms-3">
                                     <i class="fas fa-calculator"></i> Estimate

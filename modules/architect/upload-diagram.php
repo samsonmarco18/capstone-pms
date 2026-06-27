@@ -588,7 +588,7 @@ a.progress-step:hover {
                                     <br>
                                     <small class="text-muted"><?php echo htmlspecialchars($doc['description']); ?></small>
                                     <div class="mt-1">
-                                        <small class="text-muted"><i class="far fa-clock me-1"></i> Uploaded: <?php echo date('M d, Y H:i', strtotime($doc['created_at'])); ?></small>
+                                        <small class="text-muted"><i class="far fa-clock me-1"></i> Uploaded: <?php echo !empty($doc['created_at']) ? date('M d, Y H:i', strtotime((string) $doc['created_at'])) : 'No date'; ?></small>
                                     </div>
                                 </div>
                                 <div class="d-flex gap-2">

@@ -491,14 +491,14 @@ include '../../includes/navbar.php';
                         <td>
                             <?php 
                             if($project['timeline_start'] && $project['timeline_end']) {
-                                echo date('M d', strtotime($project['timeline_start'])) . ' - ' . 
-                                     date('M d, Y', strtotime($project['timeline_end']));
+                                echo date('M d', strtotime((string) $project['timeline_start'])) . ' - ' . 
+                                     date('M d, Y', strtotime((string) $project['timeline_end']));
                             } else {
                                 echo '<span class="text-muted">Not set</span>';
                             }
                             ?>
                         </td>
-                        <td><?php echo date('M d, Y', strtotime($project['created_at'])); ?></td>
+                        <td><?php echo !empty($project['created_at']) ? date('M d, Y', strtotime((string) $project['created_at'])) : 'No date'; ?></td>
                         <td>
                             <div class="d-flex flex-wrap gap-2">
                             <?php $nextStep = architectProjectNextStep($project); ?>

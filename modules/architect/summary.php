@@ -540,7 +540,7 @@ a.progress-step:hover {
                     <table class="info-table">
                         <tr><td>Project Name:</td><td class="fw-semibold"><?php echo htmlspecialchars($project['name']); ?></td></tr>
                         <tr><td>Client:</td><td><?php echo htmlspecialchars($project['client_name']); ?></td></tr>
-                        <tr><td>Timeline:</td><td><?php echo date('M d, Y', strtotime($project['timeline_start'])); ?> - <?php echo date('M d, Y', strtotime($project['timeline_end'])); ?></td></tr>
+                        <tr><td>Timeline:</td><td><?php echo !empty($project['timeline_start']) ? date('M d, Y', strtotime((string) $project['timeline_start'])) : 'No start date'; ?> - <?php echo !empty($project['timeline_end']) ? date('M d, Y', strtotime((string) $project['timeline_end'])) : 'No end date'; ?></td></tr>
                         <tr><td>Status:</td><td><span class="badge-status pending">Ready for SUL Review</span></td></tr>
                         <?php if ($hasSalesBudget && !empty($project['sales_budget'])): ?>
                         <tr><td>Budget:</td><td><?php echo number_format((float) $project['sales_budget'], 2); ?></td></tr>
@@ -614,7 +614,7 @@ a.progress-step:hover {
                                     <i class="fas fa-file-pdf text-danger me-2"></i>
                                     <strong><?php echo str_replace('_', ' ', ucfirst($doc['document_type'])); ?></strong>
                                     <br><small class="text-muted"><?php echo htmlspecialchars($doc['description']); ?></small>
-                                    <div class="mt-1"><small class="text-muted"><i class="far fa-clock me-1"></i> Uploaded: <?php echo date('M d, Y H:i', strtotime($doc['created_at'])); ?></small></div>
+                                    <div class="mt-1"><small class="text-muted"><i class="far fa-clock me-1"></i> Uploaded: <?php echo !empty($doc['created_at']) ? date('M d, Y H:i', strtotime((string) $doc['created_at'])) : 'No date'; ?></small></div>
                                 </div>
                                 <a href="<?php echo BASE_URL; ?>/<?php echo $doc['file_path']; ?>" class="btn-review" target="_blank"><i class="fas fa-eye"></i> View</a>
                             </div>

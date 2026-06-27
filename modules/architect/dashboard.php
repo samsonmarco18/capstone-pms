@@ -446,7 +446,7 @@ include '../../includes/navbar.php';
                                 <div class="mt-1">
                                     <small class="text-muted">
                                         <i class="far fa-calendar-alt me-1"></i>
-                                        Target: <?php echo !empty($project['timeline_end']) ? date('M d, Y', strtotime($project['timeline_end'])) : 'No target date'; ?>
+                                        Target: <?php echo !empty($project['timeline_end']) ? date('M d, Y', strtotime((string) $project['timeline_end'])) : 'No target date'; ?>
                                     </small>
                                 </div>
                                 <div class="mt-1">
@@ -488,14 +488,14 @@ include '../../includes/navbar.php';
                                     <i class="fas fa-user-circle me-1"></i>
                                     <?php echo htmlspecialchars($activity['full_name']); ?>
                                 </span>
-                                <span class="activity-time"><?php echo date('h:i A', strtotime($activity['created_at'])); ?></span>
+                                <span class="activity-time"><?php echo !empty($activity['created_at']) ? date('h:i A', strtotime((string) $activity['created_at'])) : 'No time'; ?></span>
                             </div>
                             <div class="activity-action">
                                 <?php echo ucfirst(str_replace('_', ' ', $activity['action'])); ?>
                             </div>
                             <div class="activity-date">
                                 <i class="far fa-calendar-alt me-1"></i>
-                                <?php echo date('M d, Y', strtotime($activity['created_at'])); ?>
+                                <?php echo !empty($activity['created_at']) ? date('M d, Y', strtotime((string) $activity['created_at'])) : 'No date'; ?>
                             </div>
                         </div>
                         <?php endwhile; ?>

@@ -405,8 +405,8 @@ a.progress-step:hover {
                         <div class="detail-value">
                             <?php
                             if($project['timeline_start'] && $project['timeline_end']) {
-                                echo date('M d, Y', strtotime($project['timeline_start'])) . ' - ' .
-                                     date('M d, Y', strtotime($project['timeline_end']));
+                                echo date('M d, Y', strtotime((string) $project['timeline_start'])) . ' - ' .
+                                     date('M d, Y', strtotime((string) $project['timeline_end']));
                             } else {
                                 echo 'Not set';
                             }
