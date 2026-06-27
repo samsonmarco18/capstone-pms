@@ -283,7 +283,8 @@ function createNotification(
     string $type = 'system',
     ?string $relatedTable = null,
     ?int $relatedId = null,
-    ?string $actionUrl = null
+    ?string $actionUrl = null,
+    bool $sendEmail = true
 ): bool {
     try {
         $conn = getConnection();
@@ -295,7 +296,7 @@ function createNotification(
         $result = $stmt->execute();
         $stmt->close();
 
-        if ($result) {
+        if ($result && $sendEmail) {
             sendNotificationEmailToUser($userId, $title, $message, $type, $actionUrl);
         }
 

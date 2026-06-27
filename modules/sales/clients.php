@@ -284,6 +284,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $sharedFolderId = $sharedFolderStmt->insert_id;
                     $sharedFolderStmt->close();
 
+                }
+
+                $conn->commit();
+                if ($projectId) {
                     workflowNotifyRoles(
                         $conn,
                         ['architect'],
@@ -295,8 +299,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         'projects'
                     );
                 }
-
-                $conn->commit();
                 logActivity($user['id'], 'add_client', 'clients', $clientId, null, $_POST);
                 if ($projectId) {
                     logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);

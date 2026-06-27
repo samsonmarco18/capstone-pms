@@ -147,7 +147,7 @@ function workflowNotifyRoles(
     }
 
     while ($recipient = $result->fetch_assoc()) {
-        createNotification((int) $recipient['id'], $title, $message, $notificationType, $relatedTable, $relatedId, $actionUrl);
+        createNotification((int) $recipient['id'], $title, $message, $notificationType, $relatedTable, $relatedId, $actionUrl, false);
     }
 }
 
@@ -161,7 +161,7 @@ function workflowNotifyUser(
     if ($userId <= 0) {
         return;
     }
-    createNotification($userId, $title, $message, 'task', 'tasks', $relatedId, $actionUrl);
+    createNotification($userId, $title, $message, 'task', 'tasks', $relatedId, $actionUrl, false);
 }
 
 function workflowLogStatusChange(int $userId, int $taskId, string $fromStatus, string $toStatus, string $action, ?string $comment = null): void
