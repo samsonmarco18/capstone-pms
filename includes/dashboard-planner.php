@@ -1,7 +1,7 @@
 <?php
 
 if (!function_exists('dashboardPlannerHandleRequest')) {
-    function dashboardPlannerHandleRequest(mysqli $conn, int $userId, string $redirectPath = 'dashboard.php'): void
+    function dashboardPlannerHandleRequest(mysqli|PgsqlMysqliCompatConnection $conn, int $userId, string $redirectPath = 'dashboard.php'): void
     {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             return;
@@ -81,7 +81,7 @@ if (!function_exists('dashboardPlannerHandleRequest')) {
 }
 
 if (!function_exists('dashboardPlannerBuild')) {
-    function dashboardPlannerBuild(mysqli $conn, int $userId): array
+    function dashboardPlannerBuild(mysqli|PgsqlMysqliCompatConnection $conn, int $userId): array
     {
         $calendarMonthInput = trim((string) ($_GET['calendar_month'] ?? date('Y-m')));
         if (!preg_match('/^\d{4}-\d{2}$/', $calendarMonthInput)) {
