@@ -6,6 +6,24 @@ requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+
+function sulDashboardFetchCount($conn, string $sql): int
+{
+    $result = $conn->query($sql);
+    if (!is_object($result) || !method_exists($result, 'fetch_assoc')) {
+        return 0;
+    }
+
+    $row = $result->fetch_assoc() ?: [];
+    return (int) ($row['count'] ?? 0);
+}
+
+function sulDashboardQuery($conn, string $sql)
+{
+    $result = $conn->query($sql);
+    return (is_object($result) && method_exists($result, 'fetch_assoc')) ? $result : null;
+}
+
 $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 $hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_days');
 $salesApprovalCondition = $hasSalesApproval ? "t.sales_approved = 1" : "1 = 1";
@@ -16,22 +34,22 @@ $projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '
 $projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 // Get statistics
-$totalExperts = $conn->query("SELECT COUNT(*) as count FROM users WHERE role = 'expert' OR role = 'developer'")->fetch_assoc()['count'];
-$availableExperts = $conn->query("SELECT COUNT(*) as count FROM users WHERE (role = 'expert' OR role = 'developer') AND status = 'active'")->fetch_assoc()['count'];
-$totalTasks = $conn->query("SELECT COUNT(*) as count FROM tasks")->fetch_assoc()['count'];
-$overdueTasks = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE deadline < NOW() AND status != 'completed'")->fetch_assoc()['count'];
-$unassignedTasks = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE assigned_to IS NULL OR assigned_to = 0")->fetch_assoc()['count'];
-$inProgressTasks = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE status = 'in_progress'")->fetch_assoc()['count'];
-$completedTasks = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE status = 'completed'")->fetch_assoc()['count'];
-$todoTasks = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE status = 'todo'")->fetch_assoc()['count'];
+$totalExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users WHERE role = 'expert' OR role = 'developer'");
+$availableExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users WHERE (role = 'expert' OR role = 'developer') AND status = 'active'");
+$totalTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks");
+$overdueTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE deadline < NOW() AND status != 'completed'");
+$unassignedTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE assigned_to IS NULL OR assigned_to = 0");
+$inProgressTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE status = 'in_progress'");
+$completedTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE status = 'completed'");
+$todoTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE status = 'todo'");
 
 // Get tasks by priority
-$highPriority = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE priority = 'high' AND status != 'completed'")->fetch_assoc()['count'];
-$mediumPriority = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE priority = 'medium' AND status != 'completed'")->fetch_assoc()['count'];
-$lowPriority = $conn->query("SELECT COUNT(*) as count FROM tasks WHERE priority = 'low' AND status != 'completed'")->fetch_assoc()['count'];
+$highPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE priority = 'high' AND status != 'completed'");
+$mediumPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE priority = 'medium' AND status != 'completed'");
+$lowPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE priority = 'low' AND status != 'completed'");
 
 // Get expert/developer availability
-$expertAvailability = $conn->query("
+$expertAvailability = sulDashboardQuery($conn, "
     SELECT u.id, u.full_name, u.role, 
            COUNT(t.id) as assigned_tasks,
            SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
@@ -43,7 +61,7 @@ $expertAvailability = $conn->query("
 ");
 
 // Get projects that need SUL task allocation/action
-$projectsNeedingAllocation = $conn->query("
+$projectsNeedingAllocation = sulDashboardQuery($conn, "
     SELECT
         p.*,
         c.name as client_name,
@@ -97,7 +115,7 @@ $projectsNeedingAllocation = $conn->query("
 ");
 
 // Get recent tasks
-$recentTasks = $conn->query("
+$recentTasks = sulDashboardQuery($conn, "
     SELECT t.*, p.name as project_name, u.full_name as assigned_to_name
     FROM tasks t
     LEFT JOIN projects p ON t.project_id = p.id
@@ -109,7 +127,7 @@ $recentTasks = $conn->query("
 // Build SUL agenda from manual schedules, upcoming deadlines, and allocation actions
 $upcomingAgenda = [];
 
-$scheduleRows = $conn->query("
+$scheduleRows = sulDashboardQuery($conn, "
     SELECT title, description, start_date, start_time, schedule_type
     FROM schedules
     WHERE user_id = {$user['id']}
@@ -118,20 +136,22 @@ $scheduleRows = $conn->query("
     ORDER BY start_date ASC, start_time ASC
     LIMIT 5
 ");
-while ($schedule = $scheduleRows->fetch_assoc()) {
-    $agendaDate = trim((string) ($schedule['start_date'] ?? ''));
-    $agendaTime = trim((string) ($schedule['start_time'] ?? ''));
-    $upcomingAgenda[] = [
-        'title' => (string) ($schedule['title'] ?? 'Scheduled item'),
-        'description' => (string) ($schedule['description'] ?? ''),
-        'date' => $agendaDate . ($agendaTime !== '' ? ' ' . $agendaTime : ''),
-        'type' => ucfirst((string) ($schedule['schedule_type'] ?? 'Schedule')),
-        'icon' => 'calendar-alt',
-        'url' => '',
-    ];
+if ($scheduleRows) {
+    while ($schedule = $scheduleRows->fetch_assoc()) {
+        $agendaDate = trim((string) ($schedule['start_date'] ?? ''));
+        $agendaTime = trim((string) ($schedule['start_time'] ?? ''));
+        $upcomingAgenda[] = [
+            'title' => (string) ($schedule['title'] ?? 'Scheduled item'),
+            'description' => (string) ($schedule['description'] ?? ''),
+            'date' => $agendaDate . ($agendaTime !== '' ? ' ' . $agendaTime : ''),
+            'type' => ucfirst((string) ($schedule['schedule_type'] ?? 'Schedule')),
+            'icon' => 'calendar-alt',
+            'url' => '',
+        ];
+    }
 }
 
-$projectScheduleRows = $conn->query("
+$projectScheduleRows = sulDashboardQuery($conn, "
     SELECT p.id, p.name, p.timeline_start, {$projectStartTimeSql} AS timeline_start_time, p.timeline_end, {$projectEndTimeSql} AS timeline_end_time, c.name AS client_name
     FROM projects p
     JOIN clients c ON c.id = p.client_id
@@ -144,32 +164,34 @@ $projectScheduleRows = $conn->query("
     ORDER BY COALESCE(p.timeline_end, p.timeline_start) ASC
     LIMIT 8
 ");
-while ($project = $projectScheduleRows->fetch_assoc()) {
-    $clientDescription = 'Client: ' . (string) ($project['client_name'] ?? 'Client');
-    if (!empty($project['timeline_start'])) {
-        $upcomingAgenda[] = [
-            'title' => 'Project start: ' . (string) ($project['name'] ?? 'Project'),
-            'description' => $clientDescription,
-            'date' => trim((string) ($project['timeline_start'] ?? '') . ' ' . (string) ($project['timeline_start_time'] ?? '09:00:00')),
-            'type' => 'Project Start',
-            'icon' => 'play-circle',
-            'url' => 'task-allocation.php?project_id=' . (int) ($project['id'] ?? 0),
-        ];
-    }
+if ($projectScheduleRows) {
+    while ($project = $projectScheduleRows->fetch_assoc()) {
+        $clientDescription = 'Client: ' . (string) ($project['client_name'] ?? 'Client');
+        if (!empty($project['timeline_start'])) {
+            $upcomingAgenda[] = [
+                'title' => 'Project start: ' . (string) ($project['name'] ?? 'Project'),
+                'description' => $clientDescription,
+                'date' => trim((string) ($project['timeline_start'] ?? '') . ' ' . (string) ($project['timeline_start_time'] ?? '09:00:00')),
+                'type' => 'Project Start',
+                'icon' => 'play-circle',
+                'url' => 'task-allocation.php?project_id=' . (int) ($project['id'] ?? 0),
+            ];
+        }
 
-    if (!empty($project['timeline_end'])) {
-        $upcomingAgenda[] = [
-            'title' => 'Project deadline: ' . (string) ($project['name'] ?? 'Project'),
-            'description' => $clientDescription,
-            'date' => trim((string) ($project['timeline_end'] ?? '') . ' ' . (string) ($project['timeline_end_time'] ?? '17:00:00')),
-            'type' => 'Project Deadline',
-            'icon' => 'flag-checkered',
-            'url' => 'task-allocation.php?project_id=' . (int) ($project['id'] ?? 0),
-        ];
+        if (!empty($project['timeline_end'])) {
+            $upcomingAgenda[] = [
+                'title' => 'Project deadline: ' . (string) ($project['name'] ?? 'Project'),
+                'description' => $clientDescription,
+                'date' => trim((string) ($project['timeline_end'] ?? '') . ' ' . (string) ($project['timeline_end_time'] ?? '17:00:00')),
+                'type' => 'Project Deadline',
+                'icon' => 'flag-checkered',
+                'url' => 'task-allocation.php?project_id=' . (int) ($project['id'] ?? 0),
+            ];
+        }
     }
 }
 
-$deadlineRows = $conn->query("
+$deadlineRows = sulDashboardQuery($conn, "
     SELECT t.id, t.title, t.deadline, t.status, p.name AS project_name
     FROM tasks t
     JOIN projects p ON p.id = t.project_id
@@ -179,18 +201,20 @@ $deadlineRows = $conn->query("
     ORDER BY t.deadline ASC
     LIMIT 5
 ");
-while ($task = $deadlineRows->fetch_assoc()) {
-    $upcomingAgenda[] = [
-        'title' => (string) ($task['title'] ?? 'Task deadline'),
-        'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
-        'date' => trim((string) ($task['deadline'] ?? '') . ' 17:00:00'),
-        'type' => 'Deadline',
-        'icon' => 'flag-checkered',
-        'url' => 'task-allocation.php?task_id=' . (int) ($task['id'] ?? 0),
-    ];
+if ($deadlineRows) {
+    while ($task = $deadlineRows->fetch_assoc()) {
+        $upcomingAgenda[] = [
+            'title' => (string) ($task['title'] ?? 'Task deadline'),
+            'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
+            'date' => trim((string) ($task['deadline'] ?? '') . ' 17:00:00'),
+            'type' => 'Deadline',
+            'icon' => 'flag-checkered',
+            'url' => 'task-allocation.php?task_id=' . (int) ($task['id'] ?? 0),
+        ];
+    }
 }
 
-$actionRows = $conn->query("
+$actionRows = sulDashboardQuery($conn, "
     SELECT
         t.id,
         t.title,
@@ -221,15 +245,17 @@ $actionRows = $conn->query("
     ORDER BY COALESCE(t.deadline, NOW()) ASC
     LIMIT 5
 ");
-while ($task = $actionRows->fetch_assoc()) {
-    $upcomingAgenda[] = [
-        'title' => (string) ($task['title'] ?? 'Task action'),
-        'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
-        'date' => (string) ($task['deadline'] ?? date('Y-m-d H:i:s')),
-        'type' => (string) ($task['action_label'] ?? 'Action'),
-        'icon' => 'tasks',
-        'url' => 'task-allocation.php?task_id=' . (int) ($task['id'] ?? 0),
-    ];
+if ($actionRows) {
+    while ($task = $actionRows->fetch_assoc()) {
+        $upcomingAgenda[] = [
+            'title' => (string) ($task['title'] ?? 'Task action'),
+            'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
+            'date' => (string) ($task['deadline'] ?? date('Y-m-d H:i:s')),
+            'type' => (string) ($task['action_label'] ?? 'Action'),
+            'icon' => 'tasks',
+            'url' => 'task-allocation.php?task_id=' . (int) ($task['id'] ?? 0),
+        ];
+    }
 }
 
 usort($upcomingAgenda, static function (array $left, array $right): int {
@@ -910,7 +936,7 @@ include '../../includes/navbar.php';
                     <h5><i class="fas fa-project-diagram"></i> Projects Needing Task Allocation</h5>
                 </div>
                 <div class="card-body p-0">
-                    <?php if($projectsNeedingAllocation->num_rows > 0): ?>
+                    <?php if($projectsNeedingAllocation && $projectsNeedingAllocation->num_rows > 0): ?>
                         <?php while($project = $projectsNeedingAllocation->fetch_assoc()): ?>
                         <?php
                             $totalTasksForProject = (int) ($project['total_tasks'] ?? 0);
@@ -989,6 +1015,7 @@ include '../../includes/navbar.php';
                             </tr>
                         </thead>
                         <tbody>
+                            <?php if($expertAvailability): ?>
                             <?php while($expert = $expertAvailability->fetch_assoc()): ?>
                             <?php
                                 $statusClass = $expert['active_tasks'] >= 5 ? 'overloaded' : ($expert['active_tasks'] >= 3 ? 'busy' : ($expert['active_tasks'] > 0 ? 'available' : 'free'));
@@ -1006,6 +1033,7 @@ include '../../includes/navbar.php';
                                 </td>
                             </tr>
                             <?php endwhile; ?>
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -1019,7 +1047,7 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="card-body">
                     <div class="recent-task-list">
-                        <?php if($recentTasks->num_rows > 0): ?>
+                        <?php if($recentTasks && $recentTasks->num_rows > 0): ?>
                         <?php while($task = $recentTasks->fetch_assoc()): 
                             $deadlineTimestamp = !empty($task['deadline']) ? strtotime((string) $task['deadline']) : false;
                             $daysLeft = $deadlineTimestamp ? ceil(($deadlineTimestamp - time()) / (60 * 60 * 24)) : null;
@@ -1088,11 +1116,13 @@ include '../../includes/navbar.php';
                     <select id="assignToUser" class="form-select">
                         <option value="">Select a team member</option>
                         <?php
-                        $availableUsers = $conn->query("SELECT id, full_name, role FROM users WHERE role IN ('expert', 'developer') AND status = 'active' ORDER BY full_name");
+                        $availableUsers = sulDashboardQuery($conn, "SELECT id, full_name, role FROM users WHERE role IN ('expert', 'developer') AND status = 'active' ORDER BY full_name");
+                        if ($availableUsers):
                         while($user = $availableUsers->fetch_assoc()):
                         ?>
                         <option value="<?php echo $user['id']; ?>"><?php echo htmlspecialchars($user['full_name']); ?> (<?php echo strtoupper($user['role']); ?>)</option>
                         <?php endwhile; ?>
+                        <?php endif; ?>
                     </select>
                 </div>
                 <div class="mb-3">
