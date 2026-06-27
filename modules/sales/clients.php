@@ -9,6 +9,23 @@ $hasSalesBudget = dbColumnExists($conn, 'projects', 'sales_budget');
 $hasTimelineStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasTimelineEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
 
+function salesClientsFetchCount($conn, string $sql): int
+{
+    $result = $conn->query($sql);
+    if (!is_object($result) || !method_exists($result, 'fetch_assoc')) {
+        return 0;
+    }
+
+    $row = $result->fetch_assoc() ?: [];
+    return (int) ($row['count'] ?? 0);
+}
+
+function salesClientsQuery($conn, string $sql)
+{
+    $result = $conn->query($sql);
+    return (is_object($result) && method_exists($result, 'fetch_assoc')) ? $result : null;
+}
+
 if (!$hasTimelineStartTime) {
     $conn->query(DB_DRIVER === 'pgsql'
         ? 'ALTER TABLE projects ADD COLUMN timeline_start_time TIME NULL'
@@ -63,7 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $email = trim((string) ($_POST['email'] ?? ''));
         $phone = trim((string) ($_POST['phone'] ?? ''));
         $address = trim((string) ($_POST['address'] ?? ''));
-        $deadline = $_POST['deadline'] ?: null;
+        $deadline = trim((string) ($_POST['deadline'] ?? ''));
+        $deadline = $deadline !== '' ? $deadline : null;
 
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -101,16 +119,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             try {
                 $stmt = $conn->prepare("INSERT INTO clients (name, contact_person, email, phone, address, deadline, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                if ($stmt === false) {
+                    throw new RuntimeException('Unable to prepare client insert.');
+                }
                 $stmt->bind_param("ssssssi", $name, $contactPerson, $email, $phone, $address, $deadline, $user['id']);
-                $stmt->execute();
+                if (!$stmt->execute()) {
+                    throw new RuntimeException('Unable to insert client.');
+                }
                 $clientId = $stmt->insert_id;
                 $stmt->close();
 
                 $clientFolderStmt = $conn->prepare(
                     "SELECT id FROM folders WHERE client_id = ? AND parent_id IS NULL AND folder_type = 'client' LIMIT 1"
                 );
+                if ($clientFolderStmt === false) {
+                    throw new RuntimeException('Unable to prepare client folder lookup.');
+                }
                 $clientFolderStmt->bind_param('i', $clientId);
-                $clientFolderStmt->execute();
+                if (!$clientFolderStmt->execute()) {
+                    throw new RuntimeException('Unable to load client folder.');
+                }
                 $clientFolderResult = $clientFolderStmt->get_result()->fetch_assoc();
                 $clientFolderId = $clientFolderResult['id'] ?? null;
                 $clientFolderStmt->close();
@@ -120,8 +148,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         "INSERT INTO folders (name, folder_type, client_id, parent_id, role, created_by)
                          VALUES (?, 'client', ?, NULL, NULL, ?)"
                     );
+                    if ($createClientFolderStmt === false) {
+                        throw new RuntimeException('Unable to prepare client folder creation.');
+                    }
                     $createClientFolderStmt->bind_param('sii', $name, $clientId, $user['id']);
-                    $createClientFolderStmt->execute();
+                    if (!$createClientFolderStmt->execute()) {
+                        throw new RuntimeException('Unable to create client folder.');
+                    }
                     $clientFolderId = $createClientFolderStmt->insert_id;
                     $createClientFolderStmt->close();
                 }
@@ -141,6 +174,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 meeting_notes, mom, requested_features, sales_budget{$timeColumns}, created_by, architect_id
                             ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULLIF(?, ''){$timePlaceholders}, ?, NULL)
                         ");
+                        if ($projectStmt === false) {
+                            throw new RuntimeException('Unable to prepare project insert.');
+                        }
                         $projectBudget = $salesBudget === null ? '' : number_format($salesBudget, 2, '.', '');
                         if ($hasTimelineStartTime && $hasTimelineEndTime) {
                             $projectStmt->bind_param(
@@ -216,9 +252,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             );
                         }
                     }
-                    $projectStmt->execute();
-                    $projectId = $projectStmt->insert_id;
-                    $projectStmt->close();
+                        if (!$projectStmt->execute()) {
+                            throw new RuntimeException('Unable to create project requirements.');
+                        }
+                        $projectId = $projectStmt->insert_id;
+                        $projectStmt->close();
 
                     // Create shared project folder under client folder
                     $sharedFolderName = "Shared - " . $projectName;
@@ -226,13 +264,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         "INSERT INTO folders (name, folder_type, client_id, project_id, parent_id, role, created_by) 
                          VALUES (?, 'project', ?, ?, ?, NULL, ?)"
                     );
+                    if ($sharedFolderStmt === false) {
+                        throw new RuntimeException('Unable to prepare shared folder creation.');
+                    }
                     $sharedFolderStmt->bind_param('siiii', $sharedFolderName, $clientId, $projectId, $clientFolderId, $user['id']);
-                    $sharedFolderStmt->execute();
+                    if (!$sharedFolderStmt->execute()) {
+                        throw new RuntimeException('Unable to create shared project folder.');
+                    }
                     $sharedFolderId = $sharedFolderStmt->insert_id;
                     $sharedFolderStmt->close();
 
-                    $architects = $conn->query("SELECT id FROM users WHERE role = 'architect' AND status = 'active'");
-                    while ($architect = $architects->fetch_assoc()) {
+                    $architects = salesClientsQuery($conn, "SELECT id FROM users WHERE role = 'architect' AND status = 'active'");
+                    if ($architects) {
+                        while ($architect = $architects->fetch_assoc()) {
                         createNotification(
                             (int) $architect['id'],
                             'New Project Requirements Ready',
@@ -242,6 +286,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             $projectId,
                             BASE_URL . 'modules/architect/project-review.php?id=' . $projectId
                         );
+                        }
                     }
                 }
 
@@ -255,6 +300,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
             } catch (Throwable $e) {
                 $conn->rollback();
+                error_log('Sales client save error: ' . $e->getMessage());
                 $_SESSION['error'] = 'Unable to save client and requirements. Please try again.';
             }
         }
@@ -268,7 +314,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $status = $_POST['status'];
         $deadline = $_POST['deadline'];
         
-        $oldData = $conn->query("SELECT * FROM clients WHERE id = $id")->fetch_assoc();
+        $oldResult = salesClientsQuery($conn, "SELECT * FROM clients WHERE id = $id");
+        $oldData = $oldResult ? $oldResult->fetch_assoc() : null;
         
         $stmt = $conn->prepare("UPDATE clients SET name=?, contact_person=?, email=?, phone=?, address=?, status=?, deadline=? WHERE id=?");
         $stmt->bind_param("sssssssi", $name, $contact_person, $email, $phone, $address, $status, $deadline, $id);
@@ -279,7 +326,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     } elseif (isset($_POST['delete_client'])) {
         $id = $_POST['id'];
-        $oldData = $conn->query("SELECT * FROM clients WHERE id = $id")->fetch_assoc();
+        $oldResult = salesClientsQuery($conn, "SELECT * FROM clients WHERE id = $id");
+        $oldData = $oldResult ? $oldResult->fetch_assoc() : null;
         
         $stmt = $conn->prepare("DELETE FROM clients WHERE id=?");
         $stmt->bind_param("i", $id);
@@ -325,12 +373,12 @@ if ($statusFilter) {
 }
 $query .= " ORDER BY c.created_at DESC";
 
-$clients = $conn->query($query);
+$clients = salesClientsQuery($conn, $query);
 
 // Get statistics
-$totalClients = $conn->query("SELECT COUNT(*) as count FROM clients")->fetch_assoc()['count'];
-$activeClients = $conn->query("SELECT COUNT(*) as count FROM clients WHERE status = 'active'")->fetch_assoc()['count'];
-$pendingClients = $conn->query("SELECT COUNT(*) as count FROM clients WHERE status = 'pending'")->fetch_assoc()['count'];
+$totalClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients");
+$activeClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients WHERE status = 'active'");
+$pendingClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients WHERE status = 'pending'");
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -1567,7 +1615,7 @@ include '../../includes/navbar.php';
                 Client Directory
             </h5>
             <div>
-                <span class="text-muted small">Showing <?php echo $clients->num_rows; ?> clients</span>
+                <span class="text-muted small">Showing <?php echo $clients ? $clients->num_rows : 0; ?> clients</span>
             </div>
         </div>
 
@@ -1616,7 +1664,7 @@ include '../../includes/navbar.php';
         
         <!-- Clients Table -->
         <div class="table-container">
-            <?php if($clients->num_rows > 0): ?>
+            <?php if($clients && $clients->num_rows > 0): ?>
             <table class="client-table">
                 <thead>
                     <tr>
