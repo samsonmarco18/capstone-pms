@@ -187,6 +187,54 @@ function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?s
 
 function smtpSendMessage(array $config, string $fromEmail, array $recipients, string $message): array
 {
+    $errors = [];
+
+    foreach (smtpConnectionCandidates($config) as $candidate) {
+        $result = smtpSendMessageViaConfig($candidate, $fromEmail, $recipients, $message);
+        if ($result['success']) {
+            return $result;
+        }
+
+        $errors[] = $candidate['host'] . ':' . $candidate['port'] . '/' . $candidate['encryption'] . ' - ' . (string) $result['error'];
+
+        if (!smtpErrorLooksLikeConnectionFailure((string) $result['error'])) {
+            break;
+        }
+    }
+
+    return ['success' => false, 'error' => 'SMTP delivery failed: ' . implode('; ', $errors)];
+}
+
+function smtpConnectionCandidates(array $config): array
+{
+    $candidates = [$config];
+    $host = strtolower((string) ($config['host'] ?? ''));
+    $port = (int) ($config['port'] ?? 0);
+    $encryption = strtolower((string) ($config['encryption'] ?? 'tls'));
+
+    if (in_array($host, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true) && !($port === 465 && $encryption === 'ssl')) {
+        $sslConfig = $config;
+        $sslConfig['port'] = 465;
+        $sslConfig['encryption'] = 'ssl';
+        $candidates[] = $sslConfig;
+    }
+
+    return $candidates;
+}
+
+function smtpErrorLooksLikeConnectionFailure(string $error): bool
+{
+    $normalized = strtolower($error);
+
+    return str_contains($normalized, 'connection failed')
+        || str_contains($normalized, 'timed out')
+        || str_contains($normalized, 'connection refused')
+        || str_contains($normalized, 'network is unreachable')
+        || str_contains($normalized, 'no route to host');
+}
+
+function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recipients, string $message): array
+{
     $transport = $config['encryption'] === 'ssl' ? 'ssl://' : 'tcp://';
     $context = stream_context_create([
         'ssl' => [
