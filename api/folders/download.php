@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/file-storage.php';
 
 requireLogin();
 
@@ -23,8 +24,8 @@ if (!$file) {
     exit('File not found.');
 }
 
-$absolutePath = dirname(__DIR__, 2) . '/' . ltrim($file['file_path'], '/');
-if (!is_file($absolutePath)) {
+$absolutePath = storageResolveRelativePath((string) $file['file_path']);
+if ($absolutePath === null || !is_file($absolutePath)) {
     http_response_code(404);
     exit('Stored file not found.');
 }

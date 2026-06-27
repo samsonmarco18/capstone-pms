@@ -17,6 +17,10 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
         throw new RuntimeException('SUL can review Pull Requests only. Final merge is restricted to Architect.');
     }
 
+    if ($user['role'] === 'qa') {
+        throw new RuntimeException('QA can view repositories, branches, commits, and changed files only.');
+    }
+
     if ($user['role'] === 'architect' && !in_array($action, ['merge_branches', 'create_repository', 'fork_repository', 'create_branch', 'delete_branch', 'protect_branch', 'log_sync', 'create_working_folder', 'delete_repository'], true)) {
         throw new RuntimeException('Architects can only perform merge, repository creation, branching, and sync operations in version control.');
     }

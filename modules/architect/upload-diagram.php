@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/file-storage.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -52,19 +53,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $description = trim($_POST['description'] ?? '');
     
     if(isset($_FILES['diagram']) && $_FILES['diagram']['error'] == 0) {
-        $uploadDir = '../../uploads/architecture/';
-        if (!file_exists($uploadDir)) {
-            mkdir($uploadDir, 0777, true);
-        }
+        $target = storageBuildUploadTarget((string) $_FILES['diagram']['name'], 'architecture');
+        $originalFileName = $target['original_name'];
         
-        $originalFileName = basename($_FILES['diagram']['name']);
-        $storedFileName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $originalFileName);
-        $filePath = $uploadDir . $storedFileName;
-        $relativePath = str_replace('../../', '', $filePath);
-        
-        if (move_uploaded_file($_FILES['diagram']['tmp_name'], $filePath)) {
+        if (move_uploaded_file($_FILES['diagram']['tmp_name'], $target['absolute_path'])) {
             $stmt = $conn->prepare("INSERT INTO architecture_documents (project_id, document_type, file_name, file_path, description, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("issssi", $projectId, $docType, $originalFileName, $relativePath, $description, $user['id']);
+            $stmt->bind_param("issssi", $projectId, $docType, $originalFileName, $target['relative_path'], $description, $user['id']);
             $stmt->execute();
             
             logActivity($user['id'], 'upload_diagram', 'projects', $projectId, null, $_POST);

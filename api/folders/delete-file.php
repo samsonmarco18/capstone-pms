@@ -3,6 +3,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/file-storage.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -32,8 +33,8 @@ if (!$file) {
     exit();
 }
 
-$absolutePath = dirname(__DIR__, 2) . '/' . ltrim($file['file_path'], '/');
-if (is_file($absolutePath)) {
+$absolutePath = storageResolveRelativePath((string) $file['file_path']);
+if ($absolutePath !== null && is_file($absolutePath)) {
     @unlink($absolutePath);
 }
 

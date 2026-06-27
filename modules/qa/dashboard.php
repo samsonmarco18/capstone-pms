@@ -553,7 +553,12 @@ include '../../includes/navbar.php';
                                 <h5 class="mb-1"><i class="fas fa-vial-circle-check"></i><?php echo htmlspecialchars((string) $selectedTask['title']); ?></h5>
                                 <small class="text-muted"><?php echo htmlspecialchars((string) $selectedTask['project_name']); ?> · Developer: <?php echo htmlspecialchars((string) ($selectedTask['developer_name'] ?? 'Unassigned')); ?></small>
                             </div>
-                            <span class="badge bg-warning text-dark align-self-start">QA Testing</span>
+                            <div class="d-flex gap-2 align-items-start flex-wrap">
+                                <a class="btn btn-outline-primary btn-sm" href="<?php echo BASE_URL; ?>modules/version-control/repositories.php?project_id=<?php echo (int) $selectedTask['project_id']; ?>">
+                                    <i class="fas fa-code-branch me-1"></i> Version Control
+                                </a>
+                                <span class="badge bg-warning text-dark align-self-start">QA Testing</span>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body">

@@ -316,7 +316,7 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
          FROM tasks t
          INNER JOIN users u ON u.id = t.assigned_to
          LEFT JOIN feature_estimations fe ON fe.task_id = t.id AND fe.expert_id = u.id
-         WHERE t.project_id = ? AND u.role = "expert"
+         WHERE t.project_id = ? AND u.role = \'expert\'
          ORDER BY u.full_name ASC, t.deadline ASC'
     );
     $expertAssignmentStmt->bind_param('i', $projectId);
@@ -329,7 +329,7 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
                 u.id AS user_id, u.full_name, u.role
          FROM tasks t
          INNER JOIN users u ON u.id = t.assigned_to
-         WHERE t.project_id = ? AND u.role = "developer"
+         WHERE t.project_id = ? AND u.role = \'developer\'
          ORDER BY u.full_name ASC, t.deadline ASC'
     );
     $developerTaskStmt->bind_param('i', $projectId);
@@ -367,7 +367,7 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
     $receiptStmt->close();
 
     $featureCountStmt = $conn->prepare(
-        'SELECT COUNT(*) AS total FROM tasks WHERE project_id = ? AND task_type = "feature"'
+        'SELECT COUNT(*) AS total FROM tasks WHERE project_id = ? AND task_type = \'feature\''
     );
     $featureCountStmt->bind_param('i', $projectId);
     $featureCountStmt->execute();
