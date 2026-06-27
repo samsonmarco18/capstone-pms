@@ -406,6 +406,20 @@ include '../../includes/navbar.php';
     color: #2563eb;
 }
 
+.badge-record-id {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: #eef8ff;
+    color: #1f6392;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+}
+
 /* Empty State */
 .empty-state-modern {
     text-align: center;
@@ -504,6 +518,108 @@ include '../../includes/navbar.php';
     .audit-table td {
         padding: 0.75rem 1rem;
     }
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
+    background: #071321 !important;
+    border-color: rgba(138, 210, 255, 0.12) !important;
+    color: #d8e6f3 !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-preview {
+    background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-info,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
+    color: #d8e6f3 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-username,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-text,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-label {
+    color: #90aeca !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-table tr:hover {
+    background: rgba(31, 99, 146, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select {
+    background: rgba(10, 24, 38, 0.98);
+    border-color: rgba(138, 210, 255, 0.12);
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-action.create {
+    background: rgba(5, 150, 105, 0.16);
+    color: #94f1c6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-action.update {
+    background: rgba(217, 119, 6, 0.16);
+    color: #ffd58a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-action.delete {
+    background: rgba(220, 38, 38, 0.15);
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-action.login {
+    background: rgba(37, 99, 235, 0.16);
+    color: #8fc1ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-record-id {
+    background: rgba(31, 99, 146, 0.18);
+    color: #bfe6ff;
+    border-color: rgba(138, 210, 255, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern i {
+    color: #90aeca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-modern {
+    background: rgba(127, 29, 29, 0.34);
+    border: 1px solid rgba(248, 113, 113, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-modern i {
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-content strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-content p {
+    color: #ffd0d0;
 }
 </style>
 
@@ -651,7 +767,7 @@ include '../../includes/navbar.php';
                             <?php echo ucfirst($log['table_name']); ?>
                         </td>
                         <td>
-                            <span class="badge bg-light text-dark">#<?php echo $displayRecordNumber--; ?></span>
+                            <span class="badge-record-id">#<?php echo $displayRecordNumber--; ?></span>
                         </td>
                         <td>
                             <code><?php echo $log['ip_address']; ?></code>

@@ -622,6 +622,114 @@ $conn = getConnection();
         align-items: stretch;
     }
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-details-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
+    background: #071321 !important;
+    border-color: rgba(138, 210, 255, 0.12) !important;
+    color: #d8e6f3 !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-full .value {
+    background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-container,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-details-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-metric,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-empty,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern {
+    background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-card .card-header h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card .card-header h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-section h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-item .value {
+    color: #d8e6f3 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-header p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-metric span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-list label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-row small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern .breadcrumb-item.active,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-client-label {
+    color: #90aeca !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-metric,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item.is-active {
+    border-color: rgba(138, 210, 255, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item.is-active,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr:hover {
+    background: rgba(31, 99, 146, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-expand,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .file-link,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern .breadcrumb-item a {
+    color: #bfe6ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-folder {
+    background: rgba(217, 119, 6, 0.16);
+    color: #ffd58a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-file {
+    background: rgba(144, 174, 202, 0.12);
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .status-badge {
+    background: rgba(31, 99, 146, 0.16);
+    color: #bfe6ff;
+    border-color: rgba(138, 210, 255, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item.is-active .folder-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-card .card-header h6 i {
+    color: #8fd3ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-children {
+    border-left-color: rgba(138, 210, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .btn-close {
+    filter: brightness(0) invert(1);
+}
 </style>
 
 <div class="container-fluid px-4 py-4">

@@ -252,6 +252,72 @@ include 'includes/navbar.php';
         height: 24px;
     }
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state {
+    background: #071321 !important;
+    border-color: rgba(138, 210, 255, 0.12) !important;
+    color: #d8e6f3 !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-card .card-header {
+    background: #0a1b2c !important;
+    border-bottom-color: rgba(138, 210, 255, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-card .card-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state h4 {
+    color: #d8e6f3 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-message,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-time,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state p {
+    color: #90aeca !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-item.unread {
+    background: #071321 !important;
+    border-bottom-color: rgba(138, 210, 255, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-item:hover {
+    background: rgba(31, 99, 146, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-icon {
+    background: rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-icon i {
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-notification {
+    color: #90aeca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-notification:hover {
+    background: rgba(220, 38, 38, 0.18);
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-mark-read {
+    border-color: rgba(138, 210, 255, 0.12);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-mark-read:hover {
+    background: rgba(31, 99, 146, 0.14);
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .unread-dot {
+    background: #8fd3ff;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
