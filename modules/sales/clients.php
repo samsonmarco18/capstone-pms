@@ -27,6 +27,12 @@ function salesClientsQuery($conn, string $sql)
     return (is_object($result) && method_exists($result, 'fetch_assoc')) ? $result : null;
 }
 
+function salesClientsDbError($conn): string
+{
+    $error = trim((string) ($conn->error ?? ''));
+    return $error !== '' ? ' Database error: ' . $error : '';
+}
+
 if (!$hasTimelineStartTime) {
     $conn->query(DB_DRIVER === 'pgsql'
         ? 'ALTER TABLE projects ADD COLUMN timeline_start_time TIME NULL'
@@ -173,10 +179,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             INSERT INTO projects (
                                 client_id, name, description, status, timeline_start, timeline_end,
                                 meeting_notes, mom, requested_features, sales_budget{$timeColumns}, created_by, architect_id
-                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULLIF(?, ''){$timePlaceholders}, ?, NULL)
+                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, " . (DB_DRIVER === 'pgsql' ? "CAST(NULLIF(?, '') AS NUMERIC)" : "NULLIF(?, '')") . "{$timePlaceholders}, ?, NULL)
                         ");
                         if ($projectStmt === false) {
-                            throw new RuntimeException('Unable to prepare project insert.');
+                            throw new RuntimeException('Unable to prepare project insert.' . salesClientsDbError($conn));
                         }
                         $projectBudget = $salesBudget === null ? '' : number_format($salesBudget, 2, '.', '');
                         if ($hasTimelineStartTime && $hasTimelineEndTime) {
@@ -223,6 +229,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 meeting_notes, mom, requested_features{$timeColumns}, created_by, architect_id
                             ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?{$timePlaceholders}, ?, NULL)
                         ");
+                        if ($projectStmt === false) {
+                            throw new RuntimeException('Unable to prepare project insert.' . salesClientsDbError($conn));
+                        }
                         if ($hasTimelineStartTime && $hasTimelineEndTime) {
                             $projectStmt->bind_param(
                                 'isssssssssi',
@@ -254,7 +263,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         }
                     }
                         if (!$projectStmt->execute()) {
-                            throw new RuntimeException('Unable to create project requirements.');
+                            throw new RuntimeException('Unable to create project requirements.' . salesClientsDbError($conn));
                         }
                         $projectId = $projectStmt->insert_id;
                         $projectStmt->close();
@@ -266,11 +275,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                          VALUES (?, 'project', ?, ?, ?, NULL, ?)"
                     );
                     if ($sharedFolderStmt === false) {
-                        throw new RuntimeException('Unable to prepare shared folder creation.');
+                        throw new RuntimeException('Unable to prepare shared folder creation.' . salesClientsDbError($conn));
                     }
                     $sharedFolderStmt->bind_param('siiii', $sharedFolderName, $clientId, $projectId, $clientFolderId, $user['id']);
                     if (!$sharedFolderStmt->execute()) {
-                        throw new RuntimeException('Unable to create shared project folder.');
+                        throw new RuntimeException('Unable to create shared project folder.' . salesClientsDbError($conn));
                     }
                     $sharedFolderId = $sharedFolderStmt->insert_id;
                     $sharedFolderStmt->close();
@@ -298,7 +307,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             } catch (Throwable $e) {
                 $conn->rollback();
                 error_log('Sales client save error: ' . $e->getMessage());
-                $_SESSION['error'] = 'Unable to save client and requirements. Please try again.';
+                $_SESSION['error'] = 'Unable to save client and requirements. ' . $e->getMessage();
             }
         }
     } elseif (isset($_POST['update_client'])) {
