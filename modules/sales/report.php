@@ -424,6 +424,85 @@ include '../../includes/navbar.php';
     margin: 0;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-modern {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    border: 1px solid rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(31, 99, 146, 0.12));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr.total-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-table .total-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-item:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-item.active,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert.alert-info {
+    background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-card .card-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-card .card-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-modern h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-card strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-card p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-table td {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-modern i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-modern p {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-modern {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select:focus {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.45);
+    color: #d7e4f2;
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control::placeholder {
+    color: rgba(157, 182, 207, 0.65);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {

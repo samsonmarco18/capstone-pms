@@ -347,6 +347,93 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .diff-bar span{display:block;height:100%;}
 .diff-bar .plus{background:#16a34a;}
 .diff-bar .minus{background:#dc2626;}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode),
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repo-tile,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repo-hero,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .content-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .merge-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-box,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-card .accordion-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .file-change-row {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+    color: #d7e4f2 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repo-stat,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-tile,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-chip,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-card .card-head,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-card .accordion-button,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-card .accordion-button:not(.collapsed),
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-card .accordion-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell thead th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table tbody tr:hover {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: #d7e4f2 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-header-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repo-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repo-stat strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-tile strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repo-hero-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .file-change-path,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table td {
+    color: #d7e4f2 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-kicker,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repo-slug,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repo-description,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repo-stat span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repo-footnote,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repo-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-tile span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .file-change-old,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .change-lines,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-card .form-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table th {
+    color: #9db6cf !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-card .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-card .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) textarea {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: #d7e4f2 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-card .form-control:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-card .form-select:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) textarea:focus {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.45) !important;
+    color: #d7e4f2 !important;
+    box-shadow: 0 0 0 .2rem rgba(31, 99, 146, 0.12) !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item {
+    border-left-color: rgba(31, 99, 146, 0.24);
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .diff-bar {
+    background: rgba(157, 182, 207, 0.18);
+}
 @media (max-width: 1199.98px){.vc-sidebar{position:static;}}
 @media (max-width: 575.98px){.clone-action-row{grid-template-columns:1fr;}}
 @media (max-width: 767.98px){.vc-header{padding:1.5rem;}.vc-header-title{font-size:1.6rem;}.repo-stats,.repo-summary-grid{grid-template-columns:1fr;}}

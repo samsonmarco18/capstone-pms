@@ -437,6 +437,47 @@ a.progress-step:hover {
     .progress-step .step-label { font-size: 0.6rem; }
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-table tr,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr.total-row {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-name {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-meta {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">

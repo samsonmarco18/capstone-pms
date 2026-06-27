@@ -373,6 +373,46 @@ include '../../includes/navbar.php';
         padding: 0.75rem 1rem;
     }
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table tr:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-number,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) td {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table td {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">

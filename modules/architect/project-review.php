@@ -300,6 +300,50 @@ a.progress-step:hover {
     .detail-value { text-align: left; }
     .btn-primary-modern { width: 100%; justify-content: center; }
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .upload-area {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .detail-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-section {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .detail-value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h6 {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .detail-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) textarea {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: #d7e4f2 !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">

@@ -1149,6 +1149,220 @@ include '../../includes/navbar.php';
     white-space: nowrap;
 }
 
+html[data-theme="dark"] .sales-dashboard-hero,
+body[data-theme="dark"] .sales-dashboard-hero,
+body.dark-mode .sales-dashboard-hero,
+html[data-theme="dark"] .stat-card-modern,
+body[data-theme="dark"] .stat-card-modern,
+body.dark-mode .stat-card-modern,
+html[data-theme="dark"] .chart-card,
+body[data-theme="dark"] .chart-card,
+body.dark-mode .chart-card,
+html[data-theme="dark"] .list-card,
+body[data-theme="dark"] .list-card,
+body.dark-mode .list-card,
+html[data-theme="dark"] .planner-modal .modal-content,
+body[data-theme="dark"] .planner-modal .modal-content,
+body.dark-mode .planner-modal .modal-content {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26);
+    color: #d7e4f2;
+}
+
+html[data-theme="dark"] .sales-dashboard-hero h1,
+body[data-theme="dark"] .sales-dashboard-hero h1,
+body.dark-mode .sales-dashboard-hero h1,
+html[data-theme="dark"] .chart-card .card-header h5,
+body[data-theme="dark"] .chart-card .card-header h5,
+body.dark-mode .chart-card .card-header h5,
+html[data-theme="dark"] .list-card .card-header h5,
+body[data-theme="dark"] .list-card .card-header h5,
+body.dark-mode .list-card .card-header h5,
+html[data-theme="dark"] .client-info h6,
+body[data-theme="dark"] .client-info h6,
+body.dark-mode .client-info h6,
+html[data-theme="dark"] .timeline-title,
+body[data-theme="dark"] .timeline-title,
+body.dark-mode .timeline-title,
+html[data-theme="dark"] .agenda-title,
+body[data-theme="dark"] .agenda-title,
+body.dark-mode .agenda-title,
+html[data-theme="dark"] .agenda-next-title,
+body[data-theme="dark"] .agenda-next-title,
+body.dark-mode .agenda-next-title,
+html[data-theme="dark"] .agenda-date-label,
+body[data-theme="dark"] .agenda-date-label,
+body.dark-mode .agenda-date-label,
+html[data-theme="dark"] .planner-modal .modal-title,
+body[data-theme="dark"] .planner-modal .modal-title,
+body.dark-mode .planner-modal .modal-title,
+html[data-theme="dark"] .planner-month,
+body[data-theme="dark"] .planner-month,
+body.dark-mode .planner-month,
+html[data-theme="dark"] .planner-panel h6,
+body[data-theme="dark"] .planner-panel h6,
+body.dark-mode .planner-panel h6,
+html[data-theme="dark"] .plan-title,
+body[data-theme="dark"] .plan-title,
+body.dark-mode .plan-title,
+html[data-theme="dark"] .calendar-date,
+body[data-theme="dark"] .calendar-date,
+body.dark-mode .calendar-date,
+html[data-theme="dark"] .release-project-title,
+body[data-theme="dark"] .release-project-title,
+body.dark-mode .release-project-title,
+html[data-theme="dark"] .release-feature,
+body[data-theme="dark"] .release-feature,
+body.dark-mode .release-feature {
+    color: #d7e4f2;
+}
+
+html[data-theme="dark"] .sales-dashboard-hero .text-muted,
+body[data-theme="dark"] .sales-dashboard-hero .text-muted,
+body.dark-mode .sales-dashboard-hero .text-muted,
+html[data-theme="dark"] .stat-card-modern .stat-label,
+body[data-theme="dark"] .stat-card-modern .stat-label,
+body.dark-mode .stat-card-modern .stat-label,
+html[data-theme="dark"] .stat-card-modern .stat-sub,
+body[data-theme="dark"] .stat-card-modern .stat-sub,
+body.dark-mode .stat-card-modern .stat-sub,
+html[data-theme="dark"] .client-info .client-details,
+body[data-theme="dark"] .client-info .client-details,
+body.dark-mode .client-info .client-details,
+html[data-theme="dark"] .timeline-time,
+body[data-theme="dark"] .timeline-time,
+body.dark-mode .timeline-time,
+html[data-theme="dark"] .timeline-desc,
+body[data-theme="dark"] .timeline-desc,
+body.dark-mode .timeline-desc,
+html[data-theme="dark"] .empty-state-modern p,
+body[data-theme="dark"] .empty-state-modern p,
+body.dark-mode .empty-state-modern p,
+html[data-theme="dark"] .agenda-subtitle,
+body[data-theme="dark"] .agenda-subtitle,
+body.dark-mode .agenda-subtitle,
+html[data-theme="dark"] .agenda-today-badge span,
+body[data-theme="dark"] .agenda-today-badge span,
+body.dark-mode .agenda-today-badge span,
+html[data-theme="dark"] .agenda-next-label,
+body[data-theme="dark"] .agenda-next-label,
+body.dark-mode .agenda-next-label,
+html[data-theme="dark"] .agenda-next-meta,
+body[data-theme="dark"] .agenda-next-meta,
+body.dark-mode .agenda-next-meta,
+html[data-theme="dark"] .calendar-weekday,
+body[data-theme="dark"] .calendar-weekday,
+body.dark-mode .calendar-weekday,
+html[data-theme="dark"] .calendar-more,
+body[data-theme="dark"] .calendar-more,
+body.dark-mode .calendar-more,
+html[data-theme="dark"] .plan-meta,
+body[data-theme="dark"] .plan-meta,
+body.dark-mode .plan-meta,
+html[data-theme="dark"] .release-project-client,
+body[data-theme="dark"] .release-project-client,
+body.dark-mode .release-project-client,
+html[data-theme="dark"] .release-progress-label,
+body[data-theme="dark"] .release-progress-label,
+body.dark-mode .release-progress-label,
+html[data-theme="dark"] .release-section-title,
+body[data-theme="dark"] .release-section-title,
+body.dark-mode .release-section-title,
+html[data-theme="dark"] .release-feature small,
+body[data-theme="dark"] .release-feature small,
+body.dark-mode .release-feature small {
+    color: #9db6cf !important;
+}
+
+html[data-theme="dark"] .chart-card .card-header,
+body[data-theme="dark"] .chart-card .card-header,
+body.dark-mode .chart-card .card-header,
+html[data-theme="dark"] .list-card .card-header,
+body[data-theme="dark"] .list-card .card-header,
+body.dark-mode .list-card .card-header,
+html[data-theme="dark"] .planner-modal .modal-header,
+body[data-theme="dark"] .planner-modal .modal-header,
+body.dark-mode .planner-modal .modal-header {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+html[data-theme="dark"] .list-item-modern,
+body[data-theme="dark"] .list-item-modern,
+body.dark-mode .list-item-modern,
+html[data-theme="dark"] .timeline-item-modern::after,
+body[data-theme="dark"] .timeline-item-modern::after,
+body.dark-mode .timeline-item-modern::after,
+html[data-theme="dark"] .calendar-grid,
+body[data-theme="dark"] .calendar-grid,
+body.dark-mode .calendar-grid,
+html[data-theme="dark"] .calendar-weekday,
+body[data-theme="dark"] .calendar-weekday,
+body.dark-mode .calendar-weekday,
+html[data-theme="dark"] .calendar-day,
+body[data-theme="dark"] .calendar-day,
+body.dark-mode .calendar-day,
+html[data-theme="dark"] .planner-nav a,
+body[data-theme="dark"] .planner-nav a,
+body.dark-mode .planner-nav a {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+html[data-theme="dark"] .list-item-modern:hover,
+body[data-theme="dark"] .list-item-modern:hover,
+body.dark-mode .list-item-modern:hover,
+html[data-theme="dark"] .agenda-summary,
+body[data-theme="dark"] .agenda-summary,
+body.dark-mode .agenda-summary,
+html[data-theme="dark"] .agenda-date-group,
+body[data-theme="dark"] .agenda-date-group,
+body.dark-mode .agenda-date-group,
+html[data-theme="dark"] .planner-panel,
+body[data-theme="dark"] .planner-panel,
+body.dark-mode .planner-panel,
+html[data-theme="dark"] .calendar-weekday,
+body[data-theme="dark"] .calendar-weekday,
+body.dark-mode .calendar-weekday,
+html[data-theme="dark"] .calendar-day:hover,
+body[data-theme="dark"] .calendar-day:hover,
+body.dark-mode .calendar-day:hover,
+html[data-theme="dark"] .calendar-day.is-selected,
+body[data-theme="dark"] .calendar-day.is-selected,
+body.dark-mode .calendar-day.is-selected,
+html[data-theme="dark"] .release-project,
+body[data-theme="dark"] .release-project,
+body.dark-mode .release-project {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+html[data-theme="dark"] .agenda-today-badge,
+body[data-theme="dark"] .agenda-today-badge,
+body.dark-mode .agenda-today-badge,
+html[data-theme="dark"] .calendar-day,
+body[data-theme="dark"] .calendar-day,
+body.dark-mode .calendar-day,
+html[data-theme="dark"] .plan-item,
+body[data-theme="dark"] .plan-item,
+body.dark-mode .plan-item {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+html[data-theme="dark"] .calendar-day.is-muted,
+body[data-theme="dark"] .calendar-day.is-muted,
+body.dark-mode .calendar-day.is-muted {
+    background: #06101b;
+    color: #637f9a;
+}
+
+html[data-theme="dark"] .release-progress-track,
+body[data-theme="dark"] .release-progress-track,
+body.dark-mode .release-progress-track {
+    background: rgba(157, 182, 207, 0.18);
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .stats-grid {
@@ -1208,7 +1422,7 @@ include '../../includes/navbar.php';
     <!-- Welcome Section -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card border-0 shadow-sm">
+            <div class="card border-0 shadow-sm sales-dashboard-hero">
                 <div class="card-body p-4">
                     <div class="row align-items-center">
                         <div class="col-12">

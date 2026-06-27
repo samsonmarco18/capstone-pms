@@ -866,6 +866,103 @@ include '../../includes/navbar.php';
     display: none;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-group,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-task-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    border: 1px solid rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-toggle:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-gantt-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-meta-list span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expectation-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-pert-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-legend-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-choice-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-choice-tone,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-choice-status,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-pill,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-chevron {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-head h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-gantt-head h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-feature-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-panel-head h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-choice-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-head p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-pill,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-gantt-head p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-meta-list span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expectation-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-helper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-pert-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-legend-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .choice-group-head p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-choice-caption,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .choice-range-note {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-kicker,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-feature-eyebrow {
+    background: rgba(31, 99, 146, 0.14);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-actions,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-choice-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-bar-track,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-view {
+    background: rgba(157, 182, 207, 0.18);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern textarea {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern textarea:focus {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.45);
+    color: #d7e4f2;
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
 @media (max-width: 991.98px) {
     .approval-actions {
         justify-content: flex-end;

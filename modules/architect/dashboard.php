@@ -226,6 +226,47 @@ include '../../includes/navbar.php';
     font-size: 0.8rem;
     margin: 0;
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .dashboard-hero,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-content {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table thead th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table tbody tr:hover {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h1,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h2,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h3,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table td {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table th {
+    color: #9db6cf !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-3">

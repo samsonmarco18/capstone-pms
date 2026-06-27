@@ -1322,6 +1322,153 @@ include '../../includes/navbar.php';
     color: white !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .modal-content,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    border: 1px solid rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(31, 99, 146, 0.12));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tabs,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-drafts-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table tr:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .field-group,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__summary span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-summary span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.view,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.edit {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .deadline-date,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-banner__text strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .section-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientContent,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #clientProjects {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tab-btn,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-email,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__subtitle,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__summary span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-banner__text,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-banner__text span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .mini-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .draft-status,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input label {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tabs,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .field-group,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern textarea,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal textarea {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern textarea:focus {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.45);
+    color: #d7e4f2;
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input::placeholder,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern textarea::placeholder,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control::placeholder {
+    color: rgba(157, 182, 207, 0.65);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tab-btn.is-active,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-text,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-summary span {
+    color: var(--theme-primary) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress {
+    background: rgba(157, 182, 207, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .unsaved-close-panel {
+    background: rgba(217, 119, 6, 0.12);
+    border-color: rgba(217, 119, 6, 0.35);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .unsaved-close-panel__text,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .unsaved-close-panel__text strong {
+    color: #fbbf24;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {

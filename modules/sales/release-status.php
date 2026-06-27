@@ -544,6 +544,106 @@ include '../../includes/navbar.php';
     color: #047857;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    border: 1px solid rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(31, 99, 146, 0.12));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card .card-head,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-item.is-complete,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requirements-box,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .source-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-summary-tag {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card .card-head h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-title h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requirements-box {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-sub,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-title small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-description,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card .card-head,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requirements-box,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control:focus {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.45);
+    color: #d7e4f2;
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-track {
+    background: rgba(157, 182, 207, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.complete,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-summary-tag.success {
+    background: rgba(16, 185, 129, 0.14);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: #34d399;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.pending,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-summary-tag.warning {
+    background: rgba(249, 115, 22, 0.14);
+    border-color: rgba(249, 115, 22, 0.3);
+    color: #fdba74;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.architect,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .source-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-summary-tag {
+    background: rgba(31, 99, 146, 0.14);
+    border-color: rgba(31, 99, 146, 0.3);
+    color: var(--theme-primary);
+}
+
 @media (max-width: 992px) {
     .summary-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
