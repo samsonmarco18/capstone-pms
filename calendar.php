@@ -653,6 +653,130 @@ include __DIR__ . '/includes/navbar.php';
         display: none;
     }
 }
+
+html[data-theme="dark"] .calendar-shell {
+    color: #d8e6f3;
+}
+
+html[data-theme="dark"] .calendar-hero {
+    background: linear-gradient(135deg, rgba(31, 99, 146, 0.26) 0%, rgba(12, 31, 49, 0.96) 100%);
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.34);
+}
+
+html[data-theme="dark"] .calendar-hero p,
+html[data-theme="dark"] .calendar-stat span,
+html[data-theme="dark"] .calendar-weekday,
+html[data-theme="dark"] .calendar-more,
+html[data-theme="dark"] .calendar-event__meta,
+html[data-theme="dark"] .calendar-empty {
+    color: #90aeca;
+}
+
+html[data-theme="dark"] .calendar-stat,
+html[data-theme="dark"] .calendar-card__header,
+html[data-theme="dark"] .calendar-day,
+html[data-theme="dark"] .calendar-panel {
+    background: rgba(10, 22, 35, 0.88);
+    border-color: rgba(138, 210, 255, 0.10);
+}
+
+html[data-theme="dark"] .calendar-stat strong {
+    color: #8cc7ff;
+}
+
+html[data-theme="dark"] .calendar-card,
+html[data-theme="dark"] .calendar-panel {
+    box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme="dark"] .calendar-grid {
+    background: linear-gradient(180deg, rgba(12, 31, 49, 0.94) 0%, rgba(8, 20, 32, 0.98) 100%);
+}
+
+html[data-theme="dark"] .calendar-day:hover {
+    border-color: rgba(138, 210, 255, 0.18);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.20);
+}
+
+html[data-theme="dark"] .calendar-day.is-today {
+    border-color: rgba(140, 199, 255, 0.65);
+    box-shadow: inset 0 0 0 1px rgba(140, 199, 255, 0.65);
+}
+
+html[data-theme="dark"] .calendar-day.is-today .calendar-date {
+    background: rgba(140, 199, 255, 0.16);
+    color: #d8e6f3;
+}
+
+html[data-theme="dark"] .calendar-day.is-selected {
+    background: linear-gradient(180deg, rgba(31, 99, 146, 0.18), rgba(31, 99, 146, 0.08));
+    border-color: rgba(140, 199, 255, 0.20);
+}
+
+html[data-theme="dark"] .calendar-date {
+    color: #d8e6f3;
+}
+
+html[data-theme="dark"] .calendar-event-count {
+    background: rgba(31, 99, 146, 0.18);
+    color: #8cc7ff;
+}
+
+html[data-theme="dark"] .calendar-mini-event {
+    background: rgba(12, 31, 49, 0.96);
+    color: #d8e6f3;
+    border-left-color: var(--event-color, #8cc7ff);
+}
+
+html[data-theme="dark"] .calendar-dot {
+    opacity: 0.92;
+}
+
+html[data-theme="dark"] .calendar-event__title,
+html[data-theme="dark"] .calendar-card__header h2,
+html[data-theme="dark"] .calendar-card__header h3,
+html[data-theme="dark"] .calendar-panel__header h3 {
+    color: #d8e6f3;
+}
+
+html[data-theme="dark"] .calendar-event {
+    border-top-color: rgba(138, 210, 255, 0.10);
+}
+
+html[data-theme="dark"] .calendar-event__marker {
+    box-shadow: 0 0 0 4px rgba(31, 99, 146, 0.18);
+}
+
+html[data-theme="dark"] .calendar-event__link {
+    color: #8cc7ff;
+    background: rgba(31, 99, 146, 0.18);
+}
+
+html[data-theme="dark"] .calendar-event__link:hover {
+    color: #d8e6f3;
+    background: rgba(31, 99, 146, 0.28);
+}
+
+html[data-theme="dark"] .calendar-panel .badge.text-bg-primary {
+    background-color: rgba(31, 99, 146, 0.22) !important;
+    color: #8cc7ff !important;
+}
+
+html[data-theme="dark"] .calendar-panel .badge.text-bg-light {
+    background-color: rgba(12, 31, 49, 0.92) !important;
+    color: #d8e6f3 !important;
+    border: 1px solid rgba(138, 210, 255, 0.10);
+}
+
+html[data-theme="dark"] .btn-outline-primary.calendar-today-btn {
+    color: #8cc7ff;
+    border-color: rgba(140, 199, 255, 0.35);
+}
+
+html[data-theme="dark"] .btn-outline-primary.calendar-today-btn:hover {
+    background: rgba(31, 99, 146, 0.22);
+    color: #d8e6f3;
+}
 </style>
 
 <div class="container-fluid calendar-shell">
@@ -703,7 +827,7 @@ include __DIR__ . '/includes/navbar.php';
                     <div>
                         <h2><?php echo htmlspecialchars($calendarStart->format('F Y')); ?></h2>
                     </div>
-                    <a class="btn btn-sm btn-outline-primary" href="calendar.php?calendar_month=<?php echo urlencode(date('Y-m')); ?>&day=<?php echo urlencode(date('Y-m-d')); ?>">
+                    <a class="btn btn-sm btn-outline-primary calendar-today-btn" href="calendar.php?calendar_month=<?php echo urlencode(date('Y-m')); ?>&day=<?php echo urlencode(date('Y-m-d')); ?>">
                         Today
                     </a>
                 </div>
