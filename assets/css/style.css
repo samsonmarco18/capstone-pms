@@ -1692,6 +1692,8 @@ body {
     border-radius: 50%;
     color: #1c679f !important;
     background: transparent;
+    border: 0;
+    box-shadow: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1703,7 +1705,9 @@ body {
 }
 
 .app-toggle.is-active {
-    background: #eef7fd;
+    background: transparent !important;
+    color: #1c679f !important;
+    box-shadow: none !important;
 }
 
 .nav-context-title {
@@ -1725,11 +1729,24 @@ body {
     align-items: center;
     justify-content: center;
     background: transparent;
+    border: 0;
+    box-shadow: none;
     color: #1691cd !important;
 }
 
 .nav-icon-link:hover {
     background: #eef7fd;
+}
+
+.navbar #darkModeToggle {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+.navbar #darkModeToggle:hover,
+.navbar #darkModeToggle:focus {
+    background: #eef7fd !important;
 }
 
 .user-profile-pic {

@@ -11,6 +11,10 @@ function initSidebar() {
     const content = $('#page-content-wrapper');
     const overlay = $('.sidebar-overlay');
     const toggle = $('.sidebar-toggle-btn');
+    if (!sidebar.length || !content.length || !toggle.length) {
+        return;
+    }
+
     const storageScope = getSidebarStateScope();
     const desktopStateKey = `erni.sidebar.${storageScope}.collapsed`;
     const mobileStateKey = `erni.sidebar.${storageScope}.mobile_open`;
@@ -22,7 +26,7 @@ function initSidebar() {
 
     function applySidebarState() {
         if (window.innerWidth <= 992) {
-            const isMobileOpen = localStorage.getItem(mobileStateKey) === 'true';
+            const isMobileOpen = getStoredSidebarValue(mobileStateKey) === 'true';
             sidebar.removeClass('collapsed');
             content.removeClass('sidebar-collapsed');
             sidebar.toggleClass('active', isMobileOpen);
@@ -31,7 +35,7 @@ function initSidebar() {
             return;
         }
 
-        const isCollapsed = localStorage.getItem(desktopStateKey) === 'true';
+        const isCollapsed = getStoredSidebarValue(desktopStateKey) === 'true';
         sidebar.removeClass('active');
         overlay.removeClass('active');
         sidebar.toggleClass('collapsed', isCollapsed);
@@ -48,7 +52,7 @@ function initSidebar() {
             const nextOpenState = !sidebar.hasClass('active');
             sidebar.toggleClass('active', nextOpenState);
             overlay.toggleClass('active', nextOpenState);
-            localStorage.setItem(mobileStateKey, String(nextOpenState));
+            setStoredSidebarValue(mobileStateKey, String(nextOpenState));
             updateToggleState();
             return;
         }
@@ -56,20 +60,24 @@ function initSidebar() {
         const nextCollapsedState = !sidebar.hasClass('collapsed');
         sidebar.toggleClass('collapsed', nextCollapsedState);
         content.toggleClass('sidebar-collapsed', nextCollapsedState);
-        localStorage.setItem(desktopStateKey, String(nextCollapsedState));
+        setStoredSidebarValue(desktopStateKey, String(nextCollapsedState));
         updateToggleState();
     });
 
     overlay.on('click', function () {
         sidebar.removeClass('active');
         overlay.removeClass('active');
-        localStorage.setItem(mobileStateKey, 'false');
+        setStoredSidebarValue(mobileStateKey, 'false');
         updateToggleState();
     });
 
     $(window).on('resize', debounce(function () {
         applySidebarState();
     }, 150));
+
+    window.addEventListener('pageshow', function () {
+        applySidebarState();
+    });
 }
 
 function getSidebarStateScope() {
@@ -85,7 +93,24 @@ function getSidebarStateScope() {
         return `role-${role}`;
     }
 
-    return 'guest';
+    const path = String(window.location.pathname || '').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase();
+    return path ? `page-${path}` : 'guest';
+}
+
+function getStoredSidebarValue(key) {
+    try {
+        return window.localStorage.getItem(key);
+    } catch (error) {
+        return null;
+    }
+}
+
+function setStoredSidebarValue(key, value) {
+    try {
+        window.localStorage.setItem(key, value);
+    } catch (error) {
+        // Ignore storage failures so the toggle still works in restricted browsers.
+    }
 }
 
 function initDarkMode() {
