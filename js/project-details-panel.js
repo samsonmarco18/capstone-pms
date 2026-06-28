@@ -40,7 +40,7 @@ function renderProjectMetric(label, value) {
     return `
         <div class="project-context-metric">
             <span>${escapeHtml(label)}</span>
-            <strong>${escapeHtml(String(value ?? 0))}</strong>
+            <strong>${escapeHtml(String(value !== null && value !== undefined ? value : 0))}</strong>
         </div>
     `;
 }
@@ -75,7 +75,7 @@ function groupAssignmentsByUser(assignments) {
 }
 
 function renderApprovedTimelineGantt(timeline) {
-    const tasks = Array.isArray(timeline?.tasks) ? timeline.tasks : [];
+    const tasks = timeline && Array.isArray(timeline.tasks) ? timeline.tasks : [];
     if (!tasks.length) {
         return '<div class="project-context-empty">No approved timeline available yet.</div>';
     }
@@ -86,8 +86,8 @@ function renderApprovedTimelineGantt(timeline) {
         return '<div class="project-context-empty">Timeline dates are not available yet.</div>';
     }
 
-    const rangeStart = Math.min(...starts);
-    const rangeEnd = Math.max(...ends);
+    const rangeStart = Math.min.apply(null, starts);
+    const rangeEnd = Math.max.apply(null, ends);
     const range = Math.max(1, rangeEnd - rangeStart);
 
     const rows = tasks.map(task => {
@@ -173,10 +173,10 @@ function renderArchitectSection(project) {
         <div class="project-context-section">
             <h6><i class="fas fa-drafting-compass"></i> Architect — Project Review Summary</h6>
             <div class="project-context-metrics">
-                ${renderProjectMetric('Features', summary.feature_count ?? 0)}
-                ${renderProjectMetric('Technologies', summary.technology_count ?? 0)}
-                ${renderProjectMetric('Developer Roles', summary.allocation_count ?? 0)}
-                ${renderProjectMetric('Documents', summary.document_count ?? 0)}
+                ${renderProjectMetric('Features', summary.feature_count !== null && summary.feature_count !== undefined ? summary.feature_count : 0)}
+                ${renderProjectMetric('Technologies', summary.technology_count !== null && summary.technology_count !== undefined ? summary.technology_count : 0)}
+                ${renderProjectMetric('Developer Roles', summary.allocation_count !== null && summary.allocation_count !== undefined ? summary.allocation_count : 0)}
+                ${renderProjectMetric('Documents', summary.document_count !== null && summary.document_count !== undefined ? summary.document_count : 0)}
             </div>
             <div class="project-details-grid">
                 <div class="project-detail-item">
