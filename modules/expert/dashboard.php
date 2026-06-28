@@ -9,18 +9,36 @@ $conn = getConnection();
 $user = getCurrentUser();
 dashboardPlannerHandleRequest($conn, (int) $user['id']);
 $dashboardPlanner = dashboardPlannerBuild($conn, (int) $user['id']);
+
+function expertDashboardFetchCount($conn, string $sql): int
+{
+    $result = $conn->query($sql);
+    if (!is_object($result) || !method_exists($result, 'fetch_assoc')) {
+        return 0;
+    }
+
+    $row = $result->fetch_assoc() ?: [];
+    return (int) ($row['count'] ?? 0);
+}
+
+function expertDashboardQuery($conn, string $sql)
+{
+    $result = $conn->query($sql);
+    return (is_object($result) && method_exists($result, 'fetch_assoc')) ? $result : null;
+}
+
 $hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
 $projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
 $projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 // Get estimation statistics
-$totalEstimations = $conn->query("SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']}")->fetch_assoc()['count'];
-$pendingEstimations = $conn->query("SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'pending'")->fetch_assoc()['count'];
-$completedEstimations = $conn->query("SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'completed'")->fetch_assoc()['count'];
+$totalEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']}");
+$pendingEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'pending'");
+$completedEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'completed'");
 
 // Get assigned tasks for estimation
-$pendingTasks = $conn->query("
+$pendingTasks = expertDashboardQuery($conn, "
     SELECT t.*, p.name as project_name 
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
@@ -31,7 +49,7 @@ $pendingTasks = $conn->query("
 ");
 
 // Get team composition recommendations
-$teamCompositions = $conn->query("
+$teamCompositions = expertDashboardQuery($conn, "
     SELECT tc.*, p.name as project_name 
     FROM team_compositions tc
     JOIN projects p ON tc.project_id = p.id
@@ -41,7 +59,7 @@ $teamCompositions = $conn->query("
 ");
 
 // Get recent feature estimations for this expert
-$recentFeatureEstimates = $conn->query("
+$recentFeatureEstimates = expertDashboardQuery($conn, "
     SELECT 
         fe.task_id,
         fe.min_days,
@@ -63,7 +81,7 @@ $recentFeatureEstimates = $conn->query("
 ");
 
 // Get this expert's own manual schedule. Assigned work deadlines are listed in the agenda below.
-$schedules = $conn->query("
+$schedules = expertDashboardQuery($conn, "
     SELECT title, description, schedule_type, start_date, start_time, status, project_id
     FROM schedules
     WHERE user_id = {$user['id']}
@@ -78,7 +96,7 @@ $schedules = $conn->query("
 // Build Expert agenda from assigned estimation tasks and deadlines.
 $expertAgenda = [];
 
-$agendaTaskRows = $conn->query("
+$agendaTaskRows = expertDashboardQuery($conn, "
     SELECT t.id, t.title, t.description, t.deadline, t.status, p.name AS project_name
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
@@ -87,16 +105,18 @@ $agendaTaskRows = $conn->query("
     ORDER BY COALESCE(t.deadline, NOW()) ASC
     LIMIT 8
 ");
-while ($task = $agendaTaskRows->fetch_assoc()) {
-    $hasDeadline = !empty($task['deadline']);
-    $expertAgenda[] = [
-        'title' => (string) ($task['title'] ?? 'Assigned task'),
-        'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
-        'date' => $hasDeadline ? (string) $task['deadline'] : date('Y-m-d H:i:s'),
-        'type' => ((string) ($task['status'] ?? '') === 'todo') ? 'Estimate Needed' : 'Assigned Task',
-        'icon' => ((string) ($task['status'] ?? '') === 'todo') ? 'calculator' : 'flag-checkered',
-        'url' => 'feature-estimation.php?task_id=' . (int) ($task['id'] ?? 0),
-    ];
+if ($agendaTaskRows) {
+    while ($task = $agendaTaskRows->fetch_assoc()) {
+        $hasDeadline = !empty($task['deadline']);
+        $expertAgenda[] = [
+            'title' => (string) ($task['title'] ?? 'Assigned task'),
+            'description' => 'Project: ' . (string) ($task['project_name'] ?? 'Project'),
+            'date' => $hasDeadline ? (string) $task['deadline'] : date('Y-m-d H:i:s'),
+            'type' => ((string) ($task['status'] ?? '') === 'todo') ? 'Estimate Needed' : 'Assigned Task',
+            'icon' => ((string) ($task['status'] ?? '') === 'todo') ? 'calculator' : 'flag-checkered',
+            'url' => 'feature-estimation.php?task_id=' . (int) ($task['id'] ?? 0),
+        ];
+    }
 }
 
 usort($expertAgenda, static function (array $left, array $right): int {
@@ -422,6 +442,98 @@ include '../../includes/navbar.php';
     margin: 0;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .welcome-banner,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item-custom:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr:hover {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .welcome-banner h2,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .welcome-banner p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card .stat-sub,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item-custom,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-custom {
+    background: rgba(157, 182, 207, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-urgent {
+    background: rgba(220, 38, 38, 0.16);
+    color: #fca5a5;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-preview {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-today-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-date-group,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-item {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-date-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-text {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-subtitle,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-today-badge span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-time,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-kicker {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-open-btn,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-more-btn {
+    background: rgba(31, 99, 146, 0.14) !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: var(--theme-primary) !important;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .stats-grid {
@@ -535,7 +647,7 @@ include '../../includes/navbar.php';
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">
                             <div class="text-muted text-uppercase small fw-semibold mb-2">Active Projects</div>
-                            <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $pendingTasks->num_rows; ?></div>
+                            <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $pendingTasks ? $pendingTasks->num_rows : 0; ?></div>
                             <small class="text-muted">Currently estimating</small>
                         </div>
                         <div class="ms-3">
@@ -564,9 +676,11 @@ include '../../includes/navbar.php';
                     <h5><i class="fas fa-calculator"></i> Pending Feature Estimations</h5>
                 </div>
                 <div>
-                    <?php if($pendingTasks->num_rows > 0): ?>
+                    <?php if($pendingTasks && $pendingTasks->num_rows > 0): ?>
                         <?php while($task = $pendingTasks->fetch_assoc()): 
-                            $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
+                            $deadlineValue = (string) ($task['deadline'] ?? '');
+                            $deadlineTimestamp = $deadlineValue !== '' ? strtotime($deadlineValue) : false;
+                            $daysLeft = $deadlineTimestamp !== false ? ceil(($deadlineTimestamp - time()) / (60 * 60 * 24)) : 999;
                         ?>
                         <div class="list-group-item-custom">
                             <div class="d-flex justify-content-between align-items-start">
@@ -579,9 +693,9 @@ include '../../includes/navbar.php';
                                     </div>
                                     <div class="mb-1">
                                         <small class="text-muted"><i class="fas fa-folder me-1"></i><?php echo htmlspecialchars($task['project_name']); ?></small>
-                                        <small class="text-muted ms-3"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></small>
+                                        <small class="text-muted ms-3"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo $deadlineTimestamp !== false ? date('M d, Y', $deadlineTimestamp) : 'No deadline'; ?></small>
                                     </div>
-                                    <p class="small text-muted mb-0"><?php echo htmlspecialchars(substr($task['description'], 0, 100)); ?></p>
+                                    <p class="small text-muted mb-0"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 100)); ?></p>
                                 </div>
                                 <a href="feature-estimation.php?task_id=<?php echo $task['id']; ?>" class="btn-estimate ms-3">
                                     <i class="fas fa-calculator"></i> Estimate
@@ -614,6 +728,7 @@ include '../../includes/navbar.php';
                             </tr>
                         </thead>
                         <tbody>
+                            <?php if($teamCompositions): ?>
                             <?php while($tc = $teamCompositions->fetch_assoc()): ?>
                             <tr>
                                 <td class="fw-semibold"><?php echo htmlspecialchars($tc['project_name']); ?></td>
@@ -630,6 +745,11 @@ include '../../includes/navbar.php';
                             </tr>
                             <?php endwhile; ?>
                             <?php if($teamCompositions->num_rows == 0): ?>
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">No team compositions available</td>
+                            </tr>
+                            <?php endif; ?>
+                            <?php else: ?>
                             <tr>
                                 <td colspan="4" class="text-center text-muted py-4">No team compositions available</td>
                             </tr>
@@ -657,7 +777,7 @@ include '../../includes/navbar.php';
                     <h5><i class="fas fa-chart-line"></i> Recent Feature Estimates</h5>
                 </div>
                 <div>
-                    <?php if($recentFeatureEstimates->num_rows > 0): ?>
+                    <?php if($recentFeatureEstimates && $recentFeatureEstimates->num_rows > 0): ?>
                         <?php while($estimate = $recentFeatureEstimates->fetch_assoc()): ?>
                         <?php
                             $minDays = (int) ($estimate['min_days'] ?? 0);

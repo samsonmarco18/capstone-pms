@@ -446,6 +446,49 @@ a.progress-step:hover {
     .progress-step .step-label { font-size: 0.6rem; }
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .documents-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .upload-area {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .documents-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) label {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-meta {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: #d7e4f2 !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -494,7 +537,7 @@ a.progress-step:hover {
                     <h5><i class="fas fa-plus-circle"></i> Upload New Document</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" enctype="multipart/form-data">
+                    <form method="POST" enctype="multipart/form-data" data-app-loading data-loading-title="Uploading document" data-loading-text="Please wait while the architecture document is uploaded.">
                         <div class="mb-3">
                             <label class="form-label">Document Type</label>
                             <select name="document_type" class="form-select-modern" required>
@@ -545,7 +588,7 @@ a.progress-step:hover {
                                     <br>
                                     <small class="text-muted"><?php echo htmlspecialchars($doc['description']); ?></small>
                                     <div class="mt-1">
-                                        <small class="text-muted"><i class="far fa-clock me-1"></i> Uploaded: <?php echo date('M d, Y H:i', strtotime($doc['created_at'])); ?></small>
+                                        <small class="text-muted"><i class="far fa-clock me-1"></i> Uploaded: <?php echo !empty($doc['created_at']) ? date('M d, Y H:i', strtotime((string) $doc['created_at'])) : 'No date'; ?></small>
                                     </div>
                                 </div>
                                 <div class="d-flex gap-2">
@@ -592,15 +635,31 @@ a.progress-step:hover {
 </div>
 
 <script>
-function deleteDocument(id) {
-    if(confirm('Are you sure you want to delete this document?')) {
-        $.ajax({
-            url: '../../api/delete-document.php',
-            method: 'POST',
-            data: { id: id },
-            success: function() { location.reload(); }
-        });
+async function deleteDocument(id) {
+    const confirmed = await appConfirm({
+        title: 'Delete Document',
+        subject: 'Delete this architecture document?',
+        message: 'The uploaded document will be removed permanently.',
+        icon: 'fas fa-triangle-exclamation fa-lg',
+        variant: 'danger',
+        confirmIcon: 'fas fa-trash-alt',
+        confirmText: 'Yes, delete it'
+    });
+    if (!confirmed) return;
+
+    if (window.appShowLoading) {
+        window.appShowLoading('Deleting document', 'Please wait while the document is removed.');
     }
+
+    $.ajax({
+        url: '../../api/delete-document.php',
+        method: 'POST',
+        data: { id: id },
+        success: function() { location.reload(); },
+        complete: function() {
+            if (window.appHideLoading) window.appHideLoading();
+        }
+    });
 }
 </script>
 

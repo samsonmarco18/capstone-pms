@@ -501,6 +501,47 @@ a.progress-step:hover {
     .allocation-table th, .allocation-table td { padding: 0.5rem; }
     .form-control-sm { width: 60px; }
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-table tr:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-name {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: #d7e4f2 !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">

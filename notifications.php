@@ -5,6 +5,24 @@ requireLogin();
 $user = getCurrentUser();
 $conn = getConnection();
 
+function resolveNotificationActionUrl(?string $actionUrl): string
+{
+    $url = trim((string) $actionUrl);
+    if ($url === '') {
+        return BASE_URL . 'notifications.php';
+    }
+
+    if (preg_match('#^https?://#i', $url)) {
+        return $url;
+    }
+
+    if ($url[0] === '/') {
+        return BASE_URL . ltrim($url, '/');
+    }
+
+    return BASE_URL . ltrim($url, '/');
+}
+
 // Handle delete request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_notification'])) {
     $notificationId = (int)$_POST['notification_id'];
@@ -127,6 +145,15 @@ include 'includes/navbar.php';
 
 .notification-content {
     flex: 1;
+}
+
+.notification-link {
+    display: block;
+    text-decoration: none;
+}
+
+.notification-link:hover .notification-title {
+    color: var(--theme-primary);
 }
 
 .notification-title {
@@ -252,6 +279,72 @@ include 'includes/navbar.php';
         height: 24px;
     }
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state {
+    background: #071321 !important;
+    border-color: rgba(138, 210, 255, 0.12) !important;
+    color: #d8e6f3 !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-card .card-header {
+    background: #0a1b2c !important;
+    border-bottom-color: rgba(138, 210, 255, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-card .card-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state h4 {
+    color: #d8e6f3 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-message,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-time,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state p {
+    color: #90aeca !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-item.unread {
+    background: #071321 !important;
+    border-bottom-color: rgba(138, 210, 255, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-item:hover {
+    background: rgba(31, 99, 146, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-icon {
+    background: rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .notification-icon i {
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-notification {
+    color: #90aeca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-notification:hover {
+    background: rgba(220, 38, 38, 0.18);
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-mark-read {
+    border-color: rgba(138, 210, 255, 0.12);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-mark-read:hover {
+    background: rgba(31, 99, 146, 0.14);
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .unread-dot {
+    background: #8fd3ff;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -280,7 +373,11 @@ include 'includes/navbar.php';
                         <div class="notification-icon">
                             <i class="fas fa-bell"></i>
                         </div>
-                        <div class="notification-content" onclick="markAsRead(<?php echo $notification['id']; ?>)">
+                        <a
+                            class="notification-content notification-link"
+                            href="<?php echo htmlspecialchars(resolveNotificationActionUrl($notification['action_url'] ?? '')); ?>"
+                            onclick="return markAsReadAndGo(<?php echo (int) $notification['id']; ?>, this.href, event);"
+                        >
                             <div class="notification-title">
                                 <?php if (!$notification['is_read']): ?>
                                     <span class="unread-dot"></span>
@@ -294,7 +391,7 @@ include 'includes/navbar.php';
                                 <i class="far fa-clock"></i>
                                 <?php echo date('M d, Y h:i A', strtotime($notification['created_at'])); ?>
                             </div>
-                        </div>
+                        </a>
                         <button class="btn-delete-notification" onclick="deleteNotification(<?php echo $notification['id']; ?>, event)">
                             <i class="fas fa-trash-alt"></i>
                         </button>
@@ -312,15 +409,21 @@ include 'includes/navbar.php';
 </div>
 
 <script>
-function markAsRead(notificationId) {
+function markAsReadAndGo(notificationId, targetUrl, event) {
+    if (event) {
+        event.preventDefault();
+    }
+
     $.ajax({
         url: '<?php echo BASE_URL; ?>api/notifications/mark-read.php',
         method: 'POST',
         data: { id: notificationId },
         success: function() {
-            location.reload();
+            window.location.href = targetUrl;
         }
     });
+
+    return false;
 }
 
 function markAllAsRead() {

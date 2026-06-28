@@ -176,4 +176,39 @@ function dbColumnExists(mysqli|PgsqlMysqliCompatConnection $conn, string $table,
         ? $result->num_rows > 0
         : ($result instanceof PgsqlMysqliCompatResult && $result->num_rows > 0);
 }
+
+function dbTableExists(mysqli|PgsqlMysqliCompatConnection $conn, string $table): bool
+{
+    $tableName = strtolower(trim($table));
+
+    if ($tableName === '') {
+        return false;
+    }
+
+    $escapedTable = $conn->real_escape_string($tableName);
+
+    if (DB_DRIVER === 'pgsql') {
+        $sql = "
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = current_schema()
+              AND table_name = '{$escapedTable}'
+            LIMIT 1
+        ";
+    } else {
+        $sql = "
+            SELECT TABLE_NAME AS table_name
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = '{$escapedTable}'
+            LIMIT 1
+        ";
+    }
+
+    $result = $conn->query($sql);
+
+    return $result instanceof mysqli_result
+        ? $result->num_rows > 0
+        : ($result instanceof PgsqlMysqliCompatResult && $result->num_rows > 0);
+}
 ?>

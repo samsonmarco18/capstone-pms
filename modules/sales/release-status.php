@@ -5,6 +5,8 @@ require_once '../../includes/project-progress.php';
 requireRole('sales');
 
 $conn = getConnection();
+$user = getCurrentUser();
+$currentUserId = (int) ($user['id'] ?? 0);
 workflowEnsureSchema($conn);
 
 $selectedTaskId = (int) ($_GET['task_id'] ?? 0);
@@ -124,7 +126,8 @@ if ($selectedProjectId <= 0 && $projectOptions) {
 $selectedProject = null;
 if ($selectedProjectId > 0) {
     $projectStmt = $conn->prepare("
-        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone
+        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone,
+               c.created_by AS client_created_by
         FROM projects p
         JOIN clients c ON c.id = p.client_id
         WHERE p.id = ? AND p.client_id = ?
@@ -142,7 +145,8 @@ if (!$selectedProject && $projectOptions) {
     $selectedProjectId = (int) $projectOptions[0]['id'];
     $selectedProject = null;
     $projectStmt = $conn->prepare("
-        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone
+        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone,
+               c.created_by AS client_created_by
         FROM projects p
         JOIN clients c ON c.id = p.client_id
         WHERE p.id = ? AND p.client_id = ?
@@ -163,9 +167,35 @@ $featurePendingCount = 0;
 $additionalCompleteCount = 0;
 $additionalPendingCount = 0;
 $additionalRequirementsText = '';
+$selectedProjectRepository = null;
+$canDownloadSelectedProjectRepository = false;
 
 if ($selectedProject) {
     $additionalRequirementsText = trim((string) ($selectedProject['requested_features'] ?? ''));
+    $canDownloadSelectedProjectRepository = (string) ($selectedProject['status'] ?? '') === 'completed'
+        && $currentUserId > 0
+        && (
+            (int) ($selectedProject['created_by'] ?? 0) === $currentUserId
+            || (int) ($selectedProject['client_created_by'] ?? 0) === $currentUserId
+        );
+
+    if ($canDownloadSelectedProjectRepository) {
+        $repositoryStmt = $conn->prepare("
+            SELECT id, name, default_branch_name
+            FROM project_repositories
+            WHERE project_id = ?
+              AND repository_status = 'active'
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+        ");
+
+        if ($repositoryStmt !== false) {
+            $repositoryStmt->bind_param('i', $selectedProjectId);
+            $repositoryStmt->execute();
+            $selectedProjectRepository = $repositoryStmt->get_result()->fetch_assoc() ?: null;
+            $repositoryStmt->close();
+        }
+    }
 
     $taskStmt = $conn->prepare("
         SELECT
@@ -544,6 +574,137 @@ include '../../includes/navbar.php';
     color: #047857;
 }
 
+.release-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.65rem;
+}
+
+.release-download-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 40px;
+    padding: 0.55rem 0.85rem;
+    border-radius: 8px;
+    background: var(--theme-primary);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.release-download-btn:hover {
+    background: var(--theme-dark);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    border: 1px solid rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(31, 99, 146, 0.12));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card .card-head,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-item.is-complete,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requirements-box,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .source-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-summary-tag {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card .card-head h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-title h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requirements-box {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-sub,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-title small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-description,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card .card-head,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requirements-box,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control:focus {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.45);
+    color: #d7e4f2;
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-track {
+    background: rgba(157, 182, 207, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.complete,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-summary-tag.success {
+    background: rgba(16, 185, 129, 0.14);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: #34d399;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.pending,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-summary-tag.warning {
+    background: rgba(249, 115, 22, 0.14);
+    border-color: rgba(249, 115, 22, 0.3);
+    color: #fdba74;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.architect,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .source-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-summary-tag {
+    background: rgba(31, 99, 146, 0.14);
+    border-color: rgba(31, 99, 146, 0.3);
+    color: var(--theme-primary);
+}
+
 @media (max-width: 992px) {
     .summary-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -565,6 +726,15 @@ include '../../includes/navbar.php';
 
     .feature-item {
         grid-template-columns: 1fr;
+    }
+
+    .release-actions {
+        justify-content: stretch;
+        width: 100%;
+    }
+
+    .release-download-btn {
+        width: 100%;
     }
 }
 </style>

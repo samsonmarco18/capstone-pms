@@ -36,11 +36,27 @@ $groupId = $stmt->insert_id;
 $stmt->close();
 
 $memberIds = array_values(array_unique(array_merge([$user['id']], $members)));
-$insertMemberStmt = $conn->prepare('INSERT IGNORE INTO chat_group_members (group_id, user_id) VALUES (?, ?)');
+$existingMemberStmt = $conn->prepare('SELECT id FROM chat_group_members WHERE group_id = ? AND user_id = ? LIMIT 1');
+$insertMemberStmt = $conn->prepare('INSERT INTO chat_group_members (group_id, user_id) VALUES (?, ?)');
+
+if ($existingMemberStmt === false || $insertMemberStmt === false) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Failed to prepare group members.']);
+    exit();
+}
 
 foreach ($memberIds as $memberId) {
+    $existingMemberStmt->bind_param('ii', $groupId, $memberId);
+    $existingMemberStmt->execute();
+    $existingMember = $existingMemberStmt->get_result()->fetch_assoc();
+    if ($existingMember) {
+        continue;
+    }
+
     $insertMemberStmt->bind_param('ii', $groupId, $memberId);
-    $insertMemberStmt->execute();
+    if (!$insertMemberStmt->execute()) {
+        continue;
+    }
 
     if ($memberId !== (int) $user['id']) {
         createNotification(
@@ -55,6 +71,7 @@ foreach ($memberIds as $memberId) {
     }
 }
 
+$existingMemberStmt->close();
 $insertMemberStmt->close();
 
 logActivity((int) $user['id'], 'create_chat_group', 'chat_groups', $groupId, null, $data);

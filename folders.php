@@ -3,6 +3,8 @@ require_once 'includes/auth.php';
 requireLogin();
 $user = getCurrentUser();
 $conn = getConnection();
+$projectDetailsPanelAsset = __DIR__ . '/js/project-details-panel.js';
+$projectDetailsPanelVersion = is_file($projectDetailsPanelAsset) ? (int) filemtime($projectDetailsPanelAsset) : time();
 ?>
 
 <?php include 'includes/header.php'; ?>
@@ -26,6 +28,10 @@ $conn = getConnection();
     --gray-900: #212529;
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.02);
+}
+
+body {
+    background: linear-gradient(180deg, #f7fbff 0%, #eef5fb 100%);
 }
 
 /* Page Header */
@@ -622,6 +628,114 @@ $conn = getConnection();
         align-items: stretch;
     }
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-details-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
+    background: #071321 !important;
+    border-color: rgba(138, 210, 255, 0.12) !important;
+    color: #d8e6f3 !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-full .value {
+    background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-container,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-details-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-metric,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-empty,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern {
+    background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-card .card-header h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card .card-header h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-section h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-item .value {
+    color: #d8e6f3 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-header p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-metric span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-list label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-row small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern .breadcrumb-item.active,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-client-label {
+    color: #90aeca !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-detail-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-metric,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item.is-active {
+    border-color: rgba(138, 210, 255, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item.is-active,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr:hover {
+    background: rgba(31, 99, 146, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-expand,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .file-link,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern .breadcrumb-item a {
+    color: #bfe6ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-folder {
+    background: rgba(217, 119, 6, 0.16);
+    color: #ffd58a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-file {
+    background: rgba(144, 174, 202, 0.12);
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .status-badge {
+    background: rgba(31, 99, 146, 0.16);
+    color: #bfe6ff;
+    border-color: rgba(138, 210, 255, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-item.is-active .folder-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-tree-card .card-header h6 i {
+    color: #8fd3ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .folder-children {
+    border-left-color: rgba(138, 210, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .btn-close {
+    filter: brightness(0) invert(1);
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -760,7 +874,7 @@ $conn = getConnection();
     </div>
 </div>
 
-<script src="<?php echo BASE_URL; ?>js/project-details-panel.js?v=<?php echo (int) filemtime(__DIR__ . '/js/project-details-panel.js'); ?>"></script>
+<script src="<?php echo BASE_URL; ?>js/project-details-panel.js?v=<?php echo $projectDetailsPanelVersion; ?>"></script>
 <script>
 // Global variables
 let currentFolderId = 0;
@@ -818,7 +932,10 @@ function showProjectPanel(projectContext, folderId, projectId) {
         }
 
         $('#projectDetailsCard').addClass('is-visible');
-        document.getElementById('projectDetailsCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const projectDetailsCard = document.getElementById('projectDetailsCard');
+        if (projectDetailsCard) {
+            projectDetailsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     };
 
     if (projectContext) {
@@ -834,10 +951,20 @@ function showProjectPanel(projectContext, folderId, projectId) {
         url: `<?php echo BASE_URL; ?>api/folders/get-project-context.php?${query}`,
         dataType: 'json',
         success: function(data) {
+            if (data && data.error) {
+                $('#projectDetailsPanel').html(`<div class="alert alert-warning mb-0">${escapeHtml(data.error)}</div>`);
+                $('#projectDetailsCard').addClass('is-visible');
+                return;
+            }
+
             renderPanel(data.project_context || data.project_details || null);
         },
-        error: function() {
-            hideProjectPanel();
+        error: function(xhr) {
+            const message = xhr.responseJSON && xhr.responseJSON.error
+                ? xhr.responseJSON.error
+                : 'Unable to load project details right now.';
+            $('#projectDetailsPanel').html(`<div class="alert alert-warning mb-0">${escapeHtml(message)}</div>`);
+            $('#projectDetailsCard').addClass('is-visible');
         }
     });
 }
@@ -857,6 +984,11 @@ function loadSharedFolders() {
         url: `<?php echo BASE_URL; ?>api/folders/get-tree.php?folder_id=0&role=${encodeURIComponent(CURRENT_USER_ROLE)}`,
         dataType: 'json',
         success: function(data) {
+            if (data && data.error) {
+                showFolderLoadError(data.error);
+                return;
+            }
+
             sharedFolderRoots = data.folders || [];
             renderBreadcrumbs(currentBreadcrumb);
             renderFullSharedFolderTree();
@@ -867,8 +999,11 @@ function loadSharedFolders() {
                 openFolderById(sharedFolderRoots[0].id);
             }
         },
-        error: function() {
-            alert('Failed to load shared projects');
+        error: function(xhr) {
+            const message = xhr.responseJSON && xhr.responseJSON.error
+                ? xhr.responseJSON.error
+                : 'Failed to load shared projects.';
+            showFolderLoadError(message);
         }
     });
 }
@@ -930,7 +1065,15 @@ function renderFullSharedFolderTree() {
         folder_type: 'shared_root',
         expanded: true,
         children: sharedFolderRoots.map(folder => ({
-            ...folder,
+            id: folder.id,
+            name: folder.name,
+            folder_type: folder.folder_type,
+            client_name: folder.client_name,
+            owner_name: folder.owner_name,
+            project_id: folder.project_id,
+            role: folder.role,
+            updated_at: folder.updated_at,
+            created_at: folder.created_at,
             expanded: Number(folder.id) === Number(currentFolderId),
             children: Number(folder.id) === Number(currentFolderId) ? (folderStructure[folder.id] || []) : []
         }))
@@ -938,7 +1081,7 @@ function renderFullSharedFolderTree() {
 }
 
 function renderScopedProjectTree(folderBreadcrumb, childFolders) {
-    const projectFolder = [...(folderBreadcrumb || [])].reverse().find(folder => folder.folder_type === 'project')
+    const projectFolder = (folderBreadcrumb || []).slice().reverse().find(folder => folder.folder_type === 'project')
         || (folderBreadcrumb || [])[folderBreadcrumb.length - 1];
 
     if (!projectFolder) {
@@ -952,7 +1095,15 @@ function renderScopedProjectTree(folderBreadcrumb, childFolders) {
         folder_type: 'shared_root',
         expanded: true,
         children: sharedFolderRoots.map(folder => ({
-            ...folder,
+            id: folder.id,
+            name: folder.name,
+            folder_type: folder.folder_type,
+            client_name: folder.client_name,
+            owner_name: folder.owner_name,
+            project_id: folder.project_id,
+            role: folder.role,
+            updated_at: folder.updated_at,
+            created_at: folder.created_at,
             expanded: Number(folder.id) === Number(projectFolder.id),
             children: Number(folder.id) === Number(projectFolder.id) ? (childFolders || []) : []
         }))
@@ -988,6 +1139,12 @@ function loadFolderContents(folderId) {
         dataType: 'json',
         success: function(data) {
             hideLoading();
+            if (data && data.error) {
+                renderProjectEntries([], []);
+                $('#fileTableBody').html(`<tr><td colspan="7" class="text-center text-muted py-5">${escapeHtml(data.error)}</td></tr>`);
+                return;
+            }
+
             const folderBreadcrumb = Array.isArray(data.breadcrumb)
                 ? data.breadcrumb.filter(folder => folder.folder_type !== 'client')
                 : [];
@@ -995,17 +1152,17 @@ function loadFolderContents(folderId) {
                 id: SHARED_FOLDERS_ID,
                 name: 'Shared Projects',
                 virtual: true
-            }, ...folderBreadcrumb];
+            }].concat(folderBreadcrumb);
             renderBreadcrumbs(currentBreadcrumb);
 
             const folder = data.current_folder || findFolderById(folderId);
             $('#currentFolderTitle').html(`<i class="fas fa-folder-open me-2"></i>${folder ? escapeHtml(folder.name) : 'Files'}`);
 
-            const resolvedProjectId = Number(data.project_id || folder?.project_id || 0);
+            const resolvedProjectId = Number(data.project_id || (folder ? folder.project_id : 0) || 0);
             const childFolders = resolvedProjectId > 0
                 ? (data.folders || []).filter(child => child.folder_type !== 'project')
                 : (data.folders || []);
-            const isSharedProjectRoot = resolvedProjectId > 0 && folder?.folder_type === 'project';
+            const isSharedProjectRoot = resolvedProjectId > 0 && folder && folder.folder_type === 'project';
 
             if (isSharedProjectRoot) {
                 hideFolderBrowser();
@@ -1024,11 +1181,20 @@ function loadFolderContents(folderId) {
             const projectContext = data.project_context || data.project_details;
             showProjectPanel(projectContext, folderId, resolvedProjectId);
         },
-        error: function() {
+        error: function(xhr) {
             hideLoading();
-            alert('Failed to load folder contents');
+            const message = xhr.responseJSON && xhr.responseJSON.error
+                ? xhr.responseJSON.error
+                : 'Failed to load folder contents.';
+            $('#fileTableBody').html(`<tr><td colspan="7" class="text-center text-muted py-5">${escapeHtml(message)}</td></tr>`);
         }
     });
+}
+
+function showFolderLoadError(message) {
+    $('#folderTree').html(`<div class="text-center text-muted py-4">${escapeHtml(message)}</div>`);
+    renderBreadcrumbs(currentBreadcrumb);
+    $('#fileTableBody').html(`<tr><td colspan="7" class="text-center text-muted py-5">${escapeHtml(message)}</td></tr>`);
 }
 
 function renderProjectEntries(folders, files) {
@@ -1149,7 +1315,8 @@ function renderBreadcrumbs(path) {
 
 function findFolderById(id) {
     for (let parentId in folderStructure) {
-        const folder = folderStructure[parentId]?.find(f => f.id == id);
+        const children = folderStructure[parentId] || [];
+        const folder = children.find(f => f.id == id);
         if (folder) return folder;
     }
     return null;

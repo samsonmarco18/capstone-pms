@@ -37,6 +37,27 @@ include '../../includes/navbar.php';
     --theme-primary: #1f6392;
     --theme-dark: #184f73;
     --theme-light: #3a7ca3;
+    --dashboard-surface: #ffffff;
+    --dashboard-surface-alt: #f8fbff;
+    --dashboard-border: #e4edf5;
+    --dashboard-heading: #1f6392;
+    --dashboard-text: #212529;
+    --dashboard-muted: #6c757d;
+    --dashboard-chart-grid: rgba(31, 99, 146, 0.08);
+    --dashboard-chart-axis: #36566f;
+    --dashboard-shadow: 0 10px 28px rgba(15, 74, 110, 0.08);
+}
+
+html[data-theme="dark"] {
+    --dashboard-surface: rgba(10, 22, 35, 0.88);
+    --dashboard-surface-alt: rgba(12, 31, 49, 0.94);
+    --dashboard-border: rgba(138, 210, 255, 0.10);
+    --dashboard-heading: #d8e6f3;
+    --dashboard-text: #d8e6f3;
+    --dashboard-muted: #90aeca;
+    --dashboard-chart-grid: rgba(144, 174, 202, 0.14);
+    --dashboard-chart-axis: #b4cde0;
+    --dashboard-shadow: 0 14px 32px rgba(0, 0, 0, 0.32);
 }
 
 .card {
@@ -74,6 +95,30 @@ include '../../includes/navbar.php';
     background-color: var(--theme-primary) !important;
     color: #fff !important;
 }
+
+.dashboard-mini-stat {
+    flex: 1;
+    background: var(--dashboard-surface) !important;
+    border: 1px solid var(--dashboard-border) !important;
+    box-shadow: var(--dashboard-shadow);
+}
+
+.dashboard-mini-stat .text-muted {
+    color: var(--dashboard-muted) !important;
+}
+
+.dashboard-mini-stat-value {
+    color: var(--theme-primary) !important;
+}
+
+.dashboard-chart-card .card-header {
+    background: var(--dashboard-surface) !important;
+    border-bottom: 1px solid var(--dashboard-border) !important;
+}
+
+.dashboard-chart-title {
+    color: var(--dashboard-heading) !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-3">
@@ -90,22 +135,22 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-md-5">
                             <div class="d-flex gap-2 justify-content-md-end">
-                                <div class="card bg-white" style="flex: 1; border: 1px solid #1f6392 !important;">
+                                <div class="card dashboard-mini-stat">
                                     <div class="card-body p-3">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
                                             <div class="text-muted small text-uppercase fw-semibold">Password Requests</div>
                                             <i class="fas fa-heartbeat" style="font-size: 20px; color: var(--theme-primary); opacity: 0.65;"></i>
                                         </div>
-                                        <div class="fw-bold fs-2" style="color: #1f6392;"><?php echo $passwordResetPending; ?></div>
+                                        <div class="fw-bold fs-2 dashboard-mini-stat-value"><?php echo $passwordResetPending; ?></div>
                                     </div>
                                 </div>
-                                <div class="card bg-white" style="flex: 1; border: 1px solid #1f6392 !important;">
+                                <div class="card dashboard-mini-stat">
                                     <div class="card-body p-3">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
                                             <div class="text-muted small text-uppercase fw-semibold">Active Services</div>
                                             <i class="fas fa-microchip" style="font-size: 20px; color: var(--theme-primary); opacity: 0.65;"></i>
                                         </div>
-                                        <div class="fw-bold fs-4" style="color: #1f6392;"><?php echo $techCount; ?></div>
+                                        <div class="fw-bold fs-4 dashboard-mini-stat-value"><?php echo $techCount; ?></div>
                                     </div>
                                 </div>
                             </div>
@@ -124,7 +169,7 @@ include '../../includes/navbar.php';
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">
                             <div class="text-muted text-uppercase small fw-semibold mb-2">Technologies / Services</div>
-                            <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $techCount; ?></div>
+                            <div class="h1 fw-bold mb-2 dashboard-mini-stat-value"><?php echo $techCount; ?></div>
                             <small class="text-muted">Azure-style catalog and renewals</small>
                         </div>
                         <div class="ms-3">
@@ -141,7 +186,7 @@ include '../../includes/navbar.php';
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">
                             <div class="text-muted text-uppercase small fw-semibold mb-2">Total Users</div>
-                            <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $userCount; ?></div>
+                            <div class="h1 fw-bold mb-2 dashboard-mini-stat-value"><?php echo $userCount; ?></div>
                             <small class="text-muted">Role-based access across six departments</small>
                         </div>
                         <div class="ms-3">
@@ -158,7 +203,7 @@ include '../../includes/navbar.php';
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">
                             <div class="text-muted text-uppercase small fw-semibold mb-2">Security Reports</div>
-                            <div class="h1 fw-bold mb-2" style="color: #1f6392;"><?php echo $securityReports; ?></div>
+                            <div class="h1 fw-bold mb-2 dashboard-mini-stat-value"><?php echo $securityReports; ?></div>
                             <small class="text-muted">Audit-backed monitoring and recovery</small>
                         </div>
                         <div class="ms-3">
@@ -182,9 +227,9 @@ include '../../includes/navbar.php';
     <!-- Charts Section -->
     <div class="row g-3">
         <div class="col-xl-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0 fw-semibold" style="color: #1f6392;">Technology Status</h5>
+            <div class="card border-0 shadow-sm h-100 dashboard-chart-card">
+                <div class="card-header border-0 pt-4 px-4">
+                    <h5 class="mb-0 fw-semibold dashboard-chart-title">Technology Status</h5>
                 </div>
                 <div class="card-body p-4 pt-2">
                     <canvas id="techStatusChart" style="max-height: 300px; width: 100%;"></canvas>
@@ -193,9 +238,9 @@ include '../../includes/navbar.php';
         </div>
         
         <div class="col-xl-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0 fw-semibold" style="color: #1f6392;">User Roles Distribution</h5>
+            <div class="card border-0 shadow-sm h-100 dashboard-chart-card">
+                <div class="card-header border-0 pt-4 px-4">
+                    <h5 class="mb-0 fw-semibold dashboard-chart-title">User Roles Distribution</h5>
                 </div>
                 <div class="card-body p-4 pt-2">
                     <canvas id="userRolesChart" style="max-height: 300px; width: 100%;"></canvas>
@@ -208,10 +253,38 @@ include '../../includes/navbar.php';
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Technology Status Chart with #1f6392 theme
-    const techCtx = document.getElementById('techStatusChart').getContext('2d');
-    
-    // Color palette based on #1f6392
+    const rootStyles = () => getComputedStyle(document.documentElement);
+    const getChartTheme = () => {
+        const styles = rootStyles();
+        return {
+            axis: styles.getPropertyValue('--dashboard-chart-axis').trim() || '#36566f',
+            grid: styles.getPropertyValue('--dashboard-chart-grid').trim() || 'rgba(31, 99, 146, 0.08)',
+            legend: styles.getPropertyValue('--dashboard-chart-axis').trim() || '#36566f'
+        };
+    };
+
+    let techStatusChart = null;
+    let userRolesChart = null;
+
+    function destroyCharts() {
+        if (techStatusChart) {
+            techStatusChart.destroy();
+            techStatusChart = null;
+        }
+
+        if (userRolesChart) {
+            userRolesChart.destroy();
+            userRolesChart = null;
+        }
+    }
+
+    function renderCharts() {
+        destroyCharts();
+
+        const techCtx = document.getElementById('techStatusChart').getContext('2d');
+        const chartTheme = getChartTheme();
+
+        // Color palette based on #1f6392
     const themePalette = [
         '#1f6392',  // Primary theme color
         '#3a7ca3',  // Lighter shade
@@ -232,7 +305,7 @@ document.addEventListener('DOMContentLoaded', function() {
         return themePalette[index % themePalette.length];
     });
     
-    new Chart(techCtx, {
+        techStatusChart = new Chart(techCtx, {
         type: 'pie',
         data: {
             labels: statusLabels,
@@ -252,6 +325,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     labels: {
                         usePointStyle: true,
                         padding: 15,
+                        color: chartTheme.legend,
                         font: {
                             size: 12,
                             weight: '500'
@@ -290,13 +364,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // User Roles Chart with #1f6392 theme
-    const rolesCtx = document.getElementById('userRolesChart').getContext('2d');
+        const rolesCtx = document.getElementById('userRolesChart').getContext('2d');
     const roleThemeColors = [
         '#1f6392', '#3a7ca3', '#0f4a6e', '#5b8fb2', '#0a3a55', '#74a0c0'
     ];
     
-    new Chart(rolesCtx, {
+        userRolesChart = new Chart(rolesCtx, {
         type: 'bar',
         data: {
             labels: <?php echo json_encode(array_keys($userRolesData)); ?>,
@@ -331,14 +404,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 y: {
                     beginAtZero: true,
                     grid: {
-                        color: 'rgba(0, 0, 0, 0.05)',
+                        color: chartTheme.grid,
                         drawBorder: false
                     },
                     ticks: {
                         stepSize: 1,
+                        color: chartTheme.axis,
                         font: {
-                            size: 11,
-                            color: '#1f6392'
+                            size: 11
                         },
                         callback: function(value) {
                             return value;
@@ -347,10 +420,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     title: {
                         display: true,
                         text: 'Number of Users',
+                        color: chartTheme.axis,
                         font: {
                             size: 12,
-                            weight: '500',
-                            color: '#1f6392'
+                            weight: '500'
                         }
                     }
                 },
@@ -359,24 +432,40 @@ document.addEventListener('DOMContentLoaded', function() {
                         display: false
                     },
                     ticks: {
+                        color: chartTheme.axis,
                         font: {
                             size: 12,
-                            weight: '500',
-                            color: '#1f6392'
+                            weight: '500'
                         }
                     },
                     title: {
                         display: true,
                         text: 'User Roles',
+                        color: chartTheme.axis,
                         font: {
                             size: 12,
-                            weight: '500',
-                            color: '#1f6392'
+                            weight: '500'
                         }
                     }
                 }
             }
         }
+    });
+    }
+
+    renderCharts();
+
+    const themeObserver = new MutationObserver(function(mutations) {
+        if (mutations.some(function(mutation) {
+            return mutation.type === 'attributes' && mutation.attributeName === 'data-theme';
+        })) {
+            renderCharts();
+        }
+    });
+
+    themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-theme']
     });
 });
 </script>

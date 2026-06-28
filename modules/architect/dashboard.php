@@ -226,6 +226,82 @@ include '../../includes/navbar.php';
     font-size: 0.8rem;
     margin: 0;
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .dashboard-hero,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-content {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table thead th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table tbody tr:hover {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h1,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h2,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h3,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table td {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table th {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-preview {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-today-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-date-group,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-item {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-date-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-text {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-subtitle,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-today-badge span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-next-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-time,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-kicker {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-open-btn,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-more-btn {
+    background: rgba(31, 99, 146, 0.14) !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: var(--theme-primary) !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-3">
@@ -370,7 +446,7 @@ include '../../includes/navbar.php';
                                 <div class="mt-1">
                                     <small class="text-muted">
                                         <i class="far fa-calendar-alt me-1"></i>
-                                        Target: <?php echo !empty($project['timeline_end']) ? date('M d, Y', strtotime($project['timeline_end'])) : 'No target date'; ?>
+                                        Target: <?php echo !empty($project['timeline_end']) ? date('M d, Y', strtotime((string) $project['timeline_end'])) : 'No target date'; ?>
                                     </small>
                                 </div>
                                 <div class="mt-1">
@@ -412,14 +488,14 @@ include '../../includes/navbar.php';
                                     <i class="fas fa-user-circle me-1"></i>
                                     <?php echo htmlspecialchars($activity['full_name']); ?>
                                 </span>
-                                <span class="activity-time"><?php echo date('h:i A', strtotime($activity['created_at'])); ?></span>
+                                <span class="activity-time"><?php echo !empty($activity['created_at']) ? date('h:i A', strtotime((string) $activity['created_at'])) : 'No time'; ?></span>
                             </div>
                             <div class="activity-action">
                                 <?php echo ucfirst(str_replace('_', ' ', $activity['action'])); ?>
                             </div>
                             <div class="activity-date">
                                 <i class="far fa-calendar-alt me-1"></i>
-                                <?php echo date('M d, Y', strtotime($activity['created_at'])); ?>
+                                <?php echo !empty($activity['created_at']) ? date('M d, Y', strtotime((string) $activity['created_at'])) : 'No date'; ?>
                             </div>
                         </div>
                         <?php endwhile; ?>

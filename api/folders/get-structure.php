@@ -209,24 +209,37 @@ function getSharedProjectFolders(mysqli|PgsqlMysqliCompatConnection $conn, ?stri
     return $folders;
 }
 
-ensureClientRootFolders($conn, (int) $user['id']);
-ensureProjectSharedFolders($conn, (int) $user['id']);
-$folders = getSharedProjectFolders($conn, $roleFilter);
+try {
+    ensureClientRootFolders($conn, (int) $user['id']);
+    ensureProjectSharedFolders($conn, (int) $user['id']);
+    $folders = getSharedProjectFolders($conn, $roleFilter);
 
-$recentStmt = $conn->prepare(
-    'SELECT f.*, u.full_name AS owner_name
-     FROM files f
-     LEFT JOIN users u ON u.id = f.uploaded_by
-     ORDER BY f.created_at DESC
-     LIMIT 10'
-);
-$recentStmt->execute();
-$recentFiles = $recentStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$recentStmt->close();
+    $recentStmt = $conn->prepare(
+        'SELECT f.*, u.full_name AS owner_name
+         FROM files f
+         LEFT JOIN users u ON u.id = f.uploaded_by
+         ORDER BY f.created_at DESC
+         LIMIT 10'
+    );
 
-echo json_encode([
-    'folders' => $folders,
-    'recent_files' => $recentFiles,
-    'user_role' => $user['role'],
-]);
+    if ($recentStmt === false) {
+        throw new RuntimeException('Failed to prepare recent files query: ' . ($conn->error ?? 'unknown error'));
+    }
+
+    $recentStmt->execute();
+    $recentFiles = $recentStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $recentStmt->close();
+
+    echo json_encode([
+        'folders' => $folders,
+        'recent_files' => $recentFiles,
+        'user_role' => $user['role'],
+    ]);
+} catch (Throwable $e) {
+    error_log('Folder tree API failed: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'error' => 'Unable to load folders right now.',
+    ]);
+}
 ?>

@@ -373,6 +373,46 @@ include '../../includes/navbar.php';
         padding: 0.75rem 1rem;
     }
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table tr:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-number,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) td {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table td {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -451,14 +491,14 @@ include '../../includes/navbar.php';
                         <td>
                             <?php 
                             if($project['timeline_start'] && $project['timeline_end']) {
-                                echo date('M d', strtotime($project['timeline_start'])) . ' - ' . 
-                                     date('M d, Y', strtotime($project['timeline_end']));
+                                echo date('M d', strtotime((string) $project['timeline_start'])) . ' - ' . 
+                                     date('M d, Y', strtotime((string) $project['timeline_end']));
                             } else {
                                 echo '<span class="text-muted">Not set</span>';
                             }
                             ?>
                         </td>
-                        <td><?php echo date('M d, Y', strtotime($project['created_at'])); ?></td>
+                        <td><?php echo !empty($project['created_at']) ? date('M d, Y', strtotime((string) $project['created_at'])) : 'No date'; ?></td>
                         <td>
                             <div class="d-flex flex-wrap gap-2">
                             <?php $nextStep = architectProjectNextStep($project); ?>

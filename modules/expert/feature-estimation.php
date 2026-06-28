@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/workflow.php';
 requireRole('expert');
 
 $conn = getConnection();
@@ -26,7 +27,7 @@ function featureRecommendationSignature(string $value): string
     return substr($normalized, 0, 190);
 }
 
-function saveRecommendationFeedback(mysqli $conn, int $taskId, string $sourceType, int $sourceId, string $action, int $expertId): void
+function saveRecommendationFeedback(mysqli|PgsqlMysqliCompatConnection $conn, int $taskId, string $sourceType, int $sourceId, string $action, int $expertId): void
 {
     if ($taskId <= 0 || $sourceId <= 0) {
         return;
@@ -36,11 +37,15 @@ function saveRecommendationFeedback(mysqli $conn, int $taskId, string $sourceTyp
         return;
     }
 
-    $stmt = $conn->prepare("
-        INSERT INTO feature_estimation_recommendation_feedback (task_id, source_type, source_id, action, acted_by)
-        VALUES (?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE action = VALUES(action), acted_by = VALUES(acted_by), updated_at = CURRENT_TIMESTAMP
-    ");
+    $upsertSql = DB_DRIVER === 'pgsql'
+        ? "INSERT INTO feature_estimation_recommendation_feedback (task_id, source_type, source_id, action, acted_by)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (task_id, source_type, source_id)
+           DO UPDATE SET action = EXCLUDED.action, acted_by = EXCLUDED.acted_by, updated_at = CURRENT_TIMESTAMP"
+        : "INSERT INTO feature_estimation_recommendation_feedback (task_id, source_type, source_id, action, acted_by)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE action = VALUES(action), acted_by = VALUES(acted_by), updated_at = CURRENT_TIMESTAMP";
+    $stmt = $conn->prepare($upsertSql);
     if (!$stmt) {
         return;
     }
@@ -57,51 +62,76 @@ function decodeRecommendationJson(?string $json): array
 }
 
 // Check if project_phases column exists (auto-create if missing)
-$hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
+$hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 if (!$hasProjectPhases) {
     try {
-        $conn->query("ALTER TABLE projects ADD COLUMN project_phases LONGTEXT NULL");
-        $hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
+        $conn->query("ALTER TABLE projects ADD COLUMN project_phases " . (DB_DRIVER === 'pgsql' ? "TEXT" : "LONGTEXT") . " NULL");
+        $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
     } catch (Throwable $e) {
         // Leave $hasProjectPhases as false; UI will show warning
     }
 }
 
 // Check if phase_name column exists in feature_estimations
-$hasPhaseName = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'phase_name'")->num_rows > 0;
+$hasPhaseName = dbColumnExists($conn, 'feature_estimations', 'phase_name');
 if (!$hasPhaseName) {
     try {
         $conn->query("ALTER TABLE feature_estimations ADD COLUMN phase_name VARCHAR(150) NULL");
-        $hasPhaseName = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'phase_name'")->num_rows > 0;
+        $hasPhaseName = dbColumnExists($conn, 'feature_estimations', 'phase_name');
     } catch (Throwable $e) {
         // Leave $hasPhaseName as false
     }
 }
 
-$hasInvolvementPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'involvement_plan_json'")->num_rows > 0;
+$hasInvolvementPlan = dbColumnExists($conn, 'feature_estimations', 'involvement_plan_json');
 if (!$hasInvolvementPlan) {
     try {
-        $conn->query("ALTER TABLE feature_estimations ADD COLUMN involvement_plan_json LONGTEXT NULL");
-        $hasInvolvementPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'involvement_plan_json'")->num_rows > 0;
+        $conn->query("ALTER TABLE feature_estimations ADD COLUMN involvement_plan_json " . (DB_DRIVER === 'pgsql' ? "TEXT" : "LONGTEXT") . " NULL");
+        $hasInvolvementPlan = dbColumnExists($conn, 'feature_estimations', 'involvement_plan_json');
     } catch (Throwable $e) {
         // Leave $hasInvolvementPlan as false
     }
 }
 
-$hasComponentPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'component_plan_json'")->num_rows > 0;
+$hasComponentPlan = dbColumnExists($conn, 'feature_estimations', 'component_plan_json');
 if (!$hasComponentPlan) {
     try {
-        $conn->query("ALTER TABLE feature_estimations ADD COLUMN component_plan_json LONGTEXT NULL");
-        $hasComponentPlan = $conn->query("SHOW COLUMNS FROM feature_estimations LIKE 'component_plan_json'")->num_rows > 0;
+        $conn->query("ALTER TABLE feature_estimations ADD COLUMN component_plan_json " . (DB_DRIVER === 'pgsql' ? "TEXT" : "LONGTEXT") . " NULL");
+        $hasComponentPlan = dbColumnExists($conn, 'feature_estimations', 'component_plan_json');
     } catch (Throwable $e) {
         // Leave $hasComponentPlan as false
     }
 }
 
-$hasManualRecommendationTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_manual_recommendations'")->num_rows > 0;
+$hasManualRecommendationTable = dbTableExists($conn, 'feature_estimation_manual_recommendations');
 if (!$hasManualRecommendationTable) {
     try {
-        $conn->query("
+        $manualRecommendationSql = DB_DRIVER === 'pgsql' ? "
+            CREATE TABLE feature_estimation_manual_recommendations (
+                id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                feature_signature VARCHAR(190) NOT NULL,
+                feature_title VARCHAR(255) NOT NULL,
+                recommendation_name VARCHAR(255) NOT NULL,
+                source_project_id INT NULL,
+                source_task_id INT NULL,
+                phase_name VARCHAR(150) NULL,
+                expectation_description TEXT,
+                min_days INT NOT NULL,
+                likely_days INT NOT NULL,
+                max_days INT NOT NULL,
+                involvement_plan_json TEXT NULL,
+                component_plan_json TEXT NULL,
+                created_by INT NOT NULL,
+                updated_by INT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (created_by, feature_signature, recommendation_name),
+                CONSTRAINT fk_manual_recommendation_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+                CONSTRAINT fk_manual_recommendation_updater FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+                CONSTRAINT fk_manual_recommendation_project FOREIGN KEY (source_project_id) REFERENCES projects(id) ON DELETE SET NULL,
+                CONSTRAINT fk_manual_recommendation_task FOREIGN KEY (source_task_id) REFERENCES tasks(id) ON DELETE SET NULL
+            )
+        " : "
             CREATE TABLE feature_estimation_manual_recommendations (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 feature_signature VARCHAR(190) NOT NULL,
@@ -127,17 +157,32 @@ if (!$hasManualRecommendationTable) {
                 CONSTRAINT fk_manual_recommendation_project FOREIGN KEY (source_project_id) REFERENCES projects(id) ON DELETE SET NULL,
                 CONSTRAINT fk_manual_recommendation_task FOREIGN KEY (source_task_id) REFERENCES tasks(id) ON DELETE SET NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
-        $hasManualRecommendationTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_manual_recommendations'")->num_rows > 0;
+        ";
+        $conn->query($manualRecommendationSql);
+        $hasManualRecommendationTable = dbTableExists($conn, 'feature_estimation_manual_recommendations');
     } catch (Throwable $e) {
         $hasManualRecommendationTable = false;
     }
 }
 
-$hasRecommendationFeedbackTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_recommendation_feedback'")->num_rows > 0;
+$hasRecommendationFeedbackTable = dbTableExists($conn, 'feature_estimation_recommendation_feedback');
 if (!$hasRecommendationFeedbackTable) {
     try {
-        $conn->query("
+        $feedbackSql = DB_DRIVER === 'pgsql' ? "
+            CREATE TABLE feature_estimation_recommendation_feedback (
+                id INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+                task_id INT NOT NULL,
+                source_type TEXT NOT NULL,
+                source_id INT NOT NULL,
+                action TEXT NOT NULL,
+                acted_by INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (task_id, source_type, source_id),
+                CONSTRAINT fk_recommendation_feedback_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                CONSTRAINT fk_recommendation_feedback_actor FOREIGN KEY (acted_by) REFERENCES users(id) ON DELETE CASCADE
+            )
+        " : "
             CREATE TABLE feature_estimation_recommendation_feedback (
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 task_id INT NOT NULL,
@@ -152,21 +197,22 @@ if (!$hasRecommendationFeedbackTable) {
                 CONSTRAINT fk_recommendation_feedback_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
                 CONSTRAINT fk_recommendation_feedback_actor FOREIGN KEY (acted_by) REFERENCES users(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        ");
-        $hasRecommendationFeedbackTable = $conn->query("SHOW TABLES LIKE 'feature_estimation_recommendation_feedback'")->num_rows > 0;
+        ";
+        $conn->query($feedbackSql);
+        $hasRecommendationFeedbackTable = dbTableExists($conn, 'feature_estimation_recommendation_feedback');
     } catch (Throwable $e) {
         $hasRecommendationFeedbackTable = false;
     }
 }
 
 // Check if sales approval columns exist in tasks (auto-create if missing)
-$hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+$hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 if (!$hasSalesApproval) {
     try {
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved TINYINT(1) DEFAULT 0");
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved " . (DB_DRIVER === 'pgsql' ? "SMALLINT" : "TINYINT(1)") . " DEFAULT 0");
         $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_by INT NULL");
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_at DATETIME NULL");
-        $hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_at " . (DB_DRIVER === 'pgsql' ? "TIMESTAMP" : "DATETIME") . " NULL");
+        $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
     } catch (Throwable $e) {
         // Leave $hasSalesApproval as false; sales approval will be skipped
     }
@@ -253,18 +299,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['project_setup'])) {
             $submitStmt->execute();
             $submitStmt->close();
 
-            $salesUsers = $conn->query("SELECT id FROM users WHERE role = 'sales' AND status = 'active'");
-            while ($sales = $salesUsers->fetch_assoc()) {
-                createNotification(
-                    (int) $sales['id'],
-                    "Estimations Ready for Approval",
-                    "Feature estimations are ready for sales approval.",
-                    'approval',
-                    'projects',
-                    (int) $projectId,
-                    BASE_URL . 'modules/sales/estimation-approval.php'
-                );
-            }
+            workflowNotifyRoles(
+                $conn,
+                ['sales'],
+                'Estimations Ready for Approval',
+                'Feature estimations are ready for sales approval.',
+                BASE_URL . 'modules/sales/estimation-approval.php',
+                (int) $projectId,
+                'approval',
+                'projects'
+            );
 
             $_SESSION['success'] = "Project setup saved and estimations sent to Sales.";
         } else {
@@ -457,7 +501,38 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
 
         if ($hasManualRecommendationTable && $manualRecommendationName !== '') {
             $featureSignature = featureRecommendationSignature($taskTitle);
-            $templateStmt = $conn->prepare("
+            $templateSql = DB_DRIVER === 'pgsql' ? "
+                INSERT INTO feature_estimation_manual_recommendations (
+                    feature_signature,
+                    feature_title,
+                    recommendation_name,
+                    source_project_id,
+                    source_task_id,
+                    phase_name,
+                    expectation_description,
+                    min_days,
+                    likely_days,
+                    max_days,
+                    involvement_plan_json,
+                    component_plan_json,
+                    created_by,
+                    updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (created_by, feature_signature, recommendation_name)
+                DO UPDATE SET
+                    feature_title = EXCLUDED.feature_title,
+                    source_project_id = EXCLUDED.source_project_id,
+                    source_task_id = EXCLUDED.source_task_id,
+                    phase_name = EXCLUDED.phase_name,
+                    expectation_description = EXCLUDED.expectation_description,
+                    min_days = EXCLUDED.min_days,
+                    likely_days = EXCLUDED.likely_days,
+                    max_days = EXCLUDED.max_days,
+                    involvement_plan_json = EXCLUDED.involvement_plan_json,
+                    component_plan_json = EXCLUDED.component_plan_json,
+                    updated_by = EXCLUDED.updated_by,
+                    updated_at = CURRENT_TIMESTAMP
+            " : "
                 INSERT INTO feature_estimation_manual_recommendations (
                     feature_signature,
                     feature_title,
@@ -487,7 +562,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
                     component_plan_json = VALUES(component_plan_json),
                     updated_by = VALUES(updated_by),
                     updated_at = CURRENT_TIMESTAMP
-            ");
+            ";
+            $templateStmt = $conn->prepare($templateSql);
 
             if ($templateStmt) {
                 $expertId = (int) $user['id'];
@@ -1548,6 +1624,175 @@ textarea.form-control-custom {
     margin-bottom: 0;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    background: #071321 !important;
+    border: 1px solid rgba(31, 99, 146, 0.24);
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(31, 99, 146, 0.16));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern h2,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern h2 i {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern p {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-management-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-list,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-card {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-selector,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-section-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table tbody tr:hover td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-list-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-stats span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-save-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-info-custom {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-row.incomplete {
+    background: rgba(245, 158, 11, 0.08) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-row.complete,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-card.is-accepted {
+    background: rgba(16, 185, 129, 0.08) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-section-header h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-role,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-feature-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-list-item strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-panel-header h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-header p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table-header p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-feature-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-list-item span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-empty,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pm-day-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-info-custom small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-panel-header p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-updated,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-subtitle,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-phase,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-expectation,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-stats span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-selector,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-section-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-row {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-name input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-dates input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-input {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-input[disabled],
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom[disabled] {
+    background: rgba(157, 182, 207, 0.08);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom::placeholder,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-input::placeholder {
+    color: #7f9bb6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-bar-track {
+    background: rgba(157, 182, 207, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-phase-tag,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-count,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-tag.history {
+    background: rgba(31, 99, 146, 0.18);
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-tag.manual,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-badge.ready {
+    background: rgba(16, 185, 129, 0.16);
+    color: #86efac;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-badge.pending,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .day-badge.likely {
+    background: rgba(245, 158, 11, 0.16);
+    color: #fbbf24;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pm-inline-btn,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-add-phase {
+    background: rgba(31, 99, 146, 0.12);
+    border-color: rgba(31, 99, 146, 0.3);
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pm-inline-btn.remove,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-remove-phase,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-remove-item {
+    background: rgba(220, 38, 38, 0.16);
+    color: #fca5a5;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
@@ -1751,7 +1996,7 @@ textarea.form-control-custom {
                                             <?php echo $recommendation['source_type'] === 'manual' ? 'Manual' : 'Past Project'; ?>
                                         </span>
                                         <?php if (!empty($recommendation['updated_at'])): ?>
-                                            <span class="recommendation-updated">Updated <?php echo htmlspecialchars(date('M d, Y', strtotime($recommendation['updated_at']))); ?></span>
+                                            <span class="recommendation-updated">Updated <?php echo htmlspecialchars(date('M d, Y', strtotime((string) $recommendation['updated_at']))); ?></span>
                                         <?php endif; ?>
                                     </div>
                                     <div class="recommendation-title"><?php echo htmlspecialchars($recommendation['label']); ?></div>
@@ -1838,13 +2083,13 @@ textarea.form-control-custom {
                         <div class="col-md-6">
                             <label class="form-label">Planned Start Date</label>
                             <input type="date" name="planned_start" class="form-control-custom estimate-start" <?php echo $isReadonly ? 'disabled' : ''; ?>
-                                   value="<?php echo $task['started_at'] ? date('Y-m-d', strtotime($task['started_at'])) : ''; ?>">
+                                   value="<?php echo !empty($task['started_at']) ? date('Y-m-d', strtotime((string) $task['started_at'])) : ''; ?>">
                             <small class="text-muted d-block mt-1">Set the task start for Gantt</small>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Planned End Date</label>
                             <input type="date" name="planned_end" class="form-control-custom estimate-end" <?php echo $isReadonly ? 'disabled' : ''; ?>
-                                   value="<?php echo $task['deadline'] ? date('Y-m-d', strtotime($task['deadline'])) : ''; ?>">
+                                   value="<?php echo !empty($task['deadline']) ? date('Y-m-d', strtotime((string) $task['deadline'])) : ''; ?>">
                             <small class="text-muted d-block mt-1">Set the task end for Gantt</small>
                         </div>
                     </div>

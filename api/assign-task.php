@@ -37,8 +37,8 @@ if (!$assignee) {
     exit();
 }
 
-$hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
-$hasSalesChoice = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_estimate_days'")->num_rows > 0;
+$hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
+$hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_days');
 
 $salesApprovedSelect = $hasSalesApproval ? "sales_approved" : "0 AS sales_approved";
 $salesEstimateDaysSelect = $hasSalesChoice ? "sales_estimate_days" : "0 AS sales_estimate_days";

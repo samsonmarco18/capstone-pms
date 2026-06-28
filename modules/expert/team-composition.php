@@ -392,6 +392,74 @@ include '../../includes/navbar.php';
     margin-bottom: 0;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .composition-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-item:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .input-group-custom .input-group-text {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-card .card-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card .card-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .composition-item .role-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-card h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .input-group-custom .input-group-text,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breakdown-list li,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-item.active {
+    background: rgba(31, 99, 146, 0.16) !important;
+    color: #7cc0ee !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom::placeholder {
+    color: #7f9bb6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-info-custom {
+    background: rgba(31, 99, 146, 0.14);
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breakdown-list li {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {

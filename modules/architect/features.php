@@ -26,28 +26,46 @@ if (!$project && $pageError === null) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
-    $features = $_POST['features'] ?? [];
+    $features = $_POST['new_features'] ?? [];
+    $existingFeatureTitles = [];
+
+    $existingTitleResult = $conn->query("
+        SELECT title
+        FROM tasks
+        WHERE project_id = $projectId
+          AND task_type = 'feature'
+    ");
+
+    if ($existingTitleResult !== false) {
+        while ($row = $existingTitleResult->fetch_assoc()) {
+            $normalizedTitle = strtolower(preg_replace('/\s+/', ' ', trim((string) ($row['title'] ?? ''))));
+            if ($normalizedTitle !== '') {
+                $existingFeatureTitles[$normalizedTitle] = true;
+            }
+        }
+    }
 
     $conn->begin_transaction();
     try {
-        $deleteResult = $conn->query("
-            DELETE FROM tasks
-            WHERE project_id = $projectId
-              AND task_type = 'feature'
-              AND (assigned_to IS NULL OR assigned_to = 0)
-              AND status = 'todo'
-        ");
-
-        if ($deleteResult === false) {
-            throw new RuntimeException('Failed to clear existing features.');
-        }
+        $savedCount = 0;
+        $skippedCount = 0;
 
         foreach ($features as $feature) {
             $title = trim((string) ($feature['title'] ?? ''));
             $description = trim((string) ($feature['description'] ?? ''));
-            $priority = trim((string) ($feature['priority'] ?? 'medium'));
+            $priority = strtolower(trim((string) ($feature['priority'] ?? 'medium')));
 
             if ($title === '') {
+                continue;
+            }
+
+            if (!in_array($priority, ['low', 'medium', 'high', 'critical'], true)) {
+                $priority = 'medium';
+            }
+
+            $normalizedTitle = strtolower(preg_replace('/\s+/', ' ', $title));
+            if (isset($existingFeatureTitles[$normalizedTitle])) {
+                $skippedCount++;
                 continue;
             }
 
@@ -66,11 +84,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
                 throw new RuntimeException('Failed to save feature.');
             }
             $stmt->close();
+            $existingFeatureTitles[$normalizedTitle] = true;
+            $savedCount++;
         }
 
-        logActivity($user['id'], 'define_features', 'projects', $projectId, null, $_POST);
+        if (count($existingFeatureTitles) === 0) {
+            throw new RuntimeException('At least one feature is required.');
+        }
+
+        logActivity($user['id'], 'define_features', 'projects', $projectId, null, [
+            'new_features' => $features,
+            'saved_count' => $savedCount,
+            'skipped_duplicate_count' => $skippedCount,
+        ]);
         $conn->commit();
-        $_SESSION['success'] = 'Features saved successfully.';
+        if ($savedCount > 0) {
+            $_SESSION['success'] = $savedCount . ' new feature' . ($savedCount === 1 ? '' : 's') . ' saved successfully.';
+        } else {
+            $_SESSION['success'] = $skippedCount > 0
+                ? 'Duplicate feature titles were skipped. Existing saved features were kept.'
+                : 'Saved features were kept. Continuing to technology recommendations.';
+        }
         header('Location: tech-recommendation.php?id=' . $projectId);
         exit();
     } catch (Throwable $e) {
@@ -142,6 +176,61 @@ include '../../includes/navbar.php';
     border-radius: 16px;
     padding: 1rem;
     margin-bottom: 1rem;
+}
+
+.feature-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.85rem;
+    color: var(--gray-900);
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.saved-feature-list {
+    display: grid;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.saved-feature {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr) auto;
+    gap: 0.75rem;
+    align-items: start;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+}
+
+.saved-feature-title {
+    color: var(--gray-900);
+    font-weight: 700;
+    word-break: break-word;
+}
+
+.saved-feature-description {
+    color: var(--gray-600);
+    font-size: 0.88rem;
+    word-break: break-word;
+}
+
+.priority-pill {
+    border-radius: 999px;
+    background: rgba(31, 99, 146, 0.1);
+    color: var(--theme-dark);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.35rem 0.65rem;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.additional-features {
+    border-top: 1px solid var(--gray-200);
+    padding-top: 1.25rem;
 }
 
 .btn-add {
@@ -320,6 +409,52 @@ a.progress-step:hover {
     .progress-indicator { padding: 0.75rem; }
     .progress-step .step-label { font-size: 0.6rem; }
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
+    .saved-feature { grid-template-columns: 1fr; }
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-card {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .saved-feature,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) label {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .saved-feature-description,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .saved-feature-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-section-title {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) textarea {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: #d7e4f2 !important;
 }
 </style>
 
@@ -358,51 +493,45 @@ a.progress-step:hover {
     </div>
 
     <form method="POST" class="card p-4">
-        <div id="featuresContainer">
-            <?php if (count($existingFeatures) > 0): ?>
-                <?php foreach ($existingFeatures as $idx => $feature): ?>
-                    <div class="feature-item">
-                        <div class="row g-3 align-items-end">
-                            <div class="col-md-4">
-                                <label class="form-label">Feature Title</label>
-                                <input type="text" name="features[<?php echo $idx; ?>][title]" class="form-control" value="<?php echo htmlspecialchars($feature['title']); ?>" required>
-                            </div>
-                            <div class="col-md-5">
-                                <label class="form-label">Description</label>
-                                <input type="text" name="features[<?php echo $idx; ?>][description]" class="form-control" value="<?php echo htmlspecialchars($feature['description']); ?>">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">Priority</label>
-                                <select name="features[<?php echo $idx; ?>][priority]" class="form-select">
-                                    <?php foreach (['low', 'medium', 'high', 'critical'] as $priority): ?>
-                                        <option value="<?php echo $priority; ?>" <?php echo $feature['priority'] === $priority ? 'selected' : ''; ?>>
-                                            <?php echo ucfirst($priority); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="col-md-1">
-                                <button type="button" class="btn-remove" onclick="removeFeature(this)" aria-label="Remove feature">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
+        <?php if (count($existingFeatures) > 0): ?>
+            <div class="feature-section-title">
+                <i class="fas fa-check-circle text-success"></i>
+                Saved Features
+            </div>
+            <div class="saved-feature-list">
+                <?php foreach ($existingFeatures as $feature): ?>
+                    <div class="saved-feature">
+                        <div>
+                            <div class="saved-feature-title"><?php echo htmlspecialchars($feature['title']); ?></div>
                         </div>
+                        <div class="saved-feature-description">
+                            <?php echo htmlspecialchars(trim((string) $feature['description']) !== '' ? $feature['description'] : 'No description added.'); ?>
+                        </div>
+                        <span class="priority-pill"><?php echo htmlspecialchars(ucfirst((string) $feature['priority'])); ?></span>
                     </div>
                 <?php endforeach; ?>
-            <?php else: ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="additional-features">
+            <div class="feature-section-title">
+                <i class="fas fa-plus-circle"></i>
+                Additional Features
+            </div>
+            <div id="featuresContainer">
                 <div class="feature-item">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-4">
                             <label class="form-label">Feature Title</label>
-                            <input type="text" name="features[0][title]" class="form-control" required>
+                            <input type="text" name="new_features[0][title]" class="form-control" <?php echo count($existingFeatures) === 0 ? 'required' : ''; ?>>
                         </div>
                         <div class="col-md-5">
                             <label class="form-label">Description</label>
-                            <input type="text" name="features[0][description]" class="form-control">
+                            <input type="text" name="new_features[0][description]" class="form-control">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Priority</label>
-                            <select name="features[0][priority]" class="form-select">
+                            <select name="new_features[0][priority]" class="form-select">
                                 <option value="low">Low</option>
                                 <option value="medium" selected>Medium</option>
                                 <option value="high">High</option>
@@ -416,7 +545,7 @@ a.progress-step:hover {
                         </div>
                     </div>
                 </div>
-            <?php endif; ?>
+            </div>
         </div>
 
         <div class="d-flex justify-content-between flex-wrap gap-2 mt-3">
@@ -432,7 +561,8 @@ a.progress-step:hover {
 </div>
 
 <script>
-let featureIndex = <?php echo max(0, count($existingFeatures)); ?>;
+let featureIndex = 1;
+const hasSavedFeatures = <?php echo count($existingFeatures) > 0 ? 'true' : 'false'; ?>;
 
 function addFeature() {
     const container = document.getElementById('featuresContainer');
@@ -442,15 +572,15 @@ function addFeature() {
         <div class="row g-3 align-items-end">
             <div class="col-md-4">
                 <label class="form-label">Feature Title</label>
-                <input type="text" name="features[${featureIndex}][title]" class="form-control" required>
+                <input type="text" name="new_features[${featureIndex}][title]" class="form-control">
             </div>
             <div class="col-md-5">
                 <label class="form-label">Description</label>
-                <input type="text" name="features[${featureIndex}][description]" class="form-control">
+                <input type="text" name="new_features[${featureIndex}][description]" class="form-control">
             </div>
             <div class="col-md-2">
                 <label class="form-label">Priority</label>
-                <select name="features[${featureIndex}][priority]" class="form-select">
+                <select name="new_features[${featureIndex}][priority]" class="form-select">
                     <option value="low">Low</option>
                     <option value="medium" selected>Medium</option>
                     <option value="high">High</option>
@@ -475,6 +605,13 @@ function removeFeature(button) {
     const allItems = document.querySelectorAll('.feature-item');
     if (!item) return;
     if (allItems.length <= 1) {
+        if (hasSavedFeatures) {
+            item.remove();
+            updateFeatureIndexes();
+            updateRemoveButtons();
+            return;
+        }
+
         item.querySelectorAll('input, select, textarea').forEach((field) => {
             if (field.tagName === 'SELECT') {
                 field.selectedIndex = 0;
@@ -495,7 +632,7 @@ function updateFeatureIndexes() {
         item.querySelectorAll('input, select, textarea').forEach((field) => {
             const name = field.getAttribute('name');
             if (!name) return;
-            field.setAttribute('name', name.replace(/features\[\d+\]/, `features[${idx}]`));
+            field.setAttribute('name', name.replace(/new_features\[\d+\]/, `new_features[${idx}]`));
         });
     });
     featureIndex = items.length;
@@ -503,12 +640,12 @@ function updateFeatureIndexes() {
 
 function updateRemoveButtons() {
     const items = document.querySelectorAll('.feature-item');
-    const disable = items.length <= 1;
+    const disable = items.length <= 1 && !hasSavedFeatures;
     items.forEach((item) => {
         const btn = item.querySelector('.btn-remove');
         if (!btn) return;
         btn.disabled = disable;
-        btn.title = disable ? 'At least one feature is required.' : 'Remove feature';
+        btn.title = disable ? 'At least one feature is required.' : 'Remove feature row';
     });
 }
 

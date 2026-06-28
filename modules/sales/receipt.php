@@ -410,6 +410,64 @@ include '../../includes/navbar.php';
     margin-bottom: 1.5rem;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    border: 1px solid rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(31, 99, 146, 0.12));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-table tr:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon-sm.download,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon-sm.view {
+    background: #0a1b2c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-number,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern h4 {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern .stat-sub,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern p {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-table td {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon-sm.download {
+    color: #10b981;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon-sm.view {
+    color: var(--theme-primary);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
@@ -530,7 +588,7 @@ include '../../includes/navbar.php';
                         <td>
                             <div class="client-name"><?php echo htmlspecialchars($receipt['client_name']); ?></div>
                         </td>
-                        <td><?php echo date('M d, Y', strtotime($receipt['created_at'])); ?></td>
+                        <td><?php echo !empty($receipt['created_at']) ? date('M d, Y', strtotime((string) $receipt['created_at'])) : 'No date'; ?></td>
                         <td class="fw-semibold">$<?php echo number_format($receipt['amount_due'], 2); ?></td>
                         <td>
                             <span class="badge-status <?php echo $receipt['status']; ?>">

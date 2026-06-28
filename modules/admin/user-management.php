@@ -112,6 +112,33 @@ include '../../includes/navbar.php';
     --shadow-sm: 0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
     --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.02);
+    --panel-surface: #ffffff;
+    --panel-surface-alt: #f8fbff;
+    --panel-border: var(--gray-200);
+    --panel-text: var(--gray-900);
+    --panel-muted: var(--gray-600);
+    --panel-shadow: var(--shadow-sm);
+    --panel-shadow-hover: var(--shadow-md);
+    --panel-row-hover: var(--gray-50);
+    --panel-input-bg: #ffffff;
+    --panel-input-text: var(--gray-900);
+    --panel-badge-bg: #eef5fb;
+    --panel-badge-text: #1f6392;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) {
+    --panel-surface: rgba(8, 20, 33, 0.94);
+    --panel-surface-alt: rgba(10, 24, 38, 0.98);
+    --panel-border: rgba(138, 210, 255, 0.12);
+    --panel-text: #d8e6f3;
+    --panel-muted: #90aeca;
+    --panel-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+    --panel-shadow-hover: 0 18px 38px rgba(0, 0, 0, 0.42);
+    --panel-row-hover: rgba(31, 99, 146, 0.12);
+    --panel-input-bg: rgba(10, 24, 38, 0.98);
+    --panel-input-text: #d8e6f3;
+    --panel-badge-bg: rgba(31, 99, 146, 0.18);
+    --panel-badge-text: #bfe6ff;
 }
 
 /* Page Header */
@@ -162,20 +189,20 @@ include '../../includes/navbar.php';
 }
 
 .stat-card-modern {
-    background: white;
+    background: var(--panel-surface);
     border-radius: 20px;
     padding: 1.25rem 1.5rem;
     flex: 1;
     min-width: 180px;
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--gray-200);
+    box-shadow: var(--panel-shadow);
+    border: 1px solid var(--panel-border);
     transition: all 0.2s ease;
     position: relative;
 }
 
 .stat-card-modern:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--panel-shadow-hover);
 }
 
 .stat-card-modern .stat-icon {
@@ -191,7 +218,7 @@ include '../../includes/navbar.php';
     font-size: 0.75rem;
     text-transform: uppercase;
     font-weight: 600;
-    color: var(--gray-600);
+    color: var(--panel-muted);
     letter-spacing: 0.5px;
     margin-bottom: 0.5rem;
 }
@@ -205,17 +232,17 @@ include '../../includes/navbar.php';
 
 /* Main Card */
 .main-card {
-    background: white;
+    background: var(--panel-surface);
     border-radius: 24px;
-    border: 1px solid var(--gray-200);
+    border: 1px solid var(--panel-border);
     overflow: hidden;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--panel-shadow);
 }
 
 .card-header-modern {
     padding: 1.5rem 2rem;
-    background: #ffffff;
-    border-bottom: 1px solid var(--gray-200);
+    background: var(--panel-surface);
+    border-bottom: 1px solid var(--panel-border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -226,19 +253,19 @@ include '../../includes/navbar.php';
 .card-header-modern h5 {
     font-size: 1.1rem;
     font-weight: 600;
-    color: var(--gray-900);
+    color: var(--panel-text);
     margin: 0;
 }
 
 .card-header-modern .text-muted {
-    color: var(--gray-600) !important;
+    color: var(--panel-muted) !important;
 }
 
 /* Filter Section */
 .filter-section {
     padding: 1.5rem 2rem;
-    background: var(--gray-50);
-    border-bottom: 1px solid var(--gray-200);
+    background: var(--panel-surface-alt);
+    border-bottom: 1px solid var(--panel-border);
 }
 
 .filter-group {
@@ -257,7 +284,7 @@ include '../../includes/navbar.php';
     font-size: 0.7rem;
     text-transform: uppercase;
     font-weight: 600;
-    color: var(--gray-600);
+    color: var(--panel-muted);
     letter-spacing: 0.5px;
     margin-bottom: 0.25rem;
     display: block;
@@ -267,10 +294,12 @@ include '../../includes/navbar.php';
 .filter-input select {
     width: 100%;
     padding: 0.6rem 1rem;
-    border: 1px solid var(--gray-300);
+    border: 1px solid var(--panel-border);
     border-radius: 12px;
     font-size: 0.85rem;
     transition: all 0.2s;
+    background: var(--panel-input-bg);
+    color: var(--panel-input-text);
 }
 
 .filter-input input:focus,
@@ -307,7 +336,7 @@ include '../../includes/navbar.php';
 }
 
 .user-table thead {
-    background: var(--gray-50);
+    background: var(--panel-surface-alt);
 }
 
 .user-table th {
@@ -317,29 +346,29 @@ include '../../includes/navbar.php';
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: var(--gray-600);
-    border-bottom: 1px solid var(--gray-200);
+    color: var(--panel-muted);
+    border-bottom: 1px solid var(--panel-border);
 }
 
 .user-table td {
     padding: 1rem 1.5rem;
     vertical-align: middle;
-    border-bottom: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--panel-border);
 }
 
 .user-table tr:hover {
-    background: var(--gray-50);
+    background: var(--panel-row-hover);
 }
 
 .user-name {
     font-weight: 600;
-    color: var(--gray-900);
+    color: var(--panel-text);
     margin-bottom: 0.25rem;
 }
 
 .user-email {
     font-size: 0.75rem;
-    color: var(--gray-600);
+    color: var(--panel-muted);
 }
 
 /* Badges */
@@ -350,41 +379,51 @@ include '../../includes/navbar.php';
     font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
+    background: var(--panel-badge-bg);
+    color: var(--panel-badge-text);
+    border: 1px solid transparent;
 }
 
 .badge-role.admin {
-    background: #fee2e2;
-    color: #dc2626;
+    background: rgba(220, 38, 38, 0.10);
+    color: #b91c1c;
+    border-color: rgba(220, 38, 38, 0.18);
 }
 
 .badge-role.sales {
-    background: #dbeafe;
-    color: #2563eb;
+    background: rgba(37, 99, 235, 0.10);
+    color: #1d4ed8;
+    border-color: rgba(37, 99, 235, 0.18);
 }
 
 .badge-role.architect {
-    background: #e0e7ff;
+    background: rgba(79, 70, 229, 0.10);
     color: #4f46e5;
+    border-color: rgba(79, 70, 229, 0.18);
 }
 
 .badge-role.sul {
-    background: #fef3c7;
-    color: #d97706;
+    background: rgba(217, 119, 6, 0.10);
+    color: #b45309;
+    border-color: rgba(217, 119, 6, 0.18);
 }
 
 .badge-role.qa {
-    background: #cffafe;
-    color: #0e7490;
+    background: rgba(14, 116, 144, 0.10);
+    color: #0f766e;
+    border-color: rgba(14, 116, 144, 0.18);
 }
 
 .badge-role.expert {
-    background: #d1fae5;
-    color: #059669;
+    background: rgba(5, 150, 105, 0.10);
+    color: #047857;
+    border-color: rgba(5, 150, 105, 0.18);
 }
 
 .badge-role.developer {
-    background: #e9ecef;
-    color: #495057;
+    background: rgba(73, 80, 87, 0.10);
+    color: #475569;
+    border-color: rgba(73, 80, 87, 0.18);
 }
 
 .badge-status {
@@ -393,21 +432,26 @@ include '../../includes/navbar.php';
     border-radius: 20px;
     font-size: 0.7rem;
     font-weight: 600;
+    text-transform: uppercase;
+    border: 1px solid transparent;
 }
 
 .badge-status.active {
-    background: #d1fae5;
-    color: #059669;
+    background: rgba(5, 150, 105, 0.10);
+    color: #047857;
+    border-color: rgba(5, 150, 105, 0.18);
 }
 
 .badge-status.inactive {
-    background: #fef3c7;
-    color: #d97706;
+    background: rgba(217, 119, 6, 0.10);
+    color: #b45309;
+    border-color: rgba(217, 119, 6, 0.18);
 }
 
 .badge-status.suspended {
-    background: #fee2e2;
-    color: #dc2626;
+    background: rgba(220, 38, 38, 0.10);
+    color: #b91c1c;
+    border-color: rgba(220, 38, 38, 0.18);
 }
 
 /* Action Buttons */
@@ -429,8 +473,8 @@ include '../../includes/navbar.php';
 }
 
 .btn-icon.view {
-    background: #e9ecef;
-    color: #6c757d;
+    background: var(--panel-surface-alt);
+    color: var(--panel-muted);
 }
 
 .btn-icon.view:hover {
@@ -439,7 +483,7 @@ include '../../includes/navbar.php';
 }
 
 .btn-icon.edit {
-    background: #e9ecef;
+    background: var(--panel-surface-alt);
     color: var(--theme-primary);
 }
 
@@ -449,8 +493,9 @@ include '../../includes/navbar.php';
 }
 
 .btn-icon.delete {
-    background: #fee2e2;
+    background: rgba(220, 38, 38, 0.08);
     color: #dc2626;
+    border: 1px solid rgba(220, 38, 38, 0.18);
 }
 
 .btn-icon.delete:hover {
@@ -519,17 +564,17 @@ include '../../includes/navbar.php';
 
 .empty-state-modern i {
     font-size: 4rem;
-    color: var(--gray-300);
+    color: var(--panel-muted);
     margin-bottom: 1rem;
 }
 
 .empty-state-modern h4 {
-    color: var(--gray-900);
+    color: var(--panel-text);
     margin-bottom: 0.5rem;
 }
 
 .empty-state-modern p {
-    color: var(--gray-600);
+    color: var(--panel-muted);
 }
 
 /* Modal Styling */
@@ -560,12 +605,12 @@ include '../../includes/navbar.php';
 
 .modal-modern .modal-footer {
     padding: 1rem 2rem 2rem;
-    border-top: 1px solid var(--gray-200);
+    border-top: 1px solid var(--panel-border);
 }
 
 .modal-modern .form-label {
     font-weight: 500;
-    color: var(--theme-primary);
+    color: var(--panel-text);
     margin-bottom: 0.5rem;
 }
 
@@ -573,14 +618,245 @@ include '../../includes/navbar.php';
 .modal-modern .form-control,
 .modal-modern .form-select {
     border-radius: 12px;
-    border: 1px solid var(--gray-300);
+    border: 1px solid var(--panel-border);
     padding: 0.6rem 1rem;
+    background: var(--panel-input-bg);
+    color: var(--panel-input-text);
 }
 
 .modal-modern .form-control:focus,
 .modal-modern .form-select:focus {
     border-color: var(--theme-primary);
     box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
+}
+
+.modal-modern .modal-content {
+    background: var(--panel-surface);
+    color: var(--panel-text);
+    box-shadow: var(--panel-shadow-hover);
+}
+
+.modal-modern .modal-body,
+.modal-modern .modal-footer {
+    background: var(--panel-surface);
+}
+
+.modal-modern .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+.delete-confirm-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1rem;
+    border-radius: 16px;
+    background: rgba(220, 38, 38, 0.06);
+    border: 1px solid rgba(220, 38, 38, 0.12);
+    color: var(--panel-text);
+}
+
+.delete-confirm-note i {
+    color: #dc2626;
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+}
+
+.btn-delete-cancel {
+    background: var(--panel-surface-alt);
+    border: 1px solid var(--panel-border);
+    color: var(--panel-text);
+    border-radius: 12px;
+    padding: 0.65rem 1.15rem;
+    font-weight: 600;
+}
+
+.btn-delete-cancel:hover {
+    background: var(--panel-row-hover);
+    color: var(--panel-text);
+}
+
+.btn-delete-confirm {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    border: 1px solid #dc2626;
+    color: #fff;
+    border-radius: 12px;
+    padding: 0.65rem 1.15rem;
+    font-weight: 600;
+    box-shadow: 0 10px 22px rgba(220, 38, 38, 0.18);
+}
+
+.btn-delete-confirm:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.26);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
+    background: var(--panel-surface);
+    border-color: var(--panel-border);
+    box-shadow: var(--panel-shadow);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer {
+    background: var(--panel-surface-alt);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
+    color: var(--panel-text) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-email,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-table td {
+    color: var(--panel-muted) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select {
+    background: var(--panel-input-bg);
+    border-color: var(--panel-border);
+    color: var(--panel-input-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select:focus {
+    background: var(--panel-input-bg);
+    border-color: var(--theme-primary);
+    color: var(--panel-input-text);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-table tr:hover {
+    background: var(--panel-row-hover);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-role,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-status {
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.view,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.edit {
+    background: rgba(144, 174, 202, 0.12);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.delete {
+    background: rgba(220, 38, 38, 0.15);
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.view:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.edit:hover {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.delete:hover {
+    background: #dc2626;
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-note {
+    background: rgba(220, 38, 38, 0.10);
+    border-color: rgba(220, 38, 38, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-cancel {
+    background: var(--panel-surface-alt);
+    border-color: var(--panel-border);
+    color: var(--panel-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-cancel:hover {
+    background: rgba(144, 174, 202, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-role.admin {
+    background: rgba(220, 38, 38, 0.18);
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-role.sales {
+    background: rgba(37, 99, 235, 0.16);
+    color: #8fc1ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-role.architect {
+    background: rgba(79, 70, 229, 0.16);
+    color: #b7b8ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-role.sul {
+    background: rgba(217, 119, 6, 0.16);
+    color: #ffd58a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-role.qa {
+    background: rgba(14, 116, 144, 0.16);
+    color: #8de7ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-role.expert {
+    background: rgba(5, 150, 105, 0.16);
+    color: #94f1c6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-role.developer {
+    background: rgba(73, 80, 87, 0.16);
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-status.active {
+    background: rgba(5, 150, 105, 0.16);
+    color: #94f1c6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-status.inactive {
+    background: rgba(217, 119, 6, 0.16);
+    color: #ffd58a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-status.suspended {
+    background: rgba(220, 38, 38, 0.15);
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .btn.btn-light {
+    background: rgba(144, 174, 202, 0.12);
+    border-color: rgba(144, 174, 202, 0.16);
+    color: var(--panel-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .btn.btn-light:hover {
+    background: rgba(144, 174, 202, 0.18);
 }
 
 /* Responsive */
@@ -748,7 +1024,13 @@ include '../../includes/navbar.php';
                                 <button class="btn-icon edit" onclick="editUser(<?php echo $row['id']; ?>)">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button class="btn-icon delete" onclick="deleteUser(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['full_name']); ?>')">
+                                <button
+                                    type="button"
+                                    class="btn-icon delete"
+                                    data-user-id="<?php echo (int) $row['id']; ?>"
+                                    data-user-name="<?php echo htmlspecialchars($row['full_name'], ENT_QUOTES); ?>"
+                                    onclick="openDeleteUserModal(this)"
+                                >
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -771,6 +1053,39 @@ include '../../includes/navbar.php';
     </div>
 </div>
 
+<!-- Delete User Modal -->
+<div class="modal fade modal-modern" id="deleteUserModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-slash me-2"></i> Delete User
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" id="deleteUserForm" data-app-loading data-loading-title="Deleting user" data-loading-text="Please wait while the account is removed.">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="id" id="delete_user_id">
+                <div class="modal-body">
+                    <div class="delete-confirm-note mb-0">
+                        <i class="fas fa-triangle-exclamation fa-lg"></i>
+                        <div>
+                            <div class="fw-semibold mb-1" id="deleteUserName">Selected user will appear here.</div>
+                            <div class="small text-muted">This action cannot be undone and the account will be removed permanently.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-delete-confirm">
+                        <i class="fas fa-trash-alt me-1"></i> Yes, delete it
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Create User Modal -->
 <div class="modal fade modal-modern" id="createUserModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
@@ -781,7 +1096,7 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Creating user" data-loading-text="Please wait while the user account is created.">
                 <div class="modal-body">
                     <input type="hidden" name="action" value="create">
                     <div class="row g-3">
@@ -856,17 +1171,14 @@ function editUser(id) {
     window.location.href = 'edit-user.php?id=' + id;
 }
 
-function deleteUser(id, name) {
-    if (confirm('Are you sure you want to delete user: ' + name + '? This action cannot be undone.')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.innerHTML = `
-            <input type="hidden" name="action" value="delete">
-            <input type="hidden" name="id" value="${id}">
-        `;
-        document.body.appendChild(form);
-        form.submit();
-    }
+function openDeleteUserModal(button) {
+    const userId = button.getAttribute('data-user-id') || '';
+    const userName = button.getAttribute('data-user-name') || 'this user';
+
+    document.getElementById('delete_user_id').value = userId;
+    document.getElementById('deleteUserName').textContent = `User: ${userName}`;
+
+    new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
 }
 
 // Auto-submit on enter in search

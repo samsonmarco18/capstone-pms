@@ -517,6 +517,11 @@ include '../../includes/navbar.php';
     --gray-900: #212529;
     --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.03);
     --shadow-md: 0 6px 12px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.03);
+    --insight-surface: #071321;
+    --insight-surface-soft: #0a1b2c;
+    --insight-border: rgba(31, 99, 146, 0.24);
+    --insight-text: #d7e4f2;
+    --insight-muted: #9db6cf;
 }
 
 body,
@@ -731,7 +736,55 @@ body,
     border: 1px solid var(--gray-200);
     border-radius: 28px;
     box-shadow: var(--shadow-sm);
-    padding: 1.6rem 1.75rem;
+    overflow: hidden;
+}
+
+.overview-project-card summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 1.35rem 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    background: #fff;
+}
+
+.overview-project-card summary::-webkit-details-marker {
+    display: none;
+}
+
+.overview-project-card summary:focus-visible {
+    outline: 3px solid rgba(31, 99, 146, 0.22);
+    outline-offset: -3px;
+}
+
+.overview-project-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.overview-project-toggle {
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(31, 99, 146, 0.08);
+    color: var(--insight-primary);
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.overview-project-card[open] .overview-project-toggle {
+    transform: rotate(180deg);
+    background: rgba(31, 99, 146, 0.14);
+}
+
+.overview-project-body {
+    padding: 0 1.5rem 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
@@ -1320,6 +1373,171 @@ body,
     padding: 2.5rem 1.5rem;
     text-align: center;
     color: var(--gray-600);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .insights-hero {
+    background: var(--insight-surface);
+    border: 1px solid rgba(31, 99, 146, 0.18);
+    color: var(--insight-text);
+    box-shadow: 0 18px 42px rgba(3, 14, 25, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .insights-hero p {
+    color: var(--insight-muted);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-control-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .metric-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .toolbar-menu,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .insight-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-content {
+    background: var(--insight-surface);
+    border-color: var(--insight-border);
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.22);
+    color: var(--insight-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-body {
+    background: var(--insight-surface);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-toggle {
+    background: rgba(157, 182, 207, 0.1);
+    color: var(--insight-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card[open] .overview-project-toggle {
+    background: rgba(157, 182, 207, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-card .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .toolbar-menu .dropdown-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-header {
+    background: var(--insight-surface);
+    border-color: var(--insight-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-card .card-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-head h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-panel-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .metric-card .value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-brief-card h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .mini-stat .value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .insight-item h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-title {
+    color: var(--insight-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .toolbar-button,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-search-input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-sort-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
+    background: var(--insight-surface);
+    border-color: var(--insight-border);
+    color: var(--insight-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .toolbar-button:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .toolbar-menu .dropdown-item:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-search-input:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-sort-select:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select:focus {
+    background: var(--insight-surface-soft);
+    border-color: rgba(31, 99, 146, 0.45);
+    color: var(--insight-text);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-control-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-results-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-mini-card span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-list,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .action-modal-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .metric-card .label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .metric-card .meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-brief-card p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-brief-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-brief-list,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .compare-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .mini-stat .label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .heatmap-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .insight-item p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .insight-item small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .scenario-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .subtext,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state {
+    color: var(--insight-muted);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-panel.after,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-low .overview-panel.before,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-medium .overview-panel.before,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-high .overview-panel.before,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-low .overview-panel.after,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-medium .overview-panel.after,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-high .overview-panel.after,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-mini-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-brief-block,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .mini-stat,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .scenario-note {
+    background: var(--insight-surface-soft);
+    border-color: var(--insight-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-low,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-medium,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-high {
+    border-color: var(--insight-border);
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-note {
+    color: var(--insight-muted);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .compare-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th {
+    background: var(--insight-surface-soft);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .compare-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .compare-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th {
+    border-bottom-color: var(--insight-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-chip {
+    background: var(--insight-surface-soft);
+    border-color: var(--insight-border);
+    color: var(--insight-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-tag,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delta-neutral {
+    background: var(--insight-surface);
+    border-color: var(--insight-border);
+    color: var(--insight-muted);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state {
+    border-color: var(--insight-border);
 }
 
 @media (max-width: 1200px) {
@@ -1986,7 +2204,7 @@ body,
     </div>
 
     <div class="overview-results-note" id="overviewResultsNote">
-        Showing <?php echo count($projects); ?> project card(s).
+        Showing <?php echo count($projects); ?> project card(s). Click a project to expand its full insight.
     </div>
 
     <div class="overview-card-grid">
@@ -2009,97 +2227,107 @@ body,
                 . delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))
             ));
             ?>
-            <div
+            <details
                 class="overview-project-card js-overview-card <?php echo $riskLevel === 'High' ? 'risk-high' : ($riskLevel === 'Medium' ? 'risk-medium' : 'risk-low'); ?>"
                 data-name="<?php echo htmlspecialchars(strtolower((string) $project['name'])); ?>"
                 data-date="<?php echo (int) $createdAtTs; ?>"
                 data-risk="<?php echo (int) $riskOrder; ?>"
                 data-search="<?php echo htmlspecialchars($searchBlob); ?>"
             >
-                <div class="overview-project-head">
-                    <div>
-                        <h5><?php echo htmlspecialchars($project['name']); ?></h5>
-                        <div class="overview-project-meta">
-                            Client: <?php echo htmlspecialchars($project['client_name']); ?> |
-                            Status: <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $project['status']))); ?> |
-                            Timeline: <?php echo htmlspecialchars(delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))); ?>
+                <summary>
+                    <div class="overview-project-summary">
+                        <div class="overview-project-head">
+                            <div>
+                                <h5><?php echo htmlspecialchars($project['name']); ?></h5>
+                                <div class="overview-project-meta">
+                                    Client: <?php echo htmlspecialchars($project['client_name']); ?> |
+                                    Status: <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $project['status']))); ?> |
+                                    Timeline: <?php echo htmlspecialchars(delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))); ?>
+                                </div>
+                            </div>
+                            <span class="delay-risk-badge <?php echo $riskClass; ?>">
+                                <i class="fas fa-signal"></i>
+                                <?php echo htmlspecialchars($riskLevel); ?> Delay Risk
+                            </span>
                         </div>
+                        <div class="overview-summary">Click to review the full project insight summary.</div>
                     </div>
-                    <span class="delay-risk-badge <?php echo $riskClass; ?>">
-                        <i class="fas fa-signal"></i>
-                        <?php echo htmlspecialchars($riskLevel); ?> Delay Risk
+                    <span class="overview-project-toggle" aria-hidden="true">
+                        <i class="fas fa-chevron-down"></i>
                     </span>
-                </div>
+                </summary>
 
-                <?php if ($overviewInsight !== null): ?>
-                    <div class="overview-insight-layout">
-                        <div class="overview-panel before">
-                            <div class="overview-panel-title">
-                                <i class="fas fa-drafting-compass"></i>
-                                Before Project Insight
-                            </div>
-                            <div class="overview-metric-grid">
-                                <div class="overview-mini-card">
-                                    <span>Delay Chance</span>
-                                    <strong><?php echo (int) $overviewInsight['before']['delay_probability']; ?>%</strong>
+                <div class="overview-project-body">
+                    <?php if ($overviewInsight !== null): ?>
+                        <div class="overview-insight-layout">
+                            <div class="overview-panel before">
+                                <div class="overview-panel-title">
+                                    <i class="fas fa-drafting-compass"></i>
+                                    Before Project Insight
                                 </div>
-                                <div class="overview-mini-card">
-                                    <span>Success Chance</span>
-                                    <strong><?php echo (int) $overviewInsight['before']['success_probability']; ?>%</strong>
+                                <div class="overview-metric-grid">
+                                    <div class="overview-mini-card">
+                                        <span>Delay Chance</span>
+                                        <strong><?php echo (int) $overviewInsight['before']['delay_probability']; ?>%</strong>
+                                    </div>
+                                    <div class="overview-mini-card">
+                                        <span>Success Chance</span>
+                                        <strong><?php echo (int) $overviewInsight['before']['success_probability']; ?>%</strong>
+                                    </div>
                                 </div>
+                                <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['before']['summary']); ?></p>
+                                <?php if (!empty($overviewInsight['before']['tips'])): ?>
+                                    <ul class="overview-list">
+                                        <?php foreach (array_slice($overviewInsight['before']['tips'], 0, 2) as $tip): ?>
+                                            <li><?php echo htmlspecialchars($tip); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
                             </div>
-                            <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['before']['summary']); ?></p>
-                            <?php if (!empty($overviewInsight['before']['tips'])): ?>
-                                <ul class="overview-list">
-                                    <?php foreach (array_slice($overviewInsight['before']['tips'], 0, 2) as $tip): ?>
-                                        <li><?php echo htmlspecialchars($tip); ?></li>
-                                    <?php endforeach; ?>
-                                </ul>
-                            <?php endif; ?>
-                        </div>
 
-                        <div class="overview-panel after">
-                            <div class="overview-panel-title">
-                                <i class="fas fa-clipboard-list"></i>
-                                After Project Review
-                            </div>
-                            <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['after']['summary']); ?></p>
-                            <?php if (!empty($overviewInsight['after']['reasons'])): ?>
-                                <div class="overview-tags">
-                                    <?php foreach (array_slice($overviewInsight['after']['reasons'], 0, 2) as $reason): ?>
-                                        <span class="overview-tag"><?php echo htmlspecialchars($reason); ?></span>
-                                    <?php endforeach; ?>
+                            <div class="overview-panel after">
+                                <div class="overview-panel-title">
+                                    <i class="fas fa-clipboard-list"></i>
+                                    After Project Review
                                 </div>
-                            <?php endif; ?>
-                            <div class="overview-note"><?php echo htmlspecialchars($overviewInsight['after']['note']); ?></div>
+                                <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['after']['summary']); ?></p>
+                                <?php if (!empty($overviewInsight['after']['reasons'])): ?>
+                                    <div class="overview-tags">
+                                        <?php foreach (array_slice($overviewInsight['after']['reasons'], 0, 2) as $reason): ?>
+                                            <span class="overview-tag"><?php echo htmlspecialchars($reason); ?></span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="overview-note"><?php echo htmlspecialchars($overviewInsight['after']['note']); ?></div>
+                            </div>
                         </div>
+                    <?php else: ?>
+                        <p class="overview-summary">Insight details are not available yet for this project.</p>
+                    <?php endif; ?>
+
+                    <div class="overview-footer">
+                        <a class="toolbar-button primary" href="<?php echo htmlspecialchars($projectStatsUrl); ?>">
+                            <i class="fas fa-chart-bar"></i>
+                            View Overall Statistics
+                        </a>
+                        <button
+                            type="button"
+                            class="toolbar-button open-action-modal"
+                            data-project-id="<?php echo $projectId; ?>"
+                            data-project-name="<?php echo htmlspecialchars($project['name']); ?>"
+                            data-scenario=""
+                            data-label=""
+                            data-default-value=""
+                            data-min=""
+                            data-max=""
+                            data-unit=""
+                        >
+                            <i class="fas fa-bolt"></i>
+                            Actions
+                        </button>
                     </div>
-                <?php else: ?>
-                    <p class="overview-summary">Insight details are not available yet for this project.</p>
-                <?php endif; ?>
-
-                <div class="overview-footer">
-                    <a class="toolbar-button primary" href="<?php echo htmlspecialchars($projectStatsUrl); ?>">
-                        <i class="fas fa-chart-bar"></i>
-                        View Overall Statistics
-                    </a>
-                    <button
-                        type="button"
-                        class="toolbar-button open-action-modal"
-                        data-project-id="<?php echo $projectId; ?>"
-                        data-project-name="<?php echo htmlspecialchars($project['name']); ?>"
-                        data-scenario=""
-                        data-label=""
-                        data-default-value=""
-                        data-min=""
-                        data-max=""
-                        data-unit=""
-                    >
-                        <i class="fas fa-bolt"></i>
-                        Actions
-                    </button>
                 </div>
-            </div>
+            </details>
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
@@ -2159,6 +2387,13 @@ body,
 const radarData = <?php echo json_encode($radarChart, JSON_UNESCAPED_UNICODE); ?>;
 const strategyData = <?php echo json_encode($comparisonChart, JSON_UNESCAPED_UNICODE); ?>;
 const actionCatalog = <?php echo json_encode($actionCatalog, JSON_UNESCAPED_UNICODE); ?>;
+const insightDarkMode =
+    document.documentElement.getAttribute('data-theme') === 'dark' ||
+    document.body.getAttribute('data-theme') === 'dark' ||
+    document.body.classList.contains('dark-mode');
+const insightChartTextColor = insightDarkMode ? '#9db6cf' : '#666';
+const insightChartGridColor = insightDarkMode ? 'rgba(157, 182, 207, 0.18)' : 'rgba(0, 0, 0, 0.08)';
+const insightStrategyGridColor = insightDarkMode ? insightChartGridColor : 'rgba(0, 0, 0, 0.06)';
 
 const actionModalEl = document.getElementById('projectActionModal');
 const actionScenarioEl = document.getElementById('actionScenario');
@@ -2276,6 +2511,20 @@ if (overviewSortEl) {
     overviewSortEl.addEventListener('change', applyOverviewFilters);
 }
 
+document.querySelectorAll('.overview-project-card').forEach((card) => {
+    card.addEventListener('toggle', () => {
+        if (!card.open) {
+            return;
+        }
+
+        document.querySelectorAll('.overview-project-card[open]').forEach((otherCard) => {
+            if (otherCard !== card) {
+                otherCard.open = false;
+            }
+        });
+    });
+});
+
 applyOverviewFilters();
 
 const radarChartEl = document.getElementById('decisionRadarChart');
@@ -2310,19 +2559,26 @@ if (radarChartEl) {
                     max: 100,
                     ticks: {
                         stepSize: 20,
-                        backdropColor: 'transparent'
+                        backdropColor: 'transparent',
+                        color: insightChartTextColor
+                    },
+                    pointLabels: {
+                        color: insightChartTextColor
                     },
                     grid: {
-                        color: 'rgba(0, 0, 0, 0.08)'
+                        color: insightChartGridColor
                     },
                     angleLines: {
-                        color: 'rgba(0, 0, 0, 0.08)'
+                        color: insightChartGridColor
                     }
                 }
             },
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: {
+                        color: insightChartTextColor
+                    }
                 }
             }
         }
@@ -2355,18 +2611,27 @@ if (strategyChartEl) {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: {
+                        color: insightChartTextColor
+                    }
                 }
             },
             scales: {
                 y: {
                     beginAtZero: true,
                     max: 100,
+                    ticks: {
+                        color: insightChartTextColor
+                    },
                     grid: {
-                        color: 'rgba(0, 0, 0, 0.06)'
+                        color: insightStrategyGridColor
                     }
                 },
                 x: {
+                    ticks: {
+                        color: insightChartTextColor
+                    },
                     grid: {
                         display: false
                     }

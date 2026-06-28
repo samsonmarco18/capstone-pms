@@ -503,6 +503,110 @@ include '../../includes/navbar.php';
         gap: 0.55rem;
     }
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .detail-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .action-btn-secondary {
+    background: #071321 !important;
+    border-color: rgba(138, 210, 255, 0.12) !important;
+    color: #d8e6f3 !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-details,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-actions textarea {
+    background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .detail-card .value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .action-btn-secondary {
+    color: #d8e6f3 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .queue-count,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .detail-card .label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-label.text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-error {
+    color: #90aeca !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-item:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-item[open],
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-item.is-selected {
+    background: rgba(31, 99, 146, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-toggle {
+    background: rgba(31, 99, 146, 0.16);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .status-pending {
+    background: rgba(29, 78, 216, 0.18);
+    color: #8fc1ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .status-failed {
+    background: rgba(185, 28, 28, 0.18);
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .status-sent {
+    background: rgba(21, 128, 61, 0.18);
+    color: #94f1c6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .status-closed {
+    background: rgba(75, 85, 99, 0.22);
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-banner {
+    background: rgba(127, 29, 29, 0.34);
+    border-color: rgba(248, 113, 113, 0.18);
+    color: #ffd0d0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-banner i {
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-actions textarea,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-actions textarea:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
+    background: rgba(10, 24, 38, 0.98);
+    border-color: rgba(138, 210, 255, 0.12);
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .action-btn-secondary:hover:not(:disabled) {
+    background: rgba(31, 99, 146, 0.14);
+    border-color: #1f6392;
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .request-divider {
+    background: rgba(138, 210, 255, 0.12);
+}
 </style>
 
 <div class="container-fluid px-4 py-4">

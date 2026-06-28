@@ -103,6 +103,27 @@ include '../../includes/navbar.php';
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
     --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.02);
     --shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.05), 0 10px 10px -5px rgba(0,0,0,0.01);
+    --tech-surface: #ffffff;
+    --tech-surface-alt: #f8fbff;
+    --tech-border: var(--gray-200);
+    --tech-text: var(--gray-900);
+    --tech-muted: var(--gray-600);
+    --tech-shadow: var(--shadow-sm);
+    --tech-shadow-hover: var(--shadow-xl);
+    --tech-panel-gradient: linear-gradient(135deg, var(--gray-50) 0%, #ffffff 100%);
+    --tech-panel-tint: rgba(31, 99, 146, 0.1);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) {
+    --tech-surface: rgba(8, 20, 33, 0.94);
+    --tech-surface-alt: rgba(10, 24, 38, 0.98);
+    --tech-border: rgba(138, 210, 255, 0.12);
+    --tech-text: #d8e6f3;
+    --tech-muted: #90aeca;
+    --tech-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+    --tech-shadow-hover: 0 18px 38px rgba(0, 0, 0, 0.42);
+    --tech-panel-gradient: linear-gradient(180deg, rgba(10, 24, 38, 0.98) 0%, rgba(7, 16, 27, 0.98) 100%);
+    --tech-panel-tint: rgba(31, 99, 146, 0.16);
 }
 
 /* Page Header */
@@ -185,13 +206,13 @@ include '../../includes/navbar.php';
 }
 
 .stat-card-mini {
-    background: white;
+    background: var(--tech-surface);
     border-radius: 16px;
     padding: 1rem 1.5rem;
     flex: 1;
     min-width: 150px;
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--gray-200);
+    box-shadow: var(--tech-shadow);
+    border: 1px solid var(--tech-border);
     transition: all 0.2s ease;
 }
 
@@ -204,7 +225,7 @@ include '../../includes/navbar.php';
     font-size: 0.75rem;
     text-transform: uppercase;
     font-weight: 600;
-    color: var(--gray-600);
+    color: var(--tech-muted);
     letter-spacing: 0.5px;
 }
 
@@ -223,18 +244,18 @@ include '../../includes/navbar.php';
 }
 
 .tech-card-modern {
-    background: white;
+    background: var(--tech-surface);
     border-radius: 20px;
     overflow: hidden;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--gray-200);
+    box-shadow: var(--tech-shadow);
+    border: 1px solid var(--tech-border);
     position: relative;
 }
 
 .tech-card-modern:hover {
     transform: translateY(-4px);
-    box-shadow: var(--shadow-xl);
+    box-shadow: var(--tech-shadow-hover);
     border-color: var(--theme-primary-light);
 }
 
@@ -306,26 +327,27 @@ include '../../includes/navbar.php';
 .tech-info h4 {
     font-size: 1.1rem;
     font-weight: 600;
-    color: var(--gray-900);
+    color: var(--tech-text);
     margin-bottom: 0.25rem;
 }
 
 .tech-info .category {
     font-size: 0.75rem;
-    color: var(--gray-600);
+    color: var(--tech-muted);
     display: inline-block;
     padding: 0.2rem 0.6rem;
-    background: var(--gray-100);
+    background: var(--tech-surface-alt);
     border-radius: 20px;
 }
 
 /* Pricing Section */
 .pricing-section {
     padding: 1rem 1.5rem;
-    background: linear-gradient(135deg, var(--gray-50) 0%, white 100%);
+    background: var(--tech-panel-gradient);
     margin: 1rem 1.5rem;
     border-radius: 16px;
     text-align: center;
+    border: 1px solid var(--tech-border);
 }
 
 .price-amount {
@@ -337,7 +359,7 @@ include '../../includes/navbar.php';
 
 .price-period {
     font-size: 0.8rem;
-    color: var(--gray-600);
+    color: var(--tech-muted);
 }
 
 /* Meta Info */
@@ -351,7 +373,7 @@ include '../../includes/navbar.php';
     align-items: center;
     justify-content: space-between;
     padding: 0.5rem 0;
-    border-bottom: 1px dashed var(--gray-200);
+    border-bottom: 1px dashed var(--tech-border);
 }
 
 .meta-item:last-child {
@@ -360,13 +382,13 @@ include '../../includes/navbar.php';
 
 .meta-label {
     font-size: 0.75rem;
-    color: var(--gray-600);
+    color: var(--tech-muted);
 }
 
 .meta-value {
     font-size: 0.85rem;
     font-weight: 500;
-    color: var(--gray-900);
+    color: var(--tech-text);
 }
 
 .expiry-warning {
@@ -451,19 +473,20 @@ include '../../includes/navbar.php';
 .empty-state-modern {
     text-align: center;
     padding: 4rem 2rem;
-    background: white;
+    background: var(--tech-surface);
     border-radius: 24px;
-    border: 1px solid var(--gray-200);
+    border: 1px solid var(--tech-border);
+    box-shadow: var(--tech-shadow);
 }
 
 .empty-state-modern i {
     font-size: 4rem;
-    color: var(--gray-300);
+    color: var(--tech-muted);
     margin-bottom: 1rem;
 }
 
 .empty-state-modern h4 {
-    color: var(--gray-900);
+    color: var(--tech-text);
     margin-bottom: 0.5rem;
 }
 
@@ -491,7 +514,201 @@ include '../../includes/navbar.php';
 
 .modal-modern .modal-footer {
     padding: 1rem 2rem 2rem;
-    border-top: 1px solid var(--gray-200);
+    border-top: 1px solid var(--tech-border);
+}
+
+.modal-modern .modal-content {
+    background: var(--tech-surface);
+    color: var(--tech-text);
+    box-shadow: var(--tech-shadow-hover);
+}
+
+.modal-modern .modal-body,
+.modal-modern .modal-footer {
+    background: var(--tech-surface);
+}
+
+.modal-modern .form-label,
+.modal-modern .text-muted {
+    color: var(--tech-muted) !important;
+}
+
+.modal-modern .form-control,
+.modal-modern .form-select {
+    background: var(--tech-surface-alt);
+    border-color: var(--tech-border);
+    color: var(--tech-text);
+}
+
+.modal-modern .form-control:focus,
+.modal-modern .form-select:focus {
+    background: var(--tech-surface-alt);
+    border-color: var(--theme-primary);
+    color: var(--tech-text);
+    box-shadow: 0 0 0 0.2rem rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-mini,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
+    background: var(--tech-surface);
+    border-color: var(--tech-border);
+    box-shadow: var(--tech-shadow);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-card-modern:hover {
+    box-shadow: var(--tech-shadow-hover);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-mini .stat-number,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .price-amount {
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-info h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .meta-value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
+    color: var(--tech-text) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-mini .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-info .category,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .price-period,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .meta-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expiry-warning,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .text-muted {
+    color: var(--tech-muted) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-info .category {
+    background: var(--tech-surface-alt);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pricing-section {
+    background: linear-gradient(180deg, rgba(11, 28, 44, 0.98) 0%, rgba(8, 20, 33, 0.98) 100%);
+    border-color: var(--tech-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-actions-modern .btn-outline-modern {
+    border-color: rgba(143, 211, 255, 0.4);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-actions-modern .btn-outline-modern:hover {
+    background: rgba(31, 99, 146, 0.2);
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-danger-modern {
+    border-color: rgba(239, 68, 68, 0.55);
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-danger-modern:hover {
+    background: rgba(239, 68, 68, 0.9);
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-primary-modern {
+    box-shadow: 0 10px 22px rgba(31, 99, 146, 0.26);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header {
+    background: linear-gradient(135deg, #0f4a6e 0%, #0a3a55 100%);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer {
+    border-top-color: var(--tech-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control::placeholder {
+    color: rgba(144, 174, 202, 0.75);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .btn.btn-light {
+    background: rgba(144, 174, 202, 0.12);
+    border-color: rgba(144, 174, 202, 0.18);
+    color: var(--tech-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .btn.btn-light:hover {
+    background: rgba(144, 174, 202, 0.18);
+}
+
+.delete-confirm-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1rem;
+    border-radius: 16px;
+    background: rgba(220, 38, 38, 0.06);
+    border: 1px solid rgba(220, 38, 38, 0.12);
+    color: var(--tech-text);
+}
+
+.delete-confirm-note i {
+    color: #dc2626;
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+}
+
+.btn-delete-cancel {
+    background: var(--tech-surface-alt);
+    border: 1px solid var(--tech-border);
+    color: var(--tech-text);
+    border-radius: 12px;
+    padding: 0.65rem 1.15rem;
+    font-weight: 600;
+}
+
+.btn-delete-cancel:hover {
+    background: var(--tech-panel-tint);
+    color: var(--tech-text);
+}
+
+.btn-delete-confirm {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    border: 1px solid #dc2626;
+    color: #fff;
+    border-radius: 12px;
+    padding: 0.65rem 1.15rem;
+    font-weight: 600;
+    box-shadow: 0 10px 22px rgba(220, 38, 38, 0.18);
+}
+
+.btn-delete-confirm:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-note {
+    background: rgba(220, 38, 38, 0.10);
+    border-color: rgba(220, 38, 38, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-cancel {
+    background: var(--tech-surface-alt);
+    border-color: var(--tech-border);
+    color: var(--tech-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-cancel:hover {
+    background: rgba(144, 174, 202, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .status-text {
+    color: #cfe4f4;
 }
 
 /* Responsive */
@@ -635,7 +852,13 @@ include '../../includes/navbar.php';
                     <button class="btn-modern btn-outline-modern" onclick="editTechnology(<?php echo htmlspecialchars(json_encode($tech)); ?>)">
                         <i class="fas fa-edit me-1"></i> Edit
                     </button>
-                    <button class="btn-modern btn-danger-modern" onclick="deleteTechnology(<?php echo $tech['id']; ?>, '<?php echo htmlspecialchars($tech['name']); ?>')">
+                    <button
+                        type="button"
+                        class="btn-modern btn-danger-modern"
+                        data-tech-id="<?php echo (int) $tech['id']; ?>"
+                        data-tech-name="<?php echo htmlspecialchars($tech['name'], ENT_QUOTES); ?>"
+                        onclick="openDeleteTechnologyModal(this)"
+                    >
                         <i class="fas fa-trash-alt me-1"></i>
                     </button>
                 </div>
@@ -660,6 +883,39 @@ include '../../includes/navbar.php';
             </button>
         </div>
     <?php endif; ?>
+</div>
+
+<!-- Delete Technology Modal -->
+<div class="modal fade modal-modern" id="deleteTechnologyModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-trash-alt me-2"></i> Delete Technology
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" id="deleteTechnologyForm" data-app-loading data-loading-title="Deleting technology" data-loading-text="Please wait while the technology item is removed.">
+                <input type="hidden" name="delete_technology" value="1">
+                <input type="hidden" name="id" id="delete_technology_id">
+                <div class="modal-body">
+                    <div class="delete-confirm-note mb-0">
+                        <i class="fas fa-triangle-exclamation fa-lg"></i>
+                        <div>
+                            <div class="fw-semibold mb-1" id="deleteTechnologyName">Selected technology will appear here.</div>
+                            <div class="small text-muted">This action cannot be undone and the technology entry will be removed permanently.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-delete-confirm">
+                        <i class="fas fa-trash-alt me-1"></i> Yes, delete it
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 
 <!-- Renew Technology Modal -->
@@ -719,7 +975,7 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Adding technology" data-loading-text="Please wait while the technology item is saved.">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Technology Name</label>
@@ -766,7 +1022,7 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Updating technology" data-loading-text="Please wait while the technology item is updated.">
                 <input type="hidden" name="id" id="edit_id">
                 <div class="modal-body">
                     <div class="mb-3">
@@ -815,17 +1071,14 @@ function editTechnology(tech) {
     new bootstrap.Modal(document.getElementById('editTechnologyModal')).show();
 }
 
-function deleteTechnology(id, name) {
-    if (confirm('Are you sure you want to delete ' + name + '? This action cannot be undone.')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.innerHTML = `
-            <input type="hidden" name="delete_technology" value="1">
-            <input type="hidden" name="id" value="${id}">
-        `;
-        document.body.appendChild(form);
-        form.submit();
-    }
+function openDeleteTechnologyModal(button) {
+    const techId = button.getAttribute('data-tech-id') || '';
+    const techName = button.getAttribute('data-tech-name') || 'this technology';
+
+    document.getElementById('delete_technology_id').value = techId;
+    document.getElementById('deleteTechnologyName').textContent = `Technology: ${techName}`;
+
+    new bootstrap.Modal(document.getElementById('deleteTechnologyModal')).show();
 }
 
 function openRenewTechnologyModal(tech) {

@@ -50,7 +50,7 @@ $conn = getConnection();
 workflowEnsureSchema($conn);
 
 $taskStmt = $conn->prepare(
-    'SELECT t.id, t.title, t.status, t.assigned_to, t.assigned_by, p.name AS project_name, p.sul_id
+    'SELECT t.id, t.title, t.status, t.project_id, t.assigned_to, t.assigned_by, p.name AS project_name, p.sul_id
      FROM tasks t
      LEFT JOIN projects p ON p.id = t.project_id
      WHERE t.id = ?
@@ -165,6 +165,79 @@ if ($isPullRequestSubmission) {
         BASE_URL . 'modules/sul/task-allocation.php?task_id=' . $taskId,
         $taskId
     );
+}
+
+$isReleaseMovement = !$isPullRequestSubmission && (in_array($gitAction, ['merged', 'deployed'], true) || $status === 'merged');
+if ($isReleaseMovement) {
+    $currentStatus = (string) ($task['status'] ?? '');
+    $movementLabel = $gitAction === 'deployed' ? 'Deployment Update' : 'Merge Update';
+    $movementVerb = $gitAction === 'deployed' ? 'deployed' : 'merged';
+
+    $releaseStmt = $conn->prepare("
+        UPDATE tasks
+        SET status = 'completed',
+            merged_at = COALESCE(merged_at, NOW()),
+            release_notified_at = NOW(),
+            completed_at = COALESCE(completed_at, NOW())
+        WHERE id = ?
+    ");
+    if ($releaseStmt !== false) {
+        $releaseStmt->bind_param('i', $taskId);
+        $releaseStmt->execute();
+        $releaseStmt->close();
+    }
+
+    if ($currentStatus !== 'completed') {
+        workflowLogStatusChange((int) $user['id'], $taskId, $currentStatus, 'completed', 'git_' . $movementVerb, $notes);
+    }
+
+    workflowAddTaskComment(
+        $conn,
+        $taskId,
+        (int) $user['id'],
+        $movementLabel . ': ' . ($notes ?: ucfirst($movementVerb) . ' update recorded.')
+    );
+
+    workflowMaybeCompleteProject($conn, (int) ($task['project_id'] ?? 0));
+
+    workflowNotifyRoles(
+        $conn,
+        ['sales'],
+        $movementLabel . ': ' . ($task['title'] ?? 'Developer task'),
+        'A task was ' . $movementVerb . (!empty($task['project_name']) ? ' for ' . $task['project_name'] : '') . '. Sales can view the release status.',
+        BASE_URL . 'modules/sales/release-status.php?task_id=' . $taskId,
+        $taskId
+    );
+
+    $developerId = (int) ($task['assigned_to'] ?? 0);
+    if ($developerId > 0 && $developerId !== (int) $user['id']) {
+        workflowNotifyUser(
+            $developerId,
+            $movementLabel . ': ' . ($task['title'] ?? 'Developer task'),
+            'The task was ' . $movementVerb . (!empty($task['project_name']) ? ' for ' . $task['project_name'] : '') . '.',
+            BASE_URL . 'modules/developer/task.php?id=' . $taskId,
+            $taskId
+        );
+    }
+
+    $reviewerIds = array_unique(array_filter([
+        (int) ($task['assigned_by'] ?? 0),
+        (int) ($task['sul_id'] ?? 0),
+    ]));
+
+    foreach ($reviewerIds as $recipientId) {
+        if ($recipientId === (int) $user['id']) {
+            continue;
+        }
+
+        workflowNotifyUser(
+            $recipientId,
+            $movementLabel . ': ' . ($task['title'] ?? 'Developer task'),
+            'The task was ' . $movementVerb . (!empty($task['project_name']) ? ' for ' . $task['project_name'] : '') . '.',
+            BASE_URL . 'modules/sul/task-allocation.php?task_id=' . $taskId,
+            $taskId
+        );
+    }
 }
 
 logActivity(

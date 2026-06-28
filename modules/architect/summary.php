@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
+require_once '../../includes/workflow.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -79,18 +80,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $title = "New Architecture Plan Ready for Review";
     $message = "Project: " . $project['name'] . " is ready for SUL review and assignment";
     
-    $sulUsers = $conn->query("SELECT id FROM users WHERE role = 'sul'");
-    while($sul = $sulUsers->fetch_assoc()) {
-        createNotification(
-            (int) $sul['id'],
-            $title,
-            $message,
-            'project',
-            'projects',
-            (int) $projectId,
-            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId
-        );
-    }
+    workflowNotifyRoles(
+        $conn,
+        ['sul'],
+        $title,
+        $message,
+        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
+        $projectId,
+        'project',
+        'projects'
+    );
     
     logActivity($user['id'], 'submit_architecture', 'projects', $projectId);
     $_SESSION['success'] = "Architecture plan submitted to SUL successfully";
@@ -437,6 +436,47 @@ a.progress-step:hover {
     .progress-step .step-label { font-size: 0.6rem; }
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-table tr,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr.total-row {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-name {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-meta {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -499,7 +539,7 @@ a.progress-step:hover {
                     <table class="info-table">
                         <tr><td>Project Name:</td><td class="fw-semibold"><?php echo htmlspecialchars($project['name']); ?></td></tr>
                         <tr><td>Client:</td><td><?php echo htmlspecialchars($project['client_name']); ?></td></tr>
-                        <tr><td>Timeline:</td><td><?php echo date('M d, Y', strtotime($project['timeline_start'])); ?> - <?php echo date('M d, Y', strtotime($project['timeline_end'])); ?></td></tr>
+                        <tr><td>Timeline:</td><td><?php echo !empty($project['timeline_start']) ? date('M d, Y', strtotime((string) $project['timeline_start'])) : 'No start date'; ?> - <?php echo !empty($project['timeline_end']) ? date('M d, Y', strtotime((string) $project['timeline_end'])) : 'No end date'; ?></td></tr>
                         <tr><td>Status:</td><td><span class="badge-status pending">Ready for SUL Review</span></td></tr>
                         <?php if ($hasSalesBudget && !empty($project['sales_budget'])): ?>
                         <tr><td>Budget:</td><td><?php echo number_format((float) $project['sales_budget'], 2); ?></td></tr>
@@ -573,7 +613,7 @@ a.progress-step:hover {
                                     <i class="fas fa-file-pdf text-danger me-2"></i>
                                     <strong><?php echo str_replace('_', ' ', ucfirst($doc['document_type'])); ?></strong>
                                     <br><small class="text-muted"><?php echo htmlspecialchars($doc['description']); ?></small>
-                                    <div class="mt-1"><small class="text-muted"><i class="far fa-clock me-1"></i> Uploaded: <?php echo date('M d, Y H:i', strtotime($doc['created_at'])); ?></small></div>
+                                    <div class="mt-1"><small class="text-muted"><i class="far fa-clock me-1"></i> Uploaded: <?php echo !empty($doc['created_at']) ? date('M d, Y H:i', strtotime((string) $doc['created_at'])) : 'No date'; ?></small></div>
                                 </div>
                                 <a href="<?php echo BASE_URL; ?>/<?php echo $doc['file_path']; ?>" class="btn-review" target="_blank"><i class="fas fa-eye"></i> View</a>
                             </div>

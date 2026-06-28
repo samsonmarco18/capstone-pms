@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-progress.php';
+require_once '../../includes/workflow.php';
 requireRole('sales');
 
 $conn = getConnection();
@@ -8,6 +9,29 @@ $user = getCurrentUser();
 $hasSalesBudget = dbColumnExists($conn, 'projects', 'sales_budget');
 $hasTimelineStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasTimelineEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
+
+function salesClientsFetchCount($conn, string $sql): int
+{
+    $result = $conn->query($sql);
+    if (!is_object($result) || !method_exists($result, 'fetch_assoc')) {
+        return 0;
+    }
+
+    $row = $result->fetch_assoc() ?: [];
+    return (int) ($row['count'] ?? 0);
+}
+
+function salesClientsQuery($conn, string $sql)
+{
+    $result = $conn->query($sql);
+    return (is_object($result) && method_exists($result, 'fetch_assoc')) ? $result : null;
+}
+
+function salesClientsDbError($conn): string
+{
+    $error = trim((string) ($conn->error ?? ''));
+    return $error !== '' ? ' Database error: ' . $error : '';
+}
 
 if (!$hasTimelineStartTime) {
     $conn->query(DB_DRIVER === 'pgsql'
@@ -63,7 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $email = trim((string) ($_POST['email'] ?? ''));
         $phone = trim((string) ($_POST['phone'] ?? ''));
         $address = trim((string) ($_POST['address'] ?? ''));
-        $deadline = $_POST['deadline'] ?: null;
+        $deadline = trim((string) ($_POST['deadline'] ?? ''));
+        $deadline = $deadline !== '' ? $deadline : null;
 
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -101,16 +126,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             try {
                 $stmt = $conn->prepare("INSERT INTO clients (name, contact_person, email, phone, address, deadline, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                if ($stmt === false) {
+                    throw new RuntimeException('Unable to prepare client insert.');
+                }
                 $stmt->bind_param("ssssssi", $name, $contactPerson, $email, $phone, $address, $deadline, $user['id']);
-                $stmt->execute();
+                if (!$stmt->execute()) {
+                    throw new RuntimeException('Unable to insert client.');
+                }
                 $clientId = $stmt->insert_id;
                 $stmt->close();
 
                 $clientFolderStmt = $conn->prepare(
                     "SELECT id FROM folders WHERE client_id = ? AND parent_id IS NULL AND folder_type = 'client' LIMIT 1"
                 );
+                if ($clientFolderStmt === false) {
+                    throw new RuntimeException('Unable to prepare client folder lookup.');
+                }
                 $clientFolderStmt->bind_param('i', $clientId);
-                $clientFolderStmt->execute();
+                if (!$clientFolderStmt->execute()) {
+                    throw new RuntimeException('Unable to load client folder.');
+                }
                 $clientFolderResult = $clientFolderStmt->get_result()->fetch_assoc();
                 $clientFolderId = $clientFolderResult['id'] ?? null;
                 $clientFolderStmt->close();
@@ -120,8 +155,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         "INSERT INTO folders (name, folder_type, client_id, parent_id, role, created_by)
                          VALUES (?, 'client', ?, NULL, NULL, ?)"
                     );
+                    if ($createClientFolderStmt === false) {
+                        throw new RuntimeException('Unable to prepare client folder creation.');
+                    }
                     $createClientFolderStmt->bind_param('sii', $name, $clientId, $user['id']);
-                    $createClientFolderStmt->execute();
+                    if (!$createClientFolderStmt->execute()) {
+                        throw new RuntimeException('Unable to create client folder.');
+                    }
                     $clientFolderId = $createClientFolderStmt->insert_id;
                     $createClientFolderStmt->close();
                 }
@@ -139,8 +179,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             INSERT INTO projects (
                                 client_id, name, description, status, timeline_start, timeline_end,
                                 meeting_notes, mom, requested_features, sales_budget{$timeColumns}, created_by, architect_id
-                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, NULLIF(?, ''){$timePlaceholders}, ?, NULL)
+                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, " . (DB_DRIVER === 'pgsql' ? "CAST(NULLIF(?, '') AS NUMERIC)" : "NULLIF(?, '')") . "{$timePlaceholders}, ?, NULL)
                         ");
+                        if ($projectStmt === false) {
+                            throw new RuntimeException('Unable to prepare project insert.' . salesClientsDbError($conn));
+                        }
                         $projectBudget = $salesBudget === null ? '' : number_format($salesBudget, 2, '.', '');
                         if ($hasTimelineStartTime && $hasTimelineEndTime) {
                             $projectStmt->bind_param(
@@ -186,6 +229,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 meeting_notes, mom, requested_features{$timeColumns}, created_by, architect_id
                             ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?{$timePlaceholders}, ?, NULL)
                         ");
+                        if ($projectStmt === false) {
+                            throw new RuntimeException('Unable to prepare project insert.' . salesClientsDbError($conn));
+                        }
                         if ($hasTimelineStartTime && $hasTimelineEndTime) {
                             $projectStmt->bind_param(
                                 'isssssssssi',
@@ -216,9 +262,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             );
                         }
                     }
-                    $projectStmt->execute();
-                    $projectId = $projectStmt->insert_id;
-                    $projectStmt->close();
+                        if (!$projectStmt->execute()) {
+                            throw new RuntimeException('Unable to create project requirements.' . salesClientsDbError($conn));
+                        }
+                        $projectId = $projectStmt->insert_id;
+                        $projectStmt->close();
 
                     // Create shared project folder under client folder
                     $sharedFolderName = "Shared - " . $projectName;
@@ -226,26 +274,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         "INSERT INTO folders (name, folder_type, client_id, project_id, parent_id, role, created_by) 
                          VALUES (?, 'project', ?, ?, ?, NULL, ?)"
                     );
+                    if ($sharedFolderStmt === false) {
+                        throw new RuntimeException('Unable to prepare shared folder creation.' . salesClientsDbError($conn));
+                    }
                     $sharedFolderStmt->bind_param('siiii', $sharedFolderName, $clientId, $projectId, $clientFolderId, $user['id']);
-                    $sharedFolderStmt->execute();
+                    if (!$sharedFolderStmt->execute()) {
+                        throw new RuntimeException('Unable to create shared project folder.' . salesClientsDbError($conn));
+                    }
                     $sharedFolderId = $sharedFolderStmt->insert_id;
                     $sharedFolderStmt->close();
 
-                    $architects = $conn->query("SELECT id FROM users WHERE role = 'architect' AND status = 'active'");
-                    while ($architect = $architects->fetch_assoc()) {
-                        createNotification(
-                            (int) $architect['id'],
-                            'New Project Requirements Ready',
-                            'Sales submitted a new project for architectural review: ' . $projectName,
-                            'project',
-                            'projects',
-                            $projectId,
-                            BASE_URL . 'modules/architect/project-review.php?id=' . $projectId
-                        );
-                    }
                 }
 
                 $conn->commit();
+                if ($projectId) {
+                    workflowNotifyRoles(
+                        $conn,
+                        ['architect'],
+                        'New Project Requirements Ready',
+                        'Sales submitted a new project for architectural review: ' . $projectName,
+                        BASE_URL . 'modules/architect/project-review.php?id=' . $projectId,
+                        (int) $projectId,
+                        'project',
+                        'projects'
+                    );
+                }
                 logActivity($user['id'], 'add_client', 'clients', $clientId, null, $_POST);
                 if ($projectId) {
                     logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);
@@ -255,7 +308,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
             } catch (Throwable $e) {
                 $conn->rollback();
-                $_SESSION['error'] = 'Unable to save client and requirements. Please try again.';
+                error_log('Sales client save error: ' . $e->getMessage());
+                $_SESSION['error'] = 'Unable to save client and requirements. ' . $e->getMessage();
             }
         }
     } elseif (isset($_POST['update_client'])) {
@@ -268,7 +322,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $status = $_POST['status'];
         $deadline = $_POST['deadline'];
         
-        $oldData = $conn->query("SELECT * FROM clients WHERE id = $id")->fetch_assoc();
+        $oldResult = salesClientsQuery($conn, "SELECT * FROM clients WHERE id = $id");
+        $oldData = $oldResult ? $oldResult->fetch_assoc() : null;
         
         $stmt = $conn->prepare("UPDATE clients SET name=?, contact_person=?, email=?, phone=?, address=?, status=?, deadline=? WHERE id=?");
         $stmt->bind_param("sssssssi", $name, $contact_person, $email, $phone, $address, $status, $deadline, $id);
@@ -279,7 +334,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     } elseif (isset($_POST['delete_client'])) {
         $id = $_POST['id'];
-        $oldData = $conn->query("SELECT * FROM clients WHERE id = $id")->fetch_assoc();
+        $oldResult = salesClientsQuery($conn, "SELECT * FROM clients WHERE id = $id");
+        $oldData = $oldResult ? $oldResult->fetch_assoc() : null;
         
         $stmt = $conn->prepare("DELETE FROM clients WHERE id=?");
         $stmt->bind_param("i", $id);
@@ -325,12 +381,12 @@ if ($statusFilter) {
 }
 $query .= " ORDER BY c.created_at DESC";
 
-$clients = $conn->query($query);
+$clients = salesClientsQuery($conn, $query);
 
 // Get statistics
-$totalClients = $conn->query("SELECT COUNT(*) as count FROM clients")->fetch_assoc()['count'];
-$activeClients = $conn->query("SELECT COUNT(*) as count FROM clients WHERE status = 'active'")->fetch_assoc()['count'];
-$pendingClients = $conn->query("SELECT COUNT(*) as count FROM clients WHERE status = 'pending'")->fetch_assoc()['count'];
+$totalClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients");
+$activeClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients WHERE status = 'active'");
+$pendingClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients WHERE status = 'pending'");
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -489,6 +545,20 @@ include '../../includes/navbar.php';
     padding: 1rem 2rem 0;
     background: #ffffff;
     border-bottom: 1px solid var(--gray-200);
+}
+
+.client-detail-panel {
+    padding: 1rem;
+    border-radius: 1rem;
+    background: #f8fbff;
+    border: 1px solid rgba(18, 80, 127, 0.12);
+}
+
+.client-project-item {
+    background: #f8fbff;
+    border: 1px solid rgba(18, 80, 127, 0.12);
+    border-radius: 0.85rem;
+    padding: 0.85rem 1rem;
 }
 
 .client-tab-btn {
@@ -1322,6 +1392,270 @@ include '../../includes/navbar.php';
     color: white !important;
 }
 
+.delete-confirm-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1rem;
+    border-radius: 16px;
+    background: rgba(220, 38, 38, 0.06);
+    border: 1px solid rgba(220, 38, 38, 0.12);
+    color: var(--gray-900);
+}
+
+.delete-confirm-note i {
+    color: #dc2626;
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+}
+
+.btn-delete-cancel {
+    background: #f8fafc;
+    border: 1px solid var(--gray-200);
+    color: var(--gray-900);
+    border-radius: 12px;
+    padding: 0.65rem 1.15rem;
+    font-weight: 600;
+}
+
+.btn-delete-cancel:hover {
+    background: #eef2f7;
+    color: var(--gray-900);
+}
+
+.btn-delete-confirm {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    border: 1px solid #dc2626;
+    color: #fff;
+    border-radius: 12px;
+    padding: 0.65rem 1.15rem;
+    font-weight: 600;
+    box-shadow: 0 10px 22px rgba(220, 38, 38, 0.18);
+}
+
+.btn-delete-confirm:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+    color: #fff;
+}
+
+.modal-modern.delete-confirm-modal .modal-body {
+    padding: 1.25rem 1.5rem;
+}
+
+.modal-modern.delete-confirm-modal .modal-footer {
+    padding: 0 1.5rem 1.35rem;
+}
+
+.modal-modern.delete-confirm-modal .delete-confirm-note {
+    padding: 0.85rem 0.9rem;
+    border-radius: 14px;
+}
+
+.modal-modern.delete-confirm-modal .delete-confirm-note .fw-semibold {
+    font-size: 0.95rem;
+    line-height: 1.25;
+    word-break: break-word;
+}
+
+.modal-modern.delete-confirm-modal .delete-confirm-note .small {
+    line-height: 1.35;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .modal-content,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    border: 1px solid rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(31, 99, 146, 0.12));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tabs,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-drafts-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table tr:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .field-group,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__summary span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-summary span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.view,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.edit,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-detail-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-project-item {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .deadline-date,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-banner__text strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .section-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientContent,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #clientProjects {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-detail-panel strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-project-item strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tab-btn,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-email,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__subtitle,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__summary span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-banner__text,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-banner__text span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .mini-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .draft-status,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input label {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tabs,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .field-group,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-detail-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-project-item {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern textarea,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal textarea {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern textarea:focus {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.45);
+    color: #d7e4f2;
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input::placeholder,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern textarea::placeholder,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control::placeholder {
+    color: rgba(157, 182, 207, 0.65);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tab-btn.is-active,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-text,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-summary span {
+    color: var(--theme-primary) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress {
+    background: rgba(157, 182, 207, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .unsaved-close-panel {
+    background: rgba(217, 119, 6, 0.12);
+    border-color: rgba(217, 119, 6, 0.35);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .unsaved-close-panel__text,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .unsaved-close-panel__text strong {
+    color: #fbbf24;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-note {
+    background: rgba(220, 38, 38, 0.12);
+    border-color: rgba(220, 38, 38, 0.3);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-cancel {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-cancel:hover {
+    background: #0f2438;
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-modal .modal-header {
+    background: linear-gradient(135deg, #0b3654 0%, #0f5f94 100%);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-title {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-text {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-target {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-target i {
+    color: #66c8ff;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
@@ -1420,7 +1754,7 @@ include '../../includes/navbar.php';
                 Client Directory
             </h5>
             <div>
-                <span class="text-muted small">Showing <?php echo $clients->num_rows; ?> clients</span>
+                <span class="text-muted small">Showing <?php echo $clients ? $clients->num_rows : 0; ?> clients</span>
             </div>
         </div>
 
@@ -1469,7 +1803,7 @@ include '../../includes/navbar.php';
         
         <!-- Clients Table -->
         <div class="table-container">
-            <?php if($clients->num_rows > 0): ?>
+            <?php if($clients && $clients->num_rows > 0): ?>
             <table class="client-table">
                 <thead>
                     <tr>
@@ -1483,8 +1817,10 @@ include '../../includes/navbar.php';
                 <tbody>
     <?php while($client = $clients->fetch_assoc()): ?>
     <?php 
-    $daysLeft = $client['deadline'] ? ceil((strtotime($client['deadline']) - time()) / (60 * 60 * 24)) : null;
-    $deadlineClass = $daysLeft <= 7 ? 'urgent' : ($daysLeft <= 30 ? 'warning' : 'normal');
+    $clientDeadline = (string) ($client['deadline'] ?? '');
+    $clientDeadlineTimestamp = $clientDeadline !== '' ? strtotime($clientDeadline) : false;
+    $daysLeft = $clientDeadlineTimestamp !== false ? ceil(($clientDeadlineTimestamp - time()) / (60 * 60 * 24)) : null;
+    $deadlineClass = $daysLeft === null ? 'normal' : ($daysLeft <= 7 ? 'urgent' : ($daysLeft <= 30 ? 'warning' : 'normal'));
     $featureProgress = projectProgressPercent((int) ($client['total_features'] ?? 0), (int) ($client['merged_features'] ?? 0));
     ?>
     <tr>
@@ -1509,7 +1845,7 @@ include '../../includes/navbar.php';
         <td>
             <?php if($client['deadline']): ?>
             <div class="deadline-info">
-                <div class="deadline-date"><?php echo date('M d, Y', strtotime($client['deadline'])); ?></div>
+                <div class="deadline-date"><?php echo $clientDeadlineTimestamp !== false ? date('M d, Y', $clientDeadlineTimestamp) : 'No deadline'; ?></div>
                 <span class="deadline-days <?php echo $deadlineClass; ?>">
                     <?php echo $daysLeft; ?> days left
                 </span>
@@ -1526,7 +1862,7 @@ include '../../includes/navbar.php';
                 <button class="btn-icon edit" onclick="editClient(<?php echo htmlspecialchars(json_encode($client)); ?>)">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn-icon delete" onclick="deleteClient(<?php echo $client['id']; ?>, '<?php echo htmlspecialchars($client['name']); ?>')">
+                <button class="btn-icon delete" onclick="openDeleteClientModal(<?php echo (int) $client['id']; ?>, <?php echo htmlspecialchars(json_encode($client['name'])); ?>)">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
@@ -1560,7 +1896,7 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close add-client-close" aria-label="Close"></button>
             </div>
-            <form method="POST" id="addClientForm" novalidate>
+            <form method="POST" id="addClientForm" novalidate data-app-loading data-loading-title="Saving client" data-loading-text="Please wait while the client, project details, folders, and notifications are saved.">
                 <div class="modal-body">
                     <div class="add-client-stepper" aria-label="Add client progress">
                         <button type="button" class="stepper-item is-active" data-step-target="0" aria-current="step" disabled>
@@ -1709,7 +2045,7 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Updating client" data-loading-text="Please wait while the client details are updated.">
                 <input type="hidden" name="id" id="edit_id">
                 <div class="modal-body">
                     <div class="row">
@@ -1782,6 +2118,64 @@ include '../../includes/navbar.php';
     </div>
 </div>
 
+<!-- Delete Client Modal -->
+<div class="modal fade modal-modern delete-confirm-modal" id="deleteClientModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-building-circle-xmark me-2"></i> Delete Client
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="delete-confirm-note mb-0">
+                    <i class="fas fa-triangle-exclamation fa-lg"></i>
+                    <div>
+                        <div class="fw-semibold mb-1" id="deleteClientName">Selected client</div>
+                        <div class="small text-muted">This will remove the client and all related projects, tasks, and files. This action cannot be undone.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-delete-confirm" id="deleteClientConfirmBtn">
+                    <i class="fas fa-trash-alt me-1"></i> Yes, delete it
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Draft Modal -->
+<div class="modal fade modal-modern delete-confirm-modal" id="deleteDraftModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-circle-xmark me-2"></i> Delete Draft
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="delete-confirm-note mb-0">
+                    <i class="fas fa-triangle-exclamation fa-lg"></i>
+                    <div>
+                        <div class="fw-semibold mb-1" id="deleteDraftName">Untitled draft</div>
+                        <div class="small text-muted">This saved draft will be removed from this browser. This action cannot be undone.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-delete-confirm" id="deleteDraftConfirmBtn">
+                    <i class="fas fa-trash-alt me-1"></i> Yes, delete it
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 function applyFilters() {
     const search = document.getElementById('searchInput').value;
@@ -1822,7 +2216,7 @@ function viewClient(id) {
             let html = `
                 <div class="row g-4">
                     <div class="col-md-6">
-                        <div class="p-3 bg-light rounded-3">
+                        <div class="client-detail-panel">
                             <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-info-circle me-2"></i>Contact Information</h6>
                             <p><strong>Company Name:</strong> ${client.name}</p>
                             <p><strong>Contact Person:</strong> ${client.contact_person}</p>
@@ -1832,7 +2226,7 @@ function viewClient(id) {
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="p-3 bg-light rounded-3">
+                        <div class="client-detail-panel">
                             <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-chart-line me-2"></i>Project Status</h6>
                             <p><strong>Status:</strong> <span class="badge-status ${client.status}">${client.status}</span></p>
                             <p><strong>Progress:</strong> ${client.progress}%</p>
@@ -1864,7 +2258,7 @@ function viewClient(id) {
                         let projectsHtml = '<div class="list-group">';
                         projects.forEach(project => {
                             projectsHtml += `
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div class="client-project-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>${project.name}</strong><br>
                                         <small class="text-muted">Created: ${new Date(project.created_at).toLocaleDateString()}</small>
@@ -1893,17 +2287,75 @@ function viewClient(id) {
     });
 }
 
-function deleteClient(id, name) {
-    if (confirm(`WARNING: This will delete client "${name}" and ALL associated projects, tasks, and files. This action cannot be undone.\n\nAre you sure you want to proceed?`)) {
+let pendingDeleteClientId = null;
+const deleteClientModalElement = document.getElementById('deleteClientModal');
+const deleteClientConfirmBtn = document.getElementById('deleteClientConfirmBtn');
+const deleteClientName = document.getElementById('deleteClientName');
+let pendingDeleteDraftId = null;
+const deleteDraftModalElement = document.getElementById('deleteDraftModal');
+const deleteDraftConfirmBtn = document.getElementById('deleteDraftConfirmBtn');
+const deleteDraftName = document.getElementById('deleteDraftName');
+
+function openDeleteClientModal(id, name) {
+    pendingDeleteClientId = Number(id) || null;
+
+    if (deleteClientName) {
+        deleteClientName.textContent = name || 'Selected client';
+    }
+
+    new bootstrap.Modal(deleteClientModalElement).show();
+}
+
+function openDeleteDraftModal(draftId, draftLabel) {
+    pendingDeleteDraftId = String(draftId || '').trim();
+    if (!pendingDeleteDraftId) {
+        return;
+    }
+
+    if (deleteDraftName) {
+        deleteDraftName.textContent = draftLabel || 'Untitled draft';
+    }
+
+    new bootstrap.Modal(deleteDraftModalElement).show();
+}
+
+if (deleteClientConfirmBtn) {
+    deleteClientConfirmBtn.addEventListener('click', function () {
+        if (!pendingDeleteClientId) {
+            return;
+        }
+
+        if (window.appShowLoading) {
+            window.appShowLoading('Deleting client', 'Please wait while the client and related records are removed.');
+        }
+
         const form = document.createElement('form');
         form.method = 'POST';
         form.innerHTML = `
             <input type="hidden" name="delete_client" value="1">
-            <input type="hidden" name="id" value="${id}">
+            <input type="hidden" name="id" value="${pendingDeleteClientId}">
         `;
         document.body.appendChild(form);
         form.submit();
-    }
+    });
+}
+
+if (deleteDraftConfirmBtn) {
+    deleteDraftConfirmBtn.addEventListener('click', function () {
+        if (!pendingDeleteDraftId) {
+            return;
+        }
+
+        const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== pendingDeleteDraftId);
+        saveStoredDrafts(remainingDrafts);
+
+        if (activeDraftId === pendingDeleteDraftId) {
+            resetCurrentClientInput();
+        }
+
+        pendingDeleteDraftId = null;
+        updateDraftStatus(hasStoredDraft());
+    });
 }
 
 const addClientModalElement = document.getElementById('addClientModal');
@@ -2373,13 +2825,10 @@ if (addClientModalElement && addClientForm) {
                 return;
             }
 
-            if (action === 'delete' && confirm('Delete this saved draft?')) {
-                const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== draftId);
-                saveStoredDrafts(remainingDrafts);
-                if (activeDraftId === draftId) {
-                    resetCurrentClientInput();
-                }
-                updateDraftStatus(hasStoredDraft());
+            if (action === 'delete') {
+                const draft = getStoredDrafts().find((item) => item.id === draftId);
+                const draftLabel = draft?.data?.name || draft?.data?.project_name || 'Untitled draft';
+                openDeleteDraftModal(draftId, draftLabel);
             }
         });
     }

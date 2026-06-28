@@ -674,6 +674,114 @@ input:checked + .switch-slider:before {
         gap: 0.5rem;
     }
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .settings-nav-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .settings-card {
+    background: #071321 !important;
+    border-color: rgba(138, 210, 255, 0.12) !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32) !important;
+    color: #d8e6f3 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .settings-nav-card .nav-link,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .system-info-list,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
+    background: #071321 !important;
+    border-color: rgba(138, 210, 255, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .settings-nav-card .nav-link:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .settings-nav-card .nav-link.active,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .switch-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer {
+    background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .settings-nav-card .nav-link,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-text,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .switch-info small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .settings-status,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-content p {
+    color: #90aeca !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .switch-info label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
+    color: #d8e6f3 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select {
+    background: rgba(10, 24, 38, 0.98);
+    border-color: rgba(138, 210, 255, 0.12);
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-modern:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select-modern:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select:focus {
+    background: rgba(10, 24, 38, 0.98);
+    border-color: var(--theme-primary);
+    color: #d8e6f3;
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .settings-nav-card .nav-link.active {
+    box-shadow: inset 0 0 0 1px rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .settings-status.ready {
+    background: rgba(21, 128, 61, 0.18);
+    color: #94f1c6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .settings-status.incomplete {
+    background: rgba(220, 38, 38, 0.15);
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .switch-slider {
+    background-color: rgba(144, 174, 202, 0.32);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .switch-slider:before {
+    background-color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .system-info-list {
+    border: 1px solid rgba(138, 210, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-modern {
+    background: linear-gradient(135deg, rgba(127, 29, 29, 0.34) 0%, rgba(69, 10, 10, 0.34) 100%);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-modern i {
+    color: #ff9ca0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .alert-content strong {
+    color: #ffd0d0;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">

@@ -6,30 +6,30 @@ $conn = getConnection();
 $user = getCurrentUser();
 
 // Ensure sales approval columns exist
-$hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+$hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 if (!$hasSalesApproval) {
     try {
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved TINYINT(1) DEFAULT 0");
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved " . (DB_DRIVER === 'pgsql' ? "SMALLINT" : "TINYINT(1)") . " DEFAULT 0");
         $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_by INT NULL");
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_at DATETIME NULL");
-        $hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_at " . (DB_DRIVER === 'pgsql' ? "TIMESTAMP" : "DATETIME") . " NULL");
+        $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
     } catch (Throwable $e) {
         // Continue without sales approval columns
     }
 }
 
-$hasSalesChoice = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_estimate_choice'")->num_rows > 0;
+$hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_choice');
 if (!$hasSalesChoice) {
     try {
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_estimate_choice ENUM('min','likely','max') DEFAULT NULL");
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_estimate_choice " . (DB_DRIVER === 'pgsql' ? "TEXT" : "ENUM('min','likely','max')") . " DEFAULT NULL");
         $conn->query("ALTER TABLE tasks ADD COLUMN sales_estimate_days INT DEFAULT NULL");
-        $hasSalesChoice = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_estimate_choice'")->num_rows > 0;
+        $hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_choice');
     } catch (Throwable $e) {
         // Continue without sales choice columns
     }
 }
 
-$hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
+$hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 
 // Handle approval actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -866,6 +866,103 @@ include '../../includes/navbar.php';
     display: none;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-group,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-task-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
+    border: 1px solid rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-toggle:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-gantt-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-meta-list span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expectation-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-pert-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-legend-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-choice-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-choice-tone,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-choice-status,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-pill,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-chevron {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-head h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-gantt-head h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-feature-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-panel-head h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-choice-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-head p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-pill,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-gantt-head p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-meta-list span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expectation-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-helper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-pert-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-legend-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .choice-group-head p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-choice-caption,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .choice-range-note {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-approval-kicker,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-feature-eyebrow {
+    background: rgba(31, 99, 146, 0.14);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-actions,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-choice-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-bar-track,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-view {
+    background: rgba(157, 182, 207, 0.18);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern textarea {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern textarea:focus {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.45);
+    color: #d7e4f2;
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
 @media (max-width: 991.98px) {
     .approval-actions {
         justify-content: flex-end;
@@ -1097,7 +1194,7 @@ include '../../includes/navbar.php';
                 <h5 class="modal-title"><i class="fas fa-times-circle me-2"></i>Reject Estimation</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Rejecting estimation" data-loading-text="Please wait while the estimation is returned to the expert.">
                 <div class="modal-body">
                     <input type="hidden" name="task_id" id="rejectTaskId">
                     <div class="mb-3">
@@ -1397,7 +1494,7 @@ function syncSalesSelection(taskId) {
     });
 }
 
-function approveEstimation(taskId) {
+async function approveEstimation(taskId) {
     const choiceInput = document.querySelector(`input[name="estimate_choice_${taskId}"]:checked`);
     const estimateChoice = choiceInput?.value || '';
     const daysValue = parseInt(choiceInput?.dataset?.days || '0', 10);
@@ -1405,7 +1502,18 @@ function approveEstimation(taskId) {
         alert('Please choose Minimum, Most Likely, or Maximum before approving.');
         return;
     }
-    if (!confirm('Approve this estimation and send to SUL?')) return;
+    const confirmed = await appConfirm({
+        title: 'Approve Estimation',
+        subject: 'Send this estimation to SUL?',
+        message: 'The selected timeline will be saved and the task will move to SUL review.',
+        icon: 'fas fa-circle-check fa-lg',
+        confirmIcon: 'fas fa-check',
+        confirmText: 'Approve'
+    });
+    if (!confirmed) return;
+    if (window.appShowLoading) {
+        window.appShowLoading('Approving estimation', 'Please wait while the task is sent to SUL.');
+    }
     const form = document.createElement('form');
     form.method = 'POST';
     form.innerHTML = `<input type="hidden" name="approve_estimation" value="1"><input type="hidden" name="task_id" value="${taskId}"><input type="hidden" name="estimate_choice" value="${estimateChoice}"><input type="hidden" name="estimate_days" value="${daysValue}">`;

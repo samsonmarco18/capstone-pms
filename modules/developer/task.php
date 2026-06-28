@@ -27,7 +27,7 @@ $taskBaseQuery = "
 ";
 
 // Check if project_phases column exists
-$hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
+$hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 
 // Get tasks assigned to this developer
 $todoTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'todo' ORDER BY t.deadline ASC");
@@ -758,6 +758,113 @@ include '../../includes/navbar.php';
 .phase-design { background: #06b6d4; }
 .phase-implementation { background: #10b981; }
 .phase-followup { background: #f59e0b; }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-column,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-update-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-modal .modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-hero,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-col,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-month {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-action {
+    background: rgba(31, 99, 146, 0.14) !important;
+    border-color: rgba(31, 99, 146, 0.28) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-panel h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact-value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-latest-value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-project-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-col {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-mini p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-desc,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-latest-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-project-dates,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-month,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-project-detail,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-grid,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-col,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-quarters,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-quarter,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-month {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel .form-select {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel .form-control::placeholder {
+    color: #7f9bb6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-quarter {
+    background: rgba(31, 99, 146, 0.18) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-time-track {
+    background: repeating-linear-gradient(
+        to right,
+        rgba(157, 182, 207, 0.04),
+        rgba(157, 182, 207, 0.04) calc(100% / var(--month-count) - 1px),
+        rgba(31, 99, 146, 0.28) calc(100% / var(--month-count) - 1px),
+        rgba(31, 99, 146, 0.28) calc(100% / var(--month-count))
+    );
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
@@ -836,18 +943,18 @@ include '../../includes/navbar.php';
                     <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
+                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
                         <?php if (!empty($task['git_branch_name'])): ?>
                         <div class="git-snippet">
                             <i class="fas fa-code-branch"></i>
                             <span><?php echo htmlspecialchars($task['git_branch_name']); ?></span>
                             <?php if (!empty($task['git_commit_hash'])): ?>
-                            <code><?php echo htmlspecialchars(substr($task['git_commit_hash'], 0, 7)); ?></code>
+                            <code><?php echo htmlspecialchars(substr((string) ($task['git_commit_hash'] ?? ''), 0, 7)); ?></code>
                             <?php endif; ?>
                         </div>
                         <?php endif; ?>
                         <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
+                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
                             <div>
                                 <button class="btn-action me-1" onclick="startTask(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-play"></i> Start
@@ -883,18 +990,18 @@ include '../../includes/navbar.php';
                     <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
+                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
                         <?php if (!empty($task['git_branch_name'])): ?>
                         <div class="git-snippet">
                             <i class="fas fa-code-branch"></i>
                             <span><?php echo htmlspecialchars($task['git_branch_name']); ?></span>
                             <?php if (!empty($task['git_commit_hash'])): ?>
-                            <code><?php echo htmlspecialchars(substr($task['git_commit_hash'], 0, 7)); ?></code>
+                            <code><?php echo htmlspecialchars(substr((string) ($task['git_commit_hash'] ?? ''), 0, 7)); ?></code>
                             <?php endif; ?>
                         </div>
                         <?php endif; ?>
                         <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
+                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
                             <div>
                                 <button class="btn-action me-1" onclick="viewTask(<?php echo $task['id']; ?>)">
                                     <i class="fas fa-code-pull-request"></i> Submit PR
@@ -933,18 +1040,18 @@ include '../../includes/navbar.php';
                     <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
                         <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr($task['description'], 0, 80)); ?></p>
+                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
                         <?php if (!empty($task['git_branch_name'])): ?>
                         <div class="git-snippet">
                             <i class="fas fa-code-branch"></i>
                             <span><?php echo htmlspecialchars($task['git_branch_name']); ?></span>
                             <?php if (!empty($task['git_commit_hash'])): ?>
-                            <code><?php echo htmlspecialchars(substr($task['git_commit_hash'], 0, 7)); ?></code>
+                            <code><?php echo htmlspecialchars(substr((string) ($task['git_commit_hash'] ?? ''), 0, 7)); ?></code>
                             <?php endif; ?>
                         </div>
                         <?php endif; ?>
                         <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo date('M d', strtotime($task['deadline'])); ?></small>
+                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
                             <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)">
                                 <i class="fas fa-eye"></i> View
                             </button>
@@ -975,7 +1082,7 @@ include '../../includes/navbar.php';
                     <div class="completed-card">
                         <div class="d-flex justify-content-between">
                             <small><s><?php echo htmlspecialchars($task['title']); ?></s></small>
-                            <small class="text-muted"><?php echo date('M d', strtotime($task['completed_at'])); ?></small>
+                            <small class="text-muted"><?php echo !empty($task['completed_at']) ? date('M d', strtotime((string) $task['completed_at'])) : 'No date'; ?></small>
                         </div>
                     </div>
                     <?php endwhile; ?>

@@ -11,30 +11,30 @@ $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
 $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
 
 // Ensure sales approval columns exist
-$hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+$hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 if (!$hasSalesApproval) {
     try {
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved TINYINT(1) DEFAULT 0");
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved " . (DB_DRIVER === 'pgsql' ? "SMALLINT" : "TINYINT(1)") . " DEFAULT 0");
         $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_by INT NULL");
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_at DATETIME NULL");
-        $hasSalesApproval = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_approved'")->num_rows > 0;
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_approved_at " . (DB_DRIVER === 'pgsql' ? "TIMESTAMP" : "DATETIME") . " NULL");
+        $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
     } catch (Throwable $e) {
         // Continue without sales approval columns
     }
 }
 
-$hasSalesChoice = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_estimate_choice'")->num_rows > 0;
+$hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_choice');
 if (!$hasSalesChoice) {
     try {
-        $conn->query("ALTER TABLE tasks ADD COLUMN sales_estimate_choice ENUM('min','likely','max') DEFAULT NULL");
+        $conn->query("ALTER TABLE tasks ADD COLUMN sales_estimate_choice " . (DB_DRIVER === 'pgsql' ? "TEXT" : "ENUM('min','likely','max')") . " DEFAULT NULL");
         $conn->query("ALTER TABLE tasks ADD COLUMN sales_estimate_days INT DEFAULT NULL");
-        $hasSalesChoice = $conn->query("SHOW COLUMNS FROM tasks LIKE 'sales_estimate_choice'")->num_rows > 0;
+        $hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_choice');
     } catch (Throwable $e) {
         // Continue without sales choice columns
     }
 }
 
-$hasProjectPhases = $conn->query("SHOW COLUMNS FROM projects LIKE 'project_phases'")->num_rows > 0;
+$hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 
 // If a dashboard link points to a specific task, open that task's project context.
 if (!$projectId && $taskId > 0) {
@@ -1148,6 +1148,97 @@ include '../../includes/navbar.php';
     margin-right: 0.25rem;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(31, 99, 146, 0.16));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs .nav-link:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs .nav-link.active,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-column-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-light {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern h2,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern h2 i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body strong {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select-custom,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs .nav-link {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs .nav-link.active {
+    box-shadow: inset 0 0 0 1px rgba(31, 99, 146, 0.12);
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom::placeholder {
+    color: #7f9bb6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #allocationTabs {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #allocationTabs .nav-link {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #allocationTabs .nav-link.active {
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-outline-modern {
+    background: rgba(31, 99, 146, 0.12);
+    border-color: rgba(31, 99, 146, 0.3);
+    color: #9db6cf;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .expert-utility-grid {
@@ -1401,7 +1492,7 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="p-3 allocation-column-body">
                     <?php if($projectsForAllocation->num_rows > 0): ?>
-                        <form method="POST" class="row g-3 align-items-end">
+                        <form method="POST" class="row g-3 align-items-end" data-app-loading data-loading-title="Assigning project" data-loading-text="Please wait while the project features are assigned to the expert.">
                             <div class="col-md-6">
                                 <label class="form-label">Project</label>
                                 <select name="project_id" class="form-select-custom" required>
@@ -1625,7 +1716,7 @@ include '../../includes/navbar.php';
                 <?php if($codeReviewTasks->num_rows > 0): ?>
                     <?php while($task = $codeReviewTasks->fetch_assoc()): ?>
                     <div class="task-card">
-                        <form method="POST">
+                        <form method="POST" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
                             <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
                             <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
                                 <div class="flex-grow-1">
@@ -1735,7 +1826,7 @@ include '../../includes/navbar.php';
                 <h5 class="modal-title"><i class="fas fa-user-plus me-2"></i>Assign to Expert</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Assigning expert" data-loading-text="Please wait while the expert assignment is saved.">
                 <div class="modal-body">
                     <input type="hidden" name="task_id" id="expertTaskId">
                     <p><strong>Task:</strong> <span id="expertTaskTitle"></span></p>
@@ -1772,7 +1863,7 @@ include '../../includes/navbar.php';
                 <h5 class="modal-title"><i class="fas fa-user-plus me-2"></i>Assign to Developer</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Assigning developer" data-loading-text="Please wait while the developer assignment is saved.">
                 <div class="modal-body">
                     <input type="hidden" name="task_id" id="devTaskId">
                     <p><strong>Task:</strong> <span id="devTaskTitle"></span></p>
@@ -1810,7 +1901,7 @@ include '../../includes/navbar.php';
                 <h5 class="modal-title"><i class="fas fa-undo me-2"></i>Request Revision</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Sending revision" data-loading-text="Please wait while the revision request is sent.">
                 <div class="modal-body">
                     <input type="hidden" name="task_id" id="reviseTaskId">
                     <p><strong>Task:</strong> <span id="reviseTaskTitle"></span></p>
@@ -1836,7 +1927,7 @@ include '../../includes/navbar.php';
                 <h5 class="modal-title"><i class="fas fa-times-circle me-2"></i>Reject Estimation</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Rejecting estimation" data-loading-text="Please wait while the estimation is returned to the expert.">
                 <div class="modal-body">
                     <input type="hidden" name="task_id" id="rejectTaskId">
                     <p><strong>Task:</strong> <span id="rejectTaskTitle"></span></p>
@@ -1887,14 +1978,26 @@ function openAssignDeveloperModal(taskId, taskTitle, deadline) {
     new bootstrap.Modal(document.getElementById('assignDeveloperModal')).show();
 }
 
-function approveEstimation(taskId) {
-    if(confirm('Approve this estimation? The task will be ready for developer assignment.')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.innerHTML = `<input type="hidden" name="approve_estimation" value="1"><input type="hidden" name="task_id" value="${taskId}">`;
-        document.body.appendChild(form);
-        form.submit();
+async function approveEstimation(taskId) {
+    const confirmed = await appConfirm({
+        title: 'Approve Estimation',
+        subject: 'Approve this estimation?',
+        message: 'The task will become ready for developer assignment.',
+        icon: 'fas fa-circle-check fa-lg',
+        confirmIcon: 'fas fa-check',
+        confirmText: 'Approve'
+    });
+    if (!confirmed) return;
+
+    if (window.appShowLoading) {
+        window.appShowLoading('Approving estimation', 'Please wait while the task is prepared for developer assignment.');
     }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.innerHTML = `<input type="hidden" name="approve_estimation" value="1"><input type="hidden" name="task_id" value="${taskId}">`;
+    document.body.appendChild(form);
+    form.submit();
 }
 
 function openRejectModal(taskId, taskTitle) {
