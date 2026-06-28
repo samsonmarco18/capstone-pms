@@ -9,6 +9,7 @@ let chatData = {
 let currentGroupDetails = null;
 let groupUserOptions = [];
 let groupSelectedMemberIds = new Set();
+let groupAddMemberIds = new Set();
 
 const chatStateKey = 'erni.chat.open';
 
@@ -96,8 +97,33 @@ function initChatWidget() {
         removeGroupMember(Number($(this).data('chatRemoveMember')));
     });
 
+    $('#chatGroupInfoContent').on('click', '[data-chat-add-member]', function () {
+        openAddMemberModal();
+    });
+
     $('#chatGroupInfoContent').on('click', '[data-chat-leave-group]', function () {
         leaveCurrentGroup();
+    });
+
+    $('#addGroupMemberSearch').on('input', debounce(function () {
+        renderAddGroupMemberPicker();
+    }, 120));
+
+    $('#addGroupMembers').on('change', '.group-member-checkbox', function () {
+        const memberId = Number($(this).val());
+        if ($(this).is(':checked')) {
+            groupAddMemberIds.add(memberId);
+        } else {
+            groupAddMemberIds.delete(memberId);
+        }
+
+        updateAddGroupMemberCount();
+    });
+
+    $('#addGroupMemberSubmitBtn').on('click', addSelectedGroupMembers);
+
+    $('#addGroupMemberModal').on('hidden.bs.modal', function () {
+        resetAddGroupMemberForm();
     });
 }
 
@@ -314,7 +340,6 @@ function renderGroupInfoLoading() {
             <span>Loading members...</span>
         </div>
     `);
-    panel.find('.chat-group-info-hero small').text(`${createdLabel} - ${Number(group.member_count) || members.length} members`);
 }
 
 function renderGroupInfoView(details) {
@@ -374,6 +399,12 @@ function renderGroupInfoView(details) {
             <small>${createdLabel} · ${Number(group.member_count) || members.length} members</small>
         </div>
         <div class="chat-group-actions">
+            ${canManageMembers ? `
+            <button type="button" class="chat-group-action primary" data-chat-add-member>
+                <i class="fas fa-user-plus"></i>
+                <span>Add Member</span>
+            </button>
+            ` : ''}
             <button type="button" class="chat-group-action danger" data-chat-leave-group>
                 <i class="fas fa-right-from-bracket"></i>
                 <span>Leave Group</span>
@@ -418,6 +449,151 @@ function removeGroupMember(memberId) {
         },
         error: function () {
             showToast('Group Chat', 'Unable to remove member.', 'error');
+        }
+    });
+}
+
+function openAddMemberModal() {
+    if (!currentChatGroup) {
+        return;
+    }
+
+    if (!currentGroupDetails || !Array.isArray(currentGroupDetails.members)) {
+        showToast('Group Chat', 'Group details are still loading.', 'warning');
+        return;
+    }
+
+    resetAddGroupMemberForm();
+    renderAddGroupMemberPicker();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('addGroupMemberModal')).show();
+}
+
+function getCurrentGroupMemberIds() {
+    const members = currentGroupDetails && Array.isArray(currentGroupDetails.members)
+        ? currentGroupDetails.members
+        : [];
+
+    return new Set(members.map(function (member) {
+        return Number(member.id);
+    }));
+}
+
+function renderAddGroupMemberPicker() {
+    const container = $('#addGroupMembers');
+    if (!container.length) {
+        return;
+    }
+
+    const search = ($('#addGroupMemberSearch').val() || '').trim().toLowerCase();
+    const currentMemberIds = getCurrentGroupMemberIds();
+    const users = groupUserOptions.filter(function (user) {
+        const userId = Number(user.id);
+        if (currentMemberIds.has(userId) || (currentChatUser && userId === Number(currentChatUser))) {
+            return false;
+        }
+
+        if (!search) {
+            return true;
+        }
+
+        return [user.full_name, user.role, user.email]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(search);
+    });
+
+    if (!users.length) {
+        container.html(`
+            <div class="group-member-empty">
+                <i class="fas fa-user-slash"></i>
+                <span>No available users found.</span>
+            </div>
+        `);
+        updateAddGroupMemberCount();
+        return;
+    }
+
+    container.html(users.map(function (user) {
+        const userId = Number(user.id);
+        const initials = getConversationInitials(user.full_name || 'User', 'user');
+        const checked = groupAddMemberIds.has(userId) ? 'checked' : '';
+
+        return `
+            <label class="group-member-option">
+                <input type="checkbox" class="group-member-checkbox" value="${userId}" ${checked}>
+                <span class="group-member-avatar">${escapeHtml(initials)}</span>
+                <span class="group-member-main">
+                    <strong>${escapeHtml(user.full_name || 'User')}</strong>
+                    <small>${escapeHtml(user.role || 'Team member')}</small>
+                </span>
+                <span class="group-member-check"><i class="fas fa-check"></i></span>
+            </label>
+        `;
+    }).join(''));
+
+    updateAddGroupMemberCount();
+}
+
+function updateAddGroupMemberCount(countOverride = null) {
+    const count = countOverride === null ? groupAddMemberIds.size : countOverride;
+    $('#addGroupMemberCount').text(`${count} selected`);
+}
+
+function resetAddGroupMemberForm() {
+    groupAddMemberIds = new Set();
+    $('#addGroupMemberSearch').val('');
+    updateAddGroupMemberCount(0);
+}
+
+function setAddGroupMemberLoading(isLoading) {
+    const button = $('#addGroupMemberSubmitBtn');
+    if (!button.length) {
+        return;
+    }
+
+    button.prop('disabled', isLoading);
+    button.html(isLoading
+        ? '<i class="fas fa-spinner fa-spin me-1"></i> Adding...'
+        : 'Add Members');
+}
+
+function addSelectedGroupMembers() {
+    const memberIds = Array.from(groupAddMemberIds);
+
+    if (!currentChatGroup) {
+        return;
+    }
+
+    if (!memberIds.length) {
+        showToast('Chat', 'Please choose at least one member.', 'warning');
+        return;
+    }
+
+    setAddGroupMemberLoading(true);
+
+    $.ajax({
+        url: `${BASE_URL}api/chat/add-group-member.php`,
+        method: 'POST',
+        contentType: 'application/json',
+        dataType: 'json',
+        data: JSON.stringify({ group_id: currentChatGroup, user_ids: memberIds }),
+        success: function (response) {
+            if (response.success) {
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('addGroupMemberModal')).hide();
+                currentGroupDetails = null;
+                loadGroupDetails(currentChatGroup);
+                loadConversationData();
+                showToast('Group Chat', response.message || 'Member(s) added.', 'success');
+            } else {
+                showToast('Group Chat', response.error || 'Unable to add member.', 'error');
+            }
+        },
+        error: function () {
+            showToast('Group Chat', 'Unable to add member.', 'error');
+        },
+        complete: function () {
+            setAddGroupMemberLoading(false);
         }
     });
 }

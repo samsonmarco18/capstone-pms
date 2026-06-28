@@ -13,24 +13,20 @@ if (!isLoggedIn()) {
 $user = getCurrentUser();
 $conn = getConnection();
 
-$stmt = $conn->prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 20');
+$stmt = $conn->prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY is_read ASC, created_at DESC LIMIT 20');
 $stmt->bind_param('i', $user['id']);
 $stmt->execute();
 $result = $stmt->get_result();
 
 $notifications = [];
-$unreadCount = 0;
 while ($row = $result->fetch_assoc()) {
     $notifications[] = $row;
-    if (!(bool) $row['is_read']) {
-        $unreadCount++;
-    }
 }
 
 $stmt->close();
 
 echo json_encode([
     'notifications' => $notifications,
-    'unread_count' => $unreadCount,
+    'unread_count' => getUnreadNotificationsCount((int) $user['id']),
 ]);
 ?>

@@ -5,13 +5,12 @@ requireRole('admin');
 $conn = getConnection();
 $user = getCurrentUser();
 
-// Handle technology operations (same logic as before)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['add_technology'])) {
-        $name = $_POST['name'];
-        $category = $_POST['category'];
-        $price = $_POST['price'];
-        $expiry_date = $_POST['expiry_date'];
+        $name = trim((string) ($_POST['name'] ?? ''));
+        $category = trim((string) ($_POST['category'] ?? ''));
+        $price = (float) ($_POST['price'] ?? 0);
+        $expiry_date = trim((string) ($_POST['expiry_date'] ?? ''));
         
         $today = date('Y-m-d');
         if ($expiry_date && $expiry_date < $today) {
@@ -22,21 +21,39 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $status = 'active';
         }
         
-        $stmt = $conn->prepare("INSERT INTO technologies (name, category, price, expiry_date, status, created_by) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssdssi", $name, $category, $price, $expiry_date, $status, $user['id']);
-        
-        if ($stmt->execute()) {
-            logActivity($user['id'], 'add_technology', 'technologies', $stmt->insert_id, null, $_POST);
-            $_SESSION['success'] = "Technology added successfully";
+        if ($name === '' || $category === '' || $price < 0 || $expiry_date === '') {
+            $_SESSION['error'] = 'Please complete all technology fields with valid values.';
+        } else {
+            $stmt = $conn->prepare("INSERT INTO technologies (name, category, price, expiry_date, status, created_by) VALUES (?, ?, ?, ?, ?, ?)");
+            if ($stmt !== false) {
+                $stmt->bind_param("ssdssi", $name, $category, $price, $expiry_date, $status, $user['id']);
+                
+                if ($stmt->execute()) {
+                    logActivity($user['id'], 'add_technology', 'technologies', $stmt->insert_id, null, $_POST);
+                    $_SESSION['success'] = "Technology added successfully";
+                } else {
+                    $_SESSION['error'] = 'Unable to add technology.';
+                }
+                $stmt->close();
+            } else {
+                $_SESSION['error'] = 'Unable to prepare technology insert.';
+            }
         }
     } elseif (isset($_POST['update_technology'])) {
-        $id = $_POST['id'];
-        $name = $_POST['name'];
-        $category = $_POST['category'];
-        $price = $_POST['price'];
-        $expiry_date = $_POST['expiry_date'];
+        $id = (int) ($_POST['id'] ?? 0);
+        $name = trim((string) ($_POST['name'] ?? ''));
+        $category = trim((string) ($_POST['category'] ?? ''));
+        $price = (float) ($_POST['price'] ?? 0);
+        $expiry_date = trim((string) ($_POST['expiry_date'] ?? ''));
         
-        $oldData = $conn->query("SELECT * FROM technologies WHERE id = $id")->fetch_assoc();
+        $oldData = null;
+        $oldStmt = $conn->prepare("SELECT * FROM technologies WHERE id = ? LIMIT 1");
+        if ($oldStmt !== false) {
+            $oldStmt->bind_param('i', $id);
+            $oldStmt->execute();
+            $oldData = $oldStmt->get_result()->fetch_assoc();
+            $oldStmt->close();
+        }
         
         $today = date('Y-m-d');
         if ($expiry_date && $expiry_date < $today) {
@@ -47,23 +64,52 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $status = 'active';
         }
         
-        $stmt = $conn->prepare("UPDATE technologies SET name=?, category=?, price=?, expiry_date=?, status=? WHERE id=?");
-        $stmt->bind_param("ssdssi", $name, $category, $price, $expiry_date, $status, $id);
-        
-        if ($stmt->execute()) {
-            logActivity($user['id'], 'update_technology', 'technologies', $id, $oldData, $_POST);
-            $_SESSION['success'] = "Technology updated successfully";
+        if ($id <= 0 || !$oldData || $name === '' || $category === '' || $price < 0 || $expiry_date === '') {
+            $_SESSION['error'] = 'Please select a valid technology and complete all fields.';
+        } else {
+            $stmt = $conn->prepare("UPDATE technologies SET name=?, category=?, price=?, expiry_date=?, status=? WHERE id=?");
+            if ($stmt !== false) {
+                $stmt->bind_param("ssdssi", $name, $category, $price, $expiry_date, $status, $id);
+                
+                if ($stmt->execute()) {
+                    logActivity($user['id'], 'update_technology', 'technologies', $id, $oldData, $_POST);
+                    $_SESSION['success'] = "Technology updated successfully";
+                } else {
+                    $_SESSION['error'] = 'Unable to update technology.';
+                }
+                $stmt->close();
+            } else {
+                $_SESSION['error'] = 'Unable to prepare technology update.';
+            }
         }
     } elseif (isset($_POST['delete_technology'])) {
-        $id = $_POST['id'];
-        $oldData = $conn->query("SELECT * FROM technologies WHERE id = $id")->fetch_assoc();
+        $id = (int) ($_POST['id'] ?? 0);
+        $oldData = null;
+        $oldStmt = $conn->prepare("SELECT * FROM technologies WHERE id = ? LIMIT 1");
+        if ($oldStmt !== false) {
+            $oldStmt->bind_param('i', $id);
+            $oldStmt->execute();
+            $oldData = $oldStmt->get_result()->fetch_assoc();
+            $oldStmt->close();
+        }
         
-        $stmt = $conn->prepare("DELETE FROM technologies WHERE id=?");
-        $stmt->bind_param("i", $id);
-        
-        if ($stmt->execute()) {
-            logActivity($user['id'], 'delete_technology', 'technologies', $id, $oldData, null);
-            $_SESSION['success'] = "Technology deleted successfully";
+        if ($id <= 0 || !$oldData) {
+            $_SESSION['error'] = 'Technology not found.';
+        } else {
+            $stmt = $conn->prepare("DELETE FROM technologies WHERE id=?");
+            if ($stmt !== false) {
+                $stmt->bind_param("i", $id);
+                
+                if ($stmt->execute()) {
+                    logActivity($user['id'], 'delete_technology', 'technologies', $id, $oldData, null);
+                    $_SESSION['success'] = "Technology deleted successfully";
+                } else {
+                    $_SESSION['error'] = 'Unable to delete technology.';
+                }
+                $stmt->close();
+            } else {
+                $_SESSION['error'] = 'Unable to prepare technology delete.';
+            }
         }
     }
     
@@ -80,7 +126,23 @@ $conn->query("
         ELSE status
     END
 ");
-$technologies = $conn->query("SELECT * FROM technologies ORDER BY FIELD(status, 'expired', 'expiring', 'active', 'inactive'), expiry_date ASC");
+$technologies = $conn->query("
+    SELECT *
+    FROM technologies
+    ORDER BY CASE status
+        WHEN 'expired' THEN 1
+        WHEN 'expiring' THEN 2
+        WHEN 'active' THEN 3
+        WHEN 'inactive' THEN 4
+        ELSE 5
+    END,
+    expiry_date ASC
+");
+if ($technologies === false) {
+    error_log('Techstack list query failed: ' . ($conn->error ?? 'unknown error'));
+    $_SESSION['error'] = 'Unable to load technology stack right now.';
+    $technologies = new PgsqlMysqliCompatResult([]);
+}
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -835,10 +897,15 @@ include '../../includes/navbar.php';
                         <span class="meta-label">
                             <i class="fas fa-calendar-alt me-1"></i> Expiry Date
                         </span>
-                        <span class="meta-value"><?php echo date('M d, Y', strtotime($tech['expiry_date'])); ?></span>
+                        <span class="meta-value">
+                            <?php
+                            $expiryValue = trim((string) ($tech['expiry_date'] ?? ''));
+                            echo $expiryValue !== '' ? htmlspecialchars(date('M d, Y', strtotime($expiryValue))) : 'No expiry date';
+                            ?>
+                        </span>
                     </div>
                     <?php 
-                    $daysLeft = ceil((strtotime($tech['expiry_date']) - time()) / 86400);
+                    $daysLeft = $expiryValue !== '' ? (int) ceil((strtotime($expiryValue) - time()) / 86400) : 0;
                     if($tech['status'] == 'expiring' && $daysLeft > 0):
                     ?>
                     <div class="expiry-warning">

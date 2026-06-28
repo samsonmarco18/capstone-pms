@@ -418,6 +418,73 @@ include '../../includes/navbar.php';
     transform: translateY(-1px);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-dashboard,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-dashboard .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-stat-card {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-dashboard .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-check-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-feature-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-queue-item:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-queue-item.active {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-queue-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-feature-block,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-check-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-result-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) hr {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-dashboard .card-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-queue-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-check-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h1,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h2,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h3,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-stat-sub,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-empty,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-progress {
+    background: rgba(157, 182, 207, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
+    background-color: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control::placeholder {
+    color: #7f9bb6;
+}
+
 @media (max-width: 767.98px) {
     .qa-dashboard .card-header,
     .qa-dashboard .card-body {

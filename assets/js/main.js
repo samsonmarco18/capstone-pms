@@ -151,17 +151,26 @@ function updateNotificationList(notifications) {
         return;
     }
 
-    notifications.slice(0, 8).forEach(function (notification) {
+    const sortedNotifications = notifications.slice().sort(function (a, b) {
+        const readDiff = Number(a.is_read) - Number(b.is_read);
+        if (readDiff !== 0) {
+            return readDiff;
+        }
+
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    });
+
+    sortedNotifications.slice(0, 8).forEach(function (notification) {
         const unreadClass = Number(notification.is_read) ? '' : 'bg-light';
         const safeTitle = escapeHtml(notification.title || 'Notification');
         const safeMessage = escapeHtml(notification.message || '');
-        const actionUrl = notification.action_url || `${BASE_URL}notifications.php`;
+        const actionUrl = escapeHtml(notification.action_url || `${BASE_URL}notifications.php`);
 
         list.append(`
             <li>
                 <a class="dropdown-item py-2 ${unreadClass}" href="${actionUrl}" onclick="markNotificationRead(${notification.id})">
-                    <div class="fw-semibold small">${safeTitle}</div>
-                    <div class="text-muted small">${safeMessage}</div>
+                    <div class="notification-item-title fw-semibold small">${safeTitle}</div>
+                    <div class="notification-item-message text-muted small">${safeMessage}</div>
                 </a>
             </li>
         `);

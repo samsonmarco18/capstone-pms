@@ -8,7 +8,7 @@ $unreadCount = 0;
 if ($user) {
     $unreadCount = getUnreadNotificationsCount((int) $user['id']);
     $conn = getConnection();
-    $stmt = $conn->prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 8');
+    $stmt = $conn->prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY is_read ASC, created_at DESC LIMIT 8');
     $stmt->bind_param('i', $user['id']);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -168,7 +168,13 @@ $appUserContext = [
         }
 
         .notifications-menu {
-            max-width: min(380px, calc(100vw - 24px));
+            width: min(340px, calc(100vw - 24px));
+            max-width: min(340px, calc(100vw - 24px));
+        }
+
+        #notificationsList {
+            max-height: min(420px, calc(100vh - 170px));
+            overflow-y: auto;
         }
 
         .notifications-menu .dropdown-item {
@@ -179,17 +185,66 @@ $appUserContext = [
 
         .notifications-menu .notification-item-title,
         .notifications-menu .notification-item-message {
-            white-space: normal;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
             overflow-wrap: anywhere;
             word-break: break-word;
         }
 
         .notifications-menu .notification-item-title {
             margin-bottom: 0.2rem;
+            -webkit-line-clamp: 1;
         }
 
         .notifications-menu .notification-item-message {
             line-height: 1.35;
+            -webkit-line-clamp: 2;
+        }
+
+        html[data-theme="dark"] #logoutConfirmModal .modal-content,
+        body[data-theme="dark"] #logoutConfirmModal .modal-content,
+        body.dark-mode #logoutConfirmModal .modal-content {
+            background: #071321;
+            border: 1px solid rgba(31, 99, 146, 0.24);
+            color: #d7e4f2;
+        }
+
+        html[data-theme="dark"] #logoutConfirmModal .modal-header,
+        body[data-theme="dark"] #logoutConfirmModal .modal-header,
+        body.dark-mode #logoutConfirmModal .modal-header,
+        html[data-theme="dark"] #logoutConfirmModal .modal-footer,
+        body[data-theme="dark"] #logoutConfirmModal .modal-footer,
+        body.dark-mode #logoutConfirmModal .modal-footer {
+            border-color: rgba(31, 99, 146, 0.24);
+            background: #0a1b2c;
+        }
+
+        html[data-theme="dark"] #logoutConfirmModal .modal-body p,
+        body[data-theme="dark"] #logoutConfirmModal .modal-body p,
+        body.dark-mode #logoutConfirmModal .modal-body p {
+            color: #9db6cf !important;
+        }
+
+        html[data-theme="dark"] #logoutConfirmModal h5,
+        body[data-theme="dark"] #logoutConfirmModal h5,
+        body.dark-mode #logoutConfirmModal h5 {
+            color: #d7e4f2 !important;
+        }
+
+        html[data-theme="dark"] #logoutConfirmModal .btn-outline-secondary,
+        body[data-theme="dark"] #logoutConfirmModal .btn-outline-secondary,
+        body.dark-mode #logoutConfirmModal .btn-outline-secondary {
+            color: #d7e4f2;
+            border-color: rgba(157, 182, 207, 0.36);
+            background: transparent;
+        }
+
+        html[data-theme="dark"] #logoutConfirmModal .btn-outline-secondary:hover,
+        body[data-theme="dark"] #logoutConfirmModal .btn-outline-secondary:hover,
+        body.dark-mode #logoutConfirmModal .btn-outline-secondary:hover {
+            background: rgba(31, 99, 146, 0.14);
+            border-color: rgba(31, 99, 146, 0.28);
         }
 
         .app-logout-modal .modal-content {

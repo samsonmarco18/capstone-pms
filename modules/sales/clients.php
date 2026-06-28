@@ -547,6 +547,20 @@ include '../../includes/navbar.php';
     border-bottom: 1px solid var(--gray-200);
 }
 
+.client-detail-panel {
+    padding: 1rem;
+    border-radius: 1rem;
+    background: #f8fbff;
+    border: 1px solid rgba(18, 80, 127, 0.12);
+}
+
+.client-project-item {
+    background: #f8fbff;
+    border: 1px solid rgba(18, 80, 127, 0.12);
+    border-radius: 0.85rem;
+    padding: 0.85rem 1rem;
+}
+
 .client-tab-btn {
     display: inline-flex;
     align-items: center;
@@ -1489,7 +1503,9 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__summary span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-summary span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.view,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.edit {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.edit,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-detail-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-project-item {
     background: #0a1b2c;
     border-color: rgba(31, 99, 146, 0.24);
 }
@@ -1505,6 +1521,11 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientContent,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #clientProjects {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-detail-panel strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-project-item strong {
     color: #d7e4f2;
 }
 
@@ -1540,7 +1561,9 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .field-group,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-detail-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-project-item {
     border-color: rgba(31, 99, 146, 0.24);
 }
 
@@ -2193,7 +2216,7 @@ function viewClient(id) {
             let html = `
                 <div class="row g-4">
                     <div class="col-md-6">
-                        <div class="p-3 bg-light rounded-3">
+                        <div class="client-detail-panel">
                             <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-info-circle me-2"></i>Contact Information</h6>
                             <p><strong>Company Name:</strong> ${client.name}</p>
                             <p><strong>Contact Person:</strong> ${client.contact_person}</p>
@@ -2203,7 +2226,7 @@ function viewClient(id) {
                         </div>
                     </div>
                     <div class="col-md-6">
-                        <div class="p-3 bg-light rounded-3">
+                        <div class="client-detail-panel">
                             <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-chart-line me-2"></i>Project Status</h6>
                             <p><strong>Status:</strong> <span class="badge-status ${client.status}">${client.status}</span></p>
                             <p><strong>Progress:</strong> ${client.progress}%</p>
@@ -2235,7 +2258,7 @@ function viewClient(id) {
                         let projectsHtml = '<div class="list-group">';
                         projects.forEach(project => {
                             projectsHtml += `
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div class="client-project-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>${project.name}</strong><br>
                                         <small class="text-muted">Created: ${new Date(project.created_at).toLocaleDateString()}</small>
