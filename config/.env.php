@@ -126,16 +126,23 @@ function detectAppUrl(string $appRootPath, bool $isRender): string
     $scheme = $isHttps ? 'https' : 'http';
     $host = trim((string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 
+    $basePathOverride = trim((string) getEnvOrDefault('APP_BASE_PATH', ''));
+    if ($basePathOverride !== '') {
+        return $scheme . '://' . $host . '/' . trim($basePathOverride, '/') . '/';
+    }
+
     $normalizedAppRoot = str_replace('\\', '/', $appRootPath);
     $documentRootInput = trim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''));
     $documentRoot = $documentRootInput !== ''
         ? str_replace('\\', '/', realpath($documentRootInput) ?: $documentRootInput)
         : '';
 
-    $basePath = '/' . basename($normalizedAppRoot) . '/';
+    $basePath = '/';
     if ($documentRoot !== '' && str_starts_with(strtolower($normalizedAppRoot), strtolower($documentRoot))) {
         $relativePath = trim(substr($normalizedAppRoot, strlen($documentRoot)), '/');
         $basePath = ($relativePath !== '' ? '/' . $relativePath : '') . '/';
+    } elseif (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false || strpos($host, '::1') !== false) {
+        $basePath = '/' . basename($normalizedAppRoot) . '/';
     }
 
     return $scheme . '://' . $host . $basePath;

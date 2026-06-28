@@ -86,6 +86,14 @@ function getMailConfig(): array
         $encryption = 'tls';
     }
 
+    if (in_array($host, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true)) {
+        if ($port === 465 && $encryption === 'tls') {
+            $encryption = 'ssl';
+        } elseif ($port === 587 && $encryption === 'ssl') {
+            $encryption = 'tls';
+        }
+    }
+
     $config = [
         'enabled' => in_array($enabledRaw, ['1', 'true', 'yes', 'on'], true),
         'host' => $host,
@@ -221,19 +229,36 @@ function smtpSendMessage(array $config, string $fromEmail, array $recipients, st
 
 function smtpConnectionCandidates(array $config): array
 {
-    $candidates = [$config];
+    $candidates = [];
+    $seen = [];
+    $addCandidate = static function (array $candidate) use (&$candidates, &$seen): void {
+        $key = strtolower((string) ($candidate['host'] ?? '')) . ':' . (int) ($candidate['port'] ?? 0) . '/' . strtolower((string) ($candidate['encryption'] ?? 'tls'));
+        if (isset($seen[$key])) {
+            return;
+        }
+
+        $seen[$key] = true;
+        $candidates[] = $candidate;
+    };
+
+    $addCandidate($config);
     $host = strtolower((string) ($config['host'] ?? ''));
     $port = (int) ($config['port'] ?? 0);
     $encryption = strtolower((string) ($config['encryption'] ?? 'tls'));
 
-    if (in_array($host, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true) && !($port === 465 && $encryption === 'ssl')) {
+    if (in_array($host, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true)) {
         $sslConfig = $config;
         $sslConfig['port'] = 465;
         $sslConfig['encryption'] = 'ssl';
-        $candidates[] = $sslConfig;
+        $tlsConfig = $config;
+        $tlsConfig['port'] = 587;
+        $tlsConfig['encryption'] = 'tls';
+
+        $addCandidate($sslConfig);
+        $addCandidate($tlsConfig);
     }
 
-    return $candidates;
+    return array_values($candidates);
 }
 
 function smtpErrorLooksLikeConnectionFailure(string $error): bool
@@ -244,7 +269,10 @@ function smtpErrorLooksLikeConnectionFailure(string $error): bool
         || str_contains($normalized, 'timed out')
         || str_contains($normalized, 'connection refused')
         || str_contains($normalized, 'network is unreachable')
-        || str_contains($normalized, 'no route to host');
+        || str_contains($normalized, 'no route to host')
+        || str_contains($normalized, 'empty response')
+        || str_contains($normalized, 'unable to start tls')
+        || str_contains($normalized, 'failed to enable crypto');
 }
 
 function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recipients, string $message): array
