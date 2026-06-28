@@ -3,6 +3,7 @@ $(function () {
     initDarkMode();
     initNotifications();
     initTooltips();
+    initAppActionHelpers();
 });
 
 function initSidebar() {
@@ -187,6 +188,99 @@ function showToast(title, message, type = 'success') {
     toast.show();
     toastEl.addEventListener('hidden.bs.toast', function () {
         $(toastEl).closest('.toast-container').remove();
+    });
+}
+
+function initAppActionHelpers() {
+    window.appShowLoading = showAppLoading;
+    window.appHideLoading = hideAppLoading;
+    window.appConfirm = showAppConfirm;
+
+    $(document).on('submit', 'form[data-app-loading]', function () {
+        const form = this;
+        const title = form.getAttribute('data-loading-title') || 'Saving changes';
+        const text = form.getAttribute('data-loading-text') || 'Please wait while the system finishes this action.';
+        showAppLoading(title, text);
+    });
+}
+
+function showAppLoading(title = 'Working on it', text = 'Please wait while the system finishes this action.') {
+    const overlay = document.getElementById('appGlobalLoadingOverlay');
+    if (!overlay) {
+        return;
+    }
+
+    const titleEl = document.getElementById('appGlobalLoadingTitle');
+    const textEl = document.getElementById('appGlobalLoadingText');
+    if (titleEl) titleEl.textContent = title;
+    if (textEl) textEl.textContent = text;
+
+    overlay.classList.add('is-visible');
+    overlay.setAttribute('aria-hidden', 'false');
+}
+
+function hideAppLoading() {
+    const overlay = document.getElementById('appGlobalLoadingOverlay');
+    if (!overlay) {
+        return;
+    }
+
+    overlay.classList.remove('is-visible');
+    overlay.setAttribute('aria-hidden', 'true');
+}
+
+function showAppConfirm(options = {}) {
+    const modalElement = document.getElementById('appConfirmModal');
+    const submitBtn = document.getElementById('appConfirmSubmitBtn');
+    if (!modalElement || !submitBtn || !window.bootstrap) {
+        return Promise.resolve(window.confirm(options.message || options.subject || 'Continue?'));
+    }
+
+    const titleEl = document.getElementById('appConfirmTitle');
+    const subjectEl = document.getElementById('appConfirmSubject');
+    const messageEl = document.getElementById('appConfirmMessage');
+    const iconEl = document.getElementById('appConfirmIcon');
+    const cancelBtn = document.getElementById('appConfirmCancelBtn');
+
+    if (titleEl) {
+        titleEl.innerHTML = `<i class="${escapeHtml(options.titleIcon || 'fas fa-triangle-exclamation')} me-2"></i>${escapeHtml(options.title || 'Confirm Action')}`;
+    }
+    if (subjectEl) subjectEl.textContent = options.subject || 'Please confirm this action.';
+    if (messageEl) messageEl.textContent = options.message || 'This action may affect the system workflow.';
+    if (iconEl) iconEl.className = options.icon || 'fas fa-circle-info fa-lg';
+    if (submitBtn) {
+        submitBtn.innerHTML = `<i class="${escapeHtml(options.confirmIcon || 'fas fa-check')} me-1"></i>${escapeHtml(options.confirmText || 'Continue')}`;
+        submitBtn.classList.toggle('is-danger', options.variant === 'danger');
+    }
+    if (cancelBtn) cancelBtn.textContent = options.cancelText || 'Cancel';
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+
+    return new Promise((resolve) => {
+        let settled = false;
+
+        function cleanup() {
+            submitBtn.removeEventListener('click', onConfirm);
+            modalElement.removeEventListener('hidden.bs.modal', onHidden);
+        }
+
+        function onConfirm() {
+            settled = true;
+            cleanup();
+            modal.hide();
+            resolve(true);
+        }
+
+        function onHidden() {
+            cleanup();
+            if (!settled) {
+                resolve(false);
+            }
+        }
+
+        submitBtn.addEventListener('click', onConfirm);
+        modalElement.addEventListener('hidden.bs.modal', onHidden);
+        modal.show();
     });
 }
 

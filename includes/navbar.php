@@ -51,8 +51,8 @@ if ($user) {
                                         <a class="dropdown-item py-2 <?php echo !$notification['is_read'] ? 'bg-light' : ''; ?>"
                                            href="<?php echo htmlspecialchars($notification['action_url'] ?: BASE_URL . 'notifications.php'); ?>"
                                            onclick="markNotificationRead(<?php echo (int) $notification['id']; ?>)">
-                                            <div class="fw-semibold small"><?php echo htmlspecialchars($notification['title']); ?></div>
-                                            <div class="text-muted small"><?php echo htmlspecialchars($notification['message']); ?></div>
+                                            <div class="notification-item-title fw-semibold small"><?php echo htmlspecialchars($notification['title']); ?></div>
+                                            <div class="notification-item-message text-muted small"><?php echo htmlspecialchars($notification['message']); ?></div>
                                         </a>
                                     </li>
                                 <?php endforeach; ?>
@@ -94,9 +94,172 @@ if ($user) {
                         <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>profile.php"><i class="fas fa-user me-2"></i>Profile</a></li>
                         <li><a class="dropdown-item" href="<?php echo BASE_URL; ?>settings.php"><i class="fas fa-cog me-2"></i>Settings</a></li>
                         <li><hr class="dropdown-divider m-0"></li>
-                        <li><a class="dropdown-item text-danger" href="<?php echo BASE_URL; ?>logout.php"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                        <li>
+                            <button type="button" class="dropdown-item text-danger" id="logoutTriggerBtn">
+                                <i class="fas fa-sign-out-alt me-2"></i>Logout
+                            </button>
+                        </li>
                     </ul>
                 </li>
             </ul>
         </div>
     </nav>
+
+    <style>
+        .app-logout-loading-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(6, 10, 18, 0.72);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+
+        .app-logout-loading-overlay.is-visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .app-logout-loading-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #fff;
+        }
+
+        .app-logout-loading-spinner {
+            width: 3.25rem;
+            height: 3.25rem;
+            border-width: 0.3em;
+            color: #66c8ff;
+        }
+
+        .app-logout-loading-title {
+            margin: 18px 0 6px;
+            font-family: 'Montserrat', 'Source Sans 3', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 700;
+        }
+
+        .app-logout-loading-text {
+            margin: 0;
+            font-size: 0.92rem;
+            color: rgba(255, 255, 255, 0.78);
+        }
+
+        .notifications-menu {
+            max-width: min(380px, calc(100vw - 24px));
+        }
+
+        .notifications-menu .dropdown-item {
+            white-space: normal;
+            display: block;
+            line-height: 1.35;
+        }
+
+        .notifications-menu .notification-item-title,
+        .notifications-menu .notification-item-message {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+        }
+
+        .notifications-menu .notification-item-title {
+            margin-bottom: 0.2rem;
+        }
+
+        .notifications-menu .notification-item-message {
+            line-height: 1.35;
+        }
+    </style>
+
+    <form method="POST" action="<?php echo BASE_URL; ?>logout.php" id="logoutForm" class="d-none"></form>
+
+    <div class="modal fade" id="logoutConfirmModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 rounded-4 shadow">
+                <div class="modal-header border-0 pb-0 justify-content-end">
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center px-4 pt-0 pb-3">
+                    <div class="mx-auto mb-3 d-flex align-items-center justify-content-center rounded-circle" style="width:62px;height:62px;background:rgba(13,103,134,.12);color:#0d6786;font-size:1.5rem;">
+                        <i class="fas fa-arrow-right-from-bracket"></i>
+                    </div>
+                    <h5 class="fw-bold mb-2" style="color:#123b4d;font-family:'Montserrat','Source Sans 3',sans-serif;">Sign out now?</h5>
+                    <p class="mb-0" style="color:#5f7482;">You will need to log in again to continue using the system.</p>
+                </div>
+                <div class="modal-footer border-0 justify-content-center gap-2 px-4 pb-4 pt-0">
+                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Stay signed in</button>
+                    <button type="button" class="btn btn-primary px-4" id="logoutConfirmBtn" style="background:linear-gradient(180deg,#0d6786,#0a5570);border:0;">Yes, log me out</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-logout-loading-overlay" id="logoutLoadingOverlay" aria-hidden="true">
+        <div class="app-logout-loading-content" role="status" aria-live="polite" aria-label="Logging out">
+            <div class="spinner-border app-logout-loading-spinner" role="presentation"></div>
+            <div class="app-logout-loading-title">Signing you out</div>
+            <p class="app-logout-loading-text">Please wait while we secure your session.</p>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const logoutTriggerBtn = document.getElementById('logoutTriggerBtn');
+            const logoutConfirmBtn = document.getElementById('logoutConfirmBtn');
+            const logoutForm = document.getElementById('logoutForm');
+            const logoutLoadingOverlay = document.getElementById('logoutLoadingOverlay');
+
+            function showLogoutLoading() {
+                if (!logoutLoadingOverlay) {
+                    return;
+                }
+
+                logoutLoadingOverlay.classList.add('is-visible');
+                logoutLoadingOverlay.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function hideLogoutLoading() {
+                if (!logoutLoadingOverlay) {
+                    return;
+                }
+
+                logoutLoadingOverlay.classList.remove('is-visible');
+                logoutLoadingOverlay.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+            }
+
+            if (logoutTriggerBtn) {
+                logoutTriggerBtn.addEventListener('click', function () {
+                    const modalElement = document.getElementById('logoutConfirmModal');
+                    if (window.bootstrap && modalElement) {
+                        bootstrap.Modal.getOrCreateInstance(modalElement).show();
+                    }
+                });
+            }
+
+            if (logoutConfirmBtn && logoutForm) {
+                logoutConfirmBtn.addEventListener('click', function () {
+                    showLogoutLoading();
+                    logoutForm.submit();
+                });
+            }
+
+            window.addEventListener('pageshow', function () {
+                hideLogoutLoading();
+            });
+        })();
+    </script>

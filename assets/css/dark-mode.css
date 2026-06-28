@@ -237,6 +237,28 @@ body.dark-mode .dropdown-menu .dropdown-divider {
     border-top-color: rgba(138, 210, 255, 0.08);
 }
 
+html[data-theme="dark"] .app-confirm-note,
+body[data-theme="dark"] .app-confirm-note,
+body.dark-mode .app-confirm-note {
+    background: rgba(12, 31, 49, 0.88);
+    border-color: rgba(138, 210, 255, 0.12);
+    color: #d8e6f3;
+}
+
+html[data-theme="dark"] .app-confirm-cancel,
+body[data-theme="dark"] .app-confirm-cancel,
+body.dark-mode .app-confirm-cancel {
+    background: #0a1b2c;
+    border-color: rgba(138, 210, 255, 0.12);
+    color: #d8e6f3;
+}
+
+html[data-theme="dark"] .app-confirm-note .text-muted,
+body[data-theme="dark"] .app-confirm-note .text-muted,
+body.dark-mode .app-confirm-note .text-muted {
+    color: #90aeca !important;
+}
+
 html[data-theme="dark"] .chat-widget,
 body[data-theme="dark"] .chat-widget,
 body.dark-mode .chat-widget {

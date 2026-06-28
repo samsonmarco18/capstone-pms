@@ -381,41 +381,49 @@ include '../../includes/navbar.php';
     text-transform: uppercase;
     background: var(--panel-badge-bg);
     color: var(--panel-badge-text);
+    border: 1px solid transparent;
 }
 
 .badge-role.admin {
-    background: rgba(220, 38, 38, 0.15);
-    color: #ff9ca0;
+    background: rgba(220, 38, 38, 0.10);
+    color: #b91c1c;
+    border-color: rgba(220, 38, 38, 0.18);
 }
 
 .badge-role.sales {
-    background: rgba(37, 99, 235, 0.16);
-    color: #8fc1ff;
+    background: rgba(37, 99, 235, 0.10);
+    color: #1d4ed8;
+    border-color: rgba(37, 99, 235, 0.18);
 }
 
 .badge-role.architect {
-    background: rgba(79, 70, 229, 0.16);
-    color: #b7b8ff;
+    background: rgba(79, 70, 229, 0.10);
+    color: #4f46e5;
+    border-color: rgba(79, 70, 229, 0.18);
 }
 
 .badge-role.sul {
-    background: rgba(217, 119, 6, 0.16);
-    color: #ffd58a;
+    background: rgba(217, 119, 6, 0.10);
+    color: #b45309;
+    border-color: rgba(217, 119, 6, 0.18);
 }
 
 .badge-role.qa {
-    background: rgba(14, 116, 144, 0.16);
-    color: #8de7ff;
+    background: rgba(14, 116, 144, 0.10);
+    color: #0f766e;
+    border-color: rgba(14, 116, 144, 0.18);
 }
 
 .badge-role.expert {
-    background: rgba(5, 150, 105, 0.16);
-    color: #94f1c6;
+    background: rgba(5, 150, 105, 0.10);
+    color: #047857;
+    border-color: rgba(5, 150, 105, 0.18);
 }
 
 .badge-role.developer {
-    background: rgba(73, 80, 87, 0.16);
-    color: #d8e6f3;
+    background: rgba(73, 80, 87, 0.10);
+    color: #475569;
+    border-color: rgba(73, 80, 87, 0.18);
 }
 
 .badge-status {
@@ -424,21 +432,26 @@ include '../../includes/navbar.php';
     border-radius: 20px;
     font-size: 0.7rem;
     font-weight: 600;
+    text-transform: uppercase;
+    border: 1px solid transparent;
 }
 
 .badge-status.active {
-    background: rgba(5, 150, 105, 0.16);
-    color: #94f1c6;
+    background: rgba(5, 150, 105, 0.10);
+    color: #047857;
+    border-color: rgba(5, 150, 105, 0.18);
 }
 
 .badge-status.inactive {
-    background: rgba(217, 119, 6, 0.16);
-    color: #ffd58a;
+    background: rgba(217, 119, 6, 0.10);
+    color: #b45309;
+    border-color: rgba(217, 119, 6, 0.18);
 }
 
 .badge-status.suspended {
-    background: rgba(220, 38, 38, 0.15);
-    color: #ff9ca0;
+    background: rgba(220, 38, 38, 0.10);
+    color: #b91c1c;
+    border-color: rgba(220, 38, 38, 0.18);
 }
 
 /* Action Buttons */
@@ -480,8 +493,9 @@ include '../../includes/navbar.php';
 }
 
 .btn-icon.delete {
-    background: rgba(220, 38, 38, 0.15);
-    color: #ff9ca0;
+    background: rgba(220, 38, 38, 0.08);
+    color: #dc2626;
+    border: 1px solid rgba(220, 38, 38, 0.18);
 }
 
 .btn-icon.delete:hover {
@@ -631,6 +645,52 @@ include '../../includes/navbar.php';
     filter: brightness(0) invert(1);
 }
 
+.delete-confirm-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1rem;
+    border-radius: 16px;
+    background: rgba(220, 38, 38, 0.06);
+    border: 1px solid rgba(220, 38, 38, 0.12);
+    color: var(--panel-text);
+}
+
+.delete-confirm-note i {
+    color: #dc2626;
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+}
+
+.btn-delete-cancel {
+    background: var(--panel-surface-alt);
+    border: 1px solid var(--panel-border);
+    color: var(--panel-text);
+    border-radius: 12px;
+    padding: 0.65rem 1.15rem;
+    font-weight: 600;
+}
+
+.btn-delete-cancel:hover {
+    background: var(--panel-row-hover);
+    color: var(--panel-text);
+}
+
+.btn-delete-confirm {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    border: 1px solid #dc2626;
+    color: #fff;
+    border-radius: 12px;
+    padding: 0.65rem 1.15rem;
+    font-weight: 600;
+    box-shadow: 0 10px 22px rgba(220, 38, 38, 0.18);
+}
+
+.btn-delete-confirm:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+    color: #fff;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
     box-shadow: 0 16px 38px rgba(0, 0, 0, 0.26);
 }
@@ -722,6 +782,21 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.delete:hover {
     background: #dc2626;
     color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-note {
+    background: rgba(220, 38, 38, 0.10);
+    border-color: rgba(220, 38, 38, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-cancel {
+    background: var(--panel-surface-alt);
+    border-color: var(--panel-border);
+    color: var(--panel-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-cancel:hover {
+    background: rgba(144, 174, 202, 0.12);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-role.admin {
@@ -949,7 +1024,13 @@ include '../../includes/navbar.php';
                                 <button class="btn-icon edit" onclick="editUser(<?php echo $row['id']; ?>)">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button class="btn-icon delete" onclick="deleteUser(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['full_name']); ?>')">
+                                <button
+                                    type="button"
+                                    class="btn-icon delete"
+                                    data-user-id="<?php echo (int) $row['id']; ?>"
+                                    data-user-name="<?php echo htmlspecialchars($row['full_name'], ENT_QUOTES); ?>"
+                                    onclick="openDeleteUserModal(this)"
+                                >
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -972,6 +1053,39 @@ include '../../includes/navbar.php';
     </div>
 </div>
 
+<!-- Delete User Modal -->
+<div class="modal fade modal-modern" id="deleteUserModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-slash me-2"></i> Delete User
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" id="deleteUserForm" data-app-loading data-loading-title="Deleting user" data-loading-text="Please wait while the account is removed.">
+                <input type="hidden" name="action" value="delete">
+                <input type="hidden" name="id" id="delete_user_id">
+                <div class="modal-body">
+                    <div class="delete-confirm-note mb-0">
+                        <i class="fas fa-triangle-exclamation fa-lg"></i>
+                        <div>
+                            <div class="fw-semibold mb-1" id="deleteUserName">Selected user will appear here.</div>
+                            <div class="small text-muted">This action cannot be undone and the account will be removed permanently.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-delete-confirm">
+                        <i class="fas fa-trash-alt me-1"></i> Yes, delete it
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Create User Modal -->
 <div class="modal fade modal-modern" id="createUserModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
@@ -982,7 +1096,7 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Creating user" data-loading-text="Please wait while the user account is created.">
                 <div class="modal-body">
                     <input type="hidden" name="action" value="create">
                     <div class="row g-3">
@@ -1057,17 +1171,14 @@ function editUser(id) {
     window.location.href = 'edit-user.php?id=' + id;
 }
 
-function deleteUser(id, name) {
-    if (confirm('Are you sure you want to delete user: ' + name + '? This action cannot be undone.')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.innerHTML = `
-            <input type="hidden" name="action" value="delete">
-            <input type="hidden" name="id" value="${id}">
-        `;
-        document.body.appendChild(form);
-        form.submit();
-    }
+function openDeleteUserModal(button) {
+    const userId = button.getAttribute('data-user-id') || '';
+    const userName = button.getAttribute('data-user-name') || 'this user';
+
+    document.getElementById('delete_user_id').value = userId;
+    document.getElementById('deleteUserName').textContent = `User: ${userName}`;
+
+    new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
 }
 
 // Auto-submit on enter in search

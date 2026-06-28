@@ -688,6 +688,11 @@ include '../../includes/navbar.php';
 .recent-task-list {
     display: grid;
     gap: 0.75rem;
+    max-height: 560px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+    scrollbar-gutter: stable;
 }
 
 .recent-task-card {
@@ -699,6 +704,10 @@ include '../../includes/navbar.php';
     border: 1px solid var(--gray-200);
     border-radius: 16px;
     background: #fff;
+}
+
+.recent-task-card > div:first-child {
+    min-width: 0;
 }
 
 .recent-task-title {
@@ -834,6 +843,10 @@ include '../../includes/navbar.php';
 
     .recent-task-card {
         grid-template-columns: 1fr;
+    }
+
+    .recent-task-list {
+        max-height: 380px;
     }
 }
 </style>

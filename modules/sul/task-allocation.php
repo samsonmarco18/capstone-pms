@@ -1476,7 +1476,7 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="p-3 allocation-column-body">
                     <?php if($projectsForAllocation->num_rows > 0): ?>
-                        <form method="POST" class="row g-3 align-items-end">
+                        <form method="POST" class="row g-3 align-items-end" data-app-loading data-loading-title="Assigning project" data-loading-text="Please wait while the project features are assigned to the expert.">
                             <div class="col-md-6">
                                 <label class="form-label">Project</label>
                                 <select name="project_id" class="form-select-custom" required>
@@ -1700,7 +1700,7 @@ include '../../includes/navbar.php';
                 <?php if($codeReviewTasks->num_rows > 0): ?>
                     <?php while($task = $codeReviewTasks->fetch_assoc()): ?>
                     <div class="task-card">
-                        <form method="POST">
+                        <form method="POST" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
                             <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
                             <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
                                 <div class="flex-grow-1">
@@ -1810,7 +1810,7 @@ include '../../includes/navbar.php';
                 <h5 class="modal-title"><i class="fas fa-user-plus me-2"></i>Assign to Expert</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Assigning expert" data-loading-text="Please wait while the expert assignment is saved.">
                 <div class="modal-body">
                     <input type="hidden" name="task_id" id="expertTaskId">
                     <p><strong>Task:</strong> <span id="expertTaskTitle"></span></p>
@@ -1847,7 +1847,7 @@ include '../../includes/navbar.php';
                 <h5 class="modal-title"><i class="fas fa-user-plus me-2"></i>Assign to Developer</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Assigning developer" data-loading-text="Please wait while the developer assignment is saved.">
                 <div class="modal-body">
                     <input type="hidden" name="task_id" id="devTaskId">
                     <p><strong>Task:</strong> <span id="devTaskTitle"></span></p>
@@ -1885,7 +1885,7 @@ include '../../includes/navbar.php';
                 <h5 class="modal-title"><i class="fas fa-undo me-2"></i>Request Revision</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Sending revision" data-loading-text="Please wait while the revision request is sent.">
                 <div class="modal-body">
                     <input type="hidden" name="task_id" id="reviseTaskId">
                     <p><strong>Task:</strong> <span id="reviseTaskTitle"></span></p>
@@ -1911,7 +1911,7 @@ include '../../includes/navbar.php';
                 <h5 class="modal-title"><i class="fas fa-times-circle me-2"></i>Reject Estimation</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Rejecting estimation" data-loading-text="Please wait while the estimation is returned to the expert.">
                 <div class="modal-body">
                     <input type="hidden" name="task_id" id="rejectTaskId">
                     <p><strong>Task:</strong> <span id="rejectTaskTitle"></span></p>
@@ -1962,14 +1962,26 @@ function openAssignDeveloperModal(taskId, taskTitle, deadline) {
     new bootstrap.Modal(document.getElementById('assignDeveloperModal')).show();
 }
 
-function approveEstimation(taskId) {
-    if(confirm('Approve this estimation? The task will be ready for developer assignment.')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.innerHTML = `<input type="hidden" name="approve_estimation" value="1"><input type="hidden" name="task_id" value="${taskId}">`;
-        document.body.appendChild(form);
-        form.submit();
+async function approveEstimation(taskId) {
+    const confirmed = await appConfirm({
+        title: 'Approve Estimation',
+        subject: 'Approve this estimation?',
+        message: 'The task will become ready for developer assignment.',
+        icon: 'fas fa-circle-check fa-lg',
+        confirmIcon: 'fas fa-check',
+        confirmText: 'Approve'
+    });
+    if (!confirmed) return;
+
+    if (window.appShowLoading) {
+        window.appShowLoading('Approving estimation', 'Please wait while the task is prepared for developer assignment.');
     }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.innerHTML = `<input type="hidden" name="approve_estimation" value="1"><input type="hidden" name="task_id" value="${taskId}">`;
+    document.body.appendChild(form);
+    form.submit();
 }
 
 function openRejectModal(taskId, taskTitle) {

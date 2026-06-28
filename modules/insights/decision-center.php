@@ -736,7 +736,55 @@ body,
     border: 1px solid var(--gray-200);
     border-radius: 28px;
     box-shadow: var(--shadow-sm);
-    padding: 1.6rem 1.75rem;
+    overflow: hidden;
+}
+
+.overview-project-card summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 1.35rem 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    background: #fff;
+}
+
+.overview-project-card summary::-webkit-details-marker {
+    display: none;
+}
+
+.overview-project-card summary:focus-visible {
+    outline: 3px solid rgba(31, 99, 146, 0.22);
+    outline-offset: -3px;
+}
+
+.overview-project-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.overview-project-toggle {
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(31, 99, 146, 0.08);
+    color: var(--insight-primary);
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.overview-project-card[open] .overview-project-toggle {
+    transform: rotate(180deg);
+    background: rgba(31, 99, 146, 0.14);
+}
+
+.overview-project-body {
+    padding: 0 1.5rem 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 1.25rem;
@@ -1354,6 +1402,20 @@ body,
     border-color: var(--insight-border);
     box-shadow: 0 16px 36px rgba(3, 14, 25, 0.22);
     color: var(--insight-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-body {
+    background: var(--insight-surface);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-toggle {
+    background: rgba(157, 182, 207, 0.1);
+    color: var(--insight-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card[open] .overview-project-toggle {
+    background: rgba(157, 182, 207, 0.16);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-card .card-header,
@@ -2142,7 +2204,7 @@ body,
     </div>
 
     <div class="overview-results-note" id="overviewResultsNote">
-        Showing <?php echo count($projects); ?> project card(s).
+        Showing <?php echo count($projects); ?> project card(s). Click a project to expand its full insight.
     </div>
 
     <div class="overview-card-grid">
@@ -2165,97 +2227,107 @@ body,
                 . delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))
             ));
             ?>
-            <div
+            <details
                 class="overview-project-card js-overview-card <?php echo $riskLevel === 'High' ? 'risk-high' : ($riskLevel === 'Medium' ? 'risk-medium' : 'risk-low'); ?>"
                 data-name="<?php echo htmlspecialchars(strtolower((string) $project['name'])); ?>"
                 data-date="<?php echo (int) $createdAtTs; ?>"
                 data-risk="<?php echo (int) $riskOrder; ?>"
                 data-search="<?php echo htmlspecialchars($searchBlob); ?>"
             >
-                <div class="overview-project-head">
-                    <div>
-                        <h5><?php echo htmlspecialchars($project['name']); ?></h5>
-                        <div class="overview-project-meta">
-                            Client: <?php echo htmlspecialchars($project['client_name']); ?> |
-                            Status: <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $project['status']))); ?> |
-                            Timeline: <?php echo htmlspecialchars(delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))); ?>
+                <summary>
+                    <div class="overview-project-summary">
+                        <div class="overview-project-head">
+                            <div>
+                                <h5><?php echo htmlspecialchars($project['name']); ?></h5>
+                                <div class="overview-project-meta">
+                                    Client: <?php echo htmlspecialchars($project['client_name']); ?> |
+                                    Status: <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $project['status']))); ?> |
+                                    Timeline: <?php echo htmlspecialchars(delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))); ?>
+                                </div>
+                            </div>
+                            <span class="delay-risk-badge <?php echo $riskClass; ?>">
+                                <i class="fas fa-signal"></i>
+                                <?php echo htmlspecialchars($riskLevel); ?> Delay Risk
+                            </span>
                         </div>
+                        <div class="overview-summary">Click to review the full project insight summary.</div>
                     </div>
-                    <span class="delay-risk-badge <?php echo $riskClass; ?>">
-                        <i class="fas fa-signal"></i>
-                        <?php echo htmlspecialchars($riskLevel); ?> Delay Risk
+                    <span class="overview-project-toggle" aria-hidden="true">
+                        <i class="fas fa-chevron-down"></i>
                     </span>
-                </div>
+                </summary>
 
-                <?php if ($overviewInsight !== null): ?>
-                    <div class="overview-insight-layout">
-                        <div class="overview-panel before">
-                            <div class="overview-panel-title">
-                                <i class="fas fa-drafting-compass"></i>
-                                Before Project Insight
-                            </div>
-                            <div class="overview-metric-grid">
-                                <div class="overview-mini-card">
-                                    <span>Delay Chance</span>
-                                    <strong><?php echo (int) $overviewInsight['before']['delay_probability']; ?>%</strong>
+                <div class="overview-project-body">
+                    <?php if ($overviewInsight !== null): ?>
+                        <div class="overview-insight-layout">
+                            <div class="overview-panel before">
+                                <div class="overview-panel-title">
+                                    <i class="fas fa-drafting-compass"></i>
+                                    Before Project Insight
                                 </div>
-                                <div class="overview-mini-card">
-                                    <span>Success Chance</span>
-                                    <strong><?php echo (int) $overviewInsight['before']['success_probability']; ?>%</strong>
+                                <div class="overview-metric-grid">
+                                    <div class="overview-mini-card">
+                                        <span>Delay Chance</span>
+                                        <strong><?php echo (int) $overviewInsight['before']['delay_probability']; ?>%</strong>
+                                    </div>
+                                    <div class="overview-mini-card">
+                                        <span>Success Chance</span>
+                                        <strong><?php echo (int) $overviewInsight['before']['success_probability']; ?>%</strong>
+                                    </div>
                                 </div>
+                                <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['before']['summary']); ?></p>
+                                <?php if (!empty($overviewInsight['before']['tips'])): ?>
+                                    <ul class="overview-list">
+                                        <?php foreach (array_slice($overviewInsight['before']['tips'], 0, 2) as $tip): ?>
+                                            <li><?php echo htmlspecialchars($tip); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
                             </div>
-                            <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['before']['summary']); ?></p>
-                            <?php if (!empty($overviewInsight['before']['tips'])): ?>
-                                <ul class="overview-list">
-                                    <?php foreach (array_slice($overviewInsight['before']['tips'], 0, 2) as $tip): ?>
-                                        <li><?php echo htmlspecialchars($tip); ?></li>
-                                    <?php endforeach; ?>
-                                </ul>
-                            <?php endif; ?>
-                        </div>
 
-                        <div class="overview-panel after">
-                            <div class="overview-panel-title">
-                                <i class="fas fa-clipboard-list"></i>
-                                After Project Review
-                            </div>
-                            <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['after']['summary']); ?></p>
-                            <?php if (!empty($overviewInsight['after']['reasons'])): ?>
-                                <div class="overview-tags">
-                                    <?php foreach (array_slice($overviewInsight['after']['reasons'], 0, 2) as $reason): ?>
-                                        <span class="overview-tag"><?php echo htmlspecialchars($reason); ?></span>
-                                    <?php endforeach; ?>
+                            <div class="overview-panel after">
+                                <div class="overview-panel-title">
+                                    <i class="fas fa-clipboard-list"></i>
+                                    After Project Review
                                 </div>
-                            <?php endif; ?>
-                            <div class="overview-note"><?php echo htmlspecialchars($overviewInsight['after']['note']); ?></div>
+                                <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['after']['summary']); ?></p>
+                                <?php if (!empty($overviewInsight['after']['reasons'])): ?>
+                                    <div class="overview-tags">
+                                        <?php foreach (array_slice($overviewInsight['after']['reasons'], 0, 2) as $reason): ?>
+                                            <span class="overview-tag"><?php echo htmlspecialchars($reason); ?></span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                                <div class="overview-note"><?php echo htmlspecialchars($overviewInsight['after']['note']); ?></div>
+                            </div>
                         </div>
+                    <?php else: ?>
+                        <p class="overview-summary">Insight details are not available yet for this project.</p>
+                    <?php endif; ?>
+
+                    <div class="overview-footer">
+                        <a class="toolbar-button primary" href="<?php echo htmlspecialchars($projectStatsUrl); ?>">
+                            <i class="fas fa-chart-bar"></i>
+                            View Overall Statistics
+                        </a>
+                        <button
+                            type="button"
+                            class="toolbar-button open-action-modal"
+                            data-project-id="<?php echo $projectId; ?>"
+                            data-project-name="<?php echo htmlspecialchars($project['name']); ?>"
+                            data-scenario=""
+                            data-label=""
+                            data-default-value=""
+                            data-min=""
+                            data-max=""
+                            data-unit=""
+                        >
+                            <i class="fas fa-bolt"></i>
+                            Actions
+                        </button>
                     </div>
-                <?php else: ?>
-                    <p class="overview-summary">Insight details are not available yet for this project.</p>
-                <?php endif; ?>
-
-                <div class="overview-footer">
-                    <a class="toolbar-button primary" href="<?php echo htmlspecialchars($projectStatsUrl); ?>">
-                        <i class="fas fa-chart-bar"></i>
-                        View Overall Statistics
-                    </a>
-                    <button
-                        type="button"
-                        class="toolbar-button open-action-modal"
-                        data-project-id="<?php echo $projectId; ?>"
-                        data-project-name="<?php echo htmlspecialchars($project['name']); ?>"
-                        data-scenario=""
-                        data-label=""
-                        data-default-value=""
-                        data-min=""
-                        data-max=""
-                        data-unit=""
-                    >
-                        <i class="fas fa-bolt"></i>
-                        Actions
-                    </button>
                 </div>
-            </div>
+            </details>
         <?php endforeach; ?>
     </div>
     <?php endif; ?>
@@ -2438,6 +2510,20 @@ if (overviewSearchButtonEl) {
 if (overviewSortEl) {
     overviewSortEl.addEventListener('change', applyOverviewFilters);
 }
+
+document.querySelectorAll('.overview-project-card').forEach((card) => {
+    card.addEventListener('toggle', () => {
+        if (!card.open) {
+            return;
+        }
+
+        document.querySelectorAll('.overview-project-card[open]').forEach((otherCard) => {
+            if (otherCard !== card) {
+                otherCard.open = false;
+            }
+        });
+    });
+});
 
 applyOverviewFilters();
 

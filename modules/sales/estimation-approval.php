@@ -1194,7 +1194,7 @@ include '../../includes/navbar.php';
                 <h5 class="modal-title"><i class="fas fa-times-circle me-2"></i>Reject Estimation</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Rejecting estimation" data-loading-text="Please wait while the estimation is returned to the expert.">
                 <div class="modal-body">
                     <input type="hidden" name="task_id" id="rejectTaskId">
                     <div class="mb-3">
@@ -1494,7 +1494,7 @@ function syncSalesSelection(taskId) {
     });
 }
 
-function approveEstimation(taskId) {
+async function approveEstimation(taskId) {
     const choiceInput = document.querySelector(`input[name="estimate_choice_${taskId}"]:checked`);
     const estimateChoice = choiceInput?.value || '';
     const daysValue = parseInt(choiceInput?.dataset?.days || '0', 10);
@@ -1502,7 +1502,18 @@ function approveEstimation(taskId) {
         alert('Please choose Minimum, Most Likely, or Maximum before approving.');
         return;
     }
-    if (!confirm('Approve this estimation and send to SUL?')) return;
+    const confirmed = await appConfirm({
+        title: 'Approve Estimation',
+        subject: 'Send this estimation to SUL?',
+        message: 'The selected timeline will be saved and the task will move to SUL review.',
+        icon: 'fas fa-circle-check fa-lg',
+        confirmIcon: 'fas fa-check',
+        confirmText: 'Approve'
+    });
+    if (!confirmed) return;
+    if (window.appShowLoading) {
+        window.appShowLoading('Approving estimation', 'Please wait while the task is sent to SUL.');
+    }
     const form = document.createElement('form');
     form.method = 'POST';
     form.innerHTML = `<input type="hidden" name="approve_estimation" value="1"><input type="hidden" name="task_id" value="${taskId}"><input type="hidden" name="estimate_choice" value="${estimateChoice}"><input type="hidden" name="estimate_days" value="${daysValue}">`;

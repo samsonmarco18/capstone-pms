@@ -3,6 +3,8 @@ require_once 'includes/auth.php';
 requireLogin();
 $user = getCurrentUser();
 $conn = getConnection();
+$projectDetailsPanelAsset = __DIR__ . '/js/project-details-panel.js';
+$projectDetailsPanelVersion = is_file($projectDetailsPanelAsset) ? (int) filemtime($projectDetailsPanelAsset) : time();
 ?>
 
 <?php include 'includes/header.php'; ?>
@@ -26,6 +28,10 @@ $conn = getConnection();
     --gray-900: #212529;
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.02);
+}
+
+body {
+    background: linear-gradient(180deg, #f7fbff 0%, #eef5fb 100%);
 }
 
 /* Page Header */
@@ -868,7 +874,7 @@ $conn = getConnection();
     </div>
 </div>
 
-<script src="<?php echo BASE_URL; ?>js/project-details-panel.js?v=<?php echo (int) filemtime(__DIR__ . '/js/project-details-panel.js'); ?>"></script>
+<script src="<?php echo BASE_URL; ?>js/project-details-panel.js?v=<?php echo $projectDetailsPanelVersion; ?>"></script>
 <script>
 // Global variables
 let currentFolderId = 0;

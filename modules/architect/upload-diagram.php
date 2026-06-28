@@ -537,7 +537,7 @@ a.progress-step:hover {
                     <h5><i class="fas fa-plus-circle"></i> Upload New Document</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" enctype="multipart/form-data">
+                    <form method="POST" enctype="multipart/form-data" data-app-loading data-loading-title="Uploading document" data-loading-text="Please wait while the architecture document is uploaded.">
                         <div class="mb-3">
                             <label class="form-label">Document Type</label>
                             <select name="document_type" class="form-select-modern" required>
@@ -635,15 +635,31 @@ a.progress-step:hover {
 </div>
 
 <script>
-function deleteDocument(id) {
-    if(confirm('Are you sure you want to delete this document?')) {
-        $.ajax({
-            url: '../../api/delete-document.php',
-            method: 'POST',
-            data: { id: id },
-            success: function() { location.reload(); }
-        });
+async function deleteDocument(id) {
+    const confirmed = await appConfirm({
+        title: 'Delete Document',
+        subject: 'Delete this architecture document?',
+        message: 'The uploaded document will be removed permanently.',
+        icon: 'fas fa-triangle-exclamation fa-lg',
+        variant: 'danger',
+        confirmIcon: 'fas fa-trash-alt',
+        confirmText: 'Yes, delete it'
+    });
+    if (!confirmed) return;
+
+    if (window.appShowLoading) {
+        window.appShowLoading('Deleting document', 'Please wait while the document is removed.');
     }
+
+    $.ajax({
+        url: '../../api/delete-document.php',
+        method: 'POST',
+        data: { id: id },
+        success: function() { location.reload(); },
+        complete: function() {
+            if (window.appHideLoading) window.appHideLoading();
+        }
+    });
 }
 </script>
 

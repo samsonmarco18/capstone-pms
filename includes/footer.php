@@ -49,6 +49,42 @@
         </div>
     </div>
 
+    <div class="modal fade app-confirm-modal" id="appConfirmModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="appConfirmTitle">
+                        <i class="fas fa-triangle-exclamation me-2"></i> Confirm Action
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="app-confirm-note mb-0">
+                        <i class="fas fa-circle-info fa-lg" id="appConfirmIcon"></i>
+                        <div>
+                            <div class="fw-semibold mb-1" id="appConfirmSubject">Please confirm this action.</div>
+                            <div class="small text-muted" id="appConfirmMessage">This action may affect the system workflow.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="app-confirm-cancel" data-bs-dismiss="modal" id="appConfirmCancelBtn">Cancel</button>
+                    <button type="button" class="app-confirm-submit" id="appConfirmSubmitBtn">
+                        <i class="fas fa-check me-1"></i> Continue
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-global-loading-overlay" id="appGlobalLoadingOverlay" aria-hidden="true">
+        <div class="app-global-loading-content" role="status" aria-live="polite">
+            <div class="spinner-border app-global-loading-spinner" role="presentation"></div>
+            <div class="app-global-loading-title" id="appGlobalLoadingTitle">Working on it</div>
+            <p class="app-global-loading-text" id="appGlobalLoadingText">Please wait while the system finishes this action.</p>
+        </div>
+    </div>
+
     <div class="sidebar-overlay"></div>
 
     <script src="<?php echo BASE_URL; ?>assets/js/chat.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/chat.js'); ?>" defer></script>

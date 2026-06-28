@@ -1378,6 +1378,75 @@ include '../../includes/navbar.php';
     color: white !important;
 }
 
+.delete-confirm-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1rem;
+    border-radius: 16px;
+    background: rgba(220, 38, 38, 0.06);
+    border: 1px solid rgba(220, 38, 38, 0.12);
+    color: var(--gray-900);
+}
+
+.delete-confirm-note i {
+    color: #dc2626;
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+}
+
+.btn-delete-cancel {
+    background: #f8fafc;
+    border: 1px solid var(--gray-200);
+    color: var(--gray-900);
+    border-radius: 12px;
+    padding: 0.65rem 1.15rem;
+    font-weight: 600;
+}
+
+.btn-delete-cancel:hover {
+    background: #eef2f7;
+    color: var(--gray-900);
+}
+
+.btn-delete-confirm {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    border: 1px solid #dc2626;
+    color: #fff;
+    border-radius: 12px;
+    padding: 0.65rem 1.15rem;
+    font-weight: 600;
+    box-shadow: 0 10px 22px rgba(220, 38, 38, 0.18);
+}
+
+.btn-delete-confirm:hover {
+    background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
+    color: #fff;
+}
+
+.modal-modern.delete-confirm-modal .modal-body {
+    padding: 1.25rem 1.5rem;
+}
+
+.modal-modern.delete-confirm-modal .modal-footer {
+    padding: 0 1.5rem 1.35rem;
+}
+
+.modal-modern.delete-confirm-modal .delete-confirm-note {
+    padding: 0.85rem 0.9rem;
+    border-radius: 14px;
+}
+
+.modal-modern.delete-confirm-modal .delete-confirm-note .fw-semibold {
+    font-size: 0.95rem;
+    line-height: 1.25;
+    word-break: break-word;
+}
+
+.modal-modern.delete-confirm-modal .delete-confirm-note .small {
+    line-height: 1.35;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
     background: #06111e;
 }
@@ -1523,6 +1592,45 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .unsaved-close-panel__text,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .unsaved-close-panel__text strong {
     color: #fbbf24;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-note {
+    background: rgba(220, 38, 38, 0.12);
+    border-color: rgba(220, 38, 38, 0.3);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-cancel {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-delete-cancel:hover {
+    background: #0f2438;
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-modal .modal-header {
+    background: linear-gradient(135deg, #0b3654 0%, #0f5f94 100%);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-title {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-text {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-target {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-target i {
+    color: #66c8ff;
 }
 
 /* Responsive */
@@ -1731,7 +1839,7 @@ include '../../includes/navbar.php';
                 <button class="btn-icon edit" onclick="editClient(<?php echo htmlspecialchars(json_encode($client)); ?>)">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn-icon delete" onclick="deleteClient(<?php echo $client['id']; ?>, '<?php echo htmlspecialchars($client['name']); ?>')">
+                <button class="btn-icon delete" onclick="openDeleteClientModal(<?php echo (int) $client['id']; ?>, <?php echo htmlspecialchars(json_encode($client['name'])); ?>)">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
@@ -1765,7 +1873,7 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close add-client-close" aria-label="Close"></button>
             </div>
-            <form method="POST" id="addClientForm" novalidate>
+            <form method="POST" id="addClientForm" novalidate data-app-loading data-loading-title="Saving client" data-loading-text="Please wait while the client, project details, folders, and notifications are saved.">
                 <div class="modal-body">
                     <div class="add-client-stepper" aria-label="Add client progress">
                         <button type="button" class="stepper-item is-active" data-step-target="0" aria-current="step" disabled>
@@ -1914,7 +2022,7 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" data-app-loading data-loading-title="Updating client" data-loading-text="Please wait while the client details are updated.">
                 <input type="hidden" name="id" id="edit_id">
                 <div class="modal-body">
                     <div class="row">
@@ -1982,6 +2090,64 @@ include '../../includes/navbar.php';
                     </div>
                     <p class="mt-2 text-muted">Loading client details...</p>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Client Modal -->
+<div class="modal fade modal-modern delete-confirm-modal" id="deleteClientModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-building-circle-xmark me-2"></i> Delete Client
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="delete-confirm-note mb-0">
+                    <i class="fas fa-triangle-exclamation fa-lg"></i>
+                    <div>
+                        <div class="fw-semibold mb-1" id="deleteClientName">Selected client</div>
+                        <div class="small text-muted">This will remove the client and all related projects, tasks, and files. This action cannot be undone.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-delete-confirm" id="deleteClientConfirmBtn">
+                    <i class="fas fa-trash-alt me-1"></i> Yes, delete it
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Draft Modal -->
+<div class="modal fade modal-modern delete-confirm-modal" id="deleteDraftModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-circle-xmark me-2"></i> Delete Draft
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="delete-confirm-note mb-0">
+                    <i class="fas fa-triangle-exclamation fa-lg"></i>
+                    <div>
+                        <div class="fw-semibold mb-1" id="deleteDraftName">Untitled draft</div>
+                        <div class="small text-muted">This saved draft will be removed from this browser. This action cannot be undone.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn-delete-confirm" id="deleteDraftConfirmBtn">
+                    <i class="fas fa-trash-alt me-1"></i> Yes, delete it
+                </button>
             </div>
         </div>
     </div>
@@ -2098,17 +2264,75 @@ function viewClient(id) {
     });
 }
 
-function deleteClient(id, name) {
-    if (confirm(`WARNING: This will delete client "${name}" and ALL associated projects, tasks, and files. This action cannot be undone.\n\nAre you sure you want to proceed?`)) {
+let pendingDeleteClientId = null;
+const deleteClientModalElement = document.getElementById('deleteClientModal');
+const deleteClientConfirmBtn = document.getElementById('deleteClientConfirmBtn');
+const deleteClientName = document.getElementById('deleteClientName');
+let pendingDeleteDraftId = null;
+const deleteDraftModalElement = document.getElementById('deleteDraftModal');
+const deleteDraftConfirmBtn = document.getElementById('deleteDraftConfirmBtn');
+const deleteDraftName = document.getElementById('deleteDraftName');
+
+function openDeleteClientModal(id, name) {
+    pendingDeleteClientId = Number(id) || null;
+
+    if (deleteClientName) {
+        deleteClientName.textContent = name || 'Selected client';
+    }
+
+    new bootstrap.Modal(deleteClientModalElement).show();
+}
+
+function openDeleteDraftModal(draftId, draftLabel) {
+    pendingDeleteDraftId = String(draftId || '').trim();
+    if (!pendingDeleteDraftId) {
+        return;
+    }
+
+    if (deleteDraftName) {
+        deleteDraftName.textContent = draftLabel || 'Untitled draft';
+    }
+
+    new bootstrap.Modal(deleteDraftModalElement).show();
+}
+
+if (deleteClientConfirmBtn) {
+    deleteClientConfirmBtn.addEventListener('click', function () {
+        if (!pendingDeleteClientId) {
+            return;
+        }
+
+        if (window.appShowLoading) {
+            window.appShowLoading('Deleting client', 'Please wait while the client and related records are removed.');
+        }
+
         const form = document.createElement('form');
         form.method = 'POST';
         form.innerHTML = `
             <input type="hidden" name="delete_client" value="1">
-            <input type="hidden" name="id" value="${id}">
+            <input type="hidden" name="id" value="${pendingDeleteClientId}">
         `;
         document.body.appendChild(form);
         form.submit();
-    }
+    });
+}
+
+if (deleteDraftConfirmBtn) {
+    deleteDraftConfirmBtn.addEventListener('click', function () {
+        if (!pendingDeleteDraftId) {
+            return;
+        }
+
+        const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== pendingDeleteDraftId);
+        saveStoredDrafts(remainingDrafts);
+
+        if (activeDraftId === pendingDeleteDraftId) {
+            resetCurrentClientInput();
+        }
+
+        pendingDeleteDraftId = null;
+        updateDraftStatus(hasStoredDraft());
+    });
 }
 
 const addClientModalElement = document.getElementById('addClientModal');
@@ -2578,13 +2802,10 @@ if (addClientModalElement && addClientForm) {
                 return;
             }
 
-            if (action === 'delete' && confirm('Delete this saved draft?')) {
-                const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== draftId);
-                saveStoredDrafts(remainingDrafts);
-                if (activeDraftId === draftId) {
-                    resetCurrentClientInput();
-                }
-                updateDraftStatus(hasStoredDraft());
+            if (action === 'delete') {
+                const draft = getStoredDrafts().find((item) => item.id === draftId);
+                const draftLabel = draft?.data?.name || draft?.data?.project_name || 'Untitled draft';
+                openDeleteDraftModal(draftId, draftLabel);
             }
         });
     }

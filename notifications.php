@@ -5,6 +5,24 @@ requireLogin();
 $user = getCurrentUser();
 $conn = getConnection();
 
+function resolveNotificationActionUrl(?string $actionUrl): string
+{
+    $url = trim((string) $actionUrl);
+    if ($url === '') {
+        return BASE_URL . 'notifications.php';
+    }
+
+    if (preg_match('#^https?://#i', $url)) {
+        return $url;
+    }
+
+    if ($url[0] === '/') {
+        return BASE_URL . ltrim($url, '/');
+    }
+
+    return BASE_URL . ltrim($url, '/');
+}
+
 // Handle delete request
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_notification'])) {
     $notificationId = (int)$_POST['notification_id'];
@@ -127,6 +145,15 @@ include 'includes/navbar.php';
 
 .notification-content {
     flex: 1;
+}
+
+.notification-link {
+    display: block;
+    text-decoration: none;
+}
+
+.notification-link:hover .notification-title {
+    color: var(--theme-primary);
 }
 
 .notification-title {
@@ -346,7 +373,11 @@ include 'includes/navbar.php';
                         <div class="notification-icon">
                             <i class="fas fa-bell"></i>
                         </div>
-                        <div class="notification-content" onclick="markAsRead(<?php echo $notification['id']; ?>)">
+                        <a
+                            class="notification-content notification-link"
+                            href="<?php echo htmlspecialchars(resolveNotificationActionUrl($notification['action_url'] ?? '')); ?>"
+                            onclick="return markAsReadAndGo(<?php echo (int) $notification['id']; ?>, this.href, event);"
+                        >
                             <div class="notification-title">
                                 <?php if (!$notification['is_read']): ?>
                                     <span class="unread-dot"></span>
@@ -360,7 +391,7 @@ include 'includes/navbar.php';
                                 <i class="far fa-clock"></i>
                                 <?php echo date('M d, Y h:i A', strtotime($notification['created_at'])); ?>
                             </div>
-                        </div>
+                        </a>
                         <button class="btn-delete-notification" onclick="deleteNotification(<?php echo $notification['id']; ?>, event)">
                             <i class="fas fa-trash-alt"></i>
                         </button>
@@ -378,15 +409,21 @@ include 'includes/navbar.php';
 </div>
 
 <script>
-function markAsRead(notificationId) {
+function markAsReadAndGo(notificationId, targetUrl, event) {
+    if (event) {
+        event.preventDefault();
+    }
+
     $.ajax({
         url: '<?php echo BASE_URL; ?>api/notifications/mark-read.php',
         method: 'POST',
         data: { id: notificationId },
         success: function() {
-            location.reload();
+            window.location.href = targetUrl;
         }
     });
+
+    return false;
 }
 
 function markAllAsRead() {

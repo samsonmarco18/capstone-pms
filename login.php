@@ -472,6 +472,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-top: 14px;
         }
 
+        .login-loading-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(6, 10, 18, 0.72);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+
+        .login-loading-overlay.is-visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .login-loading-spinner {
+            width: 3.25rem;
+            height: 3.25rem;
+            border-width: 0.3em;
+            color: #66c8ff;
+        }
+
+        .login-loading-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #fff;
+        }
+
+        .login-loading-title {
+            margin: 18px 0 6px;
+            font-family: 'Montserrat', 'Source Sans 3', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .login-loading-text {
+            margin: 0;
+            font-size: 0.92rem;
+            color: rgba(255, 255, 255, 0.78);
+        }
+
         @media (max-width: 1100px) {
             .login-shell {
                 grid-template-columns: 1fr;
@@ -750,8 +803,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 
+    <div class="login-loading-overlay" id="loginLoadingOverlay" aria-hidden="true">
+        <div class="login-loading-content" role="status" aria-live="polite" aria-label="Signing in">
+            <div class="spinner-border login-loading-spinner" role="presentation"></div>
+            <div class="login-loading-title">Signing you in</div>
+            <p class="login-loading-text">Please wait while we verify your account.</p>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const loginForm = document.getElementById('loginForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginLoadingOverlay = document.getElementById('loginLoadingOverlay');
+
+        function showLoginLoading() {
+            if (!loginLoadingOverlay) {
+                return;
+            }
+
+            loginLoadingOverlay.classList.add('is-visible');
+            loginLoadingOverlay.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function hideLoginLoading() {
+            if (!loginLoadingOverlay) {
+                return;
+            }
+
+            loginLoadingOverlay.classList.remove('is-visible');
+            loginLoadingOverlay.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+
         function togglePassword() {
             const input = document.getElementById('password');
             const toggle = document.getElementById('passwordToggle');
@@ -805,10 +890,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        document.getElementById('loginForm').addEventListener('submit', function () {
-            const btn = document.getElementById('loginBtn');
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing in...';
-            btn.disabled = true;
+        if (loginForm) {
+            loginForm.addEventListener('submit', function () {
+                if (loginBtn) {
+                    loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing in...';
+                    loginBtn.disabled = true;
+                }
+
+                showLoginLoading();
+            });
+        }
+
+        window.addEventListener('pageshow', function () {
+            hideLoginLoading();
+            if (loginBtn) {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = 'Sign in';
+            }
         });
 
     </script>
