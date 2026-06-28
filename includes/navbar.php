@@ -17,7 +17,16 @@ if ($user) {
     }
     $stmt->close();
 }
+
+$appUserContext = [
+    'id' => (int) ($user['id'] ?? 0),
+    'role' => (string) ($user['role'] ?? ''),
+];
 ?>
+
+<script>
+    window.APP_USER_CONTEXT = <?php echo json_encode($appUserContext, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+</script>
 
 <div id="page-content-wrapper">
     <nav class="navbar app-navbar navbar-light bg-white shadow-sm sticky-top">
@@ -182,26 +191,195 @@ if ($user) {
         .notifications-menu .notification-item-message {
             line-height: 1.35;
         }
+
+        .app-logout-modal .modal-content {
+            border: 0;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 28px 72px rgba(8, 31, 50, 0.24);
+        }
+
+        .app-logout-modal .modal-header {
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 1.1rem 1.25rem;
+            background: linear-gradient(135deg, #0d6786 0%, #0a5570 100%);
+            color: #fff;
+            border: 0;
+        }
+
+        .app-logout-modal .modal-title {
+            margin: 0;
+            font-family: 'Montserrat', 'Source Sans 3', sans-serif;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1.2;
+        }
+
+        .app-logout-modal .app-logout-modal-eyebrow {
+            margin-bottom: 0.2rem;
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .app-logout-modal .btn-close {
+            flex: 0 0 auto;
+            margin: 0;
+            filter: invert(1) grayscale(100%) brightness(2);
+            opacity: 0.95;
+            box-shadow: none;
+        }
+
+        .app-logout-modal .modal-body {
+            padding: 1.6rem 1.5rem 1.25rem;
+        }
+
+        .app-logout-modal .app-logout-icon {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 1rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(13, 103, 134, 0.12);
+            color: #0d6786;
+            font-size: 1.7rem;
+            box-shadow: inset 0 0 0 1px rgba(13, 103, 134, 0.08);
+        }
+
+        .app-logout-modal .app-logout-title {
+            margin-bottom: 0.55rem;
+            color: #123b4d;
+            font-family: 'Montserrat', 'Source Sans 3', sans-serif;
+            font-weight: 700;
+        }
+
+        .app-logout-modal .app-logout-text {
+            margin: 0;
+            color: #5f7482;
+            line-height: 1.5;
+        }
+
+        .app-logout-modal .modal-footer {
+            padding: 1rem 1.25rem 1.25rem;
+            background: #f8fbfd;
+            border-top: 1px solid rgba(18, 80, 127, 0.08);
+        }
+
+        .app-logout-modal .app-logout-actions {
+            width: 100%;
+        }
+
+        .app-logout-modal .app-logout-actions .btn {
+            min-width: 156px;
+            padding: 0.72rem 1.1rem;
+            font-weight: 700;
+            border-radius: 12px;
+        }
+
+        @media (max-width: 576px) {
+            .app-logout-modal .modal-header,
+            .app-logout-modal .modal-body,
+            .app-logout-modal .modal-footer {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+
+            .app-logout-modal .app-logout-actions .btn {
+                min-width: 0;
+                width: 100%;
+            }
+        }
+
+        html[data-theme="dark"] .app-logout-modal .modal-content,
+        body[data-theme="dark"] .app-logout-modal .modal-content,
+        body.dark-mode .app-logout-modal .modal-content {
+            background: #071321;
+            border: 1px solid rgba(138, 210, 255, 0.12);
+            box-shadow: 0 28px 72px rgba(0, 0, 0, 0.42);
+            color: #d8e6f3;
+        }
+
+        html[data-theme="dark"] .app-logout-modal .modal-header,
+        body[data-theme="dark"] .app-logout-modal .modal-header,
+        body.dark-mode .app-logout-modal .modal-header {
+            background: linear-gradient(135deg, #0b3654 0%, #0f5f94 100%);
+        }
+
+        html[data-theme="dark"] .app-logout-modal .app-logout-title,
+        body[data-theme="dark"] .app-logout-modal .app-logout-title,
+        body.dark-mode .app-logout-modal .app-logout-title,
+        html[data-theme="dark"] .app-logout-modal .app-logout-text,
+        body[data-theme="dark"] .app-logout-modal .app-logout-text,
+        body.dark-mode .app-logout-modal .app-logout-text {
+            color: #d8e6f3;
+        }
+
+        html[data-theme="dark"] .app-logout-modal .app-logout-modal-eyebrow,
+        body[data-theme="dark"] .app-logout-modal .app-logout-modal-eyebrow,
+        body.dark-mode .app-logout-modal .app-logout-modal-eyebrow {
+            color: rgba(216, 230, 243, 0.78);
+        }
+
+        html[data-theme="dark"] .app-logout-modal .app-logout-icon,
+        body[data-theme="dark"] .app-logout-modal .app-logout-icon,
+        body.dark-mode .app-logout-modal .app-logout-icon {
+            background: rgba(138, 210, 255, 0.12);
+            color: #bfe6ff;
+            box-shadow: inset 0 0 0 1px rgba(138, 210, 255, 0.08);
+        }
+
+        html[data-theme="dark"] .app-logout-modal .modal-footer,
+        body[data-theme="dark"] .app-logout-modal .modal-footer,
+        body.dark-mode .app-logout-modal .modal-footer {
+            background: #06111e;
+            border-top: 1px solid rgba(138, 210, 255, 0.08);
+        }
+
+        html[data-theme="dark"] .app-logout-modal .btn-outline-secondary,
+        body[data-theme="dark"] .app-logout-modal .btn-outline-secondary,
+        body.dark-mode .app-logout-modal .btn-outline-secondary {
+            border-color: rgba(138, 210, 255, 0.18);
+            color: #d8e6f3;
+        }
+
+        html[data-theme="dark"] .app-logout-modal .btn-outline-secondary:hover,
+        body[data-theme="dark"] .app-logout-modal .btn-outline-secondary:hover,
+        body.dark-mode .app-logout-modal .btn-outline-secondary:hover {
+            background: rgba(144, 174, 202, 0.12);
+            color: #ffffff;
+        }
     </style>
 
     <form method="POST" action="<?php echo BASE_URL; ?>logout.php" id="logoutForm" class="d-none"></form>
 
-    <div class="modal fade" id="logoutConfirmModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+    <div class="modal fade app-logout-modal" id="logoutConfirmModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content border-0 rounded-4 shadow">
-                <div class="modal-header border-0 pb-0 justify-content-end">
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-header">
+                    <div>
+                        <div class="app-logout-modal-eyebrow">Session action</div>
+                        <h5 class="modal-title">Confirm logout</h5>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body text-center px-4 pt-0 pb-3">
-                    <div class="mx-auto mb-3 d-flex align-items-center justify-content-center rounded-circle" style="width:62px;height:62px;background:rgba(13,103,134,.12);color:#0d6786;font-size:1.5rem;">
+                <div class="modal-body text-center">
+                    <div class="app-logout-icon">
                         <i class="fas fa-arrow-right-from-bracket"></i>
                     </div>
-                    <h5 class="fw-bold mb-2" style="color:#123b4d;font-family:'Montserrat','Source Sans 3',sans-serif;">Sign out now?</h5>
-                    <p class="mb-0" style="color:#5f7482;">You will need to log in again to continue using the system.</p>
+                    <h5 class="app-logout-title">Sign out now?</h5>
+                    <p class="app-logout-text">You will need to log in again to continue using the system.</p>
                 </div>
-                <div class="modal-footer border-0 justify-content-center gap-2 px-4 pb-4 pt-0">
-                    <button type="button" class="btn btn-outline-secondary px-4" data-bs-dismiss="modal">Stay signed in</button>
-                    <button type="button" class="btn btn-primary px-4" id="logoutConfirmBtn" style="background:linear-gradient(180deg,#0d6786,#0a5570);border:0;">Yes, log me out</button>
+                <div class="modal-footer border-0">
+                    <div class="app-logout-actions d-flex flex-column flex-sm-row justify-content-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Stay signed in</button>
+                        <button type="button" class="btn btn-primary" id="logoutConfirmBtn" style="background:linear-gradient(180deg,#0d6786,#0a5570);border:0;">Yes, log me out</button>
+                    </div>
                 </div>
             </div>
         </div>

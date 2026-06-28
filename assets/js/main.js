@@ -11,8 +11,9 @@ function initSidebar() {
     const content = $('#page-content-wrapper');
     const overlay = $('.sidebar-overlay');
     const toggle = $('.sidebar-toggle-btn');
-    const desktopStateKey = 'erni.sidebar.collapsed';
-    const mobileStateKey = 'erni.sidebar.mobile_open';
+    const storageScope = getSidebarStateScope();
+    const desktopStateKey = `erni.sidebar.${storageScope}.collapsed`;
+    const mobileStateKey = `erni.sidebar.${storageScope}.mobile_open`;
 
     function updateToggleState() {
         const isActive = window.innerWidth <= 992 ? sidebar.hasClass('active') : sidebar.hasClass('collapsed');
@@ -69,6 +70,22 @@ function initSidebar() {
     $(window).on('resize', debounce(function () {
         applySidebarState();
     }, 150));
+}
+
+function getSidebarStateScope() {
+    const context = window.APP_USER_CONTEXT || {};
+    const userId = Number(context.id || 0);
+
+    if (Number.isFinite(userId) && userId > 0) {
+        return `user-${userId}`;
+    }
+
+    const role = String(context.role || '').trim().toLowerCase();
+    if (role) {
+        return `role-${role}`;
+    }
+
+    return 'guest';
 }
 
 function initDarkMode() {
