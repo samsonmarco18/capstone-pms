@@ -1162,14 +1162,8 @@ function loadFolderContents(folderId) {
             const childFolders = resolvedProjectId > 0
                 ? (data.folders || []).filter(child => child.folder_type !== 'project')
                 : (data.folders || []);
-            const isSharedProjectRoot = resolvedProjectId > 0 && folder && folder.folder_type === 'project';
-
-            if (isSharedProjectRoot) {
-                hideFolderBrowser();
-            } else {
-                showFolderBrowser();
-                renderProjectEntries(childFolders, data.files || []);
-            }
+            showFolderBrowser();
+            renderProjectEntries(childFolders, data.files || []);
 
             if (resolvedProjectId > 0 && folder) {
                 folderStructure[folder.id] = childFolders;

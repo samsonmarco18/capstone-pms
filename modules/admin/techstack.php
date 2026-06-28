@@ -1051,14 +1051,14 @@ include '../../includes/navbar.php';
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Category</label>
                         <select name="category" class="form-select" required>
-                            <option value="Cloud Platform">☁️ Cloud Platform</option>
-                            <option value="Database">🗄️ Database</option>
-                            <option value="Storage">💾 Storage</option>
-                            <option value="Networking">🌐 Networking</option>
-                            <option value="AI/ML">🧠 AI/ML</option>
-                            <option value="IoT">📡 IoT</option>
-                            <option value="DevOps">⚙️ DevOps</option>
-                            <option value="Security">🔒 Security</option>
+                            <option value="Cloud Platform">Cloud Platform</option>
+                            <option value="Database">Database</option>
+                            <option value="Storage">Storage</option>
+                            <option value="Networking">Networking</option>
+                            <option value="AI/ML">AI/ML</option>
+                            <option value="IoT">IoT</option>
+                            <option value="DevOps">DevOps</option>
+                            <option value="Security">Security</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -1099,14 +1099,14 @@ include '../../includes/navbar.php';
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Category</label>
                         <select name="category" id="edit_category" class="form-select" required>
-                            <option value="Cloud Platform">☁️ Cloud Platform</option>
-                            <option value="Database">🗄️ Database</option>
-                            <option value="Storage">💾 Storage</option>
-                            <option value="Networking">🌐 Networking</option>
-                            <option value="AI/ML">🧠 AI/ML</option>
-                            <option value="IoT">📡 IoT</option>
-                            <option value="DevOps">⚙️ DevOps</option>
-                            <option value="Security">🔒 Security</option>
+                            <option value="Cloud Platform">Cloud Platform</option>
+                            <option value="Database">Database</option>
+                            <option value="Storage">Storage</option>
+                            <option value="Networking">Networking</option>
+                            <option value="AI/ML">AI/ML</option>
+                            <option value="IoT">IoT</option>
+                            <option value="DevOps">DevOps</option>
+                            <option value="Security">Security</option>
                         </select>
                     </div>
                     <div class="mb-3">

@@ -31,16 +31,25 @@ function detectBaseUrl(): string
     $scheme = $isHttps ? 'https' : 'http';
     $host = trim((string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 
+    if (function_exists('getEnvOrDefault')) {
+        $basePathOverride = trim((string) getEnvOrDefault('APP_BASE_PATH', ''));
+        if ($basePathOverride !== '') {
+            return $scheme . '://' . $host . '/' . trim($basePathOverride, '/') . '/';
+        }
+    }
+
     $appRoot = str_replace('\\', '/', APP_ROOT_PATH);
     $documentRootInput = trim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''));
     $documentRoot = $documentRootInput !== ''
         ? str_replace('\\', '/', realpath($documentRootInput) ?: $documentRootInput)
         : '';
-    $basePath = '/' . basename($appRoot) . '/';
+    $basePath = '/';
 
     if ($documentRoot !== '' && str_starts_with(strtolower($appRoot), strtolower($documentRoot))) {
         $relativePath = trim(substr($appRoot, strlen($documentRoot)), '/');
         $basePath = ($relativePath !== '' ? '/' . $relativePath : '') . '/';
+    } elseif (str_contains(strtolower($host), 'localhost') || str_contains(strtolower($host), '127.0.0.1') || str_contains(strtolower($host), '::1')) {
+        $basePath = '/' . basename($appRoot) . '/';
     }
 
     return $scheme . '://' . $host . $basePath;
