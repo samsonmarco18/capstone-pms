@@ -474,6 +474,26 @@ unset($_SESSION['success'], $_SESSION['error']);
     background: var(--gray-300);
 }
 
+/* Keep the navbar burger neutral on this page */
+#menu-toggle-desktop,
+#menu-toggle-mobile {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+#menu-toggle-desktop:hover,
+#menu-toggle-mobile:hover,
+#menu-toggle-desktop:focus,
+#menu-toggle-mobile:focus,
+#menu-toggle-desktop:active,
+#menu-toggle-mobile:active,
+#menu-toggle-desktop.is-active,
+#menu-toggle-mobile.is-active {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
 /* Tabs */
 .nav-tabs {
     border-bottom: 2px solid var(--gray-200);
