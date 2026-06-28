@@ -96,7 +96,9 @@ function vcCanAccessProject(mysqli|PgsqlMysqliCompatConnection $conn, array $use
 function vcGetRepository(mysqli|PgsqlMysqliCompatConnection $conn, int $repositoryId): ?array
 {
     $stmt = $conn->prepare(
-        "SELECT pr.*, p.name AS project_name, c.name AS client_name,
+        "SELECT pr.*, p.name AS project_name, p.status AS project_status,
+                p.created_by AS project_created_by, c.name AS client_name,
+                c.created_by AS client_created_by,
                 parent_repo.name AS parent_repository_name,
                 creator.full_name AS created_by_name
          FROM project_repositories pr
