@@ -485,7 +485,11 @@ unset($_SESSION['success'], $_SESSION['error']);
 #menu-toggle-desktop:hover,
 #menu-toggle-mobile:hover,
 #menu-toggle-desktop:focus,
-#menu-toggle-mobile:focus,
+#menu-toggle-mobile:focus {
+    background: #eef7fd !important;
+    box-shadow: none !important;
+}
+
 #menu-toggle-desktop:active,
 #menu-toggle-mobile:active,
 #menu-toggle-desktop.is-active,
