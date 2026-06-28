@@ -265,15 +265,38 @@ function logActivity(
 
 function getUnreadNotificationsCount(int $userId): int
 {
-    $conn = getConnection();
-    $stmt = $conn->prepare('SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = FALSE');
-    $stmt->bind_param('i', $userId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
-    $stmt->close();
+    try {
+        $conn = getConnection();
+        $stmt = $conn->prepare('SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = FALSE');
 
-    return (int) ($row['count'] ?? 0);
+        if ($stmt === false) {
+            error_log('getUnreadNotificationsCount prepare failed: ' . ($conn->error ?? 'unknown error'));
+            return 0;
+        }
+
+        $stmt->bind_param('i', $userId);
+
+        if (!$stmt->execute()) {
+            error_log('getUnreadNotificationsCount execute failed for user_id=' . $userId . ': ' . ($conn->error ?? 'unknown error'));
+            $stmt->close();
+            return 0;
+        }
+
+        $result = $stmt->get_result();
+        if ($result === false) {
+            error_log('getUnreadNotificationsCount get_result failed for user_id=' . $userId . ': ' . ($conn->error ?? 'unknown error'));
+            $stmt->close();
+            return 0;
+        }
+
+        $row = $result->fetch_assoc() ?: [];
+        $stmt->close();
+
+        return (int) ($row['count'] ?? 0);
+    } catch (Throwable $e) {
+        error_log('getUnreadNotificationsCount error for user_id=' . $userId . ': ' . $e->getMessage());
+        return 0;
+    }
 }
 
 function createNotification(

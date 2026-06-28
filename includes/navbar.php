@@ -7,15 +7,34 @@ $unreadCount = 0;
 
 if ($user) {
     $unreadCount = getUnreadNotificationsCount((int) $user['id']);
-    $conn = getConnection();
-    $stmt = $conn->prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY is_read ASC, created_at DESC LIMIT 8');
-    $stmt->bind_param('i', $user['id']);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    while ($row = $result->fetch_assoc()) {
-        $notifications[] = $row;
+
+    try {
+        $conn = getConnection();
+        $stmt = $conn->prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY is_read ASC, created_at DESC LIMIT 8');
+
+        if ($stmt !== false) {
+            $stmt->bind_param('i', $user['id']);
+
+            if ($stmt->execute()) {
+                $result = $stmt->get_result();
+                if ($result !== false) {
+                    while ($row = $result->fetch_assoc()) {
+                        $notifications[] = $row;
+                    }
+                } else {
+                    error_log('navbar notifications get_result failed: ' . ($conn->error ?? 'unknown error'));
+                }
+            } else {
+                error_log('navbar notifications execute failed: ' . ($conn->error ?? 'unknown error'));
+            }
+
+            $stmt->close();
+        } else {
+            error_log('navbar notifications prepare failed: ' . ($conn->error ?? 'unknown error'));
+        }
+    } catch (Throwable $e) {
+        error_log('navbar notifications load error: ' . $e->getMessage());
     }
-    $stmt->close();
 }
 
 $appUserContext = [
