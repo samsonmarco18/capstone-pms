@@ -4,7 +4,25 @@ $user = getCurrentUser();
 if (!$user) {
     return;
 }
+
+$isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
 ?>
+
+<?php if ($isSulRoute): ?>
+<style>
+    #chat-widget,
+    #chat-widget-minimized {
+        z-index: 4000 !important;
+        right: 24px !important;
+        bottom: 24px !important;
+        position: fixed !important;
+    }
+
+    #chat-widget-minimized {
+        box-shadow: 0 18px 36px rgba(10, 48, 79, 0.28) !important;
+    }
+</style>
+<?php endif; ?>
 
 <div id="chat-widget" class="chat-widget">
     <div class="chat-header">
@@ -91,6 +109,44 @@ if (!$user) {
                     <i class="fas fa-spinner fa-spin"></i>
                     <div>Loading group info...</div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade create-group-modal add-member-modal" id="addGroupMemberModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title">Add Group Members</h5>
+                    <p class="create-group-subtitle mb-0">Select one or more teammates to join this group.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-0">
+                    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                        <label class="form-label mb-0" for="addGroupMemberSearch">Members</label>
+                        <span class="group-member-count" id="addGroupMemberCount">0 selected</span>
+                    </div>
+                    <div class="group-member-picker">
+                        <div class="group-member-search">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="addGroupMemberSearch" class="form-control" placeholder="Search users">
+                        </div>
+                        <div id="addGroupMembers" class="group-member-list" aria-live="polite">
+                            <div class="group-member-empty">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <span>Loading users...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="addGroupMemberSubmitBtn">Add Members</button>
             </div>
         </div>
     </div>

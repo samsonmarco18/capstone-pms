@@ -634,6 +634,36 @@ unset($_SESSION['success'], $_SESSION['error']);
     color: #7cc0ee;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-light {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+/* Chat launcher override for resource management */
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #chat-widget-minimized,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #chat-widget {
+    z-index: 99999 !important;
+    position: fixed !important;
+    right: 28px !important;
+    bottom: 28px !important;
+    transform: none !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #chat-widget-minimized {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 74px !important;
+    height: 74px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #chat-widget {
+    display: none !important;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .stats-grid {

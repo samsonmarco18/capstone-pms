@@ -696,11 +696,10 @@ include '../../includes/navbar.php';
 }
 
 .recent-task-card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 1rem;
-    align-items: start;
-    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    padding: 0.95rem 1rem;
     border: 1px solid var(--gray-200);
     border-radius: 16px;
     background: #fff;
@@ -710,24 +709,59 @@ include '../../includes/navbar.php';
     min-width: 0;
 }
 
+.recent-task-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.recent-task-card-head-main {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
 .recent-task-title {
-    margin: 0 0 0.25rem;
+    margin: 0;
     color: var(--gray-900);
     font-size: 0.92rem;
     font-weight: 700;
+    line-height: 1.35;
+}
+
+.recent-task-description {
+    color: var(--gray-600);
+    font-size: 0.8rem;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .recent-task-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.45rem 0.8rem;
+    gap: 0.35rem 0.75rem;
     color: var(--gray-600);
     font-size: 0.76rem;
 }
 
 .recent-task-actions {
     display: flex;
-    gap: 0.4rem;
+    gap: 0.35rem;
+    flex-shrink: 0;
+    align-items: flex-start;
+}
+
+.recent-task-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
@@ -822,6 +856,21 @@ include '../../includes/navbar.php';
     color: var(--theme-primary) !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-light {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .welcome-banner {
@@ -842,7 +891,7 @@ include '../../includes/navbar.php';
     }
 
     .recent-task-card {
-        grid-template-columns: 1fr;
+        gap: 0.75rem;
     }
 
     .recent-task-list {
@@ -1066,37 +1115,40 @@ include '../../includes/navbar.php';
                             $daysLeft = $deadlineTimestamp ? ceil(($deadlineTimestamp - time()) / (60 * 60 * 24)) : null;
                         ?>
                         <div class="recent-task-card">
-                            <div>
-                                <h6 class="recent-task-title"><?php echo htmlspecialchars($task['title']); ?></h6>
-                                <?php if(!empty($task['description'])): ?>
-                                    <div class="text-muted small mb-2"><?php echo htmlspecialchars(substr((string) $task['description'], 0, 90)); ?></div>
-                                <?php endif; ?>
-                                <div class="recent-task-meta">
-                                    <span><i class="fas fa-folder me-1"></i><?php echo htmlspecialchars($task['project_name'] ?? 'No project'); ?></span>
-                                    <span><i class="fas fa-user me-1"></i><?php echo htmlspecialchars($task['assigned_to_name'] ?? 'Unassigned'); ?></span>
-                                    <?php if($deadlineTimestamp): ?>
-                                        <span><i class="far fa-calendar-alt me-1"></i><?php echo date('M d, Y', $deadlineTimestamp); ?></span>
+                            <div class="recent-task-card-head">
+                                <div class="recent-task-card-head-main">
+                                    <h6 class="recent-task-title"><?php echo htmlspecialchars($task['title']); ?></h6>
+                                    <?php if(!empty($task['description'])): ?>
+                                        <div class="recent-task-description"><?php echo htmlspecialchars(substr((string) $task['description'], 0, 120)); ?></div>
                                     <?php endif; ?>
                                 </div>
-                                <div class="mt-2 d-flex flex-wrap gap-2">
-                                    <span class="badge-priority-<?php echo htmlspecialchars((string) $task['priority']); ?>"><?php echo ucfirst((string) $task['priority']); ?></span>
-                                    <span class="badge-status-<?php echo htmlspecialchars((string) $task['status']); ?>">
-                                        <?php echo ucfirst(str_replace('_', ' ', (string) $task['status'])); ?>
-                                    </span>
-                                    <?php if($daysLeft !== null && $daysLeft <= 2 && $task['status'] != 'completed'): ?>
-                                        <small class="text-danger fw-semibold"><?php echo $daysLeft; ?> days left</small>
-                                    <?php endif; ?>
+                                <div class="recent-task-actions">
+                                    <div class="d-flex gap-2">
+                                        <button class="btn-primary-modern btn-sm-modern" onclick="viewTask(<?php echo $task['id']; ?>)">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <?php if(!$task['assigned_to']): ?>
+                                        <button class="btn-primary-modern btn-sm-modern" onclick="assignTaskTo(<?php echo $task['id']; ?>)">
+                                            <i class="fas fa-user-plus"></i>
+                                        </button>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="recent-task-actions">
-                            <div class="d-flex gap-2">
-                                <button class="btn-primary-modern btn-sm-modern" onclick="viewTask(<?php echo $task['id']; ?>)">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <?php if(!$task['assigned_to']): ?>
-                                <button class="btn-primary-modern btn-sm-modern" onclick="assignTaskTo(<?php echo $task['id']; ?>)">
-                                    <i class="fas fa-user-plus"></i>
-                                </button>
+                            <div class="recent-task-meta">
+                                <span><i class="fas fa-folder me-1"></i><?php echo htmlspecialchars($task['project_name'] ?? 'No project'); ?></span>
+                                <span><i class="fas fa-user me-1"></i><?php echo htmlspecialchars($task['assigned_to_name'] ?? 'Unassigned'); ?></span>
+                                <?php if($deadlineTimestamp): ?>
+                                    <span><i class="far fa-calendar-alt me-1"></i><?php echo date('M d, Y', $deadlineTimestamp); ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="recent-task-footer">
+                                <span class="badge-priority-<?php echo htmlspecialchars((string) $task['priority']); ?>"><?php echo ucfirst((string) $task['priority']); ?></span>
+                                <span class="badge-status-<?php echo htmlspecialchars((string) $task['status']); ?>">
+                                    <?php echo ucfirst(str_replace('_', ' ', (string) $task['status'])); ?>
+                                </span>
+                                <?php if($daysLeft !== null && $daysLeft <= 2 && $task['status'] != 'completed'): ?>
+                                    <small class="text-danger fw-semibold"><?php echo $daysLeft; ?> days left</small>
                                 <?php endif; ?>
                             </div>
                         </div>

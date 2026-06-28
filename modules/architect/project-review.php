@@ -337,6 +337,37 @@ a.progress-step:hover {
     color: #9db6cf !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-indicator {
+    background: #071321 !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern .breadcrumb-item a {
+    color: #7cc0ee !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern .breadcrumb-item a:hover {
+    background: rgba(31, 99, 146, 0.16) !important;
+    color: #ffffff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern .breadcrumb-item.active,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern .breadcrumb-item::before {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .detail-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .content-box {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-title {
+    color: #d7e4f2 !important;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) textarea {

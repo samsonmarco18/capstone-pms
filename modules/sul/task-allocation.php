@@ -1167,6 +1167,9 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs .nav-link:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs .nav-link.active,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-column-body,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer,
@@ -1199,6 +1202,19 @@ include '../../includes/navbar.php';
     background: #071321;
     border-color: rgba(31, 99, 146, 0.28);
     color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs .nav-link {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs .nav-link.active {
+    box-shadow: inset 0 0 0 1px rgba(31, 99, 146, 0.12);
+    color: #7cc0ee;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom::placeholder {
