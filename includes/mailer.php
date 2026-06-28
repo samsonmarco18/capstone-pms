@@ -69,9 +69,12 @@ function getMailConfig(): array
     $encryption = strtolower($envEncryption !== '' ? $envEncryption : trim((string) getAppSetting('mail_encryption', 'tls')));
     $username = $envUsername !== '' ? $envUsername : trim((string) getAppSetting('mail_username', ''));
     $password = $envPassword !== '' ? $envPassword : (string) getAppSetting('mail_password', '');
+    $configuredFromEmail = trim((string) getAppSetting('mail_from_email', ''));
     $fromEmail = $envFromEmail !== ''
         ? $envFromEmail
-        : trim((string) getAppSetting('mail_from_email', $notificationEmail !== '' ? $notificationEmail : $username));
+        : ($configuredFromEmail !== ''
+            ? $configuredFromEmail
+            : (filter_var($username, FILTER_VALIDATE_EMAIL) ? $username : $notificationEmail));
     $fromName = $envFromName !== '' ? $envFromName : trim((string) getAppSetting('mail_from_name', $companyName));
     $enabledRaw = strtolower($envEnabled !== '' ? $envEnabled : trim((string) getAppSetting('mail_enabled', '0')));
 
@@ -89,7 +92,7 @@ function getMailConfig(): array
         'port' => $port,
         'encryption' => $encryption,
         'username' => $username,
-        'password' => $password,
+        'password' => normalizeMailPassword($host, $password),
         'from_email' => $fromEmail,
         'from_name' => $fromName !== '' ? $fromName : 'ERNI PMS',
     ];
@@ -101,6 +104,17 @@ function getMailConfig(): array
     }
 
     return $config;
+}
+
+function normalizeMailPassword(string $host, string $password): string
+{
+    $normalizedHost = strtolower(trim($host));
+
+    if (in_array($normalizedHost, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true)) {
+        return preg_replace('/\s+/', '', $password) ?? $password;
+    }
+
+    return $password;
 }
 
 function shouldDebugMailConfig(): bool
@@ -266,9 +280,12 @@ function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recip
 
         if ($config['encryption'] === 'tls') {
             smtpCommand($socket, 'STARTTLS', [220]);
-            $cryptoEnabled = @stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT);
+            $cryptoMethod = defined('STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT')
+                ? STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLS_CLIENT
+                : STREAM_CRYPTO_METHOD_TLS_CLIENT;
+            $cryptoEnabled = @stream_socket_enable_crypto($socket, true, $cryptoMethod);
             if ($cryptoEnabled !== true) {
-                throw new RuntimeException('Unable to start TLS encryption with Gmail SMTP.');
+                throw new RuntimeException('Unable to start TLS encryption with SMTP server.');
             }
             smtpCommand($socket, 'EHLO ' . $ehloHost, [250]);
         }

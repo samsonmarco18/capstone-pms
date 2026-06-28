@@ -28,6 +28,10 @@ function ensureClientRootFolders(mysqli|PgsqlMysqliCompatConnection $conn, int $
          VALUES (NULL, ?, \'client\', ?, NULL, NULL, NULL, ?)'
     );
     $updateStmt = $conn->prepare('UPDATE folders SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    if ($checkStmt === false || $insertStmt === false || $updateStmt === false) {
+        error_log('Folder client root auto-create prepare failed: ' . ($conn->error ?? 'unknown error'));
+        return;
+    }
 
     while ($client = $clientResult->fetch_assoc()) {
         $clientId = (int) $client['id'];
@@ -83,6 +87,15 @@ function ensureProjectSharedFolders(mysqli|PgsqlMysqliCompatConnection $conn, in
          VALUES (?, ?, \'project\', ?, ?, NULL, NULL, ?)'
     );
     $updateSharedStmt = $conn->prepare('UPDATE folders SET name = ?, parent_id = ?, role = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    if (
+        $clientFolderStmt === false
+        || $existingSharedStmt === false
+        || $insertSharedStmt === false
+        || $updateSharedStmt === false
+    ) {
+        error_log('Shared project folder auto-create prepare failed: ' . ($conn->error ?? 'unknown error'));
+        return;
+    }
 
     while ($project = $projectResult->fetch_assoc()) {
         $projectId = (int) $project['id'];
@@ -145,6 +158,9 @@ function getFolderTree(mysqli|PgsqlMysqliCompatConnection $conn, int $parentId, 
 
     $sql .= ' ORDER BY f.name ASC';
     $stmt = $conn->prepare($sql);
+    if ($stmt === false) {
+        throw new RuntimeException('Failed to prepare folder tree query: ' . ($conn->error ?? 'unknown error'));
+    }
 
     if ($parentId === 0 && $roleFilter !== '') {
         $stmt->bind_param('s', $roleFilter);
@@ -190,9 +206,15 @@ function getSharedProjectFolders(mysqli|PgsqlMysqliCompatConnection $conn, ?stri
 
     if ($roleFilter !== '') {
         $stmt = $conn->prepare($sql);
+        if ($stmt === false) {
+            throw new RuntimeException('Failed to prepare shared project folder query: ' . ($conn->error ?? 'unknown error'));
+        }
         $stmt->bind_param('s', $roleFilter);
     } else {
         $stmt = $conn->prepare($sql);
+        if ($stmt === false) {
+            throw new RuntimeException('Failed to prepare shared project folder query: ' . ($conn->error ?? 'unknown error'));
+        }
     }
 
     $stmt->execute();

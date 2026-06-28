@@ -30,6 +30,10 @@ function getFolderBreadcrumb(mysqli|PgsqlMysqliCompatConnection $conn, int $fold
     $path = [];
     $currentId = $folderId;
     $stmt = $conn->prepare('SELECT id, parent_id, name, folder_type FROM folders WHERE id = ? LIMIT 1');
+    if ($stmt === false) {
+        error_log('Folder breadcrumb prepare failed: ' . ($conn->error ?? 'unknown error'));
+        return [];
+    }
 
     while ($currentId > 0) {
         $stmt->bind_param('i', $currentId);

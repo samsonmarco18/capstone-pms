@@ -12,6 +12,10 @@ function resolveFolderProjectId(mysqli|PgsqlMysqliCompatConnection $conn, array 
 
     $currentId = (int) ($folder['parent_id'] ?? 0);
     $stmt = $conn->prepare('SELECT parent_id, project_id FROM folders WHERE id = ? LIMIT 1');
+    if ($stmt === false) {
+        error_log('resolveFolderProjectId prepare failed: ' . ($conn->error ?? 'unknown error'));
+        return 0;
+    }
 
     while ($currentId > 0) {
         $stmt->bind_param('i', $currentId);
@@ -149,6 +153,7 @@ function buildApprovedTimeline(mysqli|PgsqlMysqliCompatConnection $conn, array $
 
 function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId, array $user): ?array
 {
+    try {
     $projectStmt = $conn->prepare(
         'SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email,
                 c.phone AS client_phone, c.address AS client_address, c.industry AS client_industry,
@@ -452,4 +457,8 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
     }, $sharedFolderFiles);
 
     return $project;
+    } catch (Throwable $e) {
+        error_log('fetchProjectContext failed for project_id=' . $projectId . ': ' . $e->getMessage());
+        return null;
+    }
 }

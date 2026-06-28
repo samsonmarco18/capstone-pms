@@ -813,13 +813,25 @@ include '../../includes/navbar.php';
                         <span>Status: <?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', (string) $selectedProject['status']))); ?></span>
                     </div>
                 </div>
-                <div class="progress-shell" style="min-width: 240px;">
-                <div class="d-flex justify-content-between gap-2">
-                    <small class="text-muted fw-semibold">Architect checklist</small>
-                    <small class="text-muted fw-semibold"><?php echo $projectCompleteCount; ?>/<?php echo $projectTotalCount; ?></small>
-                </div>
-                    <div class="progress-track">
-                        <div class="progress-bar-modern" style="width: <?php echo $projectProgress; ?>%;"></div>
+                <div class="release-actions">
+                    <?php if ($canDownloadSelectedProjectRepository && $selectedProjectRepository): ?>
+                        <a
+                            class="release-download-btn"
+                            href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . (int) $selectedProjectRepository['id']); ?>"
+                            title="Download <?php echo htmlspecialchars((string) (($selectedProjectRepository['default_branch_name'] ?? '') ?: 'main')); ?> branch code"
+                        >
+                            <i class="fas fa-download"></i>
+                            Download Main Branch
+                        </a>
+                    <?php endif; ?>
+                    <div class="progress-shell" style="min-width: 240px;">
+                        <div class="d-flex justify-content-between gap-2">
+                            <small class="text-muted fw-semibold">Architect checklist</small>
+                            <small class="text-muted fw-semibold"><?php echo $projectCompleteCount; ?>/<?php echo $projectTotalCount; ?></small>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-bar-modern" style="width: <?php echo $projectProgress; ?>%;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
