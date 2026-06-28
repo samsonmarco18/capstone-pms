@@ -100,6 +100,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $mailFromEmail = trim((string) ($_POST['mail_from_email'] ?? $mailUsername));
         $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'ERNI PMS'));
 
+        $normalizedMailHost = strtolower($mailHost);
+        if (in_array($normalizedMailHost, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true) && filter_var($mailUsername, FILTER_VALIDATE_EMAIL)) {
+            $mailFromEmail = $mailUsername;
+        }
+
         error_log('Mail settings save attempt: enabled=' . $mailEnabled . ', host=' . $mailHost . ', user=' . $mailUsername);
 
         $saved = setAppSetting('mail_enabled', $mailEnabled, 'Enable SMTP email delivery', 'system')

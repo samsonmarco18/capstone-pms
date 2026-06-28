@@ -92,6 +92,10 @@ function getMailConfig(): array
         } elseif ($port === 587 && $encryption === 'ssl') {
             $encryption = 'tls';
         }
+
+        if (filter_var($username, FILTER_VALIDATE_EMAIL)) {
+            $fromEmail = $username;
+        }
     }
 
     $config = [

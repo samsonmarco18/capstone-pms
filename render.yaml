@@ -12,6 +12,8 @@ services:
         value: production
       - key: DEBUG_MODE
         value: false
+      - key: APP_URL
+        value: https://erni-pms.onrender.com
       - key: AUTO_INIT_DB
         value: "1"
       - key: DB_DRIVER
@@ -20,6 +22,20 @@ services:
         fromDatabase:
           name: erni-pms-db
           property: connectionString
+      - key: MAIL_ENABLED
+        value: "1"
+      - key: MAIL_HOST
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_ENCRYPTION
+        value: tls
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: ERNI Development Center Philippines Inc.
 
 databases:
   - name: erni-pms-db
