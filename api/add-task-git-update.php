@@ -184,5 +184,10 @@ logActivity(
 echo json_encode([
     'success' => true,
     'git_update_id' => $updateId,
+    'pull_request_submitted' => $isPullRequestSubmission,
+    'task_status' => $isPullRequestSubmission ? 'for_review' : (string) ($task['status'] ?? ''),
+    'message' => $isPullRequestSubmission
+        ? 'Pull Request submitted. Task moved to Workflow Review.'
+        : 'Git update saved successfully.',
 ]);
 ?>

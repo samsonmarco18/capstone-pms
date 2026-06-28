@@ -1028,6 +1028,88 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
+function updateKanbanColumnCount(columnBody) {
+    if (!columnBody) {
+        return;
+    }
+
+    const column = columnBody.closest('.kanban-column');
+    const badge = column?.querySelector('.kanban-header .badge');
+    const count = columnBody.querySelectorAll('.kanban-card').length;
+    if (badge) {
+        badge.textContent = String(count);
+    }
+
+    ensureKanbanColumnEmptyState(columnBody);
+}
+
+function getKanbanEmptyState(columnBody) {
+    if (columnBody.id === 'todo-column') {
+        return { icon: 'fa-check-circle', text: 'No tasks in To Do' };
+    }
+    if (columnBody.id === 'progress-column') {
+        return { icon: 'fa-play-circle', text: 'No tasks in progress' };
+    }
+    if (columnBody.id === 'review-column') {
+        return { icon: 'fa-check-double', text: 'No tasks in review' };
+    }
+
+    return { icon: 'fa-inbox', text: 'No tasks' };
+}
+
+function ensureKanbanColumnEmptyState(columnBody) {
+    const count = columnBody.querySelectorAll('.kanban-card').length;
+    const existing = columnBody.querySelector('.empty-state-mini');
+
+    if (count > 0) {
+        existing?.remove();
+        return;
+    }
+
+    if (existing) {
+        return;
+    }
+
+    const config = getKanbanEmptyState(columnBody);
+    const empty = document.createElement('div');
+    empty.className = 'empty-state-mini';
+    empty.innerHTML = `<i class="fas ${config.icon}"></i><p>${config.text}</p>`;
+    columnBody.appendChild(empty);
+}
+
+function transformKanbanCardForReviewColumn(card, taskId) {
+    const footer = card.querySelector('.d-flex.justify-content-between.align-items-center');
+    if (!footer) {
+        return;
+    }
+
+    const dueLabel = footer.querySelector('small');
+    const dueHtml = dueLabel ? dueLabel.outerHTML : '';
+    footer.innerHTML = `
+        ${dueHtml}
+        <button class="btn-action-view" onclick="viewTask(${taskId})">
+            <i class="fas fa-eye"></i> View
+        </button>
+    `;
+}
+
+function moveKanbanTaskToReview(taskId) {
+    const card = document.querySelector(`.kanban-card[data-task-id="${String(taskId)}"]`);
+    const reviewColumn = document.getElementById('review-column');
+
+    if (!card || !reviewColumn || card.closest('.kanban-body') === reviewColumn) {
+        return;
+    }
+
+    const sourceColumn = card.closest('.kanban-body');
+    transformKanbanCardForReviewColumn(card, taskId);
+    reviewColumn.querySelector('.empty-state-mini')?.remove();
+    reviewColumn.appendChild(card);
+
+    updateKanbanColumnCount(sourceColumn);
+    updateKanbanColumnCount(reviewColumn);
+}
+
 function startTask(taskId) {
     updateTaskStatus(taskId, 'in_progress');
 }
@@ -1541,10 +1623,16 @@ function addGitUpdate(taskId) {
             status: $('#gitStatus').val(),
             notes: $('#gitNotes').val().trim()
         },
-        success: function() {
+        success: function(response) {
+            const data = typeof response === 'string' ? JSON.parse(response) : response;
             $('#gitCommitHash, #gitCommitMessage, #gitPullRequestUrl, #gitRepositoryUrl, #gitNotes').val('');
             loadGitUpdates(taskId);
             viewTask(taskId);
+
+            if (data.pull_request_submitted || data.task_status === 'for_review') {
+                moveKanbanTaskToReview(taskId);
+                alert(data.message || 'Pull Request submitted. Task moved to Workflow Review.');
+            }
         },
         error: function(xhr) {
             alert(xhr.responseJSON?.error || 'Failed to save Git update');
