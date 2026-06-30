@@ -41,7 +41,7 @@ services:
       - key: MAIL_VERIFY_PEER
         value: "1"
       - key: MAIL_TIMEOUT
-        value: "30"
+        value: "8"
 
 databases:
   - name: erni-pms-db

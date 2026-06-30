@@ -16,5 +16,5 @@ return [
     'MAIL_FROM_EMAIL' => 'altheapalentinos@gmail.com',
     'MAIL_FROM_NAME' => 'ERNI PMS',
     'MAIL_VERIFY_PEER' => '1',
-    'MAIL_TIMEOUT' => '30',
+    'MAIL_TIMEOUT' => '8',
 ];

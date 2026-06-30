@@ -107,6 +107,7 @@ return [
   'MAIL_PASSWORD' => 'your-google-app-password',
   'MAIL_FROM_EMAIL' => 'altheapalentinos@gmail.com',
   'MAIL_FROM_NAME' => 'Erni PMS',
+  'MAIL_TIMEOUT' => '8',
 ];
 ```
 

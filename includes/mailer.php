@@ -106,7 +106,7 @@ function getMailConfig(): array
     $envFromEmail = getMailSetting('MAIL_FROM_EMAIL', '');
     $envFromName = getMailSetting('MAIL_FROM_NAME', '');
     $verifyPeerRaw = strtolower(getMailSetting('MAIL_VERIFY_PEER', '1'));
-    $timeout = (int) getMailSetting('MAIL_TIMEOUT', '20');
+    $timeout = (int) getMailSetting('MAIL_TIMEOUT', '8');
 
     $host = $envHost !== '' ? $envHost : trim((string) getAppSetting('mail_host', 'smtp.gmail.com'));
     $port = (int) ($envPort !== '' ? $envPort : (getAppSetting('mail_port', '587') ?? '587'));
@@ -132,8 +132,8 @@ function getMailConfig(): array
 
     if ($timeout < 5) {
         $timeout = 5;
-    } elseif ($timeout > 60) {
-        $timeout = 60;
+    } elseif ($timeout > 10) {
+        $timeout = 10;
     }
 
     if (in_array($host, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true)) {
