@@ -34,19 +34,10 @@ fi
 table_exists="$(psql "$DATABASE_URL" -tAc "SELECT to_regclass('public.users') IS NOT NULL" | tr -d '[:space:]')"
 
 if [ "$table_exists" = "t" ]; then
-    if [ -f "database.render-fixes.sql" ]; then
-        echo "Postgres schema already present. Applying idempotent deployment fixes..."
-        psql "$DATABASE_URL" -1 -v ON_ERROR_STOP=1 -f database.render-fixes.sql
-    else
-        echo "Postgres schema already present. Skipping import."
-    fi
+    echo "Postgres schema already present. Skipping import."
     exit 0
 fi
 
 echo "Importing database.postgres.sql..."
 psql "$DATABASE_URL" -1 -v ON_ERROR_STOP=1 -f database.postgres.sql
-if [ -f "database.render-fixes.sql" ]; then
-    echo "Applying idempotent deployment fixes..."
-    psql "$DATABASE_URL" -1 -v ON_ERROR_STOP=1 -f database.render-fixes.sql
-fi
 echo "Postgres bootstrap completed."

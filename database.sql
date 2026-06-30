@@ -27,6 +27,8 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_role (role),
+    INDEX idx_department (department),
+    INDEX idx_role_department_status (role, department, status),
     INDEX idx_status (status),
     INDEX idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -150,7 +152,8 @@ CREATE TABLE developer_allocations (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     INDEX idx_project_id (project_id),
-    INDEX idx_role (role)
+    INDEX idx_role (role),
+    INDEX idx_project_role (project_id, role)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -232,7 +235,8 @@ CREATE TABLE tasks (
     FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_status (status),
     INDEX idx_assigned_to (assigned_to),
-    INDEX idx_project_id (project_id)
+    INDEX idx_project_id (project_id),
+    INDEX idx_project_status_assigned (project_id, status, assigned_to)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -917,20 +921,26 @@ INSERT INTO clients (name, contact_person, email, phone, address, company_type, 
 ('Healthcare Inc', 'Maria Santos', 'maria@healthcare.com', '+63 917 1234 567', 'Quezon City, Philippines', 'Company', 'Healthcare', 'active', '2026-12-15', 1);
 
 -- Insert Sample Projects
-INSERT INTO projects (client_id, name, description, status, timeline_start, timeline_end, complexity_level, created_by, architect_id, sul_id) VALUES
-(1, 'E-Commerce Platform', 'Complete e-commerce solution with payment gateway', 'requirements_gathering', '2026-03-01', '2026-12-31', 'complex', 1, 3, 4),
-(2, 'Patient Management System', 'Hospital management and patient tracking system', 'pending', '2026-04-01', '2027-03-31', 'complex', 1, NULL, NULL);
+INSERT INTO projects (client_id, name, description, status, timeline_start, timeline_end, requested_features, included_departments, complexity_level, created_by, architect_id, sul_id) VALUES
+(1, 'E-Commerce Platform', 'Complete e-commerce solution with payment gateway', 'requirements_gathering', '2026-03-01', '2026-12-31', 'Product Catalog
+Cart and Checkout
+Payment Gateway Integration
+Loyalty Rewards', '["Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","DevOps Engineer","Database Administrator"]', 'complex', 1, 3, 4),
+(2, 'Patient Management System', 'Hospital management and patient tracking system', 'pending', '2026-04-01', '2027-03-31', 'Patient Registration
+Appointment Scheduling
+Medical Records
+Insurance Export', '["Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","Database Administrator"]', 'complex', 1, NULL, NULL);
 
 -- Sample project feature checklist data
 INSERT INTO tasks (project_id, title, description, task_type, assigned_to, assigned_by, status, priority, deadline, completed_at, architect_reviewed_by, architect_reviewed_at, merged_at, release_notified_at) VALUES
 (1, 'Product Catalog', 'Customer can browse products by category and search terms.', 'feature', (SELECT id FROM users WHERE username = 'developer'), 3, 'completed', 'high', '2026-06-15', NOW(), 3, NOW(), NOW(), NOW()),
-(1, 'Cart and Checkout', 'Customer can manage cart items and complete checkout.', 'feature', (SELECT id FROM users WHERE username = 'web_dev_2'), 3, 'completed', 'critical', '2026-07-15', NOW(), 3, NOW(), NOW(), NOW()),
-(1, 'Payment Gateway Integration', 'Online payment provider integration with transaction logging.', 'feature', (SELECT id FROM users WHERE username = 'web_dev_3'), 3, 'in_progress', 'critical', '2026-08-15', NULL, NULL, NULL, NULL, NULL),
+(1, 'Cart and Checkout', 'Customer can manage cart items and complete checkout.', 'feature', (SELECT id FROM users WHERE username = 'frontend_dev_2'), 3, 'completed', 'critical', '2026-07-15', NOW(), 3, NOW(), NOW(), NOW()),
+(1, 'Payment Gateway Integration', 'Online payment provider integration with transaction logging.', 'feature', (SELECT id FROM users WHERE username = 'backend_dev_1'), 3, 'in_progress', 'critical', '2026-08-15', NULL, NULL, NULL, NULL, NULL),
 (1, 'Additional Loyalty Rewards', 'Additional client request: points-based rewards and vouchers.', 'enhancement', (SELECT id FROM users WHERE username = 'developer'), 3, 'qa_passed', 'medium', '2026-09-15', NULL, NULL, NULL, NULL, NULL),
-(2, 'Patient Registration', 'Staff can register patient profiles and emergency contacts.', 'feature', (SELECT id FROM users WHERE username = 'data_dev_1'), 3, 'completed', 'high', '2026-07-20', NOW(), 3, NOW(), NOW(), NOW()),
-(2, 'Appointment Scheduling', 'Clinic staff can create and update appointment schedules.', 'feature', (SELECT id FROM users WHERE username = 'mobile_dev_1'), 3, 'in_progress', 'high', '2026-08-30', NULL, NULL, NULL, NULL, NULL),
-(2, 'Medical Records', 'Secure medical history and consultation notes module.', 'feature', (SELECT id FROM users WHERE username = 'data_dev_2'), 3, 'todo', 'critical', '2026-10-15', NULL, NULL, NULL, NULL, NULL),
-(2, 'Additional Insurance Export', 'Additional architect request: export insurance claim summaries.', 'enhancement', (SELECT id FROM users WHERE username = 'data_dev_3'), 3, 'completed', 'medium', '2026-11-15', NOW(), 3, NOW(), NOW(), NOW());
+(2, 'Patient Registration', 'Staff can register patient profiles and emergency contacts.', 'feature', (SELECT id FROM users WHERE username = 'backend_dev_2'), 3, 'completed', 'high', '2026-07-20', NOW(), 3, NOW(), NOW(), NOW()),
+(2, 'Appointment Scheduling', 'Clinic staff can create and update appointment schedules.', 'feature', (SELECT id FROM users WHERE username = 'frontend_dev_3'), 3, 'in_progress', 'high', '2026-08-30', NULL, NULL, NULL, NULL, NULL),
+(2, 'Medical Records', 'Secure medical history and consultation notes module.', 'feature', (SELECT id FROM users WHERE username = 'database_dev_1'), 3, 'todo', 'critical', '2026-10-15', NULL, NULL, NULL, NULL, NULL),
+(2, 'Additional Insurance Export', 'Additional architect request: export insurance claim summaries.', 'enhancement', (SELECT id FROM users WHERE username = 'database_dev_2'), 3, 'completed', 'medium', '2026-11-15', NOW(), 3, NOW(), NOW(), NOW());
 
 -- Default Settings
 INSERT INTO settings (setting_key, setting_value, description, setting_type) VALUES
