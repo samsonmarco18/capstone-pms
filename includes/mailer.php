@@ -386,7 +386,12 @@ function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recip
     );
 
     if (!is_resource($socket)) {
-        return ['success' => false, 'error' => 'SMTP connection failed: ' . $errorMessage . ' (' . $errorNumber . ')'];
+        $detail = trim((string) $errorMessage);
+        if ($detail === '') {
+            $detail = 'No socket error was returned. The host may be blocking outbound SMTP or the connection timed out before Gmail responded.';
+        }
+
+        return ['success' => false, 'error' => 'SMTP connection failed: ' . $detail . ' (' . $errorNumber . ')'];
     }
 
     stream_set_timeout($socket, $timeout);
@@ -425,14 +430,21 @@ function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recip
         }
 
         smtpCommand($socket, 'DATA', [354]);
-        fwrite($socket, dotStuffSmtpData($message) . "\r\n.\r\n");
+        if (fwrite($socket, dotStuffSmtpData($message) . "\r\n.\r\n") === false) {
+            throw new RuntimeException('SMTP write failed while sending message body.');
+        }
         smtpExpect($socket, [250]);
         smtpCommand($socket, 'QUIT', [221]);
 
         return ['success' => true, 'error' => null];
     } catch (Throwable $e) {
-        error_log('SMTP send failed: ' . $e->getMessage());
-        return ['success' => false, 'error' => $e->getMessage()];
+        $message = trim($e->getMessage());
+        if ($message === '') {
+            $message = 'SMTP failed without a detailed server message.';
+        }
+
+        error_log('SMTP send failed: ' . $message);
+        return ['success' => false, 'error' => $message];
     } finally {
         fclose($socket);
     }

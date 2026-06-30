@@ -59,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         logActivity($user['id'], 'update_general_settings', 'settings', 0, null, $_POST);
         $_SESSION['success'] = "General settings updated successfully";
+        $_SESSION['settings_active_tab'] = 'general';
     }
     
     if (isset($_POST['update_security'])) {
@@ -76,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         logActivity($user['id'], 'update_security_settings', 'settings', 0, null, $_POST);
         $_SESSION['success'] = "Security settings updated successfully";
+        $_SESSION['settings_active_tab'] = 'security';
     }
     
     if (isset($_POST['update_notifications'])) {
@@ -88,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         logActivity($user['id'], 'update_notification_settings', 'users', $user['id'], null, $_POST);
         $_SESSION['success'] = "Notification settings updated successfully";
+        $_SESSION['settings_active_tab'] = 'notifications';
     }
 
     if (isset($_POST['update_mail_settings'])) {
@@ -131,6 +134,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $_SESSION[$saved ? 'success' : 'error'] = $saved
             ? 'Gmail SMTP settings saved successfully'
             : 'Failed to save Gmail SMTP settings';
+        $_SESSION['settings_active_tab'] = 'mail';
     }
 
     if (isset($_POST['send_test_email'])) {
@@ -141,16 +145,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             '<div style="font-family:Arial,sans-serif;padding:24px;"><h2 style="color:#1f6392;">ERNI PMS Gmail Test</h2><p>Your Gmail SMTP integration is working.</p><p>This message confirms the system can now send email through your configured Google account.</p></div>',
             "ERNI PMS Gmail Test\n\nYour Gmail SMTP integration is working."
         );
+        $errorDetail = trim((string) ($result['error'] ?? ''));
+        if (!$result['success'] && $errorDetail === '') {
+            $mailIssues = getMailConfigIssues();
+            $errorDetail = $mailIssues !== []
+                ? 'Mail settings are incomplete: ' . implode(', ', $mailIssues) . '.'
+                : 'SMTP failed without a detailed server message. Check Render Logs and verify MAIL_USERNAME, MAIL_PASSWORD, Gmail App Password access, and outbound SMTP connectivity.';
+        }
 
         logActivity($user['id'], 'send_test_email', 'settings', 0, null, [
             'test_email' => $testEmail,
             'success' => $result['success'],
-            'error' => $result['error'],
+            'error' => $errorDetail,
         ], $result['success'] ? 'success' : 'failed');
 
         $_SESSION[$result['success'] ? 'success' : 'error'] = $result['success']
             ? 'Test email sent successfully to ' . $testEmail
-            : 'Test email failed: ' . $result['error'];
+            : 'Test email failed: ' . $errorDetail;
+        $_SESSION['settings_active_tab'] = 'mail';
     }
     
     if (isset($_POST['backup_database'])) {
@@ -165,6 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } else {
             $_SESSION['error'] = "Backup failed. Please check permissions.";
         }
+        $_SESSION['settings_active_tab'] = 'maintenance';
     }
     
     header('Location: settings.php');
@@ -182,6 +195,13 @@ $currentTimezone = $generalSettings['timezone'] ?? date_default_timezone_get();
 $emailNotifications = $conn->query("SELECT email_notifications, task_reminders, project_updates FROM users WHERE id = {$user['id']}")->fetch_assoc();
 $activeMailConfig = getMailConfig();
 $mailConfigured = isMailConfigured();
+$settingsActiveTab = (string) ($_SESSION['settings_active_tab'] ?? 'general');
+$settingsFlashSuccess = (string) ($_SESSION['success'] ?? '');
+$settingsFlashError = (string) ($_SESSION['error'] ?? '');
+unset($_SESSION['settings_active_tab'], $_SESSION['success'], $_SESSION['error']);
+if (!in_array($settingsActiveTab, ['general', 'mail', 'notifications', 'security', 'maintenance'], true)) {
+    $settingsActiveTab = 'general';
+}
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -799,23 +819,30 @@ input:checked + .switch-slider:before {
         </div>
     </div>
 
+    <?php if ($settingsFlashSuccess !== '' || $settingsFlashError !== ''): ?>
+        <div class="alert <?php echo $settingsFlashError !== '' ? 'alert-danger' : 'alert-success'; ?> shadow-sm" role="alert">
+            <i class="fas <?php echo $settingsFlashError !== '' ? 'fa-circle-exclamation' : 'fa-check-circle'; ?> me-2"></i>
+            <?php echo htmlspecialchars($settingsFlashError !== '' ? $settingsFlashError : $settingsFlashSuccess); ?>
+        </div>
+    <?php endif; ?>
+
     <div class="settings-layout">
         <aside class="settings-nav-card">
             <div class="nav flex-column nav-pills" id="settingsTabs" role="tablist" aria-orientation="vertical">
-                <button class="nav-link active" id="general-tab" data-bs-toggle="pill" data-bs-target="#general-panel" type="button" role="tab" aria-controls="general-panel" aria-selected="true">
+                <button class="nav-link <?php echo $settingsActiveTab === 'general' ? 'active' : ''; ?>" id="general-tab" data-bs-toggle="pill" data-bs-target="#general-panel" type="button" role="tab" aria-controls="general-panel" aria-selected="<?php echo $settingsActiveTab === 'general' ? 'true' : 'false'; ?>">
                     <i class="fas fa-globe"></i> <span>General</span>
                 </button>
-                <button class="nav-link" id="mail-tab" data-bs-toggle="pill" data-bs-target="#mail-panel" type="button" role="tab" aria-controls="mail-panel" aria-selected="false">
+                <button class="nav-link <?php echo $settingsActiveTab === 'mail' ? 'active' : ''; ?>" id="mail-tab" data-bs-toggle="pill" data-bs-target="#mail-panel" type="button" role="tab" aria-controls="mail-panel" aria-selected="<?php echo $settingsActiveTab === 'mail' ? 'true' : 'false'; ?>">
                     <i class="fas fa-envelope-open-text"></i> <span>Gmail SMTP</span>
                     <span class="nav-dot <?php echo $mailConfigured ? 'ready' : 'warning'; ?>"></span>
                 </button>
-                <button class="nav-link" id="notifications-tab" data-bs-toggle="pill" data-bs-target="#notifications-panel" type="button" role="tab" aria-controls="notifications-panel" aria-selected="false">
+                <button class="nav-link <?php echo $settingsActiveTab === 'notifications' ? 'active' : ''; ?>" id="notifications-tab" data-bs-toggle="pill" data-bs-target="#notifications-panel" type="button" role="tab" aria-controls="notifications-panel" aria-selected="<?php echo $settingsActiveTab === 'notifications' ? 'true' : 'false'; ?>">
                     <i class="fas fa-bell"></i> <span>Notifications</span>
                 </button>
-                <button class="nav-link" id="security-tab" data-bs-toggle="pill" data-bs-target="#security-panel" type="button" role="tab" aria-controls="security-panel" aria-selected="false">
+                <button class="nav-link <?php echo $settingsActiveTab === 'security' ? 'active' : ''; ?>" id="security-tab" data-bs-toggle="pill" data-bs-target="#security-panel" type="button" role="tab" aria-controls="security-panel" aria-selected="<?php echo $settingsActiveTab === 'security' ? 'true' : 'false'; ?>">
                     <i class="fas fa-shield-alt"></i> <span>Security</span>
                 </button>
-                <button class="nav-link" id="maintenance-tab" data-bs-toggle="pill" data-bs-target="#maintenance-panel" type="button" role="tab" aria-controls="maintenance-panel" aria-selected="false">
+                <button class="nav-link <?php echo $settingsActiveTab === 'maintenance' ? 'active' : ''; ?>" id="maintenance-tab" data-bs-toggle="pill" data-bs-target="#maintenance-panel" type="button" role="tab" aria-controls="maintenance-panel" aria-selected="<?php echo $settingsActiveTab === 'maintenance' ? 'true' : 'false'; ?>">
                     <i class="fas fa-tools"></i> <span>Maintenance</span>
                 </button>
             </div>
@@ -823,7 +850,7 @@ input:checked + .switch-slider:before {
 
         <div class="settings-content tab-content" id="settingsTabContent">
         <!-- General Settings -->
-        <div class="tab-pane fade show active" id="general-panel" role="tabpanel" aria-labelledby="general-tab">
+        <div class="tab-pane fade <?php echo $settingsActiveTab === 'general' ? 'show active' : ''; ?>" id="general-panel" role="tabpanel" aria-labelledby="general-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-globe"></i>
@@ -863,7 +890,7 @@ input:checked + .switch-slider:before {
         </div>
 
         <!-- Security Settings -->
-        <div class="tab-pane fade" id="security-panel" role="tabpanel" aria-labelledby="security-tab">
+        <div class="tab-pane fade <?php echo $settingsActiveTab === 'security' ? 'show active' : ''; ?>" id="security-panel" role="tabpanel" aria-labelledby="security-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-shield-alt"></i>
@@ -898,7 +925,7 @@ input:checked + .switch-slider:before {
         </div>
         </div>
 
-        <div class="tab-pane fade" id="mail-panel" role="tabpanel" aria-labelledby="mail-tab">
+        <div class="tab-pane fade <?php echo $settingsActiveTab === 'mail' ? 'show active' : ''; ?>" id="mail-panel" role="tabpanel" aria-labelledby="mail-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-envelope-open-text"></i>
@@ -987,7 +1014,7 @@ input:checked + .switch-slider:before {
         </div>
 
         <!-- Notification Settings -->
-        <div class="tab-pane fade" id="notifications-panel" role="tabpanel" aria-labelledby="notifications-tab">
+        <div class="tab-pane fade <?php echo $settingsActiveTab === 'notifications' ? 'show active' : ''; ?>" id="notifications-panel" role="tabpanel" aria-labelledby="notifications-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-bell"></i>
@@ -1028,7 +1055,7 @@ input:checked + .switch-slider:before {
         </div>
 
         <!-- System Maintenance -->
-        <div class="tab-pane fade" id="maintenance-panel" role="tabpanel" aria-labelledby="maintenance-tab">
+        <div class="tab-pane fade <?php echo $settingsActiveTab === 'maintenance' ? 'show active' : ''; ?>" id="maintenance-panel" role="tabpanel" aria-labelledby="maintenance-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-tools"></i>
