@@ -10,6 +10,32 @@ workflowEnsureSchema($conn);
 $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
 $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
 
+function sulTaskAllocationProjectFilter($conn, string $projectAlias, string $department): string
+{
+    $department = trim($department);
+    if ($department === '') {
+        return '1 = 0';
+    }
+
+    $escapedDepartment = $conn->real_escape_string($department);
+    $clauses = [];
+
+    if (dbTableExists($conn, 'developer_allocations')) {
+        $clauses[] = "EXISTS (
+            SELECT 1
+            FROM developer_allocations da_scope
+            WHERE da_scope.project_id = {$projectAlias}.id
+              AND da_scope.role = '{$escapedDepartment}'
+        )";
+    }
+
+    if (dbColumnExists($conn, 'projects', 'included_departments')) {
+        $clauses[] = "{$projectAlias}.included_departments LIKE '%\"{$escapedDepartment}\"%'";
+    }
+
+    return count($clauses) > 0 ? '(' . implode(' OR ', $clauses) . ')' : '1 = 1';
+}
+
 // Ensure sales approval columns exist
 $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 if (!$hasSalesApproval) {
@@ -35,6 +61,15 @@ if (!$hasSalesChoice) {
 }
 
 $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
+$sulDepartment = trim((string) ($user['department'] ?? ''));
+$sulDepartmentEscaped = $conn->real_escape_string($sulDepartment);
+$sulMissingDepartment = $sulDepartment === '';
+$sulUserDepartmentFilter = $sulDepartment !== '' ? " AND u.department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+$sulProjectFilter = sulTaskAllocationProjectFilter($conn, 'p', $sulDepartment);
+
+if ($sulMissingDepartment) {
+    $_SESSION['error'] = 'Your SUL account must be assigned to a department before managing task allocation.';
+}
 
 // If a dashboard link points to a specific task, open that task's project context.
 if (!$projectId && $taskId > 0) {
@@ -57,6 +92,7 @@ $ganttProjectOptions = $conn->query("
     FROM projects p
     LEFT JOIN tasks t ON t.project_id = p.id
     WHERE p.status != 'completed'
+      AND {$sulProjectFilter}
     GROUP BY p.id, p.name
     ORDER BY p.created_at DESC
 ");
@@ -67,6 +103,7 @@ if (!$projectId) {
         SELECT p.id 
         FROM projects p 
         WHERE p.status != 'completed'
+          AND {$sulProjectFilter}
         ORDER BY p.created_at DESC 
         LIMIT 1
     ")->fetch_assoc();
@@ -81,6 +118,7 @@ if($projectId) {
         FROM projects p
         JOIN clients c ON p.client_id = c.id
         WHERE p.id = $projectId
+          AND {$sulProjectFilter}
     ")->fetch_assoc();
 }
 
@@ -180,6 +218,7 @@ $unassignedTasks = $conn->query("
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
     WHERE (t.assigned_to IS NULL OR t.assigned_to = 0) AND t.status = 'todo'
+      AND {$sulProjectFilter}
     ORDER BY 
         CASE t.priority 
             WHEN 'critical' THEN 1 
@@ -201,6 +240,8 @@ $pendingEstimationTasks = $conn->query("
       AND t.assigned_to IS NOT NULL 
       AND t.assigned_to != 0
       AND u.role = 'expert'
+      {$sulUserDepartmentFilter}
+      AND {$sulProjectFilter}
       AND (SELECT COUNT(*) FROM feature_estimations fe WHERE fe.task_id = t.id AND fe.status = 'completed') = 0
     ORDER BY t.deadline ASC
 ");
@@ -219,6 +260,8 @@ $reviewTasks = $conn->query("
     JOIN projects p ON t.project_id = p.id
     LEFT JOIN feature_estimations fe ON t.id = fe.task_id AND fe.status = 'completed'
     WHERE t.status = 'review'{$salesApprovalFilter}
+      {$sulUserDepartmentFilter}
+      AND {$sulProjectFilter}
     ORDER BY t.deadline ASC
 ");
 
@@ -234,6 +277,8 @@ $readyForDevTasks = $conn->query("
       AND t.assigned_to IS NOT NULL 
       AND t.assigned_to != 0
       AND u.role = 'expert'
+      {$sulUserDepartmentFilter}
+      AND {$sulProjectFilter}
       AND (SELECT COUNT(*) FROM feature_estimations fe2 WHERE fe2.task_id = t.id AND fe2.status = 'completed') > 0" . ($hasSalesApproval ? " AND t.sales_approved = 1" : "") . ($hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "") . "
     ORDER BY t.deadline ASC
 ");
@@ -245,6 +290,8 @@ $inProgressTasks = $conn->query("
     JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
     WHERE t.status = 'in_progress'
+      {$sulUserDepartmentFilter}
+      AND {$sulProjectFilter}
     ORDER BY t.deadline ASC
 ");
 
@@ -263,6 +310,8 @@ $codeReviewTasks = $conn->query("
         LIMIT 1
     )
     WHERE t.status = 'for_review'
+      {$sulUserDepartmentFilter}
+      AND {$sulProjectFilter}
     ORDER BY t.pr_submitted_at ASC, t.updated_at ASC
 ");
 
@@ -273,6 +322,8 @@ $completedTasks = $conn->query("
     LEFT JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
     WHERE t.status = 'completed'
+      {$sulUserDepartmentFilter}
+      AND {$sulProjectFilter}
     ORDER BY t.completed_at DESC
     LIMIT 10
 ");
@@ -284,6 +335,7 @@ $experts = $conn->query("
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
     WHERE u.role = 'expert' AND u.status = 'active'
+      {$sulUserDepartmentFilter}
     GROUP BY u.id
     ORDER BY assigned_tasks ASC
 ");
@@ -296,6 +348,7 @@ $projectsForAllocation = $conn->query("
     WHERE t.task_type = 'feature'
       AND (t.assigned_to IS NULL OR t.assigned_to = 0)
       AND t.status = 'todo'
+      AND {$sulProjectFilter}
     GROUP BY p.id, p.name
     ORDER BY p.created_at DESC
 ");
@@ -307,6 +360,7 @@ $developers = $conn->query("
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
     WHERE u.role = 'developer' AND u.status = 'active'
+      {$sulUserDepartmentFilter}
     GROUP BY u.id
     ORDER BY assigned_tasks ASC
 ");
@@ -324,13 +378,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         }
 
-        $expertCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'expert' AND status = 'active'");
+        $expertDepartmentSql = $sulDepartment !== '' ? " AND department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+        $expertCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'expert' AND status = 'active'{$expertDepartmentSql}");
         $expertCheck->bind_param("i", $expertId);
         $expertCheck->execute();
         $validExpert = $expertCheck->get_result()->num_rows > 0;
         $expertCheck->close();
 
-        $taskCheck = $conn->prepare("SELECT id FROM tasks WHERE id = ? AND status = 'todo' AND (assigned_to IS NULL OR assigned_to = 0)");
+        $taskCheck = $conn->prepare("
+            SELECT t.id
+            FROM tasks t
+            JOIN projects p ON p.id = t.project_id
+            WHERE t.id = ?
+              AND t.status = 'todo'
+              AND (t.assigned_to IS NULL OR t.assigned_to = 0)
+              AND {$sulProjectFilter}
+        ");
         $taskCheck->bind_param("i", $taskId);
         $taskCheck->execute();
         $validTask = $taskCheck->get_result()->num_rows > 0;
@@ -376,7 +439,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         }
 
-        $expertCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'expert' AND status = 'active'");
+        $expertDepartmentSql = $sulDepartment !== '' ? " AND department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+        $expertCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'expert' AND status = 'active'{$expertDepartmentSql}");
         $expertCheck->bind_param("i", $expertId);
         $expertCheck->execute();
         $validExpert = $expertCheck->get_result()->num_rows > 0;
@@ -384,6 +448,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if (!$validExpert) {
             $_SESSION['error'] = "Please select an active expert.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $projectCheck = $conn->prepare("SELECT p.id FROM projects p WHERE p.id = ? AND {$sulProjectFilter} LIMIT 1");
+        $projectCheck->bind_param('i', $projectId);
+        $projectCheck->execute();
+        $validProjectForSul = $projectCheck->get_result()->num_rows > 0;
+        $projectCheck->close();
+
+        if (!$validProjectForSul) {
+            $_SESSION['error'] = "This project is not assigned to your SUL department.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -443,7 +519,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         }
 
-        $developerCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'developer' AND status = 'active'");
+        $developerDepartmentSql = $sulDepartment !== '' ? " AND department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+        $developerCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'developer' AND status = 'active'{$developerDepartmentSql}");
         $developerCheck->bind_param("i", $developerId);
         $developerCheck->execute();
         $validDeveloper = $developerCheck->get_result()->num_rows > 0;
@@ -452,12 +529,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $approvalSql = $hasSalesApproval ? " AND sales_approved = 1" : "";
         $choiceSql = $hasSalesChoice ? " AND sales_estimate_days IS NOT NULL" : "";
         $taskCheck = $conn->prepare("
-            SELECT id
-            FROM tasks
-            WHERE id = ?
-              AND status = 'todo'
-              AND assigned_to IS NOT NULL
-              AND assigned_to != 0
+            SELECT t.id
+            FROM tasks t
+            JOIN projects p ON p.id = t.project_id
+            WHERE t.id = ?
+              AND t.status = 'todo'
+              AND t.assigned_to IS NOT NULL
+              AND t.assigned_to != 0
+              AND {$sulProjectFilter}
               {$approvalSql}{$choiceSql}
         ");
         $taskCheck->bind_param("i", $taskId);
@@ -511,7 +590,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             SELECT t.id, t.title, t.status, t.assigned_to, p.name AS project_name
             FROM tasks t
             JOIN projects p ON p.id = t.project_id
+            JOIN users u ON u.id = t.assigned_to
             WHERE t.id = ? AND t.status = 'for_review'
+              {$sulUserDepartmentFilter}
+              AND {$sulProjectFilter}
             LIMIT 1
         ");
         $taskStmt->bind_param("i", $taskId);
@@ -578,12 +660,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $taskStmt = $conn->prepare("
             SELECT id, title, assigned_to, architect_reviewed_at
-            FROM tasks
-            WHERE id = ?
-              AND status = 'completed'
-              AND architect_reviewed_at IS NULL
-              AND assigned_to IS NOT NULL
-              AND assigned_to != 0
+            FROM tasks t
+            JOIN projects p ON p.id = t.project_id
+            JOIN users u ON u.id = t.assigned_to
+            WHERE t.id = ?
+              AND t.status = 'completed'
+              AND t.architect_reviewed_at IS NULL
+              AND t.assigned_to IS NOT NULL
+              AND t.assigned_to != 0
+              {$sulUserDepartmentFilter}
+              AND {$sulProjectFilter}
             LIMIT 1
         ");
         $taskStmt->bind_param("i", $taskId);

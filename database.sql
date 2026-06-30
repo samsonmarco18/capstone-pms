@@ -92,6 +92,7 @@ CREATE TABLE projects (
     meeting_notes TEXT,
     mom TEXT,
     requested_features LONGTEXT,
+    included_departments LONGTEXT,
     sales_budget DECIMAL(15, 2) NULL,
     cloud_platform VARCHAR(100),
     database_server VARCHAR(100),
@@ -232,6 +233,32 @@ CREATE TABLE tasks (
     INDEX idx_status (status),
     INDEX idx_assigned_to (assigned_to),
     INDEX idx_project_id (project_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- TASK DEPARTMENT ARTIFACTS TABLE
+-- =====================================================
+CREATE TABLE task_department_artifacts (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    task_id INT NOT NULL,
+    project_id INT NOT NULL,
+    user_id INT NULL,
+    department VARCHAR(100) NOT NULL,
+    artifact_type VARCHAR(50) NOT NULL DEFAULT 'department_handoff',
+    title VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500),
+    original_file_name VARCHAR(255),
+    file_type VARCHAR(100),
+    file_size BIGINT,
+    external_url VARCHAR(500),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_task_id (task_id),
+    INDEX idx_project_id (project_id),
+    INDEX idx_department (department)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================

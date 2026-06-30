@@ -28,6 +28,29 @@ if (!$project) {
     exit();
 }
 
+if (!dbColumnExists($conn, 'projects', 'included_departments')) {
+    $conn->query("ALTER TABLE projects ADD COLUMN included_departments " . (DB_DRIVER === 'pgsql' ? 'TEXT' : 'LONGTEXT') . " NULL");
+    $project = $conn->query("SELECT * FROM projects WHERE id = $projectId")->fetch_assoc();
+}
+
+$hasIncludedDepartments = false;
+$includedDepartmentRaw = trim((string) ($project['included_departments'] ?? ''));
+if ($includedDepartmentRaw !== '') {
+    $decodedDepartments = json_decode($includedDepartmentRaw, true);
+    $hasIncludedDepartments = is_array($decodedDepartments) && count($decodedDepartments) > 0;
+}
+
+if (!$hasIncludedDepartments && dbTableExists($conn, 'developer_allocations')) {
+    $allocationCount = $conn->query("SELECT COUNT(*) AS count FROM developer_allocations WHERE project_id = $projectId")->fetch_assoc();
+    $hasIncludedDepartments = (int) ($allocationCount['count'] ?? 0) > 0;
+}
+
+if (!$hasIncludedDepartments) {
+    $_SESSION['error'] = 'Select the departments included in this project before uploading architecture documents.';
+    header('Location: developer-allocation.php?id=' . $projectId);
+    exit();
+}
+
 // Get existing documents
 $documents = $conn->query("
     SELECT * FROM architecture_documents 

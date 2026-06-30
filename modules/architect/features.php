@@ -262,7 +262,7 @@ include '../../includes/navbar.php';
 
 .saved-feature {
     display: grid;
-    grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr) auto;
+    grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr);
     gap: 0.75rem;
     align-items: start;
     background: #ffffff;
@@ -291,7 +291,7 @@ include '../../includes/navbar.php';
 
 .sales-requested-feature {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 170px;
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.85rem;
     align-items: center;
     background: #f8fbfd;
@@ -321,17 +321,6 @@ include '../../includes/navbar.php';
     color: var(--gray-600);
     font-size: 0.78rem;
     margin-top: 0.2rem;
-}
-
-.priority-pill {
-    border-radius: 999px;
-    background: rgba(31, 99, 146, 0.1);
-    color: var(--theme-dark);
-    font-size: 0.72rem;
-    font-weight: 700;
-    padding: 0.35rem 0.65rem;
-    text-transform: uppercase;
-    white-space: nowrap;
 }
 
 .additional-features {
@@ -616,7 +605,6 @@ a.progress-step:hover {
                         <div class="saved-feature-description">
                             <?php echo htmlspecialchars(trim((string) $feature['description']) !== '' ? $feature['description'] : 'No description added.'); ?>
                         </div>
-                        <span class="priority-pill"><?php echo htmlspecialchars(ucfirst((string) $feature['priority'])); ?></span>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -644,33 +632,20 @@ a.progress-step:hover {
                                 <span class="sales-requested-meta d-block">From Sales intake</span>
                             </label>
                         </div>
-                        <div>
-                            <input
-                                type="hidden"
-                                name="new_features[<?php echo $index; ?>][title]"
-                                value="<?php echo htmlspecialchars($salesFeature); ?>"
-                                data-sales-feature-field
-                                disabled
-                            >
-                            <input
-                                type="hidden"
-                                name="new_features[<?php echo $index; ?>][description]"
-                                value="Requested by Sales during client intake."
-                                data-sales-feature-field
-                                disabled
-                            >
-                            <select
-                                name="new_features[<?php echo $index; ?>][priority]"
-                                class="form-select"
-                                data-sales-feature-field
-                                disabled
-                            >
-                                <option value="low">Low</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="high">High</option>
-                                <option value="critical">Critical</option>
-                            </select>
-                        </div>
+                        <input
+                            type="hidden"
+                            name="new_features[<?php echo $index; ?>][title]"
+                            value="<?php echo htmlspecialchars($salesFeature); ?>"
+                            data-sales-feature-field
+                            disabled
+                        >
+                        <input
+                            type="hidden"
+                            name="new_features[<?php echo $index; ?>][description]"
+                            value="Requested by Sales during client intake."
+                            data-sales-feature-field
+                            disabled
+                        >
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -684,22 +659,13 @@ a.progress-step:hover {
             <div id="featuresContainer">
                 <div class="feature-item">
                     <div class="row g-3 align-items-end">
-                        <div class="col-md-4">
+                        <div class="col-md-5">
                             <label class="form-label">Feature Title</label>
                             <input type="text" name="new_features[<?php echo count($salesRequestedFeatures); ?>][title]" class="form-control" <?php echo count($existingFeatures) === 0 && count($salesRequestedFeatures) === 0 ? 'required' : ''; ?>>
                         </div>
-                        <div class="col-md-5">
+                        <div class="col-md-6">
                             <label class="form-label">Description</label>
                             <input type="text" name="new_features[<?php echo count($salesRequestedFeatures); ?>][description]" class="form-control">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Priority</label>
-                            <select name="new_features[<?php echo count($salesRequestedFeatures); ?>][priority]" class="form-select">
-                                <option value="low">Low</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="high">High</option>
-                                <option value="critical">Critical</option>
-                            </select>
                         </div>
                         <div class="col-md-1">
                             <button type="button" class="btn-remove" onclick="removeFeature(this)" aria-label="Remove feature">
@@ -734,22 +700,13 @@ function addFeature() {
     item.className = 'feature-item';
     item.innerHTML = `
         <div class="row g-3 align-items-end">
-            <div class="col-md-4">
+            <div class="col-md-5">
                 <label class="form-label">Feature Title</label>
                 <input type="text" name="new_features[${featureIndex}][title]" class="form-control">
             </div>
-            <div class="col-md-5">
+            <div class="col-md-6">
                 <label class="form-label">Description</label>
                 <input type="text" name="new_features[${featureIndex}][description]" class="form-control">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Priority</label>
-                <select name="new_features[${featureIndex}][priority]" class="form-select">
-                    <option value="low">Low</option>
-                    <option value="medium" selected>Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                </select>
             </div>
             <div class="col-md-1">
                 <button type="button" class="btn-remove" onclick="removeFeature(this)" aria-label="Remove feature">

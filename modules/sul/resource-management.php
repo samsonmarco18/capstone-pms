@@ -4,6 +4,15 @@ requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$sulDepartment = trim((string) ($user['department'] ?? ''));
+$sulDepartmentEscaped = $conn->real_escape_string($sulDepartment);
+$sulMissingDepartment = $sulDepartment === '';
+$resourceDepartmentFilter = $sulDepartment !== '' ? " AND u.department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+$resourceDepartmentWhere = $sulDepartment !== '' ? " AND department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+
+if ($sulMissingDepartment) {
+    $_SESSION['error'] = 'Your SUL account must be assigned to a department before managing resources.';
+}
 
 function sulQueryResultOrNull($conn, $sql, $label)
 {
@@ -28,6 +37,32 @@ function sulQueryAssocOrDefault($conn, $sql, array $default, $label)
     return $row ?: $default;
 }
 
+function sulResourceProjectFilter($conn, string $projectAlias, string $department): string
+{
+    $department = trim($department);
+    if ($department === '') {
+        return '1 = 0';
+    }
+
+    $escapedDepartment = $conn->real_escape_string($department);
+    $clauses = [];
+    if (dbTableExists($conn, 'developer_allocations')) {
+        $clauses[] = "EXISTS (
+            SELECT 1
+            FROM developer_allocations da_scope
+            WHERE da_scope.project_id = {$projectAlias}.id
+              AND da_scope.role = '{$escapedDepartment}'
+        )";
+    }
+    if (dbColumnExists($conn, 'projects', 'included_departments')) {
+        $clauses[] = "{$projectAlias}.included_departments LIKE '%\"{$escapedDepartment}\"%'";
+    }
+
+    return count($clauses) > 0 ? '(' . implode(' OR ', $clauses) . ')' : '1 = 1';
+}
+
+$projectDepartmentFilter = sulResourceProjectFilter($conn, 'p', $sulDepartment);
+
 // Get developers
 $developers = sulQueryResultOrNull($conn, "
     SELECT u.*, 
@@ -41,7 +76,7 @@ $developers = sulQueryResultOrNull($conn, "
                ELSE NULL END), 1) as avg_completion_days
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role = 'developer' AND u.status = 'active'
+    WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
     GROUP BY u.id
     ORDER BY active_tasks DESC
 ", 'developers');
@@ -59,7 +94,7 @@ $experts = sulQueryResultOrNull($conn, "
                ELSE NULL END), 1) as avg_completion_days
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role = 'expert' AND u.status = 'active'
+    WHERE u.role = 'expert' AND u.status = 'active'{$resourceDepartmentFilter}
     GROUP BY u.id
     ORDER BY active_tasks DESC
 ", 'experts');
@@ -73,7 +108,7 @@ $workloadByRole = sulQueryResultOrNull($conn, "
            SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
+    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'{$resourceDepartmentFilter}
     GROUP BY u.role
 ", 'workloadByRole');
 
@@ -84,14 +119,14 @@ $skills = sulQueryAssocOrDefault($conn, "
         SUM(CASE WHEN role = 'developer' THEN 1 ELSE 0 END) as developers,
         COUNT(*) as total
     FROM users 
-    WHERE role IN ('expert', 'developer') AND status = 'active'
+    WHERE role IN ('expert', 'developer') AND status = 'active'{$resourceDepartmentWhere}
 ", ['experts' => 0, 'developers' => 0, 'total' => 0], 'skills');
 
 // Get available developers (not already in SUL's team)
 $availableDevelopers = sulQueryResultOrNull($conn, "
     SELECT u.id, u.full_name, u.email, u.department
     FROM users u
-    WHERE u.role = 'developer' AND u.status = 'active'
+    WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
     ORDER BY u.full_name
 ", 'availableDevelopers');
 
@@ -99,7 +134,7 @@ $availableDevelopers = sulQueryResultOrNull($conn, "
 $availableExperts = sulQueryResultOrNull($conn, "
     SELECT u.id, u.full_name, u.email, u.department
     FROM users u
-    WHERE u.role = 'expert' AND u.status = 'active'
+    WHERE u.role = 'expert' AND u.status = 'active'{$resourceDepartmentFilter}
     ORDER BY u.full_name
 ", 'availableExperts');
 
@@ -113,6 +148,7 @@ $projects = sulQueryResultOrNull($conn, "
     JOIN clients c ON p.client_id = c.id
     LEFT JOIN tasks t ON p.id = t.project_id
     WHERE p.status != 'completed'
+      AND {$projectDepartmentFilter}
     GROUP BY p.id
     ORDER BY p.created_at DESC
     LIMIT 10
@@ -124,7 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $userId = $_POST['user_id'];
         $maxTasks = $_POST['max_tasks'];
         
-        $stmt = $conn->prepare("UPDATE users SET max_concurrent_tasks = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE users SET max_concurrent_tasks = ? WHERE id = ?{$resourceDepartmentWhere}");
         $stmt->bind_param("ii", $maxTasks, $userId);
         $stmt->execute();
         
@@ -138,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $userId = $_POST['user_id'];
         $status = $_POST['availability_status'];
         
-        $stmt = $conn->prepare("UPDATE users SET availability_status = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE users SET availability_status = ? WHERE id = ?{$resourceDepartmentWhere}");
         $stmt->bind_param("si", $status, $userId);
         $stmt->execute();
         
@@ -156,7 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['error'] = "Invalid role selected";
         } else {
             // Check if user exists and is the correct role
-            $stmt = $conn->prepare("SELECT id, full_name, role FROM users WHERE id = ? AND role = ? AND status = 'active'");
+            $stmt = $conn->prepare("SELECT id, full_name, role FROM users WHERE id = ? AND role = ? AND status = 'active'{$resourceDepartmentWhere}");
             $stmt->bind_param("is", $userId, $role);
             $stmt->execute();
             $existingUser = $stmt->get_result()->fetch_assoc();
