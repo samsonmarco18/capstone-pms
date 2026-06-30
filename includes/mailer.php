@@ -8,47 +8,81 @@ function getMailSetting(string $name, ?string $default = null): string
     global $localOverrides;
 
     if (is_array($localOverrides ?? null) && array_key_exists($name, $localOverrides)) {
-        $value = $localOverrides[$name];
-        if (is_bool($value)) {
-            return $value ? '1' : '0';
+        $value = normalizeMailSettingValue($name, $localOverrides[$name]);
+        if ($value !== null) {
+            return $value;
         }
-
-        return trim((string) $value);
     }
 
     $envValue = getenv($name);
-    if ($envValue !== false && $envValue !== '') {
-        return trim((string) $envValue);
+    $envValue = normalizeMailSettingValue($name, $envValue);
+    if ($envValue !== null) {
+        return $envValue;
     }
 
     if (str_starts_with($name, 'MAIL_')) {
         $appSettingKey = 'mail_' . strtolower(substr($name, 5));
-        $appValue = getAppSetting($appSettingKey, null);
-        if ($appValue !== null && $appValue !== '') {
-            return trim((string) $appValue);
+        $appValue = normalizeMailSettingValue($name, getAppSetting($appSettingKey, null));
+        if ($appValue !== null) {
+            return $appValue;
         }
     }
 
     if (function_exists('getEnvOrDefault')) {
-        $value = getEnvOrDefault($name, $default ?? '');
-        if ($value !== false && $value !== null) {
-            $value = (string) $value;
-            if ($value !== '' || $default === null) {
-                return trim($value);
-            }
+        $value = normalizeMailSettingValue($name, getEnvOrDefault($name, $default ?? ''));
+        if ($value !== null) {
+            return $value;
         }
     }
 
     if (defined($name)) {
-        $value = constant($name);
-        if (is_bool($value)) {
-            return $value ? '1' : '0';
+        $value = normalizeMailSettingValue($name, constant($name));
+        if ($value !== null) {
+            return $value;
         }
-
-        return trim((string) $value);
     }
 
     return trim((string) ($default ?? ''));
+}
+
+function normalizeMailSettingValue(string $name, mixed $value): ?string
+{
+    if ($value === false || $value === null) {
+        return null;
+    }
+
+    if (is_bool($value)) {
+        return $value ? '1' : '0';
+    }
+
+    $trimmed = trim((string) $value);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    $normalizedName = strtoupper($name);
+    $lowerValue = strtolower($trimmed);
+    $placeholderValues = [
+        'your-google-app-password',
+        'your-app-password',
+        'google-app-password',
+        'app-password',
+        'changeme',
+        'change-me',
+        'your-password',
+    ];
+
+    if ($normalizedName === 'MAIL_PASSWORD' && in_array($lowerValue, $placeholderValues, true)) {
+        return null;
+    }
+
+    if (in_array($normalizedName, ['MAIL_USERNAME', 'MAIL_FROM_EMAIL'], true)
+        && in_array($lowerValue, ['your-email@example.com', 'your-email@gmail.com', 'example@gmail.com'], true)
+    ) {
+        return null;
+    }
+
+    return $trimmed;
 }
 
 function getMailConfig(): array
@@ -143,23 +177,51 @@ function isMailConfigured(): bool
 {
     $config = getMailConfig();
 
-    return $config['enabled']
-        && $config['host'] !== ''
-        && $config['port'] > 0
-        && $config['username'] !== ''
-        && $config['password'] !== ''
-        && filter_var($config['from_email'], FILTER_VALIDATE_EMAIL);
+    return getMailConfigIssues($config) === [];
+}
+
+function getMailConfigIssues(?array $config = null): array
+{
+    $config ??= getMailConfig();
+    $issues = [];
+
+    if (!$config['enabled']) {
+        $issues[] = 'email delivery is disabled';
+    }
+
+    if (trim((string) ($config['host'] ?? '')) === '') {
+        $issues[] = 'SMTP host is missing';
+    }
+
+    if ((int) ($config['port'] ?? 0) <= 0) {
+        $issues[] = 'SMTP port is missing';
+    }
+
+    if (trim((string) ($config['username'] ?? '')) === '') {
+        $issues[] = 'SMTP username is missing';
+    }
+
+    if (trim((string) ($config['password'] ?? '')) === '') {
+        $issues[] = 'SMTP app password is missing';
+    }
+
+    if (!filter_var((string) ($config['from_email'] ?? ''), FILTER_VALIDATE_EMAIL)) {
+        $issues[] = 'sender email is invalid';
+    }
+
+    return $issues;
 }
 
 function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?string $textBody = null): array
 {
     $config = getMailConfig();
-    if (!$config['enabled']) {
+    $configIssues = getMailConfigIssues($config);
+    if (in_array('email delivery is disabled', $configIssues, true)) {
         return ['success' => false, 'error' => 'Mail delivery is disabled in system settings.'];
     }
 
-    if (!isMailConfigured()) {
-        return ['success' => false, 'error' => 'Mail settings are incomplete.'];
+    if ($configIssues !== []) {
+        return ['success' => false, 'error' => 'Mail settings are incomplete: ' . implode(', ', $configIssues) . '.'];
     }
 
     $recipients = is_array($to) ? $to : [$to];
@@ -547,6 +609,7 @@ function getMailConfigDiagnostic(): array
         'from_name' => $config['from_name'],
     ];
     $diagnostic['is_configured'] = isMailConfigured();
+    $diagnostic['issues'] = getMailConfigIssues($config);
     
     return $diagnostic;
 }
