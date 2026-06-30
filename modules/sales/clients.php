@@ -1146,6 +1146,35 @@ include '../../includes/navbar.php';
     background: #ffffff;
 }
 
+.modal-modern.add-client-modal .requested-feature-builder {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.modal-modern.add-client-modal .requested-feature-list {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.modal-modern.add-client-modal .requested-feature-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 42px;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.modal-modern.add-client-modal .requested-feature-item .btn {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 10px;
+}
+
+.modal-modern.add-client-modal .requested-feature-actions {
+    display: flex;
+    justify-content: flex-start;
+}
+
 .modal-modern.add-client-modal .add-client-footer {
     display: flex;
     align-items: center;
@@ -1957,7 +1986,22 @@ include '../../includes/navbar.php';
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Requested System Features</label>
-                                    <textarea name="requested_features" class="form-control" rows="3" placeholder="List requested features, one per line"></textarea>
+                                    <div class="requested-feature-builder">
+                                        <input type="hidden" name="requested_features" id="requestedFeaturesField">
+                                        <div class="requested-feature-list" id="requestedFeatureList">
+                                            <div class="requested-feature-item">
+                                                <input type="text" class="form-control" data-requested-feature-input placeholder="Feature item">
+                                                <button type="button" class="btn btn-outline-danger" data-remove-requested-feature aria-label="Remove feature">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="requested-feature-actions">
+                                            <button type="button" class="btn btn-outline-primary btn-sm" id="addRequestedFeature">
+                                                <i class="fas fa-plus me-1"></i> Add Feature Item
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Meeting Notes</label>
@@ -2386,13 +2430,84 @@ if (addClientModalElement && addClientForm) {
     const keepEditingButton = addClientModalElement.querySelector('[data-keep-editing]');
     const discardUnsavedButton = addClientModalElement.querySelector('[data-discard-unsaved]');
     const saveCloseDraftButton = addClientModalElement.querySelector('[data-save-close-draft]');
+    const requestedFeaturesField = document.getElementById('requestedFeaturesField');
+    const requestedFeatureList = document.getElementById('requestedFeatureList');
+    const addRequestedFeatureButton = document.getElementById('addRequestedFeature');
     let currentStep = 0;
     let formTouched = false;
     let activeDraftLoaded = false;
     let activeDraftId = null;
 
     function getDraftData() {
+        syncRequestedFeaturesField();
         return Object.fromEntries(new FormData(addClientForm).entries());
+    }
+
+    function createRequestedFeatureRow(value = '') {
+        const item = document.createElement('div');
+        item.className = 'requested-feature-item';
+        item.innerHTML = `
+            <input type="text" class="form-control" data-requested-feature-input placeholder="Feature item">
+            <button type="button" class="btn btn-outline-danger" data-remove-requested-feature aria-label="Remove feature">
+                <i class="fas fa-trash"></i>
+            </button>
+        `;
+
+        const input = item.querySelector('[data-requested-feature-input]');
+        if (input) {
+            input.value = value;
+        }
+
+        return item;
+    }
+
+    function getRequestedFeatureValues() {
+        if (!requestedFeatureList) {
+            return [];
+        }
+
+        return Array.from(requestedFeatureList.querySelectorAll('[data-requested-feature-input]'))
+            .map((input) => String(input.value || '').trim())
+            .filter((value) => value !== '');
+    }
+
+    function syncRequestedFeaturesField() {
+        if (requestedFeaturesField) {
+            requestedFeaturesField.value = getRequestedFeatureValues().join("\n");
+        }
+    }
+
+    function renderRequestedFeatureRows(rawValue = '') {
+        if (!requestedFeatureList) {
+            return;
+        }
+
+        const features = String(rawValue || '')
+            .split(/\r?\n/)
+            .map((feature) => feature.trim())
+            .filter((feature) => feature !== '');
+
+        requestedFeatureList.innerHTML = '';
+        (features.length > 0 ? features : ['']).forEach((feature) => {
+            requestedFeatureList.appendChild(createRequestedFeatureRow(feature));
+        });
+
+        updateRequestedFeatureRemoveButtons();
+        syncRequestedFeaturesField();
+    }
+
+    function updateRequestedFeatureRemoveButtons() {
+        if (!requestedFeatureList) {
+            return;
+        }
+
+        const items = Array.from(requestedFeatureList.querySelectorAll('.requested-feature-item'));
+        items.forEach((item) => {
+            const button = item.querySelector('[data-remove-requested-feature]');
+            if (button) {
+                button.disabled = items.length <= 1;
+            }
+        });
     }
 
     function hasDraftValues(data = getDraftData()) {
@@ -2623,7 +2738,11 @@ if (addClientModalElement && addClientForm) {
         }
 
         addClientForm.reset();
+        renderRequestedFeatureRows(draftData.data?.requested_features || '');
         Object.entries(draftData.data || {}).forEach(([name, value]) => {
+            if (name === 'requested_features') {
+                return;
+            }
             const field = addClientForm.elements[name];
             if (field) {
                 field.value = value;
@@ -2639,6 +2758,7 @@ if (addClientModalElement && addClientForm) {
     function clearAddClientDraft() {
         saveStoredDrafts([]);
         addClientForm.reset();
+        renderRequestedFeatureRows('');
         formTouched = false;
         activeDraftLoaded = false;
         activeDraftId = null;
@@ -2649,6 +2769,7 @@ if (addClientModalElement && addClientForm) {
 
     function resetCurrentClientInput() {
         addClientForm.reset();
+        renderRequestedFeatureRows('');
         formTouched = false;
         activeDraftLoaded = false;
         activeDraftId = null;
@@ -2722,6 +2843,58 @@ if (addClientModalElement && addClientForm) {
         updateDraftStatus(false);
     });
 
+    if (requestedFeatureList) {
+        requestedFeatureList.addEventListener('input', (event) => {
+            if (event.target.matches('[data-requested-feature-input]')) {
+                syncRequestedFeaturesField();
+            }
+        });
+
+        requestedFeatureList.addEventListener('click', (event) => {
+            const removeButton = event.target.closest('[data-remove-requested-feature]');
+            if (!removeButton) {
+                return;
+            }
+
+            const item = removeButton.closest('.requested-feature-item');
+            const items = requestedFeatureList.querySelectorAll('.requested-feature-item');
+            if (!item) {
+                return;
+            }
+
+            if (items.length <= 1) {
+                const input = item.querySelector('[data-requested-feature-input]');
+                if (input) {
+                    input.value = '';
+                }
+            } else {
+                item.remove();
+            }
+
+            formTouched = true;
+            hideUnsavedClosePanel();
+            updateRequestedFeatureRemoveButtons();
+            syncRequestedFeaturesField();
+            updateDraftStatus(false);
+        });
+    }
+
+    if (addRequestedFeatureButton && requestedFeatureList) {
+        addRequestedFeatureButton.addEventListener('click', () => {
+            requestedFeatureList.appendChild(createRequestedFeatureRow(''));
+            updateRequestedFeatureRemoveButtons();
+            formTouched = true;
+            hideUnsavedClosePanel();
+            updateDraftStatus(false);
+
+            const inputs = requestedFeatureList.querySelectorAll('[data-requested-feature-input]');
+            const lastInput = inputs[inputs.length - 1];
+            if (lastInput) {
+                lastInput.focus();
+            }
+        });
+    }
+
     closeButtons.forEach((button) => {
         button.addEventListener('click', requestAddClientClose);
     });
@@ -2789,6 +2962,7 @@ if (addClientModalElement && addClientForm) {
     });
 
         addClientForm.addEventListener('submit', (event) => {
+        syncRequestedFeaturesField();
         for (let stepIndex = 0; stepIndex < stepPanels.length; stepIndex++) {
             if (!validateClientStep(stepIndex, false)) {
                 event.preventDefault();

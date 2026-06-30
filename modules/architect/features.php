@@ -7,6 +7,50 @@ $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $pageError = null;
 
+function architectFeatureNormalizeTitle(string $title): string
+{
+    return strtolower(preg_replace('/\s+/', ' ', trim($title)));
+}
+
+function architectFeatureParseSalesItems(?string $rawFeatures): array
+{
+    $raw = trim((string) $rawFeatures);
+    if ($raw === '') {
+        return [];
+    }
+
+    $items = [];
+    $seen = [];
+    $lines = preg_split('/\R/', $raw) ?: [];
+
+    foreach ($lines as $line) {
+        $line = trim((string) $line);
+        if ($line === '') {
+            continue;
+        }
+
+        if (preg_match('/^(additional requirements|budget)\s*:/i', $line)) {
+            break;
+        }
+
+        $line = preg_replace('/^\s*(?:[-*]|\d+[\.)])\s*/', '', $line);
+        $line = trim((string) $line);
+        if ($line === '') {
+            continue;
+        }
+
+        $normalized = architectFeatureNormalizeTitle($line);
+        if ($normalized === '' || isset($seen[$normalized])) {
+            continue;
+        }
+
+        $seen[$normalized] = true;
+        $items[] = $line;
+    }
+
+    return $items;
+}
+
 $projectResult = $conn->query("
     SELECT p.*, c.name AS client_name
     FROM projects p
@@ -38,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
 
     if ($existingTitleResult !== false) {
         while ($row = $existingTitleResult->fetch_assoc()) {
-            $normalizedTitle = strtolower(preg_replace('/\s+/', ' ', trim((string) ($row['title'] ?? ''))));
+            $normalizedTitle = architectFeatureNormalizeTitle((string) ($row['title'] ?? ''));
             if ($normalizedTitle !== '') {
                 $existingFeatureTitles[$normalizedTitle] = true;
             }
@@ -51,6 +95,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
         $skippedCount = 0;
 
         foreach ($features as $feature) {
+            if (!is_array($feature)) {
+                continue;
+            }
+
+            if (array_key_exists('include', $feature) && (string) ($feature['include'] ?? '') !== '1') {
+                continue;
+            }
+
             $title = trim((string) ($feature['title'] ?? ''));
             $description = trim((string) ($feature['description'] ?? ''));
             $priority = strtolower(trim((string) ($feature['priority'] ?? 'medium')));
@@ -63,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
                 $priority = 'medium';
             }
 
-            $normalizedTitle = strtolower(preg_replace('/\s+/', ' ', $title));
+            $normalizedTitle = architectFeatureNormalizeTitle($title);
             if (isset($existingFeatureTitles[$normalizedTitle])) {
                 $skippedCount++;
                 continue;
@@ -115,6 +167,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
 }
 
 $existingFeatures = [];
+$existingFeatureLookup = [];
 if ($project) {
     $featureResult = $conn->query("
         SELECT id, title, description, priority
@@ -130,6 +183,19 @@ if ($project) {
     } else {
         while ($row = $featureResult->fetch_assoc()) {
             $existingFeatures[] = $row;
+            $normalizedTitle = architectFeatureNormalizeTitle((string) ($row['title'] ?? ''));
+            if ($normalizedTitle !== '') {
+                $existingFeatureLookup[$normalizedTitle] = true;
+            }
+        }
+    }
+}
+
+$salesRequestedFeatures = [];
+if ($project) {
+    foreach (architectFeatureParseSalesItems($project['requested_features'] ?? '') as $salesFeature) {
+        if (!isset($existingFeatureLookup[architectFeatureNormalizeTitle($salesFeature)])) {
+            $salesRequestedFeatures[] = $salesFeature;
         }
     }
 }
@@ -215,6 +281,46 @@ include '../../includes/navbar.php';
     color: var(--gray-600);
     font-size: 0.88rem;
     word-break: break-word;
+}
+
+.sales-requested-list {
+    display: grid;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.sales-requested-feature {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 170px;
+    gap: 0.85rem;
+    align-items: center;
+    background: #f8fbfd;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+}
+
+.sales-requested-feature .form-check {
+    display: flex;
+    gap: 0.65rem;
+    align-items: flex-start;
+    margin: 0;
+}
+
+.sales-requested-feature .form-check-input {
+    margin-top: 0.15rem;
+}
+
+.sales-requested-title {
+    color: var(--gray-900);
+    font-weight: 700;
+    word-break: break-word;
+}
+
+.sales-requested-meta {
+    color: var(--gray-600);
+    font-size: 0.78rem;
+    margin-top: 0.2rem;
 }
 
 .priority-pill {
@@ -410,6 +516,7 @@ a.progress-step:hover {
     .progress-step .step-label { font-size: 0.6rem; }
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
     .saved-feature { grid-template-columns: 1fr; }
+    .sales-requested-feature { grid-template-columns: 1fr; }
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
     background: #06111e;
@@ -427,6 +534,7 @@ a.progress-step:hover {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-requested-feature,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .saved-feature,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white {
     background: #0a1b2c !important;
@@ -446,6 +554,7 @@ a.progress-step:hover {
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .saved-feature-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-requested-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-section-title {
     color: #d7e4f2 !important;
 }
@@ -513,6 +622,60 @@ a.progress-step:hover {
             </div>
         <?php endif; ?>
 
+        <?php if (count($salesRequestedFeatures) > 0): ?>
+            <div class="feature-section-title">
+                <i class="fas fa-user-tie"></i>
+                Sales Requested Features
+            </div>
+            <div class="sales-requested-list">
+                <?php foreach ($salesRequestedFeatures as $index => $salesFeature): ?>
+                    <div class="sales-requested-feature" data-sales-requested-feature>
+                        <div class="form-check">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                value="1"
+                                name="new_features[<?php echo $index; ?>][include]"
+                                id="salesFeature<?php echo $index; ?>"
+                                data-sales-feature-toggle
+                            >
+                            <label class="form-check-label" for="salesFeature<?php echo $index; ?>">
+                                <span class="sales-requested-title"><?php echo htmlspecialchars($salesFeature); ?></span>
+                                <span class="sales-requested-meta d-block">From Sales intake</span>
+                            </label>
+                        </div>
+                        <div>
+                            <input
+                                type="hidden"
+                                name="new_features[<?php echo $index; ?>][title]"
+                                value="<?php echo htmlspecialchars($salesFeature); ?>"
+                                data-sales-feature-field
+                                disabled
+                            >
+                            <input
+                                type="hidden"
+                                name="new_features[<?php echo $index; ?>][description]"
+                                value="Requested by Sales during client intake."
+                                data-sales-feature-field
+                                disabled
+                            >
+                            <select
+                                name="new_features[<?php echo $index; ?>][priority]"
+                                class="form-select"
+                                data-sales-feature-field
+                                disabled
+                            >
+                                <option value="low">Low</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
         <div class="additional-features">
             <div class="feature-section-title">
                 <i class="fas fa-plus-circle"></i>
@@ -523,15 +686,15 @@ a.progress-step:hover {
                     <div class="row g-3 align-items-end">
                         <div class="col-md-4">
                             <label class="form-label">Feature Title</label>
-                            <input type="text" name="new_features[0][title]" class="form-control" <?php echo count($existingFeatures) === 0 ? 'required' : ''; ?>>
+                            <input type="text" name="new_features[<?php echo count($salesRequestedFeatures); ?>][title]" class="form-control" <?php echo count($existingFeatures) === 0 && count($salesRequestedFeatures) === 0 ? 'required' : ''; ?>>
                         </div>
                         <div class="col-md-5">
                             <label class="form-label">Description</label>
-                            <input type="text" name="new_features[0][description]" class="form-control">
+                            <input type="text" name="new_features[<?php echo count($salesRequestedFeatures); ?>][description]" class="form-control">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label">Priority</label>
-                            <select name="new_features[0][priority]" class="form-select">
+                            <select name="new_features[<?php echo count($salesRequestedFeatures); ?>][priority]" class="form-select">
                                 <option value="low">Low</option>
                                 <option value="medium" selected>Medium</option>
                                 <option value="high">High</option>
@@ -561,7 +724,8 @@ a.progress-step:hover {
 </div>
 
 <script>
-let featureIndex = 1;
+const salesRequestedFeatureCount = <?php echo count($salesRequestedFeatures); ?>;
+let featureIndex = salesRequestedFeatureCount + 1;
 const hasSavedFeatures = <?php echo count($existingFeatures) > 0 ? 'true' : 'false'; ?>;
 
 function addFeature() {
@@ -629,13 +793,14 @@ function removeFeature(button) {
 function updateFeatureIndexes() {
     const items = document.querySelectorAll('.feature-item');
     items.forEach((item, idx) => {
+        const nextIndex = salesRequestedFeatureCount + idx;
         item.querySelectorAll('input, select, textarea').forEach((field) => {
             const name = field.getAttribute('name');
             if (!name) return;
-            field.setAttribute('name', name.replace(/new_features\[\d+\]/, `new_features[${idx}]`));
+            field.setAttribute('name', name.replace(/new_features\[\d+\]/, `new_features[${nextIndex}]`));
         });
     });
-    featureIndex = items.length;
+    featureIndex = salesRequestedFeatureCount + items.length;
 }
 
 function updateRemoveButtons() {
@@ -650,6 +815,19 @@ function updateRemoveButtons() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-sales-feature-toggle]').forEach((checkbox) => {
+        const wrapper = checkbox.closest('[data-sales-requested-feature]');
+        const fields = wrapper ? Array.from(wrapper.querySelectorAll('[data-sales-feature-field]')) : [];
+
+        function syncSalesFeatureFields() {
+            fields.forEach((field) => {
+                field.disabled = !checkbox.checked;
+            });
+        }
+
+        checkbox.addEventListener('change', syncSalesFeatureFields);
+        syncSalesFeatureFields();
+    });
     updateFeatureIndexes();
     updateRemoveButtons();
 });

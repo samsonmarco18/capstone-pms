@@ -7,6 +7,42 @@ $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $hasSalesBudget = dbColumnExists($conn, 'projects', 'sales_budget');
 
+function projectReviewParseRequestedFeatures(?string $rawFeatures): array
+{
+    $raw = trim((string) $rawFeatures);
+    if ($raw === '') {
+        return [];
+    }
+
+    $items = [];
+    $seen = [];
+    foreach ((preg_split('/\R/', $raw) ?: []) as $line) {
+        $line = trim((string) $line);
+        if ($line === '') {
+            continue;
+        }
+
+        if (preg_match('/^(additional requirements|budget)\s*:/i', $line)) {
+            break;
+        }
+
+        $line = trim((string) preg_replace('/^\s*(?:[-*]|\d+[\.)])\s*/', '', $line));
+        if ($line === '') {
+            continue;
+        }
+
+        $normalized = strtolower(preg_replace('/\s+/', ' ', $line));
+        if (isset($seen[$normalized])) {
+            continue;
+        }
+
+        $seen[$normalized] = true;
+        $items[] = $line;
+    }
+
+    return $items;
+}
+
 $project = $conn->query("
     SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email,
            c.phone AS client_phone, c.address AS client_address, c.industry AS client_industry
@@ -18,6 +54,20 @@ $project = $conn->query("
 if (!$project) {
     header('Location: projects.php');
     exit();
+}
+
+$requestedFeatureItems = projectReviewParseRequestedFeatures($project['requested_features'] ?? '');
+$additionalRequirementsText = '';
+if (preg_match('/Additional Requirements:\s*(.*?)(?:\R{2,}Budget:|\z)/is', (string) ($project['requested_features'] ?? ''), $matches)) {
+    $additionalRequirementsText = trim((string) ($matches[1] ?? ''));
+}
+$timelineDays = null;
+if (!empty($project['timeline_start']) && !empty($project['timeline_end'])) {
+    $start = strtotime((string) $project['timeline_start']);
+    $end = strtotime((string) $project['timeline_end']);
+    if ($start !== false && $end !== false && $end >= $start) {
+        $timelineDays = (int) floor(($end - $start) / 86400) + 1;
+    }
 }
 
 include '../../includes/header.php';
@@ -269,6 +319,30 @@ a.progress-step:hover {
     white-space: pre-line;
 }
 
+.requested-feature-list {
+    display: grid;
+    gap: 0.65rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    white-space: normal;
+}
+
+.requested-feature-list li {
+    display: flex;
+    gap: 0.55rem;
+    align-items: flex-start;
+    padding: 0.7rem 0.8rem;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+}
+
+.requested-feature-list i {
+    color: var(--theme-primary);
+    margin-top: 0.18rem;
+}
+
 .btn-primary-modern {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
     color: white;
@@ -359,7 +433,8 @@ a.progress-step:hover {
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .detail-row,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .content-box {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .content-box,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requested-feature-list li {
     background: #0a1b2c !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
 }
@@ -428,10 +503,6 @@ a.progress-step:hover {
                         <div class="detail-value"><?php echo htmlspecialchars($project['name']); ?></div>
                     </div>
                     <div class="detail-row">
-                        <div class="detail-label">Complexity</div>
-                        <div class="detail-value"><?php echo ucfirst($project['complexity_level']); ?></div>
-                    </div>
-                    <div class="detail-row">
                         <div class="detail-label">Timeline</div>
                         <div class="detail-value">
                             <?php
@@ -441,6 +512,19 @@ a.progress-step:hover {
                             } else {
                                 echo 'Not set';
                             }
+                            ?>
+                        </div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Planning Basis</div>
+                        <div class="detail-value">
+                            <?php
+                            $basisParts = [];
+                            $basisParts[] = count($requestedFeatureItems) . ' requested feature' . (count($requestedFeatureItems) === 1 ? '' : 's');
+                            if ($timelineDays !== null) {
+                                $basisParts[] = $timelineDays . ' day' . ($timelineDays === 1 ? '' : 's');
+                            }
+                            echo htmlspecialchars(implode(' | ', $basisParts));
                             ?>
                         </div>
                     </div>
@@ -470,7 +554,22 @@ a.progress-step:hover {
                 </div>
                 <div class="card-body">
                     <div class="content-box">
-                        <?php echo $project['requested_features'] ? htmlspecialchars($project['requested_features']) : 'No requested features provided.'; ?>
+                        <?php if (count($requestedFeatureItems) > 0): ?>
+                            <ul class="requested-feature-list">
+                                <?php foreach ($requestedFeatureItems as $featureItem): ?>
+                                    <li>
+                                        <i class="fas fa-check-circle"></i>
+                                        <span><?php echo htmlspecialchars($featureItem); ?></span>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php else: ?>
+                            No requested features provided.
+                        <?php endif; ?>
+                        <?php if ($additionalRequirementsText !== ''): ?>
+                            <div class="section-title mt-3">Additional Requirements</div>
+                            <div><?php echo htmlspecialchars($additionalRequirementsText); ?></div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
