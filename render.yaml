@@ -34,8 +34,14 @@ services:
         sync: false
       - key: MAIL_PASSWORD
         sync: false
+      - key: MAIL_FROM_EMAIL
+        sync: false
       - key: MAIL_FROM_NAME
         value: ERNI Development Center Philippines Inc.
+      - key: MAIL_VERIFY_PEER
+        value: "1"
+      - key: MAIL_TIMEOUT
+        value: "30"
 
 databases:
   - name: erni-pms-db

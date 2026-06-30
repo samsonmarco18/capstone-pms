@@ -60,6 +60,14 @@ function normalizeMailSettingValue(string $name, mixed $value): ?string
         return null;
     }
 
+    if (strlen($trimmed) >= 2) {
+        $first = $trimmed[0];
+        $last = $trimmed[strlen($trimmed) - 1];
+        if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+            $trimmed = trim(substr($trimmed, 1, -1));
+        }
+    }
+
     $normalizedName = strtoupper($name);
     $lowerValue = strtolower($trimmed);
     $placeholderValues = [
@@ -97,6 +105,8 @@ function getMailConfig(): array
     $envPassword = getMailSetting('MAIL_PASSWORD', '');
     $envFromEmail = getMailSetting('MAIL_FROM_EMAIL', '');
     $envFromName = getMailSetting('MAIL_FROM_NAME', '');
+    $verifyPeerRaw = strtolower(getMailSetting('MAIL_VERIFY_PEER', '1'));
+    $timeout = (int) getMailSetting('MAIL_TIMEOUT', '20');
 
     $host = $envHost !== '' ? $envHost : trim((string) getAppSetting('mail_host', 'smtp.gmail.com'));
     $port = (int) ($envPort !== '' ? $envPort : (getAppSetting('mail_port', '587') ?? '587'));
@@ -120,6 +130,12 @@ function getMailConfig(): array
         $encryption = 'tls';
     }
 
+    if ($timeout < 5) {
+        $timeout = 5;
+    } elseif ($timeout > 60) {
+        $timeout = 60;
+    }
+
     if (in_array($host, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true)) {
         if ($port === 465 && $encryption === 'tls') {
             $encryption = 'ssl';
@@ -141,6 +157,8 @@ function getMailConfig(): array
         'password' => normalizeMailPassword($host, $password),
         'from_email' => $fromEmail,
         'from_name' => $fromName !== '' ? $fromName : 'ERNI PMS',
+        'verify_peer' => !in_array($verifyPeerRaw, ['0', 'false', 'no', 'off'], true),
+        'timeout' => $timeout,
     ];
 
     if (shouldDebugMailConfig()) {
@@ -207,6 +225,10 @@ function getMailConfigIssues(?array $config = null): array
 
     if (!filter_var((string) ($config['from_email'] ?? ''), FILTER_VALIDATE_EMAIL)) {
         $issues[] = 'sender email is invalid';
+    }
+
+    if (($config['encryption'] ?? 'tls') !== 'none' && !extension_loaded('openssl')) {
+        $issues[] = 'PHP OpenSSL extension is missing';
     }
 
     return $issues;
@@ -344,11 +366,13 @@ function smtpErrorLooksLikeConnectionFailure(string $error): bool
 function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recipients, string $message): array
 {
     $transport = $config['encryption'] === 'ssl' ? 'ssl://' : 'tcp://';
+    $verifyPeer = (bool) ($config['verify_peer'] ?? true);
+    $timeout = (int) ($config['timeout'] ?? 20);
     $context = stream_context_create([
         'ssl' => [
             'peer_name' => $config['host'],
-            'verify_peer' => true,
-            'verify_peer_name' => true,
+            'verify_peer' => $verifyPeer,
+            'verify_peer_name' => $verifyPeer,
             'SNI_enabled' => true,
         ],
     ]);
@@ -356,7 +380,7 @@ function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recip
         $transport . $config['host'] . ':' . $config['port'],
         $errorNumber,
         $errorMessage,
-        20,
+        $timeout,
         STREAM_CLIENT_CONNECT,
         $context
     );
@@ -365,7 +389,7 @@ function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recip
         return ['success' => false, 'error' => 'SMTP connection failed: ' . $errorMessage . ' (' . $errorNumber . ')'];
     }
 
-    stream_set_timeout($socket, 20);
+    stream_set_timeout($socket, $timeout);
 
     try {
         $ehloHost = parse_url(BASE_URL, PHP_URL_HOST) ?: (gethostname() ?: 'localhost');
@@ -374,12 +398,19 @@ function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recip
 
         if ($config['encryption'] === 'tls') {
             smtpCommand($socket, 'STARTTLS', [220]);
-            $cryptoMethod = defined('STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT')
-                ? STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLS_CLIENT
-                : STREAM_CRYPTO_METHOD_TLS_CLIENT;
+            $cryptoMethod = 0;
+            foreach (['STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT', 'STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT', 'STREAM_CRYPTO_METHOD_TLS_CLIENT'] as $constantName) {
+                if (defined($constantName)) {
+                    $cryptoMethod |= constant($constantName);
+                }
+            }
+            if ($cryptoMethod === 0) {
+                $cryptoMethod = STREAM_CRYPTO_METHOD_TLS_CLIENT;
+            }
             $cryptoEnabled = @stream_socket_enable_crypto($socket, true, $cryptoMethod);
             if ($cryptoEnabled !== true) {
-                throw new RuntimeException('Unable to start TLS encryption with SMTP server.');
+                $opensslError = function_exists('openssl_error_string') ? (openssl_error_string() ?: '') : '';
+                throw new RuntimeException('Unable to start TLS encryption with SMTP server.' . ($opensslError !== '' ? ' ' . $opensslError : ''));
             }
             smtpCommand($socket, 'EHLO ' . $ehloHost, [250]);
         }
@@ -409,10 +440,8 @@ function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recip
 
 function smtpCommand($socket, string $command, array $expectedCodes, bool $logCommand = true): string
 {
-    if ($logCommand) {
-        fwrite($socket, $command . "\r\n");
-    } else {
-        fwrite($socket, $command . "\r\n");
+    if (fwrite($socket, $command . "\r\n") === false) {
+        throw new RuntimeException('SMTP write failed.');
     }
 
     return smtpExpect($socket, $expectedCodes);
@@ -427,6 +456,11 @@ function smtpExpect($socket, array $expectedCodes): string
         if (strlen($line) < 4 || $line[3] !== '-') {
             break;
         }
+    }
+
+    $meta = stream_get_meta_data($socket);
+    if (($meta['timed_out'] ?? false) === true) {
+        throw new RuntimeException('SMTP server response timed out.');
     }
 
     if ($response === '') {
@@ -485,7 +519,9 @@ function notificationTypeAllowsEmail(array $user, string $type): bool
 
 function sendNotificationEmailToUser(int $userId, string $title, string $message, string $type = 'system', ?string $actionUrl = null): bool
 {
-    if (!isMailConfigured()) {
+    $configIssues = getMailConfigIssues();
+    if ($configIssues !== []) {
+        error_log('Notification email skipped for user_id=' . $userId . ': ' . implode(', ', $configIssues));
         return false;
     }
 
@@ -607,6 +643,8 @@ function getMailConfigDiagnostic(): array
         'password' => $config['password'] ? '***' : '',
         'from_email' => $config['from_email'],
         'from_name' => $config['from_name'],
+        'verify_peer' => $config['verify_peer'],
+        'timeout' => $config['timeout'],
     ];
     $diagnostic['is_configured'] = isMailConfigured();
     $diagnostic['issues'] = getMailConfigIssues($config);

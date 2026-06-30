@@ -15,4 +15,6 @@ return [
     'MAIL_PASSWORD' => 'your-google-app-password',
     'MAIL_FROM_EMAIL' => 'altheapalentinos@gmail.com',
     'MAIL_FROM_NAME' => 'ERNI PMS',
+    'MAIL_VERIFY_PEER' => '1',
+    'MAIL_TIMEOUT' => '30',
 ];

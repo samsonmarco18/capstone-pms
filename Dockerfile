@@ -1,7 +1,8 @@
 FROM php:8.2-apache
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git postgresql-client libpq-dev \
+    && apt-get install -y --no-install-recommends ca-certificates git postgresql-client libpq-dev \
+    && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 RUN docker-php-ext-install mysqli pdo pdo_mysql pdo_pgsql pgsql \
