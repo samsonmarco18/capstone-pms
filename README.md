@@ -100,6 +100,7 @@ Optional Gmail SMTP for automatic email sending:
 
 return [
   'MAIL_ENABLED' => '1',
+  'MAIL_DELIVERY_METHOD' => 'smtp',
   'MAIL_HOST' => 'smtp.gmail.com',
   'MAIL_PORT' => '587',
   'MAIL_ENCRYPTION' => 'tls',
@@ -115,6 +116,25 @@ Important for Gmail:
 - enable 2-Step Verification on the Google account
 - create a Google App Password
 - use the App Password here, not the normal Gmail password
+
+Render may not be able to connect to Gmail SMTP ports `587` or `465`. If test email fails with connection timeouts, use Gmail API over HTTPS instead:
+
+```text
+MAIL_DELIVERY_METHOD=gmail_api
+MAIL_ENABLED=1
+MAIL_USERNAME=your-gmail-address
+MAIL_FROM_EMAIL=your-gmail-address
+GMAIL_CLIENT_ID=your-google-oauth-client-id
+GMAIL_CLIENT_SECRET=your-google-oauth-client-secret
+GMAIL_REFRESH_TOKEN=your-google-oauth-refresh-token
+GMAIL_USER=your-gmail-address
+```
+
+For Gmail API, the Google OAuth consent/app must include the Gmail send scope:
+
+```text
+https://www.googleapis.com/auth/gmail.send
+```
 
 ### 5. Start Application
 

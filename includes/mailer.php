@@ -107,6 +107,7 @@ function getMailConfig(): array
     $envFromName = getMailSetting('MAIL_FROM_NAME', '');
     $verifyPeerRaw = strtolower(getMailSetting('MAIL_VERIFY_PEER', '1'));
     $timeout = (int) getMailSetting('MAIL_TIMEOUT', '8');
+    $deliveryMethod = strtolower(getMailSetting('MAIL_DELIVERY_METHOD', 'smtp'));
 
     $host = $envHost !== '' ? $envHost : trim((string) getAppSetting('mail_host', 'smtp.gmail.com'));
     $port = (int) ($envPort !== '' ? $envPort : (getAppSetting('mail_port', '587') ?? '587'));
@@ -128,6 +129,10 @@ function getMailConfig(): array
 
     if (!in_array($encryption, ['tls', 'ssl', 'none'], true)) {
         $encryption = 'tls';
+    }
+
+    if (!in_array($deliveryMethod, ['smtp', 'gmail_api'], true)) {
+        $deliveryMethod = 'smtp';
     }
 
     if ($timeout < 5) {
@@ -159,6 +164,8 @@ function getMailConfig(): array
         'from_name' => $fromName !== '' ? $fromName : 'ERNI PMS',
         'verify_peer' => !in_array($verifyPeerRaw, ['0', 'false', 'no', 'off'], true),
         'timeout' => $timeout,
+        'delivery_method' => $deliveryMethod,
+        'gmail_api' => getGmailApiConfig($username),
     ];
 
     if (shouldDebugMailConfig()) {
@@ -202,36 +209,72 @@ function getMailConfigIssues(?array $config = null): array
 {
     $config ??= getMailConfig();
     $issues = [];
+    $deliveryMethod = (string) ($config['delivery_method'] ?? 'smtp');
 
     if (!$config['enabled']) {
         $issues[] = 'email delivery is disabled';
     }
 
-    if (trim((string) ($config['host'] ?? '')) === '') {
-        $issues[] = 'SMTP host is missing';
-    }
+    if ($deliveryMethod === 'gmail_api') {
+        $gmailConfig = $config['gmail_api'] ?? [];
 
-    if ((int) ($config['port'] ?? 0) <= 0) {
-        $issues[] = 'SMTP port is missing';
-    }
+        if (trim((string) ($gmailConfig['client_id'] ?? '')) === '') {
+            $issues[] = 'Gmail API client ID is missing';
+        }
 
-    if (trim((string) ($config['username'] ?? '')) === '') {
-        $issues[] = 'SMTP username is missing';
-    }
+        if (trim((string) ($gmailConfig['client_secret'] ?? '')) === '') {
+            $issues[] = 'Gmail API client secret is missing';
+        }
 
-    if (trim((string) ($config['password'] ?? '')) === '') {
-        $issues[] = 'SMTP app password is missing';
+        if (trim((string) ($gmailConfig['refresh_token'] ?? '')) === '') {
+            $issues[] = 'Gmail API refresh token is missing';
+        }
+
+        if (trim((string) ($gmailConfig['user'] ?? '')) === '') {
+            $issues[] = 'Gmail API user is missing';
+        }
+    } else {
+        if (trim((string) ($config['host'] ?? '')) === '') {
+            $issues[] = 'SMTP host is missing';
+        }
+
+        if ((int) ($config['port'] ?? 0) <= 0) {
+            $issues[] = 'SMTP port is missing';
+        }
+
+        if (trim((string) ($config['username'] ?? '')) === '') {
+            $issues[] = 'SMTP username is missing';
+        }
+
+        if (trim((string) ($config['password'] ?? '')) === '') {
+            $issues[] = 'SMTP app password is missing';
+        }
+
+        if (($config['encryption'] ?? 'tls') !== 'none' && !extension_loaded('openssl')) {
+            $issues[] = 'PHP OpenSSL extension is missing';
+        }
     }
 
     if (!filter_var((string) ($config['from_email'] ?? ''), FILTER_VALIDATE_EMAIL)) {
         $issues[] = 'sender email is invalid';
     }
 
-    if (($config['encryption'] ?? 'tls') !== 'none' && !extension_loaded('openssl')) {
-        $issues[] = 'PHP OpenSSL extension is missing';
+    return $issues;
+}
+
+function getGmailApiConfig(string $smtpUsername = ''): array
+{
+    $user = getMailSetting('GMAIL_USER', '');
+    if ($user === '') {
+        $user = $smtpUsername;
     }
 
-    return $issues;
+    return [
+        'client_id' => getMailSetting('GMAIL_CLIENT_ID', ''),
+        'client_secret' => getMailSetting('GMAIL_CLIENT_SECRET', ''),
+        'refresh_token' => getMailSetting('GMAIL_REFRESH_TOKEN', ''),
+        'user' => $user,
+    ];
 }
 
 function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?string $textBody = null): array
@@ -292,7 +335,132 @@ function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?s
     $message .= normalizeSmtpBody($htmlBody) . "\r\n";
     $message .= '--' . $boundary . "--\r\n";
 
+    if (($config['delivery_method'] ?? 'smtp') === 'gmail_api') {
+        return gmailApiSendMessage($config['gmail_api'], $message);
+    }
+
     return smtpSendMessage($config, $fromEmail, $validRecipients, $message);
+}
+
+function gmailApiSendMessage(array $gmailConfig, string $message): array
+{
+    $tokenResult = gmailApiFetchAccessToken($gmailConfig);
+    if (!$tokenResult['success']) {
+        return $tokenResult;
+    }
+
+    $rawMessage = rtrim(strtr(base64_encode($message), '+/', '-_'), '=');
+    $sendResult = httpJsonRequest(
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+        ['raw' => $rawMessage],
+        [
+            'Authorization: Bearer ' . $tokenResult['access_token'],
+            'Content-Type: application/json',
+        ],
+        15
+    );
+
+    if ($sendResult['success']) {
+        return ['success' => true, 'error' => null];
+    }
+
+    return [
+        'success' => false,
+        'error' => 'Gmail API send failed: ' . $sendResult['error'],
+    ];
+}
+
+function gmailApiFetchAccessToken(array $gmailConfig): array
+{
+    $response = httpFormRequest(
+        'https://oauth2.googleapis.com/token',
+        [
+            'client_id' => (string) ($gmailConfig['client_id'] ?? ''),
+            'client_secret' => (string) ($gmailConfig['client_secret'] ?? ''),
+            'refresh_token' => (string) ($gmailConfig['refresh_token'] ?? ''),
+            'grant_type' => 'refresh_token',
+        ],
+        15
+    );
+
+    if (!$response['success']) {
+        return [
+            'success' => false,
+            'error' => 'Gmail API token request failed: ' . $response['error'],
+        ];
+    }
+
+    $accessToken = trim((string) ($response['json']['access_token'] ?? ''));
+    if ($accessToken === '') {
+        return [
+            'success' => false,
+            'error' => 'Gmail API token response did not include an access token.',
+        ];
+    }
+
+    return [
+        'success' => true,
+        'access_token' => $accessToken,
+        'error' => null,
+    ];
+}
+
+function httpFormRequest(string $url, array $fields, int $timeout = 15): array
+{
+    return httpRequest($url, http_build_query($fields), ['Content-Type: application/x-www-form-urlencoded'], $timeout);
+}
+
+function httpJsonRequest(string $url, array $payload, array $headers, int $timeout = 15): array
+{
+    return httpRequest($url, json_encode($payload, JSON_UNESCAPED_SLASHES), $headers, $timeout);
+}
+
+function httpRequest(string $url, string|false $body, array $headers, int $timeout = 15): array
+{
+    if ($body === false) {
+        return ['success' => false, 'error' => 'Unable to encode HTTP request body.'];
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => implode("\r\n", $headers),
+            'content' => $body,
+            'timeout' => max(5, min(30, $timeout)),
+            'ignore_errors' => true,
+        ],
+    ]);
+
+    $responseBody = @file_get_contents($url, false, $context);
+    $statusLine = (string) ($http_response_header[0] ?? '');
+    preg_match('/\s(\d{3})\s/', $statusLine, $matches);
+    $statusCode = isset($matches[1]) ? (int) $matches[1] : 0;
+
+    if ($responseBody === false) {
+        $lastError = error_get_last();
+        return [
+            'success' => false,
+            'error' => (string) ($lastError['message'] ?? 'HTTP request failed without a detailed error.'),
+        ];
+    }
+
+    $decoded = json_decode($responseBody, true);
+    $json = is_array($decoded) ? $decoded : [];
+
+    if ($statusCode < 200 || $statusCode >= 300) {
+        $apiError = $json['error']['message'] ?? $json['error_description'] ?? $json['error'] ?? trim($responseBody);
+        return [
+            'success' => false,
+            'error' => 'HTTP ' . ($statusCode ?: 'unknown') . ': ' . (string) $apiError,
+            'json' => $json,
+        ];
+    }
+
+    return [
+        'success' => true,
+        'error' => null,
+        'json' => $json,
+    ];
 }
 
 function smtpSendMessage(array $config, string $fromEmail, array $recipients, string $message): array

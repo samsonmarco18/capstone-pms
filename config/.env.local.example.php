@@ -8,6 +8,7 @@ return [
     'APP_URL' => 'http://localhost/erni-pms',
     'APP_BASE_PATH' => 'erni-pms',
     'MAIL_ENABLED' => '1',
+    'MAIL_DELIVERY_METHOD' => 'smtp',
     'MAIL_HOST' => 'smtp.gmail.com',
     'MAIL_PORT' => '587',
     'MAIL_ENCRYPTION' => 'tls',
@@ -17,4 +18,8 @@ return [
     'MAIL_FROM_NAME' => 'ERNI PMS',
     'MAIL_VERIFY_PEER' => '1',
     'MAIL_TIMEOUT' => '8',
+    'GMAIL_CLIENT_ID' => '',
+    'GMAIL_CLIENT_SECRET' => '',
+    'GMAIL_REFRESH_TOKEN' => '',
+    'GMAIL_USER' => '',
 ];
