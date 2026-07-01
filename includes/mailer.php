@@ -456,7 +456,21 @@ function httpRequest(string $url, string|false $body, array $headers, int $timeo
     $json = is_array($decoded) ? $decoded : [];
 
     if ($statusCode < 200 || $statusCode >= 300) {
-        $apiError = $json['error']['message'] ?? $json['error_description'] ?? $json['error'] ?? trim($responseBody);
+        $apiError = '';
+        if (isset($json['error']) && is_array($json['error'])) {
+            $apiError = (string) ($json['error']['message'] ?? json_encode($json['error'], JSON_UNESCAPED_SLASHES));
+        } elseif (isset($json['error_description'])) {
+            $apiError = (string) $json['error_description'];
+        } elseif (isset($json['error'])) {
+            $apiError = (string) $json['error'];
+        } else {
+            $apiError = trim($responseBody);
+        }
+
+        if ($apiError === '') {
+            $apiError = trim($statusLine) !== '' ? trim($statusLine) : 'HTTP request failed without a response body.';
+        }
+
         return [
             'success' => false,
             'error' => 'HTTP ' . ($statusCode ?: 'unknown') . ': ' . (string) $apiError,
