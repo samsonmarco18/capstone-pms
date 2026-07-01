@@ -67,6 +67,38 @@ function hasAllRoles(array $roles): bool
     return count(array_unique($roles)) === 1 && $user['role'] === $roles[0];
 }
 
+function formatTimeAgo(?string $datetime): string
+{
+    $timestamp = strtotime((string) $datetime);
+    if ($timestamp === false) {
+        return 'just now';
+    }
+
+    $diff = max(0, time() - $timestamp);
+
+    if ($diff < 60) {
+        return 'just now';
+    }
+
+    $units = [
+        31536000 => 'y',
+        2592000 => 'mo',
+        604800 => 'w',
+        86400 => 'd',
+        3600 => 'h',
+        60 => 'm',
+    ];
+
+    foreach ($units as $seconds => $suffix) {
+        if ($diff >= $seconds) {
+            $value = (int) floor($diff / $seconds);
+            return $value . $suffix . ' ago';
+        }
+    }
+
+    return 'just now';
+}
+
 function getSecuritySettings(): array
 {
     static $cache = null;

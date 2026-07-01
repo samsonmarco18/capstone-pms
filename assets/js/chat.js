@@ -149,8 +149,12 @@ function applyChatVisibility() {
 }
 
 function setChatVisibility(isOpen, persist = true) {
-    $('#chat-widget').css('display', isOpen ? 'flex' : 'none');
-    $('#chat-widget-minimized').css('display', isOpen ? 'none' : 'block');
+    $('#chat-widget')
+        .toggleClass('chat-widget-open', isOpen)
+        .css('display', isOpen ? 'flex' : 'none');
+    $('#chat-widget-minimized')
+        .toggleClass('chat-launcher-hidden', isOpen)
+        .css('display', isOpen ? 'none' : 'block');
 
     if (persist) {
         localStorage.setItem(chatStateKey, String(isOpen));

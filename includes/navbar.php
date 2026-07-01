@@ -81,6 +81,9 @@ $appUserContext = [
                                            onclick="markNotificationRead(<?php echo (int) $notification['id']; ?>)">
                                             <div class="notification-item-title fw-semibold small"><?php echo htmlspecialchars($notification['title']); ?></div>
                                             <div class="notification-item-message text-muted small"><?php echo htmlspecialchars($notification['message']); ?></div>
+                                            <div class="notification-item-time text-muted small mt-1" title="<?php echo htmlspecialchars(date('M d, Y h:i A', strtotime($notification['created_at']))); ?>">
+                                                <i class="far fa-clock me-1"></i><?php echo htmlspecialchars(formatTimeAgo($notification['created_at'])); ?>
+                                            </div>
                                         </a>
                                     </li>
                                 <?php endforeach; ?>

@@ -1,7 +1,9 @@
         </div>
     </div>
 
-    <?php include __DIR__ . '/chat-widget.php'; ?>
+    <?php if (empty($chatWidgetRendered)): ?>
+        <?php include __DIR__ . '/chat-widget.php'; ?>
+    <?php endif; ?>
 
     <div class="modal fade create-group-modal" id="createGroupModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
@@ -87,6 +89,8 @@
 
     <div class="sidebar-overlay"></div>
 
-    <script src="<?php echo BASE_URL; ?>assets/js/chat.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/chat.js'); ?>" defer></script>
+    <?php if (empty($chatScriptLoaded)): ?>
+        <script src="<?php echo BASE_URL; ?>assets/js/chat.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/chat.js'); ?>" defer></script>
+    <?php endif; ?>
 </body>
 </html>

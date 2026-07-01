@@ -29,6 +29,12 @@ $reportLabels = [
     'project' => 'Project Performance',
 ];
 $reportTitle = $reportLabels[$reportType] ?? $reportLabels['team'];
+$reportContextMessage = [
+    'team' => 'Quick view of overall workload, completion pace, and overdue items for the selected period.',
+    'individual' => 'Compare each team member by task load, completion rate, and overdue work for the selected period.',
+    'project' => 'Focus on project completion and risk so you can spot delays early in the selected period.',
+][$reportType] ?? 'Performance snapshot for the selected period.';
+$reportDateRangeLabel = date('M d, Y', strtotime($dateFrom)) . ' to ' . date('M d, Y', strtotime($dateTo));
 
 // Get team performance metrics
 $teamMetrics = $conn->query("
@@ -231,7 +237,14 @@ if (isset($_GET['download'])) {
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
+
+// Render chat before the report body so production-side report failures cannot hide it.
+include '../../includes/chat-widget.php';
+$chatWidgetRendered = true;
+$chatScriptLoaded = true;
 ?>
+
+<script src="<?php echo BASE_URL; ?>assets/js/chat.js?v=<?php echo filemtime(__DIR__ . '/../../assets/js/chat.js'); ?>" defer></script>
 
 <style>
 :root {
@@ -339,6 +352,44 @@ include '../../includes/navbar.php';
 .stat-card-modern .stat-sub {
     font-size: 0.7rem;
     color: var(--gray-600);
+}
+
+/* Report Message */
+.report-message-card {
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(31, 99, 146, 0.08) 0%, rgba(58, 124, 163, 0.04) 100%);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    gap: 0.85rem;
+    align-items: flex-start;
+}
+
+.report-message-card .report-message-icon {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(31, 99, 146, 0.12);
+    color: var(--theme-primary);
+    font-size: 1rem;
+}
+
+.report-message-card h6 {
+    margin: 0 0 0.25rem;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--gray-800);
+}
+
+.report-message-card p {
+    margin: 0;
+    color: var(--gray-600);
+    line-height: 1.55;
 }
 
 /* Cards */
@@ -570,6 +621,18 @@ include '../../includes/navbar.php';
     .stat-card-modern .stat-number {
         font-size: 2rem;
     }
+
+    .report-message-card {
+        padding: 0.9rem 1rem;
+        gap: 0.75rem;
+    }
+
+    .report-message-card .report-message-icon {
+        width: 38px;
+        height: 38px;
+        flex-basis: 38px;
+        border-radius: 10px;
+    }
 }
 </style>
 
@@ -582,6 +645,16 @@ include '../../includes/navbar.php';
                 Performance Report
             </h2>
             <p>Monitor team performance, task completion rates, and productivity metrics</p>
+        </div>
+    </div>
+
+    <div class="report-message-card">
+        <div class="report-message-icon">
+            <i class="fas fa-circle-info"></i>
+        </div>
+        <div>
+            <h6><?php echo htmlspecialchars($reportTitle); ?></h6>
+            <p><?php echo htmlspecialchars($reportContextMessage); ?> Date range: <?php echo htmlspecialchars($reportDateRangeLabel); ?>.</p>
         </div>
     </div>
 
@@ -921,6 +994,98 @@ function printReport(tableId) {
     document.body.innerHTML = originalContents;
     location.reload();
 }
+</script>
+
+<style>
+/* Keep the shared messenger above the report layout on desktop and mobile. */
+body #chat-widget,
+body #chat-widget-minimized {
+    position: fixed !important;
+    top: auto !important;
+    right: 24px !important;
+    bottom: 24px !important;
+    left: auto !important;
+    margin: 0 !important;
+    transform: none !important;
+    z-index: 2147483000 !important;
+}
+
+body #chat-widget-minimized {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 64px !important;
+    height: 64px !important;
+    border: 0 !important;
+    border-radius: 50% !important;
+    background: linear-gradient(135deg, #1f75ae, #075b96) !important;
+    color: #fff !important;
+    box-shadow: 0 18px 38px rgba(10, 48, 79, 0.3) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+}
+
+body #chat-widget-minimized.report-chat-hidden {
+    display: none !important;
+}
+
+body #chat-widget.report-chat-open {
+    display: flex !important;
+}
+
+body #chat-widget:not(.report-chat-open) {
+    display: none !important;
+}
+
+@media (max-width: 576px) {
+    body #chat-widget,
+    body #chat-widget-minimized {
+        right: 12px !important;
+        bottom: 12px !important;
+    }
+
+    body #chat-widget {
+        width: calc(100vw - 24px) !important;
+        height: calc(100dvh - 88px) !important;
+        max-height: calc(100dvh - 24px) !important;
+    }
+
+    body #chat-widget-minimized {
+        width: 58px !important;
+        height: 58px !important;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const widget = document.getElementById('chat-widget');
+    const launcher = document.getElementById('chat-widget-minimized');
+    const minimizeButton = document.getElementById('toggleChatMinimize');
+
+    if (!widget || !launcher) return;
+
+    // Moving fixed elements directly under body avoids clipping by report containers.
+    document.body.appendChild(widget);
+    document.body.appendChild(launcher);
+
+    const setReportChatOpen = function (isOpen) {
+        widget.classList.toggle('report-chat-open', isOpen);
+        launcher.classList.toggle('report-chat-hidden', isOpen);
+    };
+
+    setReportChatOpen(false);
+    launcher.addEventListener('click', function () {
+        setReportChatOpen(true);
+    });
+
+    if (minimizeButton) {
+        minimizeButton.addEventListener('click', function () {
+            setReportChatOpen(false);
+        });
+    }
+});
 </script>
 
 <?php include '../../includes/footer.php'; ?>
