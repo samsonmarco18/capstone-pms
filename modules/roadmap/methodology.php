@@ -70,6 +70,7 @@ function roadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
                 end_date DATE NOT NULL,
                 assigned_developer_id INT NULL,
                 expert_people_count INT DEFAULT 0,
+                expert_developer_type VARCHAR(100) NULL,
                 expert_notes TEXT,
                 status VARCHAR(30) DEFAULT 'planned',
                 created_by INT NULL,
@@ -98,6 +99,7 @@ function roadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
                 end_date DATE NOT NULL,
                 assigned_developer_id INT NULL,
                 expert_people_count INT DEFAULT 0,
+                expert_developer_type VARCHAR(100) NULL,
                 expert_notes TEXT,
                 status ENUM('planned', 'in_progress', 'completed', 'blocked') DEFAULT 'planned',
                 created_by INT NULL,
@@ -488,13 +490,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } elseif ($canEditExpertInput && $taskId > 0) {
             $expertPeopleCount = max(0, (int) ($_POST['expert_people_count'] ?? 0));
+            $expertDeveloperType = trim((string) ($_POST['expert_developer_type'] ?? ''));
             $expertNotes = trim((string) ($_POST['expert_notes'] ?? ''));
+
+            if ($expertDeveloperType !== '' && !in_array($expertDeveloperType, $departments, true)) {
+                $_SESSION['error'] = 'Select a valid expert developer type.';
+                header('Location: methodology.php?project_id=' . $postedProjectId);
+                exit();
+            }
+
             $stmt = $conn->prepare("
                 UPDATE methodology_tasks
-                SET expert_people_count = ?, expert_notes = ?, expert_updated_by = ?, expert_updated_at = CURRENT_TIMESTAMP
+                SET expert_people_count = ?, expert_developer_type = ?, expert_notes = ?, expert_updated_by = ?, expert_updated_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND project_id = ?
             ");
-            $stmt->bind_param('isiii', $expertPeopleCount, $expertNotes, $userId, $taskId, $postedProjectId);
+            $stmt->bind_param('issiii', $expertPeopleCount, $expertDeveloperType, $expertNotes, $userId, $taskId, $postedProjectId);
             $stmt->execute();
             $stmt->close();
             $_SESSION['success'] = 'Expert staffing input updated.';
@@ -647,6 +657,110 @@ include '../../includes/navbar.php';
     font-size: 1.45rem;
     font-weight: 700;
     margin-bottom: .25rem;
+}
+
+.breadcrumb-modern {
+    align-items: center;
+    background: #fff;
+    border: 1px solid var(--roadmap-line);
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: .75rem 1rem;
+}
+
+.breadcrumb-modern .breadcrumb-item {
+    align-items: center;
+    color: var(--roadmap-muted);
+    display: inline-flex;
+    font-size: .85rem;
+    gap: .45rem;
+}
+
+.breadcrumb-modern .breadcrumb-item a {
+    align-items: center;
+    color: var(--roadmap-primary);
+    display: inline-flex;
+    gap: .45rem;
+    text-decoration: none;
+}
+
+.breadcrumb-modern .breadcrumb-item + .breadcrumb-item::before {
+    color: #94a3b8;
+    content: "›";
+    font-weight: 700;
+    margin-right: .5rem;
+}
+
+.progress-indicator {
+    align-items: center;
+    background: #fff;
+    border: 1px solid var(--roadmap-line);
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+}
+
+.progress-step {
+    align-items: center;
+    color: var(--roadmap-muted);
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: .45rem;
+    text-align: center;
+    text-decoration: none;
+}
+
+.progress-step .step-number {
+    align-items: center;
+    background: #e5e7eb;
+    border-radius: 999px;
+    color: #64748b;
+    display: inline-flex;
+    font-size: .82rem;
+    font-weight: 700;
+    height: 32px;
+    justify-content: center;
+    width: 32px;
+}
+
+.progress-step .step-label {
+    color: inherit;
+    font-size: .72rem;
+    font-weight: 600;
+}
+
+.progress-step.completed .step-number {
+    background: #10b981;
+    color: #fff;
+}
+
+.progress-step.active .step-number {
+    background: var(--roadmap-primary);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, .18);
+    color: #fff;
+}
+
+.progress-step.active .step-label {
+    color: var(--roadmap-primary);
+}
+
+.progress-line {
+    background: #e5e7eb;
+    flex: .35;
+    height: 2px;
+}
+
+.progress-line.completed {
+    background: #10b981;
 }
 
 .roadmap-toolbar,
@@ -875,7 +989,9 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-toolbar,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-gantt,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-table-wrap {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-table-wrap,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-indicator {
     background: #111827;
     border-color: #263244;
 }
@@ -956,6 +1072,35 @@ include '../../includes/navbar.php';
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
             <?php echo htmlspecialchars((string) $_SESSION['error']); unset($_SESSION['error']); ?>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($selectedProject && $canEditArchitecture): ?>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb-modern">
+                <li class="breadcrumb-item"><a href="<?php echo BASE_URL; ?>modules/architect/projects.php"><i class="fas fa-folder-open"></i> Projects</a></li>
+                <li class="breadcrumb-item"><a href="<?php echo BASE_URL; ?>modules/architect/project-review.php?id=<?php echo (int) $selectedProjectId; ?>"><i class="fas fa-clipboard-list"></i> Project Review</a></li>
+                <li class="breadcrumb-item"><a href="<?php echo BASE_URL; ?>modules/architect/features.php?id=<?php echo (int) $selectedProjectId; ?>"><i class="fas fa-list-check"></i> Features</a></li>
+                <li class="breadcrumb-item"><a href="<?php echo BASE_URL; ?>modules/architect/tech-recommendation.php?id=<?php echo (int) $selectedProjectId; ?>"><i class="fas fa-microchip"></i> Technology</a></li>
+                <li class="breadcrumb-item"><a href="<?php echo BASE_URL; ?>modules/architect/developer-allocation.php?id=<?php echo (int) $selectedProjectId; ?>"><i class="fas fa-users"></i> Developers</a></li>
+                <li class="breadcrumb-item active"><i class="fas fa-route"></i> Roadmap</li>
+            </ol>
+        </nav>
+
+        <div class="progress-indicator">
+            <a class="progress-step completed" href="<?php echo BASE_URL; ?>modules/architect/project-review.php?id=<?php echo (int) $selectedProjectId; ?>"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Project Review</div></a>
+            <div class="progress-line completed"></div>
+            <a class="progress-step completed" href="<?php echo BASE_URL; ?>modules/architect/features.php?id=<?php echo (int) $selectedProjectId; ?>"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Features</div></a>
+            <div class="progress-line completed"></div>
+            <a class="progress-step completed" href="<?php echo BASE_URL; ?>modules/architect/tech-recommendation.php?id=<?php echo (int) $selectedProjectId; ?>"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Technology</div></a>
+            <div class="progress-line completed"></div>
+            <a class="progress-step completed" href="<?php echo BASE_URL; ?>modules/architect/developer-allocation.php?id=<?php echo (int) $selectedProjectId; ?>"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Developers</div></a>
+            <div class="progress-line completed"></div>
+            <a class="progress-step active" href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $selectedProjectId; ?>"><div class="step-number">5</div><div class="step-label">Roadmap</div></a>
+            <div class="progress-line"></div>
+            <a class="progress-step" href="<?php echo BASE_URL; ?>modules/architect/upload-diagram.php?id=<?php echo (int) $selectedProjectId; ?>"><div class="step-number">6</div><div class="step-label">Documents</div></a>
+            <div class="progress-line"></div>
+            <a class="progress-step" href="<?php echo BASE_URL; ?>modules/architect/summary.php?id=<?php echo (int) $selectedProjectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
         </div>
     <?php endif; ?>
 
@@ -1129,7 +1274,7 @@ include '../../includes/navbar.php';
                                     class="gantt-bar-roadmap gantt-bar-task"
                                     style="left: <?php echo $taskLeft; ?>%; width: <?php echo $taskWidth; ?>%;"
                                     data-task='<?php echo htmlspecialchars(json_encode($task, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>'
-                                    onclick="<?php echo ($canEditArchitecture || $canEditExpertInput) ? 'openTaskModalFromTask(this)' : ''; ?>"
+                                    onclick="openTaskModalFromTask(this)"
                                 >
                                     <?php echo htmlspecialchars((string) $task['title']); ?>
                                 </div>
@@ -1150,7 +1295,7 @@ include '../../includes/navbar.php';
                             <th>Department</th>
                             <th>Developer</th>
                             <th>Timeline</th>
-                            <th>Expert People</th>
+                            <th>Expert Staffing</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -1173,7 +1318,10 @@ include '../../includes/navbar.php';
                                 <td><?php echo htmlspecialchars((string) ($task['department'] ?: 'Unassigned')); ?></td>
                                 <td><?php echo htmlspecialchars((string) ($task['developer_name'] ?: 'Unassigned')); ?></td>
                                 <td><?php echo htmlspecialchars((string) $task['start_date']); ?> to <?php echo htmlspecialchars((string) $task['end_date']); ?></td>
-                                <td><?php echo (int) $task['expert_people_count']; ?></td>
+                                <td>
+                                    <strong><?php echo (int) $task['expert_people_count']; ?></strong>
+                                    <div class="small text-muted"><?php echo htmlspecialchars((string) ($task['expert_developer_type'] ?: 'Type not set')); ?></div>
+                                </td>
                                 <td><span class="status-pill status-<?php echo htmlspecialchars((string) $task['status']); ?>"><?php echo htmlspecialchars(str_replace('_', ' ', (string) $task['status'])); ?></span></td>
                             </tr>
                         <?php endforeach; ?>
@@ -1326,7 +1474,19 @@ include '../../includes/navbar.php';
                         <label class="form-label">Expert People Count</label>
                         <input type="number" class="form-control" name="expert_people_count" id="expertPeopleCount" min="0" step="1" value="0" <?php echo !$canEditExpertInput ? 'readonly' : ''; ?>>
                     </div>
-                    <div class="col-md-8">
+                    <div class="col-md-4">
+                        <label class="form-label">Expert Developer Type</label>
+                        <select class="form-select" name="expert_developer_type" id="expertDeveloperType" <?php echo !$canEditExpertInput ? 'disabled' : ''; ?>>
+                            <option value="">Not set</option>
+                            <?php foreach ($departments as $department): ?>
+                                <option value="<?php echo htmlspecialchars($department); ?>"><?php echo htmlspecialchars($department); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php if (!$canEditExpertInput): ?>
+                            <input type="hidden" name="expert_developer_type" id="expertDeveloperTypeHidden">
+                        <?php endif; ?>
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label">Expert Notes</label>
                         <textarea class="form-control" name="expert_notes" id="expertNotes" rows="2" <?php echo !$canEditExpertInput ? 'readonly' : ''; ?>></textarea>
                     </div>
@@ -1412,6 +1572,8 @@ function openTaskModal(task) {
     setValue('taskStatus', task.status || 'planned');
     setValue('taskDescription', task.description || '');
     setValue('expertPeopleCount', task.expert_people_count || 0);
+    setValue('expertDeveloperType', task.expert_developer_type || '');
+    setValue('expertDeveloperTypeHidden', task.expert_developer_type || '');
     setValue('expertNotes', task.expert_notes || '');
     taskModal.show();
 }

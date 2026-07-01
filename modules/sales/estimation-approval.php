@@ -1059,6 +1059,9 @@ include '../../includes/navbar.php';
                                 <h6>Project Gantt Overview</h6>
                                 <p>The gantt stays attached to this project so the feature approvals below are easier to review in context.</p>
                             </div>
+                            <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $pid; ?>" class="btn-action text-decoration-none">
+                                <i class="fas fa-route"></i> Roadmap
+                            </a>
                         </div>
                         <div id="salesGantt_<?php echo (int) $pid; ?>"></div>
                     </div>

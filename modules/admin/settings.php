@@ -95,6 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     if (isset($_POST['update_mail_settings'])) {
         $mailEnabled = isset($_POST['mail_enabled']) ? '1' : '0';
+        $mailDeliveryMethod = strtolower(trim((string) ($_POST['mail_delivery_method'] ?? 'smtp')));
         $mailHost = trim((string) ($_POST['mail_host'] ?? 'smtp.gmail.com'));
         $mailPort = trim((string) ($_POST['mail_port'] ?? '587'));
         $mailEncryption = trim((string) ($_POST['mail_encryption'] ?? 'tls'));
@@ -102,26 +103,50 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $mailPassword = trim((string) ($_POST['mail_password'] ?? ''));
         $mailFromEmail = trim((string) ($_POST['mail_from_email'] ?? $mailUsername));
         $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'ERNI PMS'));
+        $gmailClientId = trim((string) ($_POST['gmail_client_id'] ?? ''));
+        $gmailClientSecret = trim((string) ($_POST['gmail_client_secret'] ?? ''));
+        $gmailRefreshToken = trim((string) ($_POST['gmail_refresh_token'] ?? ''));
+        $gmailUser = trim((string) ($_POST['gmail_user'] ?? $mailUsername));
+
+        if (!in_array($mailDeliveryMethod, ['smtp', 'gmail_api'], true)) {
+            $mailDeliveryMethod = 'smtp';
+        }
 
         $normalizedMailHost = strtolower($mailHost);
         if (in_array($normalizedMailHost, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true) && filter_var($mailUsername, FILTER_VALIDATE_EMAIL)) {
             $mailFromEmail = $mailUsername;
         }
 
-        $saved = setAppSetting('mail_enabled', $mailEnabled, 'Enable SMTP email delivery', 'system')
+        if ($gmailUser === '') {
+            $gmailUser = $mailUsername;
+        }
+
+        $saved = setAppSetting('mail_enabled', $mailEnabled, 'Enable email delivery', 'system')
+            && setAppSetting('mail_delivery_method', $mailDeliveryMethod, 'Mail delivery method', 'system')
             && setAppSetting('mail_host', $mailHost, 'SMTP server host', 'system')
             && setAppSetting('mail_port', $mailPort, 'SMTP server port', 'system')
             && setAppSetting('mail_encryption', $mailEncryption, 'SMTP transport security', 'system')
             && setAppSetting('mail_username', $mailUsername, 'SMTP username', 'system')
             && setAppSetting('mail_from_email', $mailFromEmail, 'Mail sender address', 'system')
-            && setAppSetting('mail_from_name', $mailFromName, 'Mail sender name', 'system');
+            && setAppSetting('mail_from_name', $mailFromName, 'Mail sender name', 'system')
+            && setAppSetting('gmail_client_id', $gmailClientId, 'Gmail API OAuth client ID', 'system')
+            && setAppSetting('gmail_user', $gmailUser, 'Gmail API sender user', 'system');
 
         if ($mailPassword !== '') {
             $saved = $saved && setAppSetting('mail_password', $mailPassword, 'SMTP app password', 'system');
         }
 
+        if ($gmailClientSecret !== '') {
+            $saved = $saved && setAppSetting('gmail_client_secret', $gmailClientSecret, 'Gmail API OAuth client secret', 'system');
+        }
+
+        if ($gmailRefreshToken !== '') {
+            $saved = $saved && setAppSetting('gmail_refresh_token', $gmailRefreshToken, 'Gmail API OAuth refresh token', 'system');
+        }
+
         logActivity($user['id'], 'update_mail_settings', 'settings', 0, null, [
             'mail_enabled' => $mailEnabled,
+            'mail_delivery_method' => $mailDeliveryMethod,
             'mail_host' => $mailHost,
             'mail_port' => $mailPort,
             'mail_encryption' => $mailEncryption,
@@ -129,11 +154,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             'mail_from_email' => $mailFromEmail,
             'mail_from_name' => $mailFromName,
             'mail_password_updated' => $mailPassword !== '',
+            'gmail_client_id_updated' => $gmailClientId !== '',
+            'gmail_client_secret_updated' => $gmailClientSecret !== '',
+            'gmail_refresh_token_updated' => $gmailRefreshToken !== '',
+            'gmail_user' => $gmailUser,
         ]);
 
         $_SESSION[$saved ? 'success' : 'error'] = $saved
-            ? 'Gmail SMTP settings saved successfully'
-            : 'Failed to save Gmail SMTP settings';
+            ? 'Gmail mail settings saved successfully'
+            : 'Failed to save Gmail mail settings';
         $_SESSION['settings_active_tab'] = 'mail';
     }
 
@@ -833,7 +862,7 @@ input:checked + .switch-slider:before {
                     <i class="fas fa-globe"></i> <span>General</span>
                 </button>
                 <button class="nav-link <?php echo $settingsActiveTab === 'mail' ? 'active' : ''; ?>" id="mail-tab" data-bs-toggle="pill" data-bs-target="#mail-panel" type="button" role="tab" aria-controls="mail-panel" aria-selected="<?php echo $settingsActiveTab === 'mail' ? 'true' : 'false'; ?>">
-                    <i class="fas fa-envelope-open-text"></i> <span>Gmail SMTP</span>
+                    <i class="fas fa-envelope-open-text"></i> <span>Gmail Mailer</span>
                     <span class="nav-dot <?php echo $mailConfigured ? 'ready' : 'warning'; ?>"></span>
                 </button>
                 <button class="nav-link <?php echo $settingsActiveTab === 'notifications' ? 'active' : ''; ?>" id="notifications-tab" data-bs-toggle="pill" data-bs-target="#notifications-panel" type="button" role="tab" aria-controls="notifications-panel" aria-selected="<?php echo $settingsActiveTab === 'notifications' ? 'true' : 'false'; ?>">
@@ -929,7 +958,7 @@ input:checked + .switch-slider:before {
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-envelope-open-text"></i>
-                <h5>Gmail SMTP</h5>
+                <h5>Gmail Mailer</h5>
             </div>
             <div class="card-body-modern">
                 <form method="POST">
@@ -945,6 +974,14 @@ input:checked + .switch-slider:before {
                     </div>
 
                     <div class="settings-form-grid" style="margin-top: 1.25rem;">
+                    <div class="form-group full-span">
+                        <label class="form-label">Delivery Method</label>
+                        <select name="mail_delivery_method" class="form-select-modern">
+                            <option value="smtp" <?php echo ($activeMailConfig['delivery_method'] ?? 'smtp') === 'smtp' ? 'selected' : ''; ?>>Gmail SMTP</option>
+                            <option value="gmail_api" <?php echo ($activeMailConfig['delivery_method'] ?? '') === 'gmail_api' ? 'selected' : ''; ?>>Gmail API over HTTPS</option>
+                        </select>
+                        <span class="form-text">Use Gmail API when the server blocks SMTP ports 587 and 465.</span>
+                    </div>
                     <div class="form-group">
                         <label class="form-label">SMTP Host</label>
                         <input type="text" name="mail_host" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['host'] ?? 'smtp.gmail.com'); ?>" required>
@@ -980,6 +1017,26 @@ input:checked + .switch-slider:before {
                         <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'ERNI PMS'); ?>" required>
                     </div>
                     <div class="form-group full-span">
+                        <hr style="margin: 0.25rem 0;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gmail API Client ID</label>
+                        <input type="text" name="gmail_client_id" class="form-control-modern" value="<?php echo htmlspecialchars((string) ($activeMailConfig['gmail_api']['client_id'] ?? '')); ?>" placeholder="Google OAuth client ID">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gmail API Client Secret</label>
+                        <input type="password" name="gmail_client_secret" class="form-control-modern" placeholder="Leave blank to keep current saved secret">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gmail API Refresh Token</label>
+                        <input type="password" name="gmail_refresh_token" class="form-control-modern" placeholder="Leave blank to keep current saved token">
+                        <span class="form-text">Must be generated with the Gmail send scope.</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gmail API User</label>
+                        <input type="email" name="gmail_user" class="form-control-modern" value="<?php echo htmlspecialchars((string) ($activeMailConfig['gmail_api']['user'] ?? ($activeMailConfig['username'] ?? ''))); ?>" placeholder="sender@gmail.com">
+                    </div>
+                    <div class="form-group full-span">
                         <span class="settings-status <?php echo $mailConfigured ? 'ready' : 'incomplete'; ?>">
                             <i class="fas <?php echo $mailConfigured ? 'fa-check-circle' : 'fa-circle-exclamation'; ?>"></i>
                             <?php echo $mailConfigured ? 'Ready to send' : 'Incomplete configuration'; ?>
@@ -988,7 +1045,7 @@ input:checked + .switch-slider:before {
                     </div>
                     <div class="settings-actions">
                     <button type="submit" name="update_mail_settings" class="btn-primary-modern">
-                        <i class="fas fa-save"></i> Save Gmail Settings
+                        <i class="fas fa-save"></i> Save Mail Settings
                     </button>
                     </div>
                 </form>

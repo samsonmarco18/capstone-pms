@@ -206,6 +206,7 @@ CREATE TABLE methodology_tasks (
     end_date DATE NOT NULL,
     assigned_developer_id INT NULL,
     expert_people_count INT DEFAULT 0,
+    expert_developer_type VARCHAR(100) NULL,
     expert_notes TEXT,
     status TEXT CHECK (status IN ('planned', 'in_progress', 'completed', 'blocked')) DEFAULT 'planned',
     created_by INT NULL,

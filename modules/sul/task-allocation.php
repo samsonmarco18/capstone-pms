@@ -1679,6 +1679,9 @@ include '../../includes/navbar.php';
                                 </option>
                             <?php endwhile; ?>
                         </select>
+                        <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $projectId; ?>" class="btn-primary-modern text-decoration-none">
+                            <i class="fas fa-route"></i> Roadmap
+                        </a>
                     </form>
                     <?php endif; ?>
                 </div>

@@ -1,9 +1,11 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/methodology-roadmap.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
+methodologyRoadmapEnsureSchema($conn);
 
 function architectProjectNextStep(array $project): array
 {
@@ -11,22 +13,26 @@ function architectProjectNextStep(array $project): array
     $featureCount = (int) ($project['feature_count'] ?? 0);
     $techCount = (int) ($project['tech_count'] ?? 0);
     $allocationCount = (int) ($project['allocation_count'] ?? 0);
+    $roadmapCount = (int) ($project['roadmap_count'] ?? 0);
     $documentCount = (int) ($project['document_count'] ?? 0);
 
     if ($featureCount <= 0) {
-        return ['url' => 'project-review.php?id=' . $projectId, 'label' => 'Start Review', 'step' => 'Step 1 of 6'];
+        return ['url' => 'project-review.php?id=' . $projectId, 'label' => 'Start Review', 'step' => 'Step 1 of 7'];
     }
     if ($techCount <= 0) {
-        return ['url' => 'tech-recommendation.php?id=' . $projectId, 'label' => 'Continue Technology', 'step' => 'Step 3 of 6'];
+        return ['url' => 'tech-recommendation.php?id=' . $projectId, 'label' => 'Continue Technology', 'step' => 'Step 3 of 7'];
     }
     if ($allocationCount <= 0) {
-        return ['url' => 'developer-allocation.php?id=' . $projectId, 'label' => 'Continue Developers', 'step' => 'Step 4 of 6'];
+        return ['url' => 'developer-allocation.php?id=' . $projectId, 'label' => 'Continue Developers', 'step' => 'Step 4 of 7'];
+    }
+    if ($roadmapCount <= 0) {
+        return ['url' => '../roadmap/methodology.php?project_id=' . $projectId, 'label' => 'Continue Roadmap', 'step' => 'Step 5 of 7'];
     }
     if ($documentCount <= 0) {
-        return ['url' => 'upload-diagram.php?id=' . $projectId, 'label' => 'Continue Documents', 'step' => 'Step 5 of 6'];
+        return ['url' => 'upload-diagram.php?id=' . $projectId, 'label' => 'Continue Documents', 'step' => 'Step 6 of 7'];
     }
 
-    return ['url' => 'summary.php?id=' . $projectId, 'label' => 'Open Summary', 'step' => 'Step 6 of 6'];
+    return ['url' => 'summary.php?id=' . $projectId, 'label' => 'Open Summary', 'step' => 'Step 7 of 7'];
 }
 
 // Get all projects assigned to this architect
@@ -35,6 +41,7 @@ $projects = $conn->query("
            (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.task_type = 'feature') AS feature_count,
            (SELECT COUNT(*) FROM tech_recommendations tr WHERE tr.project_id = p.id) AS tech_count,
            (SELECT COUNT(*) FROM developer_allocations da WHERE da.project_id = p.id) AS allocation_count,
+           (SELECT COUNT(*) FROM methodology_phases mp WHERE mp.project_id = p.id) AS roadmap_count,
            (SELECT COUNT(*) FROM architecture_documents ad WHERE ad.project_id = p.id) AS document_count
     FROM projects p 
     JOIN clients c ON p.client_id = c.id 

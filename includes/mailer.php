@@ -28,6 +28,14 @@ function getMailSetting(string $name, ?string $default = null): string
         }
     }
 
+    if (str_starts_with($name, 'GMAIL_')) {
+        $appSettingKey = 'gmail_' . strtolower(substr($name, 6));
+        $appValue = normalizeMailSettingValue($name, getAppSetting($appSettingKey, null));
+        if ($appValue !== null) {
+            return $appValue;
+        }
+    }
+
     if (function_exists('getEnvOrDefault')) {
         $value = normalizeMailSettingValue($name, getEnvOrDefault($name, $default ?? ''));
         if ($value !== null) {
@@ -794,7 +802,21 @@ function getMailConfigDiagnostic(): array
     
     try {
         $conn = getConnection();
-        $keys = ['mail_enabled', 'mail_host', 'mail_port', 'mail_encryption', 'mail_username', 'mail_password', 'mail_from_email', 'mail_from_name'];
+        $keys = [
+            'mail_enabled',
+            'mail_delivery_method',
+            'mail_host',
+            'mail_port',
+            'mail_encryption',
+            'mail_username',
+            'mail_password',
+            'mail_from_email',
+            'mail_from_name',
+            'gmail_client_id',
+            'gmail_client_secret',
+            'gmail_refresh_token',
+            'gmail_user',
+        ];
         
         foreach ($keys as $key) {
             $stmt = $conn->prepare('SELECT setting_value FROM settings WHERE setting_key = ? LIMIT 1');
@@ -825,6 +847,13 @@ function getMailConfigDiagnostic(): array
         'from_name' => $config['from_name'],
         'verify_peer' => $config['verify_peer'],
         'timeout' => $config['timeout'],
+        'delivery_method' => $config['delivery_method'],
+        'gmail_api' => [
+            'client_id' => ($config['gmail_api']['client_id'] ?? '') !== '' ? 'set' : '',
+            'client_secret' => ($config['gmail_api']['client_secret'] ?? '') !== '' ? '***' : '',
+            'refresh_token' => ($config['gmail_api']['refresh_token'] ?? '') !== '' ? '***' : '',
+            'user' => $config['gmail_api']['user'] ?? '',
+        ],
     ];
     $diagnostic['is_configured'] = isMailConfigured();
     $diagnostic['issues'] = getMailConfigIssues($config);

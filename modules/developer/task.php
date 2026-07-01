@@ -112,6 +112,7 @@ if ($developerProjects && $developerProjects->num_rows > 0) {
         }
         
         $ganttProjects[$pid] = [
+            'project_id' => (int) $pid,
             'project_name' => $project['name'],
             'timeline_start' => $project['timeline_start'],
             'timeline_end' => $project['timeline_end'],
@@ -1215,6 +1216,9 @@ include '../../includes/navbar.php';
                         <i class="fas fa-folder"></i>
                         <span><?php echo htmlspecialchars($project['project_name']); ?></span>
                         <small>(<?php echo count($project['tasks']); ?> tasks)</small>
+                        <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $project['project_id']; ?>" class="text-decoration-none ms-2" onclick="event.stopPropagation();" title="View methodology roadmap">
+                            <i class="fas fa-route"></i>
+                        </a>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>

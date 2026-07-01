@@ -63,6 +63,7 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
                 end_date DATE NOT NULL,
                 assigned_developer_id INT NULL,
                 expert_people_count INT DEFAULT 0,
+                expert_developer_type VARCHAR(100) NULL,
                 expert_notes TEXT,
                 status VARCHAR(30) DEFAULT 'planned',
                 created_by INT NULL,
@@ -93,6 +94,7 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
                 end_date DATE NOT NULL,
                 assigned_developer_id INT NULL,
                 expert_people_count INT DEFAULT 0,
+                expert_developer_type VARCHAR(100) NULL,
                 expert_notes TEXT,
                 status ENUM('planned', 'in_progress', 'completed', 'blocked') DEFAULT 'planned',
                 created_by INT NULL,
@@ -118,6 +120,10 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
         $conn->query($sql);
     } elseif (!dbColumnExists($conn, 'methodology_tasks', 'task_id')) {
         $conn->query("ALTER TABLE methodology_tasks ADD COLUMN task_id INT NULL");
+    }
+
+    if (dbTableExists($conn, 'methodology_tasks') && !dbColumnExists($conn, 'methodology_tasks', 'expert_developer_type')) {
+        $conn->query("ALTER TABLE methodology_tasks ADD COLUMN expert_developer_type VARCHAR(100) NULL");
     }
 
     if (!dbColumnExists($conn, 'projects', 'methodology_template')) {
