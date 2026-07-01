@@ -1,10 +1,4 @@
 <?php
-require_once __DIR__ . '/auth.php';
-$user = getCurrentUser();
-if (!$user) {
-    return;
-}
-
 $isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
 ?>
 
