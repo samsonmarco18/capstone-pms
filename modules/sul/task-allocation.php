@@ -39,6 +39,43 @@ function sulTaskAllocationProjectFilter($conn, string $projectAlias, string $dep
     return count($clauses) > 0 ? '(' . implode(' OR ', $clauses) . ')' : '1 = 1';
 }
 
+function sulTaskAllocationFormatDeadline(?string $deadline): string
+{
+    $timestamp = $deadline ? strtotime($deadline) : false;
+    return $timestamp ? date('M d, Y', $timestamp) : 'N/A';
+}
+
+function sulTaskAllocationDaysLeft(?string $deadline): ?int
+{
+    $timestamp = $deadline ? strtotime($deadline) : false;
+    if ($timestamp === false) {
+        return null;
+    }
+
+    return (int) ceil(($timestamp - time()) / 86400);
+}
+
+function sulTaskAllocationExcerpt(?string $text, int $limit = 120): string
+{
+    $clean = trim(preg_replace('/\s+/', ' ', strip_tags((string) $text)));
+    if ($clean === '') {
+        return 'No description provided.';
+    }
+
+    if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+        if (mb_strlen($clean) <= $limit) {
+            return $clean;
+        }
+        return mb_substr($clean, 0, $limit - 1) . '…';
+    }
+
+    if (strlen($clean) <= $limit) {
+        return $clean;
+    }
+
+    return substr($clean, 0, $limit - 1) . '…';
+}
+
 // Ensure sales approval columns exist
 $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 if (!$hasSalesApproval) {
@@ -1494,9 +1531,9 @@ include '../../includes/navbar.php';
                     
                 </div>
                 <div class="p-3 allocation-column-body">
-                    <?php if($unassignedTasks->num_rows > 0): ?>
+                        <?php if($unassignedTasks->num_rows > 0): ?>
                         <?php while($task = $unassignedTasks->fetch_assoc()): 
-                            $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
+                            $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                         ?>
                         <div class="task-card is-clickable" role="button" tabindex="0" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); viewTaskDetails(<?php echo (int) $task['id']; ?>); }">
                             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -1507,8 +1544,10 @@ include '../../includes/navbar.php';
                                     </div>
                                     <div class="task-meta">
                                         <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                                        <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
-                                        <span class="text-<?php echo $daysLeft <= 2 ? 'danger' : 'muted'; ?>"><?php echo $daysLeft; ?> days left</span>
+                                        <span><i class="far fa-calendar-alt"></i> Due: <?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['deadline'] ?? null)); ?></span>
+                                        <span class="text-<?php echo ($daysLeft !== null && $daysLeft <= 2) ? 'danger' : 'muted'; ?>">
+                                            <?php echo $daysLeft !== null ? $daysLeft . ' days left' : 'No deadline set'; ?>
+                                        </span>
                                     </div>
                                 </div>
                                 <div class="task-card-actions" onclick="event.stopPropagation();">
@@ -1543,7 +1582,7 @@ include '../../includes/navbar.php';
                 <div class="p-3 allocation-column-body">
                     <?php if($pendingEstimationTasks->num_rows > 0): ?>
                         <?php while($task = $pendingEstimationTasks->fetch_assoc()): 
-                            $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
+                            $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                         ?>
                         <div class="task-card">
                             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -1555,7 +1594,7 @@ include '../../includes/navbar.php';
                                     <div class="task-meta">
                                         <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
                                         <span><i class="fas fa-user"></i> Expert: <?php echo htmlspecialchars($task['expert_name']); ?></span>
-                                        <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
+                                        <span><i class="far fa-calendar-alt"></i> Due: <?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['deadline'] ?? null)); ?></span>
                                         <span class="estimation-badge"><i class="fas fa-hourglass-half"></i> Waiting for estimation</span>
                                     </div>
                                 </div>
@@ -1586,7 +1625,7 @@ include '../../includes/navbar.php';
                 <div class="p-3 allocation-column-body">
                     <?php if($reviewTasks->num_rows > 0): ?>
                         <?php while($task = $reviewTasks->fetch_assoc()): 
-                            $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
+                            $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                             $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
                         ?>
                         <div class="task-card">
@@ -1599,7 +1638,7 @@ include '../../includes/navbar.php';
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
                                     <span><i class="fas fa-user"></i> Expert: <?php echo htmlspecialchars($task['expert_name']); ?></span>
-                                    <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
+                                    <span><i class="far fa-calendar-alt"></i> Due: <?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['deadline'] ?? null)); ?></span>
                                     <span class="estimation-badge"><i class="fas fa-chart-line"></i> PERT: <?php echo $pertEstimate; ?> days</span>
                                 </div>
                                 <div class="mt-2 p-2 bg-light rounded-2">
@@ -1767,11 +1806,11 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
-                <?php if($readyForDevTasks->num_rows > 0): ?>
-                    <?php while($task = $readyForDevTasks->fetch_assoc()): 
-                        $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
-                        $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
-                    ?>
+                    <?php if($readyForDevTasks->num_rows > 0): ?>
+                        <?php while($task = $readyForDevTasks->fetch_assoc()): 
+                            $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
+                            $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
+                        ?>
                     <div class="task-card">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                             <div>
@@ -1782,7 +1821,7 @@ include '../../includes/navbar.php';
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
                                     <span><i class="fas fa-user-check"></i> Estimated by: <?php echo htmlspecialchars($task['expert_name']); ?></span>
-                                    <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
+                                    <span><i class="far fa-calendar-alt"></i> Due: <?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['deadline'] ?? null)); ?></span>
                                     <span class="estimation-badge"><i class="fas fa-chart-line"></i> PERT: <?php echo $pertEstimate; ?> days</span>
                                     <?php if (!empty($task['sales_estimate_choice']) && !empty($task['sales_estimate_days'])): ?>
                                         <span class="estimation-badge"><i class="fas fa-flag-checkered"></i> Sales picked <?php echo ucfirst($task['sales_estimate_choice']); ?>: <?php echo (int) $task['sales_estimate_days']; ?> days</span>
@@ -1814,9 +1853,9 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
-                <?php if($inProgressTasks->num_rows > 0): ?>
+                    <?php if($inProgressTasks->num_rows > 0): ?>
                     <?php while($task = $inProgressTasks->fetch_assoc()): 
-                        $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
+                        $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                     ?>
                     <div class="task-card">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -1828,8 +1867,10 @@ include '../../includes/navbar.php';
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
                                     <span><i class="fas fa-user"></i> Developer: <?php echo htmlspecialchars($task['developer_name']); ?></span>
-                                    <span><i class="far fa-calendar-alt"></i> Due: <?php echo date('M d, Y', strtotime($task['deadline'])); ?></span>
-                                    <span class="text-<?php echo $daysLeft <= 2 ? 'danger' : 'muted'; ?>"><?php echo $daysLeft; ?> days left</span>
+                                    <span><i class="far fa-calendar-alt"></i> Due: <?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['deadline'] ?? null)); ?></span>
+                                    <span class="text-<?php echo ($daysLeft !== null && $daysLeft <= 2) ? 'danger' : 'muted'; ?>">
+                                        <?php echo $daysLeft !== null ? $daysLeft . ' days left' : 'No deadline set'; ?>
+                                    </span>
                                 </div>
                             </div>
                             <div class="d-flex gap-2 flex-wrap">
@@ -2158,6 +2199,19 @@ function openReviseCompletedModal(taskId, taskTitle) {
     new bootstrap.Modal(document.getElementById('reviseCompletedModal')).show();
 }
 
+function formatTaskDeadlineLabel(deadline) {
+    if (!deadline) {
+        return 'N/A';
+    }
+
+    const parsed = new Date(deadline);
+    if (Number.isNaN(parsed.getTime())) {
+        return 'N/A';
+    }
+
+    return parsed.toLocaleDateString();
+}
+
 function viewTaskDetails(taskId) {
     $.ajax({
         url: '../../api/get-task-details.php',
@@ -2182,7 +2236,7 @@ function viewTaskDetails(taskId) {
                             <span class="task-priority priority-${task.priority}">${task.priority}</span>
                         </div>
                         <div class="mb-2">
-                            <strong>Deadline:</strong> ${new Date(task.deadline).toLocaleDateString()}
+                            <strong>Deadline:</strong> ${formatTaskDeadlineLabel(task.deadline)}
                         </div>
                     </div>
                     <div class="col-md-4">

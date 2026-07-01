@@ -29,6 +29,12 @@ $reportLabels = [
     'project' => 'Project Performance',
 ];
 $reportTitle = $reportLabels[$reportType] ?? $reportLabels['team'];
+$reportContextMessage = [
+    'team' => 'Quick view of overall workload, completion pace, and overdue items for the selected period.',
+    'individual' => 'Compare each team member by task load, completion rate, and overdue work for the selected period.',
+    'project' => 'Focus on project completion and risk so you can spot delays early in the selected period.',
+][$reportType] ?? 'Performance snapshot for the selected period.';
+$reportDateRangeLabel = date('M d, Y', strtotime($dateFrom)) . ' to ' . date('M d, Y', strtotime($dateTo));
 
 // Get team performance metrics
 $teamMetrics = $conn->query("
@@ -341,6 +347,44 @@ include '../../includes/navbar.php';
     color: var(--gray-600);
 }
 
+/* Report Message */
+.report-message-card {
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(31, 99, 146, 0.08) 0%, rgba(58, 124, 163, 0.04) 100%);
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    gap: 0.85rem;
+    align-items: flex-start;
+}
+
+.report-message-card .report-message-icon {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(31, 99, 146, 0.12);
+    color: var(--theme-primary);
+    font-size: 1rem;
+}
+
+.report-message-card h6 {
+    margin: 0 0 0.25rem;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--gray-800);
+}
+
+.report-message-card p {
+    margin: 0;
+    color: var(--gray-600);
+    line-height: 1.55;
+}
+
 /* Cards */
 .card {
     background: white;
@@ -570,6 +614,18 @@ include '../../includes/navbar.php';
     .stat-card-modern .stat-number {
         font-size: 2rem;
     }
+
+    .report-message-card {
+        padding: 0.9rem 1rem;
+        gap: 0.75rem;
+    }
+
+    .report-message-card .report-message-icon {
+        width: 38px;
+        height: 38px;
+        flex-basis: 38px;
+        border-radius: 10px;
+    }
 }
 </style>
 
@@ -582,6 +638,16 @@ include '../../includes/navbar.php';
                 Performance Report
             </h2>
             <p>Monitor team performance, task completion rates, and productivity metrics</p>
+        </div>
+    </div>
+
+    <div class="report-message-card">
+        <div class="report-message-icon">
+            <i class="fas fa-circle-info"></i>
+        </div>
+        <div>
+            <h6><?php echo htmlspecialchars($reportTitle); ?></h6>
+            <p><?php echo htmlspecialchars($reportContextMessage); ?> Date range: <?php echo htmlspecialchars($reportDateRangeLabel); ?>.</p>
         </div>
     </div>
 
