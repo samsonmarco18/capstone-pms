@@ -387,9 +387,9 @@ include 'includes/navbar.php';
                             <div class="notification-message">
                                 <?php echo htmlspecialchars($notification['message']); ?>
                             </div>
-                            <div class="notification-time">
+                            <div class="notification-time" title="<?php echo htmlspecialchars(date('M d, Y h:i A', strtotime($notification['created_at']))); ?>">
                                 <i class="far fa-clock"></i>
-                                <?php echo date('M d, Y h:i A', strtotime($notification['created_at'])); ?>
+                                <?php echo htmlspecialchars(formatTimeAgo($notification['created_at'])); ?>
                             </div>
                         </a>
                         <button class="btn-delete-notification" onclick="deleteNotification(<?php echo $notification['id']; ?>, event)">
