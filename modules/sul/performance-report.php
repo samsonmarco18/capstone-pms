@@ -989,4 +989,96 @@ function printReport(tableId) {
 }
 </script>
 
+<style>
+/* Keep the shared messenger above the report layout on desktop and mobile. */
+body #chat-widget,
+body #chat-widget-minimized {
+    position: fixed !important;
+    top: auto !important;
+    right: 24px !important;
+    bottom: 24px !important;
+    left: auto !important;
+    margin: 0 !important;
+    transform: none !important;
+    z-index: 2147483000 !important;
+}
+
+body #chat-widget-minimized {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 64px !important;
+    height: 64px !important;
+    border: 0 !important;
+    border-radius: 50% !important;
+    background: linear-gradient(135deg, #1f75ae, #075b96) !important;
+    color: #fff !important;
+    box-shadow: 0 18px 38px rgba(10, 48, 79, 0.3) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+}
+
+body #chat-widget-minimized.report-chat-hidden {
+    display: none !important;
+}
+
+body #chat-widget.report-chat-open {
+    display: flex !important;
+}
+
+body #chat-widget:not(.report-chat-open) {
+    display: none !important;
+}
+
+@media (max-width: 576px) {
+    body #chat-widget,
+    body #chat-widget-minimized {
+        right: 12px !important;
+        bottom: 12px !important;
+    }
+
+    body #chat-widget {
+        width: calc(100vw - 24px) !important;
+        height: calc(100dvh - 88px) !important;
+        max-height: calc(100dvh - 24px) !important;
+    }
+
+    body #chat-widget-minimized {
+        width: 58px !important;
+        height: 58px !important;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const widget = document.getElementById('chat-widget');
+    const launcher = document.getElementById('chat-widget-minimized');
+    const minimizeButton = document.getElementById('toggleChatMinimize');
+
+    if (!widget || !launcher) return;
+
+    // Moving fixed elements directly under body avoids clipping by report containers.
+    document.body.appendChild(widget);
+    document.body.appendChild(launcher);
+
+    const setReportChatOpen = function (isOpen) {
+        widget.classList.toggle('report-chat-open', isOpen);
+        launcher.classList.toggle('report-chat-hidden', isOpen);
+    };
+
+    setReportChatOpen(false);
+    launcher.addEventListener('click', function () {
+        setReportChatOpen(true);
+    });
+
+    if (minimizeButton) {
+        minimizeButton.addEventListener('click', function () {
+            setReportChatOpen(false);
+        });
+    }
+});
+</script>
+
 <?php include '../../includes/footer.php'; ?>
