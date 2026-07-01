@@ -12,10 +12,15 @@ $isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
 <style>
     #chat-widget,
     #chat-widget-minimized {
-        z-index: 4000 !important;
+        position: fixed !important;
+        inset: auto 24px 24px auto !important;
+        top: auto !important;
         right: 24px !important;
         bottom: 24px !important;
-        position: fixed !important;
+        left: auto !important;
+        margin: 0 !important;
+        transform: none !important;
+        z-index: 5000 !important;
     }
 
     #chat-widget-minimized {
