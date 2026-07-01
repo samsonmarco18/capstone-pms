@@ -1,11 +1,14 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
+require_once '../../includes/methodology-roadmap.php';
 requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$userId = (int) ($user['id'] ?? 0);
 workflowEnsureSchema($conn);
+methodologyRoadmapEnsureSchema($conn);
 
 $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
 $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
@@ -386,7 +389,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $expertCheck->close();
 
         $taskCheck = $conn->prepare("
-            SELECT t.id
+            SELECT t.id, t.project_id
             FROM tasks t
             JOIN projects p ON p.id = t.project_id
             WHERE t.id = ?
@@ -541,7 +544,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         ");
         $taskCheck->bind_param("i", $taskId);
         $taskCheck->execute();
-        $validTask = $taskCheck->get_result()->num_rows > 0;
+        $validTaskRow = $taskCheck->get_result()->fetch_assoc();
+        $validTask = (bool) $validTaskRow;
         $taskCheck->close();
 
         if (!$validDeveloper || !$validTask) {
@@ -549,11 +553,48 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             header("Location: task-allocation.php");
             exit();
         }
+
+        $assignmentProjectId = (int) ($validTaskRow['project_id'] ?? 0);
+        $roadmapPhaseCount = (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$assignmentProjectId}")->fetch_assoc()['total'] ?? 0));
+        if ($roadmapPhaseCount > 0) {
+            $roadmapTask = $conn->query("
+                SELECT start_date, end_date
+                FROM methodology_tasks
+                WHERE project_id = {$assignmentProjectId}
+                  AND task_id = {$taskId}
+                LIMIT 1
+            ")->fetch_assoc();
+
+            if (!$roadmapTask) {
+                $_SESSION['error'] = "This task is not scheduled in the methodology roadmap yet.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+
+            $roadmapStart = DateTime::createFromFormat('Y-m-d', (string) ($roadmapTask['start_date'] ?? ''));
+            $roadmapEnd = DateTime::createFromFormat('Y-m-d', (string) ($roadmapTask['end_date'] ?? ''));
+            if (($roadmapStart && $deadlineDate < $roadmapStart) || ($roadmapEnd && $deadlineDate > $roadmapEnd)) {
+                $_SESSION['error'] = "The developer deadline must stay inside the methodology task window: "
+                    . date('M d, Y', strtotime((string) $roadmapTask['start_date']))
+                    . " to "
+                    . date('M d, Y', strtotime((string) $roadmapTask['end_date']))
+                    . ".";
+                header("Location: task-allocation.php");
+                exit();
+            }
+        }
         
         $stmt = $conn->prepare("UPDATE tasks SET assigned_to = ?, status = 'todo', deadline = ? WHERE id = ?");
         $stmt->bind_param("isi", $developerId, $deadline, $taskId);
         
         if ($stmt->execute()) {
+            $syncRoadmapStmt = $conn->prepare("UPDATE methodology_tasks SET assigned_developer_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE task_id = ?");
+            if ($syncRoadmapStmt) {
+                $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $taskId);
+                $syncRoadmapStmt->execute();
+                $syncRoadmapStmt->close();
+            }
+
             $taskDetails = $conn->query("SELECT title, deadline FROM tasks WHERE id = $taskId")->fetch_assoc();
             
             createNotification(

@@ -2,6 +2,7 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/department-artifacts.php';
+require_once '../../includes/methodology-roadmap.php';
 requireRole('developer');
 
 $conn = getConnection();
@@ -155,6 +156,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $_SESSION['error'] = "This task is already in the controlled review workflow and cannot be moved by Developer.";
         header('Location: task.php');
         exit();
+    }
+
+    if ($newStatus === 'in_progress') {
+        $roadmapBlockReason = methodologyRoadmapStartBlockReason($conn, $taskId, (int) $user['id']);
+        if ($roadmapBlockReason !== null) {
+            $_SESSION['error'] = $roadmapBlockReason;
+            header('Location: task.php');
+            exit();
+        }
     }
     
     $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = NULL WHERE id = ?");

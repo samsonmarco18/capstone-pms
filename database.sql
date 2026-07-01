@@ -175,6 +175,67 @@ CREATE TABLE developer_allocation_assignments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- METHODOLOGY ROADMAP PHASES TABLE
+-- =====================================================
+CREATE TABLE methodology_phases (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    project_id INT NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    description TEXT,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    developer_count INT DEFAULT 0,
+    sequence_no INT DEFAULT 0,
+    status ENUM('planned', 'in_progress', 'completed', 'on_hold') DEFAULT 'planned',
+    created_by INT NULL,
+    updated_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_methodology_phase_project (project_id),
+    INDEX idx_methodology_phase_dates (start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- METHODOLOGY ROADMAP TASKS TABLE
+-- =====================================================
+CREATE TABLE methodology_tasks (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    phase_id INT NOT NULL,
+    project_id INT NOT NULL,
+    task_id INT NULL,
+    title VARCHAR(255) NOT NULL,
+    component_name VARCHAR(150),
+    department VARCHAR(100),
+    description TEXT,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    assigned_developer_id INT NULL,
+    expert_people_count INT DEFAULT 0,
+    expert_notes TEXT,
+    status ENUM('planned', 'in_progress', 'completed', 'blocked') DEFAULT 'planned',
+    created_by INT NULL,
+    updated_by INT NULL,
+    expert_updated_by INT NULL,
+    expert_updated_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (phase_id) REFERENCES methodology_phases(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (assigned_developer_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (expert_updated_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_methodology_task_project (project_id),
+    INDEX idx_methodology_task_phase (phase_id),
+    INDEX idx_methodology_task_workflow_task (task_id),
+    INDEX idx_methodology_task_dates (start_date, end_date),
+    INDEX idx_methodology_task_developer (assigned_developer_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- ARCHITECTURE DOCUMENTS TABLE
 -- =====================================================
 CREATE TABLE architecture_documents (
