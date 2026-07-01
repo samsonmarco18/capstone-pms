@@ -28,6 +28,14 @@ $isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
         pointer-events: auto !important;
         box-shadow: 0 18px 36px rgba(10, 48, 79, 0.28) !important;
     }
+
+    #chat-widget-minimized.chat-launcher-hidden {
+        display: none !important;
+    }
+
+    #chat-widget.chat-widget-open {
+        display: flex !important;
+    }
 </style>
 <?php endif; ?>
 
@@ -172,13 +180,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!widget || !minimized) return;
 
+    document.body.appendChild(widget);
+    document.body.appendChild(minimized);
+
+    const setSharedChatOpen = function (isOpen) {
+        widget.classList.toggle('chat-widget-open', isOpen);
+        minimized.classList.toggle('chat-launcher-hidden', isOpen);
+    };
+
     minimized.addEventListener('click', function () {
+        setSharedChatOpen(true);
         widget.style.display = 'flex';
         minimized.style.display = 'none';
     });
 
     if (minimizeBtn) {
         minimizeBtn.addEventListener('click', function () {
+            setSharedChatOpen(false);
             widget.style.display = 'none';
             minimized.style.display = 'block';
         });

@@ -237,7 +237,14 @@ if (isset($_GET['download'])) {
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
+
+// Render chat before the report body so production-side report failures cannot hide it.
+include '../../includes/chat-widget.php';
+$chatWidgetRendered = true;
+$chatScriptLoaded = true;
 ?>
+
+<script src="<?php echo BASE_URL; ?>assets/js/chat.js?v=<?php echo filemtime(__DIR__ . '/../../assets/js/chat.js'); ?>" defer></script>
 
 <style>
 :root {
