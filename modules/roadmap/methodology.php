@@ -232,6 +232,7 @@ methodologyRoadmapEnsureSchema($conn);
 
 $canEditArchitecture = $role === 'architect';
 $canEditExpertInput = $role === 'expert';
+$methodologyTemplates = methodologyRoadmapTemplates();
 $allowedPhaseStatuses = ['planned', 'in_progress', 'completed', 'on_hold'];
 $allowedTaskStatuses = ['planned', 'in_progress', 'completed', 'blocked'];
 $departments = [
@@ -274,6 +275,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$postedProject) {
         $_SESSION['error'] = 'Project not found or not available for your account.';
         header('Location: methodology.php');
+        exit();
+    }
+
+    if (isset($_POST['apply_template'])) {
+        if (!$canEditArchitecture) {
+            $_SESSION['error'] = 'Only architects can apply methodology templates.';
+            header('Location: methodology.php?project_id=' . $postedProjectId);
+            exit();
+        }
+
+        $templateKey = trim((string) ($_POST['methodology_template'] ?? ''));
+        $replaceExisting = isset($_POST['replace_existing_template']);
+        $applyResult = methodologyRoadmapApplyTemplate($conn, $postedProjectId, $postedProject, $templateKey, $userId, $replaceExisting);
+
+        if ($applyResult['success']) {
+            $_SESSION['success'] = (string) $applyResult['message'];
+            logActivity($userId, 'apply_methodology_template', 'projects', $postedProjectId, null, [
+                'methodology_template' => $templateKey,
+                'replace_existing' => $replaceExisting,
+            ]);
+        } else {
+            $_SESSION['error'] = (string) $applyResult['message'];
+        }
+
+        header('Location: methodology.php?project_id=' . $postedProjectId);
         exit();
     }
 
@@ -640,7 +666,7 @@ include '../../includes/navbar.php';
 
 .roadmap-stats {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: .75rem;
     margin-bottom: 1rem;
 }
@@ -951,6 +977,35 @@ include '../../includes/navbar.php';
                 </button>
             </div>
         </form>
+
+        <?php if ($canEditArchitecture && $selectedProject): ?>
+            <form method="POST" class="row g-3 align-items-end mt-2" data-app-loading data-loading-title="Applying template" data-loading-text="Please wait while the methodology phases are generated.">
+                <input type="hidden" name="apply_template" value="1">
+                <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
+                <div class="col-lg-7">
+                    <label class="form-label">Methodology Template</label>
+                    <select class="form-select" name="methodology_template" required>
+                        <option value="">Select Agile, Waterfall, Scrum, etc.</option>
+                        <?php foreach ($methodologyTemplates as $templateKey => $template): ?>
+                            <option value="<?php echo htmlspecialchars((string) $templateKey); ?>" <?php echo (string) ($selectedProject['methodology_template'] ?? '') === (string) $templateKey ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars((string) $template['name']); ?> - <?php echo htmlspecialchars((string) $template['description']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-lg-3">
+                    <div class="form-check mt-lg-4">
+                        <input class="form-check-input" type="checkbox" name="replace_existing_template" value="1" id="replaceExistingTemplate">
+                        <label class="form-check-label" for="replaceExistingTemplate">Replace existing phases</label>
+                    </div>
+                </div>
+                <div class="col-lg-2">
+                    <button class="btn btn-primary w-100" type="submit">
+                        <i class="fas fa-layer-group me-1"></i> Apply
+                    </button>
+                </div>
+            </form>
+        <?php endif; ?>
     </div>
 
     <?php if (!$selectedProject): ?>
@@ -960,6 +1015,10 @@ include '../../includes/navbar.php';
             <div class="roadmap-card roadmap-stat">
                 <span>Phases</span>
                 <strong><?php echo (int) $phaseCount; ?></strong>
+            </div>
+            <div class="roadmap-card roadmap-stat">
+                <span>Template</span>
+                <strong style="font-size: 1rem;"><?php echo htmlspecialchars(methodologyRoadmapTemplateLabel((string) ($selectedProject['methodology_template'] ?? ''))); ?></strong>
             </div>
             <div class="roadmap-card roadmap-stat">
                 <span>Roadmap Tasks</span>

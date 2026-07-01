@@ -119,6 +119,220 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
     } elseif (!dbColumnExists($conn, 'methodology_tasks', 'task_id')) {
         $conn->query("ALTER TABLE methodology_tasks ADD COLUMN task_id INT NULL");
     }
+
+    if (!dbColumnExists($conn, 'projects', 'methodology_template')) {
+        $columnType = DB_DRIVER === 'pgsql' ? 'VARCHAR(80)' : 'VARCHAR(80) NULL';
+        $conn->query("ALTER TABLE projects ADD COLUMN methodology_template {$columnType}");
+    }
+}
+
+function methodologyRoadmapTemplates(): array
+{
+    return [
+        'agile' => [
+            'name' => 'Agile',
+            'description' => 'Flexible iterative delivery with regular review and release cycles.',
+            'phases' => [
+                ['name' => 'Discovery and Backlog', 'weight' => 1, 'description' => 'Clarify goals, prioritize backlog items, and define acceptance criteria.'],
+                ['name' => 'Sprint Planning', 'weight' => 1, 'description' => 'Select sprint scope, capacity, and implementation order.'],
+                ['name' => 'Iterative Development', 'weight' => 4, 'description' => 'Build features in short cycles with continuous team feedback.'],
+                ['name' => 'Review and Testing', 'weight' => 2, 'description' => 'Validate completed increments with QA, SUL, and stakeholder review.'],
+                ['name' => 'Release and Retrospective', 'weight' => 1, 'description' => 'Release accepted work and capture improvements for the next cycle.'],
+            ],
+        ],
+        'scrum' => [
+            'name' => 'Scrum',
+            'description' => 'Sprint-based agile delivery with explicit planning, review, and retrospective phases.',
+            'phases' => [
+                ['name' => 'Product Backlog Refinement', 'weight' => 1, 'description' => 'Confirm backlog readiness, user stories, and acceptance criteria.'],
+                ['name' => 'Sprint 0 Setup', 'weight' => 1, 'description' => 'Prepare environments, architecture runway, and sprint cadence.'],
+                ['name' => 'Sprint Execution', 'weight' => 4, 'description' => 'Deliver committed sprint items through development and daily coordination.'],
+                ['name' => 'Sprint Review and QA', 'weight' => 2, 'description' => 'Inspect increments, test outputs, and process review feedback.'],
+                ['name' => 'Release Retrospective', 'weight' => 1, 'description' => 'Release the sprint output and document improvement actions.'],
+            ],
+        ],
+        'waterfall' => [
+            'name' => 'Waterfall',
+            'description' => 'Sequential delivery where each phase must be completed before the next begins.',
+            'phases' => [
+                ['name' => 'Requirements', 'weight' => 2, 'description' => 'Finalize requirements, scope, constraints, and approvals.'],
+                ['name' => 'System Design', 'weight' => 2, 'description' => 'Complete architecture, data, interface, and deployment design.'],
+                ['name' => 'Implementation', 'weight' => 4, 'description' => 'Build the approved scope according to the completed design.'],
+                ['name' => 'Verification and Testing', 'weight' => 2, 'description' => 'Run QA, integration checks, UAT preparation, and defect fixes.'],
+                ['name' => 'Deployment and Handover', 'weight' => 1, 'description' => 'Deploy, document, train, and hand over the completed system.'],
+            ],
+        ],
+        'kanban' => [
+            'name' => 'Kanban',
+            'description' => 'Flow-based delivery that manages work through controlled queues and WIP limits.',
+            'phases' => [
+                ['name' => 'Intake and Prioritization', 'weight' => 1, 'description' => 'Collect requests, rank priority, and define readiness criteria.'],
+                ['name' => 'Ready Queue', 'weight' => 1, 'description' => 'Prepare tasks for development with clear owners and acceptance rules.'],
+                ['name' => 'Development Flow', 'weight' => 4, 'description' => 'Move tasks through active development while controlling work in progress.'],
+                ['name' => 'Validation Flow', 'weight' => 2, 'description' => 'Review, test, and approve completed cards.'],
+                ['name' => 'Release Flow', 'weight' => 1, 'description' => 'Release approved work and monitor delivery outcomes.'],
+            ],
+        ],
+        'iterative' => [
+            'name' => 'Iterative',
+            'description' => 'Repeated build-evaluate-improve cycles for progressively refined delivery.',
+            'phases' => [
+                ['name' => 'Planning', 'weight' => 1, 'description' => 'Define the initial scope, goals, and iteration plan.'],
+                ['name' => 'Iteration 1 Core Build', 'weight' => 3, 'description' => 'Deliver core functionality and baseline architecture.'],
+                ['name' => 'Iteration 2 Enhancements', 'weight' => 3, 'description' => 'Improve features based on review and technical findings.'],
+                ['name' => 'Stabilization', 'weight' => 2, 'description' => 'Fix defects, harden integrations, and prepare release quality.'],
+                ['name' => 'Deployment', 'weight' => 1, 'description' => 'Deploy the refined product and complete handover.'],
+            ],
+        ],
+        'spiral' => [
+            'name' => 'Spiral',
+            'description' => 'Risk-driven delivery with repeated planning, risk analysis, build, and evaluation cycles.',
+            'phases' => [
+                ['name' => 'Objective Planning', 'weight' => 1, 'description' => 'Define objectives, alternatives, and constraints.'],
+                ['name' => 'Risk Analysis', 'weight' => 2, 'description' => 'Identify and reduce technical, budget, schedule, and operational risks.'],
+                ['name' => 'Engineering Cycle', 'weight' => 4, 'description' => 'Build and verify the selected solution approach.'],
+                ['name' => 'Customer Evaluation', 'weight' => 2, 'description' => 'Review outputs, collect feedback, and refine next-cycle priorities.'],
+                ['name' => 'Release Decision', 'weight' => 1, 'description' => 'Decide whether to release, continue another cycle, or adjust scope.'],
+            ],
+        ],
+        'v_model' => [
+            'name' => 'V-Model',
+            'description' => 'Verification-focused delivery that pairs each build phase with a matching test phase.',
+            'phases' => [
+                ['name' => 'Requirements Analysis', 'weight' => 2, 'description' => 'Define requirements and acceptance tests.'],
+                ['name' => 'Architecture and Detailed Design', 'weight' => 2, 'description' => 'Design system structure, modules, interfaces, and test plans.'],
+                ['name' => 'Implementation', 'weight' => 3, 'description' => 'Build modules according to the verified design.'],
+                ['name' => 'Integration and System Testing', 'weight' => 2, 'description' => 'Validate module, integration, and system behavior.'],
+                ['name' => 'Acceptance and Deployment', 'weight' => 1, 'description' => 'Complete acceptance validation and production handover.'],
+            ],
+        ],
+    ];
+}
+
+function methodologyRoadmapTemplateLabel(string $templateKey): string
+{
+    $templates = methodologyRoadmapTemplates();
+    return (string) ($templates[$templateKey]['name'] ?? 'Custom');
+}
+
+function methodologyRoadmapDistributeTemplatePhases(array $project, string $templateKey): array
+{
+    $templates = methodologyRoadmapTemplates();
+    if (!isset($templates[$templateKey])) {
+        return [];
+    }
+
+    $projectStart = DateTimeImmutable::createFromFormat('!Y-m-d', (string) ($project['timeline_start'] ?? ''));
+    $projectEnd = DateTimeImmutable::createFromFormat('!Y-m-d', (string) ($project['timeline_end'] ?? ''));
+    if (!$projectStart || !$projectEnd || $projectEnd < $projectStart) {
+        return [];
+    }
+
+    $phaseDefinitions = $templates[$templateKey]['phases'];
+    $totalWeight = max(1, array_sum(array_map(static fn(array $phase): int => max(1, (int) ($phase['weight'] ?? 1)), $phaseDefinitions)));
+    $totalDays = ((int) $projectStart->diff($projectEnd)->format('%a')) + 1;
+    $remainingDays = $totalDays;
+    $phaseCount = count($phaseDefinitions);
+    $cursor = $projectStart;
+    $phases = [];
+
+    foreach ($phaseDefinitions as $index => $phase) {
+        $remainingPhases = $phaseCount - $index;
+        if ($remainingPhases === 1) {
+            $duration = $remainingDays;
+        } else {
+            $duration = max(1, (int) round($totalDays * (max(1, (int) ($phase['weight'] ?? 1)) / $totalWeight)));
+            $duration = min($duration, $remainingDays - ($remainingPhases - 1));
+        }
+
+        $end = $cursor->modify('+' . max(0, $duration - 1) . ' days');
+        if ($end > $projectEnd || $remainingPhases === 1) {
+            $end = $projectEnd;
+        }
+
+        $phases[] = [
+            'name' => (string) ($phase['name'] ?? 'Phase'),
+            'description' => (string) ($phase['description'] ?? ''),
+            'start_date' => $cursor->format('Y-m-d'),
+            'end_date' => $end->format('Y-m-d'),
+            'developer_count' => 0,
+            'sequence_no' => $index + 1,
+            'status' => 'planned',
+        ];
+
+        $remainingDays -= $duration;
+        $cursor = $end->modify('+1 day');
+    }
+
+    return $phases;
+}
+
+function methodologyRoadmapApplyTemplate(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId, array $project, string $templateKey, int $userId, bool $replaceExisting): array
+{
+    methodologyRoadmapEnsureSchema($conn);
+    $templates = methodologyRoadmapTemplates();
+    if (!isset($templates[$templateKey])) {
+        return ['success' => false, 'message' => 'Select a valid methodology template.'];
+    }
+
+    $existingPhaseCount = (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$projectId}")->fetch_assoc()['total'] ?? 0));
+    if ($existingPhaseCount > 0 && !$replaceExisting) {
+        return ['success' => false, 'message' => 'This project already has phases. Choose replace existing phases to apply a template again.'];
+    }
+
+    $templatePhases = methodologyRoadmapDistributeTemplatePhases($project, $templateKey);
+    if ($templatePhases === []) {
+        return ['success' => false, 'message' => 'Project start and end dates are required before applying a methodology template.'];
+    }
+
+    if ($replaceExisting && $existingPhaseCount > 0) {
+        $deleteStmt = $conn->prepare('DELETE FROM methodology_phases WHERE project_id = ?');
+        $deleteStmt->bind_param('i', $projectId);
+        $deleteStmt->execute();
+        $deleteStmt->close();
+    }
+
+    $insertStmt = $conn->prepare("
+        INSERT INTO methodology_phases (project_id, name, description, start_date, end_date, developer_count, sequence_no, status, created_by, updated_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+
+    foreach ($templatePhases as $phase) {
+        $phaseName = (string) $phase['name'];
+        $phaseDescription = (string) $phase['description'];
+        $phaseStart = (string) $phase['start_date'];
+        $phaseEnd = (string) $phase['end_date'];
+        $developerCount = (int) $phase['developer_count'];
+        $sequenceNo = (int) $phase['sequence_no'];
+        $status = (string) $phase['status'];
+        $insertStmt->bind_param(
+            'issssiisii',
+            $projectId,
+            $phaseName,
+            $phaseDescription,
+            $phaseStart,
+            $phaseEnd,
+            $developerCount,
+            $sequenceNo,
+            $status,
+            $userId,
+            $userId
+        );
+        $insertStmt->execute();
+    }
+    $insertStmt->close();
+
+    if (dbColumnExists($conn, 'projects', 'methodology_template')) {
+        $templateStmt = $conn->prepare('UPDATE projects SET methodology_template = ? WHERE id = ?');
+        $templateStmt->bind_param('si', $templateKey, $projectId);
+        $templateStmt->execute();
+        $templateStmt->close();
+    }
+
+    return [
+        'success' => true,
+        'message' => methodologyRoadmapTemplateLabel($templateKey) . ' template applied with ' . count($templatePhases) . ' phases.',
+    ];
 }
 
 function methodologyRoadmapCompletion(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId): array

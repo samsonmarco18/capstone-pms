@@ -91,6 +91,7 @@ CREATE TABLE projects (
     timeline_end DATE,
     timeline_end_time TIME NULL,
     project_phases LONGTEXT,
+    methodology_template VARCHAR(80) NULL,
     meeting_notes TEXT,
     mom TEXT,
     requested_features LONGTEXT,
