@@ -1043,6 +1043,10 @@ include '../../includes/navbar.php';
     transition: all 0.2s;
 }
 
+.task-card.is-clickable {
+    cursor: pointer;
+}
+
 .task-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-md);
@@ -1077,6 +1081,13 @@ include '../../includes/navbar.php';
     gap: 1rem;
     flex-wrap: wrap;
     margin-top: 0.5rem;
+}
+
+.task-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 /* Estimation Badge */
@@ -1487,7 +1498,7 @@ include '../../includes/navbar.php';
                         <?php while($task = $unassignedTasks->fetch_assoc()): 
                             $daysLeft = ceil((strtotime($task['deadline']) - time()) / (60 * 60 * 24));
                         ?>
-                        <div class="task-card">
+                        <div class="task-card is-clickable" role="button" tabindex="0" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); viewTaskDetails(<?php echo (int) $task['id']; ?>); }">
                             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                                 <div>
                                     <div class="d-flex align-items-center gap-2 mb-1">
@@ -1500,9 +1511,14 @@ include '../../includes/navbar.php';
                                         <span class="text-<?php echo $daysLeft <= 2 ? 'danger' : 'muted'; ?>"><?php echo $daysLeft; ?> days left</span>
                                     </div>
                                 </div>
-                                <button class="btn-primary-modern" onclick="openAssignExpertModal(<?php echo $task['id']; ?>, '<?php echo htmlspecialchars($task['title']); ?>')">
-                                    <i class="fas fa-user-plus"></i> Assign to Expert
-                                </button>
+                                <div class="task-card-actions" onclick="event.stopPropagation();">
+                                    <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
+                                        <i class="fas fa-circle-info"></i> View Info
+                                    </button>
+                                    <button class="btn-primary-modern" type="button" onclick="openAssignExpertModal(<?php echo (int) $task['id']; ?>, <?php echo json_encode($task['title'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>)">
+                                        <i class="fas fa-user-plus"></i> Assign to Expert
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <?php endwhile; ?>
