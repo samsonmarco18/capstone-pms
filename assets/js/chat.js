@@ -24,6 +24,7 @@ function initChatWidget() {
 
     applyChatVisibility();
     loadConversationData();
+    startChatPolling();
     loadUsersForGroup();
 
     $('.chat-tab').on('click', function () {
@@ -247,6 +248,14 @@ function updateChatUnreadBadge(countOverride = null) {
 
     badge.text(totalUnread > 99 ? '99+' : totalUnread);
     badge.toggleClass('d-none', totalUnread <= 0);
+    badge.attr('aria-label', `${totalUnread} unread ${totalUnread === 1 ? 'message' : 'messages'}`);
+
+    $('#chat-widget-minimized').attr(
+        'title',
+        totalUnread > 0
+            ? `Open chat - ${totalUnread} unread ${totalUnread === 1 ? 'message' : 'messages'}`
+            : 'Open chat'
+    );
 }
 
 function openConversation(type, id) {
@@ -291,11 +300,6 @@ function showInboxView() {
     currentChatUser = null;
     currentChatGroup = null;
     currentGroupDetails = null;
-
-    if (chatPollInterval) {
-        clearInterval(chatPollInterval);
-        chatPollInterval = null;
-    }
 }
 
 function showThreadView() {
@@ -670,12 +674,15 @@ function startChatPolling() {
         clearInterval(chatPollInterval);
     }
 
-    if (currentChatUser || currentChatGroup) {
-        chatPollInterval = setInterval(function () {
+    chatPollInterval = setInterval(function () {
+        const isChatVisible = $('#chat-widget').hasClass('chat-widget-open') && !document.hidden;
+
+        if (isChatVisible && (currentChatUser || currentChatGroup)) {
             loadChatMessages();
+        } else {
             loadConversationData();
-        }, 5000);
-    }
+        }
+    }, 5000);
 }
 
 function loadChatMessages() {
