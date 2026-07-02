@@ -136,35 +136,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $clientId = $stmt->insert_id;
                 $stmt->close();
 
-                $clientFolderStmt = $conn->prepare(
-                    "SELECT id FROM folders WHERE client_id = ? AND parent_id IS NULL AND folder_type = 'client' LIMIT 1"
+                $createClientFolderStmt = $conn->prepare(
+                    "INSERT INTO folders (name, folder_type, client_id, parent_id, role, created_by)
+                     VALUES (?, 'client', ?, NULL, NULL, ?)"
                 );
-                if ($clientFolderStmt === false) {
-                    throw new RuntimeException('Unable to prepare client folder lookup.');
+                if ($createClientFolderStmt === false) {
+                    throw new RuntimeException('Unable to prepare client folder creation.');
                 }
-                $clientFolderStmt->bind_param('i', $clientId);
-                if (!$clientFolderStmt->execute()) {
-                    throw new RuntimeException('Unable to load client folder.');
+                $createClientFolderStmt->bind_param('sii', $name, $clientId, $user['id']);
+                if (!$createClientFolderStmt->execute()) {
+                    throw new RuntimeException('Unable to create client folder.');
                 }
-                $clientFolderResult = $clientFolderStmt->get_result()->fetch_assoc();
-                $clientFolderId = $clientFolderResult['id'] ?? null;
-                $clientFolderStmt->close();
-
-                if (!$clientFolderId) {
-                    $createClientFolderStmt = $conn->prepare(
-                        "INSERT INTO folders (name, folder_type, client_id, parent_id, role, created_by)
-                         VALUES (?, 'client', ?, NULL, NULL, ?)"
-                    );
-                    if ($createClientFolderStmt === false) {
-                        throw new RuntimeException('Unable to prepare client folder creation.');
-                    }
-                    $createClientFolderStmt->bind_param('sii', $name, $clientId, $user['id']);
-                    if (!$createClientFolderStmt->execute()) {
-                        throw new RuntimeException('Unable to create client folder.');
-                    }
-                    $clientFolderId = $createClientFolderStmt->insert_id;
-                    $createClientFolderStmt->close();
-                }
+                $clientFolderId = $createClientFolderStmt->insert_id;
+                $createClientFolderStmt->close();
 
                 $projectId = null;
                 if ($projectName !== '') {
@@ -1001,7 +985,7 @@ include '../../includes/navbar.php';
 
 .modal-modern.add-client-modal .add-client-stepper {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.75rem;
     margin-bottom: 1rem;
 }
@@ -1132,6 +1116,59 @@ include '../../includes/navbar.php';
     color: var(--gray-900);
     font-size: 0.92rem;
     font-weight: 700;
+}
+
+.modal-modern.add-client-modal .client-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.modal-modern.add-client-modal .client-summary-panel {
+    display: grid;
+    gap: 0.7rem;
+    padding: 0.95rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    background: #f8fafc;
+}
+
+.modal-modern.add-client-modal .client-summary-panel--wide {
+    grid-column: 1 / -1;
+}
+
+.modal-modern.add-client-modal .client-summary-panel h6 {
+    margin: 0;
+    color: var(--gray-900);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.modal-modern.add-client-modal .client-summary-list {
+    display: grid;
+    gap: 0.55rem;
+    margin: 0;
+}
+
+.modal-modern.add-client-modal .client-summary-list div {
+    display: grid;
+    gap: 0.12rem;
+}
+
+.modal-modern.add-client-modal .client-summary-list dt {
+    color: var(--gray-500);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.modal-modern.add-client-modal .client-summary-list dd {
+    margin: 0;
+    color: var(--gray-900);
+    font-size: 0.9rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .modal-modern.add-client-modal .form-label {
@@ -1315,6 +1352,10 @@ include '../../includes/navbar.php';
 
 @media (max-width: 768px) {
     .modal-modern.add-client-modal .add-client-stepper {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .modal-modern.add-client-modal .client-summary-grid {
         grid-template-columns: 1fr;
     }
 
@@ -1500,6 +1541,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .field-group,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .client-summary-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__summary span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-summary span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.view,
@@ -1519,6 +1561,8 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-banner__text strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .section-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .client-summary-panel h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .client-summary-list dd,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientContent,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #clientProjects {
     color: #d7e4f2;
@@ -1546,6 +1590,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .mini-note,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .client-summary-list dt,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .draft-status,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input label {
     color: #9db6cf !important;
@@ -1560,6 +1605,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .field-group,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .client-summary-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-detail-panel,
@@ -1911,6 +1957,10 @@ include '../../includes/navbar.php';
                             <span>3</span>
                             <strong>Timeline & Budget</strong>
                         </button>
+                        <button type="button" class="stepper-item" data-step-target="3" disabled>
+                            <span>4</span>
+                            <strong>Review</strong>
+                        </button>
                     </div>
 
                     <div class="add-client-layout">
@@ -2003,6 +2053,84 @@ include '../../includes/navbar.php';
                                         <span>Outcome</span>
                                         <strong>Creates the client and sends the project to Architect review</strong>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="field-group add-client-step" data-client-step="3" hidden>
+                            <div class="section-title"><i class="fas fa-clipboard-check"></i> Review Client Summary</div>
+                            <div class="client-summary-grid" data-client-summary>
+                                <div class="client-summary-panel">
+                                    <h6>Client Profile</h6>
+                                    <dl class="client-summary-list">
+                                        <div>
+                                            <dt>Company</dt>
+                                            <dd data-summary-field="name">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Contact Person</dt>
+                                            <dd data-summary-field="contact_person">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Email</dt>
+                                            <dd data-summary-field="email">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Phone</dt>
+                                            <dd data-summary-field="phone">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Client Deadline</dt>
+                                            <dd data-summary-field="deadline">Not set</dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                                <div class="client-summary-panel">
+                                    <h6>Project Intake</h6>
+                                    <dl class="client-summary-list">
+                                        <div>
+                                            <dt>Project</dt>
+                                            <dd data-summary-field="project_name">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Timeline</dt>
+                                            <dd data-summary-field="timeline">Not set</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Budget</dt>
+                                            <dd data-summary-field="sales_budget">Not provided</dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                                <div class="client-summary-panel client-summary-panel--wide">
+                                    <h6>Requirements</h6>
+                                    <dl class="client-summary-list">
+                                        <div>
+                                            <dt>Description</dt>
+                                            <dd data-summary-field="project_description">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Requested Features</dt>
+                                            <dd data-summary-field="requested_features">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Additional Requirements</dt>
+                                            <dd data-summary-field="additional_requirements">Not provided</dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                                <div class="client-summary-panel client-summary-panel--wide">
+                                    <h6>Meeting Notes</h6>
+                                    <dl class="client-summary-list">
+                                        <div>
+                                            <dt>Notes</dt>
+                                            <dd data-summary-field="meeting_notes">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>MOM</dt>
+                                            <dd data-summary-field="mom">Not provided</dd>
+                                        </div>
+                                    </dl>
                                 </div>
                             </div>
                         </div>
@@ -2386,10 +2514,12 @@ if (addClientModalElement && addClientForm) {
     const keepEditingButton = addClientModalElement.querySelector('[data-keep-editing]');
     const discardUnsavedButton = addClientModalElement.querySelector('[data-discard-unsaved]');
     const saveCloseDraftButton = addClientModalElement.querySelector('[data-save-close-draft]');
+    const summaryFields = Array.from(addClientModalElement.querySelectorAll('[data-summary-field]'));
     let currentStep = 0;
     let formTouched = false;
     let activeDraftLoaded = false;
     let activeDraftId = null;
+    let isSubmittingClient = false;
 
     function getDraftData() {
         return Object.fromEntries(new FormData(addClientForm).entries());
@@ -2652,9 +2782,123 @@ if (addClientModalElement && addClientForm) {
         formTouched = false;
         activeDraftLoaded = false;
         activeDraftId = null;
+        isSubmittingClient = false;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
         showClientStep(0);
+    }
+
+    function getFormValue(name) {
+        const field = addClientForm.elements[name];
+        return field ? String(field.value || '').trim() : '';
+    }
+
+    function formatDateInput(value) {
+        if (!value) {
+            return '';
+        }
+
+        const parts = value.split('-').map(Number);
+        if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+            return value;
+        }
+
+        const parsed = new Date(parts[0], parts[1] - 1, parts[2]);
+        return parsed.toLocaleDateString([], {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    }
+
+    function formatTimeInput(value) {
+        if (!value) {
+            return '';
+        }
+
+        const parts = value.split(':').map(Number);
+        if (parts.length < 2 || parts.some((part) => Number.isNaN(part))) {
+            return value;
+        }
+
+        const parsed = new Date();
+        parsed.setHours(parts[0], parts[1], 0, 0);
+        return parsed.toLocaleTimeString([], {
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    }
+
+    function formatDateTime(dateValue, timeValue) {
+        const formattedDate = formatDateInput(dateValue);
+        const formattedTime = formatTimeInput(timeValue);
+
+        if (formattedDate && formattedTime) {
+            return `${formattedDate}, ${formattedTime}`;
+        }
+
+        return formattedDate || formattedTime;
+    }
+
+    function formatBudget(value) {
+        const normalized = String(value || '').replace(/,/g, '').trim();
+        if (!normalized) {
+            return '';
+        }
+
+        const amount = Number(normalized);
+        if (!Number.isFinite(amount)) {
+            return value;
+        }
+
+        return amount.toLocaleString([], {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function buildTimelineSummary() {
+        const start = formatDateTime(getFormValue('timeline_start'), getFormValue('timeline_start_time'));
+        const endDate = getFormValue('timeline_end') || getFormValue('deadline');
+        const end = formatDateTime(endDate, getFormValue('timeline_end_time'));
+
+        if (start && end) {
+            return `${start} to ${end}`;
+        }
+
+        if (start) {
+            return `Starts ${start}`;
+        }
+
+        if (end) {
+            return `Due ${end}`;
+        }
+
+        return '';
+    }
+
+    function renderAddClientSummary() {
+        const summaryData = {
+            name: getFormValue('name'),
+            contact_person: getFormValue('contact_person'),
+            email: getFormValue('email'),
+            phone: getFormValue('phone'),
+            deadline: formatDateInput(getFormValue('deadline')),
+            project_name: getFormValue('project_name'),
+            timeline: buildTimelineSummary(),
+            sales_budget: formatBudget(getFormValue('sales_budget')),
+            project_description: getFormValue('project_description'),
+            requested_features: getFormValue('requested_features'),
+            additional_requirements: getFormValue('additional_requirements'),
+            meeting_notes: getFormValue('meeting_notes'),
+            mom: getFormValue('mom')
+        };
+
+        summaryFields.forEach((field) => {
+            const key = field.dataset.summaryField || '';
+            const fallback = key === 'deadline' || key === 'timeline' ? 'Not set' : 'Not provided';
+            field.textContent = summaryData[key] || fallback;
+        });
     }
 
     function validateClientStep(stepIndex, shouldReport = true) {
@@ -2678,6 +2922,9 @@ if (addClientModalElement && addClientForm) {
 
     function showClientStep(stepIndex) {
         currentStep = Math.max(0, Math.min(stepIndex, stepPanels.length - 1));
+        if (currentStep === stepPanels.length - 1) {
+            renderAddClientSummary();
+        }
 
         stepPanels.forEach((panel, index) => {
             panel.hidden = index !== currentStep;
@@ -2788,20 +3035,35 @@ if (addClientModalElement && addClientForm) {
         });
     });
 
-        addClientForm.addEventListener('submit', (event) => {
+    addClientForm.addEventListener('submit', (event) => {
+        if (isSubmittingClient) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+
         for (let stepIndex = 0; stepIndex < stepPanels.length; stepIndex++) {
             if (!validateClientStep(stepIndex, false)) {
                 event.preventDefault();
+                event.stopPropagation();
                 showClientStep(stepIndex);
                 validateClientStep(stepIndex, true);
                 return;
             }
         }
 
+        if (currentStep !== stepPanels.length - 1) {
+            event.preventDefault();
+            event.stopPropagation();
+            showClientStep(stepPanels.length - 1);
+            return;
+        }
+
         if (activeDraftId) {
             const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== activeDraftId);
             saveStoredDrafts(remainingDrafts);
         }
+        isSubmittingClient = true;
         formTouched = false;
     });
 
