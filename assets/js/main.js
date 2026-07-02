@@ -335,6 +335,60 @@ function markNotificationRead(id) {
     $.post(`${BASE_URL}api/notifications/mark-read.php`, { id: id }).done(loadNotifications);
 }
 
+function getPageProcessHelp() {
+    const helpByRoute = {
+        '/modules/admin/dashboard.php': 'Review system health, pending requests, user activity, and governance signals, then open the area that needs attention.',
+        '/modules/admin/techstack.php': 'Review the approved technology catalog, then add or update technologies and verify their status before saving.',
+        '/modules/admin/user-management.php': 'Search or filter users, then add, view, edit, or manage access for the selected account.',
+        '/modules/admin/edit-user.php': 'Update the user profile, role, department, or account status, then save the changes.',
+        '/modules/admin/view-user.php': 'Review the user account details, then use the available action to edit or manage the account.',
+        '/modules/admin/password-reset-requests.php': 'Review each pending password request, verify the user, then approve or reject the request.',
+        '/modules/admin/audit-log.php': 'Filter activity by user, action, or date, inspect the record details, then export or restore data when appropriate.',
+        '/modules/admin/settings.php': 'Choose a settings category, update the required values, test integrations when available, then save the configuration.',
+        '/modules/sales/dashboard.php': 'Review the client pipeline, deadlines, estimates, and release signals, then open the item that needs follow-up.',
+        '/modules/sales/clients.php': 'Add a client, complete each intake step, save a draft if needed, then submit the project for Architect review.',
+        '/modules/sales/estimation-approval.php': 'Review the submitted timeline and cost estimate, compare the details, then approve it or request changes.',
+        '/modules/sales/release-status.php': 'Review release readiness and delivery progress, then update or communicate the current release status.',
+        '/modules/sales/report.php': 'Choose the report scope and period, review the calculated totals, then generate or export the sales report.',
+        '/modules/sales/receipt.php': 'Select the approved billing data, verify the charges and client details, then generate the receipt.',
+        '/modules/architect/dashboard.php': 'Review projects entering technical evaluation and open the project that needs the next architecture action.',
+        '/modules/architect/projects.php': 'Select a project awaiting technical evaluation, review its intake, then open the required architecture step.',
+        '/modules/architect/project-review.php': 'Review the client requirements and intake details, record technical findings, then continue to feature definition.',
+        '/modules/architect/features.php': 'Define the required project features and acceptance details, then save them for estimation.',
+        '/modules/architect/tech-recommendation.php': 'Choose suitable technologies, document the architecture guidance and rationale, then save the recommendation.',
+        '/modules/architect/developer-allocation.php': 'Review approved estimates and available resources, then assign suitable developers to the project.',
+        '/modules/architect/upload-diagram.php': 'Upload architecture diagrams or supporting documents, add their descriptions, then save them to the project.',
+        '/modules/architect/summary.php': 'Review the features, technology choices, estimates, team plan, and artifacts, then resolve any missing items.',
+        '/modules/architect/final-approval.php': 'Review completed work, QA evidence, and merge readiness, then approve the merge or return it for revision.',
+        '/modules/roadmap/methodology.php': 'Select a project, organize its phases and tasks, set dates or dependencies, then save the delivery roadmap.',
+        '/modules/version-control/repositories.php': 'Select a project and repository, then create or synchronize branches, commits, pushes, pulls, and merges.',
+        '/modules/sul/dashboard.php': 'Review team workload, task flow, deadlines, and delivery risks, then open the area that needs intervention.',
+        '/modules/sul/task-allocation.php': 'Choose the Expert or Developer workflow, review pending tasks, then assign or update the responsible team member.',
+        '/modules/sul/resource-management.php': 'Review availability and workload, then add, update, or rebalance resources and assignments.',
+        '/modules/sul/performance-report.php': 'Set the reporting period and filters, review team performance metrics, then export or print the report.',
+        '/modules/qa/dashboard.php': 'Review tasks ready for testing, record the test result and defects, then pass the task or return it for fixes.',
+        '/modules/expert/dashboard.php': 'Review projects awaiting estimation, then open the next feature, cost, or team-planning activity.',
+        '/modules/expert/feature-estimation.php': 'Select a project, estimate the effort and complexity of each feature, then continue to cost and team planning.',
+        '/modules/expert/cost-estimation.php': 'Review the feature effort, enter the cost assumptions and rates, then save the project cost estimate.',
+        '/modules/expert/team-composition.php': 'Choose the roles and team size needed for the estimated work, then submit the proposed team.',
+        '/modules/developer/dashboard.php': 'Review assigned tasks, deadlines, and status summaries, then open the task that needs work.',
+        '/modules/developer/task.php': 'Open an assigned task, review its requirements, complete the work, then update the task status.',
+        '/modules/insights/decision-center.php': 'Choose a project, review role-specific risks and delivery signals, then use the evidence to make the next decision.',
+        '/calendar.php': 'Add or select an event, set its date, time, and details, then save or update the schedule.',
+        '/folders.php': 'Open a project folder, upload or organize files, then use the available actions to share, download, or remove items.',
+        '/notifications.php': 'Review system workflow notifications, open the related item, then mark notifications as read or remove them.',
+        '/profile.php': 'Review your account details, then use the available actions to update your profile or password.',
+        '/settings.php': 'Update your account settings or password, then save the changes; administrators can also open system settings.'
+    };
+    const pathname = String(window.location.pathname || '').replace(/\\/g, '/').toLowerCase();
+    const modulesIndex = pathname.lastIndexOf('/modules/');
+    const route = modulesIndex >= 0
+        ? pathname.slice(modulesIndex)
+        : `/${pathname.split('/').filter(Boolean).pop() || ''}`;
+
+    return helpByRoute[route] || '';
+}
+
 function initPageHeaderHelp() {
     const pageRoot = document.getElementById('page-content-wrapper');
     if (!pageRoot || pageRoot.querySelector('.page-header-help-btn')) {
@@ -381,9 +435,13 @@ function initPageHeaderHelp() {
     const title = heading.textContent.replace(/\s+/g, ' ').trim() || 'this page';
     const subtitle = header.querySelector('p');
     const customHelp = header.getAttribute('data-page-help');
+    const processHelp = getPageProcessHelp();
+    const subtitleText = subtitle ? subtitle.textContent.replace(/\s+/g, ' ').trim() : '';
     const helpText = customHelp
-        || (subtitle ? subtitle.textContent.replace(/\s+/g, ' ').trim() : '')
-        || `View information and actions available on ${title}.`;
+        || processHelp
+        || (subtitleText
+            ? `${subtitleText} Complete the required fields or actions, then save or continue to the next step.`
+            : `Review ${title}, complete the required fields or actions, then save or continue to the next step.`);
 
     const button = document.createElement('button');
     button.type = 'button';
@@ -391,6 +449,7 @@ function initPageHeaderHelp() {
     button.setAttribute('aria-label', `Help for ${title}`);
     button.setAttribute('data-bs-toggle', 'tooltip');
     button.setAttribute('data-bs-placement', 'left');
+    button.setAttribute('data-bs-custom-class', 'page-process-tooltip');
     button.setAttribute('title', helpText);
     button.innerHTML = '<i class="fas fa-circle-question" aria-hidden="true"></i>';
 

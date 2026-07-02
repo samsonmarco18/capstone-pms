@@ -587,6 +587,13 @@ body {
     outline: none;
 }
 
+.page-process-tooltip .tooltip-inner {
+    max-width: 320px;
+    padding: 0.65rem 0.8rem;
+    text-align: left;
+    line-height: 1.45;
+}
+
 .page-header-modern .page-header-help-btn,
 .profile-header .page-header-help-btn,
 .insights-hero .page-header-help-btn,
