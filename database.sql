@@ -929,6 +929,9 @@ INSERT INTO users (username, email, password, full_name, department, role, statu
 
 -- Department dummy teams (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
+('expert_sul_1', 'expert.sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Evelyn Expert SUL', 'Expert Department', 'sul', 'active', 'Expert Service Unit Leader'),
+('expert_dept_1', 'expert.dept1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Rafael Estimation Expert', 'Expert Department', 'expert', 'active', 'Solution Estimation Expert'),
+('expert_dept_2', 'expert.dept2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Mina Senior Estimator', 'Expert Department', 'expert', 'active', 'Senior Estimation Expert'),
 ('frontend_sul_2', 'frontend.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ana Frontend SUL', 'Frontend Developer', 'sul', 'active', 'Service Unit Leader'),
 ('frontend_dev_2', 'frontend.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Liam Frontend Developer', 'Frontend Developer', 'developer', 'active', 'Frontend Developer'),
 ('frontend_dev_3', 'frontend.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Mia Frontend Developer', 'Frontend Developer', 'developer', 'active', 'Frontend Developer'),
@@ -989,11 +992,11 @@ INSERT INTO projects (client_id, name, description, status, timeline_start, time
 (1, 'E-Commerce Platform', 'Complete e-commerce solution with payment gateway', 'requirements_gathering', '2026-03-01', '2026-12-31', 'Product Catalog
 Cart and Checkout
 Payment Gateway Integration
-Loyalty Rewards', '["Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","DevOps Engineer","Database Administrator"]', 'complex', 1, 3, 4),
+Loyalty Rewards', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","DevOps Engineer","Database Administrator"]', 'complex', 1, 3, 4),
 (2, 'Patient Management System', 'Hospital management and patient tracking system', 'pending', '2026-04-01', '2027-03-31', 'Patient Registration
 Appointment Scheduling
 Medical Records
-Insurance Export', '["Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","Database Administrator"]', 'complex', 1, NULL, NULL);
+Insurance Export', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","Database Administrator"]', 'complex', 1, NULL, NULL);
 
 -- Sample project feature checklist data
 INSERT INTO tasks (project_id, title, description, task_type, assigned_to, assigned_by, status, priority, deadline, completed_at, architect_reviewed_by, architect_reviewed_at, merged_at, release_notified_at) VALUES

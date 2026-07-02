@@ -83,8 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    $firstExecutionDepartment = '';
-    $firstExecutionRow = $conn->query("
+    $firstHandoffDepartment = '';
+    $firstHandoffRow = $conn->query("
         SELECT mt.department
         FROM methodology_tasks mt
         INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
@@ -92,16 +92,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
           AND mt.department IS NOT NULL
           AND mt.department != ''
         ORDER BY COALESCE(mp.sequence_no, mp.id) ASC, mt.id ASC
+        LIMIT 1
     ");
-    while ($departmentRow = $firstExecutionRow->fetch_assoc()) {
-        $candidate = projectWorkflowDepartmentLabel($departmentRow['department'] ?? '');
-        if ($candidate !== '' && !in_array($candidate, ['Expert Department', 'QA'], true)) {
-            $firstExecutionDepartment = $candidate;
-            break;
-        }
+    if ($departmentRow = $firstHandoffRow->fetch_assoc()) {
+        $firstHandoffDepartment = projectWorkflowDepartmentLabel($departmentRow['department'] ?? '');
     }
-    if ($firstExecutionDepartment !== 'UI/UX') {
-        $_SESSION['error'] = 'UI/UX must be the first execution department before Architect submission. Place UI/UX before development and QA phases in the roadmap.';
+    if ($firstHandoffDepartment !== 'Expert Department') {
+        $_SESSION['error'] = 'Expert Department must be the first department before Architect submission because Expert SUL receives the project for estimation first.';
         header('Location: summary.php?id=' . $projectId);
         exit();
     }
@@ -135,7 +132,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (is_array($decodedDepartments)) {
         $selectedDepartments = array_map(static fn($department): string => projectWorkflowDepartmentLabel((string) $department), $decodedDepartments);
     }
-    projectWorkflowNotifySelectedSuls($conn, $projectId, array_unique($selectedDepartments), (string) $project['name']);
+    if (!in_array('Expert Department', $selectedDepartments, true)) {
+        $_SESSION['error'] = 'Expert Department must be included so the Expert SUL can receive the project for estimation.';
+        header('Location: summary.php?id=' . $projectId);
+        exit();
+    }
+    projectWorkflowNotifySelectedSuls($conn, $projectId, ['Expert Department'], (string) $project['name']);
     
     logActivity($user['id'], 'submit_architecture', 'projects', $projectId);
     $_SESSION['success'] = "Architecture plan submitted to SUL successfully";

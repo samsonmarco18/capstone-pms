@@ -83,10 +83,15 @@ if (!$hasSalesChoice) {
 
 $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 $sulDepartment = trim((string) ($user['department'] ?? ''));
+$sulDepartmentLabel = projectWorkflowDepartmentLabel($sulDepartment);
 $sulDepartmentEscaped = $conn->real_escape_string($sulDepartment);
 $sulMissingDepartment = $sulDepartment === '';
+$isExpertDepartmentSul = $sulDepartmentLabel === 'Expert Department';
+$canManageExpertWorkflow = !$sulMissingDepartment && $isExpertDepartmentSul;
+$canManageDeveloperWorkflow = !$sulMissingDepartment && !$isExpertDepartmentSul;
 $sulUserDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : ' AND 1 = 0';
 $sulProjectFilter = sulTaskAllocationProjectFilter($conn, 'p', $sulDepartment);
+$sulTaskDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
 
 if ($sulMissingDepartment) {
     $_SESSION['error'] = 'Your SUL account must be assigned to a department before managing task allocation.';
@@ -298,8 +303,8 @@ $readyForDevTasks = $conn->query("
       AND t.assigned_to IS NOT NULL 
       AND t.assigned_to != 0
       AND u.role = 'expert'
-      {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
+      {$sulTaskDepartmentFilter}
       AND (SELECT COUNT(*) FROM feature_estimations fe2 WHERE fe2.task_id = t.id AND fe2.status = 'completed') > 0" . ($hasSalesApproval ? " AND t.sales_approved = 1" : "") . ($hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "") . "
     ORDER BY t.deadline ASC
 ");
@@ -390,6 +395,12 @@ $developers = $conn->query("
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Assign task to expert
     if (isset($_POST['assign_to_expert'])) {
+        if (!$canManageExpertWorkflow) {
+            $_SESSION['error'] = "Only the Expert Department SUL can assign tasks to experts.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $expertId = (int) ($_POST['expert_id'] ?? 0);
 
@@ -452,6 +463,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Assign project to expert (bulk features)
     if (isset($_POST['assign_project_to_expert'])) {
+        if (!$canManageExpertWorkflow) {
+            $_SESSION['error'] = "Only the Expert Department SUL can assign projects to experts.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $projectId = (int) ($_POST['project_id'] ?? 0);
         $expertId = (int) ($_POST['expert_id'] ?? 0);
         if ($projectId <= 0 || $expertId <= 0) {
@@ -518,6 +535,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Assign task to developer (after estimation approved)
     if (isset($_POST['assign_to_developer'])) {
+        if (!$canManageDeveloperWorkflow) {
+            $_SESSION['error'] = "Developer assignment is available only for department SULs outside Expert Department.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $developerId = (int) ($_POST['developer_id'] ?? 0);
         $deadline = trim((string) ($_POST['deadline'] ?? ''));
@@ -558,6 +581,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
               AND t.assigned_to IS NOT NULL
               AND t.assigned_to != 0
               AND {$sulProjectFilter}
+              {$sulTaskDepartmentFilter}
               {$approvalSql}{$choiceSql}
         ");
         $taskCheck->bind_param("i", $taskId);
@@ -651,6 +675,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Review developer Pull Request and move to QA or back to Developer
     if (isset($_POST['sul_approve_pr']) || isset($_POST['sul_request_revision'])) {
+        if (!$canManageDeveloperWorkflow) {
+            $_SESSION['error'] = "Developer code review is available only for department SULs outside Expert Department.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $reviewComment = trim((string) ($_POST['review_comment'] ?? ''));
         $isApproval = isset($_POST['sul_approve_pr']);
@@ -756,6 +786,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Send a completed task back to the developer for revision
     if (isset($_POST['revise_completed_task'])) {
+        if (!$canManageDeveloperWorkflow) {
+            $_SESSION['error'] = "Developer revision requests are available only for department SULs outside Expert Department.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $revisionReason = trim((string) ($_POST['revision_reason'] ?? ''));
 
@@ -813,6 +849,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Approve estimation and move to ready for dev
     if (isset($_POST['approve_estimation'])) {
+        if (!$canManageExpertWorkflow) {
+            $_SESSION['error'] = "Only the Expert Department SUL can approve expert estimations.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
 
         if ($taskId <= 0) {
@@ -826,9 +868,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $taskCheck = $conn->prepare("
             SELECT t.id
             FROM tasks t
+            INNER JOIN projects p ON p.id = t.project_id
             INNER JOIN feature_estimations fe ON fe.task_id = t.id AND fe.status = 'completed'
             WHERE t.id = ?
               AND t.status = 'review'
+              AND {$sulProjectFilter}
               {$approvalSql}{$choiceSql}
         ");
         $taskCheck->bind_param("i", $taskId);
@@ -856,6 +900,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Reject estimation
     if (isset($_POST['reject_estimation'])) {
+        if (!$canManageExpertWorkflow) {
+            $_SESSION['error'] = "Only the Expert Department SUL can reject expert estimations.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $rejectionReason = trim((string) ($_POST['rejection_reason'] ?? ''));
 
@@ -865,8 +915,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         }
         
-        // Get task details for notification
-        $task = $conn->query("SELECT assigned_to, title FROM tasks WHERE id = $taskId")->fetch_assoc();
+        $taskCheck = $conn->prepare("
+            SELECT t.assigned_to, t.title
+            FROM tasks t
+            INNER JOIN projects p ON p.id = t.project_id
+            INNER JOIN feature_estimations fe ON fe.task_id = t.id AND fe.status = 'completed'
+            WHERE t.id = ?
+              AND t.status = 'review'
+              AND {$sulProjectFilter}
+            LIMIT 1
+        ");
+        $taskCheck->bind_param("i", $taskId);
+        $taskCheck->execute();
+        $task = $taskCheck->get_result()->fetch_assoc();
+        $taskCheck->close();
+
+        if (!$task) {
+            $_SESSION['error'] = "Only reviewed estimations for Expert Department projects can be rejected.";
+            header("Location: task-allocation.php");
+            exit();
+        }
         
         $stmt = $conn->prepare("UPDATE tasks SET status = 'todo' WHERE id = ?");
         $stmt->bind_param("i", $taskId);
@@ -1500,24 +1568,29 @@ include '../../includes/navbar.php';
 
     <!-- Tab Navigation -->
     <ul class="nav nav-tabs mb-4" id="allocationTabs" role="tablist">
+        <?php if ($canManageExpertWorkflow): ?>
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="expert-tab" data-bs-toggle="tab" data-bs-target="#expert-panel" type="button" role="tab">
                 <i class="fas fa-user-tie me-2"></i>Expert
                 <span class="badge bg-warning ms-2"><?php echo $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows + $projectsForAllocation->num_rows; ?></span>
             </button>
         </li>
+        <?php endif; ?>
+        <?php if ($canManageDeveloperWorkflow): ?>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="developer-tab" data-bs-toggle="tab" data-bs-target="#developer-panel" type="button" role="tab">
+            <button class="nav-link active" id="developer-tab" data-bs-toggle="tab" data-bs-target="#developer-panel" type="button" role="tab">
                 <i class="fas fa-code me-2"></i>Developer
                 <span class="badge bg-primary ms-2"><?php echo $readyForDevTasks->num_rows + $inProgressTasks->num_rows + $codeReviewTasks->num_rows; ?></span>
             </button>
         </li>
+        <?php endif; ?>
     </ul>
 
     <!-- Tab Content -->
     <div class="tab-content" id="allocationTabsContent">
         
         <!-- Expert Tab Panel -->
+        <?php if ($canManageExpertWorkflow): ?>
         <div class="tab-pane fade show active" id="expert-panel" role="tabpanel">
             <div class="workflow-layout">
             <ul class="nav workflow-tabs" id="expertWorkflowTabs" role="tablist">
@@ -1797,9 +1870,11 @@ include '../../includes/navbar.php';
             </div>
             </div>
             <!-- End Expert Tab Panel -->
+        <?php endif; ?>
             
             <!-- Developer Tab Panel -->
-            <div class="tab-pane fade" id="developer-panel" role="tabpanel">
+        <?php if ($canManageDeveloperWorkflow): ?>
+            <div class="tab-pane fade show active" id="developer-panel" role="tabpanel">
             <div class="workflow-layout">
             <ul class="nav workflow-tabs" id="developerWorkflowTabs" role="tablist">
                 <li class="nav-item" role="presentation">
@@ -2029,12 +2104,14 @@ include '../../includes/navbar.php';
             </div>
             </div>
             <!-- End Developer Tab Panel -->
+        <?php endif; ?>
             
         </div>
         <!-- End Tab Content -->
     </div>
 
 <!-- Assign to Expert Modal -->
+<?php if ($canManageExpertWorkflow): ?>
 <div class="modal fade modal-modern" id="assignExpertModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -2070,8 +2147,10 @@ include '../../includes/navbar.php';
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Assign to Developer Modal -->
+<?php if ($canManageDeveloperWorkflow): ?>
 <div class="modal fade modal-modern" id="assignDeveloperModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -2108,8 +2187,10 @@ include '../../includes/navbar.php';
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Revise Completed Task Modal -->
+<?php if ($canManageDeveloperWorkflow): ?>
 <div class="modal fade modal-modern" id="reviseCompletedModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -2134,8 +2215,10 @@ include '../../includes/navbar.php';
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Reject Estimation Modal -->
+<?php if ($canManageExpertWorkflow): ?>
 <div class="modal fade modal-modern" id="rejectModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -2160,6 +2243,7 @@ include '../../includes/navbar.php';
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Task Details Modal -->
 <div class="modal fade modal-modern" id="taskDetailsModal" tabindex="-1">

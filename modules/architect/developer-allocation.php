@@ -9,7 +9,7 @@ projectWorkflowEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 $allocationRoles = [
-    'Expert Department' => ['min' => 0, 'max' => 3],
+    'Expert Department' => ['min' => 1, 'max' => 3],
     'UI/UX' => ['min' => 1, 'max' => 3],
     'Frontend' => ['min' => 1, 'max' => 5],
     'Backend' => ['min' => 1, 'max' => 5],
@@ -21,6 +21,7 @@ $allocationRoles = [
     'QA' => ['min' => 1, 'max' => 3],
     'Other Departments' => ['min' => 0, 'max' => 5],
 ];
+$mandatoryDepartments = ['Expert Department'];
 
 function normalizeAllocationComplexity(?string $value): string
 {
@@ -32,6 +33,16 @@ function normalizeAllocationComplexity(?string $value): string
         'complex', 'high' => 'high',
         'critical' => 'critical',
         default => 'medium'
+    };
+}
+
+function allocationComplexityDescription(string $complexity): string
+{
+    return match ($complexity) {
+        'low' => 'Low - Simple application with basic features',
+        'high' => 'High - Complex system with advanced features',
+        'critical' => 'Critical - Enterprise-grade solution',
+        default => 'Medium - Standard web/mobile application'
     };
 }
 
@@ -81,13 +92,7 @@ if (count($includedDepartments) === 0) {
 
 $includedDepartmentLookup = array_fill_keys($includedDepartments, true);
 
-$selectedComplexity = 'medium';
-if (!empty($existingAllocations)) {
-    $firstAllocation = reset($existingAllocations);
-    $selectedComplexity = normalizeAllocationComplexity($firstAllocation['complexity_level'] ?? 'medium');
-} elseif ($project) {
-    $selectedComplexity = normalizeAllocationComplexity($project['complexity_level'] ?? 'medium');
-}
+$selectedComplexity = normalizeAllocationComplexity($project['complexity_level'] ?? 'medium');
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $postedAllocations = is_array($_POST['allocations'] ?? null) ? $_POST['allocations'] : [];
@@ -98,11 +103,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $requiredCount = max(0, (int) ($data['required'] ?? 0));
-        if (isset($data['included']) || $requiredCount > 0) {
+        if (isset($data['included']) || $requiredCount > 0 || in_array((string) $role, $mandatoryDepartments, true)) {
             $selectedDepartments[] = (string) $role;
         }
     }
 
+    $selectedDepartments = array_merge($mandatoryDepartments, $selectedDepartments);
     $selectedDepartments = array_values(array_unique($selectedDepartments));
     if (count($selectedDepartments) === 0) {
         $_SESSION['error'] = 'Select at least one department included in this project.';
@@ -117,8 +123,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 continue;
             }
 
-            $requiredCount = max(0, (int) ($data['required'] ?? 0));
-            $complexity = normalizeAllocationComplexity($data['complexity'] ?? 'medium');
+            $minRequired = in_array((string) $role, $mandatoryDepartments, true) ? (int) ($allocationRoles[$role]['min'] ?? 0) : 0;
+            $requiredCount = max($minRequired, (int) ($data['required'] ?? 0));
+            $complexity = $selectedComplexity;
             $stmt = $conn->prepare("INSERT INTO developer_allocations (project_id, role, required_count, complexity_level) VALUES (?, ?, ?, ?)");
             $stmt->bind_param("isis", $projectId, $role, $requiredCount, $complexity);
             $stmt->execute();
@@ -442,6 +449,25 @@ a.progress-step:hover {
     box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
 }
 
+.readonly-complexity-field {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--gray-300);
+    border-radius: 10px;
+    font-size: 0.9rem;
+    background: var(--gray-50);
+    color: var(--gray-900);
+}
+
+.readonly-complexity-source {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.45rem;
+    color: var(--gray-600);
+    font-size: 0.75rem;
+}
+
 .form-control-sm {
     width: 80px;
     text-align: center;
@@ -645,6 +671,12 @@ a.progress-step:hover {
     border-color: rgba(31, 99, 146, 0.24) !important;
     color: #d7e4f2 !important;
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .readonly-complexity-field {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+    color: #d7e4f2 !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -701,14 +733,13 @@ a.progress-step:hover {
                         <div class="mb-4">
                             <label class="form-label">
                                 Project Complexity Level
-                                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Complexity is now project-level. It guides overall resource recommendations, not per-feature sizing."></i>
+                                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Complexity is generated by Sales and cannot be changed during architect allocation."></i>
                             </label>
-                            <select class="form-select-modern" id="complexityLevel" onchange="updateAllocation()">
-                                <option value="low" <?php echo $selectedComplexity === 'low' ? 'selected' : ''; ?>>Low - Simple application with basic features</option>
-                                <option value="medium" <?php echo $selectedComplexity === 'medium' ? 'selected' : ''; ?>>Medium - Standard web/mobile application</option>
-                                <option value="high" <?php echo $selectedComplexity === 'high' ? 'selected' : ''; ?>>High - Complex system with advanced features</option>
-                                <option value="critical" <?php echo $selectedComplexity === 'critical' ? 'selected' : ''; ?>>Critical - Enterprise-grade solution</option>
-                            </select>
+                            <div class="readonly-complexity-field" aria-readonly="true">
+                                <?php echo htmlspecialchars(allocationComplexityDescription($selectedComplexity)); ?>
+                            </div>
+                            <input type="hidden" id="complexityLevel" value="<?php echo htmlspecialchars($selectedComplexity); ?>">
+                            <span class="readonly-complexity-source"><i class="fas fa-lock"></i> Generated by Sales</span>
                         </div>
                         
                         <div class="table-responsive">
@@ -738,11 +769,18 @@ a.progress-step:hover {
                                     }
                                     
                                     foreach($allocationRoles as $role => $limits):
+                                        $isMandatory = in_array($role, $mandatoryDepartments, true);
                                         $isIncluded = isset($includedDepartmentLookup[$role]);
+                                        if ($isMandatory) {
+                                            $isIncluded = true;
+                                        }
                                         $existing = array_key_exists($role, $existingAllocations)
                                             ? (int) ($existingAllocations[$role]['required_count'] ?? 0)
                                             : ($isIncluded ? (int) ($limits['min'] ?? 0) : 0);
-                                        $existingComplexity = normalizeAllocationComplexity($existingAllocations[$role]['complexity_level'] ?? $selectedComplexity);
+                                        if ($isMandatory) {
+                                            $existing = max((int) ($limits['min'] ?? 0), $existing);
+                                        }
+                                        $existingComplexity = $selectedComplexity;
                                         $available = 0;
                                         foreach (projectWorkflowDepartmentAliases($role) as $roleAlias) {
                                             $available += (int) ($availableDevs[$roleAlias] ?? 0);
@@ -751,6 +789,9 @@ a.progress-step:hover {
                                     ?>
                                     <tr>
                                         <td class="fw-semibold">
+                                            <?php if ($isMandatory): ?>
+                                                <input type="hidden" name="allocations[<?php echo $role; ?>][included]" value="1">
+                                            <?php endif; ?>
                                             <label class="department-toggle-wrap">
                                                 <input
                                                     type="checkbox"
@@ -760,16 +801,18 @@ a.progress-step:hover {
                                                     data-role="<?php echo htmlspecialchars($role); ?>"
                                                     onchange="toggleDepartmentRow(this)"
                                                     <?php echo $isIncluded ? 'checked' : ''; ?>
+                                                    <?php echo $isMandatory ? 'disabled' : ''; ?>
                                                 >
                                                 <span><?php echo $role; ?></span>
                                             </label>
-                                            <span class="department-role-note">SUL and team members are matched by this department.</span>
+                                            <span class="department-role-note"><?php echo $isMandatory ? 'First handoff for expert estimation.' : 'SUL and team members are matched by this department.'; ?></span>
                                         </td>
                                         <td>
                                             <input type="number" name="allocations[<?php echo $role; ?>][required]" 
                                                    class="form-control-modern form-control-sm required-count" 
                                                    value="<?php echo $existing; ?>" 
-                                                  min="0"
+                                                   min="<?php echo $isMandatory ? (int) ($limits['min'] ?? 0) : 0; ?>"
+                                                   <?php echo $isMandatory ? 'required' : ''; ?>
                                                    max="<?php echo $limits['max']; ?>"
                                                    data-min-recommended="<?php echo (int) ($limits['min'] ?? 0); ?>"
                                                    onchange="checkAvailability(this, '<?php echo $role; ?>')">
@@ -843,10 +886,10 @@ function initAllocationTooltips() {
 function updateAllocation() {
     const complexity = document.getElementById('complexityLevel').value;
     const recommendations = {
-        low: {'Frontend Developer':1,'Backend Developer':1,'Full Stack Developer':0,'QA Engineer':1,'UI/UX Designer':1,'DevOps Engineer':0,'Database Administrator':0},
-        medium: {'Frontend Developer':2,'Backend Developer':2,'Full Stack Developer':1,'QA Engineer':1,'UI/UX Designer':1,'DevOps Engineer':1,'Database Administrator':1},
-        high: {'Frontend Developer':3,'Backend Developer':3,'Full Stack Developer':2,'QA Engineer':2,'UI/UX Designer':2,'DevOps Engineer':2,'Database Administrator':1},
-        critical: {'Frontend Developer':4,'Backend Developer':4,'Full Stack Developer':3,'QA Engineer':3,'UI/UX Designer':2,'DevOps Engineer':3,'Database Administrator':2}
+        low: {'Expert Department':1,'UI/UX':1,'Frontend':1,'Backend':1,'Mobile':0,'Database':0,'DevOps':0,'AI':0,'Security':0,'QA':1,'Other Departments':0},
+        medium: {'Expert Department':1,'UI/UX':1,'Frontend':2,'Backend':2,'Mobile':1,'Database':1,'DevOps':1,'AI':0,'Security':0,'QA':1,'Other Departments':0},
+        high: {'Expert Department':2,'UI/UX':2,'Frontend':3,'Backend':3,'Mobile':2,'Database':1,'DevOps':2,'AI':1,'Security':1,'QA':2,'Other Departments':0},
+        critical: {'Expert Department':2,'UI/UX':2,'Frontend':4,'Backend':4,'Mobile':3,'Database':2,'DevOps':3,'AI':2,'Security':2,'QA':3,'Other Departments':0}
     };
     const rec = recommendations[complexity];
     if (rec) {

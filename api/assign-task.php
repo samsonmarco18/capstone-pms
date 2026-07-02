@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json');
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/project-workflow.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -18,6 +19,9 @@ if (($user['role'] ?? '') !== 'sul') {
 $conn = getConnection();
 $taskId = (int) ($_POST['task_id'] ?? 0);
 $assigneeId = (int) ($_POST['user_id'] ?? 0);
+$sulDepartment = trim((string) ($user['department'] ?? ''));
+$sulDepartmentLabel = projectWorkflowDepartmentLabel($sulDepartment);
+$isExpertDepartmentSul = $sulDepartmentLabel === 'Expert Department';
 
 if ($taskId <= 0 || $assigneeId <= 0) {
     http_response_code(400);
@@ -25,7 +29,8 @@ if ($taskId <= 0 || $assigneeId <= 0) {
     exit();
 }
 
-$userStmt = $conn->prepare("SELECT id, role, full_name FROM users WHERE id = ? AND role IN ('expert', 'developer') AND status = 'active'");
+$departmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) : ' AND 1 = 0';
+$userStmt = $conn->prepare("SELECT id, role, full_name FROM users WHERE id = ? AND role IN ('expert', 'developer') AND status = 'active'{$departmentFilter}");
 $userStmt->bind_param('i', $assigneeId);
 $userStmt->execute();
 $assignee = $userStmt->get_result()->fetch_assoc();
@@ -39,10 +44,23 @@ if (!$assignee) {
 
 $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 $hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_days');
+$projectFilter = $sulDepartment !== '' ? projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment) : '1 = 0';
+$taskDepartmentFilter = $sulDepartment !== '' ? projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true) : '1 = 0';
 
-$salesApprovedSelect = $hasSalesApproval ? "sales_approved" : "0 AS sales_approved";
-$salesEstimateDaysSelect = $hasSalesChoice ? "sales_estimate_days" : "0 AS sales_estimate_days";
-$taskStmt = $conn->prepare("SELECT id, title, assigned_to, status, {$salesApprovedSelect}, {$salesEstimateDaysSelect} FROM tasks WHERE id = ?");
+$salesApprovedSelect = $hasSalesApproval ? "t.sales_approved" : "0 AS sales_approved";
+$salesEstimateDaysSelect = $hasSalesChoice ? "t.sales_estimate_days" : "0 AS sales_estimate_days";
+$taskStmt = $conn->prepare("
+    SELECT t.id, t.title, t.assigned_to, t.status, {$salesApprovedSelect}, {$salesEstimateDaysSelect},
+           CASE WHEN EXISTS (
+               SELECT 1
+               FROM feature_estimations fe
+               WHERE fe.task_id = t.id AND fe.status = 'completed'
+           ) THEN 1 ELSE 0 END AS has_completed_estimation
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE t.id = ?
+      AND {$projectFilter}
+");
 $taskStmt->bind_param('i', $taskId);
 $taskStmt->execute();
 $task = $taskStmt->get_result()->fetch_assoc();
@@ -55,15 +73,28 @@ if (!$task) {
 }
 
 if ($assignee['role'] === 'expert') {
+    if (!$isExpertDepartmentSul) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Only the Expert Department SUL can assign tasks to experts.']);
+        exit();
+    }
+
     if (($task['status'] ?? '') !== 'todo' || !empty($task['assigned_to'])) {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'Only unassigned to-do tasks can be assigned to experts.']);
         exit();
     }
 } elseif ($assignee['role'] === 'developer') {
+    if ($isExpertDepartmentSul) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'Developer assignment is handled by the owning department SUL.']);
+        exit();
+    }
+
     $salesApproved = !$hasSalesApproval || (int) ($task['sales_approved'] ?? 0) === 1;
     $daysSelected = !$hasSalesChoice || (int) ($task['sales_estimate_days'] ?? 0) > 0;
-    if (($task['status'] ?? '') !== 'todo' || !$salesApproved || !$daysSelected) {
+    $taskBelongsToDepartment = (bool) ($conn->query("SELECT t.id FROM tasks t WHERE t.id = {$taskId} AND {$taskDepartmentFilter} LIMIT 1")->fetch_assoc() ?? null);
+    if (($task['status'] ?? '') !== 'todo' || !$salesApproved || !$daysSelected || !$taskBelongsToDepartment || (int) ($task['has_completed_estimation'] ?? 0) <= 0) {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => 'Only Sales-approved tasks with selected days can be assigned to developers.']);
         exit();

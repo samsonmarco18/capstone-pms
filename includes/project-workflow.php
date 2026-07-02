@@ -84,6 +84,40 @@ function projectWorkflowProjectDepartmentClause(mysqli|PgsqlMysqliCompatConnecti
     return $clauses ? '(' . implode(' OR ', $clauses) . ')' : '1 = 0';
 }
 
+function projectWorkflowTaskDepartmentClause(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    string $taskAlias,
+    string $department,
+    bool $allowUnscheduledFallback = false
+): string {
+    if (!dbTableExists($conn, 'methodology_tasks')) {
+        return $allowUnscheduledFallback ? '1 = 1' : '1 = 0';
+    }
+
+    $aliases = projectWorkflowDepartmentAliases($department);
+    if ($aliases === []) {
+        return '1 = 0';
+    }
+
+    $quoted = array_map(static fn(string $item): string => "'" . $conn->real_escape_string($item) . "'", $aliases);
+    $departmentMatch = "EXISTS (
+        SELECT 1
+        FROM methodology_tasks mt_scope
+        WHERE mt_scope.task_id = {$taskAlias}.id
+          AND mt_scope.department IN (" . implode(',', $quoted) . ")
+    )";
+
+    if (!$allowUnscheduledFallback) {
+        return $departmentMatch;
+    }
+
+    return "({$departmentMatch} OR NOT EXISTS (
+        SELECT 1
+        FROM methodology_tasks mt_any
+        WHERE mt_any.task_id = {$taskAlias}.id
+    ))";
+}
+
 function projectWorkflowClassifyComplexity(?string $timelineStart, ?string $timelineEnd, int $featureCount): string
 {
     $days = 0;
