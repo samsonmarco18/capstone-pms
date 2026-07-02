@@ -2,6 +2,7 @@ $(function () {
     initSidebar();
     initDarkMode();
     initNotifications();
+    initPageHeaderHelp();
     initTooltips();
     initAppActionHelpers();
     initGenericFormDrafts();
@@ -332,6 +333,69 @@ function updateNotificationList(notifications) {
 
 function markNotificationRead(id) {
     $.post(`${BASE_URL}api/notifications/mark-read.php`, { id: id }).done(loadNotifications);
+}
+
+function initPageHeaderHelp() {
+    const pageRoot = document.getElementById('page-content-wrapper');
+    if (!pageRoot || pageRoot.querySelector('.page-header-help-btn')) {
+        return;
+    }
+
+    const preferredSelectors = [
+        '[data-page-header]',
+        '.page-header-modern',
+        '.dashboard-header',
+        '.content-header',
+        '.roadmap-header',
+        '.vc-header',
+        '.insights-hero',
+        '.profile-header',
+        '.notification-card > .card-header'
+    ];
+    let header = null;
+
+    for (const selector of preferredSelectors) {
+        const candidate = pageRoot.querySelector(selector);
+        if (candidate && !candidate.closest('.modal, .offcanvas, .chat-widget')) {
+            header = candidate;
+            break;
+        }
+    }
+
+    const headingSelector = 'h1, h2, h3, h4, h5, .page-title, .vc-header-title, [class$="-header-title"]';
+    let heading = header ? header.querySelector(headingSelector) : null;
+    if (!header || !heading) {
+        heading = Array.from(pageRoot.querySelectorAll(headingSelector)).find(function (candidate) {
+            return !candidate.closest('nav, .modal, .offcanvas, .accordion, .dropdown-menu, .chat-widget');
+        }) || null;
+
+        if (heading) {
+            header = heading.closest('.card-header, .card-body, header, .row') || heading.parentElement;
+        }
+    }
+
+    if (!header || !heading) {
+        return;
+    }
+
+    const title = heading.textContent.replace(/\s+/g, ' ').trim() || 'this page';
+    const subtitle = header.querySelector('p');
+    const customHelp = header.getAttribute('data-page-help');
+    const helpText = customHelp
+        || (subtitle ? subtitle.textContent.replace(/\s+/g, ' ').trim() : '')
+        || `View information and actions available on ${title}.`;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'page-header-help-btn';
+    button.setAttribute('aria-label', `Help for ${title}`);
+    button.setAttribute('data-bs-toggle', 'tooltip');
+    button.setAttribute('data-bs-placement', 'left');
+    button.setAttribute('title', helpText);
+    button.innerHTML = '<i class="fas fa-circle-question" aria-hidden="true"></i>';
+
+    header.classList.add('page-help-host');
+    header.appendChild(button);
 }
 
 function initTooltips() {

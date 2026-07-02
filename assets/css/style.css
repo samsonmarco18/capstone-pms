@@ -553,6 +553,55 @@ body {
     font-size: 0.78rem;
 }
 
+.page-help-host {
+    position: relative !important;
+    padding-right: 4.5rem !important;
+}
+
+.page-header-help-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 4;
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid rgba(31, 99, 146, 0.18);
+    border-radius: 50%;
+    background: rgba(31, 99, 146, 0.08);
+    color: var(--primary-color);
+    font-size: 1rem;
+    cursor: help;
+    box-shadow: 0 8px 18px rgba(18, 80, 127, 0.1);
+    transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.page-header-help-btn:hover,
+.page-header-help-btn:focus-visible {
+    transform: translateY(-2px);
+    background: rgba(31, 99, 146, 0.14);
+    box-shadow: 0 10px 22px rgba(18, 80, 127, 0.16);
+    outline: none;
+}
+
+.page-header-modern .page-header-help-btn,
+.profile-header .page-header-help-btn {
+    border-color: rgba(255, 255, 255, 0.34);
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(5, 32, 55, 0.18);
+}
+
+.page-header-modern .page-header-help-btn:hover,
+.page-header-modern .page-header-help-btn:focus-visible,
+.profile-header .page-header-help-btn:hover,
+.profile-header .page-header-help-btn:focus-visible {
+    background: rgba(255, 255, 255, 0.25);
+}
+
 .dropdown-item:hover {
     background-color: rgba(13, 85, 107, 0.1);
     color: var(--primary-color);
@@ -1884,6 +1933,18 @@ body {
 }
 
 @media (max-width: 576px) {
+    .page-help-host {
+        padding-right: 3.75rem !important;
+    }
+
+    .page-header-help-btn {
+        top: 12px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        font-size: 0.9rem;
+    }
+
     .notifications-menu {
         width: min(300px, calc(100vw - 16px));
         min-width: 0;
