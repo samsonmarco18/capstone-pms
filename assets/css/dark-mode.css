@@ -673,10 +673,20 @@ body[data-theme="dark"] .page-header-modern .page-header-help-btn,
 body.dark-mode .page-header-modern .page-header-help-btn,
 html[data-theme="dark"] .profile-header .page-header-help-btn,
 body[data-theme="dark"] .profile-header .page-header-help-btn,
-body.dark-mode .profile-header .page-header-help-btn {
-    border-color: rgba(255, 255, 255, 0.32);
-    background: rgba(255, 255, 255, 0.14);
-    color: #ffffff;
+body.dark-mode .profile-header .page-header-help-btn,
+html[data-theme="dark"] .insights-hero .page-header-help-btn,
+body[data-theme="dark"] .insights-hero .page-header-help-btn,
+body.dark-mode .insights-hero .page-header-help-btn,
+html[data-theme="dark"] .roadmap-header .page-header-help-btn,
+body[data-theme="dark"] .roadmap-header .page-header-help-btn,
+body.dark-mode .roadmap-header .page-header-help-btn,
+html[data-theme="dark"] .vc-header .page-header-help-btn,
+body[data-theme="dark"] .vc-header .page-header-help-btn,
+body.dark-mode .vc-header .page-header-help-btn {
+    border-color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.94);
+    color: #15567f;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
 html[data-theme="dark"] .message .text-muted,

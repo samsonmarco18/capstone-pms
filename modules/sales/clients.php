@@ -1063,13 +1063,49 @@ include '../../includes/navbar.php';
     align-items: center;
     gap: 0.65rem;
     min-width: 0;
-    padding: 0.75rem;
+    width: 100%;
+    height: 100%;
+    padding: 0.75rem 2.6rem 0.75rem 0.75rem;
     border: 1px solid var(--gray-200);
     border-radius: 12px;
     background: #ffffff;
     color: var(--gray-600);
     text-align: left;
     transition: all 0.18s ease;
+}
+
+.modal-modern.add-client-modal .stepper-tooltip-wrap {
+    position: relative;
+    min-width: 0;
+}
+
+.modal-modern.add-client-modal .stepper-info {
+    position: absolute;
+    top: 50%;
+    right: 0.65rem;
+    z-index: 2;
+    width: 23px;
+    height: 23px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-50%);
+    border: 1px solid rgba(31, 99, 146, 0.22);
+    border-radius: 50%;
+    background: #e9f3fa;
+    color: var(--theme-primary);
+    font-size: 0.68rem;
+    cursor: help;
+    transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.modal-modern.add-client-modal .stepper-info:hover,
+.modal-modern.add-client-modal .stepper-info:focus-visible {
+    transform: translateY(-50%) scale(1.08);
+    background: var(--theme-primary);
+    color: #ffffff;
+    outline: none;
 }
 
 .modal-modern.add-client-modal .stepper-item:disabled {
@@ -1649,6 +1685,18 @@ include '../../includes/navbar.php';
     border-color: rgba(31, 99, 146, 0.24);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-info {
+    border-color: rgba(138, 210, 255, 0.24);
+    background: rgba(31, 99, 146, 0.22);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-info:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-info:focus-visible {
+    background: #8fd3ff;
+    color: #071321;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-name,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .deadline-date,
@@ -2059,22 +2107,42 @@ include '../../includes/navbar.php';
                 <input type="hidden" name="client_draft_id" data-client-draft-id value="">
                 <div class="modal-body">
                     <div class="add-client-stepper" aria-label="Add client progress">
-                        <button type="button" class="stepper-item is-active" data-step-target="0" aria-current="step" disabled>
-                            <span>1</span>
-                            <strong>Client Profile</strong>
-                        </button>
-                        <button type="button" class="stepper-item" data-step-target="1" disabled>
-                            <span>2</span>
-                            <strong>Project Intake</strong>
-                        </button>
-                        <button type="button" class="stepper-item" data-step-target="2" disabled>
-                            <span>3</span>
-                            <strong>Timeline & Budget</strong>
-                        </button>
-                        <button type="button" class="stepper-item" data-step-target="3" disabled>
-                            <span>4</span>
-                            <strong>Review</strong>
-                        </button>
+                        <div class="stepper-tooltip-wrap">
+                            <button type="button" class="stepper-item is-active" data-step-target="0" aria-current="step" disabled>
+                                <span>1</span>
+                                <strong>Client Profile</strong>
+                            </button>
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Enter the client's company, contact details, address, and deadline." aria-label="About Client Profile">
+                                <i class="fas fa-info" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="stepper-tooltip-wrap">
+                            <button type="button" class="stepper-item" data-step-target="1" disabled>
+                                <span>2</span>
+                                <strong>Project Intake</strong>
+                            </button>
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Capture the project scope, requested features, meeting notes, requirements, priority, and attachments." aria-label="About Project Intake">
+                                <i class="fas fa-info" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="stepper-tooltip-wrap">
+                            <button type="button" class="stepper-item" data-step-target="2" disabled>
+                                <span>3</span>
+                                <strong>Timeline & Budget</strong>
+                            </button>
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Set the schedule and budget, then review the automatically generated project complexity." aria-label="About Timeline and Budget">
+                                <i class="fas fa-info" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="stepper-tooltip-wrap">
+                            <button type="button" class="stepper-item" data-step-target="3" disabled>
+                                <span>4</span>
+                                <strong>Review</strong>
+                            </button>
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Confirm the client and project information before sending it for Architect review." aria-label="About Review">
+                                <i class="fas fa-info" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="add-client-layout">
