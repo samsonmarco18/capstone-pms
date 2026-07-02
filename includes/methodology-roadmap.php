@@ -458,6 +458,10 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
         return null;
     }
 
+    if (function_exists('projectWorkflowSyncRoadmap')) {
+        projectWorkflowSyncRoadmap($conn, $projectId);
+    }
+
     $roadmapTask = $conn->query("
         SELECT mt.start_date AS task_start, mt.end_date AS task_end, mt.assigned_developer_id,
                mp.id AS phase_id, mp.sequence_no AS phase_sequence,
@@ -471,7 +475,10 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
     ")->fetch_assoc();
 
     if (!$roadmapTask) {
-        return 'This task is not scheduled in the methodology roadmap yet. Ask the architect to place it in a phase before starting.';
+        // Task allocation intentionally permits unscheduled feature tasks. The
+        // developer assignment remains the source of truth until an architect
+        // adds the task to a roadmap phase.
+        return null;
     }
 
     $phaseId = (int) ($roadmapTask['phase_id'] ?? 0);

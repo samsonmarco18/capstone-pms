@@ -353,17 +353,94 @@ function projectWorkflowTaskDepartment(mysqli|PgsqlMysqliCompatConnection $conn,
     return projectWorkflowDepartmentLabel($row['department'] ?? '');
 }
 
+function projectWorkflowRoadmapTaskStatus(?string $workflowStatus): string
+{
+    $workflowStatus = strtolower(trim((string) $workflowStatus));
+
+    if (in_array($workflowStatus, ['completed', 'merged', 'ready_for_release'], true)) {
+        return 'completed';
+    }
+
+    if (in_array($workflowStatus, ['blocked', 'overdue', 'sul_revision', 'qa_failed'], true)) {
+        return 'blocked';
+    }
+
+    if (in_array($workflowStatus, ['in_progress', 'for_review', 'qa_testing', 'qa_passed', 'architect_review'], true)) {
+        return 'in_progress';
+    }
+
+    return 'planned';
+}
+
+function projectWorkflowAutomaticPhaseStatus(array $phase, array $counts, ?DateTimeImmutable $today = null): string
+{
+    $total = (int) ($counts['total'] ?? 0);
+    $doneCount = (int) ($counts['done_count'] ?? 0);
+    $approvalCount = (int) ($counts['approval_count'] ?? 0);
+    $progressCount = (int) ($counts['progress_count'] ?? 0);
+
+    if ($total > 0 && $doneCount >= $total) {
+        return 'completed';
+    }
+
+    if ($approvalCount > 0) {
+        return 'on_hold';
+    }
+
+    if ($progressCount > 0) {
+        return 'in_progress';
+    }
+
+    $today ??= new DateTimeImmutable('today');
+    $phaseStart = DateTimeImmutable::createFromFormat('!Y-m-d', (string) ($phase['start_date'] ?? '')) ?: null;
+    $phaseEnd = DateTimeImmutable::createFromFormat('!Y-m-d', (string) ($phase['end_date'] ?? '')) ?: null;
+
+    if ($total === 0 && $phaseEnd && $phaseEnd < $today) {
+        return 'completed';
+    }
+
+    if ($phaseStart && $phaseStart <= $today) {
+        return 'in_progress';
+    }
+
+    return 'planned';
+}
+
 function projectWorkflowSyncRoadmap(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId): void
 {
     if ($projectId <= 0 || !dbTableExists($conn, 'methodology_phases') || !dbTableExists($conn, 'methodology_tasks')) {
         return;
     }
 
-    $phaseRows = $conn->query("SELECT id FROM methodology_phases WHERE project_id = {$projectId}");
+    $roadmapTaskRows = $conn->query("
+        SELECT mt.id, mt.status AS roadmap_status, t.status AS workflow_status
+        FROM methodology_tasks mt
+        INNER JOIN tasks t ON t.id = mt.task_id
+        WHERE mt.project_id = {$projectId}
+    ");
+    if ($roadmapTaskRows) {
+        $updateRoadmapTask = $conn->prepare('UPDATE methodology_tasks SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND project_id = ?');
+        if ($updateRoadmapTask) {
+            while ($roadmapTask = $roadmapTaskRows->fetch_assoc()) {
+                $automaticTaskStatus = projectWorkflowRoadmapTaskStatus($roadmapTask['workflow_status'] ?? '');
+                if ($automaticTaskStatus === (string) ($roadmapTask['roadmap_status'] ?? '')) {
+                    continue;
+                }
+
+                $roadmapTaskId = (int) ($roadmapTask['id'] ?? 0);
+                $updateRoadmapTask->bind_param('sii', $automaticTaskStatus, $roadmapTaskId, $projectId);
+                $updateRoadmapTask->execute();
+            }
+            $updateRoadmapTask->close();
+        }
+    }
+
+    $phaseRows = $conn->query("SELECT id, status, start_date, end_date FROM methodology_phases WHERE project_id = {$projectId}");
     if (!$phaseRows) {
         return;
     }
 
+    $today = new DateTimeImmutable('today');
     while ($phase = $phaseRows->fetch_assoc()) {
         $phaseId = (int) $phase['id'];
         $counts = $conn->query("
@@ -371,23 +448,17 @@ function projectWorkflowSyncRoadmap(mysqli|PgsqlMysqliCompatConnection $conn, in
                 COUNT(mt.id) AS total,
                 SUM(CASE WHEN t.status IN ('completed', 'merged', 'ready_for_release') THEN 1 ELSE 0 END) AS done_count,
                 SUM(CASE WHEN t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review') THEN 1 ELSE 0 END) AS approval_count,
-                SUM(CASE WHEN t.status IN ('in_progress', 'sul_revision', 'qa_failed') THEN 1 ELSE 0 END) AS progress_count
+                SUM(CASE WHEN t.status IN ('in_progress', 'sul_revision', 'qa_failed', 'overdue', 'blocked') THEN 1 ELSE 0 END) AS progress_count
             FROM methodology_tasks mt
             LEFT JOIN tasks t ON t.id = mt.task_id
             WHERE mt.phase_id = {$phaseId}
         ")->fetch_assoc();
 
-        $total = (int) ($counts['total'] ?? 0);
-        $status = 'planned';
-        if ($total > 0 && (int) ($counts['done_count'] ?? 0) >= $total) {
-            $status = 'completed';
-        } elseif ((int) ($counts['approval_count'] ?? 0) > 0) {
-            $status = 'on_hold';
-        } elseif ((int) ($counts['progress_count'] ?? 0) > 0) {
-            $status = 'in_progress';
-        }
+        $status = projectWorkflowAutomaticPhaseStatus($phase, $counts, $today);
 
-        $conn->query("UPDATE methodology_phases SET status = '{$status}' WHERE id = {$phaseId}");
+        if ($status !== (string) ($phase['status'] ?? '')) {
+            $conn->query("UPDATE methodology_phases SET status = '{$status}', updated_at = CURRENT_TIMESTAMP WHERE id = {$phaseId}");
+        }
     }
 }
 

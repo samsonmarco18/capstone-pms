@@ -170,7 +170,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         exit();
     }
 
-    if ($newStatus === 'in_progress') {
+    // UI/UX design work can begin as soon as the SUL assigns it. Roadmap dates
+    // remain planning indicators and the automatic roadmap status will reflect
+    // the real task progress after this update.
+    if ($newStatus === 'in_progress' && $userDepartmentCanonical !== 'UI/UX') {
         $roadmapBlockReason = methodologyRoadmapStartBlockReason($conn, $taskId, (int) $user['id']);
         if ($roadmapBlockReason !== null) {
             $_SESSION['error'] = $roadmapBlockReason;
@@ -181,7 +184,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     
     $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = NULL WHERE id = ?");
     $stmt->bind_param("si", $newStatus, $taskId);
-    $stmt->execute();
+    if (!$stmt->execute()) {
+        $stmt->close();
+        $_SESSION['error'] = "Task status could not be updated. Please try again.";
+        header('Location: task.php');
+        exit();
+    }
+    $stmt->close();
+
+    projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
     
     workflowLogStatusChange((int) $user['id'], $taskId, (string) ($task['status'] ?? ''), $newStatus, $newStatus === 'for_review' ? 'uiux_submit_design' : 'developer_update_task_status');
     if ($newStatus === 'for_review') {
@@ -1222,6 +1233,20 @@ include '../../includes/navbar.php';
             <p>Drag and drop tasks to update status, or use the buttons below</p>
         </div>
     </div>
+
+    <?php if (!empty($_SESSION['success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-circle-check me-2"></i><?php echo htmlspecialchars((string) $_SESSION['success']); unset($_SESSION['success']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!empty($_SESSION['error'])): ?>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-circle-exclamation me-2"></i><?php echo htmlspecialchars((string) $_SESSION['error']); unset($_SESSION['error']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    <?php endif; ?>
 
     <!-- My Projects Section -->
     <div class="my-projects-card">

@@ -171,8 +171,8 @@ function roadmapPhaseIndicator(string $status): array
     if (in_array($status, ['in_progress', 'pending', 'on_hold'], true)) {
         return [
             'key' => 'pending',
-            'label' => $status === 'on_hold' ? 'Pending (On Hold)' : 'Pending',
-            'icon' => $status === 'on_hold' ? 'fas fa-circle-pause' : 'fas fa-clock',
+            'label' => $status === 'on_hold' ? 'Pending Approval' : 'Pending',
+            'icon' => 'fas fa-clock',
         ];
     }
 
@@ -263,8 +263,6 @@ methodologyRoadmapEnsureSchema($conn);
 $canEditArchitecture = $role === 'architect';
 $canEditExpertInput = $role === 'expert';
 $methodologyTemplates = methodologyRoadmapTemplates();
-$allowedPhaseStatuses = ['planned', 'in_progress', 'completed', 'on_hold'];
-$allowedTaskStatuses = ['planned', 'in_progress', 'completed', 'blocked'];
 $projects = [];
 $requestedProjectId = isset($_GET['project_id']) ? (int) $_GET['project_id'] : 0;
 $accessClause = roadmapProjectAccessClause($conn, $user, 'p');
@@ -362,9 +360,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $end = roadmapParseDate($_POST['phase_end'] ?? null);
         $developerCount = max(0, (int) ($_POST['developer_count'] ?? 0));
         $sequenceNo = max(0, (int) ($_POST['sequence_no'] ?? 0));
-        $status = in_array((string) ($_POST['phase_status'] ?? 'planned'), $allowedPhaseStatuses, true)
-            ? (string) $_POST['phase_status']
-            : 'planned';
 
         if ($name === '' || !$start || !$end) {
             $_SESSION['error'] = 'Phase name, start date, and end date are required.';
@@ -395,23 +390,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $stmt = $conn->prepare("
                 UPDATE methodology_phases
-                SET name = ?, description = ?, start_date = ?, end_date = ?, developer_count = ?, sequence_no = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                SET name = ?, description = ?, start_date = ?, end_date = ?, developer_count = ?, sequence_no = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ? AND project_id = ?
             ");
             $startValue = roadmapDateString($start);
             $endValue = roadmapDateString($end);
-            $stmt->bind_param('ssssiisiii', $name, $description, $startValue, $endValue, $developerCount, $sequenceNo, $status, $userId, $phaseId, $postedProjectId);
+            $stmt->bind_param('ssssiiiii', $name, $description, $startValue, $endValue, $developerCount, $sequenceNo, $userId, $phaseId, $postedProjectId);
             $stmt->execute();
             $stmt->close();
             $_SESSION['success'] = 'Methodology phase updated.';
         } else {
             $stmt = $conn->prepare("
-                INSERT INTO methodology_phases (project_id, name, description, start_date, end_date, developer_count, sequence_no, status, created_by, updated_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO methodology_phases (project_id, name, description, start_date, end_date, developer_count, sequence_no, created_by, updated_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $startValue = roadmapDateString($start);
             $endValue = roadmapDateString($end);
-            $stmt->bind_param('issssiisii', $postedProjectId, $name, $description, $startValue, $endValue, $developerCount, $sequenceNo, $status, $userId, $userId);
+            $stmt->bind_param('issssiiii', $postedProjectId, $name, $description, $startValue, $endValue, $developerCount, $sequenceNo, $userId, $userId);
             $stmt->execute();
             $phaseId = (int) $conn->insert_id;
             $stmt->close();
@@ -441,9 +436,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $description = trim((string) ($_POST['task_description'] ?? ''));
             $start = roadmapParseDate($_POST['task_start'] ?? null);
             $end = roadmapParseDate($_POST['task_end'] ?? null);
-            $status = in_array((string) ($_POST['task_status'] ?? 'planned'), $allowedTaskStatuses, true)
-                ? (string) $_POST['task_status']
-                : 'planned';
 
             if ($title === '' || !$start || !$end) {
                 $_SESSION['error'] = 'Task title, start date, and end date are required.';
@@ -454,7 +446,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $workflowTask = null;
             if ($workflowTaskId > 0) {
                 $workflowTaskStmt = $conn->prepare("
-                    SELECT id, title
+                    SELECT id, title, status
                     FROM tasks
                     WHERE id = ? AND project_id = ? AND task_type = 'feature'
                     LIMIT 1
@@ -470,6 +462,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: methodology.php?project_id=' . $postedProjectId);
                 exit();
             }
+
+            $status = projectWorkflowRoadmapTaskStatus($workflowTask['status'] ?? '');
 
             $duplicateStmt = $conn->prepare("
                 SELECT id
@@ -649,6 +643,8 @@ $tasksByPhase = [];
 $allTasks = [];
 
 if ($selectedProject) {
+    projectWorkflowSyncRoadmap($conn, $selectedProjectId);
+
     $phaseRows = $conn->query("
         SELECT mp.*, u.full_name AS updated_by_name
         FROM methodology_phases mp
@@ -1661,12 +1657,10 @@ include '../../includes/navbar.php';
                         <input type="number" class="form-control" name="sequence_no" id="sequenceNo" min="0" step="1" value="0">
                     </div>
                     <div class="col-md-12">
-                        <label class="form-label">Status</label>
-                        <select class="form-select" name="phase_status" id="phaseStatus">
-                            <?php foreach ($allowedPhaseStatuses as $status): ?>
-                                <option value="<?php echo htmlspecialchars($status); ?>"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $status))); ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <div class="alert alert-light border mb-0 small">
+                            <i class="fas fa-wand-magic-sparkles text-primary me-1"></i>
+                            Phase status is updated automatically from linked workflow tasks and scheduled phase dates.
+                        </div>
                     </div>
                 </div>
                 <div class="mt-3">
@@ -1765,21 +1759,19 @@ include '../../includes/navbar.php';
                             <div class="alert alert-warning mb-0">Complete Developer Allocation before adding roadmap task staffing.</div>
                         <?php endif; ?>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label">Start Date</label>
                         <input type="date" class="form-control" name="task_start" id="taskStart" <?php echo !$canEditArchitecture ? 'readonly' : 'required'; ?>>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-6">
                         <label class="form-label">End Date</label>
                         <input type="date" class="form-control" name="task_end" id="taskEnd" <?php echo !$canEditArchitecture ? 'readonly' : 'required'; ?>>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Status</label>
-                        <select class="form-select" name="task_status" id="taskStatus" <?php echo !$canEditArchitecture ? 'disabled' : ''; ?>>
-                            <?php foreach ($allowedTaskStatuses as $status): ?>
-                                <option value="<?php echo htmlspecialchars($status); ?>"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $status))); ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                    <div class="col-md-12">
+                        <div class="alert alert-light border mb-0 small">
+                            <i class="fas fa-arrows-rotate text-primary me-1"></i>
+                            Task status follows the linked workflow task automatically and cannot be set manually here.
+                        </div>
                     </div>
                     <div class="col-md-12">
                         <label class="form-label">Description</label>
@@ -1916,7 +1908,6 @@ function openPhaseModal(source) {
     setValue('phaseEnd', phase.end_date || projectEnd || projectStart || '');
     setValue('developerCount', phase.developer_count || 0);
     setValue('sequenceNo', phase.sequence_no || 0);
-    setValue('phaseStatus', phase.status || 'planned');
     setValue('phaseDescription', phase.description || '');
     phaseModal.show();
 }
@@ -1924,13 +1915,13 @@ function openPhaseModal(source) {
 function openTaskModalForPhase(source) {
     if (!taskModal || !canEditArchitecture) return;
     const phase = parseData(source, 'phase');
-    openTaskModal({ phase_id: phase.id, start_date: phase.start_date, end_date: phase.end_date, status: 'planned' });
+    openTaskModal({ phase_id: phase.id, start_date: phase.start_date, end_date: phase.end_date });
 }
 
 function openTaskModalFromBar(source) {
     if (!taskModal || !canEditArchitecture) return;
     const phase = parseData(source, 'phase');
-    openTaskModal({ phase_id: phase.id, start_date: phase.start_date, end_date: phase.end_date, status: 'planned' });
+    openTaskModal({ phase_id: phase.id, start_date: phase.start_date, end_date: phase.end_date });
 }
 
 function openTaskModalFromTask(source) {
@@ -1948,7 +1939,6 @@ function openTaskModal(task) {
     setTaskDepartmentRequirements(task.department_requirements || []);
     setValue('taskStart', task.start_date || '');
     setValue('taskEnd', task.end_date || '');
-    setValue('taskStatus', task.status || 'planned');
     setValue('taskDescription', task.description || '');
     setValue('expertPeopleCount', task.expert_people_count || 0);
     setValue('expertDeveloperType', task.expert_developer_type || '');
