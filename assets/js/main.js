@@ -498,7 +498,11 @@ function initAppActionHelpers() {
     window.appHideLoading = hideAppLoading;
     window.appConfirm = showAppConfirm;
 
-    $(document).on('submit', 'form[data-app-loading]', function () {
+    $(document).on('submit', 'form[data-app-loading]', function (event) {
+        if (event.isDefaultPrevented()) {
+            return;
+        }
+
         const form = this;
         const title = form.getAttribute('data-loading-title') || 'Saving changes';
         const text = form.getAttribute('data-loading-text') || 'Please wait while the system finishes this action.';

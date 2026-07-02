@@ -1159,7 +1159,7 @@ include '../../includes/navbar.php';
         <?php endif; ?>
 
         <?php if ($canEditArchitecture && $selectedProject): ?>
-            <form method="POST" class="row g-3 align-items-end mt-2" data-app-loading data-loading-title="Applying template" data-loading-text="Please wait while the methodology phases are generated.">
+            <form method="POST" id="methodologyTemplateForm" class="row g-3 align-items-end mt-2" data-confirm-skip="1" data-generic-draft-disabled="1" data-app-loading data-loading-title="Applying template" data-loading-text="Generating the methodology phases now.">
                 <input type="hidden" name="apply_template" value="1">
                 <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
                 <div class="col-lg-7">
@@ -1546,6 +1546,35 @@ const taskModal = taskModalElement ? new bootstrap.Modal(taskModalElement) : nul
 const canEditArchitecture = <?php echo json_encode($canEditArchitecture); ?>;
 const projectStart = <?php echo json_encode($selectedProject['timeline_start'] ?? ''); ?>;
 const projectEnd = <?php echo json_encode($selectedProject['timeline_end'] ?? ''); ?>;
+const methodologyTemplateForm = document.getElementById('methodologyTemplateForm');
+const replaceExistingTemplate = document.getElementById('replaceExistingTemplate');
+
+methodologyTemplateForm?.addEventListener('submit', async (event) => {
+    if (!replaceExistingTemplate?.checked || methodologyTemplateForm.dataset.replaceConfirmed === '1') {
+        methodologyTemplateForm.dataset.replaceConfirmed = '0';
+        return;
+    }
+
+    event.preventDefault();
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Replace Roadmap Phases',
+            titleIcon: 'fas fa-triangle-exclamation',
+            subject: 'Replace all existing methodology phases?',
+            message: 'Existing roadmap phases and their linked roadmap tasks will be removed before the selected template is applied.',
+            icon: 'fas fa-layer-group fa-lg',
+            confirmIcon: 'fas fa-rotate',
+            confirmText: 'Replace Phases',
+            cancelText: 'Keep Existing',
+            variant: 'danger'
+        })
+        : window.confirm('Replace all existing methodology phases?');
+
+    if (confirmed) {
+        methodologyTemplateForm.dataset.replaceConfirmed = '1';
+        methodologyTemplateForm.requestSubmit();
+    }
+});
 
 function parseData(element, key) {
     if (!element || !element.dataset[key]) return {};

@@ -3,6 +3,11 @@ declare(strict_types=1);
 
 function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
 {
+    static $ensured = false;
+    if ($ensured) {
+        return;
+    }
+
     if (!dbTableExists($conn, 'methodology_phases')) {
         $sql = DB_DRIVER === 'pgsql' ? "
             CREATE TABLE methodology_phases (
@@ -130,6 +135,8 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
         $columnType = DB_DRIVER === 'pgsql' ? 'VARCHAR(80)' : 'VARCHAR(80) NULL';
         $conn->query("ALTER TABLE projects ADD COLUMN methodology_template {$columnType}");
     }
+
+    $ensured = true;
 }
 
 function methodologyRoadmapTemplates(): array
