@@ -352,6 +352,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     );
                 }
                 logActivity($user['id'], 'add_client', 'clients', $clientId, null, $_POST);
+                $clientDraftId = trim((string) ($_POST['client_draft_id'] ?? ''));
+                if ($clientDraftId !== '') {
+                    $_SESSION['clear_client_draft_id'] = $clientDraftId;
+                }
+
                 if ($projectId) {
                     logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);
                     $_SESSION['success'] = "Client added, shared project folder created, and project details are available to all roles.";
@@ -400,6 +405,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     header('Location: clients.php');
     exit();
+}
+
+$savedClientDraftId = '';
+if (isset($_SESSION['clear_client_draft_id'])) {
+    $savedClientDraftId = (string) $_SESSION['clear_client_draft_id'];
+    unset($_SESSION['clear_client_draft_id']);
 }
 
 // Get all clients
@@ -2040,6 +2051,7 @@ include '../../includes/navbar.php';
                 <button type="button" class="btn-close add-client-close" aria-label="Close"></button>
             </div>
             <form method="POST" id="addClientForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Saving client" data-loading-text="Please wait while the client, project details, folders, and notifications are saved.">
+                <input type="hidden" name="client_draft_id" data-client-draft-id value="">
                 <div class="modal-body">
                     <div class="add-client-stepper" aria-label="Add client progress">
                         <button type="button" class="stepper-item is-active" data-step-target="0" aria-current="step" disabled>
@@ -2455,6 +2467,8 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
+const savedClientDraftId = <?php echo json_encode($savedClientDraftId); ?>;
+
 function applyFilters() {
     const search = document.getElementById('searchInput').value;
     const status = document.getElementById('statusFilter').value;
@@ -2648,6 +2662,7 @@ if (addClientModalElement && addClientForm) {
     const discardUnsavedButton = addClientModalElement.querySelector('[data-discard-unsaved]');
     const saveCloseDraftButton = addClientModalElement.querySelector('[data-save-close-draft]');
     const summaryFields = Array.from(addClientModalElement.querySelectorAll('[data-summary-field]'));
+    const draftIdField = addClientModalElement.querySelector('[data-client-draft-id]');
     const requestedFeaturesField = document.getElementById('requestedFeaturesField');
     const requestedFeatureList = document.getElementById('requestedFeatureList');
     const addRequestedFeatureButton = document.getElementById('addRequestedFeature');
@@ -2833,6 +2848,15 @@ if (addClientModalElement && addClientForm) {
         legacyDraftKeys.forEach((legacyKey) => localStorage.removeItem(legacyKey));
     }
 
+    function removeStoredDraft(draftId) {
+        const normalizedDraftId = String(draftId || '').trim();
+        if (normalizedDraftId === '') {
+            return;
+        }
+
+        saveStoredDrafts(getStoredDrafts().filter((draft) => draft.id !== normalizedDraftId));
+    }
+
     function hasStoredDraft() {
         return getStoredDrafts().length > 0;
     }
@@ -2981,6 +3005,9 @@ if (addClientModalElement && addClientForm) {
 
         saveStoredDrafts(drafts);
         activeDraftId = nextDraft.id;
+        if (draftIdField) {
+            draftIdField.value = activeDraftId;
+        }
         activeDraftLoaded = true;
         updateDraftStatus(true);
     }
@@ -3009,6 +3036,9 @@ if (addClientModalElement && addClientForm) {
         formTouched = false;
         activeDraftLoaded = true;
         activeDraftId = draftData.id;
+        if (draftIdField) {
+            draftIdField.value = activeDraftId;
+        }
         hideUnsavedClosePanel();
         updateDraftStatus(true);
     }
@@ -3020,6 +3050,9 @@ if (addClientModalElement && addClientForm) {
         formTouched = false;
         activeDraftLoaded = false;
         activeDraftId = null;
+        if (draftIdField) {
+            draftIdField.value = '';
+        }
         hideUnsavedClosePanel();
         updateDraftStatus(false);
         showClientStep(0);
@@ -3032,6 +3065,9 @@ if (addClientModalElement && addClientForm) {
         activeDraftLoaded = false;
         activeDraftId = null;
         isSubmittingClient = false;
+        if (draftIdField) {
+            draftIdField.value = '';
+        }
         hideUnsavedClosePanel();
         updateDraftStatus(false);
         showClientStep(0);
@@ -3373,9 +3409,11 @@ if (addClientModalElement && addClientForm) {
             return;
         }
 
-        if (activeDraftId) {
-            const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== activeDraftId);
-            saveStoredDrafts(remainingDrafts);
+        if (hasDraftValues()) {
+            saveAddClientDraft();
+        }
+        if (draftIdField) {
+            draftIdField.value = activeDraftId || '';
         }
         isSubmittingClient = true;
         formTouched = false;
@@ -3452,6 +3490,7 @@ if (addClientModalElement && addClientForm) {
 
     showClientStep(0);
     showClientTab('clients');
+    removeStoredDraft(savedClientDraftId);
     renderDraftList();
     updateDraftStatus(hasStoredDraft());
 }
