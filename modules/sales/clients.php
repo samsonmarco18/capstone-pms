@@ -2618,24 +2618,6 @@ if (deleteClientConfirmBtn) {
     });
 }
 
-if (deleteDraftConfirmBtn) {
-    deleteDraftConfirmBtn.addEventListener('click', function () {
-        if (!pendingDeleteDraftId) {
-            return;
-        }
-
-        const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== pendingDeleteDraftId);
-        saveStoredDrafts(remainingDrafts);
-
-        if (activeDraftId === pendingDeleteDraftId) {
-            resetCurrentClientInput();
-        }
-
-        pendingDeleteDraftId = null;
-        updateDraftStatus(hasStoredDraft());
-    });
-}
-
 const addClientModalElement = document.getElementById('addClientModal');
 const addClientForm = document.getElementById('addClientForm');
 
@@ -2677,7 +2659,14 @@ if (addClientModalElement && addClientForm) {
 
     function getDraftData() {
         syncRequestedFeaturesField();
-        return Object.fromEntries(new FormData(addClientForm).entries());
+        const data = {};
+        for (const [name, value] of new FormData(addClientForm).entries()) {
+            if (name === 'attachments[]' || (typeof File !== 'undefined' && value instanceof File)) {
+                continue;
+            }
+            data[name] = value;
+        }
+        return data;
     }
 
     function createRequestedFeatureRow(value = '') {
@@ -2792,6 +2781,8 @@ if (addClientModalElement && addClientForm) {
             const data = entry.data && typeof entry.data === 'object'
                 ? entry.data
                 : Object.fromEntries(Object.entries(entry).filter(([key]) => !key.startsWith('_') && key !== 'id' && key !== 'savedAt' && key !== 'data'));
+            delete data['attachments[]'];
+            delete data.attachments;
 
             return hasDraftValues(data) ? { id, savedAt, data } : null;
         } catch (error) {
@@ -3009,7 +3000,10 @@ if (addClientModalElement && addClientForm) {
             }
             const field = addClientForm.elements[name];
             if (field) {
-                field.value = value;
+                if (field.type === 'file') {
+                    return;
+                }
+                field.value = typeof value === 'string' ? value : '';
             }
         });
         formTouched = false;
@@ -3411,6 +3405,27 @@ if (addClientModalElement && addClientForm) {
                 const draft = getStoredDrafts().find((item) => item.id === draftId);
                 const draftLabel = draft?.data?.name || draft?.data?.project_name || 'Untitled draft';
                 openDeleteDraftModal(draftId, draftLabel);
+            }
+        });
+    }
+
+    if (deleteDraftConfirmBtn) {
+        deleteDraftConfirmBtn.addEventListener('click', function () {
+            if (!pendingDeleteDraftId) {
+                return;
+            }
+
+            const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== pendingDeleteDraftId);
+            saveStoredDrafts(remainingDrafts);
+
+            if (activeDraftId === pendingDeleteDraftId) {
+                resetCurrentClientInput();
+            }
+
+            pendingDeleteDraftId = null;
+            updateDraftStatus(hasStoredDraft());
+            if (deleteDraftModalElement) {
+                bootstrap.Modal.getInstance(deleteDraftModalElement)?.hide();
             }
         });
     }
