@@ -177,6 +177,37 @@ function projectWorkflowProjectDepartmentClause(mysqli|PgsqlMysqliCompatConnecti
     return $clauses ? '(' . implode(' OR ', $clauses) . ')' : '1 = 0';
 }
 
+function projectWorkflowMethodologyTaskDepartmentClause(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    string $methodologyTaskAlias,
+    string $department
+): string {
+    if (!dbTableExists($conn, 'methodology_tasks')) {
+        return '1 = 0';
+    }
+
+    $aliases = projectWorkflowDepartmentAliases($department);
+    if ($aliases === []) {
+        return '1 = 0';
+    }
+
+    $quoted = array_map(static fn(string $item): string => "'" . $conn->real_escape_string($item) . "'", $aliases);
+    $departmentClauses = [
+        "{$methodologyTaskAlias}.department IN (" . implode(',', $quoted) . ')',
+    ];
+
+    if (dbTableExists($conn, 'methodology_task_departments')) {
+        $departmentClauses[] = "EXISTS (
+            SELECT 1
+            FROM methodology_task_departments mtd_scope
+            WHERE mtd_scope.methodology_task_id = {$methodologyTaskAlias}.id
+              AND mtd_scope.department IN (" . implode(',', $quoted) . ")
+        )";
+    }
+
+    return '(' . implode(' OR ', $departmentClauses) . ')';
+}
+
 function projectWorkflowTaskDepartmentClause(
     mysqli|PgsqlMysqliCompatConnection $conn,
     string $taskAlias,
@@ -192,12 +223,12 @@ function projectWorkflowTaskDepartmentClause(
         return '1 = 0';
     }
 
-    $quoted = array_map(static fn(string $item): string => "'" . $conn->real_escape_string($item) . "'", $aliases);
+    $methodologyDepartmentMatch = projectWorkflowMethodologyTaskDepartmentClause($conn, 'mt_scope', $department);
     $departmentMatch = "EXISTS (
         SELECT 1
         FROM methodology_tasks mt_scope
         WHERE mt_scope.task_id = {$taskAlias}.id
-          AND mt_scope.department IN (" . implode(',', $quoted) . ")
+          AND {$methodologyDepartmentMatch}
     )";
 
     if (!$allowUnscheduledFallback) {
