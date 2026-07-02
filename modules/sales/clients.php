@@ -86,6 +86,92 @@ function salesClientsFeatureCount(string $requestedFeatures): int
     return count(array_filter(array_map('trim', preg_split('/\R/', $requestedFeatures) ?: [])));
 }
 
+function salesClientsProjectComplexityValue(string $complexity): string
+{
+    return match (strtolower(trim($complexity))) {
+        'low', 'simple' => 'simple',
+        'high', 'critical', 'enterprise', 'complex' => 'complex',
+        default => 'medium',
+    };
+}
+
+function salesClientsBindAndExecute($stmt, string $types, array $params): bool
+{
+    $refs = [];
+    foreach ($params as $index => $value) {
+        $refs[$index] = &$params[$index];
+    }
+
+    return $stmt->bind_param($types, ...$refs) && $stmt->execute();
+}
+
+function salesClientsInsertProject($conn, array $data): int
+{
+    $columns = [
+        'client_id',
+        'name',
+        'description',
+        'status',
+        'timeline_start',
+        'timeline_end',
+        'meeting_notes',
+        'mom',
+        'requested_features',
+        'created_by',
+    ];
+    $placeholders = array_fill(0, count($columns), '?');
+    $types = 'issssssssi';
+    $params = [
+        (int) $data['client_id'],
+        (string) $data['name'],
+        (string) $data['description'],
+        'pending',
+        $data['timeline_start'],
+        $data['timeline_end'],
+        (string) $data['meeting_notes'],
+        (string) $data['mom'],
+        (string) $data['requested_features'],
+        (int) $data['created_by'],
+    ];
+
+    $optionalColumns = [
+        'sales_budget' => ['s', $data['sales_budget']],
+        'timeline_start_time' => ['s', $data['timeline_start_time']],
+        'timeline_end_time' => ['s', $data['timeline_end_time']],
+        'complexity_level' => ['s', $data['complexity_level']],
+        'priority' => ['s', $data['priority']],
+        'sales_notes' => ['s', $data['sales_notes']],
+        'sales_attachments' => ['s', $data['sales_attachments']],
+        'workflow_status' => ['s', 'sales_submitted'],
+    ];
+
+    foreach ($optionalColumns as $column => [$type, $value]) {
+        if (!dbColumnExists($conn, 'projects', $column)) {
+            continue;
+        }
+
+        $columns[] = $column;
+        $placeholders[] = '?';
+        $types .= $type;
+        $params[] = $value;
+    }
+
+    $sql = 'INSERT INTO projects (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
+    $stmt = $conn->prepare($sql);
+    if ($stmt === false) {
+        throw new RuntimeException('Unable to prepare project insert.' . salesClientsDbError($conn));
+    }
+
+    if (!salesClientsBindAndExecute($stmt, $types, $params)) {
+        throw new RuntimeException('Unable to create project requirements.' . salesClientsDbError($conn));
+    }
+
+    $projectId = (int) $stmt->insert_id;
+    $stmt->close();
+
+    return $projectId;
+}
+
 function salesClientsSaveAttachments(array $files): array
 {
     $saved = [];
@@ -152,7 +238,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $timelineStartTime = parseSalesTimeInput($timelineStartTimeInput);
         $timelineEndTime = parseSalesTimeInput($timelineEndTimeInput);
         $featureCount = salesClientsFeatureCount($requestedFeatures);
-        $generatedComplexity = projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $featureCount);
+        $generatedComplexity = salesClientsProjectComplexityValue(
+            projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $featureCount)
+        );
         $attachmentsJson = json_encode(salesClientsSaveAttachments($_FILES['attachments'] ?? []), JSON_UNESCAPED_SLASHES);
 
         $requirementsSummary = $requestedFeatures;
@@ -202,123 +290,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                 $projectId = null;
                 if ($projectName !== '') {
-                    if ($hasSalesBudget) {
-                        $timeColumns = $hasTimelineStartTime && $hasTimelineEndTime
-                            ? ', timeline_start_time, timeline_end_time'
-                            : '';
-                        $timePlaceholders = $hasTimelineStartTime && $hasTimelineEndTime
-                            ? ', ?, ?'
-                            : '';
-                        $projectStmt = $conn->prepare("
-                            INSERT INTO projects (
-                                client_id, name, description, status, timeline_start, timeline_end,
-                                meeting_notes, mom, requested_features, sales_budget{$timeColumns}, created_by, architect_id,
-                                complexity_level, priority, sales_notes, sales_attachments, workflow_status
-                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, " . (DB_DRIVER === 'pgsql' ? "CAST(NULLIF(?, '') AS NUMERIC)" : "NULLIF(?, '')") . "{$timePlaceholders}, ?, NULL, ?, ?, ?, ?, 'sales_submitted')
-                        ");
-                        if ($projectStmt === false) {
-                            throw new RuntimeException('Unable to prepare project insert.' . salesClientsDbError($conn));
-                        }
-                        $projectBudget = $salesBudget === null ? '' : number_format($salesBudget, 2, '.', '');
-                        if ($hasTimelineStartTime && $hasTimelineEndTime) {
-                            $projectStmt->bind_param(
-                                'issssssssssissss',
-                                $clientId,
-                                $projectName,
-                                $projectDescription,
-                                $timelineStart,
-                                $timelineEnd,
-                                $meetingNotes,
-                                $mom,
-                                $requirementsSummary,
-                                $projectBudget,
-                                $timelineStartTime,
-                                $timelineEndTime,
-                                $user['id'],
-                                $generatedComplexity,
-                                $priority,
-                                $salesNotes,
-                                $attachmentsJson
-                            );
-                        } else {
-                            $projectStmt->bind_param(
-                                'issssssssissss',
-                                $clientId,
-                                $projectName,
-                                $projectDescription,
-                                $timelineStart,
-                                $timelineEnd,
-                                $meetingNotes,
-                                $mom,
-                                $requirementsSummary,
-                                $projectBudget,
-                                $user['id'],
-                                $generatedComplexity,
-                                $priority,
-                                $salesNotes,
-                                $attachmentsJson
-                            );
-                        }
-                    } else {
-                        $timeColumns = $hasTimelineStartTime && $hasTimelineEndTime
-                            ? ', timeline_start_time, timeline_end_time'
-                            : '';
-                        $timePlaceholders = $hasTimelineStartTime && $hasTimelineEndTime
-                            ? ', ?, ?'
-                            : '';
-                        $projectStmt = $conn->prepare("
-                            INSERT INTO projects (
-                                client_id, name, description, status, timeline_start, timeline_end,
-                                meeting_notes, mom, requested_features{$timeColumns}, created_by, architect_id,
-                                complexity_level, priority, sales_notes, sales_attachments, workflow_status
-                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?{$timePlaceholders}, ?, NULL, ?, ?, ?, ?, 'sales_submitted')
-                        ");
-                        if ($projectStmt === false) {
-                            throw new RuntimeException('Unable to prepare project insert.' . salesClientsDbError($conn));
-                        }
-                        if ($hasTimelineStartTime && $hasTimelineEndTime) {
-                            $projectStmt->bind_param(
-                                'isssssssssissss',
-                                $clientId,
-                                $projectName,
-                                $projectDescription,
-                                $timelineStart,
-                                $timelineEnd,
-                                $meetingNotes,
-                                $mom,
-                                $requirementsSummary,
-                                $timelineStartTime,
-                                $timelineEndTime,
-                                $user['id'],
-                                $generatedComplexity,
-                                $priority,
-                                $salesNotes,
-                                $attachmentsJson
-                            );
-                        } else {
-                            $projectStmt->bind_param(
-                                'isssssssissss',
-                                $clientId,
-                                $projectName,
-                                $projectDescription,
-                                $timelineStart,
-                                $timelineEnd,
-                                $meetingNotes,
-                                $mom,
-                                $requirementsSummary,
-                                $user['id'],
-                                $generatedComplexity,
-                                $priority,
-                                $salesNotes,
-                                $attachmentsJson
-                            );
-                        }
-                    }
-                        if (!$projectStmt->execute()) {
-                            throw new RuntimeException('Unable to create project requirements.' . salesClientsDbError($conn));
-                        }
-                        $projectId = $projectStmt->insert_id;
-                        $projectStmt->close();
+                    $projectId = salesClientsInsertProject($conn, [
+                        'client_id' => $clientId,
+                        'name' => $projectName,
+                        'description' => $projectDescription,
+                        'timeline_start' => $timelineStart,
+                        'timeline_end' => $timelineEnd,
+                        'meeting_notes' => $meetingNotes,
+                        'mom' => $mom,
+                        'requested_features' => $requirementsSummary,
+                        'sales_budget' => $salesBudget === null ? null : number_format($salesBudget, 2, '.', ''),
+                        'timeline_start_time' => $timelineStartTime,
+                        'timeline_end_time' => $timelineEndTime,
+                        'created_by' => $user['id'],
+                        'complexity_level' => $generatedComplexity,
+                        'priority' => $priority,
+                        'sales_notes' => $salesNotes,
+                        'sales_attachments' => $attachmentsJson,
+                    ]);
 
                     // Create shared project folder under client folder
                     $sharedFolderName = "Shared - " . $projectName;
@@ -1863,6 +1852,22 @@ include '../../includes/navbar.php';
 </style>
 
 <div class="container-fluid px-4 py-4">
+    <?php if (!empty($_SESSION['success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i><?php echo htmlspecialchars((string) $_SESSION['success']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        <?php unset($_SESSION['success']); ?>
+    <?php endif; ?>
+
+    <?php if (!empty($_SESSION['error'])): ?>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i><?php echo htmlspecialchars((string) $_SESSION['error']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        <?php unset($_SESSION['error']); ?>
+    <?php endif; ?>
+
     <!-- Page Header -->
     <div class="page-header-modern">
         <div class="d-flex flex-wrap justify-content-between align-items-center">
