@@ -26,6 +26,33 @@ function sulTaskAllocationFormatDeadline(?string $deadline): string
     return $timestamp ? date('M d, Y', $timestamp) : 'N/A';
 }
 
+function sulTaskAllocationDateInputValue(?string $deadline): string
+{
+    $timestamp = $deadline ? strtotime($deadline) : false;
+    return $timestamp ? date('Y-m-d', $timestamp) : '';
+}
+
+function sulTaskAllocationAssignmentDeadlineValue(?string $deadline, ?string $roadmapStart, ?string $roadmapEnd): string
+{
+    $deadlineValue = sulTaskAllocationDateInputValue($deadline);
+    $startValue = sulTaskAllocationDateInputValue($roadmapStart);
+    $endValue = sulTaskAllocationDateInputValue($roadmapEnd);
+
+    if ($deadlineValue === '') {
+        return $endValue !== '' ? $endValue : $startValue;
+    }
+
+    if ($startValue !== '' && $deadlineValue < $startValue) {
+        return $endValue !== '' ? $endValue : $startValue;
+    }
+
+    if ($endValue !== '' && $deadlineValue > $endValue) {
+        return $endValue;
+    }
+
+    return $deadlineValue;
+}
+
 function sulTaskAllocationDaysLeft(?string $deadline): ?int
 {
     $timestamp = $deadline ? strtotime($deadline) : false;
@@ -92,6 +119,7 @@ $canManageDeveloperWorkflow = !$sulMissingDepartment && !$isExpertDepartmentSul;
 $sulUserDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : ' AND 1 = 0';
 $sulProjectFilter = sulTaskAllocationProjectFilter($conn, 'p', $sulDepartment);
 $sulTaskDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
+$sulRoadmapTaskDepartmentFilter = $sulDepartment !== '' ? projectWorkflowMethodologyTaskDepartmentClause($conn, 'mt_department_scope', $sulDepartment) : '1 = 0';
 
 if ($sulMissingDepartment) {
     $_SESSION['error'] = 'Your SUL account must be assigned to a department before managing task allocation.';
@@ -294,7 +322,25 @@ $reviewTasks = $conn->query("
 // Get tasks ready for developer assignment (approved, waiting for developer)
 $readyForDevTasks = $conn->query("
     SELECT t.*, u.full_name as expert_name, p.name as project_name,
-           fe.min_days, fe.likely_days, fe.max_days
+           fe.min_days, fe.likely_days, fe.max_days,
+           (
+               SELECT mt_department_scope.start_date
+               FROM methodology_tasks mt_department_scope
+               WHERE mt_department_scope.project_id = t.project_id
+                 AND mt_department_scope.task_id = t.id
+                 AND {$sulRoadmapTaskDepartmentFilter}
+               ORDER BY mt_department_scope.start_date ASC, mt_department_scope.id ASC
+               LIMIT 1
+           ) AS department_roadmap_start,
+           (
+               SELECT mt_department_scope.end_date
+               FROM methodology_tasks mt_department_scope
+               WHERE mt_department_scope.project_id = t.project_id
+                 AND mt_department_scope.task_id = t.id
+                 AND {$sulRoadmapTaskDepartmentFilter}
+               ORDER BY mt_department_scope.start_date ASC, mt_department_scope.id ASC
+               LIMIT 1
+           ) AS department_roadmap_end
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
@@ -599,39 +645,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $assignmentProjectId = (int) ($validTaskRow['project_id'] ?? 0);
         $roadmapPhaseCount = (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$assignmentProjectId}")->fetch_assoc()['total'] ?? 0));
         if ($roadmapPhaseCount > 0) {
+            $roadmapDepartmentMatchForSelect = projectWorkflowMethodologyTaskDepartmentClause($conn, 'mt', $sulDepartment);
             $roadmapTask = $conn->query("
-                SELECT start_date, end_date
-                FROM methodology_tasks
-                WHERE project_id = {$assignmentProjectId}
-                  AND task_id = {$taskId}
+                SELECT mt.start_date, mt.end_date
+                FROM methodology_tasks mt
+                WHERE mt.project_id = {$assignmentProjectId}
+                  AND mt.task_id = {$taskId}
+                  AND {$roadmapDepartmentMatchForSelect}
+                ORDER BY mt.start_date ASC, mt.id ASC
                 LIMIT 1
             ")->fetch_assoc();
 
-            if (!$roadmapTask) {
-                $_SESSION['error'] = "This task is not scheduled in the methodology roadmap yet.";
-                header("Location: task-allocation.php");
-                exit();
-            }
-
-            $previousOpenCount = (int) (($conn->query("
-                SELECT COUNT(*) AS total
-                FROM methodology_phases previous_phase
-                INNER JOIN methodology_phases current_phase ON current_phase.project_id = previous_phase.project_id
-                INNER JOIN methodology_tasks current_task ON current_task.phase_id = current_phase.id
-                WHERE current_task.task_id = {$taskId}
-                  AND previous_phase.project_id = {$assignmentProjectId}
-                  AND COALESCE(previous_phase.sequence_no, previous_phase.id) < COALESCE(current_phase.sequence_no, current_phase.id)
-                  AND previous_phase.status != 'completed'
-            ")->fetch_assoc()['total'] ?? 0));
-            if ($previousOpenCount > 0) {
-                $_SESSION['error'] = "Waiting for Previous Phase. This department can view the roadmap but cannot start work yet.";
-                header("Location: task-allocation.php");
-                exit();
-            }
-
-            $roadmapStart = DateTime::createFromFormat('Y-m-d', (string) ($roadmapTask['start_date'] ?? ''));
-            $roadmapEnd = DateTime::createFromFormat('Y-m-d', (string) ($roadmapTask['end_date'] ?? ''));
-            if (($roadmapStart && $deadlineDate < $roadmapStart) || ($roadmapEnd && $deadlineDate > $roadmapEnd)) {
+            $roadmapStart = $roadmapTask ? DateTime::createFromFormat('Y-m-d', (string) ($roadmapTask['start_date'] ?? '')) : false;
+            $roadmapEnd = $roadmapTask ? DateTime::createFromFormat('Y-m-d', (string) ($roadmapTask['end_date'] ?? '')) : false;
+            if ($roadmapTask && (($roadmapStart && $deadlineDate < $roadmapStart) || ($roadmapEnd && $deadlineDate > $roadmapEnd))) {
                 $_SESSION['error'] = "The developer deadline must stay inside the methodology task window: "
                     . date('M d, Y', strtotime((string) $roadmapTask['start_date']))
                     . " to "
@@ -1943,7 +1970,7 @@ include '../../includes/navbar.php';
                                     <?php endif; ?>
                                 </div>
                             </div>
-                            <button class="btn-primary-modern" onclick="openAssignDeveloperModal(<?php echo $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'), '<?php echo htmlspecialchars((string) $task['deadline'], ENT_QUOTES); ?>')">
+                            <button class="btn-primary-modern" onclick="openAssignDeveloperModal(<?php echo $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'), '<?php echo htmlspecialchars(sulTaskAllocationAssignmentDeadlineValue($task['deadline'] ?? null, $task['department_roadmap_start'] ?? null, $task['department_roadmap_end'] ?? null), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(sulTaskAllocationDateInputValue($task['department_roadmap_start'] ?? null), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(sulTaskAllocationDateInputValue($task['department_roadmap_end'] ?? null), ENT_QUOTES); ?>')">
                                 <i class="fas fa-user-plus"></i> Assign to Developer
                             </button>
                         </div>
@@ -2293,10 +2320,13 @@ document.querySelectorAll('.js-assign-expert').forEach(button => {
     });
 });
 
-function openAssignDeveloperModal(taskId, taskTitle, deadline) {
+function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', maxDate = '') {
     document.getElementById('devTaskId').value = taskId;
     document.getElementById('devTaskTitle').textContent = taskTitle;
-    document.getElementById('devDeadline').value = deadline || '';
+    const deadlineInput = document.getElementById('devDeadline');
+    deadlineInput.min = minDate || '';
+    deadlineInput.max = maxDate || '';
+    deadlineInput.value = deadline || '';
     new bootstrap.Modal(document.getElementById('assignDeveloperModal')).show();
 }
 
