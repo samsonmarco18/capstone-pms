@@ -2,10 +2,15 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
 require_once '../../includes/schedule-calendar.php';
+require_once '../../includes/project-workflow.php';
 requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectWorkflowEnsureSchema($conn);
+$sulDepartment = trim((string) ($user['department'] ?? ''));
+$sulDepartmentLabel = projectWorkflowDepartmentLabel($sulDepartment);
+$isExpertDepartmentSul = $sulDepartmentLabel === 'Expert Department';
 
 function sulDashboardFetchCount($conn, string $sql): int
 {
@@ -1127,7 +1132,7 @@ include '../../includes/navbar.php';
                                         <button class="btn-primary-modern btn-sm-modern" onclick="viewTask(<?php echo $task['id']; ?>)">
                                             <i class="fas fa-eye"></i>
                                         </button>
-                                        <?php if(!$task['assigned_to']): ?>
+                                        <?php if(!$task['assigned_to'] && $isExpertDepartmentSul): ?>
                                         <button class="btn-primary-modern btn-sm-modern" onclick="assignTaskTo(<?php echo $task['id']; ?>)">
                                             <i class="fas fa-user-plus"></i>
                                         </button>
@@ -1181,11 +1186,20 @@ include '../../includes/navbar.php';
                     <select id="assignToUser" class="form-select">
                         <option value="">Select a team member</option>
                         <?php
-                        $availableUsers = sulDashboardQuery($conn, "SELECT id, full_name, role FROM users WHERE role IN ('expert', 'developer') AND status = 'active' ORDER BY full_name");
+                        $assignableRoleSql = $isExpertDepartmentSul ? "'expert'" : "'developer'";
+                        $assignableDepartmentSql = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : ' AND 1 = 0';
+                        $availableUsers = sulDashboardQuery($conn, "
+                            SELECT u.id, u.full_name, u.role
+                            FROM users u
+                            WHERE u.role IN ({$assignableRoleSql})
+                              AND u.status = 'active'
+                              {$assignableDepartmentSql}
+                            ORDER BY u.full_name
+                        ");
                         if ($availableUsers):
-                        while($user = $availableUsers->fetch_assoc()):
+                        while($assignableUser = $availableUsers->fetch_assoc()):
                         ?>
-                        <option value="<?php echo $user['id']; ?>"><?php echo htmlspecialchars($user['full_name']); ?> (<?php echo strtoupper($user['role']); ?>)</option>
+                        <option value="<?php echo $assignableUser['id']; ?>"><?php echo htmlspecialchars($assignableUser['full_name']); ?> (<?php echo strtoupper($assignableUser['role']); ?>)</option>
                         <?php endwhile; ?>
                         <?php endif; ?>
                     </select>

@@ -143,12 +143,22 @@ function projectWorkflowUserDepartmentClause(mysqli|PgsqlMysqliCompatConnection 
 
 function projectWorkflowProjectDepartmentClause(mysqli|PgsqlMysqliCompatConnection $conn, string $projectAlias, string $department): string
 {
+    $departmentLabel = projectWorkflowDepartmentLabel($department);
     $aliases = projectWorkflowDepartmentAliases($department);
     if ($aliases === []) {
         return '1 = 0';
     }
 
     $clauses = [];
+    if ($departmentLabel === 'Expert Department' && dbTableExists($conn, 'tasks')) {
+        $clauses[] = "EXISTS (
+            SELECT 1
+            FROM tasks t_expert_scope
+            WHERE t_expert_scope.project_id = {$projectAlias}.id
+              AND t_expert_scope.task_type = 'feature'
+        )";
+    }
+
     foreach ($aliases as $alias) {
         $safe = $conn->real_escape_string($alias);
         if (dbTableExists($conn, 'developer_allocations')) {
@@ -201,6 +211,49 @@ function projectWorkflowTaskDepartmentClause(
     ))";
 }
 
+function projectWorkflowEnsureExpertDepartmentSeed(mysqli|PgsqlMysqliCompatConnection $conn): void
+{
+    static $done = false;
+    if ($done || !dbTableExists($conn, 'users')) {
+        return;
+    }
+    $done = true;
+
+    $password = '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi';
+    $users = [
+        ['expert_sul_1', 'expert.sul@erni-pms.com', 'Evelyn Expert SUL', 'Expert Department', 'sul', 'Expert Service Unit Leader'],
+        ['expert_dept_1', 'expert.dept1@erni-pms.com', 'Rafael Estimation Expert', 'Expert Department', 'expert', 'Solution Estimation Expert'],
+        ['expert_dept_2', 'expert.dept2@erni-pms.com', 'Mina Senior Estimator', 'Expert Department', 'expert', 'Senior Estimation Expert'],
+    ];
+
+    foreach ($users as $seedUser) {
+        $check = $conn->prepare('SELECT id FROM users WHERE username = ? OR email = ? LIMIT 1');
+        if ($check === false) {
+            continue;
+        }
+        $check->bind_param('ss', $seedUser[0], $seedUser[1]);
+        $check->execute();
+        $exists = $check->get_result()->fetch_assoc();
+        $check->close();
+
+        if ($exists) {
+            continue;
+        }
+
+        $insert = $conn->prepare('
+            INSERT INTO users (username, email, password, full_name, department, role, status, designation)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ');
+        if ($insert === false) {
+            continue;
+        }
+        $status = 'active';
+        $insert->bind_param('ssssssss', $seedUser[0], $seedUser[1], $password, $seedUser[2], $seedUser[3], $seedUser[4], $status, $seedUser[5]);
+        $insert->execute();
+        $insert->close();
+    }
+}
+
 function projectWorkflowClassifyComplexity(?string $timelineStart, ?string $timelineEnd, int $featureCount): string
 {
     $days = 0;
@@ -250,6 +303,8 @@ function projectWorkflowEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): 
             $conn->query("ALTER TABLE projects ADD COLUMN {$column} {$definition}");
         }
     }
+
+    projectWorkflowEnsureExpertDepartmentSeed($conn);
 }
 
 function projectWorkflowNotifyDepartmentSuls(

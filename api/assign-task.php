@@ -17,6 +17,7 @@ if (($user['role'] ?? '') !== 'sul') {
 }
 
 $conn = getConnection();
+projectWorkflowEnsureSchema($conn);
 $taskId = (int) ($_POST['task_id'] ?? 0);
 $assigneeId = (int) ($_POST['user_id'] ?? 0);
 $sulDepartment = trim((string) ($user['department'] ?? ''));
