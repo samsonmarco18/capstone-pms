@@ -2234,6 +2234,18 @@ include '../../includes/navbar.php';
                                             <dt>Budget</dt>
                                             <dd data-summary-field="sales_budget">Not provided</dd>
                                         </div>
+                                        <div>
+                                            <dt>Priority</dt>
+                                            <dd data-summary-field="priority">Medium</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Generated Complexity</dt>
+                                            <dd data-summary-field="generated_complexity">Low</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Attachments</dt>
+                                            <dd data-summary-field="attachments">No attachments</dd>
+                                        </div>
                                     </dl>
                                 </div>
                                 <div class="client-summary-panel client-summary-panel--wide">
@@ -2264,6 +2276,10 @@ include '../../includes/navbar.php';
                                             <dt>MOM</dt>
                                             <dd data-summary-field="mom">Not provided</dd>
                                         </div>
+                                        <div>
+                                            <dt>Sales Notes</dt>
+                                            <dd data-summary-field="sales_notes">Not provided</dd>
+                                        </div>
                                     </dl>
                                 </div>
                             </div>
@@ -2293,26 +2309,6 @@ include '../../includes/navbar.php';
                     </div>
                 </div>
             </form>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade modal-modern" id="salesProjectSummaryModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-clipboard-check me-2"></i>Project Summary Confirmation</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div id="salesProjectSummaryContent" class="small"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Edit</button>
-                <button type="button" class="btn-add-modern" id="confirmSalesProjectSubmit">
-                    <i class="fas fa-paper-plane me-1"></i> Confirm & Submit
-                </button>
-            </div>
         </div>
     </div>
 </div>
@@ -2662,9 +2658,6 @@ if (addClientModalElement && addClientForm) {
     const submitButton = addClientModalElement.querySelector('[data-client-submit]');
     const saveDraftButton = addClientModalElement.querySelector('[data-save-draft]');
     const generatedComplexityField = addClientModalElement.querySelector('[data-generated-complexity]');
-    const summaryModalElement = document.getElementById('salesProjectSummaryModal');
-    const summaryContent = document.getElementById('salesProjectSummaryContent');
-    const confirmSalesProjectSubmit = document.getElementById('confirmSalesProjectSubmit');
     const closeButtons = Array.from(addClientModalElement.querySelectorAll('.add-client-close'));
     const draftStatus = addClientModalElement.querySelector('[data-draft-status]');
     const addClientFooter = addClientModalElement.querySelector('.add-client-footer');
@@ -2672,22 +2665,15 @@ if (addClientModalElement && addClientForm) {
     const keepEditingButton = addClientModalElement.querySelector('[data-keep-editing]');
     const discardUnsavedButton = addClientModalElement.querySelector('[data-discard-unsaved]');
     const saveCloseDraftButton = addClientModalElement.querySelector('[data-save-close-draft]');
-<<<<<<< HEAD
     const summaryFields = Array.from(addClientModalElement.querySelectorAll('[data-summary-field]'));
-=======
     const requestedFeaturesField = document.getElementById('requestedFeaturesField');
     const requestedFeatureList = document.getElementById('requestedFeatureList');
     const addRequestedFeatureButton = document.getElementById('addRequestedFeature');
->>>>>>> e32ccac3c4612e18f65052646b2fab5f9eb27ba4
     let currentStep = 0;
     let formTouched = false;
     let activeDraftLoaded = false;
     let activeDraftId = null;
-<<<<<<< HEAD
     let isSubmittingClient = false;
-=======
-    let salesSubmitConfirmed = false;
->>>>>>> e32ccac3c4612e18f65052646b2fab5f9eb27ba4
 
     function getDraftData() {
         syncRequestedFeaturesField();
@@ -2975,46 +2961,6 @@ if (addClientModalElement && addClientForm) {
         renderDraftList();
     }
 
-    function renderSalesProjectSummary() {
-        if (!summaryContent) {
-            return;
-        }
-
-        syncRequestedFeaturesField();
-        const data = getDraftData();
-        const fileInput = addClientForm.querySelector('input[name="attachments[]"]');
-        const files = Array.from(fileInput?.files || []).map((file) => file.name);
-        const features = getRequestedFeatureValues();
-        const rows = [
-            ['Client', data.name || 'Not provided'],
-            ['Contact', [data.contact_person, data.email, data.phone].filter(Boolean).join(' | ') || 'Not provided'],
-            ['Project', data.project_name || 'Not provided'],
-            ['Description', data.project_description || 'No description'],
-            ['Features', features.length ? features.map(escapeHtml).join('<br>') : 'No feature items'],
-            ['Budget', data.sales_budget || 'Not provided'],
-            ['Timeline', [data.timeline_start, data.timeline_end].filter(Boolean).join(' to ') || 'Not provided'],
-            ['Priority', data.priority || 'medium'],
-            ['Generated Complexity', calculateGeneratedComplexity()],
-            ['Attachments', files.length ? files.map(escapeHtml).join('<br>') : 'No attachments'],
-            ['Notes', data.sales_notes || data.meeting_notes || 'No notes'],
-        ];
-
-        summaryContent.innerHTML = `
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <tbody>
-                        ${rows.map(([label, value]) => `
-                            <tr>
-                                <th style="width: 32%;">${escapeHtml(label)}</th>
-                                <td>${String(value).includes('<br>') ? value : escapeHtml(String(value))}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    }
-
     function saveAddClientDraft() {
         const draftData = getDraftData();
         if (!hasDraftValues(draftData)) {
@@ -3187,6 +3133,12 @@ if (addClientModalElement && addClientForm) {
     }
 
     function renderAddClientSummary() {
+        syncRequestedFeaturesField();
+        updateGeneratedComplexity();
+        const attachmentInput = addClientForm.querySelector('input[name="attachments[]"]');
+        const attachmentNames = Array.from(attachmentInput?.files || [])
+            .map((file) => file.name)
+            .filter(Boolean);
         const summaryData = {
             name: getFormValue('name'),
             contact_person: getFormValue('contact_person'),
@@ -3196,16 +3148,22 @@ if (addClientModalElement && addClientForm) {
             project_name: getFormValue('project_name'),
             timeline: buildTimelineSummary(),
             sales_budget: formatBudget(getFormValue('sales_budget')),
+            priority: getFormValue('priority') || 'medium',
+            generated_complexity: generatedComplexityField ? generatedComplexityField.value : calculateGeneratedComplexity(),
+            attachments: attachmentNames.join("\n"),
             project_description: getFormValue('project_description'),
             requested_features: getFormValue('requested_features'),
             additional_requirements: getFormValue('additional_requirements'),
             meeting_notes: getFormValue('meeting_notes'),
-            mom: getFormValue('mom')
+            mom: getFormValue('mom'),
+            sales_notes: getFormValue('sales_notes')
         };
 
         summaryFields.forEach((field) => {
             const key = field.dataset.summaryField || '';
-            const fallback = key === 'deadline' || key === 'timeline' ? 'Not set' : 'Not provided';
+            const fallback = key === 'deadline' || key === 'timeline'
+                ? 'Not set'
+                : (key === 'attachments' ? 'No attachments' : 'Not provided');
             field.textContent = summaryData[key] || fallback;
         });
     }
@@ -3268,14 +3226,12 @@ if (addClientModalElement && addClientForm) {
 
     addClientForm.addEventListener('input', () => {
         formTouched = true;
-        salesSubmitConfirmed = false;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
     });
 
     addClientForm.addEventListener('change', () => {
         formTouched = true;
-        salesSubmitConfirmed = false;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
     });
@@ -3399,16 +3355,13 @@ if (addClientModalElement && addClientForm) {
     });
 
     addClientForm.addEventListener('submit', (event) => {
-<<<<<<< HEAD
         if (isSubmittingClient) {
             event.preventDefault();
             event.stopPropagation();
             return;
         }
 
-=======
         syncRequestedFeaturesField();
->>>>>>> e32ccac3c4612e18f65052646b2fab5f9eb27ba4
         for (let stepIndex = 0; stepIndex < stepPanels.length; stepIndex++) {
             if (!validateClientStep(stepIndex, false)) {
                 event.preventDefault();
@@ -3419,17 +3372,10 @@ if (addClientModalElement && addClientForm) {
             }
         }
 
-<<<<<<< HEAD
         if (currentStep !== stepPanels.length - 1) {
             event.preventDefault();
             event.stopPropagation();
             showClientStep(stepPanels.length - 1);
-=======
-        if (!salesSubmitConfirmed) {
-            event.preventDefault();
-            renderSalesProjectSummary();
-            bootstrap.Modal.getOrCreateInstance(summaryModalElement).show();
->>>>>>> e32ccac3c4612e18f65052646b2fab5f9eb27ba4
             return;
         }
 
@@ -3439,12 +3385,6 @@ if (addClientModalElement && addClientForm) {
         }
         isSubmittingClient = true;
         formTouched = false;
-    });
-
-    confirmSalesProjectSubmit?.addEventListener('click', () => {
-        salesSubmitConfirmed = true;
-        bootstrap.Modal.getOrCreateInstance(summaryModalElement).hide();
-        addClientForm.requestSubmit(submitButton);
     });
 
     if (draftList) {
