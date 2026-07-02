@@ -458,6 +458,15 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
         return null;
     }
 
+    $roadmapDepartmentFilter = '';
+    if (function_exists('projectWorkflowMethodologyTaskDepartmentClause')) {
+        $developer = $conn->query("SELECT department FROM users WHERE id = {$developerId} LIMIT 1")->fetch_assoc();
+        $developerDepartment = trim((string) ($developer['department'] ?? ''));
+        if ($developerDepartment !== '') {
+            $roadmapDepartmentFilter = ' AND ' . projectWorkflowMethodologyTaskDepartmentClause($conn, 'mt', $developerDepartment);
+        }
+    }
+
     $roadmapTask = $conn->query("
         SELECT mt.start_date AS task_start, mt.end_date AS task_end, mt.assigned_developer_id,
                mp.id AS phase_id, mp.sequence_no AS phase_sequence,
@@ -466,6 +475,7 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
         INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
         WHERE mt.task_id = {$taskId}
           AND mt.project_id = {$projectId}
+          {$roadmapDepartmentFilter}
         ORDER BY mt.start_date ASC, mt.id ASC
         LIMIT 1
     ")->fetch_assoc();

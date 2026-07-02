@@ -646,7 +646,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->bind_param("isi", $developerId, $deadline, $taskId);
         
         if ($stmt->execute()) {
-            $syncRoadmapStmt = $conn->prepare("UPDATE methodology_tasks SET assigned_developer_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE task_id = ?");
+            $roadmapDepartmentMatch = projectWorkflowMethodologyTaskDepartmentClause($conn, 'methodology_tasks', $sulDepartment);
+            $syncRoadmapStmt = $conn->prepare("
+                UPDATE methodology_tasks
+                SET assigned_developer_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE task_id = ?
+                  AND {$roadmapDepartmentMatch}
+            ");
             if ($syncRoadmapStmt) {
                 $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $taskId);
                 $syncRoadmapStmt->execute();

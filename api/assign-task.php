@@ -10,6 +10,7 @@ if (!isLoggedIn()) {
 }
 
 $user = getCurrentUser();
+$userId = (int) ($user['id'] ?? 0);
 if (($user['role'] ?? '') !== 'sul') {
     http_response_code(403);
     echo json_encode(['success' => false, 'error' => 'Forbidden']);
@@ -112,6 +113,21 @@ if (!$stmt->execute()) {
 }
 $stmt->close();
 
+if (($assignee['role'] ?? '') === 'developer' && dbTableExists($conn, 'methodology_tasks')) {
+    $roadmapDepartmentMatch = projectWorkflowMethodologyTaskDepartmentClause($conn, 'methodology_tasks', $sulDepartment);
+    $syncRoadmapStmt = $conn->prepare("
+        UPDATE methodology_tasks
+        SET assigned_developer_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE task_id = ?
+          AND {$roadmapDepartmentMatch}
+    ");
+    if ($syncRoadmapStmt) {
+        $syncRoadmapStmt->bind_param('iii', $assigneeId, $userId, $taskId);
+        $syncRoadmapStmt->execute();
+        $syncRoadmapStmt->close();
+    }
+}
+
 createNotification(
     $assigneeId,
     'New Task Assignment: ' . $task['title'],
@@ -122,6 +138,6 @@ createNotification(
     BASE_URL . (($assignee['role'] === 'developer') ? 'modules/developer/task.php?id=' . $taskId : 'modules/expert/feature-estimation.php')
 );
 
-logActivity((int) $user['id'], 'assign_task', 'tasks', $taskId, null, ['assigned_to' => $assigneeId]);
+logActivity($userId, 'assign_task', 'tasks', $taskId, null, ['assigned_to' => $assigneeId]);
 
 echo json_encode(['success' => true]);
