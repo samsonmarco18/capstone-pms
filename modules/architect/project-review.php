@@ -518,9 +518,11 @@ a.progress-step:hover {
         <a class="progress-step" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
     </div>
 
+    <?php include '../../includes/architect-project-review-panel.php'; ?>
+
     <div class="row g-4">
         <!-- Main Column -->
-        <div class="col-lg-8">
+        <div class="col-12">
             <div class="info-card">
                 <div class="card-header">
                     <h5><i class="fas fa-info-circle"></i> Project Overview</h5>
@@ -634,78 +636,8 @@ a.progress-step:hover {
             </div>
         </div>
 
-        <!-- Sidebar Column -->
-        <div class="col-lg-4">
-            <div class="info-card sticky-project-panel" id="architectProjectDetailsPanel">
-                <div class="card-header">
-                    <div class="d-flex align-items-center justify-content-between gap-2">
-                        <h5><i class="fas fa-building"></i> Project Details</h5>
-                        <button type="button" class="sticky-panel-toggle" id="architectProjectDetailsToggle">Minimize</button>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="detail-row">
-                        <div class="detail-label">Client</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['client_name']); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Contact</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['contact_person'] ?? ''); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Email</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['client_email'] ?? ''); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Phone</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['client_phone'] ?? ''); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Industry</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['client_industry'] ?? ''); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Address</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['client_address'] ?? ''); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Complexity</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($project['complexity_level'] ?? 'Medium')); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Priority</div>
-                        <div class="detail-value"><?php echo htmlspecialchars(ucfirst((string) ($project['priority'] ?? 'medium'))); ?></div>
-                    </div>
-                    <div class="section-title mt-3">Sales Notes</div>
-                    <div class="content-box"><?php echo !empty($project['sales_notes']) ? htmlspecialchars((string) $project['sales_notes']) : 'No Sales notes provided.'; ?></div>
-                    <div class="section-title mt-3">Attachments</div>
-                    <div class="content-box">
-                        <?php if ($salesAttachments): ?>
-                            <?php foreach ($salesAttachments as $attachment): ?>
-                                <div class="mb-2">
-                                    <a href="<?php echo BASE_URL . htmlspecialchars((string) ($attachment['path'] ?? '')); ?>" target="_blank" rel="noopener">
-                                        <i class="fas fa-paperclip me-1"></i><?php echo htmlspecialchars((string) ($attachment['name'] ?? 'Attachment')); ?>
-                                    </a>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            No attachments uploaded.
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
     <?php endif; ?>
 </div>
-
-<script>
-document.getElementById('architectProjectDetailsToggle')?.addEventListener('click', function () {
-    const panel = document.getElementById('architectProjectDetailsPanel');
-    if (!panel) return;
-    panel.classList.toggle('is-minimized');
-    this.textContent = panel.classList.contains('is-minimized') ? 'Expand' : 'Minimize';
-});
-</script>
 
 <?php include '../../includes/footer.php'; ?>
