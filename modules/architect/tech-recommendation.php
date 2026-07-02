@@ -507,7 +507,8 @@ a.progress-step:hover {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-option {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-option,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-item {
     background: #071321 !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
     box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
@@ -524,10 +525,13 @@ a.progress-step:hover {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-item .form-check-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-item .form-label,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-table td {
     color: #d7e4f2 !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-item small.text-muted,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-description,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
@@ -535,10 +539,30 @@ a.progress-step:hover {
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select-modern {
     background: #071321 !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
     color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-modern:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select-modern:focus {
+    background: #071321 !important;
+    border-color: #4aa8e8 !important;
+    box-shadow: 0 0 0 0.25rem rgba(74, 168, 232, 0.16) !important;
+    color: #f1f7fc !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-modern:disabled,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select-modern:disabled {
+    background: #06111e !important;
+    color: #7f9db7 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-table td {
+    border-bottom-color: rgba(138, 210, 255, 0.12) !important;
 }
 </style>
 
