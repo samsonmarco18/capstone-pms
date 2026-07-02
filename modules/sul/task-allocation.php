@@ -1656,7 +1656,12 @@ include '../../includes/navbar.php';
                                     <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
                                         <i class="fas fa-circle-info"></i> View Info
                                     </button>
-                                    <button class="btn-primary-modern" type="button" onclick="openAssignExpertModal(<?php echo (int) $task['id']; ?>, <?php echo json_encode($task['title'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>)">
+                                    <button
+                                        class="btn-primary-modern js-assign-expert"
+                                        type="button"
+                                        data-task-id="<?php echo (int) $task['id']; ?>"
+                                        data-task-title="<?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    >
                                         <i class="fas fa-user-plus"></i> Assign to Expert
                                     </button>
                                 </div>
@@ -2121,6 +2126,7 @@ include '../../includes/navbar.php';
             </div>
             <form method="POST" data-app-loading data-loading-title="Assigning expert" data-loading-text="Please wait while the expert assignment is saved.">
                 <div class="modal-body">
+                    <input type="hidden" name="assign_to_expert" value="1">
                     <input type="hidden" name="task_id" id="expertTaskId">
                     <p><strong>Task:</strong> <span id="expertTaskTitle"></span></p>
                     <div class="mb-3">
@@ -2141,7 +2147,7 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="assign_to_expert" class="btn-primary-modern">Assign to Expert</button>
+                    <button type="submit" class="btn-primary-modern">Assign to Expert</button>
                 </div>
             </form>
         </div>
@@ -2270,6 +2276,16 @@ function openAssignExpertModal(taskId, taskTitle) {
     document.getElementById('expertTaskTitle').textContent = taskTitle;
     new bootstrap.Modal(document.getElementById('assignExpertModal')).show();
 }
+
+document.querySelectorAll('.js-assign-expert').forEach(button => {
+    button.addEventListener('click', event => {
+        event.stopPropagation();
+        openAssignExpertModal(
+            Number.parseInt(button.dataset.taskId || '0', 10),
+            button.dataset.taskTitle || ''
+        );
+    });
+});
 
 function openAssignDeveloperModal(taskId, taskTitle, deadline) {
     document.getElementById('devTaskId').value = taskId;
