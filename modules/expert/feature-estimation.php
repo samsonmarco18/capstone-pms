@@ -1,10 +1,12 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
+require_once '../../includes/methodology-roadmap.php';
 requireRole('expert');
 
 $conn = getConnection();
 $user = getCurrentUser();
+methodologyRoadmapEnsureSchema($conn);
 
 $availableDepartments = [
     'Frontend Developer',
@@ -59,17 +61,6 @@ function decodeRecommendationJson(?string $json): array
 {
     $decoded = json_decode((string) $json, true);
     return is_array($decoded) ? $decoded : [];
-}
-
-// Check if project_phases column exists (auto-create if missing)
-$hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
-if (!$hasProjectPhases) {
-    try {
-        $conn->query("ALTER TABLE projects ADD COLUMN project_phases " . (DB_DRIVER === 'pgsql' ? "TEXT" : "LONGTEXT") . " NULL");
-        $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
-    } catch (Throwable $e) {
-        // Leave $hasProjectPhases as false; UI will show warning
-    }
 }
 
 // Check if phase_name column exists in feature_estimations
@@ -221,7 +212,7 @@ if (!$hasSalesApproval) {
 // Get tasks assigned to this expert that are pending estimation (status = 'todo')
 $tasks = $conn->query("
     SELECT t.*, p.name as project_name, p.id as project_id,
-           p.timeline_start, p.timeline_end" . ($hasProjectPhases ? ", p.project_phases" : "") . "
+           p.timeline_start, p.timeline_end
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
     WHERE t.assigned_to = {$user['id']} 
@@ -234,7 +225,7 @@ $tasks = $conn->query("
 
 // Get projects for project setup (show all active projects)
 $expertProjectsResult = $conn->query("
-    SELECT p.id, p.name, p.timeline_start, p.timeline_end" . ($hasProjectPhases ? ", p.project_phases" : "") . "
+    SELECT p.id, p.name, p.timeline_start, p.timeline_end
     FROM projects p
     WHERE p.status != 'completed'
     ORDER BY p.name ASC
@@ -245,77 +236,13 @@ while ($row = $expertProjectsResult->fetch_assoc()) {
     $expertProjects[] = $row;
 }
 
-// Handle Project Setup Update (phases + team composition + cost estimation)
+// Roadmap phases are now controlled by the Architect methodology step.
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['project_setup'])) {
     $projectId = (int) ($_POST['project_id'] ?? 0);
-    $phases = $_POST['phases_json'] ?? '[]';
-    $projectStart = !empty($_POST['project_start']) ? $_POST['project_start'] : null;
-    $projectEnd = !empty($_POST['project_end']) ? $_POST['project_end'] : null;
-
     if ($projectId > 0) {
-        if ($hasProjectPhases) {
-            $stmt = $conn->prepare("UPDATE projects SET project_phases = ?, timeline_start = ?, timeline_end = ? WHERE id = ?");
-            $stmt->bind_param("sssi", $phases, $projectStart, $projectEnd, $projectId);
-            $stmt->execute();
-        }
-
-        logActivity($user['id'], 'project_setup', 'projects', $projectId, null, [
-            'project_phases' => $phases,
-            'project_start' => $projectStart,
-            'project_end' => $projectEnd,
-        ]);
-
-        // Auto-submit to Sales if all features are estimated
-        $totalStmt = $conn->prepare("
-            SELECT COUNT(*) as total 
-            FROM tasks 
-            WHERE project_id = ? AND task_type = 'feature' AND assigned_to = ?
-        ");
-        $totalStmt->bind_param("ii", $projectId, $user['id']);
-        $totalStmt->execute();
-        $totalCount = (int) ($totalStmt->get_result()->fetch_assoc()['total'] ?? 0);
-        $totalStmt->close();
-
-        $doneStmt = $conn->prepare("
-            SELECT COUNT(*) as done 
-            FROM feature_estimations fe
-            JOIN tasks t ON fe.task_id = t.id
-            WHERE t.project_id = ? AND t.task_type = 'feature' AND t.assigned_to = ?
-              AND fe.expert_id = ? AND fe.status = 'completed'
-        ");
-        $doneStmt->bind_param("iii", $projectId, $user['id'], $user['id']);
-        $doneStmt->execute();
-        $doneCount = (int) ($doneStmt->get_result()->fetch_assoc()['done'] ?? 0);
-        $doneStmt->close();
-
-        if ($totalCount > 0 && $doneCount === $totalCount) {
-            $salesColumns = $hasSalesApproval ? ", sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL" : "";
-            $submitStmt = $conn->prepare("
-                UPDATE tasks 
-                SET status = 'in_review'{$salesColumns}
-                WHERE project_id = ? AND task_type = 'feature' AND assigned_to = ?
-            ");
-            $submitStmt->bind_param("ii", $projectId, $user['id']);
-            $submitStmt->execute();
-            $submitStmt->close();
-
-            workflowNotifyRoles(
-                $conn,
-                ['sales'],
-                'Estimations Ready for Approval',
-                'Feature estimations are ready for sales approval.',
-                BASE_URL . 'modules/sales/estimation-approval.php',
-                (int) $projectId,
-                'approval',
-                'projects'
-            );
-
-            $_SESSION['success'] = "Project setup saved and estimations sent to Sales.";
-        } else {
-            $_SESSION['error'] = "Project setup not submitted. Estimated features: {$doneCount} / {$totalCount}. Complete all feature estimates before saving setup.";
-        }
+        $_SESSION['error'] = "Project phases are managed in the Architect roadmap step. Open the roadmap to add expert staffing per task.";
     } else {
-        $_SESSION['error'] = "Please select a project to save setup.";
+        $_SESSION['error'] = "Please select a project roadmap to review.";
     }
 
     header('Location: feature-estimation.php');
@@ -589,6 +516,54 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
             }
         }
 
+        $totalStmt = $conn->prepare("
+            SELECT COUNT(*) as total
+            FROM tasks
+            WHERE project_id = ? AND task_type = 'feature' AND assigned_to = ?
+        ");
+        $totalStmt->bind_param("ii", $projectId, $user['id']);
+        $totalStmt->execute();
+        $totalCount = (int) ($totalStmt->get_result()->fetch_assoc()['total'] ?? 0);
+        $totalStmt->close();
+
+        $doneStmt = $conn->prepare("
+            SELECT COUNT(*) as done
+            FROM feature_estimations fe
+            JOIN tasks t ON fe.task_id = t.id
+            WHERE t.project_id = ? AND t.task_type = 'feature' AND t.assigned_to = ?
+              AND fe.expert_id = ? AND fe.status = 'completed'
+        ");
+        $doneStmt->bind_param("iii", $projectId, $user['id'], $user['id']);
+        $doneStmt->execute();
+        $doneCount = (int) ($doneStmt->get_result()->fetch_assoc()['done'] ?? 0);
+        $doneStmt->close();
+
+        if ($totalCount > 0 && $doneCount === $totalCount) {
+            $salesColumns = $hasSalesApproval ? ", sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL" : "";
+            $submitStmt = $conn->prepare("
+                UPDATE tasks
+                SET status = 'in_review'{$salesColumns}
+                WHERE project_id = ? AND task_type = 'feature' AND assigned_to = ? AND status = 'todo'
+            ");
+            $submitStmt->bind_param("ii", $projectId, $user['id']);
+            $submitStmt->execute();
+            $submittedRows = (int) $submitStmt->affected_rows;
+            $submitStmt->close();
+
+            if ($submittedRows > 0) {
+                workflowNotifyRoles(
+                    $conn,
+                    ['sales'],
+                    'Estimations Ready for Approval',
+                    'Feature estimations are ready for sales approval.',
+                    BASE_URL . 'modules/sales/estimation-approval.php',
+                    (int) $projectId,
+                    'approval',
+                    'projects'
+                );
+            }
+        }
+
         logActivity($user['id'], 'submit_estimation', 'tasks', $taskId, null, $_POST);
         $_SESSION['success'] = "Estimation saved successfully";
     } else {
@@ -599,11 +574,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     exit();
 }
 
-// Bulk submission handled on project setup save.
+// Completed project estimates are sent to Sales from the normal estimate-save path.
 
 $taskRows = [];
 while ($row = $tasks->fetch_assoc()) {
     $taskRows[] = $row;
+}
+
+$roadmapPhasesByProject = [];
+$roadmapProjectIds = array_values(array_unique(array_filter(array_map(static function (array $taskRow): int {
+    return (int) ($taskRow['project_id'] ?? 0);
+}, $taskRows))));
+if (!empty($roadmapProjectIds)) {
+    $phaseResult = $conn->query("
+        SELECT project_id, name
+        FROM methodology_phases
+        WHERE project_id IN (" . implode(',', $roadmapProjectIds) . ")
+        ORDER BY start_date ASC, sequence_no ASC, id ASC
+    ");
+    if ($phaseResult) {
+        while ($phaseRow = $phaseResult->fetch_assoc()) {
+            $roadmapPhasesByProject[(int) $phaseRow['project_id']][] = (string) $phaseRow['name'];
+        }
+    }
 }
 
 $recommendationsByTask = [];
@@ -1835,14 +1828,13 @@ textarea.form-control-custom {
             <h5><i class="fas fa-folder-open me-2"></i>Select Project</h5>
         </div>
         <div class="project-selector">
-            <label class="form-label">Choose a project to load features, timeline, and estimations</label>
+            <label class="form-label">Choose a project to load features, roadmap, and estimations</label>
             <div class="row g-2">
-                <div class="col-md-8">
+                <div class="col-md-9">
                     <select id="phaseProjectSelect" class="form-control-custom">
                         <option value="">-- Select a project --</option>
                         <?php foreach ($expertProjects as $proj): ?>
                             <option value="<?php echo $proj['id']; ?>" 
-                                    data-phases='<?php echo $hasProjectPhases ? htmlspecialchars($proj['project_phases'] ?? '', ENT_QUOTES, 'UTF-8') : ''; ?>'
                                     data-start="<?php echo $proj['timeline_start']; ?>"
                                     data-end="<?php echo $proj['timeline_end']; ?>">
                                 <?php echo htmlspecialchars($proj['name']); ?>
@@ -1850,10 +1842,10 @@ textarea.form-control-custom {
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <button type="button" class="btn-save-phases" id="saveSetupBtn" style="display: none;" onclick="saveProjectSetup()">
-                        <i class="fas fa-save"></i> Save Project Setup
-                    </button>
+                <div class="col-md-3">
+                    <a class="btn-save-phases text-center text-decoration-none" id="openRoadmapBtn" href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php" style="display: none;">
+                        <i class="fas fa-route"></i> Open Roadmap
+                    </a>
                 </div>
             </div>
         </div>
@@ -1862,47 +1854,18 @@ textarea.form-control-custom {
     <div id="projectSections" style="display: none;">
         <div class="phase-management-card">
             <div class="phase-header">
-                <h5><i class="fas fa-stream"></i> Project Timeline Phases</h5>
+                <h5><i class="fas fa-route"></i> Methodology Roadmap</h5>
             </div>
-            <form method="POST" id="projectSetupForm">
-                <input type="hidden" name="project_setup" value="1">
-                <input type="hidden" name="project_id" id="setupProjectId">
-                <input type="hidden" name="phases_json" id="phasesJson">
-                <input type="hidden" name="project_start" id="projectStartHidden">
-                <input type="hidden" name="project_end" id="projectEndHidden">
-                <div id="phaseEditor">
-                    <div class="project-selector" style="border-top: 1px solid var(--gray-200);">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Project Start Date</label>
-                                <input type="date" id="projectStartInput" class="form-control-custom">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Project End Date</label>
-                                <input type="date" id="projectEndInput" class="form-control-custom">
-                            </div>
-                        </div>
-                        <small class="text-muted d-block mt-2">These dates define the project timeline used in the Gantt chart.</small>
+            <div class="project-selector" style="border-top: 1px solid var(--gray-200);">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div>
+                        <div class="fw-semibold" id="selectedRoadmapProjectName">Selected project</div>
+                        <small class="text-muted">Architect manages phases and phase developer count. Experts edit staffing count and developer type inside each roadmap task.</small>
                     </div>
-                    <div class="phase-list">
-                        <div id="phasesContainer">
-                            <!-- Phases will be added here dynamically -->
-                        </div>
-                        <button type="button" class="btn-add-phase" onclick="addPhase()">
-                            <i class="fas fa-plus"></i> Add Phase
-                        </button>
-                    </div>
+                    <a class="btn-save-phases text-center text-decoration-none" id="inlineRoadmapBtn" href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php">
+                        <i class="fas fa-user-plus"></i> Edit Task Staffing
+                    </a>
                 </div>
-            </form>
-        </div>
-
-        <div class="timeline-section">
-            <div class="timeline-header">
-                <h5><i class="fas fa-stream me-2"></i>Timeline Feature Recommendations</h5>
-                <p class="text-muted mb-0 small">Real-time Gantt chart updates as you estimate each feature.</p>
-            </div>
-            <div id="expertGanttContainer" class="gantt-container">
-                <div class="text-muted small">No timeline data yet.</div>
             </div>
         </div>
 
@@ -1936,19 +1899,7 @@ textarea.form-control-custom {
                 $estimation = $conn->query("SELECT * FROM feature_estimations WHERE task_id = {$task['id']} AND expert_id = {$user['id']}")->fetch_assoc();
                 $isEstimated = $estimation && !empty($estimation['min_days']) && !empty($estimation['likely_days']) && !empty($estimation['max_days']);
                 $taskRecommendations = $recommendationsByTask[(int) $task['id']] ?? [];
-                $projectPhases = [];
-                if($hasProjectPhases && !empty($task['project_phases'])) {
-                    $projectPhases = json_decode($task['project_phases'], true);
-                }
-                if (empty($projectPhases) || !is_array($projectPhases)) {
-                    $projectPhases = [
-                        ['name' => 'Planning'],
-                        ['name' => 'Research'],
-                        ['name' => 'Design'],
-                        ['name' => 'Implementation'],
-                        ['name' => 'Follow Up'],
-                    ];
-                }
+                $projectPhases = $roadmapPhasesByProject[(int) $task['project_id']] ?? [];
             ?>
             <?php $isReadonly = $task['status'] !== 'todo'; ?>
             <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" style="display:none;">
@@ -2045,10 +1996,9 @@ textarea.form-control-custom {
                     <div class="mb-3">
                         <label class="form-label">Project Phase</label>
                         <select name="phase_name" class="form-control-custom" <?php echo $isReadonly ? 'disabled' : ''; ?>>
-                            <option value="">-- Select phase --</option>
+                            <option value=""><?php echo empty($projectPhases) ? 'Roadmap phases not ready' : '-- Select roadmap phase --'; ?></option>
                             <?php if(!empty($projectPhases)): ?>
-                                <?php foreach($projectPhases as $phase): ?>
-                                    <?php $phaseName = $phase['name'] ?? ''; ?>
+                                <?php foreach($projectPhases as $phaseName): ?>
                                     <option value="<?php echo htmlspecialchars($phaseName); ?>" <?php echo ($estimation['phase_name'] ?? '') === $phaseName ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars($phaseName); ?>
                                     </option>
@@ -2158,16 +2108,6 @@ textarea.form-control-custom {
 
 <script>
 let currentProjectId = null;
-let phases = [];
-
-// Default phases template
-const defaultPhases = [
-    { name: "Planning", start_date: "", end_date: "" },
-    { name: "Research", start_date: "", end_date: "" },
-    { name: "Design", start_date: "", end_date: "" },
-    { name: "Implementation", start_date: "", end_date: "" },
-    { name: "Follow Up", start_date: "", end_date: "" }
-];
 const existingDepartments = <?php echo json_encode($availableDepartments, JSON_UNESCAPED_UNICODE); ?>;
 
 function loadProjectSetup() {
@@ -2175,13 +2115,11 @@ function loadProjectSetup() {
     if (!select) return;
     const projectId = select.value;
     const selectedOption = select.options[select.selectedIndex];
-    const phasesData = selectedOption.getAttribute('data-phases');
-    const projectStart = selectedOption.getAttribute('data-start');
-    const projectEnd = selectedOption.getAttribute('data-end');
     
     if (!projectId) {
         currentProjectId = null;
-        document.getElementById('saveSetupBtn').style.display = 'none';
+        const openRoadmapBtn = document.getElementById('openRoadmapBtn');
+        if (openRoadmapBtn) openRoadmapBtn.style.display = 'none';
         const sections = document.getElementById('projectSections');
         if (sections) sections.style.display = 'none';
         renderProjectManagementTable();
@@ -2189,133 +2127,27 @@ function loadProjectSetup() {
     }
     
     currentProjectId = projectId;
-    document.getElementById('setupProjectId').value = projectId;
 
-    const projectStartInput = document.getElementById('projectStartInput');
-    const projectEndInput = document.getElementById('projectEndInput');
-    if (projectStartInput) projectStartInput.value = projectStart || '';
-    if (projectEndInput) projectEndInput.value = projectEnd || '';
-    
-    if (phasesData && phasesData !== 'null' && phasesData !== '') {
-        try {
-            phases = JSON.parse(phasesData);
-            if (!Array.isArray(phases) || phases.length === 0) {
-                phases = JSON.parse(JSON.stringify(defaultPhases));
-            }
-        } catch(e) {
-            phases = JSON.parse(JSON.stringify(defaultPhases));
-        }
-    } else {
-        phases = JSON.parse(JSON.stringify(defaultPhases));
+    const roadmapUrl = `${window.BASE_URL || '<?php echo BASE_URL; ?>'}modules/roadmap/methodology.php?project_id=${encodeURIComponent(projectId)}`;
+    const openRoadmapBtn = document.getElementById('openRoadmapBtn');
+    const inlineRoadmapBtn = document.getElementById('inlineRoadmapBtn');
+    if (openRoadmapBtn) {
+        openRoadmapBtn.href = roadmapUrl;
+        openRoadmapBtn.style.display = 'block';
     }
-    renderPhases();
+    if (inlineRoadmapBtn) {
+        inlineRoadmapBtn.href = roadmapUrl;
+    }
+    const selectedName = document.getElementById('selectedRoadmapProjectName');
+    if (selectedName) {
+        selectedName.textContent = getSelectedProjectName() || 'Selected project';
+    }
+
     renderProjectManagementTable();
 
     const sections = document.getElementById('projectSections');
     if (sections) sections.style.display = 'block';
-    document.getElementById('saveSetupBtn').style.display = 'block';
     filterFeatureList();
-    renderExpertGantt();
-}
-
-function renderPhases() {
-    const container = document.getElementById('phasesContainer');
-    let html = '';
-    
-    phases.forEach((phase, index) => {
-        html += `
-            <div class="phase-item" data-phase-index="${index}">
-                <div class="phase-name">
-                    <label class="form-label">Phase Name</label>
-                    <input type="text" class="form-control-custom phase-name-input" value="${escapeHtml(phase.name)}" placeholder="e.g., Planning">
-                </div>
-                <div class="phase-dates">
-                    <label class="form-label">Start Date</label>
-                    <input type="date" class="form-control-custom phase-start-input" value="${phase.start_date || ''}">
-                </div>
-                <div class="phase-dates">
-                    <label class="form-label">End Date</label>
-                    <input type="date" class="form-control-custom phase-end-input" value="${phase.end_date || ''}">
-                </div>
-                <div class="phase-remove">
-                    <label class="form-label">&nbsp;</label>
-                    <button type="button" class="btn-remove-phase" onclick="removePhase(${index})">
-                        <i class="fas fa-trash"></i> Remove
-                    </button>
-                </div>
-            </div>
-        `;
-    });
-    
-    container.innerHTML = html;
-    
-    // Add event listeners to update phases array
-    document.querySelectorAll('.phase-name-input').forEach((input, idx) => {
-        input.addEventListener('change', (e) => { phases[idx].name = e.target.value; });
-    });
-    document.querySelectorAll('.phase-start-input').forEach((input, idx) => {
-        input.addEventListener('change', (e) => { phases[idx].start_date = e.target.value; });
-    });
-    document.querySelectorAll('.phase-end-input').forEach((input, idx) => {
-        input.addEventListener('change', (e) => { phases[idx].end_date = e.target.value; });
-    });
-}
-
-function addPhase() {
-    phases.push({ name: "New Phase", start_date: "", end_date: "" });
-    renderPhases();
-}
-
-function removePhase(index) {
-    phases.splice(index, 1);
-    renderPhases();
-}
-
-function saveProjectSetup() {
-    if (!currentProjectId) {
-        alert('Please select a project first');
-        return;
-    }
-    
-    const phasesToSave = [];
-    document.querySelectorAll('.phase-item').forEach(item => {
-        const nameInput = item.querySelector('.phase-name-input');
-        const startInput = item.querySelector('.phase-start-input');
-        const endInput = item.querySelector('.phase-end-input');
-        
-        if (nameInput && nameInput.value.trim()) {
-            phasesToSave.push({
-                name: nameInput.value.trim(),
-                start_date: startInput ? startInput.value : '',
-                end_date: endInput ? endInput.value : ''
-            });
-        }
-    });
-    
-    if (phasesToSave.length === 0) {
-        alert('Please add at least one phase');
-        return;
-    }
-
-    const progressText = document.getElementById('featureProgressText');
-    if (progressText) {
-        const match = progressText.textContent.match(/Estimated:\s*(\d+)\s*\/\s*(\d+)/i);
-        if (match) {
-            const estimated = parseInt(match[1], 10);
-            const total = parseInt(match[2], 10);
-            if (total > 0 && estimated !== total) {
-                alert(`Please complete all feature estimates before saving setup. (${estimated}/${total})`);
-                return;
-            }
-        }
-    }
-    
-    document.getElementById('phasesJson').value = JSON.stringify(phasesToSave);
-    const startInput = document.getElementById('projectStartInput');
-    const endInput = document.getElementById('projectEndInput');
-    if (startInput) document.getElementById('projectStartHidden').value = startInput.value || '';
-    if (endInput) document.getElementById('projectEndHidden').value = endInput.value || '';
-    document.getElementById('projectSetupForm').submit();
 }
 
 function escapeHtml(text) {
@@ -2331,6 +2163,14 @@ function getSelectedProjectName() {
         return '';
     }
     return select.options[select.selectedIndex]?.textContent?.trim() || '';
+}
+
+function getSelectedProjectStartDate() {
+    const select = document.getElementById('phaseProjectSelect');
+    if (!select || !select.value) {
+        return '';
+    }
+    return select.options[select.selectedIndex]?.getAttribute('data-start') || '';
 }
 
 function renderDepartmentOptions(selectedValue) {
@@ -2552,7 +2392,7 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
     if (likelyInput) likelyInput.value = payload.likely_days || '';
     if (maxInput) maxInput.value = payload.max_days || '';
 
-    const projectStartValue = document.getElementById('projectStartInput')?.value || '';
+    const projectStartValue = getSelectedProjectStartDate();
     if (plannedStartInput && !plannedStartInput.value && projectStartValue) {
         plannedStartInput.value = projectStartValue;
     }
@@ -2930,8 +2770,7 @@ function bindProjectManagementTableHandlers() {
 
 function buildGanttTasks() {
     const tasks = [];
-    const projectStartInput = document.getElementById('projectStartInput');
-    const projectStartFallback = projectStartInput?.value || new Date().toISOString().slice(0, 10);
+    const projectStartFallback = getSelectedProjectStartDate() || new Date().toISOString().slice(0, 10);
     document.querySelectorAll('.feature-row').forEach(row => {
         if (currentProjectId && row.getAttribute('data-project-id') !== currentProjectId) {
             return;

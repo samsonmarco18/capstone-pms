@@ -8,47 +8,97 @@ function getMailSetting(string $name, ?string $default = null): string
     global $localOverrides;
 
     if (is_array($localOverrides ?? null) && array_key_exists($name, $localOverrides)) {
-        $value = $localOverrides[$name];
-        if (is_bool($value)) {
-            return $value ? '1' : '0';
+        $value = normalizeMailSettingValue($name, $localOverrides[$name]);
+        if ($value !== null) {
+            return $value;
         }
-
-        return trim((string) $value);
     }
 
     $envValue = getenv($name);
-    if ($envValue !== false && $envValue !== '') {
-        return trim((string) $envValue);
+    $envValue = normalizeMailSettingValue($name, $envValue);
+    if ($envValue !== null) {
+        return $envValue;
     }
 
     if (str_starts_with($name, 'MAIL_')) {
         $appSettingKey = 'mail_' . strtolower(substr($name, 5));
-        $appValue = getAppSetting($appSettingKey, null);
-        if ($appValue !== null && $appValue !== '') {
-            return trim((string) $appValue);
+        $appValue = normalizeMailSettingValue($name, getAppSetting($appSettingKey, null));
+        if ($appValue !== null) {
+            return $appValue;
+        }
+    }
+
+    if (str_starts_with($name, 'GMAIL_')) {
+        $appSettingKey = 'gmail_' . strtolower(substr($name, 6));
+        $appValue = normalizeMailSettingValue($name, getAppSetting($appSettingKey, null));
+        if ($appValue !== null) {
+            return $appValue;
         }
     }
 
     if (function_exists('getEnvOrDefault')) {
-        $value = getEnvOrDefault($name, $default ?? '');
-        if ($value !== false && $value !== null) {
-            $value = (string) $value;
-            if ($value !== '' || $default === null) {
-                return trim($value);
-            }
+        $value = normalizeMailSettingValue($name, getEnvOrDefault($name, $default ?? ''));
+        if ($value !== null) {
+            return $value;
         }
     }
 
     if (defined($name)) {
-        $value = constant($name);
-        if (is_bool($value)) {
-            return $value ? '1' : '0';
+        $value = normalizeMailSettingValue($name, constant($name));
+        if ($value !== null) {
+            return $value;
         }
-
-        return trim((string) $value);
     }
 
     return trim((string) ($default ?? ''));
+}
+
+function normalizeMailSettingValue(string $name, mixed $value): ?string
+{
+    if ($value === false || $value === null) {
+        return null;
+    }
+
+    if (is_bool($value)) {
+        return $value ? '1' : '0';
+    }
+
+    $trimmed = trim((string) $value);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    if (strlen($trimmed) >= 2) {
+        $first = $trimmed[0];
+        $last = $trimmed[strlen($trimmed) - 1];
+        if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+            $trimmed = trim(substr($trimmed, 1, -1));
+        }
+    }
+
+    $normalizedName = strtoupper($name);
+    $lowerValue = strtolower($trimmed);
+    $placeholderValues = [
+        'your-google-app-password',
+        'your-app-password',
+        'google-app-password',
+        'app-password',
+        'changeme',
+        'change-me',
+        'your-password',
+    ];
+
+    if ($normalizedName === 'MAIL_PASSWORD' && in_array($lowerValue, $placeholderValues, true)) {
+        return null;
+    }
+
+    if (in_array($normalizedName, ['MAIL_USERNAME', 'MAIL_FROM_EMAIL'], true)
+        && in_array($lowerValue, ['your-email@example.com', 'your-email@gmail.com', 'example@gmail.com'], true)
+    ) {
+        return null;
+    }
+
+    return $trimmed;
 }
 
 function getMailConfig(): array
@@ -63,6 +113,9 @@ function getMailConfig(): array
     $envPassword = getMailSetting('MAIL_PASSWORD', '');
     $envFromEmail = getMailSetting('MAIL_FROM_EMAIL', '');
     $envFromName = getMailSetting('MAIL_FROM_NAME', '');
+    $verifyPeerRaw = strtolower(getMailSetting('MAIL_VERIFY_PEER', '1'));
+    $timeout = (int) getMailSetting('MAIL_TIMEOUT', '8');
+    $deliveryMethod = strtolower(getMailSetting('MAIL_DELIVERY_METHOD', 'smtp'));
 
     $host = $envHost !== '' ? $envHost : trim((string) getAppSetting('mail_host', 'smtp.gmail.com'));
     $port = (int) ($envPort !== '' ? $envPort : (getAppSetting('mail_port', '587') ?? '587'));
@@ -86,6 +139,28 @@ function getMailConfig(): array
         $encryption = 'tls';
     }
 
+    if (!in_array($deliveryMethod, ['smtp', 'gmail_api'], true)) {
+        $deliveryMethod = 'smtp';
+    }
+
+    if ($timeout < 5) {
+        $timeout = 5;
+    } elseif ($timeout > 10) {
+        $timeout = 10;
+    }
+
+    if (in_array($host, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true)) {
+        if ($port === 465 && $encryption === 'tls') {
+            $encryption = 'ssl';
+        } elseif ($port === 587 && $encryption === 'ssl') {
+            $encryption = 'tls';
+        }
+
+        if (filter_var($username, FILTER_VALIDATE_EMAIL)) {
+            $fromEmail = $username;
+        }
+    }
+
     $config = [
         'enabled' => in_array($enabledRaw, ['1', 'true', 'yes', 'on'], true),
         'host' => $host,
@@ -95,6 +170,10 @@ function getMailConfig(): array
         'password' => normalizeMailPassword($host, $password),
         'from_email' => $fromEmail,
         'from_name' => $fromName !== '' ? $fromName : 'ERNI PMS',
+        'verify_peer' => !in_array($verifyPeerRaw, ['0', 'false', 'no', 'off'], true),
+        'timeout' => $timeout,
+        'delivery_method' => $deliveryMethod,
+        'gmail_api' => getGmailApiConfig($username),
     ];
 
     if (shouldDebugMailConfig()) {
@@ -131,23 +210,91 @@ function isMailConfigured(): bool
 {
     $config = getMailConfig();
 
-    return $config['enabled']
-        && $config['host'] !== ''
-        && $config['port'] > 0
-        && $config['username'] !== ''
-        && $config['password'] !== ''
-        && filter_var($config['from_email'], FILTER_VALIDATE_EMAIL);
+    return getMailConfigIssues($config) === [];
+}
+
+function getMailConfigIssues(?array $config = null): array
+{
+    $config ??= getMailConfig();
+    $issues = [];
+    $deliveryMethod = (string) ($config['delivery_method'] ?? 'smtp');
+
+    if (!$config['enabled']) {
+        $issues[] = 'email delivery is disabled';
+    }
+
+    if ($deliveryMethod === 'gmail_api') {
+        $gmailConfig = $config['gmail_api'] ?? [];
+
+        if (trim((string) ($gmailConfig['client_id'] ?? '')) === '') {
+            $issues[] = 'Gmail API client ID is missing';
+        }
+
+        if (trim((string) ($gmailConfig['client_secret'] ?? '')) === '') {
+            $issues[] = 'Gmail API client secret is missing';
+        }
+
+        if (trim((string) ($gmailConfig['refresh_token'] ?? '')) === '') {
+            $issues[] = 'Gmail API refresh token is missing';
+        }
+
+        if (trim((string) ($gmailConfig['user'] ?? '')) === '') {
+            $issues[] = 'Gmail API user is missing';
+        }
+    } else {
+        if (trim((string) ($config['host'] ?? '')) === '') {
+            $issues[] = 'SMTP host is missing';
+        }
+
+        if ((int) ($config['port'] ?? 0) <= 0) {
+            $issues[] = 'SMTP port is missing';
+        }
+
+        if (trim((string) ($config['username'] ?? '')) === '') {
+            $issues[] = 'SMTP username is missing';
+        }
+
+        if (trim((string) ($config['password'] ?? '')) === '') {
+            $issues[] = 'SMTP app password is missing';
+        }
+
+        if (($config['encryption'] ?? 'tls') !== 'none' && !extension_loaded('openssl')) {
+            $issues[] = 'PHP OpenSSL extension is missing';
+        }
+    }
+
+    if (!filter_var((string) ($config['from_email'] ?? ''), FILTER_VALIDATE_EMAIL)) {
+        $issues[] = 'sender email is invalid';
+    }
+
+    return $issues;
+}
+
+function getGmailApiConfig(string $smtpUsername = ''): array
+{
+    $user = getMailSetting('GMAIL_USER', '');
+    if ($user === '') {
+        $user = $smtpUsername;
+    }
+
+    return [
+        'client_id' => getMailSetting('GMAIL_CLIENT_ID', ''),
+        'client_secret' => getMailSetting('GMAIL_CLIENT_SECRET', ''),
+        'refresh_token' => getMailSetting('GMAIL_REFRESH_TOKEN', ''),
+        'user' => $user,
+    ];
 }
 
 function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?string $textBody = null): array
 {
     $config = getMailConfig();
-    if (!$config['enabled']) {
+    $configIssues = getMailConfigIssues($config);
+    if (in_array('email delivery is disabled', $configIssues, true)) {
         return ['success' => false, 'error' => 'Mail delivery is disabled in system settings.'];
     }
 
-    if (!isMailConfigured()) {
-        return ['success' => false, 'error' => 'Mail settings are incomplete.'];
+    if ($configIssues !== []) {
+        return ['success' => false, 'error' => 'Mail settings are incomplete: ' . implode(', ', $configIssues) . '.'];
     }
 
     $recipients = is_array($to) ? $to : [$to];
@@ -196,7 +343,146 @@ function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?s
     $message .= normalizeSmtpBody($htmlBody) . "\r\n";
     $message .= '--' . $boundary . "--\r\n";
 
+    if (($config['delivery_method'] ?? 'smtp') === 'gmail_api') {
+        return gmailApiSendMessage($config['gmail_api'], $message);
+    }
+
     return smtpSendMessage($config, $fromEmail, $validRecipients, $message);
+}
+
+function gmailApiSendMessage(array $gmailConfig, string $message): array
+{
+    $tokenResult = gmailApiFetchAccessToken($gmailConfig);
+    if (!$tokenResult['success']) {
+        return $tokenResult;
+    }
+
+    $rawMessage = rtrim(strtr(base64_encode($message), '+/', '-_'), '=');
+    $sendResult = httpJsonRequest(
+        'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+        ['raw' => $rawMessage],
+        [
+            'Authorization: Bearer ' . $tokenResult['access_token'],
+            'Content-Type: application/json',
+        ],
+        15
+    );
+
+    if ($sendResult['success']) {
+        return ['success' => true, 'error' => null];
+    }
+
+    return [
+        'success' => false,
+        'error' => 'Gmail API send failed: ' . $sendResult['error'],
+    ];
+}
+
+function gmailApiFetchAccessToken(array $gmailConfig): array
+{
+    $response = httpFormRequest(
+        'https://oauth2.googleapis.com/token',
+        [
+            'client_id' => (string) ($gmailConfig['client_id'] ?? ''),
+            'client_secret' => (string) ($gmailConfig['client_secret'] ?? ''),
+            'refresh_token' => (string) ($gmailConfig['refresh_token'] ?? ''),
+            'grant_type' => 'refresh_token',
+        ],
+        15
+    );
+
+    if (!$response['success']) {
+        return [
+            'success' => false,
+            'error' => 'Gmail API token request failed: ' . $response['error'],
+        ];
+    }
+
+    $accessToken = trim((string) ($response['json']['access_token'] ?? ''));
+    if ($accessToken === '') {
+        return [
+            'success' => false,
+            'error' => 'Gmail API token response did not include an access token.',
+        ];
+    }
+
+    return [
+        'success' => true,
+        'access_token' => $accessToken,
+        'error' => null,
+    ];
+}
+
+function httpFormRequest(string $url, array $fields, int $timeout = 15): array
+{
+    return httpRequest($url, http_build_query($fields), ['Content-Type: application/x-www-form-urlencoded'], $timeout);
+}
+
+function httpJsonRequest(string $url, array $payload, array $headers, int $timeout = 15): array
+{
+    return httpRequest($url, json_encode($payload, JSON_UNESCAPED_SLASHES), $headers, $timeout);
+}
+
+function httpRequest(string $url, string|false $body, array $headers, int $timeout = 15): array
+{
+    if ($body === false) {
+        return ['success' => false, 'error' => 'Unable to encode HTTP request body.'];
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => implode("\r\n", $headers),
+            'content' => $body,
+            'timeout' => max(5, min(30, $timeout)),
+            'ignore_errors' => true,
+        ],
+    ]);
+
+    $responseBody = @file_get_contents($url, false, $context);
+    $statusLine = (string) ($http_response_header[0] ?? '');
+    preg_match('/\s(\d{3})\s/', $statusLine, $matches);
+    $statusCode = isset($matches[1]) ? (int) $matches[1] : 0;
+
+    if ($responseBody === false) {
+        $lastError = error_get_last();
+        return [
+            'success' => false,
+            'error' => (string) ($lastError['message'] ?? 'HTTP request failed without a detailed error.'),
+        ];
+    }
+
+    $decoded = json_decode($responseBody, true);
+    $json = is_array($decoded) ? $decoded : [];
+
+    if ($statusCode < 200 || $statusCode >= 300) {
+        $apiError = '';
+        if (isset($json['error']) && is_array($json['error'])) {
+            $apiError = (string) ($json['error']['message'] ?? json_encode($json['error'], JSON_UNESCAPED_SLASHES));
+        } elseif (isset($json['error_description'])) {
+            $apiError = (string) $json['error_description'];
+        } elseif (isset($json['error'])) {
+            $apiError = (string) $json['error'];
+        } else {
+            $apiError = trim($responseBody);
+        }
+
+        if ($apiError === '') {
+            $apiError = trim($statusLine) !== '' ? trim($statusLine) : 'HTTP request failed without a response body.';
+        }
+
+        return [
+            'success' => false,
+            'error' => 'HTTP ' . ($statusCode ?: 'unknown') . ': ' . (string) $apiError,
+            'json' => $json,
+        ];
+    }
+
+    return [
+        'success' => true,
+        'error' => null,
+        'json' => $json,
+    ];
 }
 
 function smtpSendMessage(array $config, string $fromEmail, array $recipients, string $message): array
@@ -221,19 +507,36 @@ function smtpSendMessage(array $config, string $fromEmail, array $recipients, st
 
 function smtpConnectionCandidates(array $config): array
 {
-    $candidates = [$config];
+    $candidates = [];
+    $seen = [];
+    $addCandidate = static function (array $candidate) use (&$candidates, &$seen): void {
+        $key = strtolower((string) ($candidate['host'] ?? '')) . ':' . (int) ($candidate['port'] ?? 0) . '/' . strtolower((string) ($candidate['encryption'] ?? 'tls'));
+        if (isset($seen[$key])) {
+            return;
+        }
+
+        $seen[$key] = true;
+        $candidates[] = $candidate;
+    };
+
+    $addCandidate($config);
     $host = strtolower((string) ($config['host'] ?? ''));
     $port = (int) ($config['port'] ?? 0);
     $encryption = strtolower((string) ($config['encryption'] ?? 'tls'));
 
-    if (in_array($host, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true) && !($port === 465 && $encryption === 'ssl')) {
+    if (in_array($host, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true)) {
         $sslConfig = $config;
         $sslConfig['port'] = 465;
         $sslConfig['encryption'] = 'ssl';
-        $candidates[] = $sslConfig;
+        $tlsConfig = $config;
+        $tlsConfig['port'] = 587;
+        $tlsConfig['encryption'] = 'tls';
+
+        $addCandidate($sslConfig);
+        $addCandidate($tlsConfig);
     }
 
-    return $candidates;
+    return array_values($candidates);
 }
 
 function smtpErrorLooksLikeConnectionFailure(string $error): bool
@@ -244,17 +547,22 @@ function smtpErrorLooksLikeConnectionFailure(string $error): bool
         || str_contains($normalized, 'timed out')
         || str_contains($normalized, 'connection refused')
         || str_contains($normalized, 'network is unreachable')
-        || str_contains($normalized, 'no route to host');
+        || str_contains($normalized, 'no route to host')
+        || str_contains($normalized, 'empty response')
+        || str_contains($normalized, 'unable to start tls')
+        || str_contains($normalized, 'failed to enable crypto');
 }
 
 function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recipients, string $message): array
 {
     $transport = $config['encryption'] === 'ssl' ? 'ssl://' : 'tcp://';
+    $verifyPeer = (bool) ($config['verify_peer'] ?? true);
+    $timeout = (int) ($config['timeout'] ?? 20);
     $context = stream_context_create([
         'ssl' => [
             'peer_name' => $config['host'],
-            'verify_peer' => true,
-            'verify_peer_name' => true,
+            'verify_peer' => $verifyPeer,
+            'verify_peer_name' => $verifyPeer,
             'SNI_enabled' => true,
         ],
     ]);
@@ -262,16 +570,21 @@ function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recip
         $transport . $config['host'] . ':' . $config['port'],
         $errorNumber,
         $errorMessage,
-        20,
+        $timeout,
         STREAM_CLIENT_CONNECT,
         $context
     );
 
     if (!is_resource($socket)) {
-        return ['success' => false, 'error' => 'SMTP connection failed: ' . $errorMessage . ' (' . $errorNumber . ')'];
+        $detail = trim((string) $errorMessage);
+        if ($detail === '') {
+            $detail = 'No socket error was returned. The host may be blocking outbound SMTP or the connection timed out before Gmail responded.';
+        }
+
+        return ['success' => false, 'error' => 'SMTP connection failed: ' . $detail . ' (' . $errorNumber . ')'];
     }
 
-    stream_set_timeout($socket, 20);
+    stream_set_timeout($socket, $timeout);
 
     try {
         $ehloHost = parse_url(BASE_URL, PHP_URL_HOST) ?: (gethostname() ?: 'localhost');
@@ -280,12 +593,19 @@ function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recip
 
         if ($config['encryption'] === 'tls') {
             smtpCommand($socket, 'STARTTLS', [220]);
-            $cryptoMethod = defined('STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT')
-                ? STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLS_CLIENT
-                : STREAM_CRYPTO_METHOD_TLS_CLIENT;
+            $cryptoMethod = 0;
+            foreach (['STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT', 'STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT', 'STREAM_CRYPTO_METHOD_TLS_CLIENT'] as $constantName) {
+                if (defined($constantName)) {
+                    $cryptoMethod |= constant($constantName);
+                }
+            }
+            if ($cryptoMethod === 0) {
+                $cryptoMethod = STREAM_CRYPTO_METHOD_TLS_CLIENT;
+            }
             $cryptoEnabled = @stream_socket_enable_crypto($socket, true, $cryptoMethod);
             if ($cryptoEnabled !== true) {
-                throw new RuntimeException('Unable to start TLS encryption with SMTP server.');
+                $opensslError = function_exists('openssl_error_string') ? (openssl_error_string() ?: '') : '';
+                throw new RuntimeException('Unable to start TLS encryption with SMTP server.' . ($opensslError !== '' ? ' ' . $opensslError : ''));
             }
             smtpCommand($socket, 'EHLO ' . $ehloHost, [250]);
         }
@@ -300,14 +620,21 @@ function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recip
         }
 
         smtpCommand($socket, 'DATA', [354]);
-        fwrite($socket, dotStuffSmtpData($message) . "\r\n.\r\n");
+        if (fwrite($socket, dotStuffSmtpData($message) . "\r\n.\r\n") === false) {
+            throw new RuntimeException('SMTP write failed while sending message body.');
+        }
         smtpExpect($socket, [250]);
         smtpCommand($socket, 'QUIT', [221]);
 
         return ['success' => true, 'error' => null];
     } catch (Throwable $e) {
-        error_log('SMTP send failed: ' . $e->getMessage());
-        return ['success' => false, 'error' => $e->getMessage()];
+        $message = trim($e->getMessage());
+        if ($message === '') {
+            $message = 'SMTP failed without a detailed server message.';
+        }
+
+        error_log('SMTP send failed: ' . $message);
+        return ['success' => false, 'error' => $message];
     } finally {
         fclose($socket);
     }
@@ -315,10 +642,8 @@ function smtpSendMessageViaConfig(array $config, string $fromEmail, array $recip
 
 function smtpCommand($socket, string $command, array $expectedCodes, bool $logCommand = true): string
 {
-    if ($logCommand) {
-        fwrite($socket, $command . "\r\n");
-    } else {
-        fwrite($socket, $command . "\r\n");
+    if (fwrite($socket, $command . "\r\n") === false) {
+        throw new RuntimeException('SMTP write failed.');
     }
 
     return smtpExpect($socket, $expectedCodes);
@@ -333,6 +658,11 @@ function smtpExpect($socket, array $expectedCodes): string
         if (strlen($line) < 4 || $line[3] !== '-') {
             break;
         }
+    }
+
+    $meta = stream_get_meta_data($socket);
+    if (($meta['timed_out'] ?? false) === true) {
+        throw new RuntimeException('SMTP server response timed out.');
     }
 
     if ($response === '') {
@@ -391,7 +721,9 @@ function notificationTypeAllowsEmail(array $user, string $type): bool
 
 function sendNotificationEmailToUser(int $userId, string $title, string $message, string $type = 'system', ?string $actionUrl = null): bool
 {
-    if (!isMailConfigured()) {
+    $configIssues = getMailConfigIssues();
+    if ($configIssues !== []) {
+        error_log('Notification email skipped for user_id=' . $userId . ': ' . implode(', ', $configIssues));
         return false;
     }
 
@@ -484,7 +816,21 @@ function getMailConfigDiagnostic(): array
     
     try {
         $conn = getConnection();
-        $keys = ['mail_enabled', 'mail_host', 'mail_port', 'mail_encryption', 'mail_username', 'mail_password', 'mail_from_email', 'mail_from_name'];
+        $keys = [
+            'mail_enabled',
+            'mail_delivery_method',
+            'mail_host',
+            'mail_port',
+            'mail_encryption',
+            'mail_username',
+            'mail_password',
+            'mail_from_email',
+            'mail_from_name',
+            'gmail_client_id',
+            'gmail_client_secret',
+            'gmail_refresh_token',
+            'gmail_user',
+        ];
         
         foreach ($keys as $key) {
             $stmt = $conn->prepare('SELECT setting_value FROM settings WHERE setting_key = ? LIMIT 1');
@@ -513,8 +859,18 @@ function getMailConfigDiagnostic(): array
         'password' => $config['password'] ? '***' : '',
         'from_email' => $config['from_email'],
         'from_name' => $config['from_name'],
+        'verify_peer' => $config['verify_peer'],
+        'timeout' => $config['timeout'],
+        'delivery_method' => $config['delivery_method'],
+        'gmail_api' => [
+            'client_id' => ($config['gmail_api']['client_id'] ?? '') !== '' ? 'set' : '',
+            'client_secret' => ($config['gmail_api']['client_secret'] ?? '') !== '' ? '***' : '',
+            'refresh_token' => ($config['gmail_api']['refresh_token'] ?? '') !== '' ? '***' : '',
+            'user' => $config['gmail_api']['user'] ?? '',
+        ],
     ];
     $diagnostic['is_configured'] = isMailConfigured();
+    $diagnostic['issues'] = getMailConfigIssues($config);
     
     return $diagnostic;
 }

@@ -14,40 +14,48 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $email = $_POST['email'];
         $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
         $full_name = $_POST['full_name'];
-        $department = $_POST['department'];
-        $role = $_POST['role'];
+        $department = trim((string) $_POST['department']);
+        $role = trim((string) $_POST['role']);
         $hasPasswordChangedAt = ensureUserPasswordSecurityColumns();
-        
-        $sql = $hasPasswordChangedAt
-            ? "INSERT INTO users (username, email, password, full_name, department, role, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-            : "INSERT INTO users (username, email, password, full_name, department, role) VALUES (?, ?, ?, ?, ?, ?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssssss", $username, $email, $password, $full_name, $department, $role);
-        
-        if ($stmt->execute()) {
-            $userId = $stmt->insert_id;
-            logActivity($user['id'], 'create_user', 'users', $userId, null, $_POST);
-            $_SESSION['success'] = "User created successfully";
+
+        if ($role === 'sul' && $department === '') {
+            $_SESSION['error'] = "SUL users must be assigned to a department.";
         } else {
-            $_SESSION['error'] = "Error creating user: " . $conn->error;
+            $sql = $hasPasswordChangedAt
+                ? "INSERT INTO users (username, email, password, full_name, department, role, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                : "INSERT INTO users (username, email, password, full_name, department, role) VALUES (?, ?, ?, ?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssssss", $username, $email, $password, $full_name, $department, $role);
+
+            if ($stmt->execute()) {
+                $userId = $stmt->insert_id;
+                logActivity($user['id'], 'create_user', 'users', $userId, null, $_POST);
+                $_SESSION['success'] = "User created successfully";
+            } else {
+                $_SESSION['error'] = "Error creating user: " . $conn->error;
+            }
         }
     } elseif ($_POST['action'] == 'update') {
         $id = $_POST['id'];
         $full_name = $_POST['full_name'];
-        $department = $_POST['department'];
-        $role = $_POST['role'];
+        $department = trim((string) $_POST['department']);
+        $role = trim((string) $_POST['role']);
         $status = $_POST['status'];
         
-        $oldData = $conn->query("SELECT * FROM users WHERE id = $id")->fetch_assoc();
-        
-        $stmt = $conn->prepare("UPDATE users SET full_name=?, department=?, role=?, status=? WHERE id=?");
-        $stmt->bind_param("ssssi", $full_name, $department, $role, $status, $id);
-        
-        if ($stmt->execute()) {
-            logActivity($user['id'], 'update_user', 'users', $id, $oldData, $_POST);
-            $_SESSION['success'] = "User updated successfully";
+        if ($role === 'sul' && $department === '') {
+            $_SESSION['error'] = "SUL users must be assigned to a department.";
         } else {
-            $_SESSION['error'] = "Error updating user";
+            $oldData = $conn->query("SELECT * FROM users WHERE id = $id")->fetch_assoc();
+
+            $stmt = $conn->prepare("UPDATE users SET full_name=?, department=?, role=?, status=? WHERE id=?");
+            $stmt->bind_param("ssssi", $full_name, $department, $role, $status, $id);
+
+            if ($stmt->execute()) {
+                logActivity($user['id'], 'update_user', 'users', $id, $oldData, $_POST);
+                $_SESSION['success'] = "User updated successfully";
+            } else {
+                $_SESSION['error'] = "Error updating user";
+            }
         }
     } elseif ($_POST['action'] == 'delete') {
         $id = $_POST['id'];

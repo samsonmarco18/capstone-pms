@@ -2,10 +2,13 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
 require_once '../../includes/workflow.php';
+require_once '../../includes/methodology-roadmap.php';
+require_once '../../includes/project-workflow.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectWorkflowEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 $hasCloudPlatform = dbColumnExists($conn, 'projects', 'cloud_platform');
@@ -58,7 +61,12 @@ while ($documentTypeRow = $documentTypesResult->fetch_assoc()) {
     $documentTypes[] = (string) $documentTypeRow['document_type'];
 }
 $hasRequiredDocuments = in_array('architecture_plan', $documentTypes, true) && in_array('workflow_diagram', $documentTypes, true);
-$summaryReadyForSubmit = $featureCount > 0 && $techRecommendationCount > 0 && $allocationCount > 0 && $hasRequiredDocuments;
+$methodologyCompletion = methodologyRoadmapCompletion($conn, $projectId);
+$summaryReadyForSubmit = $featureCount > 0
+    && $techRecommendationCount > 0
+    && $allocationCount > 0
+    && $hasRequiredDocuments
+    && (bool) ($methodologyCompletion['is_complete'] ?? false);
 
 // Handle submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -69,27 +77,65 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    if ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || !$hasRequiredDocuments) {
-        $_SESSION['error'] = 'Please complete every architect step and upload the Architecture Plan plus Workflow Diagram before submitting to SUL.';
+    if ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || !$hasRequiredDocuments || !(bool) ($methodologyCompletion['is_complete'] ?? false)) {
+        $_SESSION['error'] = 'Please complete every architect step, schedule every feature in the methodology roadmap, and upload the Architecture Plan plus Workflow Diagram before submitting to SUL.';
         header('Location: summary.php?id=' . $projectId);
         exit();
     }
 
-    $conn->query("UPDATE projects SET status = 'in_progress' WHERE id = $projectId");
+    $firstExecutionDepartment = '';
+    $firstExecutionRow = $conn->query("
+        SELECT mt.department
+        FROM methodology_tasks mt
+        INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
+        WHERE mt.project_id = {$projectId}
+          AND mt.department IS NOT NULL
+          AND mt.department != ''
+        ORDER BY COALESCE(mp.sequence_no, mp.id) ASC, mt.id ASC
+    ");
+    while ($departmentRow = $firstExecutionRow->fetch_assoc()) {
+        $candidate = projectWorkflowDepartmentLabel($departmentRow['department'] ?? '');
+        if ($candidate !== '' && !in_array($candidate, ['Expert Department', 'QA'], true)) {
+            $firstExecutionDepartment = $candidate;
+            break;
+        }
+    }
+    if ($firstExecutionDepartment !== 'UI/UX') {
+        $_SESSION['error'] = 'UI/UX must be the first execution department before Architect submission. Place UI/UX before development and QA phases in the roadmap.';
+        header('Location: summary.php?id=' . $projectId);
+        exit();
+    }
+
+    $lastDepartment = '';
+    $lastDepartmentRow = $conn->query("
+        SELECT mt.department
+        FROM methodology_tasks mt
+        INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
+        WHERE mt.project_id = {$projectId}
+          AND mt.department IS NOT NULL
+          AND mt.department != ''
+        ORDER BY COALESCE(mp.sequence_no, mp.id) DESC, mt.id DESC
+        LIMIT 1
+    ")->fetch_assoc();
+    $lastDepartment = projectWorkflowDepartmentLabel($lastDepartmentRow['department'] ?? '');
+    if ($lastDepartment !== 'QA') {
+        $_SESSION['error'] = 'QA must be the final department before Architect submission. Place QA as the last roadmap phase.';
+        header('Location: summary.php?id=' . $projectId);
+        exit();
+    }
+
+    $conn->query("UPDATE projects SET status = 'in_progress', workflow_status = 'architect_submitted' WHERE id = $projectId");
     
     $title = "New Architecture Plan Ready for Review";
     $message = "Project: " . $project['name'] . " is ready for SUL review and assignment";
     
-    workflowNotifyRoles(
-        $conn,
-        ['sul'],
-        $title,
-        $message,
-        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
-        $projectId,
-        'project',
-        'projects'
-    );
+    $selectedDepartments = [];
+    $departmentRaw = trim((string) ($project['included_departments'] ?? ''));
+    $decodedDepartments = $departmentRaw !== '' ? json_decode($departmentRaw, true) : [];
+    if (is_array($decodedDepartments)) {
+        $selectedDepartments = array_map(static fn($department): string => projectWorkflowDepartmentLabel((string) $department), $decodedDepartments);
+    }
+    projectWorkflowNotifySelectedSuls($conn, $projectId, array_unique($selectedDepartments), (string) $project['name']);
     
     logActivity($user['id'], 'submit_architecture', 'projects', $projectId);
     $_SESSION['success'] = "Architecture plan submitted to SUL successfully";
@@ -500,6 +546,7 @@ a.progress-step:hover {
             <li class="breadcrumb-item"><a href="features.php?id=<?php echo $projectId; ?>"><i class="fas fa-list-check"></i> Features</a></li>
             <li class="breadcrumb-item"><a href="tech-recommendation.php?id=<?php echo $projectId; ?>"><i class="fas fa-microchip"></i> Technology</a></li>
             <li class="breadcrumb-item"><a href="developer-allocation.php?id=<?php echo $projectId; ?>"><i class="fas fa-users"></i> Developers</a></li>
+            <li class="breadcrumb-item"><a href="../roadmap/methodology.php?project_id=<?php echo $projectId; ?>"><i class="fas fa-route"></i> Roadmap</a></li>
             <li class="breadcrumb-item"><a href="upload-diagram.php?id=<?php echo $projectId; ?>"><i class="fas fa-upload"></i> Documents</a></li>
             <li class="breadcrumb-item active"><i class="fas fa-check-circle"></i> Summary</li>
         </ol>
@@ -515,9 +562,11 @@ a.progress-step:hover {
         <div class="progress-line completed"></div>
         <a class="progress-step completed" href="developer-allocation.php?id=<?php echo $projectId; ?>"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Developers</div></a>
         <div class="progress-line completed"></div>
+        <a class="progress-step completed" href="../roadmap/methodology.php?project_id=<?php echo $projectId; ?>"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Roadmap</div></a>
+        <div class="progress-line completed"></div>
         <a class="progress-step completed" href="upload-diagram.php?id=<?php echo $projectId; ?>"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Documents</div></a>
         <div class="progress-line completed"></div>
-        <a class="progress-step active" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">6</div><div class="step-label">Summary</div></a>
+        <a class="progress-step active" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
     </div>
 
     <?php
@@ -633,19 +682,27 @@ a.progress-step:hover {
                 </div>
                 <div class="card-body p-4">
                     <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Features</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $featureCount; ?></h3></div>
+                    <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Scheduled in Roadmap</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo (int) ($methodologyCompletion['scheduled_feature_count'] ?? 0); ?>/<?php echo (int) ($methodologyCompletion['feature_count'] ?? 0); ?></h3></div>
                     <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Technologies Recommended</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $techRecommendationCount; ?></h3></div>
                     <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Developers Needed</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php $totalDevs = 0; $allocations->data_seek(0); while($alloc = $allocations->fetch_assoc()) { $totalDevs += $alloc['required_count']; } echo $totalDevs; ?></h3></div>
                     <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Documents Uploaded</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $documentCount; ?></h3></div>
                     <hr>
                     <?php if (!$summaryReadyForSubmit): ?>
                     <div class="alert alert-warning small">
-                        Complete Features, Technology, Developer Allocation, Architecture Plan, and Workflow Diagram before final submission.
+                        Complete Features, Technology, Developer Allocation, Methodology Roadmap, Architecture Plan, and Workflow Diagram before final submission.
+                        <?php if (!(bool) ($methodologyCompletion['is_complete'] ?? false)): ?>
+                            <div class="mt-2">
+                                <a href="../roadmap/methodology.php?project_id=<?php echo $projectId; ?>" class="alert-link">
+                                    Schedule <?php echo (int) ($methodologyCompletion['unscheduled_count'] ?? 0); ?> unscheduled feature task<?php echo (int) ($methodologyCompletion['unscheduled_count'] ?? 0) === 1 ? '' : 's'; ?>.
+                                </a>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     <?php endif; ?>
                     <div class="alert-info-modern"><i class="fas fa-info-circle me-2"></i>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</div>
                     <form method="POST" id="summaryForm">
                         <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="confirmCheck" name="confirmCheck" value="1" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
-                        <button type="submit" class="btn-submit" id="submitBtn" disabled><i class="fas fa-paper-plane"></i> Submit to SUL</button>
+                        <button type="submit" class="btn-submit" id="submitBtn" <?php echo $summaryReadyForSubmit ? 'disabled' : 'disabled title="Complete all required architect steps first"'; ?>><i class="fas fa-paper-plane"></i> Submit to SUL</button>
                     </form>
                 </div>
             </div>
@@ -658,17 +715,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmCheck = document.getElementById('confirmCheck');
     const submitBtn = document.getElementById('submitBtn');
     const summaryForm = document.getElementById('summaryForm');
+    const summaryReady = <?php echo json_encode($summaryReadyForSubmit); ?>;
 
     if (!confirmCheck || !submitBtn || !summaryForm) {
         return;
     }
 
     function syncSubmitButton() {
-        submitBtn.disabled = !confirmCheck.checked;
+        submitBtn.disabled = !summaryReady || !confirmCheck.checked;
     }
 
     function handleFormSubmit(e) {
         // Only prevent submission if checkbox is not checked
+        if (!summaryReady) {
+            e.preventDefault();
+            alert('Complete all required architect steps, including the methodology roadmap, before submitting.');
+            return false;
+        }
+
         if (!confirmCheck.checked) {
             e.preventDefault();
             alert('Please check the confirmation box before submitting.');

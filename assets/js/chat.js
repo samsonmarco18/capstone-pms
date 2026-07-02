@@ -24,6 +24,7 @@ function initChatWidget() {
 
     applyChatVisibility();
     loadConversationData();
+    startChatPolling();
     loadUsersForGroup();
 
     $('.chat-tab').on('click', function () {
@@ -149,8 +150,12 @@ function applyChatVisibility() {
 }
 
 function setChatVisibility(isOpen, persist = true) {
-    $('#chat-widget').css('display', isOpen ? 'flex' : 'none');
-    $('#chat-widget-minimized').css('display', isOpen ? 'none' : 'block');
+    $('#chat-widget')
+        .toggleClass('chat-widget-open', isOpen)
+        .css('display', isOpen ? 'flex' : 'none');
+    $('#chat-widget-minimized')
+        .toggleClass('chat-launcher-hidden', isOpen)
+        .css('display', isOpen ? 'none' : 'block');
 
     if (persist) {
         localStorage.setItem(chatStateKey, String(isOpen));
@@ -243,6 +248,14 @@ function updateChatUnreadBadge(countOverride = null) {
 
     badge.text(totalUnread > 99 ? '99+' : totalUnread);
     badge.toggleClass('d-none', totalUnread <= 0);
+    badge.attr('aria-label', `${totalUnread} unread ${totalUnread === 1 ? 'message' : 'messages'}`);
+
+    $('#chat-widget-minimized').attr(
+        'title',
+        totalUnread > 0
+            ? `Open chat - ${totalUnread} unread ${totalUnread === 1 ? 'message' : 'messages'}`
+            : 'Open chat'
+    );
 }
 
 function openConversation(type, id) {
@@ -287,11 +300,6 @@ function showInboxView() {
     currentChatUser = null;
     currentChatGroup = null;
     currentGroupDetails = null;
-
-    if (chatPollInterval) {
-        clearInterval(chatPollInterval);
-        chatPollInterval = null;
-    }
 }
 
 function showThreadView() {
@@ -422,12 +430,42 @@ function renderGroupInfoView(details) {
     `);
 }
 
-function removeGroupMember(memberId) {
+async function removeGroupMember(memberId) {
     if (!currentChatGroup || !memberId) {
         return;
     }
 
-    if (!window.confirm('Remove this member from the group?')) {
+    const members = currentGroupDetails && Array.isArray(currentGroupDetails.members)
+        ? currentGroupDetails.members
+        : [];
+    const member = members.find(item => Number(item.id) === Number(memberId));
+    const memberName = member && member.full_name ? member.full_name : 'this member';
+    const groupName = currentGroupDetails && currentGroupDetails.group && currentGroupDetails.group.name
+        ? currentGroupDetails.group.name
+        : 'this group';
+
+    if (
+        typeof window.appConfirm !== 'function'
+        || !document.getElementById('appConfirmModal')
+        || !window.bootstrap
+    ) {
+        showToast('Group Chat', 'The confirmation window is unavailable. Please refresh and try again.', 'warning');
+        return;
+    }
+
+    const confirmed = await window.appConfirm({
+        title: 'Remove Group Member',
+        titleIcon: 'fas fa-user-minus',
+        subject: `Remove ${memberName} from ${groupName}?`,
+        message: 'They will no longer have access to this group chat.',
+        icon: 'fas fa-user-minus fa-lg',
+        confirmIcon: 'fas fa-user-minus',
+        confirmText: 'Remove Member',
+        cancelText: 'Keep Member',
+        variant: 'danger'
+    });
+
+    if (!confirmed) {
         return;
     }
 
@@ -636,12 +674,15 @@ function startChatPolling() {
         clearInterval(chatPollInterval);
     }
 
-    if (currentChatUser || currentChatGroup) {
-        chatPollInterval = setInterval(function () {
+    chatPollInterval = setInterval(function () {
+        const isChatVisible = $('#chat-widget').hasClass('chat-widget-open') && !document.hidden;
+
+        if (isChatVisible && (currentChatUser || currentChatGroup)) {
             loadChatMessages();
+        } else {
             loadConversationData();
-        }, 5000);
-    }
+        }
+    }, 5000);
 }
 
 function loadChatMessages() {

@@ -28,6 +28,29 @@ if (!$project) {
     exit();
 }
 
+if (!dbColumnExists($conn, 'projects', 'included_departments')) {
+    $conn->query("ALTER TABLE projects ADD COLUMN included_departments " . (DB_DRIVER === 'pgsql' ? 'TEXT' : 'LONGTEXT') . " NULL");
+    $project = $conn->query("SELECT * FROM projects WHERE id = $projectId")->fetch_assoc();
+}
+
+$hasIncludedDepartments = false;
+$includedDepartmentRaw = trim((string) ($project['included_departments'] ?? ''));
+if ($includedDepartmentRaw !== '') {
+    $decodedDepartments = json_decode($includedDepartmentRaw, true);
+    $hasIncludedDepartments = is_array($decodedDepartments) && count($decodedDepartments) > 0;
+}
+
+if (!$hasIncludedDepartments && dbTableExists($conn, 'developer_allocations')) {
+    $allocationCount = $conn->query("SELECT COUNT(*) AS count FROM developer_allocations WHERE project_id = $projectId")->fetch_assoc();
+    $hasIncludedDepartments = (int) ($allocationCount['count'] ?? 0) > 0;
+}
+
+if (!$hasIncludedDepartments) {
+    $_SESSION['error'] = 'Select the departments included in this project before uploading architecture documents.';
+    header('Location: developer-allocation.php?id=' . $projectId);
+    exit();
+}
+
 // Get existing documents
 $documents = $conn->query("
     SELECT * FROM architecture_documents 
@@ -511,6 +534,7 @@ a.progress-step:hover {
             <li class="breadcrumb-item"><a href="features.php?id=<?php echo $projectId; ?>"><i class="fas fa-list-check"></i> Features</a></li>
             <li class="breadcrumb-item"><a href="tech-recommendation.php?id=<?php echo $projectId; ?>"><i class="fas fa-microchip"></i> Technology</a></li>
             <li class="breadcrumb-item"><a href="developer-allocation.php?id=<?php echo $projectId; ?>"><i class="fas fa-users"></i> Developers</a></li>
+            <li class="breadcrumb-item"><a href="../roadmap/methodology.php?project_id=<?php echo $projectId; ?>"><i class="fas fa-route"></i> Roadmap</a></li>
             <li class="breadcrumb-item active"><i class="fas fa-upload"></i> Documents</li>
         </ol>
     </nav>
@@ -525,9 +549,11 @@ a.progress-step:hover {
         <div class="progress-line completed"></div>
         <a class="progress-step completed" href="developer-allocation.php?id=<?php echo $projectId; ?>"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Developers</div></a>
         <div class="progress-line completed"></div>
-        <a class="progress-step active" href="upload-diagram.php?id=<?php echo $projectId; ?>"><div class="step-number">5</div><div class="step-label">Documents</div></a>
+        <a class="progress-step completed" href="../roadmap/methodology.php?project_id=<?php echo $projectId; ?>"><div class="step-number"><i class="fas fa-check"></i></div><div class="step-label">Roadmap</div></a>
+        <div class="progress-line completed"></div>
+        <a class="progress-step active" href="upload-diagram.php?id=<?php echo $projectId; ?>"><div class="step-number">6</div><div class="step-label">Documents</div></a>
         <div class="progress-line"></div>
-        <a class="progress-step" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">6</div><div class="step-label">Summary</div></a>
+        <a class="progress-step" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
     </div>
 
     <div class="row g-4">

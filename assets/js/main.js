@@ -4,15 +4,143 @@ $(function () {
     initNotifications();
     initTooltips();
     initAppActionHelpers();
+    initGenericFormDrafts();
+    initFormSubmitConfirmations();
 });
+
+function initGenericFormDrafts() {
+    $('form[method="POST"], form[method="post"]').each(function (formIndex) {
+        const form = this;
+        const $form = $(form);
+        if ($form.data('genericDraftDisabled') || $form.find('[data-save-draft]').length || $form.find('input[type="password"]').length) {
+            return;
+        }
+
+        const formId = form.id || form.getAttribute('name') || `form-${formIndex}`;
+        const draftKey = `erniPms.formDraft.${location.pathname}.${formId}`;
+        const $submit = $form.find('button[type="submit"], input[type="submit"]').last();
+        const $draftButton = $('<button type="button" class="btn btn-outline-primary btn-sm ms-2" data-generic-save-draft><i class="fas fa-save me-1"></i> Save Draft</button>');
+        const $draftStatus = $('<span class="text-muted small ms-2" data-generic-draft-status></span>');
+
+        function readFormData() {
+            const data = {};
+            $(form).find('input, textarea, select').each(function () {
+                const field = this;
+                const name = field.name;
+                if (!name || field.type === 'file' || field.type === 'password' || field.type === 'hidden') {
+                    return;
+                }
+                if (field.type === 'checkbox' || field.type === 'radio') {
+                    data[name] = field.checked ? field.value : '';
+                    return;
+                }
+                data[name] = $(field).val();
+            });
+            return data;
+        }
+
+        function hasDraftData(data) {
+            return Object.values(data).some((value) => String(value || '').trim() !== '');
+        }
+
+        function saveDraft() {
+            const data = readFormData();
+            if (!hasDraftData(data)) {
+                localStorage.removeItem(draftKey);
+                $draftStatus.text('Draft cleared');
+                return;
+            }
+            localStorage.setItem(draftKey, JSON.stringify({ savedAt: new Date().toISOString(), data }));
+            $draftStatus.text('Draft saved');
+        }
+
+        function loadDraft() {
+            const raw = localStorage.getItem(draftKey);
+            if (!raw) {
+                return;
+            }
+            try {
+                const payload = JSON.parse(raw);
+                Object.entries(payload.data || {}).forEach(([name, value]) => {
+                    const fields = form.elements[name];
+                    if (!fields) return;
+                    const list = fields instanceof RadioNodeList ? Array.from(fields) : [fields];
+                    list.forEach((field) => {
+                        if (field.type === 'checkbox' || field.type === 'radio') {
+                            field.checked = String(field.value) === String(value);
+                        } else {
+                            field.value = value;
+                        }
+                    });
+                });
+                $draftStatus.text('Draft restored');
+            } catch (error) {
+                localStorage.removeItem(draftKey);
+            }
+        }
+
+        if ($submit.length) {
+            $submit.after($draftStatus).after($draftButton);
+        } else {
+            $form.append($('<div class="mt-3"></div>').append($draftButton, $draftStatus));
+        }
+
+        $draftButton.on('click', saveDraft);
+        $form.on('submit', function () {
+            if (form.dataset.confirmedSubmit === '1' || form.id === 'addClientForm') {
+                localStorage.removeItem(draftKey);
+            }
+        });
+        loadDraft();
+    });
+}
+
+function initFormSubmitConfirmations() {
+    $('form[method="POST"], form[method="post"]').each(function () {
+        const form = this;
+        const $form = $(form);
+        if (form.id === 'addClientForm' || $form.data('confirmSkip')) {
+            return;
+        }
+
+        $form.on('submit.genericConfirm', async function (event) {
+            if (form.dataset.confirmedSubmit === '1') {
+                form.dataset.confirmedSubmit = '0';
+                return;
+            }
+
+            event.preventDefault();
+            const confirmed = typeof window.appConfirm === 'function'
+                ? await window.appConfirm({
+                    title: 'Confirm Submission',
+                    subject: 'Submit this form?',
+                    message: 'The workflow will continue after this action is saved.',
+                    icon: 'fas fa-circle-check fa-lg',
+                    confirmIcon: 'fas fa-check',
+                    confirmText: 'Submit'
+                })
+                : window.confirm('Submit this form?');
+
+            if (confirmed) {
+                form.dataset.confirmedSubmit = '1';
+                form.requestSubmit();
+            }
+        });
+    });
+}
 
 function initSidebar() {
     const sidebar = $('#sidebar-wrapper');
     const content = $('#page-content-wrapper');
     const overlay = $('.sidebar-overlay');
     const toggle = $('.sidebar-toggle-btn');
-    const desktopStateKey = 'erni.sidebar.collapsed';
-    const mobileStateKey = 'erni.sidebar.mobile_open';
+    if (!sidebar.length || !content.length || !toggle.length) {
+        return;
+    }
+
+    const storageScope = getSidebarStateScope();
+    const desktopStateKey = `erni.sidebar.${storageScope}.collapsed`;
+    const mobileStateKey = `erni.sidebar.${storageScope}.mobile_open`;
 
     function updateToggleState() {
         const isActive = window.innerWidth <= 992 ? sidebar.hasClass('active') : sidebar.hasClass('collapsed');
@@ -21,7 +149,7 @@ function initSidebar() {
 
     function applySidebarState() {
         if (window.innerWidth <= 992) {
-            const isMobileOpen = localStorage.getItem(mobileStateKey) === 'true';
+            const isMobileOpen = getStoredSidebarValue(mobileStateKey) === 'true';
             sidebar.removeClass('collapsed');
             content.removeClass('sidebar-collapsed');
             sidebar.toggleClass('active', isMobileOpen);
@@ -30,7 +158,7 @@ function initSidebar() {
             return;
         }
 
-        const isCollapsed = localStorage.getItem(desktopStateKey) === 'true';
+        const isCollapsed = getStoredSidebarValue(desktopStateKey) === 'true';
         sidebar.removeClass('active');
         overlay.removeClass('active');
         sidebar.toggleClass('collapsed', isCollapsed);
@@ -47,7 +175,7 @@ function initSidebar() {
             const nextOpenState = !sidebar.hasClass('active');
             sidebar.toggleClass('active', nextOpenState);
             overlay.toggleClass('active', nextOpenState);
-            localStorage.setItem(mobileStateKey, String(nextOpenState));
+            setStoredSidebarValue(mobileStateKey, String(nextOpenState));
             updateToggleState();
             return;
         }
@@ -55,20 +183,57 @@ function initSidebar() {
         const nextCollapsedState = !sidebar.hasClass('collapsed');
         sidebar.toggleClass('collapsed', nextCollapsedState);
         content.toggleClass('sidebar-collapsed', nextCollapsedState);
-        localStorage.setItem(desktopStateKey, String(nextCollapsedState));
+        setStoredSidebarValue(desktopStateKey, String(nextCollapsedState));
         updateToggleState();
     });
 
     overlay.on('click', function () {
         sidebar.removeClass('active');
         overlay.removeClass('active');
-        localStorage.setItem(mobileStateKey, 'false');
+        setStoredSidebarValue(mobileStateKey, 'false');
         updateToggleState();
     });
 
     $(window).on('resize', debounce(function () {
         applySidebarState();
     }, 150));
+
+    window.addEventListener('pageshow', function () {
+        applySidebarState();
+    });
+}
+
+function getSidebarStateScope() {
+    const context = window.APP_USER_CONTEXT || {};
+    const userId = Number(context.id || 0);
+
+    if (Number.isFinite(userId) && userId > 0) {
+        return `user-${userId}`;
+    }
+
+    const role = String(context.role || '').trim().toLowerCase();
+    if (role) {
+        return `role-${role}`;
+    }
+
+    const path = String(window.location.pathname || '').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase();
+    return path ? `page-${path}` : 'guest';
+}
+
+function getStoredSidebarValue(key) {
+    try {
+        return window.localStorage.getItem(key);
+    } catch (error) {
+        return null;
+    }
+}
+
+function setStoredSidebarValue(key, value) {
+    try {
+        window.localStorage.setItem(key, value);
+    } catch (error) {
+        // Ignore storage failures so the toggle still works in restricted browsers.
+    }
 }
 
 function initDarkMode() {

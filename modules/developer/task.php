@@ -1,11 +1,19 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
+require_once '../../includes/department-artifacts.php';
+require_once '../../includes/methodology-roadmap.php';
+require_once '../../includes/project-workflow.php';
 requireRole('developer');
 
 $conn = getConnection();
 $user = getCurrentUser();
 workflowEnsureSchema($conn);
+departmentArtifactEnsureSchema($conn);
+
+$userDepartment = trim((string) ($user['department'] ?? ''));
+$userDepartmentCanonical = projectWorkflowDepartmentLabel($userDepartment);
+$departmentProfile = departmentArtifactProfile($userDepartment);
 
 $taskBaseQuery = "
     SELECT t.*,
@@ -34,6 +42,33 @@ $todoTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']}
 $inProgressTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status IN ('in_progress', 'sul_revision', 'qa_failed') ORDER BY t.deadline ASC");
 $reviewTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release') ORDER BY t.deadline ASC");
 $completedTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'completed' ORDER BY t.completed_at DESC LIMIT 10");
+
+$departmentProjects = [];
+$departmentProjectsResult = $conn->query("
+    SELECT
+        p.id,
+        p.name,
+        p.description,
+        p.requested_features,
+        p.timeline_start,
+        p.timeline_end,
+        c.name AS client_name,
+        COUNT(t.id) AS assigned_task_count,
+        SUM(CASE WHEN t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release', 'completed') THEN 1 ELSE 0 END) AS handoff_count
+    FROM projects p
+    JOIN tasks t ON t.project_id = p.id
+    LEFT JOIN clients c ON c.id = p.client_id
+    WHERE t.assigned_to = {$user['id']}
+    GROUP BY p.id, p.name, p.description, p.requested_features, p.timeline_start, p.timeline_end, c.name
+    ORDER BY p.name ASC
+");
+if ($departmentProjectsResult && $departmentProjectsResult->num_rows > 0) {
+    while ($row = $departmentProjectsResult->fetch_assoc()) {
+        $row['requirements'] = departmentArtifactParseRequirements($row['requested_features'] ?? '');
+        $row['additional_requirements'] = departmentArtifactAdditionalRequirements($row['requested_features'] ?? '');
+        $departmentProjects[] = $row;
+    }
+}
 
 // Get projects assigned to this developer (for Gantt modal) - ONLY projects with assigned tasks
 $developerProjects = $conn->query("
@@ -79,6 +114,7 @@ if ($developerProjects && $developerProjects->num_rows > 0) {
         }
         
         $ganttProjects[$pid] = [
+            'project_id' => (int) $pid,
             'project_name' => $project['name'],
             'timeline_start' => $project['timeline_start'],
             'timeline_end' => $project['timeline_end'],
@@ -93,6 +129,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $taskId = (int) ($_POST['task_id'] ?? 0);
     $newStatus = (string) ($_POST['new_status'] ?? '');
     $allowedStatuses = ['todo', 'in_progress'];
+    if ($userDepartmentCanonical === 'UI/UX') {
+        $allowedStatuses[] = 'for_review';
+    }
 
     if ($taskId <= 0 || !in_array($newStatus, $allowedStatuses, true)) {
         $_SESSION['error'] = "Invalid task status update.";
@@ -101,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 
     $taskCheck = $conn->prepare("
-        SELECT t.id, t.title, t.status, t.assigned_by, p.name AS project_name, p.sul_id
+        SELECT t.id, t.title, t.status, t.assigned_by, t.project_id, p.name AS project_name, p.sul_id
         FROM tasks t
         LEFT JOIN projects p ON p.id = t.project_id
         WHERE t.id = ? AND t.assigned_to = ?
@@ -124,12 +163,39 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         header('Location: task.php');
         exit();
     }
+
+    if ($newStatus === 'for_review' && $userDepartmentCanonical !== 'UI/UX') {
+        $_SESSION['error'] = "Submit a Pull Request from the Git update form to request SUL review.";
+        header('Location: task.php');
+        exit();
+    }
+
+    if ($newStatus === 'in_progress') {
+        $roadmapBlockReason = methodologyRoadmapStartBlockReason($conn, $taskId, (int) $user['id']);
+        if ($roadmapBlockReason !== null) {
+            $_SESSION['error'] = $roadmapBlockReason;
+            header('Location: task.php');
+            exit();
+        }
+    }
     
     $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = NULL WHERE id = ?");
     $stmt->bind_param("si", $newStatus, $taskId);
     $stmt->execute();
     
-    workflowLogStatusChange((int) $user['id'], $taskId, (string) ($task['status'] ?? ''), $newStatus, 'developer_update_task_status');
+    workflowLogStatusChange((int) $user['id'], $taskId, (string) ($task['status'] ?? ''), $newStatus, $newStatus === 'for_review' ? 'uiux_submit_design' : 'developer_update_task_status');
+    if ($newStatus === 'for_review') {
+        workflowAddTaskComment($conn, $taskId, (int) $user['id'], 'UI/UX submitted design work for SUL review.');
+        if (!empty($task['sul_id'])) {
+            workflowNotifyUser(
+                (int) $task['sul_id'],
+                'Design Submitted for Review: ' . $task['title'],
+                'UI/UX submitted design files or references for review.',
+                BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($task['project_id'] ?? 0),
+                $taskId
+            );
+        }
+    }
     $_SESSION['success'] = "Task status updated";
     
     header('Location: task.php');
@@ -267,6 +333,159 @@ include '../../includes/navbar.php';
 .project-badge small {
     font-size: 0.7rem;
     color: var(--gray-400);
+}
+
+.department-workbench {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 20px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.department-workbench__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.2rem 1.5rem;
+    border-bottom: 1px solid var(--gray-200);
+    background: linear-gradient(135deg, rgba(31, 99, 146, 0.08), #fff 70%);
+}
+
+.department-workbench__title {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.35rem;
+    color: var(--gray-900);
+    font-weight: 700;
+}
+
+.department-workbench__title i {
+    color: var(--theme-primary);
+}
+
+.department-workbench__summary {
+    color: var(--gray-600);
+    font-size: 0.88rem;
+    margin: 0;
+}
+
+.process-toggle {
+    border: 1px solid rgba(31, 99, 146, 0.22);
+    background: #fff;
+    color: var(--theme-primary);
+    border-radius: 999px;
+    padding: 0.45rem 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.process-guide {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--gray-200);
+    background: var(--gray-50);
+}
+
+.process-guide__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.process-step {
+    display: flex;
+    gap: 0.65rem;
+    align-items: flex-start;
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+    padding: 0.8rem;
+    color: var(--gray-700);
+    font-size: 0.82rem;
+}
+
+.process-step__number {
+    flex: 0 0 auto;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(31, 99, 146, 0.12);
+    color: var(--theme-primary);
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+.department-projects {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+    padding: 1rem 1.5rem 1.5rem;
+}
+
+.department-project-card {
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 1rem;
+    background: #fff;
+}
+
+.department-project-card h6 {
+    color: var(--gray-900);
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+}
+
+.department-project-card__meta {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.8rem;
+}
+
+.department-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    color: var(--gray-600);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.3rem 0.55rem;
+}
+
+.requirement-list {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.requirement-list li {
+    display: flex;
+    gap: 0.45rem;
+    align-items: flex-start;
+    color: var(--gray-700);
+    font-size: 0.8rem;
+}
+
+.requirement-list i {
+    color: var(--theme-primary);
+    margin-top: 0.16rem;
+}
+
+.tooltip-helper {
+    color: var(--theme-primary);
+    cursor: help;
 }
 
 /* Kanban Columns */
@@ -593,9 +812,93 @@ include '../../includes/navbar.php';
     word-break: break-word;
 }
 
+.department-modal-panel {
+    border-left: 3px solid var(--theme-primary);
+}
+
+.department-modal-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+
+.department-modal-heading h6 {
+    margin: 0;
+}
+
+.department-modal-summary {
+    color: var(--gray-600);
+    font-size: 0.82rem;
+    margin-bottom: 0.85rem;
+}
+
+.department-requirements {
+    display: grid;
+    gap: 0.5rem;
+    margin: 0 0 0.85rem;
+    padding: 0;
+    list-style: none;
+}
+
+.department-requirements li {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 0.65rem 0.75rem;
+    color: var(--gray-700);
+    font-size: 0.82rem;
+    background: var(--gray-50);
+}
+
+.department-requirements i {
+    color: var(--theme-primary);
+    margin-top: 0.18rem;
+}
+
+.artifact-list {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.artifact-item {
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+    padding: 0.75rem;
+    background: #fff;
+}
+
+.artifact-item__title {
+    color: var(--gray-900);
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.artifact-item__meta {
+    color: var(--gray-500);
+    font-size: 0.72rem;
+    margin-bottom: 0.45rem;
+}
+
+.artifact-item__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.artifact-note {
+    color: var(--gray-600);
+    font-size: 0.8rem;
+    margin-top: 0.45rem;
+}
+
 @media (max-width: 767.98px) {
     .task-facts-grid,
-    .git-latest-grid {
+    .git-latest-grid,
+    .process-guide__grid {
         grid-template-columns: 1fr;
     }
 
@@ -766,10 +1069,13 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-workbench,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-project-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-column,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-update-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact {
@@ -779,6 +1085,11 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-workbench__header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-guide,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-step,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-chip,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-requirements li,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-modal .modal-body,
@@ -797,6 +1108,9 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-workbench__title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-project-card h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-item__title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-header h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card h6,
@@ -814,6 +1128,13 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-workbench__summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-chip,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requirement-list li,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-modal-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-requirements li,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-item__meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-note,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-mini p,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card small,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-desc,
@@ -908,6 +1229,7 @@ include '../../includes/navbar.php';
             <h5>
                 <i class="fas fa-project-diagram"></i>
                 My Projects
+                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Open a project timeline without changing task status."></i>
             </h5>
         </div>
         <div class="project-list">
@@ -917,6 +1239,9 @@ include '../../includes/navbar.php';
                         <i class="fas fa-folder"></i>
                         <span><?php echo htmlspecialchars($project['project_name']); ?></span>
                         <small>(<?php echo count($project['tasks']); ?> tasks)</small>
+                        <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $project['project_id']; ?>" class="text-decoration-none ms-2" onclick="event.stopPropagation();" title="View methodology roadmap">
+                            <i class="fas fa-route"></i>
+                        </a>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
@@ -928,13 +1253,85 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
+    <div class="department-workbench">
+        <div class="department-workbench__header">
+            <div>
+                <div class="department-workbench__title">
+                    <i class="fas <?php echo htmlspecialchars((string) $departmentProfile['icon']); ?>"></i>
+                    <?php echo htmlspecialchars((string) $departmentProfile['title']); ?>
+                    <i class="fas fa-circle-info tooltip-helper" data-bs-toggle="tooltip" title="This department panel adds context and handoff tools only. The current task workflow below stays the source of truth."></i>
+                </div>
+                <p class="department-workbench__summary"><?php echo htmlspecialchars((string) $departmentProfile['summary']); ?></p>
+            </div>
+            <button class="process-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#departmentProcessGuide" aria-expanded="false" aria-controls="departmentProcessGuide">
+                <i class="fas fa-list-check me-1"></i> Process Guide
+            </button>
+        </div>
+        <div class="collapse" id="departmentProcessGuide">
+            <div class="process-guide">
+                <div class="process-guide__grid">
+                    <?php foreach (($departmentProfile['steps'] ?? []) as $stepIndex => $step): ?>
+                        <div class="process-step">
+                            <span class="process-step__number"><?php echo $stepIndex + 1; ?></span>
+                            <span><?php echo htmlspecialchars((string) $step); ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+        <div class="department-projects">
+            <?php if (count($departmentProjects) > 0): ?>
+                <?php foreach ($departmentProjects as $project): ?>
+                    <?php
+                    $requirements = array_slice($project['requirements'] ?? [], 0, 4);
+                    $taskCount = (int) ($project['assigned_task_count'] ?? 0);
+                    $handoffCount = (int) ($project['handoff_count'] ?? 0);
+                    ?>
+                    <div class="department-project-card">
+                        <h6><?php echo htmlspecialchars((string) ($project['name'] ?? 'Project')); ?></h6>
+                        <div class="department-project-card__meta">
+                            <span class="department-chip"><i class="fas fa-building"></i><?php echo htmlspecialchars((string) ($project['client_name'] ?? 'Client')); ?></span>
+                            <span class="department-chip"><i class="fas fa-list-check"></i><?php echo $taskCount; ?> task<?php echo $taskCount === 1 ? '' : 's'; ?></span>
+                            <span class="department-chip"><i class="fas fa-share-from-square"></i><?php echo $handoffCount; ?> in review+</span>
+                        </div>
+                        <?php if ($userDepartment === 'UI/UX Designer'): ?>
+                            <div class="small fw-semibold mb-2">
+                                Requirements
+                                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="These are the Sales-captured project requirements UI/UX should read before uploading design handoffs."></i>
+                            </div>
+                        <?php else: ?>
+                            <div class="small fw-semibold mb-2">
+                                Department Inputs
+                                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Use these project inputs as context while keeping implementation and review in the Kanban flow."></i>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (count($requirements) > 0): ?>
+                            <ul class="requirement-list">
+                                <?php foreach ($requirements as $requirement): ?>
+                                    <li><i class="fas fa-check-circle"></i><span><?php echo htmlspecialchars((string) $requirement); ?></span></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php else: ?>
+                            <p class="text-muted small mb-0">No captured feature requirements yet.</p>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="empty-state-mini" style="grid-column: 1 / -1;">
+                    <i class="fas fa-inbox"></i>
+                    <p>No department work items yet</p>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
     <div class="row g-4">
         <!-- To Do Column -->
         <div class="col-md-3">
             <div class="kanban-column">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-clock text-secondary me-2"></i>To Do</span>
+                        <span><i class="fas fa-clock text-secondary me-2"></i>To Do <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Tasks waiting for you to start. Moving from here only sets the task to In Progress."></i></span>
                         <span class="badge bg-secondary"><?php echo $todoTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -956,10 +1353,10 @@ include '../../includes/navbar.php';
                         <div class="d-flex justify-content-between align-items-center">
                             <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
                             <div>
-                                <button class="btn-action me-1" onclick="startTask(<?php echo $task['id']; ?>)">
+                                <button class="btn-action me-1" onclick="startTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Start this task without changing the controlled review workflow.">
                                     <i class="fas fa-play"></i> Start
                                 </button>
-                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)">
+                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
@@ -981,7 +1378,7 @@ include '../../includes/navbar.php';
             <div class="kanban-column">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-spinner text-primary me-2"></i>In Progress</span>
+                        <span><i class="fas fa-spinner text-primary me-2"></i>In Progress <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Work is active here. Submit a PR from task details when it is ready for review."></i></span>
                         <span class="badge bg-primary"><?php echo $inProgressTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -1003,13 +1400,13 @@ include '../../includes/navbar.php';
                         <div class="d-flex justify-content-between align-items-center">
                             <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
                             <div>
-                                <button class="btn-action me-1" onclick="viewTask(<?php echo $task['id']; ?>)">
+                                <button class="btn-action me-1" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details and submit the PR through the Git update form.">
                                     <i class="fas fa-code-pull-request"></i> Submit PR
                                 </button>
-                                <button class="btn-action me-1" onclick="reviewTask(<?php echo $task['id']; ?>)">
+                                <button class="btn-action me-1" onclick="reviewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Move this task back to To Do if work has not started cleanly.">
                                     <i class="fas fa-undo"></i> Back
                                 </button>
-                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)">
+                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
@@ -1031,7 +1428,7 @@ include '../../includes/navbar.php';
             <div class="kanban-column">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-check-circle text-warning me-2"></i>Workflow Review</span>
+                        <span><i class="fas fa-check-circle text-warning me-2"></i>Workflow Review <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Tasks arrive here only through PR submission and continue through SUL, QA, and Architect review."></i></span>
                         <span class="badge bg-warning"><?php echo $reviewTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -1052,7 +1449,7 @@ include '../../includes/navbar.php';
                         <?php endif; ?>
                         <div class="d-flex justify-content-between align-items-center">
                             <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
-                            <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)">
+                            <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Review the task details and handoff history.">
                                 <i class="fas fa-eye"></i> View
                             </button>
                         </div>
@@ -1073,7 +1470,7 @@ include '../../includes/navbar.php';
             <div class="kanban-column">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-check-double text-success me-2"></i>Completed</span>
+                        <span><i class="fas fa-check-double text-success me-2"></i>Completed <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Completion remains controlled by the existing SUL, QA, Architect, and release flow."></i></span>
                         <span class="badge bg-success"><?php echo $completedTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -1135,6 +1532,20 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
+const currentDepartment = <?php echo json_encode($userDepartment); ?>;
+const currentDepartmentCanonical = <?php echo json_encode($userDepartmentCanonical); ?>;
+const departmentProfile = <?php echo json_encode($departmentProfile); ?>;
+
+function initTooltips(root = document) {
+    if (!window.bootstrap || !bootstrap.Tooltip) {
+        return;
+    }
+
+    root.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
+        bootstrap.Tooltip.getOrCreateInstance(element);
+    });
+}
+
 function updateKanbanColumnCount(columnBody) {
     if (!columnBody) {
         return;
@@ -1225,7 +1636,23 @@ function reviewTask(taskId) {
     updateTaskStatus(taskId, 'todo');
 }
 
-function updateTaskStatus(taskId, status) {
+async function updateTaskStatus(taskId, status) {
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Confirm Task Update',
+            subject: status === 'for_review' ? 'Submit design for review?' : 'Update this task status?',
+            message: status === 'for_review'
+                ? 'Your UI/UX design handoff will be sent to the SUL for approval.'
+                : 'The task status will be saved and activity logged.',
+            icon: 'fas fa-circle-check fa-lg',
+            confirmIcon: 'fas fa-check',
+            confirmText: status === 'for_review' ? 'Submit Design' : 'Update'
+        })
+        : window.confirm('Update this task status?');
+    if (!confirmed) {
+        return;
+    }
+
     const form = document.createElement('form');
     form.method = 'POST';
     form.innerHTML = `
@@ -1481,6 +1908,43 @@ function viewTask(taskId) {
             const estimateText = [task.estimated_days_min, task.estimated_days_likely, task.estimated_days_max].every(value => value)
                 ? `Min ${task.estimated_days_min}d | Likely ${task.estimated_days_likely}d | Max ${task.estimated_days_max}d`
                 : 'No estimate available';
+            const departmentPanel = buildDepartmentPanel(task);
+            const isUiUxDepartment = currentDepartmentCanonical === 'UI/UX';
+            const gitToolsPanel = isUiUxDepartment ? '' : `
+                        <div class="task-side-panel">
+                            <div class="task-side-heading">
+                                <label class="form-label mb-0 fw-semibold">Log Git Update</label>
+                                <small class="text-muted">Branch, commit, PR</small>
+                            </div>
+                            <div class="mb-2">
+                                <select id="gitAction" class="form-select form-select-sm">
+                                    <option value="commit_pushed">Commit Pushed</option>
+                                    <option value="branch_created">Branch Created</option>
+                                    <option value="pull_request_opened">Pull Request Opened</option>
+                                    <option value="note">General Note</option>
+                                </select>
+                            </div>
+                            <div class="mb-2"><input id="gitBranchName" class="form-control form-control-sm" placeholder="Branch name (required)"></div>
+                            <div class="mb-2"><input id="gitCommitHash" class="form-control form-control-sm" placeholder="Commit hash"></div>
+                            <div class="mb-2"><input id="gitCommitMessage" class="form-control form-control-sm" placeholder="Commit message"></div>
+                            <div class="mb-2"><input id="gitPullRequestUrl" class="form-control form-control-sm" placeholder="Pull request URL"></div>
+                            <div class="mb-2"><input id="gitRepositoryUrl" class="form-control form-control-sm" placeholder="Repository URL"></div>
+                            <div class="mb-2">
+                                <select id="gitStatus" class="form-select form-select-sm">
+                                    <option value="active">Active</option>
+                                    <option value="in_review">In Review</option>
+                                    <option value="closed">Closed</option>
+                                </select>
+                            </div>
+                            <div class="mb-3"><textarea id="gitNotes" class="form-control form-control-sm" rows="3" placeholder="Notes for this Git update"></textarea></div>
+                            <button class="btn-primary-modern task-detail-action" onclick="addGitUpdate(${taskId})">
+                                <i class="fas fa-code-branch"></i> Save Git Update
+                            </button>
+                        </div>
+                        <div class="task-detail-panel">
+                            <h6 class="mb-2">Git History</h6>
+                            <div id="gitUpdatesList" class="small"></div>
+                        </div>`;
             let html = `
                 <div class="row g-4">
                     <div class="col-lg-8">
@@ -1508,6 +1972,8 @@ function viewTask(taskId) {
                                 <div class="task-fact-value">${escapeHtml(estimateText)}</div>
                             </div>
                         </div>
+
+                        ${departmentPanel}
 
                         <div class="task-detail-panel">
                             <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
@@ -1556,52 +2022,7 @@ function viewTask(taskId) {
                         </div>
                     </div>
                     <div class="col-lg-4">
-                        <div class="task-side-panel">
-                            <div class="task-side-heading">
-                                <label class="form-label mb-0 fw-semibold">Log Git Update</label>
-                                <small class="text-muted">Branch, commit, PR</small>
-                            </div>
-                            <div class="mb-2">
-                                <select id="gitAction" class="form-select form-select-sm">
-                                    <option value="commit_pushed">Commit Pushed</option>
-                                    <option value="branch_created">Branch Created</option>
-                                    <option value="pull_request_opened">Pull Request Opened</option>
-                                    <option value="note">General Note</option>
-                                </select>
-                            </div>
-                            <div class="mb-2">
-                                <input id="gitBranchName" class="form-control form-control-sm" placeholder="Branch name (required)">
-                            </div>
-                            <div class="mb-2">
-                                <input id="gitCommitHash" class="form-control form-control-sm" placeholder="Commit hash">
-                            </div>
-                            <div class="mb-2">
-                                <input id="gitCommitMessage" class="form-control form-control-sm" placeholder="Commit message">
-                            </div>
-                            <div class="mb-2">
-                                <input id="gitPullRequestUrl" class="form-control form-control-sm" placeholder="Pull request URL">
-                            </div>
-                            <div class="mb-2">
-                                <input id="gitRepositoryUrl" class="form-control form-control-sm" placeholder="Repository URL">
-                            </div>
-                            <div class="mb-2">
-                                <select id="gitStatus" class="form-select form-select-sm">
-                                    <option value="active">Active</option>
-                                    <option value="in_review">In Review</option>
-                                    <option value="closed">Closed</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <textarea id="gitNotes" class="form-control form-control-sm" rows="3" placeholder="Notes for this Git update"></textarea>
-                            </div>
-                            <button class="btn-primary-modern task-detail-action" onclick="addGitUpdate(${taskId})">
-                                <i class="fas fa-code-branch"></i> Save Git Update
-                            </button>
-                        </div>
-                        <div class="task-detail-panel">
-                            <h6 class="mb-2">Git History</h6>
-                            <div id="gitUpdatesList" class="small"></div>
-                        </div>
+                        ${gitToolsPanel}
                         <div class="task-side-panel">
                             <div class="mb-3">
                                 <label class="form-label">Add Comment</label>
@@ -1621,12 +2042,153 @@ function viewTask(taskId) {
             $('#taskDetails').html(html);
             loadComments(taskId);
             loadGitUpdates(taskId);
+            initTooltips(document.getElementById('taskDetails'));
             new bootstrap.Modal(document.getElementById('taskModal')).show();
         },
         error: function(xhr) {
             const message = xhr.responseJSON?.error || 'Unable to load task details';
             $('#taskDetails').html(`<div class="alert alert-danger mb-0">${escapeHtml(message)}</div>`);
             new bootstrap.Modal(document.getElementById('taskModal')).show();
+        }
+    });
+}
+
+function buildDepartmentPanel(task) {
+    const isUiUx = currentDepartmentCanonical === 'UI/UX';
+    const requirements = Array.isArray(task.project_requirements) ? task.project_requirements : [];
+    const requirementItems = requirements.length > 0
+        ? requirements.map((item) => `<li><i class="fas fa-check-circle"></i><span>${escapeHtml(item)}</span></li>`).join('')
+        : '<li><i class="fas fa-circle-info"></i><span>No captured feature requirements yet.</span></li>';
+    const additionalRequirements = task.additional_requirements
+        ? `<div class="mt-3">
+                <div class="small fw-semibold mb-2">Additional Requirements</div>
+                <div class="small text-muted">${escapeHtml(task.additional_requirements)}</div>
+           </div>`
+        : '';
+    const uploadInput = isUiUx
+        ? `<div class="mb-2">
+                <label class="form-label">
+                    ${escapeHtml(departmentProfile.file_label || 'Design picture')}
+                    <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Upload a JPG, PNG, GIF, or WEBP design image for the team to inspect."></i>
+                </label>
+                <input id="departmentArtifactFile" class="form-control form-control-sm" type="file" accept="image/*">
+           </div>`
+        : '';
+    const panelLabel = isUiUx ? 'Client Requirements' : 'Project Inputs';
+
+    return `
+        <div class="task-detail-panel department-modal-panel">
+            <div class="department-modal-heading">
+                <div>
+                    <h6><i class="fas ${escapeAttribute(departmentProfile.icon || 'fa-briefcase')} me-2 text-primary"></i>${escapeHtml(departmentProfile.title || 'Department Workbench')}</h6>
+                    <div class="department-modal-summary">${escapeHtml(departmentProfile.summary || '')}</div>
+                </div>
+                <span class="badge bg-light text-primary border">${escapeHtml(currentDepartment || 'Department')}</span>
+            </div>
+
+            <div class="small fw-semibold mb-2">
+                ${panelLabel}
+                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx ? 'UI/UX should review these requirements before preparing designs and wireframes.' : 'Use these requirements as context for this department without changing the task workflow.'}"></i>
+            </div>
+            <ul class="department-requirements">${requirementItems}</ul>
+            ${additionalRequirements}
+
+            <div class="row g-3 mt-1">
+                <div class="col-md-6">
+                    <div class="task-side-panel mb-0">
+                        <div class="task-side-heading">
+                            <label class="form-label mb-0 fw-semibold">${escapeHtml(departmentProfile.artifact_cta || 'Save Handoff')}</label>
+                            <small class="text-muted">${isUiUx ? 'Design, wireframe, notes' : 'Link, notes'}</small>
+                        </div>
+                        <div class="mb-2">
+                            <input id="departmentArtifactTitle" class="form-control form-control-sm" placeholder="Handoff title">
+                        </div>
+                        ${uploadInput}
+                        <div class="mb-2">
+                            <label class="form-label">
+                                ${escapeHtml(departmentProfile.link_label || 'Reference link')}
+                                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx ? 'Paste a Figma, FigJam, wireframe, or prototype link.' : 'Paste the reference link this department needs to hand off.'}"></i>
+                            </label>
+                            <input id="departmentArtifactUrl" class="form-control form-control-sm" placeholder="https://...">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">${escapeHtml(departmentProfile.notes_label || 'Notes')}</label>
+                            <textarea id="departmentArtifactNotes" class="form-control form-control-sm" rows="3" placeholder="Short handoff notes"></textarea>
+                        </div>
+                        <button class="btn-primary-modern task-detail-action" onclick="saveDepartmentArtifact(${Number(task.id)})" data-bs-toggle="tooltip" title="Saves department-specific handoff details without moving the task status.">
+                            <i class="fas fa-floppy-disk"></i> ${escapeHtml(departmentProfile.artifact_cta || 'Save Handoff')}
+                        </button>
+                        ${isUiUx ? `
+                            <button class="btn-primary-modern task-detail-action mt-2" onclick="updateTaskStatus(${Number(task.id)}, 'for_review')" data-bs-toggle="tooltip" title="Submit design work to the UI/UX SUL for approval without Git or pull requests.">
+                                <i class="fas fa-paper-plane"></i> Submit Design
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="task-side-panel mb-0">
+                        <h6 class="mb-2">Department Handoffs</h6>
+                        <div id="departmentArtifactList" class="artifact-list">
+                            ${renderDepartmentArtifacts(task.department_artifacts || [])}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderDepartmentArtifacts(artifacts) {
+    if (!Array.isArray(artifacts) || artifacts.length === 0) {
+        return '<p class="text-muted mb-0 small">No department handoffs saved yet.</p>';
+    }
+
+    return artifacts.map((artifact) => {
+        const fileLink = artifact.file_url
+            ? `<a class="btn btn-sm btn-outline-primary" href="${escapeAttribute(artifact.file_url)}" target="_blank" rel="noopener"><i class="fas fa-image me-1"></i>Design File</a>`
+            : '';
+        const externalLink = artifact.external_url
+            ? `<a class="btn btn-sm btn-outline-primary" href="${escapeAttribute(artifact.external_url)}" target="_blank" rel="noopener"><i class="fas fa-link me-1"></i>Reference</a>`
+            : '';
+        const note = artifact.notes ? `<div class="artifact-note">${escapeHtml(artifact.notes)}</div>` : '';
+
+        return `
+            <div class="artifact-item">
+                <div class="artifact-item__title">${escapeHtml(artifact.title || 'Department handoff')}</div>
+                <div class="artifact-item__meta">${escapeHtml(artifact.department || 'Department')} | ${escapeHtml(artifact.user_name || 'User')} | ${formatDateTime(artifact.created_at)}</div>
+                <div class="artifact-item__links">${fileLink}${externalLink}${!fileLink && !externalLink ? '<span class="text-muted small">No links attached</span>' : ''}</div>
+                ${note}
+            </div>
+        `;
+    }).join('');
+}
+
+function saveDepartmentArtifact(taskId) {
+    const formData = new FormData();
+    formData.append('task_id', String(taskId));
+    formData.append('artifact_type', departmentProfile.artifact_type || 'department_handoff');
+    formData.append('title', $('#departmentArtifactTitle').val() || '');
+    formData.append('external_url', $('#departmentArtifactUrl').val() || '');
+    formData.append('notes', $('#departmentArtifactNotes').val() || '');
+
+    const fileInput = document.getElementById('departmentArtifactFile');
+    if (fileInput?.files?.[0]) {
+        formData.append('artifact_file', fileInput.files[0]);
+    }
+
+    $.ajax({
+        url: '../../api/add-department-artifact.php',
+        method: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        dataType: 'json',
+        success: function(response) {
+            alert(response.message || 'Department handoff saved.');
+            viewTask(taskId);
+        },
+        error: function(xhr) {
+            alert(xhr.responseJSON?.error || 'Unable to save department handoff.');
         }
     });
 }
@@ -1845,6 +2407,7 @@ function handleDrop(e) {
 }
 
 const selectedTaskId = new URLSearchParams(window.location.search).get('id');
+initTooltips(document);
 if(selectedTaskId) {
     viewTask(selectedTaskId);
 }

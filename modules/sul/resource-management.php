@@ -4,9 +4,67 @@ requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$sulDepartment = trim((string) ($user['department'] ?? ''));
+$sulDepartmentEscaped = $conn->real_escape_string($sulDepartment);
+$sulMissingDepartment = $sulDepartment === '';
+$resourceDepartmentFilter = $sulDepartment !== '' ? " AND u.department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+$resourceDepartmentWhere = $sulDepartment !== '' ? " AND department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+
+if ($sulMissingDepartment) {
+    $_SESSION['error'] = 'Your SUL account must be assigned to a department before managing resources.';
+}
+
+function sulQueryResultOrNull($conn, $sql, $label)
+{
+    $result = $conn->query($sql);
+    if ($result === false) {
+        error_log("Resource Management {$label} query failed: " . $conn->error);
+        return null;
+    }
+
+    return $result;
+}
+
+function sulQueryAssocOrDefault($conn, $sql, array $default, $label)
+{
+    $result = $conn->query($sql);
+    if ($result === false) {
+        error_log("Resource Management {$label} query failed: " . $conn->error);
+        return $default;
+    }
+
+    $row = $result->fetch_assoc();
+    return $row ?: $default;
+}
+
+function sulResourceProjectFilter($conn, string $projectAlias, string $department): string
+{
+    $department = trim($department);
+    if ($department === '') {
+        return '1 = 0';
+    }
+
+    $escapedDepartment = $conn->real_escape_string($department);
+    $clauses = [];
+    if (dbTableExists($conn, 'developer_allocations')) {
+        $clauses[] = "EXISTS (
+            SELECT 1
+            FROM developer_allocations da_scope
+            WHERE da_scope.project_id = {$projectAlias}.id
+              AND da_scope.role = '{$escapedDepartment}'
+        )";
+    }
+    if (dbColumnExists($conn, 'projects', 'included_departments')) {
+        $clauses[] = "{$projectAlias}.included_departments LIKE '%\"{$escapedDepartment}\"%'";
+    }
+
+    return count($clauses) > 0 ? '(' . implode(' OR ', $clauses) . ')' : '1 = 1';
+}
+
+$projectDepartmentFilter = sulResourceProjectFilter($conn, 'p', $sulDepartment);
 
 // Get developers
-$developers = $conn->query("
+$developers = sulQueryResultOrNull($conn, "
     SELECT u.*, 
            COUNT(t.id) as total_tasks,
            SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
@@ -18,13 +76,13 @@ $developers = $conn->query("
                ELSE NULL END), 1) as avg_completion_days
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role = 'developer' AND u.status = 'active'
+    WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
     GROUP BY u.id
     ORDER BY active_tasks DESC
-");
+", 'developers');
 
 // Get experts
-$experts = $conn->query("
+$experts = sulQueryResultOrNull($conn, "
     SELECT u.*, 
            COUNT(t.id) as total_tasks,
            SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
@@ -36,13 +94,13 @@ $experts = $conn->query("
                ELSE NULL END), 1) as avg_completion_days
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role = 'expert' AND u.status = 'active'
+    WHERE u.role = 'expert' AND u.status = 'active'{$resourceDepartmentFilter}
     GROUP BY u.id
     ORDER BY active_tasks DESC
-");
+", 'experts');
 
 // Get workload distribution by role
-$workloadByRole = $conn->query("
+$workloadByRole = sulQueryResultOrNull($conn, "
     SELECT u.role, 
            COUNT(DISTINCT u.id) as member_count,
            COUNT(t.id) as total_tasks,
@@ -50,61 +108,38 @@ $workloadByRole = $conn->query("
            SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
+    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'{$resourceDepartmentFilter}
     GROUP BY u.role
-");
+", 'workloadByRole');
 
 // Get skill distribution
-$skills = $conn->query("
+$skills = sulQueryAssocOrDefault($conn, "
     SELECT 
         SUM(CASE WHEN role = 'expert' THEN 1 ELSE 0 END) as experts,
         SUM(CASE WHEN role = 'developer' THEN 1 ELSE 0 END) as developers,
         COUNT(*) as total
     FROM users 
-    WHERE role IN ('expert', 'developer') AND status = 'active'
-")->fetch_assoc();
-
-// Get workload distribution by role
-$workloadByRole = $conn->query("
-    SELECT u.role, 
-           COUNT(DISTINCT u.id) as member_count,
-           COUNT(t.id) as total_tasks,
-           SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-           SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
-    FROM users u
-    LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
-    GROUP BY u.role
-");
-
-// Get skill distribution
-$skills = $conn->query("
-    SELECT 
-        SUM(CASE WHEN role = 'expert' THEN 1 ELSE 0 END) as experts,
-        SUM(CASE WHEN role = 'developer' THEN 1 ELSE 0 END) as developers,
-        COUNT(*) as total
-    FROM users 
-    WHERE role IN ('expert', 'developer') AND status = 'active'
-")->fetch_assoc();
+    WHERE role IN ('expert', 'developer') AND status = 'active'{$resourceDepartmentWhere}
+", ['experts' => 0, 'developers' => 0, 'total' => 0], 'skills');
 
 // Get available developers (not already in SUL's team)
-$availableDevelopers = $conn->query("
+$availableDevelopers = sulQueryResultOrNull($conn, "
     SELECT u.id, u.full_name, u.email, u.department
     FROM users u
-    WHERE u.role = 'developer' AND u.status = 'active'
+    WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
     ORDER BY u.full_name
-");
+", 'availableDevelopers');
 
 // Get available experts (not already in SUL's team)
-$availableExperts = $conn->query("
+$availableExperts = sulQueryResultOrNull($conn, "
     SELECT u.id, u.full_name, u.email, u.department
     FROM users u
-    WHERE u.role = 'expert' AND u.status = 'active'
+    WHERE u.role = 'expert' AND u.status = 'active'{$resourceDepartmentFilter}
     ORDER BY u.full_name
-");
+", 'availableExperts');
 
 // Get projects with resource allocation
-$projects = $conn->query("
+$projects = sulQueryResultOrNull($conn, "
     SELECT p.*, c.name as client_name,
            COUNT(DISTINCT t.id) as total_tasks,
            COUNT(DISTINCT t.assigned_to) as assigned_resources,
@@ -113,10 +148,11 @@ $projects = $conn->query("
     JOIN clients c ON p.client_id = c.id
     LEFT JOIN tasks t ON p.id = t.project_id
     WHERE p.status != 'completed'
+      AND {$projectDepartmentFilter}
     GROUP BY p.id
     ORDER BY p.created_at DESC
     LIMIT 10
-");
+", 'projects');
 
 // Handle resource updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -124,7 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $userId = $_POST['user_id'];
         $maxTasks = $_POST['max_tasks'];
         
-        $stmt = $conn->prepare("UPDATE users SET max_concurrent_tasks = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE users SET max_concurrent_tasks = ? WHERE id = ?{$resourceDepartmentWhere}");
         $stmt->bind_param("ii", $maxTasks, $userId);
         $stmt->execute();
         
@@ -138,7 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $userId = $_POST['user_id'];
         $status = $_POST['availability_status'];
         
-        $stmt = $conn->prepare("UPDATE users SET availability_status = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE users SET availability_status = ? WHERE id = ?{$resourceDepartmentWhere}");
         $stmt->bind_param("si", $status, $userId);
         $stmt->execute();
         
@@ -156,7 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['error'] = "Invalid role selected";
         } else {
             // Check if user exists and is the correct role
-            $stmt = $conn->prepare("SELECT id, full_name, role FROM users WHERE id = ? AND role = ? AND status = 'active'");
+            $stmt = $conn->prepare("SELECT id, full_name, role FROM users WHERE id = ? AND role = ? AND status = 'active'{$resourceDepartmentWhere}");
             $stmt->bind_param("is", $userId, $role);
             $stmt->execute();
             $existingUser = $stmt->get_result()->fetch_assoc();
@@ -474,6 +510,30 @@ unset($_SESSION['success'], $_SESSION['error']);
     background: var(--gray-300);
 }
 
+/* Keep the navbar burger neutral on this page */
+#menu-toggle-desktop,
+#menu-toggle-mobile {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+#menu-toggle-desktop:hover,
+#menu-toggle-mobile:hover,
+#menu-toggle-desktop:focus,
+#menu-toggle-mobile:focus {
+    background: #eef7fd !important;
+    box-shadow: none !important;
+}
+
+#menu-toggle-desktop:active,
+#menu-toggle-mobile:active,
+#menu-toggle-desktop.is-active,
+#menu-toggle-mobile.is-active {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
 /* Tabs */
 .nav-tabs {
     border-bottom: 2px solid var(--gray-200);
@@ -716,9 +776,11 @@ unset($_SESSION['success'], $_SESSION['error']);
             <div class="stat-label">Active Tasks</div>
             <div class="stat-number"><?php 
                 $activeTotal = 0;
-                $workloadByRole->data_seek(0);
-                while($row = $workloadByRole->fetch_assoc()) {
-                    $activeTotal += $row['active_tasks'];
+                if ($workloadByRole instanceof mysqli_result) {
+                    $workloadByRole->data_seek(0);
+                    while($row = $workloadByRole->fetch_assoc()) {
+                        $activeTotal += (int) $row['active_tasks'];
+                    }
                 }
                 echo $activeTotal;
             ?></div>
@@ -728,11 +790,12 @@ unset($_SESSION['success'], $_SESSION['error']);
             <i class="fas fa-clock stat-icon"></i>
             <div class="stat-label">Avg Completion Time</div>
             <div class="stat-number"><?php 
-                $avgTime = $conn->query("
+                $avgTimeRow = sulQueryAssocOrDefault($conn, "
                     SELECT AVG(TIMESTAMPDIFF(DAY, created_at, completed_at)) as avg_days 
                     FROM tasks 
                     WHERE status = 'completed' AND completed_at IS NOT NULL
-                ")->fetch_assoc()['avg_days'];
+                ", ['avg_days' => 0], 'avgCompletionTime');
+                $avgTime = $avgTimeRow['avg_days'];
                 echo round($avgTime ?? 0, 1);
             ?></div>
             <div class="stat-sub">days per task</div>
@@ -741,10 +804,11 @@ unset($_SESSION['success'], $_SESSION['error']);
             <i class="fas fa-exclamation-triangle stat-icon"></i>
             <div class="stat-label">Overdue Tasks</div>
             <div class="stat-number" style="color: #dc2626;"><?php 
-                $overdue = $conn->query("
+                $overdueRow = sulQueryAssocOrDefault($conn, "
                     SELECT COUNT(*) as count FROM tasks 
                     WHERE status != 'completed' AND deadline < NOW()
-                ")->fetch_assoc()['count'];
+                ", ['count' => 0], 'overdueTasks');
+                $overdue = $overdueRow['count'];
                 echo $overdue;
             ?></div>
             <div class="stat-sub">Need immediate attention</div>
@@ -770,22 +834,25 @@ unset($_SESSION['success'], $_SESSION['error']);
                 </div>
                 <div class="card-body role-card-body">
                     <div class="role-breakdown">
-                        <?php 
-                        $workloadByRole->data_seek(0);
-                        while($role = $workloadByRole->fetch_assoc()): 
-                            $avgPerMember = $role['member_count'] > 0 ? round($role['active_tasks'] / $role['member_count'], 1) : 0;
-                        ?>
-                        <div class="mb-2">
-                            <div class="d-flex justify-content-between mb-1">
-                                <span><strong><?php echo ucfirst($role['role']); ?></strong> (<?php echo $role['member_count']; ?> members)</span>
-                                <span><?php echo $role['active_tasks']; ?> active tasks</span>
+                        <?php if ($workloadByRole instanceof mysqli_result): ?>
+                            <?php $workloadByRole->data_seek(0); ?>
+                            <?php while($role = $workloadByRole->fetch_assoc()): 
+                                $avgPerMember = $role['member_count'] > 0 ? round($role['active_tasks'] / $role['member_count'], 1) : 0;
+                            ?>
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span><strong><?php echo ucfirst($role['role']); ?></strong> (<?php echo $role['member_count']; ?> members)</span>
+                                    <span><?php echo $role['active_tasks']; ?> active tasks</span>
+                                </div>
+                                <div class="progress-modern">
+                                    <div class="progress-bar-modern" style="width: <?php echo min(100, ($role['active_tasks'] / ($role['member_count'] * 5)) * 100); ?>%; background: var(--theme-primary);"></div>
+                                </div>
+                                <small class="text-muted"><?php echo $avgPerMember; ?> avg per member</small>
                             </div>
-                            <div class="progress-modern">
-                                <div class="progress-bar-modern" style="width: <?php echo min(100, ($role['active_tasks'] / ($role['member_count'] * 5)) * 100); ?>%; background: var(--theme-primary);"></div>
-                            </div>
-                            <small class="text-muted"><?php echo $avgPerMember; ?> avg per member</small>
-                        </div>
-                        <?php endwhile; ?>
+                            <?php endwhile; ?>
+                        <?php else: ?>
+                            <div class="text-muted small">No role workload data available.</div>
+                        <?php endif; ?>
                     </div>
                     <div class="role-chart">
                         <canvas id="roleWorkloadChart"></canvas>
@@ -844,39 +911,43 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php while($resource = $developers->fetch_assoc()): 
-                                    $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
-                                    $statusClass = $resource['active_tasks'] >= 5 ? 'overloaded' : ($resource['active_tasks'] >= 3 ? 'busy' : ($resource['active_tasks'] > 0 ? 'available' : 'free'));
-                                    $statusText = $resource['active_tasks'] >= 5 ? 'Overloaded' : ($resource['active_tasks'] >= 3 ? 'Busy' : ($resource['active_tasks'] > 0 ? 'Available' : 'Free'));
-                                ?>
-                                <tr>
-                                    <td>
-                                        <div class="fw-semibold"><?php echo htmlspecialchars($resource['full_name']); ?></div>
-                                        <small class="text-muted"><?php echo htmlspecialchars($resource['email']); ?></small>
-                                    </td>
-                                    <td><span class="badge-role-<?php echo $resource['role']; ?>"><?php echo strtoupper($resource['role']); ?></span></td>
-                                    <td><?php echo $resource['active_tasks']; ?></td>
-                                    <td><?php echo $resource['completed_tasks']; ?></td>
-                                    <td><?php echo $resource['pending_tasks']; ?></td>
-                                    <td><?php if($resource['overdue_tasks'] > 0): ?><span class="badge-status-overloaded"><?php echo $resource['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
-                                    <td><?php echo $resource['avg_completion_days'] ?? 'N/A'; ?>d</td>
-                                    <td>
-                                        <div class="progress-modern" style="width: 100px;">
-                                            <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resource['active_tasks'] >= 5 ? '#dc2626' : ($resource['active_tasks'] >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
-                                        </div>
-                                        <small><?php echo $workloadPercent; ?>%</small>
-                                    </td>
-                                    <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
-                                    <td>
-                                        <button class="btn-primary-modern btn-sm-modern" onclick="editAllocation(<?php echo $resource['id']; ?>, '<?php echo htmlspecialchars($resource['full_name']); ?>', <?php echo $resource['active_tasks']; ?>)">
-                                            <i class="fas fa-sliders-h"></i>
-                                        </button>
-                                        <button class="btn-secondary-modern btn-sm-modern" onclick="viewResourceTasks(<?php echo $resource['id']; ?>)">
-                                            <i class="fas fa-tasks"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                                <?php endwhile; ?>
+                                <?php if ($developers instanceof mysqli_result): ?>
+                                    <?php while($resource = $developers->fetch_assoc()): 
+                                        $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
+                                        $statusClass = $resource['active_tasks'] >= 5 ? 'overloaded' : ($resource['active_tasks'] >= 3 ? 'busy' : ($resource['active_tasks'] > 0 ? 'available' : 'free'));
+                                        $statusText = $resource['active_tasks'] >= 5 ? 'Overloaded' : ($resource['active_tasks'] >= 3 ? 'Busy' : ($resource['active_tasks'] > 0 ? 'Available' : 'Free'));
+                                    ?>
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold"><?php echo htmlspecialchars($resource['full_name']); ?></div>
+                                            <small class="text-muted"><?php echo htmlspecialchars($resource['email']); ?></small>
+                                        </td>
+                                        <td><span class="badge-role-<?php echo $resource['role']; ?>"><?php echo strtoupper($resource['role']); ?></span></td>
+                                        <td><?php echo $resource['active_tasks']; ?></td>
+                                        <td><?php echo $resource['completed_tasks']; ?></td>
+                                        <td><?php echo $resource['pending_tasks']; ?></td>
+                                        <td><?php if($resource['overdue_tasks'] > 0): ?><span class="badge-status-overloaded"><?php echo $resource['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
+                                        <td><?php echo $resource['avg_completion_days'] ?? 'N/A'; ?>d</td>
+                                        <td>
+                                            <div class="progress-modern" style="width: 100px;">
+                                                <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resource['active_tasks'] >= 5 ? '#dc2626' : ($resource['active_tasks'] >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
+                                            </div>
+                                            <small><?php echo $workloadPercent; ?>%</small>
+                                        </td>
+                                        <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
+                                        <td>
+                                            <button class="btn-primary-modern btn-sm-modern" onclick="editAllocation(<?php echo $resource['id']; ?>, '<?php echo htmlspecialchars($resource['full_name']); ?>', <?php echo $resource['active_tasks']; ?>)">
+                                                <i class="fas fa-sliders-h"></i>
+                                            </button>
+                                            <button class="btn-secondary-modern btn-sm-modern" onclick="viewResourceTasks(<?php echo $resource['id']; ?>)">
+                                                <i class="fas fa-tasks"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <?php endwhile; ?>
+                                <?php else: ?>
+                                    <tr><td colspan="10" class="text-center text-muted py-4">No developer data available.</td></tr>
+                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
@@ -907,39 +978,43 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php while($resource = $experts->fetch_assoc()): 
-                                    $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
-                                    $statusClass = $resource['active_tasks'] >= 5 ? 'overloaded' : ($resource['active_tasks'] >= 3 ? 'busy' : ($resource['active_tasks'] > 0 ? 'available' : 'free'));
-                                    $statusText = $resource['active_tasks'] >= 5 ? 'Overloaded' : ($resource['active_tasks'] >= 3 ? 'Busy' : ($resource['active_tasks'] > 0 ? 'Available' : 'Free'));
-                                ?>
-                                <tr>
-                                    <td>
-                                        <div class="fw-semibold"><?php echo htmlspecialchars($resource['full_name']); ?></div>
-                                        <small class="text-muted"><?php echo htmlspecialchars($resource['email']); ?></small>
-                                    </td>
-                                    <td><span class="badge-role-<?php echo $resource['role']; ?>"><?php echo strtoupper($resource['role']); ?></span></td>
-                                    <td><?php echo $resource['active_tasks']; ?></td>
-                                    <td><?php echo $resource['completed_tasks']; ?></td>
-                                    <td><?php echo $resource['pending_tasks']; ?></td>
-                                    <td><?php if($resource['overdue_tasks'] > 0): ?><span class="badge-status-overloaded"><?php echo $resource['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
-                                    <td><?php echo $resource['avg_completion_days'] ?? 'N/A'; ?>d</td>
-                                    <td>
-                                        <div class="progress-modern" style="width: 100px;">
-                                            <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resource['active_tasks'] >= 5 ? '#dc2626' : ($resource['active_tasks'] >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
-                                        </div>
-                                        <small><?php echo $workloadPercent; ?>%</small>
-                                    </td>
-                                    <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
-                                    <td>
-                                        <button class="btn-primary-modern btn-sm-modern" onclick="editAllocation(<?php echo $resource['id']; ?>, '<?php echo htmlspecialchars($resource['full_name']); ?>', <?php echo $resource['active_tasks']; ?>)">
-                                            <i class="fas fa-sliders-h"></i>
-                                        </button>
-                                        <button class="btn-secondary-modern btn-sm-modern" onclick="viewResourceTasks(<?php echo $resource['id']; ?>)">
-                                            <i class="fas fa-tasks"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                                <?php endwhile; ?>
+                                <?php if ($experts instanceof mysqli_result): ?>
+                                    <?php while($resource = $experts->fetch_assoc()): 
+                                        $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
+                                        $statusClass = $resource['active_tasks'] >= 5 ? 'overloaded' : ($resource['active_tasks'] >= 3 ? 'busy' : ($resource['active_tasks'] > 0 ? 'available' : 'free'));
+                                        $statusText = $resource['active_tasks'] >= 5 ? 'Overloaded' : ($resource['active_tasks'] >= 3 ? 'Busy' : ($resource['active_tasks'] > 0 ? 'Available' : 'Free'));
+                                    ?>
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold"><?php echo htmlspecialchars($resource['full_name']); ?></div>
+                                            <small class="text-muted"><?php echo htmlspecialchars($resource['email']); ?></small>
+                                        </td>
+                                        <td><span class="badge-role-<?php echo $resource['role']; ?>"><?php echo strtoupper($resource['role']); ?></span></td>
+                                        <td><?php echo $resource['active_tasks']; ?></td>
+                                        <td><?php echo $resource['completed_tasks']; ?></td>
+                                        <td><?php echo $resource['pending_tasks']; ?></td>
+                                        <td><?php if($resource['overdue_tasks'] > 0): ?><span class="badge-status-overloaded"><?php echo $resource['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
+                                        <td><?php echo $resource['avg_completion_days'] ?? 'N/A'; ?>d</td>
+                                        <td>
+                                            <div class="progress-modern" style="width: 100px;">
+                                                <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resource['active_tasks'] >= 5 ? '#dc2626' : ($resource['active_tasks'] >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
+                                            </div>
+                                            <small><?php echo $workloadPercent; ?>%</small>
+                                        </td>
+                                        <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
+                                        <td>
+                                            <button class="btn-primary-modern btn-sm-modern" onclick="editAllocation(<?php echo $resource['id']; ?>, '<?php echo htmlspecialchars($resource['full_name']); ?>', <?php echo $resource['active_tasks']; ?>)">
+                                                <i class="fas fa-sliders-h"></i>
+                                            </button>
+                                            <button class="btn-secondary-modern btn-sm-modern" onclick="viewResourceTasks(<?php echo $resource['id']; ?>)">
+                                                <i class="fas fa-tasks"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <?php endwhile; ?>
+                                <?php else: ?>
+                                    <tr><td colspan="10" class="text-center text-muted py-4">No expert data available.</td></tr>
+                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
@@ -955,6 +1030,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <h5><i class="fas fa-project-diagram me-2"></i>Projects with Active Resources</h5>
                 </div>
                 <div class="card-body p-0">
+                    <?php if ($projects instanceof mysqli_result): ?>
                     <?php while($project = $projects->fetch_assoc()): ?>
                     <div class="list-group-item">
                         <div class="d-flex justify-content-between align-items-start">
@@ -981,6 +1057,9 @@ unset($_SESSION['success'], $_SESSION['error']);
                         </div>
                     </div>
                     <?php endwhile; ?>
+                    <?php else: ?>
+                    <div class="list-group-item text-muted py-4 text-center">No project data available.</div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -996,8 +1075,8 @@ unset($_SESSION['success'], $_SESSION['error']);
                         <i class="fas fa-info-circle text-primary me-2"></i>
                         <strong>Utilization Rate:</strong> 
                         <?php 
-                        $totalResources = $skills['total'];
-                        $overloaded = $conn->query("
+                        $totalResources = (int) $skills['total'];
+                        $overloadedRow = sulQueryAssocOrDefault($conn, "
                             SELECT COUNT(*) as count FROM (
                                 SELECT u.id, COUNT(t.id) as task_count
                                 FROM users u
@@ -1006,7 +1085,8 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 GROUP BY u.id
                                 HAVING task_count >= 5
                             ) as overloaded
-                        ")->fetch_assoc()['count'];
+                        ", ['count' => 0], 'overloadedResources');
+                        $overloaded = (int) $overloadedRow['count'];
                         
                         $utilizationRate = $totalResources > 0 ? round(($overloaded / $totalResources) * 100) : 0;
                         ?>
@@ -1031,16 +1111,18 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <input type="hidden" name="role" value="developer">
                     <div class="mb-3">
                         <label class="form-label">Select Developer</label>
-                        <select name="user_id" class="form-select" required>
-                            <option value="">Choose a developer...</option>
-                            <?php $availableDevelopers->data_seek(0); while($dev = $availableDevelopers->fetch_assoc()): ?>
-                            <option value="<?php echo $dev['id']; ?>">
-                                <?php echo htmlspecialchars($dev['full_name']); ?> 
-                                (<?php echo htmlspecialchars($dev['email']); ?>)
-                                <?php if($dev['department']): ?> - <?php echo htmlspecialchars($dev['department']); ?><?php endif; ?>
-                            </option>
-                            <?php endwhile; ?>
-                        </select>
+                            <select name="user_id" class="form-select" required>
+                                <option value="">Choose a developer...</option>
+                            <?php if ($availableDevelopers instanceof mysqli_result): ?>
+                                <?php $availableDevelopers->data_seek(0); while($dev = $availableDevelopers->fetch_assoc()): ?>
+                                <option value="<?php echo $dev['id']; ?>">
+                                    <?php echo htmlspecialchars($dev['full_name']); ?> 
+                                    (<?php echo htmlspecialchars($dev['email']); ?>)
+                                    <?php if($dev['department']): ?> - <?php echo htmlspecialchars($dev['department']); ?><?php endif; ?>
+                                </option>
+                                <?php endwhile; ?>
+                            <?php endif; ?>
+                            </select>
                         <small class="text-muted">Only developers created by admin are available for assignment</small>
                     </div>
                 </div>
@@ -1066,16 +1148,18 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <input type="hidden" name="role" value="expert">
                     <div class="mb-3">
                         <label class="form-label">Select Expert</label>
-                        <select name="user_id" class="form-select" required>
-                            <option value="">Choose an expert...</option>
-                            <?php $availableExperts->data_seek(0); while($exp = $availableExperts->fetch_assoc()): ?>
-                            <option value="<?php echo $exp['id']; ?>">
-                                <?php echo htmlspecialchars($exp['full_name']); ?> 
-                                (<?php echo htmlspecialchars($exp['email']); ?>)
-                                <?php if($exp['department']): ?> - <?php echo htmlspecialchars($exp['department']); ?><?php endif; ?>
-                            </option>
-                            <?php endwhile; ?>
-                        </select>
+                            <select name="user_id" class="form-select" required>
+                                <option value="">Choose an expert...</option>
+                            <?php if ($availableExperts instanceof mysqli_result): ?>
+                                <?php $availableExperts->data_seek(0); while($exp = $availableExperts->fetch_assoc()): ?>
+                                <option value="<?php echo $exp['id']; ?>">
+                                    <?php echo htmlspecialchars($exp['full_name']); ?> 
+                                    (<?php echo htmlspecialchars($exp['email']); ?>)
+                                    <?php if($exp['department']): ?> - <?php echo htmlspecialchars($exp['department']); ?><?php endif; ?>
+                                </option>
+                                <?php endwhile; ?>
+                            <?php endif; ?>
+                            </select>
                         <small class="text-muted">Only experts created by admin are available for assignment</small>
                     </div>
                 </div>
@@ -1151,17 +1235,21 @@ const workloadData = <?php
     $names = [];
     $active = [];
     $completed = [];
-    $developers->data_seek(0);
-    while($row = $developers->fetch_assoc()) {
-        $names[] = $row['full_name'] . ' (Dev)';
-        $active[] = $row['active_tasks'];
-        $completed[] = $row['completed_tasks'];
+    if ($developers instanceof mysqli_result) {
+        $developers->data_seek(0);
+        while($row = $developers->fetch_assoc()) {
+            $names[] = $row['full_name'] . ' (Dev)';
+            $active[] = $row['active_tasks'];
+            $completed[] = $row['completed_tasks'];
+        }
     }
-    $experts->data_seek(0);
-    while($row = $experts->fetch_assoc()) {
-        $names[] = $row['full_name'] . ' (Exp)';
-        $active[] = $row['active_tasks'];
-        $completed[] = $row['completed_tasks'];
+    if ($experts instanceof mysqli_result) {
+        $experts->data_seek(0);
+        while($row = $experts->fetch_assoc()) {
+            $names[] = $row['full_name'] . ' (Exp)';
+            $active[] = $row['active_tasks'];
+            $completed[] = $row['completed_tasks'];
+        }
     }
     echo json_encode(['names' => $names, 'active' => $active, 'completed' => $completed]);
 ?>;
@@ -1188,10 +1276,12 @@ new Chart(workloadCtx, {
 const roleData = <?php 
     $roles = [];
     $activeTasks = [];
-    $workloadByRole->data_seek(0);
-    while($row = $workloadByRole->fetch_assoc()) {
-        $roles[] = ucfirst($row['role']);
-        $activeTasks[] = $row['active_tasks'];
+    if ($workloadByRole instanceof mysqli_result) {
+        $workloadByRole->data_seek(0);
+        while($row = $workloadByRole->fetch_assoc()) {
+            $roles[] = ucfirst($row['role']);
+            $activeTasks[] = $row['active_tasks'];
+        }
     }
     echo json_encode(['roles' => $roles, 'active' => $activeTasks]);
 ?>;
@@ -1219,15 +1309,18 @@ new Chart(utilCtx, {
         datasets: [{
             data: [
                 <?php 
-                    $underutilized = $conn->query("SELECT COUNT(*) as count FROM (SELECT u.id, COUNT(t.id) as task_count FROM users u LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed' WHERE u.role IN ('expert', 'developer') GROUP BY u.id HAVING task_count <= 2) as under")->fetch_assoc()['count'];
+                    $underutilizedRow = sulQueryAssocOrDefault($conn, "SELECT COUNT(*) as count FROM (SELECT u.id, COUNT(t.id) as task_count FROM users u LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed' WHERE u.role IN ('expert', 'developer') GROUP BY u.id HAVING task_count <= 2) as under", ['count' => 0], 'underutilizedResources');
+                    $underutilized = $underutilizedRow['count'];
                     echo $underutilized;
                 ?>,
                 <?php 
-                    $optimal = $conn->query("SELECT COUNT(*) as count FROM (SELECT u.id, COUNT(t.id) as task_count FROM users u LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed' WHERE u.role IN ('expert', 'developer') GROUP BY u.id HAVING task_count BETWEEN 3 AND 4) as opt")->fetch_assoc()['count'];
+                    $optimalRow = sulQueryAssocOrDefault($conn, "SELECT COUNT(*) as count FROM (SELECT u.id, COUNT(t.id) as task_count FROM users u LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed' WHERE u.role IN ('expert', 'developer') GROUP BY u.id HAVING task_count BETWEEN 3 AND 4) as opt", ['count' => 0], 'optimalResources');
+                    $optimal = $optimalRow['count'];
                     echo $optimal;
                 ?>,
                 <?php 
-                    $overloaded = $conn->query("SELECT COUNT(*) as count FROM (SELECT u.id, COUNT(t.id) as task_count FROM users u LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed' WHERE u.role IN ('expert', 'developer') GROUP BY u.id HAVING task_count >= 5) as over")->fetch_assoc()['count'];
+                    $overloadedRow = sulQueryAssocOrDefault($conn, "SELECT COUNT(*) as count FROM (SELECT u.id, COUNT(t.id) as task_count FROM users u LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed' WHERE u.role IN ('expert', 'developer') GROUP BY u.id HAVING task_count >= 5) as over", ['count' => 0], 'overloadedResourcesChart');
+                    $overloaded = $overloadedRow['count'];
                     echo $overloaded;
                 ?>
             ],

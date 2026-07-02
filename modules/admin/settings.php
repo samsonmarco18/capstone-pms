@@ -59,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         logActivity($user['id'], 'update_general_settings', 'settings', 0, null, $_POST);
         $_SESSION['success'] = "General settings updated successfully";
+        $_SESSION['settings_active_tab'] = 'general';
     }
     
     if (isset($_POST['update_security'])) {
@@ -76,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         logActivity($user['id'], 'update_security_settings', 'settings', 0, null, $_POST);
         $_SESSION['success'] = "Security settings updated successfully";
+        $_SESSION['settings_active_tab'] = 'security';
     }
     
     if (isset($_POST['update_notifications'])) {
@@ -88,10 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         logActivity($user['id'], 'update_notification_settings', 'users', $user['id'], null, $_POST);
         $_SESSION['success'] = "Notification settings updated successfully";
+        $_SESSION['settings_active_tab'] = 'notifications';
     }
 
     if (isset($_POST['update_mail_settings'])) {
         $mailEnabled = isset($_POST['mail_enabled']) ? '1' : '0';
+        $mailDeliveryMethod = strtolower(trim((string) ($_POST['mail_delivery_method'] ?? 'smtp')));
         $mailHost = trim((string) ($_POST['mail_host'] ?? 'smtp.gmail.com'));
         $mailPort = trim((string) ($_POST['mail_port'] ?? '587'));
         $mailEncryption = trim((string) ($_POST['mail_encryption'] ?? 'tls'));
@@ -99,25 +103,50 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $mailPassword = trim((string) ($_POST['mail_password'] ?? ''));
         $mailFromEmail = trim((string) ($_POST['mail_from_email'] ?? $mailUsername));
         $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'ERNI PMS'));
+        $gmailClientId = trim((string) ($_POST['gmail_client_id'] ?? ''));
+        $gmailClientSecret = trim((string) ($_POST['gmail_client_secret'] ?? ''));
+        $gmailRefreshToken = trim((string) ($_POST['gmail_refresh_token'] ?? ''));
+        $gmailUser = trim((string) ($_POST['gmail_user'] ?? $mailUsername));
 
-        error_log('Mail settings save attempt: enabled=' . $mailEnabled . ', host=' . $mailHost . ', user=' . $mailUsername);
+        if (!in_array($mailDeliveryMethod, ['smtp', 'gmail_api'], true)) {
+            $mailDeliveryMethod = 'smtp';
+        }
 
-        $saved = setAppSetting('mail_enabled', $mailEnabled, 'Enable SMTP email delivery', 'system')
+        $normalizedMailHost = strtolower($mailHost);
+        if (in_array($normalizedMailHost, ['smtp.gmail.com', 'gmail-smtp.l.google.com'], true) && filter_var($mailUsername, FILTER_VALIDATE_EMAIL)) {
+            $mailFromEmail = $mailUsername;
+        }
+
+        if ($gmailUser === '') {
+            $gmailUser = $mailUsername;
+        }
+
+        $saved = setAppSetting('mail_enabled', $mailEnabled, 'Enable email delivery', 'system')
+            && setAppSetting('mail_delivery_method', $mailDeliveryMethod, 'Mail delivery method', 'system')
             && setAppSetting('mail_host', $mailHost, 'SMTP server host', 'system')
             && setAppSetting('mail_port', $mailPort, 'SMTP server port', 'system')
             && setAppSetting('mail_encryption', $mailEncryption, 'SMTP transport security', 'system')
             && setAppSetting('mail_username', $mailUsername, 'SMTP username', 'system')
             && setAppSetting('mail_from_email', $mailFromEmail, 'Mail sender address', 'system')
-            && setAppSetting('mail_from_name', $mailFromName, 'Mail sender name', 'system');
+            && setAppSetting('mail_from_name', $mailFromName, 'Mail sender name', 'system')
+            && setAppSetting('gmail_client_id', $gmailClientId, 'Gmail API OAuth client ID', 'system')
+            && setAppSetting('gmail_user', $gmailUser, 'Gmail API sender user', 'system');
 
         if ($mailPassword !== '') {
             $saved = $saved && setAppSetting('mail_password', $mailPassword, 'SMTP app password', 'system');
         }
 
-        error_log('Mail settings save result: ' . ($saved ? 'success' : 'failed'));
+        if ($gmailClientSecret !== '') {
+            $saved = $saved && setAppSetting('gmail_client_secret', $gmailClientSecret, 'Gmail API OAuth client secret', 'system');
+        }
+
+        if ($gmailRefreshToken !== '') {
+            $saved = $saved && setAppSetting('gmail_refresh_token', $gmailRefreshToken, 'Gmail API OAuth refresh token', 'system');
+        }
 
         logActivity($user['id'], 'update_mail_settings', 'settings', 0, null, [
             'mail_enabled' => $mailEnabled,
+            'mail_delivery_method' => $mailDeliveryMethod,
             'mail_host' => $mailHost,
             'mail_port' => $mailPort,
             'mail_encryption' => $mailEncryption,
@@ -125,11 +154,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             'mail_from_email' => $mailFromEmail,
             'mail_from_name' => $mailFromName,
             'mail_password_updated' => $mailPassword !== '',
+            'gmail_client_id_updated' => $gmailClientId !== '',
+            'gmail_client_secret_updated' => $gmailClientSecret !== '',
+            'gmail_refresh_token_updated' => $gmailRefreshToken !== '',
+            'gmail_user' => $gmailUser,
         ]);
 
         $_SESSION[$saved ? 'success' : 'error'] = $saved
-            ? 'Gmail SMTP settings saved successfully'
-            : 'Failed to save Gmail SMTP settings';
+            ? 'Gmail mail settings saved successfully'
+            : 'Failed to save Gmail mail settings';
+        $_SESSION['settings_active_tab'] = 'mail';
     }
 
     if (isset($_POST['send_test_email'])) {
@@ -140,16 +174,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             '<div style="font-family:Arial,sans-serif;padding:24px;"><h2 style="color:#1f6392;">ERNI PMS Gmail Test</h2><p>Your Gmail SMTP integration is working.</p><p>This message confirms the system can now send email through your configured Google account.</p></div>',
             "ERNI PMS Gmail Test\n\nYour Gmail SMTP integration is working."
         );
+        $errorDetail = trim((string) ($result['error'] ?? ''));
+        if (!$result['success'] && $errorDetail === '') {
+            $mailIssues = getMailConfigIssues();
+            $errorDetail = $mailIssues !== []
+                ? 'Mail settings are incomplete: ' . implode(', ', $mailIssues) . '.'
+                : 'SMTP failed without a detailed server message. Check Render Logs and verify MAIL_USERNAME, MAIL_PASSWORD, Gmail App Password access, and outbound SMTP connectivity.';
+        }
 
         logActivity($user['id'], 'send_test_email', 'settings', 0, null, [
             'test_email' => $testEmail,
             'success' => $result['success'],
-            'error' => $result['error'],
+            'error' => $errorDetail,
         ], $result['success'] ? 'success' : 'failed');
 
         $_SESSION[$result['success'] ? 'success' : 'error'] = $result['success']
             ? 'Test email sent successfully to ' . $testEmail
-            : 'Test email failed: ' . $result['error'];
+            : 'Test email failed: ' . $errorDetail;
+        $_SESSION['settings_active_tab'] = 'mail';
     }
     
     if (isset($_POST['backup_database'])) {
@@ -164,6 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } else {
             $_SESSION['error'] = "Backup failed. Please check permissions.";
         }
+        $_SESSION['settings_active_tab'] = 'maintenance';
     }
     
     header('Location: settings.php');
@@ -181,6 +224,13 @@ $currentTimezone = $generalSettings['timezone'] ?? date_default_timezone_get();
 $emailNotifications = $conn->query("SELECT email_notifications, task_reminders, project_updates FROM users WHERE id = {$user['id']}")->fetch_assoc();
 $activeMailConfig = getMailConfig();
 $mailConfigured = isMailConfigured();
+$settingsActiveTab = (string) ($_SESSION['settings_active_tab'] ?? 'general');
+$settingsFlashSuccess = (string) ($_SESSION['success'] ?? '');
+$settingsFlashError = (string) ($_SESSION['error'] ?? '');
+unset($_SESSION['settings_active_tab'], $_SESSION['success'], $_SESSION['error']);
+if (!in_array($settingsActiveTab, ['general', 'mail', 'notifications', 'security', 'maintenance'], true)) {
+    $settingsActiveTab = 'general';
+}
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -798,23 +848,30 @@ input:checked + .switch-slider:before {
         </div>
     </div>
 
+    <?php if ($settingsFlashSuccess !== '' || $settingsFlashError !== ''): ?>
+        <div class="alert <?php echo $settingsFlashError !== '' ? 'alert-danger' : 'alert-success'; ?> shadow-sm" role="alert">
+            <i class="fas <?php echo $settingsFlashError !== '' ? 'fa-circle-exclamation' : 'fa-check-circle'; ?> me-2"></i>
+            <?php echo htmlspecialchars($settingsFlashError !== '' ? $settingsFlashError : $settingsFlashSuccess); ?>
+        </div>
+    <?php endif; ?>
+
     <div class="settings-layout">
         <aside class="settings-nav-card">
             <div class="nav flex-column nav-pills" id="settingsTabs" role="tablist" aria-orientation="vertical">
-                <button class="nav-link active" id="general-tab" data-bs-toggle="pill" data-bs-target="#general-panel" type="button" role="tab" aria-controls="general-panel" aria-selected="true">
+                <button class="nav-link <?php echo $settingsActiveTab === 'general' ? 'active' : ''; ?>" id="general-tab" data-bs-toggle="pill" data-bs-target="#general-panel" type="button" role="tab" aria-controls="general-panel" aria-selected="<?php echo $settingsActiveTab === 'general' ? 'true' : 'false'; ?>">
                     <i class="fas fa-globe"></i> <span>General</span>
                 </button>
-                <button class="nav-link" id="mail-tab" data-bs-toggle="pill" data-bs-target="#mail-panel" type="button" role="tab" aria-controls="mail-panel" aria-selected="false">
-                    <i class="fas fa-envelope-open-text"></i> <span>Gmail SMTP</span>
+                <button class="nav-link <?php echo $settingsActiveTab === 'mail' ? 'active' : ''; ?>" id="mail-tab" data-bs-toggle="pill" data-bs-target="#mail-panel" type="button" role="tab" aria-controls="mail-panel" aria-selected="<?php echo $settingsActiveTab === 'mail' ? 'true' : 'false'; ?>">
+                    <i class="fas fa-envelope-open-text"></i> <span>Gmail Mailer</span>
                     <span class="nav-dot <?php echo $mailConfigured ? 'ready' : 'warning'; ?>"></span>
                 </button>
-                <button class="nav-link" id="notifications-tab" data-bs-toggle="pill" data-bs-target="#notifications-panel" type="button" role="tab" aria-controls="notifications-panel" aria-selected="false">
+                <button class="nav-link <?php echo $settingsActiveTab === 'notifications' ? 'active' : ''; ?>" id="notifications-tab" data-bs-toggle="pill" data-bs-target="#notifications-panel" type="button" role="tab" aria-controls="notifications-panel" aria-selected="<?php echo $settingsActiveTab === 'notifications' ? 'true' : 'false'; ?>">
                     <i class="fas fa-bell"></i> <span>Notifications</span>
                 </button>
-                <button class="nav-link" id="security-tab" data-bs-toggle="pill" data-bs-target="#security-panel" type="button" role="tab" aria-controls="security-panel" aria-selected="false">
+                <button class="nav-link <?php echo $settingsActiveTab === 'security' ? 'active' : ''; ?>" id="security-tab" data-bs-toggle="pill" data-bs-target="#security-panel" type="button" role="tab" aria-controls="security-panel" aria-selected="<?php echo $settingsActiveTab === 'security' ? 'true' : 'false'; ?>">
                     <i class="fas fa-shield-alt"></i> <span>Security</span>
                 </button>
-                <button class="nav-link" id="maintenance-tab" data-bs-toggle="pill" data-bs-target="#maintenance-panel" type="button" role="tab" aria-controls="maintenance-panel" aria-selected="false">
+                <button class="nav-link <?php echo $settingsActiveTab === 'maintenance' ? 'active' : ''; ?>" id="maintenance-tab" data-bs-toggle="pill" data-bs-target="#maintenance-panel" type="button" role="tab" aria-controls="maintenance-panel" aria-selected="<?php echo $settingsActiveTab === 'maintenance' ? 'true' : 'false'; ?>">
                     <i class="fas fa-tools"></i> <span>Maintenance</span>
                 </button>
             </div>
@@ -822,7 +879,7 @@ input:checked + .switch-slider:before {
 
         <div class="settings-content tab-content" id="settingsTabContent">
         <!-- General Settings -->
-        <div class="tab-pane fade show active" id="general-panel" role="tabpanel" aria-labelledby="general-tab">
+        <div class="tab-pane fade <?php echo $settingsActiveTab === 'general' ? 'show active' : ''; ?>" id="general-panel" role="tabpanel" aria-labelledby="general-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-globe"></i>
@@ -862,7 +919,7 @@ input:checked + .switch-slider:before {
         </div>
 
         <!-- Security Settings -->
-        <div class="tab-pane fade" id="security-panel" role="tabpanel" aria-labelledby="security-tab">
+        <div class="tab-pane fade <?php echo $settingsActiveTab === 'security' ? 'show active' : ''; ?>" id="security-panel" role="tabpanel" aria-labelledby="security-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-shield-alt"></i>
@@ -897,11 +954,11 @@ input:checked + .switch-slider:before {
         </div>
         </div>
 
-        <div class="tab-pane fade" id="mail-panel" role="tabpanel" aria-labelledby="mail-tab">
+        <div class="tab-pane fade <?php echo $settingsActiveTab === 'mail' ? 'show active' : ''; ?>" id="mail-panel" role="tabpanel" aria-labelledby="mail-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-envelope-open-text"></i>
-                <h5>Gmail SMTP</h5>
+                <h5>Gmail Mailer</h5>
             </div>
             <div class="card-body-modern">
                 <form method="POST">
@@ -917,6 +974,14 @@ input:checked + .switch-slider:before {
                     </div>
 
                     <div class="settings-form-grid" style="margin-top: 1.25rem;">
+                    <div class="form-group full-span">
+                        <label class="form-label">Delivery Method</label>
+                        <select name="mail_delivery_method" class="form-select-modern">
+                            <option value="smtp" <?php echo ($activeMailConfig['delivery_method'] ?? 'smtp') === 'smtp' ? 'selected' : ''; ?>>Gmail SMTP</option>
+                            <option value="gmail_api" <?php echo ($activeMailConfig['delivery_method'] ?? '') === 'gmail_api' ? 'selected' : ''; ?>>Gmail API over HTTPS</option>
+                        </select>
+                        <span class="form-text">Use Gmail API when the server blocks SMTP ports 587 and 465.</span>
+                    </div>
                     <div class="form-group">
                         <label class="form-label">SMTP Host</label>
                         <input type="text" name="mail_host" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['host'] ?? 'smtp.gmail.com'); ?>" required>
@@ -952,6 +1017,26 @@ input:checked + .switch-slider:before {
                         <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'ERNI PMS'); ?>" required>
                     </div>
                     <div class="form-group full-span">
+                        <hr style="margin: 0.25rem 0;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gmail API Client ID</label>
+                        <input type="text" name="gmail_client_id" class="form-control-modern" value="<?php echo htmlspecialchars((string) ($activeMailConfig['gmail_api']['client_id'] ?? '')); ?>" placeholder="Google OAuth client ID">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gmail API Client Secret</label>
+                        <input type="password" name="gmail_client_secret" class="form-control-modern" placeholder="Leave blank to keep current saved secret">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gmail API Refresh Token</label>
+                        <input type="password" name="gmail_refresh_token" class="form-control-modern" placeholder="Leave blank to keep current saved token">
+                        <span class="form-text">Must be generated with the Gmail send scope.</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gmail API User</label>
+                        <input type="email" name="gmail_user" class="form-control-modern" value="<?php echo htmlspecialchars((string) ($activeMailConfig['gmail_api']['user'] ?? ($activeMailConfig['username'] ?? ''))); ?>" placeholder="sender@gmail.com">
+                    </div>
+                    <div class="form-group full-span">
                         <span class="settings-status <?php echo $mailConfigured ? 'ready' : 'incomplete'; ?>">
                             <i class="fas <?php echo $mailConfigured ? 'fa-check-circle' : 'fa-circle-exclamation'; ?>"></i>
                             <?php echo $mailConfigured ? 'Ready to send' : 'Incomplete configuration'; ?>
@@ -960,7 +1045,7 @@ input:checked + .switch-slider:before {
                     </div>
                     <div class="settings-actions">
                     <button type="submit" name="update_mail_settings" class="btn-primary-modern">
-                        <i class="fas fa-save"></i> Save Gmail Settings
+                        <i class="fas fa-save"></i> Save Mail Settings
                     </button>
                     </div>
                 </form>
@@ -986,7 +1071,7 @@ input:checked + .switch-slider:before {
         </div>
 
         <!-- Notification Settings -->
-        <div class="tab-pane fade" id="notifications-panel" role="tabpanel" aria-labelledby="notifications-tab">
+        <div class="tab-pane fade <?php echo $settingsActiveTab === 'notifications' ? 'show active' : ''; ?>" id="notifications-panel" role="tabpanel" aria-labelledby="notifications-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-bell"></i>
@@ -1027,7 +1112,7 @@ input:checked + .switch-slider:before {
         </div>
 
         <!-- System Maintenance -->
-        <div class="tab-pane fade" id="maintenance-panel" role="tabpanel" aria-labelledby="maintenance-tab">
+        <div class="tab-pane fade <?php echo $settingsActiveTab === 'maintenance' ? 'show active' : ''; ?>" id="maintenance-panel" role="tabpanel" aria-labelledby="maintenance-tab">
         <div class="settings-card">
             <div class="card-header-modern">
                 <i class="fas fa-tools"></i>

@@ -67,6 +67,38 @@ function hasAllRoles(array $roles): bool
     return count(array_unique($roles)) === 1 && $user['role'] === $roles[0];
 }
 
+function formatTimeAgo(?string $datetime): string
+{
+    $timestamp = strtotime((string) $datetime);
+    if ($timestamp === false) {
+        return 'just now';
+    }
+
+    $diff = max(0, time() - $timestamp);
+
+    if ($diff < 60) {
+        return 'just now';
+    }
+
+    $units = [
+        31536000 => 'y',
+        2592000 => 'mo',
+        604800 => 'w',
+        86400 => 'd',
+        3600 => 'h',
+        60 => 'm',
+    ];
+
+    foreach ($units as $seconds => $suffix) {
+        if ($diff >= $seconds) {
+            $value = (int) floor($diff / $seconds);
+            return $value . $suffix . ' ago';
+        }
+    }
+
+    return 'just now';
+}
+
 function getSecuritySettings(): array
 {
     static $cache = null;
@@ -265,15 +297,38 @@ function logActivity(
 
 function getUnreadNotificationsCount(int $userId): int
 {
-    $conn = getConnection();
-    $stmt = $conn->prepare('SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = FALSE');
-    $stmt->bind_param('i', $userId);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $row = $result->fetch_assoc();
-    $stmt->close();
+    try {
+        $conn = getConnection();
+        $stmt = $conn->prepare('SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = FALSE');
 
-    return (int) ($row['count'] ?? 0);
+        if ($stmt === false) {
+            error_log('getUnreadNotificationsCount prepare failed: ' . ($conn->error ?? 'unknown error'));
+            return 0;
+        }
+
+        $stmt->bind_param('i', $userId);
+
+        if (!$stmt->execute()) {
+            error_log('getUnreadNotificationsCount execute failed for user_id=' . $userId . ': ' . ($conn->error ?? 'unknown error'));
+            $stmt->close();
+            return 0;
+        }
+
+        $result = $stmt->get_result();
+        if ($result === false) {
+            error_log('getUnreadNotificationsCount get_result failed for user_id=' . $userId . ': ' . ($conn->error ?? 'unknown error'));
+            $stmt->close();
+            return 0;
+        }
+
+        $row = $result->fetch_assoc() ?: [];
+        $stmt->close();
+
+        return (int) ($row['count'] ?? 0);
+    } catch (Throwable $e) {
+        error_log('getUnreadNotificationsCount error for user_id=' . $userId . ': ' . $e->getMessage());
+        return 0;
+    }
 }
 
 function createNotification(
@@ -364,11 +419,22 @@ function getRoleDisplayName(string $role): string
 function getDepartmentOptions(): array
 {
     return [
+        'UI/UX',
+        'Frontend',
+        'Backend',
+        'Mobile',
+        'Database',
+        'DevOps',
+        'AI',
+        'Security',
+        'QA',
+        'Expert Department',
+        'Other Departments',
+        'UI/UX Designer',
         'Frontend Developer',
         'Backend Developer',
         'Full Stack Developer',
         'QA Engineer',
-        'UI/UX Designer',
         'DevOps Engineer',
         'Database Administrator',
     ];
