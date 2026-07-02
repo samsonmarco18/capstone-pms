@@ -2126,6 +2126,7 @@ include '../../includes/navbar.php';
             </div>
             <form method="POST" data-app-loading data-loading-title="Assigning expert" data-loading-text="Please wait while the expert assignment is saved.">
                 <div class="modal-body">
+                    <input type="hidden" name="assign_to_expert" value="1">
                     <input type="hidden" name="task_id" id="expertTaskId">
                     <p><strong>Task:</strong> <span id="expertTaskTitle"></span></p>
                     <div class="mb-3">
@@ -2146,7 +2147,7 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="assign_to_expert" class="btn-primary-modern">Assign to Expert</button>
+                    <button type="submit" class="btn-primary-modern">Assign to Expert</button>
                 </div>
             </form>
         </div>

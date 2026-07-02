@@ -110,6 +110,9 @@ function initFormSubmitConfirmations() {
                 return;
             }
 
+            const submitter = event.originalEvent?.submitter
+                || form.querySelector('button[type="submit"]:not([disabled]), input[type="submit"]:not([disabled])');
+
             event.preventDefault();
             const confirmed = typeof window.appConfirm === 'function'
                 ? await window.appConfirm({
@@ -124,7 +127,11 @@ function initFormSubmitConfirmations() {
 
             if (confirmed) {
                 form.dataset.confirmedSubmit = '1';
-                form.requestSubmit();
+                if (submitter && submitter.form === form) {
+                    form.requestSubmit(submitter);
+                } else {
+                    form.requestSubmit();
+                }
             }
         });
     });
