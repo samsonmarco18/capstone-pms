@@ -1656,7 +1656,12 @@ include '../../includes/navbar.php';
                                     <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
                                         <i class="fas fa-circle-info"></i> View Info
                                     </button>
-                                    <button class="btn-primary-modern" type="button" onclick="openAssignExpertModal(<?php echo (int) $task['id']; ?>, <?php echo json_encode($task['title'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>)">
+                                    <button
+                                        class="btn-primary-modern js-assign-expert"
+                                        type="button"
+                                        data-task-id="<?php echo (int) $task['id']; ?>"
+                                        data-task-title="<?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    >
                                         <i class="fas fa-user-plus"></i> Assign to Expert
                                     </button>
                                 </div>
@@ -2270,6 +2275,16 @@ function openAssignExpertModal(taskId, taskTitle) {
     document.getElementById('expertTaskTitle').textContent = taskTitle;
     new bootstrap.Modal(document.getElementById('assignExpertModal')).show();
 }
+
+document.querySelectorAll('.js-assign-expert').forEach(button => {
+    button.addEventListener('click', event => {
+        event.stopPropagation();
+        openAssignExpertModal(
+            Number.parseInt(button.dataset.taskId || '0', 10),
+            button.dataset.taskTitle || ''
+        );
+    });
+});
 
 function openAssignDeveloperModal(taskId, taskTitle, deadline) {
     document.getElementById('devTaskId').value = taskId;
