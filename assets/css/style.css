@@ -854,6 +854,14 @@ body {
     z-index: 9999;
 }
 
+.app-confirm-modal {
+    z-index: 1080;
+}
+
+.app-confirm-modal.show ~ .modal-backdrop {
+    z-index: 1070;
+}
+
 .app-confirm-modal .modal-content {
     border: 0;
     border-radius: 18px;

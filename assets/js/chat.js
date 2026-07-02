@@ -426,12 +426,42 @@ function renderGroupInfoView(details) {
     `);
 }
 
-function removeGroupMember(memberId) {
+async function removeGroupMember(memberId) {
     if (!currentChatGroup || !memberId) {
         return;
     }
 
-    if (!window.confirm('Remove this member from the group?')) {
+    const members = currentGroupDetails && Array.isArray(currentGroupDetails.members)
+        ? currentGroupDetails.members
+        : [];
+    const member = members.find(item => Number(item.id) === Number(memberId));
+    const memberName = member && member.full_name ? member.full_name : 'this member';
+    const groupName = currentGroupDetails && currentGroupDetails.group && currentGroupDetails.group.name
+        ? currentGroupDetails.group.name
+        : 'this group';
+
+    if (
+        typeof window.appConfirm !== 'function'
+        || !document.getElementById('appConfirmModal')
+        || !window.bootstrap
+    ) {
+        showToast('Group Chat', 'The confirmation window is unavailable. Please refresh and try again.', 'warning');
+        return;
+    }
+
+    const confirmed = await window.appConfirm({
+        title: 'Remove Group Member',
+        titleIcon: 'fas fa-user-minus',
+        subject: `Remove ${memberName} from ${groupName}?`,
+        message: 'They will no longer have access to this group chat.',
+        icon: 'fas fa-user-minus fa-lg',
+        confirmIcon: 'fas fa-user-minus',
+        confirmText: 'Remove Member',
+        cancelText: 'Keep Member',
+        variant: 'danger'
+    });
+
+    if (!confirmed) {
         return;
     }
 
