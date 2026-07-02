@@ -47,6 +47,89 @@ function projectWorkflowDepartmentAliases(?string $value): array
     return array_values(array_unique(array_filter(array_map('strval', $aliases))));
 }
 
+function projectWorkflowSelectedDepartments(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    int $projectId,
+    array $project = []
+): array {
+    if ($projectId <= 0) {
+        return [];
+    }
+
+    $knownDepartments = array_keys(projectWorkflowDepartments());
+    $selected = [];
+    $rawDepartments = trim((string) ($project['included_departments'] ?? ''));
+
+    if ($rawDepartments !== '') {
+        $decoded = json_decode($rawDepartments, true);
+        if (is_array($decoded)) {
+            foreach ($decoded as $department) {
+                $label = projectWorkflowDepartmentLabel((string) $department);
+                if (in_array($label, $knownDepartments, true)) {
+                    $selected[] = $label;
+                }
+            }
+        }
+    }
+
+    if ($selected === [] && dbTableExists($conn, 'developer_allocations')) {
+        $stmt = $conn->prepare(
+            'SELECT role, required_count FROM developer_allocations WHERE project_id = ? ORDER BY id ASC'
+        );
+        if ($stmt !== false) {
+            $stmt->bind_param('i', $projectId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            while ($row = $result->fetch_assoc()) {
+                if ((int) ($row['required_count'] ?? 0) <= 0) {
+                    continue;
+                }
+                $label = projectWorkflowDepartmentLabel((string) ($row['role'] ?? ''));
+                if (in_array($label, $knownDepartments, true)) {
+                    $selected[] = $label;
+                }
+            }
+            $stmt->close();
+        }
+    }
+
+    return array_values(array_unique($selected));
+}
+
+function projectWorkflowDepartmentAllocations(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    int $projectId,
+    array $project = []
+): array {
+    $selectedDepartments = projectWorkflowSelectedDepartments($conn, $projectId, $project);
+    $allocations = array_fill_keys($selectedDepartments, 0);
+
+    if ($projectId <= 0 || !dbTableExists($conn, 'developer_allocations')) {
+        return $allocations;
+    }
+
+    $stmt = $conn->prepare(
+        'SELECT role, required_count FROM developer_allocations WHERE project_id = ? ORDER BY id ASC'
+    );
+    if ($stmt === false) {
+        return $allocations;
+    }
+
+    $stmt->bind_param('i', $projectId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $department = projectWorkflowDepartmentLabel((string) ($row['role'] ?? ''));
+        if (!array_key_exists($department, $allocations)) {
+            continue;
+        }
+        $allocations[$department] += max(0, (int) ($row['required_count'] ?? 0));
+    }
+    $stmt->close();
+
+    return $allocations;
+}
+
 function projectWorkflowUserDepartmentClause(mysqli|PgsqlMysqliCompatConnection $conn, string $alias, string $department): string
 {
     $aliases = projectWorkflowDepartmentAliases($department);

@@ -238,6 +238,24 @@ CREATE TABLE methodology_tasks (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- METHODOLOGY ROADMAP TASK DEPARTMENT REQUIREMENTS TABLE
+-- =====================================================
+CREATE TABLE methodology_task_departments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    methodology_task_id INT NOT NULL,
+    project_id INT NOT NULL,
+    department VARCHAR(100) NOT NULL,
+    required_count INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (methodology_task_id) REFERENCES methodology_tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_methodology_task_department (methodology_task_id, department),
+    INDEX idx_methodology_task_department_project (project_id),
+    INDEX idx_methodology_task_department_name (department)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- ARCHITECTURE DOCUMENTS TABLE
 -- =====================================================
 CREATE TABLE architecture_documents (

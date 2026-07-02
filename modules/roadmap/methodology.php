@@ -238,20 +238,6 @@ $canEditExpertInput = $role === 'expert';
 $methodologyTemplates = methodologyRoadmapTemplates();
 $allowedPhaseStatuses = ['planned', 'in_progress', 'completed', 'on_hold'];
 $allowedTaskStatuses = ['planned', 'in_progress', 'completed', 'blocked'];
-$departments = [
-    'Expert Department',
-    'UI/UX',
-    'Frontend',
-    'Backend',
-    'Mobile',
-    'Database',
-    'DevOps',
-    'AI',
-    'Security',
-    'QA',
-    'Other Departments',
-];
-
 $projects = [];
 $requestedProjectId = isset($_GET['project_id']) ? (int) $_GET['project_id'] : 0;
 $accessClause = roadmapProjectAccessClause($conn, $user, 'p');
@@ -289,6 +275,13 @@ if (!$selectedProject && count($projects) > 0) {
     $selectedProjectId = (int) $projects[0]['id'];
     $selectedProject = roadmapGetProject($conn, $selectedProjectId, $user);
 }
+$projectDepartments = $selectedProject
+    ? projectWorkflowSelectedDepartments($conn, $selectedProjectId, $selectedProject)
+    : [];
+$projectDepartmentAllocations = $selectedProject
+    ? projectWorkflowDepartmentAllocations($conn, $selectedProjectId, $selectedProject)
+    : [];
+$projectDeveloperCapacity = array_sum($projectDepartmentAllocations);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $postedProjectId = (int) ($_POST['project_id'] ?? 0);
@@ -299,6 +292,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: methodology.php');
         exit();
     }
+    $postedProjectDepartments = projectWorkflowSelectedDepartments($conn, $postedProjectId, $postedProject);
+    $postedDepartmentAllocations = projectWorkflowDepartmentAllocations($conn, $postedProjectId, $postedProject);
+    $postedDeveloperCapacity = array_sum($postedDepartmentAllocations);
 
     if (isset($_POST['apply_template'])) {
         if (!$canEditArchitecture) {
@@ -345,6 +341,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($name === '' || !$start || !$end) {
             $_SESSION['error'] = 'Phase name, start date, and end date are required.';
+            header('Location: methodology.php?project_id=' . $postedProjectId);
+            exit();
+        }
+
+        if ($developerCount > $postedDeveloperCapacity) {
+            $_SESSION['error'] = 'Phase headcount cannot exceed the ' . $postedDeveloperCapacity . ' developers configured in Developer Allocation.';
             header('Location: methodology.php?project_id=' . $postedProjectId);
             exit();
         }
@@ -409,12 +411,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $workflowTaskId = (int) ($_POST['workflow_task_id'] ?? 0);
             $title = trim((string) ($_POST['task_title'] ?? ''));
             $componentName = trim((string) ($_POST['component_name'] ?? ''));
-            $department = trim((string) ($_POST['department'] ?? ''));
             $description = trim((string) ($_POST['task_description'] ?? ''));
             $start = roadmapParseDate($_POST['task_start'] ?? null);
             $end = roadmapParseDate($_POST['task_end'] ?? null);
-            $assignedDeveloperId = (int) ($_POST['assigned_developer_id'] ?? 0);
-            $assignedDeveloperId = $assignedDeveloperId > 0 ? $assignedDeveloperId : null;
             $status = in_array((string) ($_POST['task_status'] ?? 'planned'), $allowedTaskStatuses, true)
                 ? (string) $_POST['task_status']
                 : 'planned';
@@ -448,25 +447,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $duplicateStmt = $conn->prepare("
                 SELECT id
                 FROM methodology_tasks
-                WHERE project_id = ? AND task_id = ? AND id <> ?
+                WHERE project_id = ? AND phase_id = ? AND task_id = ? AND id <> ?
                 LIMIT 1
             ");
-            $duplicateStmt->bind_param('iii', $postedProjectId, $workflowTaskId, $taskId);
+            $duplicateStmt->bind_param('iiii', $postedProjectId, $phaseId, $workflowTaskId, $taskId);
             $duplicateStmt->execute();
             $duplicateTask = $duplicateStmt->get_result()->fetch_assoc();
             $duplicateStmt->close();
 
             if ($duplicateTask) {
-                $_SESSION['error'] = 'That workflow task is already scheduled in the methodology roadmap.';
+                $_SESSION['error'] = 'That workflow task is already scheduled in this phase. You can add it to another phase.';
                 header('Location: methodology.php?project_id=' . $postedProjectId);
                 exit();
             }
 
-            if ($department !== '' && !in_array($department, $departments, true)) {
-                $_SESSION['error'] = 'Select a valid department.';
+            $selectedDepartmentValues = $_POST['task_departments'] ?? [];
+            $postedDepartmentCounts = $_POST['task_department_counts'] ?? [];
+            $departmentRequirements = [];
+            if (!is_array($selectedDepartmentValues) || !is_array($postedDepartmentCounts)) {
+                $selectedDepartmentValues = [];
+                $postedDepartmentCounts = [];
+            }
+
+            foreach (array_unique($selectedDepartmentValues) as $selectedDepartment) {
+                $department = projectWorkflowDepartmentLabel((string) $selectedDepartment);
+                if (!array_key_exists($department, $postedDepartmentAllocations)) {
+                    $_SESSION['error'] = 'Every task department must come from this project\'s Developer Allocation.';
+                    header('Location: methodology.php?project_id=' . $postedProjectId);
+                    exit();
+                }
+
+                $availableCount = max(0, (int) $postedDepartmentAllocations[$department]);
+                $requiredCount = max(0, (int) ($postedDepartmentCounts[$department] ?? 0));
+                if ($availableCount <= 0 || $requiredCount < 1 || $requiredCount > $availableCount) {
+                    $_SESSION['error'] = $department . ' task headcount must be between 1 and its Developer Allocation limit of ' . $availableCount . '.';
+                    header('Location: methodology.php?project_id=' . $postedProjectId);
+                    exit();
+                }
+                $departmentRequirements[$department] = $requiredCount;
+            }
+
+            if ($departmentRequirements === []) {
+                $_SESSION['error'] = 'Select at least one department staffing requirement for this roadmap task.';
                 header('Location: methodology.php?project_id=' . $postedProjectId);
                 exit();
             }
+
+            if (array_sum($departmentRequirements) > $postedDeveloperCapacity) {
+                $_SESSION['error'] = 'Task headcount cannot exceed the project Developer Allocation capacity of ' . $postedDeveloperCapacity . '.';
+                header('Location: methodology.php?project_id=' . $postedProjectId);
+                exit();
+            }
+
+            $department = (string) array_key_first($departmentRequirements);
 
             $validation = roadmapValidateTask($phase, $start, $end);
             if ($validation !== null) {
@@ -475,46 +508,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit();
             }
 
-            if ($taskId > 0) {
-                $taskCheck = $conn->query("SELECT id FROM methodology_tasks WHERE id = {$taskId} AND project_id = {$postedProjectId} LIMIT 1")->fetch_assoc();
-                if (!$taskCheck) {
-                    $_SESSION['error'] = 'Roadmap task not found.';
-                    header('Location: methodology.php?project_id=' . $postedProjectId);
-                    exit();
+            $conn->begin_transaction();
+            try {
+                if ($taskId > 0) {
+                    $taskCheck = $conn->query("SELECT id FROM methodology_tasks WHERE id = {$taskId} AND project_id = {$postedProjectId} LIMIT 1")->fetch_assoc();
+                    if (!$taskCheck) {
+                        throw new RuntimeException('Roadmap task not found.');
+                    }
+
+                    $stmt = $conn->prepare("
+                        UPDATE methodology_tasks
+                        SET phase_id = ?, task_id = ?, title = ?, component_name = ?, department = ?, description = ?, start_date = ?, end_date = ?,
+                            status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ? AND project_id = ?
+                    ");
+                    $startValue = roadmapDateString($start);
+                    $endValue = roadmapDateString($end);
+                    $stmt->bind_param('iisssssssiii', $phaseId, $workflowTaskId, $title, $componentName, $department, $description, $startValue, $endValue, $status, $userId, $taskId, $postedProjectId);
+                    if (!$stmt->execute()) {
+                        throw new RuntimeException('Unable to update the roadmap task.');
+                    }
+                    $stmt->close();
+                    $successMessage = 'Roadmap task updated.';
+                } else {
+                    $stmt = $conn->prepare("
+                        INSERT INTO methodology_tasks (phase_id, project_id, task_id, title, component_name, department, description, start_date, end_date, status, created_by, updated_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $startValue = roadmapDateString($start);
+                    $endValue = roadmapDateString($end);
+                    $stmt->bind_param('iiisssssssii', $phaseId, $postedProjectId, $workflowTaskId, $title, $componentName, $department, $description, $startValue, $endValue, $status, $userId, $userId);
+                    if (!$stmt->execute()) {
+                        throw new RuntimeException('Unable to add the roadmap task.');
+                    }
+                    $taskId = (int) $conn->insert_id;
+                    $stmt->close();
+                    $successMessage = 'Roadmap task added.';
                 }
 
-                $stmt = $conn->prepare("
-                    UPDATE methodology_tasks
-                    SET phase_id = ?, task_id = ?, title = ?, component_name = ?, department = ?, description = ?, start_date = ?, end_date = ?,
-                        assigned_developer_id = ?, status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ? AND project_id = ?
+                $deleteRequirements = $conn->prepare('DELETE FROM methodology_task_departments WHERE methodology_task_id = ? AND project_id = ?');
+                $deleteRequirements->bind_param('ii', $taskId, $postedProjectId);
+                if (!$deleteRequirements->execute()) {
+                    throw new RuntimeException('Unable to update task staffing requirements.');
+                }
+                $deleteRequirements->close();
+
+                $insertRequirement = $conn->prepare("
+                    INSERT INTO methodology_task_departments (methodology_task_id, project_id, department, required_count)
+                    VALUES (?, ?, ?, ?)
                 ");
-                $startValue = roadmapDateString($start);
-                $endValue = roadmapDateString($end);
-                $stmt->bind_param('iissssssisiii', $phaseId, $workflowTaskId, $title, $componentName, $department, $description, $startValue, $endValue, $assignedDeveloperId, $status, $userId, $taskId, $postedProjectId);
-                $stmt->execute();
-                $stmt->close();
-                $_SESSION['success'] = 'Roadmap task updated.';
-            } else {
-                $stmt = $conn->prepare("
-                    INSERT INTO methodology_tasks (phase_id, project_id, task_id, title, component_name, department, description, start_date, end_date, assigned_developer_id, status, created_by, updated_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ");
-                $startValue = roadmapDateString($start);
-                $endValue = roadmapDateString($end);
-                $stmt->bind_param('iiissssssisii', $phaseId, $postedProjectId, $workflowTaskId, $title, $componentName, $department, $description, $startValue, $endValue, $assignedDeveloperId, $status, $userId, $userId);
-                $stmt->execute();
-                $taskId = (int) $conn->insert_id;
-                $stmt->close();
-                $_SESSION['success'] = 'Roadmap task added.';
+                foreach ($departmentRequirements as $requirementDepartment => $requiredCount) {
+                    $insertRequirement->bind_param('iisi', $taskId, $postedProjectId, $requirementDepartment, $requiredCount);
+                    if (!$insertRequirement->execute()) {
+                        throw new RuntimeException('Unable to save a department staffing requirement.');
+                    }
+                }
+                $insertRequirement->close();
+
+                $conn->commit();
+                $_SESSION['success'] = $successMessage;
+            } catch (Throwable $exception) {
+                $conn->rollback();
+                $_SESSION['error'] = $exception->getMessage();
+                header('Location: methodology.php?project_id=' . $postedProjectId);
+                exit();
             }
         } elseif ($canEditExpertInput && $taskId > 0) {
             $expertPeopleCount = max(0, (int) ($_POST['expert_people_count'] ?? 0));
             $expertDeveloperType = trim((string) ($_POST['expert_developer_type'] ?? ''));
             $expertNotes = trim((string) ($_POST['expert_notes'] ?? ''));
 
-            if ($expertDeveloperType !== '' && !in_array($expertDeveloperType, $departments, true)) {
-                $_SESSION['error'] = 'Select a valid expert developer type.';
+            if ($expertDeveloperType !== '' && !in_array($expertDeveloperType, $postedProjectDepartments, true)) {
+                $_SESSION['error'] = 'Select an expert developer type included in this project\'s Developer Allocation team requirements.';
+                header('Location: methodology.php?project_id=' . $postedProjectId);
+                exit();
+            }
+
+            if ($expertPeopleCount > 0 && $expertDeveloperType === '') {
+                $_SESSION['error'] = 'Select the expert developer type for the requested expert headcount.';
+                header('Location: methodology.php?project_id=' . $postedProjectId);
+                exit();
+            }
+
+            if ($expertDeveloperType !== '' && $expertPeopleCount > (int) ($postedDepartmentAllocations[$expertDeveloperType] ?? 0)) {
+                $_SESSION['error'] = 'Expert headcount cannot exceed the Developer Allocation limit for ' . $expertDeveloperType . '.';
                 header('Location: methodology.php?project_id=' . $postedProjectId);
                 exit();
             }
@@ -557,16 +634,44 @@ if ($selectedProject) {
         $phases[(int) $row['id']] = $row;
     }
 
+    $taskDepartmentRequirements = [];
+    $requirementRows = $conn->query("
+        SELECT methodology_task_id, department, required_count
+        FROM methodology_task_departments
+        WHERE project_id = {$selectedProjectId}
+        ORDER BY id ASC
+    ");
+    while ($requirement = $requirementRows->fetch_assoc()) {
+        $methodologyTaskId = (int) $requirement['methodology_task_id'];
+        $taskDepartmentRequirements[$methodologyTaskId][] = [
+            'department' => projectWorkflowDepartmentLabel((string) $requirement['department']),
+            'required_count' => max(0, (int) $requirement['required_count']),
+        ];
+    }
+
     $taskRows = $conn->query("
-        SELECT mt.*, dev.full_name AS developer_name, expert.full_name AS expert_name, wt.title AS workflow_task_title
+        SELECT mt.*, expert.full_name AS expert_name, wt.title AS workflow_task_title
         FROM methodology_tasks mt
         LEFT JOIN tasks wt ON wt.id = mt.task_id
-        LEFT JOIN users dev ON dev.id = mt.assigned_developer_id
         LEFT JOIN users expert ON expert.id = mt.expert_updated_by
         WHERE mt.project_id = {$selectedProjectId}
         ORDER BY mt.start_date ASC, mt.id ASC
     ");
     while ($row = $taskRows->fetch_assoc()) {
+        $requirements = $taskDepartmentRequirements[(int) $row['id']] ?? [];
+        if ($requirements === [] && trim((string) ($row['department'] ?? '')) !== '') {
+            $requirements[] = [
+                'department' => projectWorkflowDepartmentLabel((string) $row['department']),
+                'required_count' => 1,
+            ];
+        }
+        $row['department_requirements'] = $requirements;
+        $row['department_summary'] = $requirements === []
+            ? 'No staffing requirement'
+            : implode(', ', array_map(
+                static fn(array $requirement): string => $requirement['department'] . ' (' . $requirement['required_count'] . ')',
+                $requirements
+            ));
         $phaseId = (int) $row['phase_id'];
         $allTasks[] = $row;
         if (!isset($tasksByPhase[$phaseId])) {
@@ -591,17 +696,6 @@ if ($selectedProject) {
     while ($row = $workflowTaskRows->fetch_assoc()) {
         $workflowTasks[] = $row;
     }
-}
-
-$developerRows = $conn->query("
-    SELECT id, full_name, department
-    FROM users
-    WHERE role = 'developer' AND status = 'active'
-    ORDER BY department ASC, full_name ASC
-");
-$developers = [];
-while ($row = $developerRows->fetch_assoc()) {
-    $developers[] = $row;
 }
 
 $timelineStart = null;
@@ -640,7 +734,6 @@ $timelineTotalDays = max(1, ((int) $timelineStart->diff($timelineEnd)->format('%
 
 $phaseCount = count($phases);
 $taskCount = count($allTasks);
-$phaseDeveloperTotal = array_sum(array_map(static fn(array $phase): int => (int) ($phase['developer_count'] ?? 0), $phases));
 $expertPeopleTotal = array_sum(array_map(static fn(array $task): int => (int) ($task['expert_people_count'] ?? 0), $allTasks));
 
 include '../../includes/header.php';
@@ -1000,6 +1093,44 @@ include '../../includes/navbar.php';
     margin-bottom: 0;
 }
 
+.department-requirement-grid {
+    display: grid;
+    gap: .75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.department-requirement-item {
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid var(--roadmap-line);
+    border-radius: 8px;
+    display: flex;
+    gap: .75rem;
+    justify-content: space-between;
+    padding: .75rem;
+}
+
+.department-requirement-item .form-check {
+    margin: 0;
+    min-width: 0;
+}
+
+.department-requirement-item .form-check-label {
+    color: var(--roadmap-ink);
+    font-weight: 700;
+}
+
+.department-requirement-item .department-limit {
+    color: var(--roadmap-muted);
+    display: block;
+    font-size: .72rem;
+    font-weight: 500;
+}
+
+.department-requirement-count {
+    flex: 0 0 88px;
+}
+
 .empty-roadmap {
     color: var(--roadmap-muted);
     padding: 2rem;
@@ -1010,6 +1141,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-gantt,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-table-wrap,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-requirement-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-indicator {
     background: #111827;
@@ -1057,6 +1189,10 @@ include '../../includes/navbar.php';
     }
 
     .roadmap-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .department-requirement-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -1205,8 +1341,8 @@ include '../../includes/navbar.php';
                 <strong><?php echo (int) $taskCount; ?></strong>
             </div>
             <div class="roadmap-card roadmap-stat">
-                <span>Architect Dev Count</span>
-                <strong><?php echo (int) $phaseDeveloperTotal; ?></strong>
+                <span>Developer Capacity</span>
+                <strong><?php echo (int) $projectDeveloperCapacity; ?></strong>
             </div>
             <div class="roadmap-card roadmap-stat">
                 <span>Expert People Count</span>
@@ -1302,7 +1438,7 @@ include '../../includes/navbar.php';
                         <div class="gantt-row">
                             <div class="gantt-label-cell">
                                 <span class="gantt-label-title ps-3"><?php echo htmlspecialchars((string) $task['title']); ?></span>
-                                <span class="gantt-label-sub ps-3"><?php echo htmlspecialchars((string) ($task['department'] ?: 'No department')); ?></span>
+                                <span class="gantt-label-sub ps-3"><?php echo htmlspecialchars((string) $task['department_summary']); ?></span>
                             </div>
                             <div class="gantt-track">
                                 <div
@@ -1327,8 +1463,7 @@ include '../../includes/navbar.php';
                         <tr>
                             <th>Phase</th>
                             <th>Task</th>
-                            <th>Department</th>
-                            <th>Developer</th>
+                            <th>Department Staffing</th>
                             <th>Timeline</th>
                             <th>Expert Staffing</th>
                             <th>Status</th>
@@ -1336,7 +1471,7 @@ include '../../includes/navbar.php';
                     </thead>
                     <tbody>
                         <?php if (count($allTasks) === 0): ?>
-                            <tr><td colspan="7" class="text-center text-muted py-4">No roadmap tasks yet.</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted py-4">No roadmap tasks yet.</td></tr>
                         <?php endif; ?>
                         <?php foreach ($allTasks as $task): ?>
                             <tr>
@@ -1350,8 +1485,7 @@ include '../../includes/navbar.php';
                                         <div class="small text-muted"><?php echo htmlspecialchars((string) $task['component_name']); ?></div>
                                     <?php endif; ?>
                                 </td>
-                                <td><?php echo htmlspecialchars((string) ($task['department'] ?: 'Unassigned')); ?></td>
-                                <td><?php echo htmlspecialchars((string) ($task['developer_name'] ?: 'Unassigned')); ?></td>
+                                <td><?php echo htmlspecialchars((string) $task['department_summary']); ?></td>
                                 <td><?php echo htmlspecialchars((string) $task['start_date']); ?> to <?php echo htmlspecialchars((string) $task['end_date']); ?></td>
                                 <td>
                                     <strong><?php echo (int) $task['expert_people_count']; ?></strong>
@@ -1393,8 +1527,9 @@ include '../../includes/navbar.php';
                         <input type="date" class="form-control" name="phase_end" id="phaseEnd" required>
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Developers Present</label>
-                        <input type="number" class="form-control" name="developer_count" id="developerCount" min="0" step="1" value="0">
+                        <label class="form-label">Planned Headcount</label>
+                        <input type="number" class="form-control" name="developer_count" id="developerCount" min="0" max="<?php echo (int) $projectDeveloperCapacity; ?>" step="1" value="0">
+                        <div class="form-text">Maximum <?php echo (int) $projectDeveloperCapacity; ?> from Developer Allocation.</div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Order</label>
@@ -1423,7 +1558,7 @@ include '../../includes/navbar.php';
 </div>
 
 <div class="modal fade" id="taskModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <form method="POST" class="modal-content" data-app-loading data-loading-title="Saving task" data-loading-text="Please wait while the roadmap task is saved.">
             <div class="modal-header">
                 <h5 class="modal-title">Roadmap Task</h5>
@@ -1462,28 +1597,48 @@ include '../../includes/navbar.php';
                         <label class="form-label">Component</label>
                         <input type="text" class="form-control" name="component_name" id="componentName" maxlength="150" <?php echo !$canEditArchitecture ? 'readonly' : ''; ?>>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Department</label>
-                        <select class="form-select" name="department" id="taskDepartment" <?php echo !$canEditArchitecture ? 'disabled' : ''; ?>>
-                            <option value="">Unassigned</option>
-                            <?php foreach ($departments as $department): ?>
-                                <option value="<?php echo htmlspecialchars($department); ?>"><?php echo htmlspecialchars($department); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <?php if (!$canEditArchitecture): ?>
-                            <input type="hidden" name="department" id="taskDepartmentHidden">
+                    <div class="col-md-12">
+                        <label class="form-label">Department Staffing Requirements</label>
+                        <?php if ($projectDepartmentAllocations !== []): ?>
+                            <div class="department-requirement-grid" id="taskDepartmentRequirements">
+                                <?php foreach ($projectDepartmentAllocations as $department => $capacity): ?>
+                                    <?php $fieldId = 'taskDepartment' . substr(sha1($department), 0, 10); ?>
+                                    <div class="department-requirement-item">
+                                        <div class="form-check">
+                                            <input
+                                                class="form-check-input task-department-toggle"
+                                                type="checkbox"
+                                                name="task_departments[]"
+                                                value="<?php echo htmlspecialchars($department); ?>"
+                                                id="<?php echo htmlspecialchars($fieldId); ?>"
+                                                data-department="<?php echo htmlspecialchars($department); ?>"
+                                                data-capacity="<?php echo (int) $capacity; ?>"
+                                                <?php echo (!$canEditArchitecture || $capacity <= 0) ? 'disabled' : ''; ?>
+                                            >
+                                            <label class="form-check-label" for="<?php echo htmlspecialchars($fieldId); ?>">
+                                                <?php echo htmlspecialchars($department); ?>
+                                                <span class="department-limit">
+                                                    <?php echo $capacity > 0 ? 'Up to ' . (int) $capacity . ' people' : 'No allocated headcount'; ?>
+                                                </span>
+                                            </label>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            class="form-control department-requirement-count"
+                                            name="task_department_counts[<?php echo htmlspecialchars($department); ?>]"
+                                            min="1"
+                                            max="<?php echo (int) $capacity; ?>"
+                                            value="1"
+                                            aria-label="<?php echo htmlspecialchars($department); ?> headcount"
+                                            disabled
+                                        >
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="form-text">Select one or more departments. Each headcount is capped by Developer Allocation; individual developers are assigned later by the SUL.</div>
+                        <?php else: ?>
+                            <div class="alert alert-warning mb-0">Complete Developer Allocation before adding roadmap task staffing.</div>
                         <?php endif; ?>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Developer</label>
-                        <select class="form-select" name="assigned_developer_id" id="assignedDeveloperId" <?php echo !$canEditArchitecture ? 'disabled' : ''; ?>>
-                            <option value="">Unassigned</option>
-                            <?php foreach ($developers as $developer): ?>
-                                <option value="<?php echo (int) $developer['id']; ?>">
-                                    <?php echo htmlspecialchars($developer['full_name'] . (!empty($developer['department']) ? ' - ' . $developer['department'] : '')); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Start Date</label>
@@ -1513,9 +1668,12 @@ include '../../includes/navbar.php';
                         <label class="form-label">Expert Developer Type</label>
                         <select class="form-select" name="expert_developer_type" id="expertDeveloperType" <?php echo !$canEditExpertInput ? 'disabled' : ''; ?>>
                             <option value="">Not set</option>
-                            <?php foreach ($departments as $department): ?>
+                            <?php foreach ($projectDepartments as $department): ?>
                                 <option value="<?php echo htmlspecialchars($department); ?>"><?php echo htmlspecialchars($department); ?></option>
                             <?php endforeach; ?>
+                            <?php if ($projectDepartments === []): ?>
+                                <option value="" disabled>Complete Developer Allocation first</option>
+                            <?php endif; ?>
                         </select>
                         <?php if (!$canEditExpertInput): ?>
                             <input type="hidden" name="expert_developer_type" id="expertDeveloperTypeHidden">
@@ -1548,6 +1706,7 @@ const projectStart = <?php echo json_encode($selectedProject['timeline_start'] ?
 const projectEnd = <?php echo json_encode($selectedProject['timeline_end'] ?? ''); ?>;
 const methodologyTemplateForm = document.getElementById('methodologyTemplateForm');
 const replaceExistingTemplate = document.getElementById('replaceExistingTemplate');
+const taskDepartmentToggles = Array.from(document.querySelectorAll('.task-department-toggle'));
 
 methodologyTemplateForm?.addEventListener('submit', async (event) => {
     if (!replaceExistingTemplate?.checked || methodologyTemplateForm.dataset.replaceConfirmed === '1') {
@@ -1590,6 +1749,39 @@ function setValue(id, value) {
     if (input) input.value = value ?? '';
 }
 
+function updateTaskDepartmentControl(toggle) {
+    const countInput = toggle.closest('.department-requirement-item')?.querySelector('.department-requirement-count');
+    if (!countInput) return;
+
+    const capacity = Number(toggle.dataset.capacity || 0);
+    countInput.disabled = !canEditArchitecture || !toggle.checked || capacity <= 0;
+    if (toggle.checked && Number(countInput.value || 0) < 1) {
+        countInput.value = 1;
+    }
+}
+
+function setTaskDepartmentRequirements(requirements = []) {
+    const requirementMap = new Map(
+        (Array.isArray(requirements) ? requirements : []).map((requirement) => [
+            String(requirement.department || ''),
+            Number(requirement.required_count || 1)
+        ])
+    );
+
+    taskDepartmentToggles.forEach((toggle) => {
+        const department = String(toggle.dataset.department || '');
+        const requiredCount = requirementMap.get(department);
+        const countInput = toggle.closest('.department-requirement-item')?.querySelector('.department-requirement-count');
+        toggle.checked = requirementMap.has(department);
+        if (countInput) countInput.value = requiredCount || 1;
+        updateTaskDepartmentControl(toggle);
+    });
+}
+
+taskDepartmentToggles.forEach((toggle) => {
+    toggle.addEventListener('change', () => updateTaskDepartmentControl(toggle));
+});
+
 function openPhaseModal(source) {
     if (!phaseModal || !canEditArchitecture) return;
     const phase = source ? parseData(source, 'phase') : {};
@@ -1628,9 +1820,7 @@ function openTaskModal(task) {
     setValue('workflowTaskId', task.task_id || '');
     setValue('taskTitle', task.title || '');
     setValue('componentName', task.component_name || '');
-    setValue('taskDepartment', task.department || '');
-    setValue('taskDepartmentHidden', task.department || '');
-    setValue('assignedDeveloperId', task.assigned_developer_id || '');
+    setTaskDepartmentRequirements(task.department_requirements || []);
     setValue('taskStart', task.start_date || '');
     setValue('taskEnd', task.end_date || '');
     setValue('taskStatus', task.status || 'planned');
