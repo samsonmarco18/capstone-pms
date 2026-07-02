@@ -299,7 +299,13 @@ function getUnreadNotificationsCount(int $userId): int
 {
     try {
         $conn = getConnection();
-        $stmt = $conn->prepare('SELECT COUNT(*) AS count FROM notifications WHERE user_id = ? AND is_read = FALSE');
+        $stmt = $conn->prepare(
+            "SELECT COUNT(*) AS count
+             FROM notifications
+             WHERE user_id = ?
+               AND is_read = FALSE
+               AND (notification_type IS NULL OR notification_type NOT IN ('message', 'group'))"
+        );
 
         if ($stmt === false) {
             error_log('getUnreadNotificationsCount prepare failed: ' . ($conn->error ?? 'unknown error'));

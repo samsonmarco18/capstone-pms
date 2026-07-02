@@ -3,6 +3,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/chat.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -17,6 +18,10 @@ try {
 
     if ($currentUserId <= 0) {
         throw new RuntimeException('Current user session is invalid.');
+    }
+
+    if (!ensureChatGroupReadTracking($conn)) {
+        throw new RuntimeException('Group message read tracking is unavailable.');
     }
 
     $usersStmt = $conn->prepare(
@@ -96,7 +101,7 @@ try {
     $usersStmt->close();
 
     $groupStmt = $conn->prepare(
-        'SELECT g.id, g.name, g.description
+        'SELECT g.id, g.name, g.description, gm.last_read_message_id
          FROM chat_groups g
          INNER JOIN chat_group_members gm ON gm.group_id = g.id
          WHERE gm.user_id = ? AND gm.left_at IS NULL
@@ -135,6 +140,15 @@ try {
         throw new RuntimeException('Failed to prepare group member count query: ' . $conn->error);
     }
 
+    $unreadGroupStmt = $conn->prepare(
+        'SELECT COUNT(*) AS unread_count
+         FROM messages
+         WHERE group_id = ? AND sender_id != ? AND id > ?'
+    );
+    if ($unreadGroupStmt === false) {
+        throw new RuntimeException('Failed to prepare unread group message query: ' . $conn->error);
+    }
+
     $groups = [];
     while ($row = $groupResult->fetch_assoc()) {
         $groupId = (int) $row['id'];
@@ -153,6 +167,14 @@ try {
         $groupMemberCountResult = $groupMemberCountStmt->get_result();
         $groupMemberCountRow = $groupMemberCountResult ? $groupMemberCountResult->fetch_assoc() : null;
 
+        $lastReadMessageId = (int) ($row['last_read_message_id'] ?? 0);
+        $unreadGroupStmt->bind_param('iii', $groupId, $currentUserId, $lastReadMessageId);
+        if (!$unreadGroupStmt->execute()) {
+            throw new RuntimeException('Failed to execute unread group message query: ' . $conn->error);
+        }
+        $unreadGroupResult = $unreadGroupStmt->get_result();
+        $unreadGroupRow = $unreadGroupResult ? $unreadGroupResult->fetch_assoc() : null;
+
         $groups[] = [
             'id' => $groupId,
             'type' => 'group',
@@ -162,12 +184,13 @@ try {
             'last_message' => (string) ($lastGroupMessageRow['message'] ?? 'No group messages yet.'),
             'last_message_at' => $lastGroupMessageRow['created_at'] ?? null,
             'member_count' => (int) ($groupMemberCountRow['member_count'] ?? 0),
-            'unread_count' => 0,
+            'unread_count' => (int) ($unreadGroupRow['unread_count'] ?? 0),
         ];
     }
 
     $lastGroupMessageStmt->close();
     $groupMemberCountStmt->close();
+    $unreadGroupStmt->close();
     $groupStmt->close();
 
     $sortByLatest = static function (array $left, array $right): int {

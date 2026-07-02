@@ -611,6 +611,7 @@ CREATE TABLE chat_group_members (
     role ENUM('member', 'moderator', 'admin') DEFAULT 'member',
     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     left_at DATETIME,
+    last_read_message_id INT NOT NULL DEFAULT 0,
     UNIQUE KEY unique_group_user (group_id, user_id),
     FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

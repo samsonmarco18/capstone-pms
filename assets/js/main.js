@@ -313,12 +313,17 @@ function updateNotificationList(notifications) {
         const safeTitle = escapeHtml(notification.title || 'Notification');
         const safeMessage = escapeHtml(notification.message || '');
         const actionUrl = escapeHtml(notification.action_url || `${BASE_URL}notifications.php`);
+        const safeTimeAgo = escapeHtml(notification.time_ago || 'just now');
+        const safeCreatedAt = escapeHtml(notification.formatted_created_at || notification.created_at || '');
 
         list.append(`
             <li>
                 <a class="dropdown-item py-2 ${unreadClass}" href="${actionUrl}" onclick="markNotificationRead(${notification.id})">
                     <div class="notification-item-title fw-semibold small">${safeTitle}</div>
                     <div class="notification-item-message text-muted small">${safeMessage}</div>
+                    <div class="notification-item-time text-muted small mt-1" title="${safeCreatedAt}">
+                        <i class="far fa-clock me-1"></i>${safeTimeAgo}
+                    </div>
                 </a>
             </li>
         `);
