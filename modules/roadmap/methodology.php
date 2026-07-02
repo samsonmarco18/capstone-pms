@@ -252,22 +252,39 @@ $departments = [
     'Other Departments',
 ];
 
-$accessClause = roadmapProjectAccessClause($conn, $user, 'p');
-$projectsResult = $conn->query("
-    SELECT p.id, p.name, p.status, p.timeline_start, p.timeline_end, c.name AS client_name
-    FROM projects p
-    JOIN clients c ON c.id = p.client_id
-    WHERE {$accessClause}
-    ORDER BY p.created_at DESC
-");
-
 $projects = [];
-while ($row = $projectsResult->fetch_assoc()) {
-    $projects[] = $row;
+$requestedProjectId = isset($_GET['project_id']) ? (int) $_GET['project_id'] : 0;
+$accessClause = roadmapProjectAccessClause($conn, $user, 'p');
+
+if ($requestedProjectId <= 0) {
+    $projectsResult = $conn->query("
+        SELECT p.id, p.name, p.status, p.timeline_start, p.timeline_end, c.name AS client_name
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id
+        WHERE {$accessClause}
+        ORDER BY p.created_at DESC
+    ");
+
+    while ($row = $projectsResult->fetch_assoc()) {
+        $projects[] = $row;
+    }
 }
 
-$selectedProjectId = isset($_GET['project_id']) ? (int) $_GET['project_id'] : (int) ($projects[0]['id'] ?? 0);
+$selectedProjectId = $requestedProjectId > 0 ? $requestedProjectId : (int) ($projects[0]['id'] ?? 0);
 $selectedProject = roadmapGetProject($conn, $selectedProjectId, $user);
+if (!$selectedProject && $requestedProjectId > 0) {
+    $projectsResult = $conn->query("
+        SELECT p.id, p.name, p.status, p.timeline_start, p.timeline_end, c.name AS client_name
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id
+        WHERE {$accessClause}
+        ORDER BY p.created_at DESC
+    ");
+
+    while ($row = $projectsResult->fetch_assoc()) {
+        $projects[] = $row;
+    }
+}
 if (!$selectedProject && count($projects) > 0) {
     $selectedProjectId = (int) $projects[0]['id'];
     $selectedProject = roadmapGetProject($conn, $selectedProjectId, $user);
@@ -1105,26 +1122,41 @@ include '../../includes/navbar.php';
             <div class="progress-line"></div>
             <a class="progress-step" href="<?php echo BASE_URL; ?>modules/architect/summary.php?id=<?php echo (int) $selectedProjectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
         </div>
+
+        <?php
+        $architectReviewProjectId = (int) $selectedProjectId;
+        include '../../includes/architect-project-review-panel.php';
+        ?>
     <?php endif; ?>
 
     <div class="roadmap-toolbar">
-        <form method="GET" class="row g-3 align-items-end">
-            <div class="col-lg-8">
-                <label class="form-label">Project</label>
-                <select class="form-select" name="project_id" onchange="this.form.submit()">
-                    <?php foreach ($projects as $project): ?>
-                        <option value="<?php echo (int) $project['id']; ?>" <?php echo (int) $project['id'] === $selectedProjectId ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($project['name'] . ' - ' . $project['client_name']); ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+        <?php if ($selectedProject): ?>
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>
+                    <label class="form-label d-block mb-1">Current Project</label>
+                    <strong><?php echo htmlspecialchars((string) $selectedProject['name']); ?></strong>
+                    <span class="text-muted ms-2"><?php echo htmlspecialchars((string) ($selectedProject['client_name'] ?? '')); ?></span>
+                </div>
             </div>
-            <div class="col-lg-4">
-                <button class="btn btn-primary w-100" type="submit">
-                    <i class="fas fa-filter me-1"></i> Open
-                </button>
-            </div>
-        </form>
+        <?php else: ?>
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-lg-9">
+                    <label class="form-label">Project</label>
+                    <select class="form-select" name="project_id">
+                        <?php foreach ($projects as $project): ?>
+                            <option value="<?php echo (int) $project['id']; ?>">
+                                <?php echo htmlspecialchars($project['name'] . ' - ' . $project['client_name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-lg-3">
+                    <button class="btn btn-primary w-100" type="submit">
+                        <i class="fas fa-check me-1"></i> Select
+                    </button>
+                </div>
+            </form>
+        <?php endif; ?>
 
         <?php if ($canEditArchitecture && $selectedProject): ?>
             <form method="POST" class="row g-3 align-items-end mt-2" data-app-loading data-loading-title="Applying template" data-loading-text="Please wait while the methodology phases are generated.">

@@ -687,6 +687,8 @@ a.progress-step:hover {
         <a class="progress-step" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
     </div>
 
+    <?php include '../../includes/architect-project-review-panel.php'; ?>
+
     <div class="row g-4">
         <!-- Main Form Column -->
         <div class="col-lg-8">

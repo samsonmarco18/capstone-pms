@@ -291,48 +291,77 @@ function methodologyRoadmapApplyTemplate(mysqli|PgsqlMysqliCompatConnection $con
         return ['success' => false, 'message' => 'Project start and end dates are required before applying a methodology template.'];
     }
 
-    if ($replaceExisting && $existingPhaseCount > 0) {
-        $deleteStmt = $conn->prepare('DELETE FROM methodology_phases WHERE project_id = ?');
-        $deleteStmt->bind_param('i', $projectId);
-        $deleteStmt->execute();
-        $deleteStmt->close();
-    }
+    $conn->begin_transaction();
 
-    $insertStmt = $conn->prepare("
-        INSERT INTO methodology_phases (project_id, name, description, start_date, end_date, developer_count, sequence_no, status, created_by, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ");
+    try {
+        if ($replaceExisting && $existingPhaseCount > 0) {
+            $deleteStmt = $conn->prepare('DELETE FROM methodology_phases WHERE project_id = ?');
+            if ($deleteStmt === false) {
+                throw new RuntimeException('Unable to prepare existing roadmap cleanup.');
+            }
+            $deleteStmt->bind_param('i', $projectId);
+            if (!$deleteStmt->execute()) {
+                throw new RuntimeException('Unable to replace existing methodology phases.');
+            }
+            $deleteStmt->close();
+        }
 
-    foreach ($templatePhases as $phase) {
-        $phaseName = (string) $phase['name'];
-        $phaseDescription = (string) $phase['description'];
-        $phaseStart = (string) $phase['start_date'];
-        $phaseEnd = (string) $phase['end_date'];
-        $developerCount = (int) $phase['developer_count'];
-        $sequenceNo = (int) $phase['sequence_no'];
-        $status = (string) $phase['status'];
-        $insertStmt->bind_param(
-            'issssiisii',
-            $projectId,
-            $phaseName,
-            $phaseDescription,
-            $phaseStart,
-            $phaseEnd,
-            $developerCount,
-            $sequenceNo,
-            $status,
-            $userId,
-            $userId
-        );
-        $insertStmt->execute();
-    }
-    $insertStmt->close();
+        $insertStmt = $conn->prepare("
+            INSERT INTO methodology_phases (project_id, name, description, start_date, end_date, developer_count, sequence_no, status, created_by, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+        if ($insertStmt === false) {
+            throw new RuntimeException('Unable to prepare methodology phase generation.');
+        }
 
-    if (dbColumnExists($conn, 'projects', 'methodology_template')) {
-        $templateStmt = $conn->prepare('UPDATE projects SET methodology_template = ? WHERE id = ?');
-        $templateStmt->bind_param('si', $templateKey, $projectId);
-        $templateStmt->execute();
-        $templateStmt->close();
+        foreach ($templatePhases as $phase) {
+            $phaseName = (string) $phase['name'];
+            $phaseDescription = (string) $phase['description'];
+            $phaseStart = (string) $phase['start_date'];
+            $phaseEnd = (string) $phase['end_date'];
+            $developerCount = (int) $phase['developer_count'];
+            $sequenceNo = (int) $phase['sequence_no'];
+            $status = (string) $phase['status'];
+            $insertStmt->bind_param(
+                'issssiisii',
+                $projectId,
+                $phaseName,
+                $phaseDescription,
+                $phaseStart,
+                $phaseEnd,
+                $developerCount,
+                $sequenceNo,
+                $status,
+                $userId,
+                $userId
+            );
+            if (!$insertStmt->execute()) {
+                throw new RuntimeException('Unable to create methodology phase: ' . $phaseName);
+            }
+        }
+        $insertStmt->close();
+
+        if (dbColumnExists($conn, 'projects', 'methodology_template')) {
+            $templateStmt = $conn->prepare('UPDATE projects SET methodology_template = ? WHERE id = ?');
+            if ($templateStmt === false) {
+                throw new RuntimeException('Unable to prepare template status update.');
+            }
+            $templateStmt->bind_param('si', $templateKey, $projectId);
+            if (!$templateStmt->execute()) {
+                throw new RuntimeException('Unable to update project template status.');
+            }
+            $templateStmt->close();
+        }
+
+        $conn->commit();
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log('Methodology template apply error: ' . $e->getMessage());
+
+        return [
+            'success' => false,
+            'message' => 'Unable to apply methodology template. ' . $e->getMessage(),
+        ];
     }
 
     return [

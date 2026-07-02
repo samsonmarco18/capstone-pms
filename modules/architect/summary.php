@@ -569,6 +569,8 @@ a.progress-step:hover {
         <a class="progress-step active" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
     </div>
 
+    <?php include '../../includes/architect-project-review-panel.php'; ?>
+
     <?php
     delayInsightsRenderSection($conn, $user, [
         'project_id' => $projectId,
