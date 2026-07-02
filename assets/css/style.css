@@ -941,8 +941,10 @@ body {
     border: 0;
 }
 
-.app-confirm-modal .modal-title {
+.app-confirm-modal .modal-title,
+.app-confirm-modal .modal-title i {
     font-weight: 700;
+    color: #ffffff !important;
 }
 
 .app-confirm-note {

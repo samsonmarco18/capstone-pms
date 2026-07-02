@@ -156,6 +156,33 @@ function roadmapDaysBetween(string $start, string $end): int
     return ((int) $startDate->diff($endDate)->format('%a')) + 1;
 }
 
+function roadmapPhaseIndicator(string $status): array
+{
+    $status = strtolower(trim($status));
+
+    if (in_array($status, ['completed', 'done'], true)) {
+        return [
+            'key' => 'done',
+            'label' => 'Done',
+            'icon' => 'fas fa-circle-check',
+        ];
+    }
+
+    if (in_array($status, ['in_progress', 'pending', 'on_hold'], true)) {
+        return [
+            'key' => 'pending',
+            'label' => $status === 'on_hold' ? 'Pending (On Hold)' : 'Pending',
+            'icon' => $status === 'on_hold' ? 'fas fa-circle-pause' : 'fas fa-clock',
+        ];
+    }
+
+    return [
+        'key' => 'not-started',
+        'label' => 'Not Yet Started',
+        'icon' => 'far fa-circle',
+    ];
+}
+
 function roadmapProjectAccessClause(mysqli|PgsqlMysqliCompatConnection $conn, array $user, string $alias = 'p'): string
 {
     $role = (string) ($user['role'] ?? '');
@@ -930,15 +957,32 @@ include '../../includes/navbar.php';
 }
 
 .phase-card-roadmap {
+    border-left: 5px solid #64748b;
     padding: 1rem;
     cursor: pointer;
     transition: border-color .2s ease, transform .2s ease;
+}
+
+.phase-card-roadmap.phase-state-done {
+    border-left-color: #16a34a;
+}
+
+.phase-card-roadmap.phase-state-pending {
+    border-left-color: #b45309;
+}
+
+.phase-card-roadmap.phase-state-not-started {
+    border-left-color: #64748b;
 }
 
 .phase-card-roadmap:hover {
     border-color: rgba(31, 99, 146, .35);
     transform: translateY(-1px);
 }
+
+.phase-card-roadmap.phase-state-done:hover { border-left-color: #16a34a; }
+.phase-card-roadmap.phase-state-pending:hover { border-left-color: #b45309; }
+.phase-card-roadmap.phase-state-not-started:hover { border-left-color: #64748b; }
 
 .phase-card-roadmap h5 {
     color: var(--roadmap-ink);
@@ -973,6 +1017,70 @@ include '../../includes/navbar.php';
 .status-completed { background: #ecfdf5; color: #047857; }
 .status-on_hold,
 .status-blocked { background: #fee2e2; color: #b91c1c; }
+
+.phase-status-legend {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75rem 1rem;
+    margin-bottom: 1rem;
+    padding: .75rem 1rem;
+}
+
+.phase-status-legend-title {
+    color: var(--roadmap-ink);
+    font-size: .78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.phase-status-key {
+    align-items: center;
+    color: var(--roadmap-muted);
+    display: inline-flex;
+    font-size: .78rem;
+    font-weight: 700;
+    gap: .4rem;
+}
+
+.phase-status-dot {
+    background: #64748b;
+    border-radius: 999px;
+    display: inline-block;
+    height: .65rem;
+    width: .65rem;
+}
+
+.phase-status-dot.phase-state-done { background: #16a34a; }
+.phase-status-dot.phase-state-pending { background: #b45309; }
+.phase-status-dot.phase-state-not-started { background: #64748b; }
+
+.phase-status-indicator {
+    align-items: center;
+    border-radius: 999px;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: .72rem;
+    font-weight: 800;
+    gap: .35rem;
+    line-height: 1;
+    padding: .4rem .6rem;
+}
+
+.phase-status-indicator.phase-state-done {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.phase-status-indicator.phase-state-pending {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.phase-status-indicator.phase-state-not-started {
+    background: #e2e8f0;
+    color: #475569;
+}
 
 .roadmap-gantt {
     overflow: hidden;
@@ -1073,9 +1181,13 @@ include '../../includes/navbar.php';
 }
 
 .gantt-bar-phase {
-    background: var(--roadmap-primary);
+    background: #64748b;
     cursor: pointer;
 }
+
+.gantt-bar-phase.phase-state-done { background: #15803d; }
+.gantt-bar-phase.phase-state-pending { background: #b45309; }
+.gantt-bar-phase.phase-state-not-started { background: #64748b; }
 
 .gantt-bar-task {
     background: #0f766e;
@@ -1150,7 +1262,8 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-stat strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-card-roadmap h5,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-label-title {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-label-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-status-legend-title {
     color: #f8fafc;
 }
 
@@ -1350,6 +1463,13 @@ include '../../includes/navbar.php';
             </div>
         </div>
 
+        <div class="roadmap-card phase-status-legend" aria-label="Phase status color legend">
+            <span class="phase-status-legend-title">Phase Status</span>
+            <span class="phase-status-key"><span class="phase-status-dot phase-state-done"></span> Done</span>
+            <span class="phase-status-key"><span class="phase-status-dot phase-state-pending"></span> Pending</span>
+            <span class="phase-status-key"><span class="phase-status-dot phase-state-not-started"></span> Not Yet Started</span>
+        </div>
+
         <div class="roadmap-layout">
             <div class="phase-list">
                 <?php if (count($phases) === 0): ?>
@@ -1357,15 +1477,17 @@ include '../../includes/navbar.php';
                 <?php endif; ?>
 
                 <?php foreach ($phases as $phase): ?>
+                    <?php $phaseIndicator = roadmapPhaseIndicator((string) ($phase['status'] ?? 'planned')); ?>
                     <div
-                        class="roadmap-card phase-card-roadmap"
+                        class="roadmap-card phase-card-roadmap phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?>"
                         data-phase='<?php echo htmlspecialchars(json_encode($phase, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>'
                         onclick="<?php echo $canEditArchitecture ? 'openTaskModalForPhase(this)' : ''; ?>"
                     >
                         <div class="d-flex align-items-start justify-content-between gap-2">
                             <h5><?php echo htmlspecialchars((string) $phase['name']); ?></h5>
-                            <span class="status-pill status-<?php echo htmlspecialchars((string) $phase['status']); ?>">
-                                <?php echo htmlspecialchars(projectWorkflowPhaseStatusLabel((string) $phase['status'])); ?>
+                            <span class="phase-status-indicator phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?>">
+                                <i class="<?php echo htmlspecialchars($phaseIndicator['icon']); ?>"></i>
+                                <?php echo htmlspecialchars($phaseIndicator['label']); ?>
                             </span>
                         </div>
                         <div class="phase-meta">
@@ -1407,6 +1529,7 @@ include '../../includes/navbar.php';
 
                 <?php foreach ($phases as $phase): ?>
                     <?php
+                        $phaseIndicator = roadmapPhaseIndicator((string) ($phase['status'] ?? 'planned'));
                         $phaseOffset = max(0, (int) $timelineStart->diff(roadmapParseDate($phase['start_date']))->format('%r%a'));
                         $phaseDays = roadmapDaysBetween((string) $phase['start_date'], (string) $phase['end_date']);
                         $phaseLeft = ($phaseOffset / $timelineTotalDays) * 100;
@@ -1419,8 +1542,10 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="gantt-track">
                             <div
-                                class="gantt-bar-roadmap gantt-bar-phase"
+                                class="gantt-bar-roadmap gantt-bar-phase phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?>"
                                 style="left: <?php echo $phaseLeft; ?>%; width: <?php echo $phaseWidth; ?>%;"
+                                title="<?php echo htmlspecialchars((string) $phase['name'] . ' - ' . $phaseIndicator['label']); ?>"
+                                aria-label="<?php echo htmlspecialchars((string) $phase['name'] . ': ' . $phaseIndicator['label']); ?>"
                                 data-phase='<?php echo htmlspecialchars(json_encode($phase, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>'
                                 onclick="<?php echo $canEditArchitecture ? 'openTaskModalFromBar(this)' : ''; ?>"
                             >
