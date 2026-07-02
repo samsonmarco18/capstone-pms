@@ -419,11 +419,22 @@ function getRoleDisplayName(string $role): string
 function getDepartmentOptions(): array
 {
     return [
+        'UI/UX',
+        'Frontend',
+        'Backend',
+        'Mobile',
+        'Database',
+        'DevOps',
+        'AI',
+        'Security',
+        'QA',
+        'Expert Department',
+        'Other Departments',
+        'UI/UX Designer',
         'Frontend Developer',
         'Backend Developer',
         'Full Stack Developer',
         'QA Engineer',
-        'UI/UX Designer',
         'DevOps Engineer',
         'Database Administrator',
     ];

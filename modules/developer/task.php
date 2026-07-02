@@ -3,6 +3,7 @@ require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/department-artifacts.php';
 require_once '../../includes/methodology-roadmap.php';
+require_once '../../includes/project-workflow.php';
 requireRole('developer');
 
 $conn = getConnection();
@@ -11,6 +12,7 @@ workflowEnsureSchema($conn);
 departmentArtifactEnsureSchema($conn);
 
 $userDepartment = trim((string) ($user['department'] ?? ''));
+$userDepartmentCanonical = projectWorkflowDepartmentLabel($userDepartment);
 $departmentProfile = departmentArtifactProfile($userDepartment);
 
 $taskBaseQuery = "
@@ -127,6 +129,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $taskId = (int) ($_POST['task_id'] ?? 0);
     $newStatus = (string) ($_POST['new_status'] ?? '');
     $allowedStatuses = ['todo', 'in_progress'];
+    if ($userDepartmentCanonical === 'UI/UX') {
+        $allowedStatuses[] = 'for_review';
+    }
 
     if ($taskId <= 0 || !in_array($newStatus, $allowedStatuses, true)) {
         $_SESSION['error'] = "Invalid task status update.";
@@ -135,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 
     $taskCheck = $conn->prepare("
-        SELECT t.id, t.title, t.status, t.assigned_by, p.name AS project_name, p.sul_id
+        SELECT t.id, t.title, t.status, t.assigned_by, t.project_id, p.name AS project_name, p.sul_id
         FROM tasks t
         LEFT JOIN projects p ON p.id = t.project_id
         WHERE t.id = ? AND t.assigned_to = ?
@@ -159,6 +164,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         exit();
     }
 
+    if ($newStatus === 'for_review' && $userDepartmentCanonical !== 'UI/UX') {
+        $_SESSION['error'] = "Submit a Pull Request from the Git update form to request SUL review.";
+        header('Location: task.php');
+        exit();
+    }
+
     if ($newStatus === 'in_progress') {
         $roadmapBlockReason = methodologyRoadmapStartBlockReason($conn, $taskId, (int) $user['id']);
         if ($roadmapBlockReason !== null) {
@@ -172,7 +183,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $stmt->bind_param("si", $newStatus, $taskId);
     $stmt->execute();
     
-    workflowLogStatusChange((int) $user['id'], $taskId, (string) ($task['status'] ?? ''), $newStatus, 'developer_update_task_status');
+    workflowLogStatusChange((int) $user['id'], $taskId, (string) ($task['status'] ?? ''), $newStatus, $newStatus === 'for_review' ? 'uiux_submit_design' : 'developer_update_task_status');
+    if ($newStatus === 'for_review') {
+        workflowAddTaskComment($conn, $taskId, (int) $user['id'], 'UI/UX submitted design work for SUL review.');
+        if (!empty($task['sul_id'])) {
+            workflowNotifyUser(
+                (int) $task['sul_id'],
+                'Design Submitted for Review: ' . $task['title'],
+                'UI/UX submitted design files or references for review.',
+                BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($task['project_id'] ?? 0),
+                $taskId
+            );
+        }
+    }
     $_SESSION['success'] = "Task status updated";
     
     header('Location: task.php');
@@ -1510,6 +1533,7 @@ include '../../includes/navbar.php';
 
 <script>
 const currentDepartment = <?php echo json_encode($userDepartment); ?>;
+const currentDepartmentCanonical = <?php echo json_encode($userDepartmentCanonical); ?>;
 const departmentProfile = <?php echo json_encode($departmentProfile); ?>;
 
 function initTooltips(root = document) {
@@ -1612,7 +1636,23 @@ function reviewTask(taskId) {
     updateTaskStatus(taskId, 'todo');
 }
 
-function updateTaskStatus(taskId, status) {
+async function updateTaskStatus(taskId, status) {
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Confirm Task Update',
+            subject: status === 'for_review' ? 'Submit design for review?' : 'Update this task status?',
+            message: status === 'for_review'
+                ? 'Your UI/UX design handoff will be sent to the SUL for approval.'
+                : 'The task status will be saved and activity logged.',
+            icon: 'fas fa-circle-check fa-lg',
+            confirmIcon: 'fas fa-check',
+            confirmText: status === 'for_review' ? 'Submit Design' : 'Update'
+        })
+        : window.confirm('Update this task status?');
+    if (!confirmed) {
+        return;
+    }
+
     const form = document.createElement('form');
     form.method = 'POST';
     form.innerHTML = `
@@ -1869,6 +1909,42 @@ function viewTask(taskId) {
                 ? `Min ${task.estimated_days_min}d | Likely ${task.estimated_days_likely}d | Max ${task.estimated_days_max}d`
                 : 'No estimate available';
             const departmentPanel = buildDepartmentPanel(task);
+            const isUiUxDepartment = currentDepartmentCanonical === 'UI/UX';
+            const gitToolsPanel = isUiUxDepartment ? '' : `
+                        <div class="task-side-panel">
+                            <div class="task-side-heading">
+                                <label class="form-label mb-0 fw-semibold">Log Git Update</label>
+                                <small class="text-muted">Branch, commit, PR</small>
+                            </div>
+                            <div class="mb-2">
+                                <select id="gitAction" class="form-select form-select-sm">
+                                    <option value="commit_pushed">Commit Pushed</option>
+                                    <option value="branch_created">Branch Created</option>
+                                    <option value="pull_request_opened">Pull Request Opened</option>
+                                    <option value="note">General Note</option>
+                                </select>
+                            </div>
+                            <div class="mb-2"><input id="gitBranchName" class="form-control form-control-sm" placeholder="Branch name (required)"></div>
+                            <div class="mb-2"><input id="gitCommitHash" class="form-control form-control-sm" placeholder="Commit hash"></div>
+                            <div class="mb-2"><input id="gitCommitMessage" class="form-control form-control-sm" placeholder="Commit message"></div>
+                            <div class="mb-2"><input id="gitPullRequestUrl" class="form-control form-control-sm" placeholder="Pull request URL"></div>
+                            <div class="mb-2"><input id="gitRepositoryUrl" class="form-control form-control-sm" placeholder="Repository URL"></div>
+                            <div class="mb-2">
+                                <select id="gitStatus" class="form-select form-select-sm">
+                                    <option value="active">Active</option>
+                                    <option value="in_review">In Review</option>
+                                    <option value="closed">Closed</option>
+                                </select>
+                            </div>
+                            <div class="mb-3"><textarea id="gitNotes" class="form-control form-control-sm" rows="3" placeholder="Notes for this Git update"></textarea></div>
+                            <button class="btn-primary-modern task-detail-action" onclick="addGitUpdate(${taskId})">
+                                <i class="fas fa-code-branch"></i> Save Git Update
+                            </button>
+                        </div>
+                        <div class="task-detail-panel">
+                            <h6 class="mb-2">Git History</h6>
+                            <div id="gitUpdatesList" class="small"></div>
+                        </div>`;
             let html = `
                 <div class="row g-4">
                     <div class="col-lg-8">
@@ -1946,52 +2022,7 @@ function viewTask(taskId) {
                         </div>
                     </div>
                     <div class="col-lg-4">
-                        <div class="task-side-panel">
-                            <div class="task-side-heading">
-                                <label class="form-label mb-0 fw-semibold">Log Git Update</label>
-                                <small class="text-muted">Branch, commit, PR</small>
-                            </div>
-                            <div class="mb-2">
-                                <select id="gitAction" class="form-select form-select-sm">
-                                    <option value="commit_pushed">Commit Pushed</option>
-                                    <option value="branch_created">Branch Created</option>
-                                    <option value="pull_request_opened">Pull Request Opened</option>
-                                    <option value="note">General Note</option>
-                                </select>
-                            </div>
-                            <div class="mb-2">
-                                <input id="gitBranchName" class="form-control form-control-sm" placeholder="Branch name (required)">
-                            </div>
-                            <div class="mb-2">
-                                <input id="gitCommitHash" class="form-control form-control-sm" placeholder="Commit hash">
-                            </div>
-                            <div class="mb-2">
-                                <input id="gitCommitMessage" class="form-control form-control-sm" placeholder="Commit message">
-                            </div>
-                            <div class="mb-2">
-                                <input id="gitPullRequestUrl" class="form-control form-control-sm" placeholder="Pull request URL">
-                            </div>
-                            <div class="mb-2">
-                                <input id="gitRepositoryUrl" class="form-control form-control-sm" placeholder="Repository URL">
-                            </div>
-                            <div class="mb-2">
-                                <select id="gitStatus" class="form-select form-select-sm">
-                                    <option value="active">Active</option>
-                                    <option value="in_review">In Review</option>
-                                    <option value="closed">Closed</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <textarea id="gitNotes" class="form-control form-control-sm" rows="3" placeholder="Notes for this Git update"></textarea>
-                            </div>
-                            <button class="btn-primary-modern task-detail-action" onclick="addGitUpdate(${taskId})">
-                                <i class="fas fa-code-branch"></i> Save Git Update
-                            </button>
-                        </div>
-                        <div class="task-detail-panel">
-                            <h6 class="mb-2">Git History</h6>
-                            <div id="gitUpdatesList" class="small"></div>
-                        </div>
+                        ${gitToolsPanel}
                         <div class="task-side-panel">
                             <div class="mb-3">
                                 <label class="form-label">Add Comment</label>
@@ -2023,7 +2054,7 @@ function viewTask(taskId) {
 }
 
 function buildDepartmentPanel(task) {
-    const isUiUx = currentDepartment === 'UI/UX Designer';
+    const isUiUx = currentDepartmentCanonical === 'UI/UX';
     const requirements = Array.isArray(task.project_requirements) ? task.project_requirements : [];
     const requirementItems = requirements.length > 0
         ? requirements.map((item) => `<li><i class="fas fa-check-circle"></i><span>${escapeHtml(item)}</span></li>`).join('')
@@ -2087,6 +2118,11 @@ function buildDepartmentPanel(task) {
                         <button class="btn-primary-modern task-detail-action" onclick="saveDepartmentArtifact(${Number(task.id)})" data-bs-toggle="tooltip" title="Saves department-specific handoff details without moving the task status.">
                             <i class="fas fa-floppy-disk"></i> ${escapeHtml(departmentProfile.artifact_cta || 'Save Handoff')}
                         </button>
+                        ${isUiUx ? `
+                            <button class="btn-primary-modern task-detail-action mt-2" onclick="updateTaskStatus(${Number(task.id)}, 'for_review')" data-bs-toggle="tooltip" title="Submit design work to the UI/UX SUL for approval without Git or pull requests.">
+                                <i class="fas fa-paper-plane"></i> Submit Design
+                            </button>
+                        ` : ''}
                     </div>
                 </div>
                 <div class="col-md-6">

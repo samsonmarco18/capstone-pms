@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/project-workflow.php';
 
 function departmentArtifactEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
 {
@@ -178,10 +179,24 @@ function departmentArtifactProfile(?string $department): array
 {
     $profiles = departmentArtifactProfiles();
     $department = trim((string) $department);
+    $canonical = projectWorkflowDepartmentLabel($department);
+    $profileAliases = [
+        'UI/UX' => 'UI/UX Designer',
+        'Frontend' => 'Frontend Developer',
+        'Backend' => 'Backend Developer',
+        'Database' => 'Database Administrator',
+        'DevOps' => 'DevOps Engineer',
+        'QA' => 'QA Engineer',
+    ];
+    $profileKey = $profiles[$department] ?? null;
+    if ($profileKey !== null) {
+        return $profileKey;
+    }
+    $aliasKey = $profileAliases[$canonical] ?? $canonical;
 
-    return $profiles[$department] ?? [
+    return $profiles[$aliasKey] ?? [
         'icon' => 'fa-briefcase',
-        'title' => ($department !== '' ? $department : 'Department') . ' Workbench',
+        'title' => ($canonical !== '' ? $canonical : 'Department') . ' Workbench',
         'summary' => 'Use this space for department-specific references and notes while keeping the existing task workflow intact.',
         'artifact_cta' => 'Save Department Handoff',
         'artifact_type' => 'department_handoff',

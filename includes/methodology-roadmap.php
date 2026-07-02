@@ -383,6 +383,7 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
 
     $roadmapTask = $conn->query("
         SELECT mt.start_date AS task_start, mt.end_date AS task_end, mt.assigned_developer_id,
+               mp.id AS phase_id, mp.sequence_no AS phase_sequence,
                mp.name AS phase_name, mp.start_date AS phase_start, mp.end_date AS phase_end
         FROM methodology_tasks mt
         INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
@@ -394,6 +395,20 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
 
     if (!$roadmapTask) {
         return 'This task is not scheduled in the methodology roadmap yet. Ask the architect to place it in a phase before starting.';
+    }
+
+    $phaseId = (int) ($roadmapTask['phase_id'] ?? 0);
+    $phaseSequence = (int) ($roadmapTask['phase_sequence'] ?? 0);
+    $previousOpenCount = (int) (($conn->query("
+        SELECT COUNT(*) AS total
+        FROM methodology_phases
+        WHERE project_id = {$projectId}
+          AND id <> {$phaseId}
+          AND COALESCE(sequence_no, id) < " . ($phaseSequence > 0 ? $phaseSequence : $phaseId) . "
+          AND status != 'completed'
+    ")->fetch_assoc()['total'] ?? 0));
+    if ($previousOpenCount > 0) {
+        return 'Waiting for Previous Phase. This phase is visible but cannot start until earlier roadmap phases are completed.';
     }
 
     $assignedDeveloperId = (int) ($roadmapTask['assigned_developer_id'] ?? 0);

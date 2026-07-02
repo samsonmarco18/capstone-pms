@@ -1,19 +1,25 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-workflow.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectWorkflowEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 $allocationRoles = [
-    'Frontend Developer' => ['min' => 1, 'max' => 5],
-    'Backend Developer' => ['min' => 1, 'max' => 5],
-    'Full Stack Developer' => ['min' => 0, 'max' => 3],
-    'QA Engineer' => ['min' => 1, 'max' => 2],
-    'UI/UX Designer' => ['min' => 1, 'max' => 2],
-    'DevOps Engineer' => ['min' => 0, 'max' => 2],
-    'Database Administrator' => ['min' => 0, 'max' => 1],
+    'Expert Department' => ['min' => 0, 'max' => 3],
+    'UI/UX' => ['min' => 1, 'max' => 3],
+    'Frontend' => ['min' => 1, 'max' => 5],
+    'Backend' => ['min' => 1, 'max' => 5],
+    'Mobile' => ['min' => 0, 'max' => 4],
+    'Database' => ['min' => 0, 'max' => 2],
+    'DevOps' => ['min' => 0, 'max' => 2],
+    'AI' => ['min' => 0, 'max' => 3],
+    'Security' => ['min' => 0, 'max' => 2],
+    'QA' => ['min' => 1, 'max' => 3],
+    'Other Departments' => ['min' => 0, 'max' => 5],
 ];
 
 function normalizeAllocationComplexity(?string $value): string
@@ -44,7 +50,8 @@ if (!dbColumnExists($conn, 'projects', 'included_departments')) {
 $existingAllocations = [];
 $allocResult = $conn->query("SELECT * FROM developer_allocations WHERE project_id = $projectId");
 while($row = $allocResult->fetch_assoc()) {
-    $existingAllocations[$row['role']] = $row;
+    $normalizedRole = projectWorkflowDepartmentLabel($row['role'] ?? '');
+    $existingAllocations[$normalizedRole] = $row;
 }
 
 $includedDepartments = [];
@@ -52,7 +59,7 @@ $includedDepartmentRaw = trim((string) ($project['included_departments'] ?? ''))
 if ($includedDepartmentRaw !== '') {
     $decodedDepartments = json_decode($includedDepartmentRaw, true);
     if (is_array($decodedDepartments)) {
-        $includedDepartments = array_values(array_intersect(array_map('strval', $decodedDepartments), array_keys($allocationRoles)));
+        $includedDepartments = array_values(array_intersect(array_map(static fn($item): string => projectWorkflowDepartmentLabel((string) $item), $decodedDepartments), array_keys($allocationRoles)));
     }
 }
 
@@ -734,7 +741,10 @@ a.progress-step:hover {
                                             ? (int) ($existingAllocations[$role]['required_count'] ?? 0)
                                             : ($isIncluded ? (int) ($limits['min'] ?? 0) : 0);
                                         $existingComplexity = normalizeAllocationComplexity($existingAllocations[$role]['complexity_level'] ?? $selectedComplexity);
-                                        $available = $availableDevs[$role] ?? 0;
+                                        $available = 0;
+                                        foreach (projectWorkflowDepartmentAliases($role) as $roleAlias) {
+                                            $available += (int) ($availableDevs[$roleAlias] ?? 0);
+                                        }
                                         $isShortage = $existing > $available;
                                     ?>
                                     <tr>

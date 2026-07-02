@@ -3,10 +3,12 @@ require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
+require_once '../../includes/project-workflow.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectWorkflowEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 $hasCloudPlatform = dbColumnExists($conn, 'projects', 'cloud_platform');
@@ -81,21 +83,59 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    $conn->query("UPDATE projects SET status = 'in_progress' WHERE id = $projectId");
+    $firstExecutionDepartment = '';
+    $firstExecutionRow = $conn->query("
+        SELECT mt.department
+        FROM methodology_tasks mt
+        INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
+        WHERE mt.project_id = {$projectId}
+          AND mt.department IS NOT NULL
+          AND mt.department != ''
+        ORDER BY COALESCE(mp.sequence_no, mp.id) ASC, mt.id ASC
+    ");
+    while ($departmentRow = $firstExecutionRow->fetch_assoc()) {
+        $candidate = projectWorkflowDepartmentLabel($departmentRow['department'] ?? '');
+        if ($candidate !== '' && !in_array($candidate, ['Expert Department', 'QA'], true)) {
+            $firstExecutionDepartment = $candidate;
+            break;
+        }
+    }
+    if ($firstExecutionDepartment !== 'UI/UX') {
+        $_SESSION['error'] = 'UI/UX must be the first execution department before Architect submission. Place UI/UX before development and QA phases in the roadmap.';
+        header('Location: summary.php?id=' . $projectId);
+        exit();
+    }
+
+    $lastDepartment = '';
+    $lastDepartmentRow = $conn->query("
+        SELECT mt.department
+        FROM methodology_tasks mt
+        INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
+        WHERE mt.project_id = {$projectId}
+          AND mt.department IS NOT NULL
+          AND mt.department != ''
+        ORDER BY COALESCE(mp.sequence_no, mp.id) DESC, mt.id DESC
+        LIMIT 1
+    ")->fetch_assoc();
+    $lastDepartment = projectWorkflowDepartmentLabel($lastDepartmentRow['department'] ?? '');
+    if ($lastDepartment !== 'QA') {
+        $_SESSION['error'] = 'QA must be the final department before Architect submission. Place QA as the last roadmap phase.';
+        header('Location: summary.php?id=' . $projectId);
+        exit();
+    }
+
+    $conn->query("UPDATE projects SET status = 'in_progress', workflow_status = 'architect_submitted' WHERE id = $projectId");
     
     $title = "New Architecture Plan Ready for Review";
     $message = "Project: " . $project['name'] . " is ready for SUL review and assignment";
     
-    workflowNotifyRoles(
-        $conn,
-        ['sul'],
-        $title,
-        $message,
-        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
-        $projectId,
-        'project',
-        'projects'
-    );
+    $selectedDepartments = [];
+    $departmentRaw = trim((string) ($project['included_departments'] ?? ''));
+    $decodedDepartments = $departmentRaw !== '' ? json_decode($departmentRaw, true) : [];
+    if (is_array($decodedDepartments)) {
+        $selectedDepartments = array_map(static fn($department): string => projectWorkflowDepartmentLabel((string) $department), $decodedDepartments);
+    }
+    projectWorkflowNotifySelectedSuls($conn, $projectId, array_unique($selectedDepartments), (string) $project['name']);
     
     logActivity($user['id'], 'submit_architecture', 'projects', $projectId);
     $_SESSION['success'] = "Architecture plan submitted to SUL successfully";

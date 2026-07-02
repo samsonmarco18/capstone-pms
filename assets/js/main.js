@@ -4,7 +4,130 @@ $(function () {
     initNotifications();
     initTooltips();
     initAppActionHelpers();
+    initGenericFormDrafts();
+    initFormSubmitConfirmations();
 });
+
+function initGenericFormDrafts() {
+    $('form[method="POST"], form[method="post"]').each(function (formIndex) {
+        const form = this;
+        const $form = $(form);
+        if ($form.data('genericDraftDisabled') || $form.find('[data-save-draft]').length || $form.find('input[type="password"]').length) {
+            return;
+        }
+
+        const formId = form.id || form.getAttribute('name') || `form-${formIndex}`;
+        const draftKey = `erniPms.formDraft.${location.pathname}.${formId}`;
+        const $submit = $form.find('button[type="submit"], input[type="submit"]').last();
+        const $draftButton = $('<button type="button" class="btn btn-outline-primary btn-sm ms-2" data-generic-save-draft><i class="fas fa-save me-1"></i> Save Draft</button>');
+        const $draftStatus = $('<span class="text-muted small ms-2" data-generic-draft-status></span>');
+
+        function readFormData() {
+            const data = {};
+            $(form).find('input, textarea, select').each(function () {
+                const field = this;
+                const name = field.name;
+                if (!name || field.type === 'file' || field.type === 'password' || field.type === 'hidden') {
+                    return;
+                }
+                if (field.type === 'checkbox' || field.type === 'radio') {
+                    data[name] = field.checked ? field.value : '';
+                    return;
+                }
+                data[name] = $(field).val();
+            });
+            return data;
+        }
+
+        function hasDraftData(data) {
+            return Object.values(data).some((value) => String(value || '').trim() !== '');
+        }
+
+        function saveDraft() {
+            const data = readFormData();
+            if (!hasDraftData(data)) {
+                localStorage.removeItem(draftKey);
+                $draftStatus.text('Draft cleared');
+                return;
+            }
+            localStorage.setItem(draftKey, JSON.stringify({ savedAt: new Date().toISOString(), data }));
+            $draftStatus.text('Draft saved');
+        }
+
+        function loadDraft() {
+            const raw = localStorage.getItem(draftKey);
+            if (!raw) {
+                return;
+            }
+            try {
+                const payload = JSON.parse(raw);
+                Object.entries(payload.data || {}).forEach(([name, value]) => {
+                    const fields = form.elements[name];
+                    if (!fields) return;
+                    const list = fields instanceof RadioNodeList ? Array.from(fields) : [fields];
+                    list.forEach((field) => {
+                        if (field.type === 'checkbox' || field.type === 'radio') {
+                            field.checked = String(field.value) === String(value);
+                        } else {
+                            field.value = value;
+                        }
+                    });
+                });
+                $draftStatus.text('Draft restored');
+            } catch (error) {
+                localStorage.removeItem(draftKey);
+            }
+        }
+
+        if ($submit.length) {
+            $submit.after($draftStatus).after($draftButton);
+        } else {
+            $form.append($('<div class="mt-3"></div>').append($draftButton, $draftStatus));
+        }
+
+        $draftButton.on('click', saveDraft);
+        $form.on('submit', function () {
+            if (form.dataset.confirmedSubmit === '1' || form.id === 'addClientForm') {
+                localStorage.removeItem(draftKey);
+            }
+        });
+        loadDraft();
+    });
+}
+
+function initFormSubmitConfirmations() {
+    $('form[method="POST"], form[method="post"]').each(function () {
+        const form = this;
+        const $form = $(form);
+        if (form.id === 'addClientForm' || $form.data('confirmSkip')) {
+            return;
+        }
+
+        $form.on('submit.genericConfirm', async function (event) {
+            if (form.dataset.confirmedSubmit === '1') {
+                form.dataset.confirmedSubmit = '0';
+                return;
+            }
+
+            event.preventDefault();
+            const confirmed = typeof window.appConfirm === 'function'
+                ? await window.appConfirm({
+                    title: 'Confirm Submission',
+                    subject: 'Submit this form?',
+                    message: 'The workflow will continue after this action is saved.',
+                    icon: 'fas fa-circle-check fa-lg',
+                    confirmIcon: 'fas fa-check',
+                    confirmText: 'Submit'
+                })
+                : window.confirm('Submit this form?');
+
+            if (confirmed) {
+                form.dataset.confirmedSubmit = '1';
+                form.requestSubmit();
+            }
+        });
+    });
+}
 
 function initSidebar() {
     const sidebar = $('#sidebar-wrapper');

@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/methodology-roadmap.php';
+require_once '../../includes/project-workflow.php';
 
 requireRole(['sales', 'architect', 'sul', 'qa', 'expert', 'developer']);
 
@@ -238,15 +239,17 @@ $methodologyTemplates = methodologyRoadmapTemplates();
 $allowedPhaseStatuses = ['planned', 'in_progress', 'completed', 'on_hold'];
 $allowedTaskStatuses = ['planned', 'in_progress', 'completed', 'blocked'];
 $departments = [
-    'Frontend Developer',
-    'Backend Developer',
-    'Full Stack Developer',
-    'QA Engineer',
-    'UI/UX Designer',
-    'DevOps Engineer',
-    'Database Administrator',
-    'Sales',
-    'Architecture',
+    'Expert Department',
+    'UI/UX',
+    'Frontend',
+    'Backend',
+    'Mobile',
+    'Database',
+    'DevOps',
+    'AI',
+    'Security',
+    'QA',
+    'Other Departments',
 ];
 
 $accessClause = roadmapProjectAccessClause($conn, $user, 'p');
@@ -1194,7 +1197,7 @@ include '../../includes/navbar.php';
                         <div class="d-flex align-items-start justify-content-between gap-2">
                             <h5><?php echo htmlspecialchars((string) $phase['name']); ?></h5>
                             <span class="status-pill status-<?php echo htmlspecialchars((string) $phase['status']); ?>">
-                                <?php echo htmlspecialchars(str_replace('_', ' ', (string) $phase['status'])); ?>
+                                <?php echo htmlspecialchars(projectWorkflowPhaseStatusLabel((string) $phase['status'])); ?>
                             </span>
                         </div>
                         <div class="phase-meta">
@@ -1322,7 +1325,7 @@ include '../../includes/navbar.php';
                                     <strong><?php echo (int) $task['expert_people_count']; ?></strong>
                                     <div class="small text-muted"><?php echo htmlspecialchars((string) ($task['expert_developer_type'] ?: 'Type not set')); ?></div>
                                 </td>
-                                <td><span class="status-pill status-<?php echo htmlspecialchars((string) $task['status']); ?>"><?php echo htmlspecialchars(str_replace('_', ' ', (string) $task['status'])); ?></span></td>
+                                <td><span class="status-pill status-<?php echo htmlspecialchars((string) $task['status']); ?>"><?php echo htmlspecialchars(projectWorkflowPhaseStatusLabel((string) $task['status'])); ?></span></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>

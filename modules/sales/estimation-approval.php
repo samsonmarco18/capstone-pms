@@ -1,9 +1,11 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-workflow.php';
 requireRole('sales');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectWorkflowEnsureSchema($conn);
 
 // Ensure sales approval columns exist
 $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
@@ -87,16 +89,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($stmt->execute()) {
                 $taskDetails = $conn->query("SELECT title, project_id FROM tasks WHERE id = $taskId")->fetch_assoc();
-                $sulUsers = $conn->query("SELECT id FROM users WHERE role = 'sul' AND status = 'active'");
-                while ($sul = $sulUsers->fetch_assoc()) {
-                    createNotification(
-                        (int) $sul['id'],
+                $targetDepartment = projectWorkflowTaskDepartment($conn, $taskId);
+                if ($targetDepartment !== '') {
+                    projectWorkflowNotifyDepartmentSuls(
+                        $conn,
+                        $targetDepartment,
                         "Sales Approved Estimation: " . ($taskDetails['title'] ?? 'Task'),
                         "Sales approved the estimation. Task is ready for SUL review.",
-                        'approval',
-                        'tasks',
-                        (int) $taskId,
-                        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($taskDetails['project_id'] ?? 0)
+                        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($taskDetails['project_id'] ?? 0),
+                        (int) ($taskDetails['project_id'] ?? 0)
                     );
                 }
                 logActivity($user['id'], 'sales_approve_estimation', 'tasks', $taskId, null, $_POST);

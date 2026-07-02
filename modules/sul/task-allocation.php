@@ -2,6 +2,7 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
+require_once '../../includes/project-workflow.php';
 requireRole('sul');
 
 $conn = getConnection();
@@ -9,34 +10,14 @@ $user = getCurrentUser();
 $userId = (int) ($user['id'] ?? 0);
 workflowEnsureSchema($conn);
 methodologyRoadmapEnsureSchema($conn);
+projectWorkflowEnsureSchema($conn);
 
 $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
 $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
 
 function sulTaskAllocationProjectFilter($conn, string $projectAlias, string $department): string
 {
-    $department = trim($department);
-    if ($department === '') {
-        return '1 = 0';
-    }
-
-    $escapedDepartment = $conn->real_escape_string($department);
-    $clauses = [];
-
-    if (dbTableExists($conn, 'developer_allocations')) {
-        $clauses[] = "EXISTS (
-            SELECT 1
-            FROM developer_allocations da_scope
-            WHERE da_scope.project_id = {$projectAlias}.id
-              AND da_scope.role = '{$escapedDepartment}'
-        )";
-    }
-
-    if (dbColumnExists($conn, 'projects', 'included_departments')) {
-        $clauses[] = "{$projectAlias}.included_departments LIKE '%\"{$escapedDepartment}\"%'";
-    }
-
-    return count($clauses) > 0 ? '(' . implode(' OR ', $clauses) . ')' : '1 = 1';
+    return projectWorkflowProjectDepartmentClause($conn, $projectAlias, $department);
 }
 
 function sulTaskAllocationFormatDeadline(?string $deadline): string
@@ -104,7 +85,7 @@ $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 $sulDepartment = trim((string) ($user['department'] ?? ''));
 $sulDepartmentEscaped = $conn->real_escape_string($sulDepartment);
 $sulMissingDepartment = $sulDepartment === '';
-$sulUserDepartmentFilter = $sulDepartment !== '' ? " AND u.department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+$sulUserDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : ' AND 1 = 0';
 $sulProjectFilter = sulTaskAllocationProjectFilter($conn, 'p', $sulDepartment);
 
 if ($sulMissingDepartment) {
@@ -418,7 +399,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         }
 
-        $expertDepartmentSql = $sulDepartment !== '' ? " AND department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+        $expertDepartmentSql = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) : ' AND 1 = 0';
         $expertCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'expert' AND status = 'active'{$expertDepartmentSql}");
         $expertCheck->bind_param("i", $expertId);
         $expertCheck->execute();
@@ -479,7 +460,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         }
 
-        $expertDepartmentSql = $sulDepartment !== '' ? " AND department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+        $expertDepartmentSql = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) : ' AND 1 = 0';
         $expertCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'expert' AND status = 'active'{$expertDepartmentSql}");
         $expertCheck->bind_param("i", $expertId);
         $expertCheck->execute();
@@ -559,7 +540,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         }
 
-        $developerDepartmentSql = $sulDepartment !== '' ? " AND department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+        $developerDepartmentSql = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) : ' AND 1 = 0';
         $developerCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'developer' AND status = 'active'{$developerDepartmentSql}");
         $developerCheck->bind_param("i", $developerId);
         $developerCheck->execute();
@@ -569,7 +550,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $approvalSql = $hasSalesApproval ? " AND sales_approved = 1" : "";
         $choiceSql = $hasSalesChoice ? " AND sales_estimate_days IS NOT NULL" : "";
         $taskCheck = $conn->prepare("
-            SELECT t.id
+            SELECT t.id, t.project_id
             FROM tasks t
             JOIN projects p ON p.id = t.project_id
             WHERE t.id = ?
@@ -604,6 +585,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             if (!$roadmapTask) {
                 $_SESSION['error'] = "This task is not scheduled in the methodology roadmap yet.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+
+            $previousOpenCount = (int) (($conn->query("
+                SELECT COUNT(*) AS total
+                FROM methodology_phases previous_phase
+                INNER JOIN methodology_phases current_phase ON current_phase.project_id = previous_phase.project_id
+                INNER JOIN methodology_tasks current_task ON current_task.phase_id = current_phase.id
+                WHERE current_task.task_id = {$taskId}
+                  AND previous_phase.project_id = {$assignmentProjectId}
+                  AND COALESCE(previous_phase.sequence_no, previous_phase.id) < COALESCE(current_phase.sequence_no, current_phase.id)
+                  AND previous_phase.status != 'completed'
+            ")->fetch_assoc()['total'] ?? 0));
+            if ($previousOpenCount > 0) {
+                $_SESSION['error'] = "Waiting for Previous Phase. This department can view the roadmap but cannot start work yet.";
                 header("Location: task-allocation.php");
                 exit();
             }
@@ -665,7 +662,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $taskStmt = $conn->prepare("
-            SELECT t.id, t.title, t.status, t.assigned_to, p.name AS project_name
+            SELECT t.id, t.title, t.status, t.assigned_to, t.project_id, p.name AS project_name
             FROM tasks t
             JOIN projects p ON p.id = t.project_id
             JOIN users u ON u.id = t.assigned_to
@@ -686,24 +683,56 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         if ($isApproval) {
-            $stmt = $conn->prepare("UPDATE tasks SET status = 'qa_testing', sul_reviewed_by = ?, sul_reviewed_at = NOW() WHERE id = ?");
-            $stmt->bind_param("ii", $user['id'], $taskId);
+            $projectForRouting = (int) ($reviewTask['project_id'] ?? 0);
+            $nextRoadmapTask = $conn->query("
+                SELECT next_mt.department, next_mt.task_id, next_t.title
+                FROM methodology_tasks current_mt
+                INNER JOIN methodology_phases current_phase ON current_phase.id = current_mt.phase_id
+                INNER JOIN methodology_phases next_phase ON next_phase.project_id = current_phase.project_id
+                INNER JOIN methodology_tasks next_mt ON next_mt.phase_id = next_phase.id
+                LEFT JOIN tasks next_t ON next_t.id = next_mt.task_id
+                WHERE current_mt.task_id = {$taskId}
+                  AND current_mt.project_id = {$projectForRouting}
+                  AND COALESCE(next_phase.sequence_no, next_phase.id) > COALESCE(current_phase.sequence_no, current_phase.id)
+                ORDER BY COALESCE(next_phase.sequence_no, next_phase.id) ASC, next_mt.id ASC
+                LIMIT 1
+            ")->fetch_assoc();
+            $nextDepartment = projectWorkflowDepartmentLabel($nextRoadmapTask['department'] ?? '');
+            $routeToQa = $nextDepartment === 'QA' || !$nextRoadmapTask;
+            $approvedStatus = $routeToQa ? 'qa_testing' : 'completed';
+
+            $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = CASE WHEN ? = 'completed' THEN NOW() ELSE completed_at END, sul_reviewed_by = ?, sul_reviewed_at = NOW() WHERE id = ?");
+            $stmt->bind_param("ssii", $approvedStatus, $approvedStatus, $user['id'], $taskId);
             if ($stmt->execute()) {
-                workflowLogStatusChange((int) $user['id'], $taskId, 'for_review', 'qa_testing', 'sul_approve_pull_request', $reviewComment);
-                workflowAddTaskComment($conn, $taskId, (int) $user['id'], $reviewComment !== '' ? "SUL approved PR: {$reviewComment}" : 'SUL approved PR for QA testing.');
-                workflowNotifyRoles(
-                    $conn,
-                    ['qa'],
-                    'PR Approved for QA: ' . $reviewTask['title'],
-                    'SUL approved the Pull Request. QA testing can begin.',
-                    BASE_URL . 'modules/qa/dashboard.php?task_id=' . $taskId,
-                    $taskId
-                );
-                $_SESSION['success'] = "Pull Request approved and moved to QA Testing.";
+                workflowLogStatusChange((int) $user['id'], $taskId, 'for_review', $approvedStatus, 'sul_approve_department_work', $reviewComment);
+                workflowAddTaskComment($conn, $taskId, (int) $user['id'], $reviewComment !== '' ? "SUL approved work: {$reviewComment}" : 'SUL approved this department work.');
+                projectWorkflowSyncRoadmap($conn, $projectForRouting);
+
+                if ($routeToQa) {
+                    workflowNotifyRoles(
+                        $conn,
+                        ['qa'],
+                        'Ready for QA: ' . $reviewTask['title'],
+                        'All prior work for this item is ready for QA testing.',
+                        BASE_URL . 'modules/qa/dashboard.php?task_id=' . $taskId,
+                        $taskId
+                    );
+                    $_SESSION['success'] = "Work approved and moved to QA Testing.";
+                } else {
+                    projectWorkflowNotifyDepartmentSuls(
+                        $conn,
+                        $nextDepartment,
+                        'Next Phase Unlocked: ' . ($nextRoadmapTask['title'] ?? $reviewTask['project_name']),
+                        'The previous department was approved. Your department may now assign and start work.',
+                        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectForRouting,
+                        $projectForRouting
+                    );
+                    $_SESSION['success'] = "Work approved. The next department has been notified.";
+                }
                 header("Location: task-allocation.php");
                 exit();
             }
-            $_SESSION['error'] = "Failed to approve Pull Request.";
+            $_SESSION['error'] = "Failed to approve work.";
         } else {
             $stmt = $conn->prepare("UPDATE tasks SET status = 'sul_revision', completed_at = NULL, sul_reviewed_by = ?, sul_reviewed_at = NOW() WHERE id = ?");
             $stmt->bind_param("ii", $user['id'], $taskId);
