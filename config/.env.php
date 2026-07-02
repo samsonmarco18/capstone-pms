@@ -126,16 +126,23 @@ function detectAppUrl(string $appRootPath, bool $isRender): string
     $scheme = $isHttps ? 'https' : 'http';
     $host = trim((string) ($_SERVER['HTTP_HOST'] ?? 'localhost'));
 
+    $basePathOverride = trim((string) getEnvOrDefault('APP_BASE_PATH', ''));
+    if ($basePathOverride !== '') {
+        return $scheme . '://' . $host . '/' . trim($basePathOverride, '/') . '/';
+    }
+
     $normalizedAppRoot = str_replace('\\', '/', $appRootPath);
     $documentRootInput = trim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''));
     $documentRoot = $documentRootInput !== ''
         ? str_replace('\\', '/', realpath($documentRootInput) ?: $documentRootInput)
         : '';
 
-    $basePath = '/' . basename($normalizedAppRoot) . '/';
+    $basePath = '/';
     if ($documentRoot !== '' && str_starts_with(strtolower($normalizedAppRoot), strtolower($documentRoot))) {
         $relativePath = trim(substr($normalizedAppRoot, strlen($documentRoot)), '/');
         $basePath = ($relativePath !== '' ? '/' . $relativePath : '') . '/';
+    } elseif (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false || strpos($host, '::1') !== false) {
+        $basePath = '/' . basename($normalizedAppRoot) . '/';
     }
 
     return $scheme . '://' . $host . $basePath;
@@ -175,6 +182,7 @@ define('GIT_USER_EMAIL', getEnvOrDefault('GIT_USER_EMAIL', 'noreply@erni-pms.loc
 // ==============================================
 
 define('MAIL_ENABLED', getEnvOrDefault('MAIL_ENABLED', '0') === '1');
+define('MAIL_DELIVERY_METHOD', (string) getEnvOrDefault('MAIL_DELIVERY_METHOD', 'smtp'));
 define('MAIL_HOST', (string) getEnvOrDefault('MAIL_HOST', ''));
 define('MAIL_PORT', (int) getEnvOrDefault('MAIL_PORT', 0));
 define('MAIL_ENCRYPTION', (string) getEnvOrDefault('MAIL_ENCRYPTION', 'tls'));
@@ -182,6 +190,13 @@ define('MAIL_USERNAME', (string) getEnvOrDefault('MAIL_USERNAME', ''));
 define('MAIL_PASSWORD', (string) getEnvOrDefault('MAIL_PASSWORD', ''));
 define('MAIL_FROM_EMAIL', (string) getEnvOrDefault('MAIL_FROM_EMAIL', ''));
 define('MAIL_FROM_NAME', (string) getEnvOrDefault('MAIL_FROM_NAME', ''));
+define('MAIL_VERIFY_PEER', getEnvOrDefault('MAIL_VERIFY_PEER', '1') !== '0');
+define('MAIL_TIMEOUT', (int) getEnvOrDefault('MAIL_TIMEOUT', 8));
+define('MAIL_DEBUG', getEnvOrDefault('MAIL_DEBUG', '0') === '1');
+define('GMAIL_CLIENT_ID', (string) getEnvOrDefault('GMAIL_CLIENT_ID', ''));
+define('GMAIL_CLIENT_SECRET', (string) getEnvOrDefault('GMAIL_CLIENT_SECRET', ''));
+define('GMAIL_REFRESH_TOKEN', (string) getEnvOrDefault('GMAIL_REFRESH_TOKEN', ''));
+define('GMAIL_USER', (string) getEnvOrDefault('GMAIL_USER', ''));
 
 // ==============================================
 // CACHING CONFIGURATION

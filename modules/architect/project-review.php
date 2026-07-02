@@ -1,11 +1,49 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-workflow.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectWorkflowEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $hasSalesBudget = dbColumnExists($conn, 'projects', 'sales_budget');
+
+function projectReviewParseRequestedFeatures(?string $rawFeatures): array
+{
+    $raw = trim((string) $rawFeatures);
+    if ($raw === '') {
+        return [];
+    }
+
+    $items = [];
+    $seen = [];
+    foreach ((preg_split('/\R/', $raw) ?: []) as $line) {
+        $line = trim((string) $line);
+        if ($line === '') {
+            continue;
+        }
+
+        if (preg_match('/^(additional requirements|budget)\s*:/i', $line)) {
+            break;
+        }
+
+        $line = trim((string) preg_replace('/^\s*(?:[-*]|\d+[\.)])\s*/', '', $line));
+        if ($line === '') {
+            continue;
+        }
+
+        $normalized = strtolower(preg_replace('/\s+/', ' ', $line));
+        if (isset($seen[$normalized])) {
+            continue;
+        }
+
+        $seen[$normalized] = true;
+        $items[] = $line;
+    }
+
+    return $items;
+}
 
 $project = $conn->query("
     SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email,
@@ -18,6 +56,27 @@ $project = $conn->query("
 if (!$project) {
     header('Location: projects.php');
     exit();
+}
+
+$requestedFeatureItems = projectReviewParseRequestedFeatures($project['requested_features'] ?? '');
+$salesAttachments = [];
+if (!empty($project['sales_attachments'])) {
+    $decodedAttachments = json_decode((string) $project['sales_attachments'], true);
+    if (is_array($decodedAttachments)) {
+        $salesAttachments = $decodedAttachments;
+    }
+}
+$additionalRequirementsText = '';
+if (preg_match('/Additional Requirements:\s*(.*?)(?:\R{2,}Budget:|\z)/is', (string) ($project['requested_features'] ?? ''), $matches)) {
+    $additionalRequirementsText = trim((string) ($matches[1] ?? ''));
+}
+$timelineDays = null;
+if (!empty($project['timeline_start']) && !empty($project['timeline_end'])) {
+    $start = strtotime((string) $project['timeline_start']);
+    $end = strtotime((string) $project['timeline_end']);
+    if ($start !== false && $end !== false && $end >= $start) {
+        $timelineDays = (int) floor(($end - $start) / 86400) + 1;
+    }
 }
 
 include '../../includes/header.php';
@@ -239,6 +298,23 @@ a.progress-step:hover {
 
 .info-card .card-body { padding: 1.25rem 1.5rem; }
 
+.sticky-project-panel {
+    position: sticky;
+    top: 1rem;
+}
+
+.sticky-project-panel.is-minimized .card-body {
+    display: none;
+}
+
+.sticky-panel-toggle {
+    border: 0;
+    background: transparent;
+    color: var(--theme-primary);
+    font-weight: 700;
+    font-size: 0.8rem;
+}
+
 .detail-row {
     display: flex;
     justify-content: space-between;
@@ -267,6 +343,30 @@ a.progress-step:hover {
     font-size: 0.9rem;
     color: var(--gray-900);
     white-space: pre-line;
+}
+
+.requested-feature-list {
+    display: grid;
+    gap: 0.65rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    white-space: normal;
+}
+
+.requested-feature-list li {
+    display: flex;
+    gap: 0.55rem;
+    align-items: flex-start;
+    padding: 0.7rem 0.8rem;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 10px;
+}
+
+.requested-feature-list i {
+    color: var(--theme-primary);
+    margin-top: 0.18rem;
 }
 
 .btn-primary-modern {
@@ -359,7 +459,8 @@ a.progress-step:hover {
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .detail-row,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .content-box {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .content-box,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requested-feature-list li {
     background: #0a1b2c !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
 }
@@ -410,14 +511,18 @@ a.progress-step:hover {
         <div class="progress-line"></div>
         <a class="progress-step" href="developer-allocation.php?id=<?php echo $projectId; ?>"><div class="step-number">4</div><div class="step-label">Developers</div></a>
         <div class="progress-line"></div>
-        <a class="progress-step" href="upload-diagram.php?id=<?php echo $projectId; ?>"><div class="step-number">5</div><div class="step-label">Documents</div></a>
+        <a class="progress-step" href="../roadmap/methodology.php?project_id=<?php echo $projectId; ?>"><div class="step-number">5</div><div class="step-label">Roadmap</div></a>
         <div class="progress-line"></div>
-        <a class="progress-step" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">6</div><div class="step-label">Summary</div></a>
+        <a class="progress-step" href="upload-diagram.php?id=<?php echo $projectId; ?>"><div class="step-number">6</div><div class="step-label">Documents</div></a>
+        <div class="progress-line"></div>
+        <a class="progress-step" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
     </div>
+
+    <?php include '../../includes/architect-project-review-panel.php'; ?>
 
     <div class="row g-4">
         <!-- Main Column -->
-        <div class="col-lg-8">
+        <div class="col-12">
             <div class="info-card">
                 <div class="card-header">
                     <h5><i class="fas fa-info-circle"></i> Project Overview</h5>
@@ -426,10 +531,6 @@ a.progress-step:hover {
                     <div class="detail-row">
                         <div class="detail-label">Project Name</div>
                         <div class="detail-value"><?php echo htmlspecialchars($project['name']); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Complexity</div>
-                        <div class="detail-value"><?php echo ucfirst($project['complexity_level']); ?></div>
                     </div>
                     <div class="detail-row">
                         <div class="detail-label">Timeline</div>
@@ -443,6 +544,27 @@ a.progress-step:hover {
                             }
                             ?>
                         </div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Planning Basis</div>
+                        <div class="detail-value">
+                            <?php
+                            $basisParts = [];
+                            $basisParts[] = count($requestedFeatureItems) . ' requested feature' . (count($requestedFeatureItems) === 1 ? '' : 's');
+                            if ($timelineDays !== null) {
+                                $basisParts[] = $timelineDays . ' day' . ($timelineDays === 1 ? '' : 's');
+                            }
+                            echo htmlspecialchars(implode(' | ', $basisParts));
+                            ?>
+                        </div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Generated Complexity</div>
+                        <div class="detail-value"><?php echo htmlspecialchars((string) ($project['complexity_level'] ?? 'Medium')); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Priority</div>
+                        <div class="detail-value"><?php echo htmlspecialchars(ucfirst((string) ($project['priority'] ?? 'medium'))); ?></div>
                     </div>
                     <?php if ($hasSalesBudget && !empty($project['sales_budget'])): ?>
                     <div class="detail-row">
@@ -470,7 +592,22 @@ a.progress-step:hover {
                 </div>
                 <div class="card-body">
                     <div class="content-box">
-                        <?php echo $project['requested_features'] ? htmlspecialchars($project['requested_features']) : 'No requested features provided.'; ?>
+                        <?php if (count($requestedFeatureItems) > 0): ?>
+                            <ul class="requested-feature-list">
+                                <?php foreach ($requestedFeatureItems as $featureItem): ?>
+                                    <li>
+                                        <i class="fas fa-check-circle"></i>
+                                        <span><?php echo htmlspecialchars($featureItem); ?></span>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php else: ?>
+                            No requested features provided.
+                        <?php endif; ?>
+                        <?php if ($additionalRequirementsText !== ''): ?>
+                            <div class="section-title mt-3">Additional Requirements</div>
+                            <div><?php echo htmlspecialchars($additionalRequirementsText); ?></div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -499,40 +636,6 @@ a.progress-step:hover {
             </div>
         </div>
 
-        <!-- Sidebar Column -->
-        <div class="col-lg-4">
-            <div class="info-card">
-                <div class="card-header">
-                    <h5><i class="fas fa-building"></i> Client Details</h5>
-                </div>
-                <div class="card-body">
-                    <div class="detail-row">
-                        <div class="detail-label">Client</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['client_name']); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Contact</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['contact_person'] ?? ''); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Email</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['client_email'] ?? ''); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Phone</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['client_phone'] ?? ''); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Industry</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['client_industry'] ?? ''); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Address</div>
-                        <div class="detail-value"><?php echo htmlspecialchars($project['client_address'] ?? ''); ?></div>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
     <?php endif; ?>
 </div>

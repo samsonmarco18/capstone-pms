@@ -553,6 +553,72 @@ body {
     font-size: 0.78rem;
 }
 
+.page-help-host {
+    position: relative !important;
+    padding-right: 4.5rem !important;
+}
+
+.page-header-help-btn {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 4;
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid rgba(31, 99, 146, 0.28);
+    border-radius: 50%;
+    background: #e9f3fa;
+    color: #15567f;
+    font-size: 1rem;
+    cursor: help;
+    box-shadow: 0 8px 18px rgba(18, 80, 127, 0.1);
+    transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.page-header-help-btn:hover,
+.page-header-help-btn:focus-visible {
+    transform: translateY(-2px);
+    background: rgba(31, 99, 146, 0.14);
+    box-shadow: 0 10px 22px rgba(18, 80, 127, 0.16);
+    outline: none;
+}
+
+.page-process-tooltip .tooltip-inner {
+    max-width: 320px;
+    padding: 0.65rem 0.8rem;
+    text-align: left;
+    line-height: 1.45;
+}
+
+.page-header-modern .page-header-help-btn,
+.profile-header .page-header-help-btn,
+.insights-hero .page-header-help-btn,
+.roadmap-header .page-header-help-btn,
+.vc-header .page-header-help-btn {
+    border-color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.94);
+    color: #15567f;
+    box-shadow: 0 8px 20px rgba(5, 32, 55, 0.28);
+}
+
+.page-header-modern .page-header-help-btn:hover,
+.page-header-modern .page-header-help-btn:focus-visible,
+.profile-header .page-header-help-btn:hover,
+.profile-header .page-header-help-btn:focus-visible,
+.insights-hero .page-header-help-btn:hover,
+.insights-hero .page-header-help-btn:focus-visible,
+.roadmap-header .page-header-help-btn:hover,
+.roadmap-header .page-header-help-btn:focus-visible,
+.vc-header .page-header-help-btn:hover,
+.vc-header .page-header-help-btn:focus-visible {
+    background: #ffffff;
+    color: #0f496e;
+}
+
 .dropdown-item:hover {
     background-color: rgba(13, 85, 107, 0.1);
     color: var(--primary-color);
@@ -852,6 +918,14 @@ body {
     justify-content: center;
     align-items: center;
     z-index: 9999;
+}
+
+.app-confirm-modal {
+    z-index: 1080;
+}
+
+.app-confirm-modal.show ~ .modal-backdrop {
+    z-index: 1070;
 }
 
 .app-confirm-modal .modal-content {
@@ -1692,6 +1766,8 @@ body {
     border-radius: 50%;
     color: #1c679f !important;
     background: transparent;
+    border: 0;
+    box-shadow: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1703,7 +1779,9 @@ body {
 }
 
 .app-toggle.is-active {
-    background: #eef7fd;
+    background: transparent !important;
+    color: #1c679f !important;
+    box-shadow: none !important;
 }
 
 .nav-context-title {
@@ -1725,11 +1803,24 @@ body {
     align-items: center;
     justify-content: center;
     background: transparent;
+    border: 0;
+    box-shadow: none;
     color: #1691cd !important;
 }
 
 .nav-icon-link:hover {
     background: #eef7fd;
+}
+
+.navbar #darkModeToggle {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+.navbar #darkModeToggle:hover,
+.navbar #darkModeToggle:focus {
+    background: #eef7fd !important;
 }
 
 .user-profile-pic {
@@ -1859,6 +1950,18 @@ body {
 }
 
 @media (max-width: 576px) {
+    .page-help-host {
+        padding-right: 3.75rem !important;
+    }
+
+    .page-header-help-btn {
+        top: 12px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        font-size: 0.9rem;
+    }
+
     .notifications-menu {
         width: min(300px, calc(100vw - 16px));
         min-width: 0;
@@ -2428,6 +2531,28 @@ body {
     border: 1px solid rgba(18, 80, 127, 0.09);
     color: #24384f;
     border-bottom-left-radius: 6px;
+}
+
+.message.system {
+    width: fit-content;
+    max-width: 92%;
+    margin: 4px auto 12px;
+    padding: 7px 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid rgba(18, 80, 127, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.72);
+    color: #61778b;
+    font-size: 0.74rem;
+    text-align: center;
+}
+
+.message.system small {
+    opacity: 0.72;
+    white-space: nowrap;
 }
 
 .message .text-muted {

@@ -40,6 +40,7 @@ $menuItems = [
                 '/modules/architect/features.php',
                 '/modules/architect/tech-recommendation.php',
                 '/modules/architect/developer-allocation.php',
+                '/modules/roadmap/methodology.php',
                 '/modules/architect/upload-diagram.php',
                 '/modules/architect/summary.php',
             ],

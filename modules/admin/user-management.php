@@ -14,40 +14,48 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $email = $_POST['email'];
         $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
         $full_name = $_POST['full_name'];
-        $department = $_POST['department'];
-        $role = $_POST['role'];
+        $department = trim((string) $_POST['department']);
+        $role = trim((string) $_POST['role']);
         $hasPasswordChangedAt = ensureUserPasswordSecurityColumns();
-        
-        $sql = $hasPasswordChangedAt
-            ? "INSERT INTO users (username, email, password, full_name, department, role, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
-            : "INSERT INTO users (username, email, password, full_name, department, role) VALUES (?, ?, ?, ?, ?, ?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("ssssss", $username, $email, $password, $full_name, $department, $role);
-        
-        if ($stmt->execute()) {
-            $userId = $stmt->insert_id;
-            logActivity($user['id'], 'create_user', 'users', $userId, null, $_POST);
-            $_SESSION['success'] = "User created successfully";
+
+        if ($role === 'sul' && $department === '') {
+            $_SESSION['error'] = "SUL users must be assigned to a department.";
         } else {
-            $_SESSION['error'] = "Error creating user: " . $conn->error;
+            $sql = $hasPasswordChangedAt
+                ? "INSERT INTO users (username, email, password, full_name, department, role, password_changed_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+                : "INSERT INTO users (username, email, password, full_name, department, role) VALUES (?, ?, ?, ?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssssss", $username, $email, $password, $full_name, $department, $role);
+
+            if ($stmt->execute()) {
+                $userId = $stmt->insert_id;
+                logActivity($user['id'], 'create_user', 'users', $userId, null, $_POST);
+                $_SESSION['success'] = "User created successfully";
+            } else {
+                $_SESSION['error'] = "Error creating user: " . $conn->error;
+            }
         }
     } elseif ($_POST['action'] == 'update') {
         $id = $_POST['id'];
         $full_name = $_POST['full_name'];
-        $department = $_POST['department'];
-        $role = $_POST['role'];
+        $department = trim((string) $_POST['department']);
+        $role = trim((string) $_POST['role']);
         $status = $_POST['status'];
         
-        $oldData = $conn->query("SELECT * FROM users WHERE id = $id")->fetch_assoc();
-        
-        $stmt = $conn->prepare("UPDATE users SET full_name=?, department=?, role=?, status=? WHERE id=?");
-        $stmt->bind_param("ssssi", $full_name, $department, $role, $status, $id);
-        
-        if ($stmt->execute()) {
-            logActivity($user['id'], 'update_user', 'users', $id, $oldData, $_POST);
-            $_SESSION['success'] = "User updated successfully";
+        if ($role === 'sul' && $department === '') {
+            $_SESSION['error'] = "SUL users must be assigned to a department.";
         } else {
-            $_SESSION['error'] = "Error updating user";
+            $oldData = $conn->query("SELECT * FROM users WHERE id = $id")->fetch_assoc();
+
+            $stmt = $conn->prepare("UPDATE users SET full_name=?, department=?, role=?, status=? WHERE id=?");
+            $stmt->bind_param("ssssi", $full_name, $department, $role, $status, $id);
+
+            if ($stmt->execute()) {
+                logActivity($user['id'], 'update_user', 'users', $id, $oldData, $_POST);
+                $_SESSION['success'] = "User updated successfully";
+            } else {
+                $_SESSION['error'] = "Error updating user";
+            }
         }
     } elseif ($_POST['action'] == 'delete') {
         $id = $_POST['id'];
@@ -70,23 +78,54 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 }
 
 // Get all users
-$search = isset($_GET['search']) ? $_GET['search'] : '';
-$roleFilter = isset($_GET['role']) ? $_GET['role'] : '';
-$statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
+$search = trim((string) ($_GET['search'] ?? ''));
+$roleFilter = trim((string) ($_GET['role'] ?? ''));
+$statusFilter = trim((string) ($_GET['status'] ?? ''));
 
-$query = "SELECT * FROM users WHERE 1=1";
-if ($search) {
-    $query .= " AND (username LIKE '%$search%' OR email LIKE '%$search%' OR full_name LIKE '%$search%')";
-}
-if ($roleFilter) {
-    $query .= " AND role = '$roleFilter'";
-}
-if ($statusFilter) {
-    $query .= " AND status = '$statusFilter'";
-}
-$query .= " ORDER BY created_at DESC";
+$query = 'SELECT * FROM users WHERE 1=1';
+$params = [];
+$types = '';
 
-$users = $conn->query($query);
+if ($search !== '') {
+    $searchLike = '%' . $search . '%';
+    if (DB_DRIVER === 'pgsql') {
+        $query .= ' AND (username ILIKE ? OR email ILIKE ? OR full_name ILIKE ?)';
+    } else {
+        $query .= ' AND (username LIKE ? OR email LIKE ? OR full_name LIKE ?)';
+    }
+    $params[] = $searchLike;
+    $params[] = $searchLike;
+    $params[] = $searchLike;
+    $types .= 'sss';
+}
+
+if ($roleFilter !== '') {
+    $query .= ' AND role = ?';
+    $params[] = $roleFilter;
+    $types .= 's';
+}
+
+if ($statusFilter !== '') {
+    $query .= ' AND status = ?';
+    $params[] = $statusFilter;
+    $types .= 's';
+}
+
+$query .= ' ORDER BY created_at DESC';
+
+$usersStmt = $conn->prepare($query);
+if ($usersStmt === false) {
+    $users = false;
+} elseif ($types !== '') {
+    $usersStmt->bind_param($types, ...$params);
+    $usersStmt->execute();
+    $users = $usersStmt->get_result();
+    $usersStmt->close();
+} else {
+    $usersStmt->execute();
+    $users = $usersStmt->get_result();
+    $usersStmt->close();
+}
 
 // Get statistics
 $totalUsers = $conn->query("SELECT COUNT(*) as count FROM users")->fetch_assoc()['count'];
@@ -944,20 +983,20 @@ include '../../includes/navbar.php';
                 User Directory
             </h5>
             <div>
-                <span class="text-muted small">Showing <?php echo $users->num_rows; ?> users</span>
+                <span class="text-muted small">Showing <?php echo $users ? $users->num_rows : 0; ?> users</span>
             </div>
         </div>
         
         <!-- Filter Section -->
-        <div class="filter-section">
+        <form method="GET" class="filter-section" id="userFilterForm">
             <div class="filter-group">
                 <div class="filter-input">
-                    <label>Search</label>
-                    <input type="text" id="searchInput" placeholder="Name, email, or username..." value="<?php echo htmlspecialchars($search); ?>">
+                    <label for="searchInput">Search</label>
+                    <input type="text" id="searchInput" name="search" placeholder="Name, email, or username..." value="<?php echo htmlspecialchars($search); ?>">
                 </div>
                 <div class="filter-input">
-                    <label>Role</label>
-                    <select id="roleFilter">
+                    <label for="roleFilter">Role</label>
+                    <select id="roleFilter" name="role">
                         <option value="">All Roles</option>
                         <option value="admin" <?php echo $roleFilter == 'admin' ? 'selected' : ''; ?>>Admin</option>
                         <option value="sales" <?php echo $roleFilter == 'sales' ? 'selected' : ''; ?>>Sales</option>
@@ -969,23 +1008,26 @@ include '../../includes/navbar.php';
                     </select>
                 </div>
                 <div class="filter-input">
-                    <label>Status</label>
-                    <select id="statusFilter">
+                    <label for="statusFilter">Status</label>
+                    <select id="statusFilter" name="status">
                         <option value="">All Status</option>
                         <option value="active" <?php echo $statusFilter == 'active' ? 'selected' : ''; ?>>Active</option>
                         <option value="inactive" <?php echo $statusFilter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
                         <option value="suspended" <?php echo $statusFilter == 'suspended' ? 'selected' : ''; ?>>Suspended</option>
                     </select>
                 </div>
-                <div>
-                    <button class="btn-apply" onclick="applyFilters()">Apply Filters</button>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn-apply">Apply Filters</button>
+                    <?php if ($search !== '' || $roleFilter !== '' || $statusFilter !== ''): ?>
+                    <a href="user-management.php" class="btn-apply" style="background: var(--gray-600); text-decoration: none;">Clear</a>
+                    <?php endif; ?>
                 </div>
             </div>
-        </div>
+        </form>
         
         <!-- Users Table -->
         <div class="table-container">
-            <?php if($users->num_rows > 0): ?>
+            <?php if($users && $users->num_rows > 0): ?>
             <table class="user-table">
                 <thead>
                     <tr>
@@ -1150,19 +1192,6 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
-function applyFilters() {
-    const search = document.getElementById('searchInput').value;
-    const role = document.getElementById('roleFilter').value;
-    const status = document.getElementById('statusFilter').value;
-    
-    let url = 'user-management.php?';
-    if (search) url += 'search=' + encodeURIComponent(search) + '&';
-    if (role) url += 'role=' + encodeURIComponent(role) + '&';
-    if (status) url += 'status=' + encodeURIComponent(status);
-    
-    window.location.href = url;
-}
-
 function viewUser(id) {
     window.location.href = 'view-user.php?id=' + id;
 }
@@ -1180,13 +1209,6 @@ function openDeleteUserModal(button) {
 
     new bootstrap.Modal(document.getElementById('deleteUserModal')).show();
 }
-
-// Auto-submit on enter in search
-document.getElementById('searchInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        applyFilters();
-    }
-});
 </script>
 
 <?php

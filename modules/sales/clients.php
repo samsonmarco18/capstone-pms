@@ -2,10 +2,12 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/project-progress.php';
 require_once '../../includes/workflow.php';
+require_once '../../includes/project-workflow.php';
 requireRole('sales');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectWorkflowEnsureSchema($conn);
 $hasSalesBudget = dbColumnExists($conn, 'projects', 'sales_budget');
 $hasTimelineStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasTimelineEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
@@ -79,6 +81,132 @@ function parseSalesTimeInput(string $value): ?string
     return $trimmed . ':00';
 }
 
+function salesClientsFeatureCount(string $requestedFeatures): int
+{
+    return count(array_filter(array_map('trim', preg_split('/\R/', $requestedFeatures) ?: [])));
+}
+
+function salesClientsProjectComplexityValue(string $complexity): string
+{
+    return match (strtolower(trim($complexity))) {
+        'low', 'simple' => 'simple',
+        'high', 'critical', 'enterprise', 'complex' => 'complex',
+        default => 'medium',
+    };
+}
+
+function salesClientsBindAndExecute($stmt, string $types, array $params): bool
+{
+    $refs = [];
+    foreach ($params as $index => $value) {
+        $refs[$index] = &$params[$index];
+    }
+
+    return $stmt->bind_param($types, ...$refs) && $stmt->execute();
+}
+
+function salesClientsInsertProject($conn, array $data): int
+{
+    $columns = [
+        'client_id',
+        'name',
+        'description',
+        'status',
+        'timeline_start',
+        'timeline_end',
+        'meeting_notes',
+        'mom',
+        'requested_features',
+        'created_by',
+    ];
+    $placeholders = array_fill(0, count($columns), '?');
+    $types = 'issssssssi';
+    $params = [
+        (int) $data['client_id'],
+        (string) $data['name'],
+        (string) $data['description'],
+        'pending',
+        $data['timeline_start'],
+        $data['timeline_end'],
+        (string) $data['meeting_notes'],
+        (string) $data['mom'],
+        (string) $data['requested_features'],
+        (int) $data['created_by'],
+    ];
+
+    $optionalColumns = [
+        'sales_budget' => ['s', $data['sales_budget']],
+        'timeline_start_time' => ['s', $data['timeline_start_time']],
+        'timeline_end_time' => ['s', $data['timeline_end_time']],
+        'complexity_level' => ['s', $data['complexity_level']],
+        'priority' => ['s', $data['priority']],
+        'sales_notes' => ['s', $data['sales_notes']],
+        'sales_attachments' => ['s', $data['sales_attachments']],
+        'workflow_status' => ['s', 'sales_submitted'],
+    ];
+
+    foreach ($optionalColumns as $column => [$type, $value]) {
+        if (!dbColumnExists($conn, 'projects', $column)) {
+            continue;
+        }
+
+        $columns[] = $column;
+        $placeholders[] = '?';
+        $types .= $type;
+        $params[] = $value;
+    }
+
+    $sql = 'INSERT INTO projects (' . implode(', ', $columns) . ') VALUES (' . implode(', ', $placeholders) . ')';
+    $stmt = $conn->prepare($sql);
+    if ($stmt === false) {
+        throw new RuntimeException('Unable to prepare project insert.' . salesClientsDbError($conn));
+    }
+
+    if (!salesClientsBindAndExecute($stmt, $types, $params)) {
+        throw new RuntimeException('Unable to create project requirements.' . salesClientsDbError($conn));
+    }
+
+    $projectId = (int) $stmt->insert_id;
+    $stmt->close();
+
+    return $projectId;
+}
+
+function salesClientsSaveAttachments(array $files): array
+{
+    $saved = [];
+    if (empty($files['name']) || !is_array($files['name'])) {
+        return $saved;
+    }
+
+    $relativeDir = 'uploads/sales-intake/' . date('Y/m/d');
+    $uploadDir = __DIR__ . '/../../' . $relativeDir;
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0775, true);
+    }
+
+    foreach ($files['name'] as $index => $name) {
+        if (($files['error'][$index] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            continue;
+        }
+
+        $originalName = basename((string) $name);
+        $extension = pathinfo($originalName, PATHINFO_EXTENSION);
+        $fileName = uniqid('sales_', true) . ($extension ? '.' . $extension : '');
+        $targetPath = $uploadDir . '/' . $fileName;
+        if (move_uploaded_file((string) $files['tmp_name'][$index], $targetPath)) {
+            $saved[] = [
+                'name' => $originalName,
+                'path' => $relativeDir . '/' . $fileName,
+                'type' => (string) ($files['type'][$index] ?? ''),
+                'size' => (int) ($files['size'][$index] ?? 0),
+            ];
+        }
+    }
+
+    return $saved;
+}
+
 // Handle client operations (same logic as before)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['add_client'])) {
@@ -96,6 +224,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $mom = trim((string) ($_POST['mom'] ?? ''));
         $requestedFeatures = trim((string) ($_POST['requested_features'] ?? ''));
         $additionalRequirements = trim((string) ($_POST['additional_requirements'] ?? ''));
+        $priority = trim((string) ($_POST['priority'] ?? 'medium'));
+        if (!in_array($priority, ['low', 'medium', 'high', 'critical'], true)) {
+            $priority = 'medium';
+        }
+        $salesNotes = trim((string) ($_POST['sales_notes'] ?? ''));
         $salesBudgetInput = trim((string) ($_POST['sales_budget'] ?? ''));
         $salesBudget = parseSalesBudgetInput($salesBudgetInput);
         $timelineStart = $_POST['timeline_start'] ?: null;
@@ -104,6 +237,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ($_POST['deadline_time'] ?? '')));
         $timelineStartTime = parseSalesTimeInput($timelineStartTimeInput);
         $timelineEndTime = parseSalesTimeInput($timelineEndTimeInput);
+        $featureCount = salesClientsFeatureCount($requestedFeatures);
+        $generatedComplexity = salesClientsProjectComplexityValue(
+            projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $featureCount)
+        );
+        $attachmentsJson = json_encode(salesClientsSaveAttachments($_FILES['attachments'] ?? []), JSON_UNESCAPED_SLASHES);
 
         $requirementsSummary = $requestedFeatures;
         if ($additionalRequirements !== '') {
@@ -136,137 +274,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $clientId = $stmt->insert_id;
                 $stmt->close();
 
-                $clientFolderStmt = $conn->prepare(
-                    "SELECT id FROM folders WHERE client_id = ? AND parent_id IS NULL AND folder_type = 'client' LIMIT 1"
+                $createClientFolderStmt = $conn->prepare(
+                    "INSERT INTO folders (name, folder_type, client_id, parent_id, role, created_by)
+                     VALUES (?, 'client', ?, NULL, NULL, ?)"
                 );
-                if ($clientFolderStmt === false) {
-                    throw new RuntimeException('Unable to prepare client folder lookup.');
+                if ($createClientFolderStmt === false) {
+                    throw new RuntimeException('Unable to prepare client folder creation.');
                 }
-                $clientFolderStmt->bind_param('i', $clientId);
-                if (!$clientFolderStmt->execute()) {
-                    throw new RuntimeException('Unable to load client folder.');
+                $createClientFolderStmt->bind_param('sii', $name, $clientId, $user['id']);
+                if (!$createClientFolderStmt->execute()) {
+                    throw new RuntimeException('Unable to create client folder.');
                 }
-                $clientFolderResult = $clientFolderStmt->get_result()->fetch_assoc();
-                $clientFolderId = $clientFolderResult['id'] ?? null;
-                $clientFolderStmt->close();
-
-                if (!$clientFolderId) {
-                    $createClientFolderStmt = $conn->prepare(
-                        "INSERT INTO folders (name, folder_type, client_id, parent_id, role, created_by)
-                         VALUES (?, 'client', ?, NULL, NULL, ?)"
-                    );
-                    if ($createClientFolderStmt === false) {
-                        throw new RuntimeException('Unable to prepare client folder creation.');
-                    }
-                    $createClientFolderStmt->bind_param('sii', $name, $clientId, $user['id']);
-                    if (!$createClientFolderStmt->execute()) {
-                        throw new RuntimeException('Unable to create client folder.');
-                    }
-                    $clientFolderId = $createClientFolderStmt->insert_id;
-                    $createClientFolderStmt->close();
-                }
+                $clientFolderId = $createClientFolderStmt->insert_id;
+                $createClientFolderStmt->close();
 
                 $projectId = null;
                 if ($projectName !== '') {
-                    if ($hasSalesBudget) {
-                        $timeColumns = $hasTimelineStartTime && $hasTimelineEndTime
-                            ? ', timeline_start_time, timeline_end_time'
-                            : '';
-                        $timePlaceholders = $hasTimelineStartTime && $hasTimelineEndTime
-                            ? ', ?, ?'
-                            : '';
-                        $projectStmt = $conn->prepare("
-                            INSERT INTO projects (
-                                client_id, name, description, status, timeline_start, timeline_end,
-                                meeting_notes, mom, requested_features, sales_budget{$timeColumns}, created_by, architect_id
-                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, " . (DB_DRIVER === 'pgsql' ? "CAST(NULLIF(?, '') AS NUMERIC)" : "NULLIF(?, '')") . "{$timePlaceholders}, ?, NULL)
-                        ");
-                        if ($projectStmt === false) {
-                            throw new RuntimeException('Unable to prepare project insert.' . salesClientsDbError($conn));
-                        }
-                        $projectBudget = $salesBudget === null ? '' : number_format($salesBudget, 2, '.', '');
-                        if ($hasTimelineStartTime && $hasTimelineEndTime) {
-                            $projectStmt->bind_param(
-                                'issssssssssi',
-                                $clientId,
-                                $projectName,
-                                $projectDescription,
-                                $timelineStart,
-                                $timelineEnd,
-                                $meetingNotes,
-                                $mom,
-                                $requirementsSummary,
-                                $projectBudget,
-                                $timelineStartTime,
-                                $timelineEndTime,
-                                $user['id']
-                            );
-                        } else {
-                            $projectStmt->bind_param(
-                                'issssssssi',
-                                $clientId,
-                                $projectName,
-                                $projectDescription,
-                                $timelineStart,
-                                $timelineEnd,
-                                $meetingNotes,
-                                $mom,
-                                $requirementsSummary,
-                                $projectBudget,
-                                $user['id']
-                            );
-                        }
-                    } else {
-                        $timeColumns = $hasTimelineStartTime && $hasTimelineEndTime
-                            ? ', timeline_start_time, timeline_end_time'
-                            : '';
-                        $timePlaceholders = $hasTimelineStartTime && $hasTimelineEndTime
-                            ? ', ?, ?'
-                            : '';
-                        $projectStmt = $conn->prepare("
-                            INSERT INTO projects (
-                                client_id, name, description, status, timeline_start, timeline_end,
-                                meeting_notes, mom, requested_features{$timeColumns}, created_by, architect_id
-                            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?{$timePlaceholders}, ?, NULL)
-                        ");
-                        if ($projectStmt === false) {
-                            throw new RuntimeException('Unable to prepare project insert.' . salesClientsDbError($conn));
-                        }
-                        if ($hasTimelineStartTime && $hasTimelineEndTime) {
-                            $projectStmt->bind_param(
-                                'isssssssssi',
-                                $clientId,
-                                $projectName,
-                                $projectDescription,
-                                $timelineStart,
-                                $timelineEnd,
-                                $meetingNotes,
-                                $mom,
-                                $requirementsSummary,
-                                $timelineStartTime,
-                                $timelineEndTime,
-                                $user['id']
-                            );
-                        } else {
-                            $projectStmt->bind_param(
-                                'isssssssi',
-                                $clientId,
-                                $projectName,
-                                $projectDescription,
-                                $timelineStart,
-                                $timelineEnd,
-                                $meetingNotes,
-                                $mom,
-                                $requirementsSummary,
-                                $user['id']
-                            );
-                        }
-                    }
-                        if (!$projectStmt->execute()) {
-                            throw new RuntimeException('Unable to create project requirements.' . salesClientsDbError($conn));
-                        }
-                        $projectId = $projectStmt->insert_id;
-                        $projectStmt->close();
+                    $projectId = salesClientsInsertProject($conn, [
+                        'client_id' => $clientId,
+                        'name' => $projectName,
+                        'description' => $projectDescription,
+                        'timeline_start' => $timelineStart,
+                        'timeline_end' => $timelineEnd,
+                        'meeting_notes' => $meetingNotes,
+                        'mom' => $mom,
+                        'requested_features' => $requirementsSummary,
+                        'sales_budget' => $salesBudget === null ? null : number_format($salesBudget, 2, '.', ''),
+                        'timeline_start_time' => $timelineStartTime,
+                        'timeline_end_time' => $timelineEndTime,
+                        'created_by' => $user['id'],
+                        'complexity_level' => $generatedComplexity,
+                        'priority' => $priority,
+                        'sales_notes' => $salesNotes,
+                        'sales_attachments' => $attachmentsJson,
+                    ]);
 
                     // Create shared project folder under client folder
                     $sharedFolderName = "Shared - " . $projectName;
@@ -300,6 +341,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     );
                 }
                 logActivity($user['id'], 'add_client', 'clients', $clientId, null, $_POST);
+                $clientDraftId = trim((string) ($_POST['client_draft_id'] ?? ''));
+                if ($clientDraftId !== '') {
+                    $_SESSION['clear_client_draft_id'] = $clientDraftId;
+                }
+
                 if ($projectId) {
                     logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);
                     $_SESSION['success'] = "Client added, shared project folder created, and project details are available to all roles.";
@@ -348,6 +394,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     header('Location: clients.php');
     exit();
+}
+
+$savedClientDraftId = '';
+if (isset($_SESSION['clear_client_draft_id'])) {
+    $savedClientDraftId = (string) $_SESSION['clear_client_draft_id'];
+    unset($_SESSION['clear_client_draft_id']);
 }
 
 // Get all clients
@@ -1001,7 +1053,7 @@ include '../../includes/navbar.php';
 
 .modal-modern.add-client-modal .add-client-stepper {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.75rem;
     margin-bottom: 1rem;
 }
@@ -1011,13 +1063,49 @@ include '../../includes/navbar.php';
     align-items: center;
     gap: 0.65rem;
     min-width: 0;
-    padding: 0.75rem;
+    width: 100%;
+    height: 100%;
+    padding: 0.75rem 2.6rem 0.75rem 0.75rem;
     border: 1px solid var(--gray-200);
     border-radius: 12px;
     background: #ffffff;
     color: var(--gray-600);
     text-align: left;
     transition: all 0.18s ease;
+}
+
+.modal-modern.add-client-modal .stepper-tooltip-wrap {
+    position: relative;
+    min-width: 0;
+}
+
+.modal-modern.add-client-modal .stepper-info {
+    position: absolute;
+    top: 50%;
+    right: 0.65rem;
+    z-index: 2;
+    width: 23px;
+    height: 23px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-50%);
+    border: 1px solid rgba(31, 99, 146, 0.22);
+    border-radius: 50%;
+    background: #e9f3fa;
+    color: var(--theme-primary);
+    font-size: 0.68rem;
+    cursor: help;
+    transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.modal-modern.add-client-modal .stepper-info:hover,
+.modal-modern.add-client-modal .stepper-info:focus-visible {
+    transform: translateY(-50%) scale(1.08);
+    background: var(--theme-primary);
+    color: #ffffff;
+    outline: none;
 }
 
 .modal-modern.add-client-modal .stepper-item:disabled {
@@ -1134,6 +1222,59 @@ include '../../includes/navbar.php';
     font-weight: 700;
 }
 
+.modal-modern.add-client-modal .client-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.modal-modern.add-client-modal .client-summary-panel {
+    display: grid;
+    gap: 0.7rem;
+    padding: 0.95rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    background: #f8fafc;
+}
+
+.modal-modern.add-client-modal .client-summary-panel--wide {
+    grid-column: 1 / -1;
+}
+
+.modal-modern.add-client-modal .client-summary-panel h6 {
+    margin: 0;
+    color: var(--gray-900);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.modal-modern.add-client-modal .client-summary-list {
+    display: grid;
+    gap: 0.55rem;
+    margin: 0;
+}
+
+.modal-modern.add-client-modal .client-summary-list div {
+    display: grid;
+    gap: 0.12rem;
+}
+
+.modal-modern.add-client-modal .client-summary-list dt {
+    color: var(--gray-500);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.modal-modern.add-client-modal .client-summary-list dd {
+    margin: 0;
+    color: var(--gray-900);
+    font-size: 0.9rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .modal-modern.add-client-modal .form-label {
     font-weight: 600;
     color: var(--gray-700);
@@ -1144,6 +1285,35 @@ include '../../includes/navbar.php';
 .modal-modern.add-client-modal textarea {
     border-radius: 10px;
     background: #ffffff;
+}
+
+.modal-modern.add-client-modal .requested-feature-builder {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.modal-modern.add-client-modal .requested-feature-list {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.modal-modern.add-client-modal .requested-feature-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 42px;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.modal-modern.add-client-modal .requested-feature-item .btn {
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 10px;
+}
+
+.modal-modern.add-client-modal .requested-feature-actions {
+    display: flex;
+    justify-content: flex-start;
 }
 
 .modal-modern.add-client-modal .add-client-footer {
@@ -1315,6 +1485,10 @@ include '../../includes/navbar.php';
 
 @media (max-width: 768px) {
     .modal-modern.add-client-modal .add-client-stepper {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .modal-modern.add-client-modal .client-summary-grid {
         grid-template-columns: 1fr;
     }
 
@@ -1500,6 +1674,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .field-group,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .client-summary-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__summary span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-summary span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-icon.view,
@@ -1508,6 +1683,18 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-project-item {
     background: #0a1b2c;
     border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-info {
+    border-color: rgba(138, 210, 255, 0.24);
+    background: rgba(31, 99, 146, 0.22);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-info:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-info:focus-visible {
+    background: #8fd3ff;
+    color: #071321;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
@@ -1519,6 +1706,8 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-banner__text strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .section-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .client-summary-panel h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .client-summary-list dd,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientContent,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #clientProjects {
     color: #d7e4f2;
@@ -1546,6 +1735,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .mini-note,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .client-summary-list dt,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .draft-status,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input label {
     color: #9db6cf !important;
@@ -1560,6 +1750,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .stepper-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .field-group,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .info-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .client-summary-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-empty,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-detail-panel,
@@ -1709,6 +1900,22 @@ include '../../includes/navbar.php';
 </style>
 
 <div class="container-fluid px-4 py-4">
+    <?php if (!empty($_SESSION['success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i><?php echo htmlspecialchars((string) $_SESSION['success']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        <?php unset($_SESSION['success']); ?>
+    <?php endif; ?>
+
+    <?php if (!empty($_SESSION['error'])): ?>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i><?php echo htmlspecialchars((string) $_SESSION['error']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        <?php unset($_SESSION['error']); ?>
+    <?php endif; ?>
+
     <!-- Page Header -->
     <div class="page-header-modern">
         <div class="d-flex flex-wrap justify-content-between align-items-center">
@@ -1896,21 +2103,46 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close add-client-close" aria-label="Close"></button>
             </div>
-            <form method="POST" id="addClientForm" novalidate data-app-loading data-loading-title="Saving client" data-loading-text="Please wait while the client, project details, folders, and notifications are saved.">
+            <form method="POST" id="addClientForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Saving client" data-loading-text="Please wait while the client, project details, folders, and notifications are saved.">
+                <input type="hidden" name="client_draft_id" data-client-draft-id value="">
                 <div class="modal-body">
                     <div class="add-client-stepper" aria-label="Add client progress">
-                        <button type="button" class="stepper-item is-active" data-step-target="0" aria-current="step" disabled>
-                            <span>1</span>
-                            <strong>Client Profile</strong>
-                        </button>
-                        <button type="button" class="stepper-item" data-step-target="1" disabled>
-                            <span>2</span>
-                            <strong>Project Intake</strong>
-                        </button>
-                        <button type="button" class="stepper-item" data-step-target="2" disabled>
-                            <span>3</span>
-                            <strong>Timeline & Budget</strong>
-                        </button>
+                        <div class="stepper-tooltip-wrap">
+                            <button type="button" class="stepper-item is-active" data-step-target="0" aria-current="step" disabled>
+                                <span>1</span>
+                                <strong>Client Profile</strong>
+                            </button>
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Enter the client's company, contact details, address, and deadline." aria-label="About Client Profile">
+                                <i class="fas fa-info" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="stepper-tooltip-wrap">
+                            <button type="button" class="stepper-item" data-step-target="1" disabled>
+                                <span>2</span>
+                                <strong>Project Intake</strong>
+                            </button>
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Capture the project scope, requested features, meeting notes, requirements, priority, and attachments." aria-label="About Project Intake">
+                                <i class="fas fa-info" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="stepper-tooltip-wrap">
+                            <button type="button" class="stepper-item" data-step-target="2" disabled>
+                                <span>3</span>
+                                <strong>Timeline & Budget</strong>
+                            </button>
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Set the schedule and budget, then review the automatically generated project complexity." aria-label="About Timeline and Budget">
+                                <i class="fas fa-info" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="stepper-tooltip-wrap">
+                            <button type="button" class="stepper-item" data-step-target="3" disabled>
+                                <span>4</span>
+                                <strong>Review</strong>
+                            </button>
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Confirm the client and project information before sending it for Architect review." aria-label="About Review">
+                                <i class="fas fa-info" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <div class="add-client-layout">
@@ -1957,7 +2189,22 @@ include '../../includes/navbar.php';
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Requested System Features</label>
-                                    <textarea name="requested_features" class="form-control" rows="3" placeholder="List requested features, one per line"></textarea>
+                                    <div class="requested-feature-builder">
+                                        <input type="hidden" name="requested_features" id="requestedFeaturesField">
+                                        <div class="requested-feature-list" id="requestedFeatureList">
+                                            <div class="requested-feature-item">
+                                                <input type="text" class="form-control" data-requested-feature-input placeholder="Feature item">
+                                                <button type="button" class="btn btn-outline-danger" data-remove-requested-feature aria-label="Remove feature">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="requested-feature-actions">
+                                            <button type="button" class="btn btn-outline-primary btn-sm" id="addRequestedFeature">
+                                                <i class="fas fa-plus me-1"></i> Add Feature Item
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Meeting Notes</label>
@@ -1970,6 +2217,19 @@ include '../../includes/navbar.php';
                                 <div class="col-12">
                                     <label class="form-label">Additional Requirements</label>
                                     <textarea name="additional_requirements" class="form-control" rows="3" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Priority</label>
+                                    <select name="priority" class="form-select">
+                                        <option value="low">Low</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="critical">Critical</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Attachments</label>
+                                    <input type="file" name="attachments[]" class="form-control" multiple>
                                 </div>
                             </div>
                         </div>
@@ -1999,10 +2259,113 @@ include '../../includes/navbar.php';
                                     <div class="mini-note">Used as the decision insight budget baseline when provided.</div>
                                 </div>
                                 <div class="col-md-6">
+                                    <label class="form-label">Generated Complexity</label>
+                                    <input type="text" class="form-control" data-generated-complexity readonly value="Low">
+                                    <div class="mini-note">Calculated automatically from timeline and feature count.</div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Sales Notes</label>
+                                    <textarea name="sales_notes" class="form-control" rows="3" placeholder="Internal notes for Architect review"></textarea>
+                                </div>
+                                <div class="col-md-6">
                                     <div class="info-card">
                                         <span>Outcome</span>
                                         <strong>Creates the client and sends the project to Architect review</strong>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="field-group add-client-step" data-client-step="3" hidden>
+                            <div class="section-title"><i class="fas fa-clipboard-check"></i> Review Client Summary</div>
+                            <div class="client-summary-grid" data-client-summary>
+                                <div class="client-summary-panel">
+                                    <h6>Client Profile</h6>
+                                    <dl class="client-summary-list">
+                                        <div>
+                                            <dt>Company</dt>
+                                            <dd data-summary-field="name">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Contact Person</dt>
+                                            <dd data-summary-field="contact_person">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Email</dt>
+                                            <dd data-summary-field="email">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Phone</dt>
+                                            <dd data-summary-field="phone">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Client Deadline</dt>
+                                            <dd data-summary-field="deadline">Not set</dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                                <div class="client-summary-panel">
+                                    <h6>Project Intake</h6>
+                                    <dl class="client-summary-list">
+                                        <div>
+                                            <dt>Project</dt>
+                                            <dd data-summary-field="project_name">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Timeline</dt>
+                                            <dd data-summary-field="timeline">Not set</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Budget</dt>
+                                            <dd data-summary-field="sales_budget">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Priority</dt>
+                                            <dd data-summary-field="priority">Medium</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Generated Complexity</dt>
+                                            <dd data-summary-field="generated_complexity">Low</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Attachments</dt>
+                                            <dd data-summary-field="attachments">No attachments</dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                                <div class="client-summary-panel client-summary-panel--wide">
+                                    <h6>Requirements</h6>
+                                    <dl class="client-summary-list">
+                                        <div>
+                                            <dt>Description</dt>
+                                            <dd data-summary-field="project_description">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Requested Features</dt>
+                                            <dd data-summary-field="requested_features">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Additional Requirements</dt>
+                                            <dd data-summary-field="additional_requirements">Not provided</dd>
+                                        </div>
+                                    </dl>
+                                </div>
+                                <div class="client-summary-panel client-summary-panel--wide">
+                                    <h6>Meeting Notes</h6>
+                                    <dl class="client-summary-list">
+                                        <div>
+                                            <dt>Notes</dt>
+                                            <dd data-summary-field="meeting_notes">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>MOM</dt>
+                                            <dd data-summary-field="mom">Not provided</dd>
+                                        </div>
+                                        <div>
+                                            <dt>Sales Notes</dt>
+                                            <dd data-summary-field="sales_notes">Not provided</dd>
+                                        </div>
+                                    </dl>
                                 </div>
                             </div>
                         </div>
@@ -2177,6 +2540,8 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
+const savedClientDraftId = <?php echo json_encode($savedClientDraftId); ?>;
+
 function applyFilters() {
     const search = document.getElementById('searchInput').value;
     const status = document.getElementById('statusFilter').value;
@@ -2340,24 +2705,6 @@ if (deleteClientConfirmBtn) {
     });
 }
 
-if (deleteDraftConfirmBtn) {
-    deleteDraftConfirmBtn.addEventListener('click', function () {
-        if (!pendingDeleteDraftId) {
-            return;
-        }
-
-        const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== pendingDeleteDraftId);
-        saveStoredDrafts(remainingDrafts);
-
-        if (activeDraftId === pendingDeleteDraftId) {
-            resetCurrentClientInput();
-        }
-
-        pendingDeleteDraftId = null;
-        updateDraftStatus(hasStoredDraft());
-    });
-}
-
 const addClientModalElement = document.getElementById('addClientModal');
 const addClientForm = document.getElementById('addClientForm');
 
@@ -2379,6 +2726,7 @@ if (addClientModalElement && addClientForm) {
     const nextButton = addClientModalElement.querySelector('[data-client-next]');
     const submitButton = addClientModalElement.querySelector('[data-client-submit]');
     const saveDraftButton = addClientModalElement.querySelector('[data-save-draft]');
+    const generatedComplexityField = addClientModalElement.querySelector('[data-generated-complexity]');
     const closeButtons = Array.from(addClientModalElement.querySelectorAll('.add-client-close'));
     const draftStatus = addClientModalElement.querySelector('[data-draft-status]');
     const addClientFooter = addClientModalElement.querySelector('.add-client-footer');
@@ -2386,13 +2734,120 @@ if (addClientModalElement && addClientForm) {
     const keepEditingButton = addClientModalElement.querySelector('[data-keep-editing]');
     const discardUnsavedButton = addClientModalElement.querySelector('[data-discard-unsaved]');
     const saveCloseDraftButton = addClientModalElement.querySelector('[data-save-close-draft]');
+    const summaryFields = Array.from(addClientModalElement.querySelectorAll('[data-summary-field]'));
+    const draftIdField = addClientModalElement.querySelector('[data-client-draft-id]');
+    const requestedFeaturesField = document.getElementById('requestedFeaturesField');
+    const requestedFeatureList = document.getElementById('requestedFeatureList');
+    const addRequestedFeatureButton = document.getElementById('addRequestedFeature');
     let currentStep = 0;
     let formTouched = false;
     let activeDraftLoaded = false;
     let activeDraftId = null;
+    let isSubmittingClient = false;
 
     function getDraftData() {
-        return Object.fromEntries(new FormData(addClientForm).entries());
+        syncRequestedFeaturesField();
+        const data = {};
+        for (const [name, value] of new FormData(addClientForm).entries()) {
+            if (name === 'attachments[]' || (typeof File !== 'undefined' && value instanceof File)) {
+                continue;
+            }
+            data[name] = value;
+        }
+        return data;
+    }
+
+    function createRequestedFeatureRow(value = '') {
+        const item = document.createElement('div');
+        item.className = 'requested-feature-item';
+        item.innerHTML = `
+            <input type="text" class="form-control" data-requested-feature-input placeholder="Feature item">
+            <button type="button" class="btn btn-outline-danger" data-remove-requested-feature aria-label="Remove feature">
+                <i class="fas fa-trash"></i>
+            </button>
+        `;
+
+        const input = item.querySelector('[data-requested-feature-input]');
+        if (input) {
+            input.value = value;
+        }
+
+        return item;
+    }
+
+    function getRequestedFeatureValues() {
+        if (!requestedFeatureList) {
+            return [];
+        }
+
+        return Array.from(requestedFeatureList.querySelectorAll('[data-requested-feature-input]'))
+            .map((input) => String(input.value || '').trim())
+            .filter((value) => value !== '');
+    }
+
+    function syncRequestedFeaturesField() {
+        if (requestedFeaturesField) {
+            requestedFeaturesField.value = getRequestedFeatureValues().join("\n");
+        }
+    }
+
+    function calculateGeneratedComplexity() {
+        const featureCount = getRequestedFeatureValues().length;
+        const startValue = addClientForm.elements.timeline_start?.value || '';
+        const endValue = addClientForm.elements.timeline_end?.value || addClientForm.elements.deadline?.value || '';
+        let days = 0;
+
+        if (startValue && endValue) {
+            const startDate = new Date(startValue + 'T00:00:00');
+            const endDate = new Date(endValue + 'T00:00:00');
+            if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime()) && endDate >= startDate) {
+                days = Math.floor((endDate - startDate) / 86400000) + 1;
+            }
+        }
+
+        if (featureCount >= 20 || (featureCount >= 12 && days > 120)) return 'Enterprise';
+        if (featureCount >= 12 || days > 90) return 'High';
+        if (featureCount >= 6 || days > 30) return 'Medium';
+        return 'Low';
+    }
+
+    function updateGeneratedComplexity() {
+        if (generatedComplexityField) {
+            generatedComplexityField.value = calculateGeneratedComplexity();
+        }
+    }
+
+    function renderRequestedFeatureRows(rawValue = '') {
+        if (!requestedFeatureList) {
+            return;
+        }
+
+        const features = String(rawValue || '')
+            .split(/\r?\n/)
+            .map((feature) => feature.trim())
+            .filter((feature) => feature !== '');
+
+        requestedFeatureList.innerHTML = '';
+        (features.length > 0 ? features : ['']).forEach((feature) => {
+            requestedFeatureList.appendChild(createRequestedFeatureRow(feature));
+        });
+
+        updateRequestedFeatureRemoveButtons();
+        syncRequestedFeaturesField();
+    }
+
+    function updateRequestedFeatureRemoveButtons() {
+        if (!requestedFeatureList) {
+            return;
+        }
+
+        const items = Array.from(requestedFeatureList.querySelectorAll('.requested-feature-item'));
+        items.forEach((item) => {
+            const button = item.querySelector('[data-remove-requested-feature]');
+            if (button) {
+                button.disabled = items.length <= 1;
+            }
+        });
     }
 
     function hasDraftValues(data = getDraftData()) {
@@ -2414,6 +2869,8 @@ if (addClientModalElement && addClientForm) {
             const data = entry.data && typeof entry.data === 'object'
                 ? entry.data
                 : Object.fromEntries(Object.entries(entry).filter(([key]) => !key.startsWith('_') && key !== 'id' && key !== 'savedAt' && key !== 'data'));
+            delete data['attachments[]'];
+            delete data.attachments;
 
             return hasDraftValues(data) ? { id, savedAt, data } : null;
         } catch (error) {
@@ -2462,6 +2919,15 @@ if (addClientModalElement && addClientForm) {
     function saveStoredDrafts(drafts) {
         localStorage.setItem(addClientDraftsKey, JSON.stringify(drafts));
         legacyDraftKeys.forEach((legacyKey) => localStorage.removeItem(legacyKey));
+    }
+
+    function removeStoredDraft(draftId) {
+        const normalizedDraftId = String(draftId || '').trim();
+        if (normalizedDraftId === '') {
+            return;
+        }
+
+        saveStoredDrafts(getStoredDrafts().filter((draft) => draft.id !== normalizedDraftId));
     }
 
     function hasStoredDraft() {
@@ -2578,6 +3044,7 @@ if (addClientModalElement && addClientForm) {
         if (draftStatus) {
             draftStatus.textContent = hasDraft ? 'Draft saved on this browser' : (formTouched ? 'Unsaved changes' : 'Draft not started');
         }
+        updateGeneratedComplexity();
         updateSaveDraftButton();
         renderDraftList();
     }
@@ -2611,6 +3078,9 @@ if (addClientModalElement && addClientForm) {
 
         saveStoredDrafts(drafts);
         activeDraftId = nextDraft.id;
+        if (draftIdField) {
+            draftIdField.value = activeDraftId;
+        }
         activeDraftLoaded = true;
         updateDraftStatus(true);
     }
@@ -2623,15 +3093,25 @@ if (addClientModalElement && addClientForm) {
         }
 
         addClientForm.reset();
+        renderRequestedFeatureRows(draftData.data?.requested_features || '');
         Object.entries(draftData.data || {}).forEach(([name, value]) => {
+            if (name === 'requested_features') {
+                return;
+            }
             const field = addClientForm.elements[name];
             if (field) {
-                field.value = value;
+                if (field.type === 'file') {
+                    return;
+                }
+                field.value = typeof value === 'string' ? value : '';
             }
         });
         formTouched = false;
         activeDraftLoaded = true;
         activeDraftId = draftData.id;
+        if (draftIdField) {
+            draftIdField.value = activeDraftId;
+        }
         hideUnsavedClosePanel();
         updateDraftStatus(true);
     }
@@ -2639,9 +3119,13 @@ if (addClientModalElement && addClientForm) {
     function clearAddClientDraft() {
         saveStoredDrafts([]);
         addClientForm.reset();
+        renderRequestedFeatureRows('');
         formTouched = false;
         activeDraftLoaded = false;
         activeDraftId = null;
+        if (draftIdField) {
+            draftIdField.value = '';
+        }
         hideUnsavedClosePanel();
         updateDraftStatus(false);
         showClientStep(0);
@@ -2649,12 +3133,142 @@ if (addClientModalElement && addClientForm) {
 
     function resetCurrentClientInput() {
         addClientForm.reset();
+        renderRequestedFeatureRows('');
         formTouched = false;
         activeDraftLoaded = false;
         activeDraftId = null;
+        isSubmittingClient = false;
+        if (draftIdField) {
+            draftIdField.value = '';
+        }
         hideUnsavedClosePanel();
         updateDraftStatus(false);
         showClientStep(0);
+    }
+
+    function getFormValue(name) {
+        const field = addClientForm.elements[name];
+        return field ? String(field.value || '').trim() : '';
+    }
+
+    function formatDateInput(value) {
+        if (!value) {
+            return '';
+        }
+
+        const parts = value.split('-').map(Number);
+        if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+            return value;
+        }
+
+        const parsed = new Date(parts[0], parts[1] - 1, parts[2]);
+        return parsed.toLocaleDateString([], {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    }
+
+    function formatTimeInput(value) {
+        if (!value) {
+            return '';
+        }
+
+        const parts = value.split(':').map(Number);
+        if (parts.length < 2 || parts.some((part) => Number.isNaN(part))) {
+            return value;
+        }
+
+        const parsed = new Date();
+        parsed.setHours(parts[0], parts[1], 0, 0);
+        return parsed.toLocaleTimeString([], {
+            hour: 'numeric',
+            minute: '2-digit'
+        });
+    }
+
+    function formatDateTime(dateValue, timeValue) {
+        const formattedDate = formatDateInput(dateValue);
+        const formattedTime = formatTimeInput(timeValue);
+
+        if (formattedDate && formattedTime) {
+            return `${formattedDate}, ${formattedTime}`;
+        }
+
+        return formattedDate || formattedTime;
+    }
+
+    function formatBudget(value) {
+        const normalized = String(value || '').replace(/,/g, '').trim();
+        if (!normalized) {
+            return '';
+        }
+
+        const amount = Number(normalized);
+        if (!Number.isFinite(amount)) {
+            return value;
+        }
+
+        return amount.toLocaleString([], {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    function buildTimelineSummary() {
+        const start = formatDateTime(getFormValue('timeline_start'), getFormValue('timeline_start_time'));
+        const endDate = getFormValue('timeline_end') || getFormValue('deadline');
+        const end = formatDateTime(endDate, getFormValue('timeline_end_time'));
+
+        if (start && end) {
+            return `${start} to ${end}`;
+        }
+
+        if (start) {
+            return `Starts ${start}`;
+        }
+
+        if (end) {
+            return `Due ${end}`;
+        }
+
+        return '';
+    }
+
+    function renderAddClientSummary() {
+        syncRequestedFeaturesField();
+        updateGeneratedComplexity();
+        const attachmentInput = addClientForm.querySelector('input[name="attachments[]"]');
+        const attachmentNames = Array.from(attachmentInput?.files || [])
+            .map((file) => file.name)
+            .filter(Boolean);
+        const summaryData = {
+            name: getFormValue('name'),
+            contact_person: getFormValue('contact_person'),
+            email: getFormValue('email'),
+            phone: getFormValue('phone'),
+            deadline: formatDateInput(getFormValue('deadline')),
+            project_name: getFormValue('project_name'),
+            timeline: buildTimelineSummary(),
+            sales_budget: formatBudget(getFormValue('sales_budget')),
+            priority: getFormValue('priority') || 'medium',
+            generated_complexity: generatedComplexityField ? generatedComplexityField.value : calculateGeneratedComplexity(),
+            attachments: attachmentNames.join("\n"),
+            project_description: getFormValue('project_description'),
+            requested_features: getFormValue('requested_features'),
+            additional_requirements: getFormValue('additional_requirements'),
+            meeting_notes: getFormValue('meeting_notes'),
+            mom: getFormValue('mom'),
+            sales_notes: getFormValue('sales_notes')
+        };
+
+        summaryFields.forEach((field) => {
+            const key = field.dataset.summaryField || '';
+            const fallback = key === 'deadline' || key === 'timeline'
+                ? 'Not set'
+                : (key === 'attachments' ? 'No attachments' : 'Not provided');
+            field.textContent = summaryData[key] || fallback;
+        });
     }
 
     function validateClientStep(stepIndex, shouldReport = true) {
@@ -2678,6 +3292,9 @@ if (addClientModalElement && addClientForm) {
 
     function showClientStep(stepIndex) {
         currentStep = Math.max(0, Math.min(stepIndex, stepPanels.length - 1));
+        if (currentStep === stepPanels.length - 1) {
+            renderAddClientSummary();
+        }
 
         stepPanels.forEach((panel, index) => {
             panel.hidden = index !== currentStep;
@@ -2721,6 +3338,58 @@ if (addClientModalElement && addClientForm) {
         hideUnsavedClosePanel();
         updateDraftStatus(false);
     });
+
+    if (requestedFeatureList) {
+        requestedFeatureList.addEventListener('input', (event) => {
+            if (event.target.matches('[data-requested-feature-input]')) {
+                syncRequestedFeaturesField();
+            }
+        });
+
+        requestedFeatureList.addEventListener('click', (event) => {
+            const removeButton = event.target.closest('[data-remove-requested-feature]');
+            if (!removeButton) {
+                return;
+            }
+
+            const item = removeButton.closest('.requested-feature-item');
+            const items = requestedFeatureList.querySelectorAll('.requested-feature-item');
+            if (!item) {
+                return;
+            }
+
+            if (items.length <= 1) {
+                const input = item.querySelector('[data-requested-feature-input]');
+                if (input) {
+                    input.value = '';
+                }
+            } else {
+                item.remove();
+            }
+
+            formTouched = true;
+            hideUnsavedClosePanel();
+            updateRequestedFeatureRemoveButtons();
+            syncRequestedFeaturesField();
+            updateDraftStatus(false);
+        });
+    }
+
+    if (addRequestedFeatureButton && requestedFeatureList) {
+        addRequestedFeatureButton.addEventListener('click', () => {
+            requestedFeatureList.appendChild(createRequestedFeatureRow(''));
+            updateRequestedFeatureRemoveButtons();
+            formTouched = true;
+            hideUnsavedClosePanel();
+            updateDraftStatus(false);
+
+            const inputs = requestedFeatureList.querySelectorAll('[data-requested-feature-input]');
+            const lastInput = inputs[inputs.length - 1];
+            if (lastInput) {
+                lastInput.focus();
+            }
+        });
+    }
 
     closeButtons.forEach((button) => {
         button.addEventListener('click', requestAddClientClose);
@@ -2788,20 +3457,38 @@ if (addClientModalElement && addClientForm) {
         });
     });
 
-        addClientForm.addEventListener('submit', (event) => {
+    addClientForm.addEventListener('submit', (event) => {
+        if (isSubmittingClient) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+
+        syncRequestedFeaturesField();
         for (let stepIndex = 0; stepIndex < stepPanels.length; stepIndex++) {
             if (!validateClientStep(stepIndex, false)) {
                 event.preventDefault();
+                event.stopPropagation();
                 showClientStep(stepIndex);
                 validateClientStep(stepIndex, true);
                 return;
             }
         }
 
-        if (activeDraftId) {
-            const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== activeDraftId);
-            saveStoredDrafts(remainingDrafts);
+        if (currentStep !== stepPanels.length - 1) {
+            event.preventDefault();
+            event.stopPropagation();
+            showClientStep(stepPanels.length - 1);
+            return;
         }
+
+        if (hasDraftValues()) {
+            saveAddClientDraft();
+        }
+        if (draftIdField) {
+            draftIdField.value = activeDraftId || '';
+        }
+        isSubmittingClient = true;
         formTouched = false;
     });
 
@@ -2833,6 +3520,27 @@ if (addClientModalElement && addClientForm) {
         });
     }
 
+    if (deleteDraftConfirmBtn) {
+        deleteDraftConfirmBtn.addEventListener('click', function () {
+            if (!pendingDeleteDraftId) {
+                return;
+            }
+
+            const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== pendingDeleteDraftId);
+            saveStoredDrafts(remainingDrafts);
+
+            if (activeDraftId === pendingDeleteDraftId) {
+                resetCurrentClientInput();
+            }
+
+            pendingDeleteDraftId = null;
+            updateDraftStatus(hasStoredDraft());
+            if (deleteDraftModalElement) {
+                bootstrap.Modal.getInstance(deleteDraftModalElement)?.hide();
+            }
+        });
+    }
+
     clientTabButtons.forEach((button) => {
         button.addEventListener('click', () => {
             showClientTab(button.dataset.clientTab || 'clients');
@@ -2855,6 +3563,7 @@ if (addClientModalElement && addClientForm) {
 
     showClientStep(0);
     showClientTab('clients');
+    removeStoredDraft(savedClientDraftId);
     renderDraftList();
     updateDraftStatus(hasStoredDraft());
 }

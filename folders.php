@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once 'includes/auth.php';
 requireLogin();
 $user = getCurrentUser();
@@ -221,6 +221,38 @@ body {
     font-weight: 600;
     color: var(--gray-700);
     margin: 0;
+}
+
+.project-view-tabs {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem 0 1rem;
+    flex-wrap: wrap;
+}
+
+.project-view-tab {
+    appearance: none;
+    border: 1px solid var(--gray-200);
+    background: var(--gray-100);
+    color: var(--gray-600);
+    border-radius: 999px;
+    padding: 0.65rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.project-view-tab:hover {
+    color: var(--theme-primary);
+    border-color: rgba(39, 119, 236, 0.25);
+    background: #fff;
+}
+
+.project-view-tab.active {
+    border-color: transparent;
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: #fff;
+    box-shadow: 0 10px 24px rgba(39, 119, 236, 0.18);
 }
 
 /* Buttons */
@@ -519,6 +551,28 @@ body {
     margin-bottom: 0;
 }
 
+.project-info-card .project-info-body {
+    max-height: 65vh;
+    overflow-y: auto;
+    padding: 1.25rem;
+}
+
+.project-info-card.is-visible.d-none {
+    display: none !important;
+}
+
+.project-info-card.is-visible {
+    display: block;
+}
+
+.project-view-tab-target {
+    display: none;
+}
+
+.project-view-tab-target.is-active {
+    display: block;
+}
+
 .project-details-summary {
     margin-bottom: 1rem;
 }
@@ -783,6 +837,15 @@ body {
                 </nav>
             </div>
 
+            <div class="project-view-tabs" role="tablist" aria-label="Folder views">
+                <button type="button" class="project-view-tab" id="projectInfoTabButton" data-view-target="project" aria-selected="false">
+                    <i class="fas fa-info-circle me-1"></i>Project Info
+                </button>
+                <button type="button" class="project-view-tab active" id="sharedTabButton" data-view-target="shared" aria-selected="true">
+                    <i class="fas fa-folder-open me-1"></i>Shared
+                </button>
+            </div>
+
             <!-- Project Information -->
             <div class="main-card project-info-card mb-3" id="projectDetailsCard">
                 <div class="card-header">
@@ -890,6 +953,7 @@ $(document).ready(function() {
     loadSharedFolders();
     initBulkActions();
     initEntryEvents();
+    initViewTabs();
 
     const params = new URLSearchParams(window.location.search);
     const folderParam = parseInt(params.get('folder_id') || '0', 10);
@@ -901,6 +965,33 @@ $(document).ready(function() {
 // Load shared projects list
 function loadRootFolders() {
     loadSharedFolders();
+}
+
+function setActiveViewTab(view) {
+    const showProjectInfo = view === 'project';
+
+    $('#projectInfoTabButton').toggleClass('active', showProjectInfo)
+        .attr('aria-selected', showProjectInfo ? 'true' : 'false');
+    $('#sharedTabButton').toggleClass('active', !showProjectInfo)
+        .attr('aria-selected', showProjectInfo ? 'false' : 'true');
+
+    if (showProjectInfo) {
+        $('#projectDetailsCard').removeClass('d-none');
+        if (!$('#projectDetailsCard').hasClass('is-visible')) {
+            $('#projectDetailsCard').addClass('is-visible');
+        }
+        $('#folderBrowserCard').addClass('d-none');
+    } else {
+        $('#folderBrowserCard').removeClass('d-none');
+        $('#projectDetailsCard').addClass('d-none');
+    }
+}
+
+function initViewTabs() {
+    $(document).off('click.folderViewTabs').on('click.folderViewTabs', '.project-view-tab', function() {
+        setActiveViewTab($(this).data('view-target'));
+    });
+    setActiveViewTab('shared');
 }
 
 function hideProjectPanel() {
@@ -926,13 +1017,12 @@ function showProjectPanel(projectContext, folderId, projectId) {
         }
 
         if (typeof renderProjectDetailsPanel === 'function') {
-            renderProjectDetailsPanel(context);
+            renderProjectDetailsPanel(context, { showSharedFolderFiles: false });
         } else {
             $('#projectDetailsPanel').html('<div class="alert alert-warning mb-0">Unable to load project details view.</div>');
         }
 
         $('#projectDetailsCard').addClass('is-visible');
-        document.getElementById('projectDetailsCard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     if (projectContext) {
@@ -948,10 +1038,20 @@ function showProjectPanel(projectContext, folderId, projectId) {
         url: `<?php echo BASE_URL; ?>api/folders/get-project-context.php?${query}`,
         dataType: 'json',
         success: function(data) {
+            if (data && data.error) {
+                $('#projectDetailsPanel').html(`<div class="alert alert-warning mb-0">${escapeHtml(data.error)}</div>`);
+                $('#projectDetailsCard').addClass('is-visible');
+                return;
+            }
+
             renderPanel(data.project_context || data.project_details || null);
         },
-        error: function() {
-            hideProjectPanel();
+        error: function(xhr) {
+            const message = xhr.responseJSON && xhr.responseJSON.error
+                ? xhr.responseJSON.error
+                : 'Unable to load project details right now.';
+            $('#projectDetailsPanel').html(`<div class="alert alert-warning mb-0">${escapeHtml(message)}</div>`);
+            $('#projectDetailsCard').addClass('is-visible');
         }
     });
 }
@@ -965,12 +1065,18 @@ function loadSharedFolders() {
     }];
     hideProjectPanel();
     showFolderBrowser();
+    setActiveViewTab('shared');
     $('#currentFolderTitle').html('<i class="fas fa-folder-open me-2"></i>Shared Projects');
 
     $.ajax({
         url: `<?php echo BASE_URL; ?>api/folders/get-tree.php?folder_id=0&role=${encodeURIComponent(CURRENT_USER_ROLE)}`,
         dataType: 'json',
         success: function(data) {
+            if (data && data.error) {
+                showFolderLoadError(data.error);
+                return;
+            }
+
             sharedFolderRoots = data.folders || [];
             renderBreadcrumbs(currentBreadcrumb);
             renderFullSharedFolderTree();
@@ -981,8 +1087,11 @@ function loadSharedFolders() {
                 openFolderById(sharedFolderRoots[0].id);
             }
         },
-        error: function() {
-            alert('Failed to load shared projects');
+        error: function(xhr) {
+            const message = xhr.responseJSON && xhr.responseJSON.error
+                ? xhr.responseJSON.error
+                : 'Failed to load shared projects.';
+            showFolderLoadError(message);
         }
     });
 }
@@ -1044,7 +1153,15 @@ function renderFullSharedFolderTree() {
         folder_type: 'shared_root',
         expanded: true,
         children: sharedFolderRoots.map(folder => ({
-            ...folder,
+            id: folder.id,
+            name: folder.name,
+            folder_type: folder.folder_type,
+            client_name: folder.client_name,
+            owner_name: folder.owner_name,
+            project_id: folder.project_id,
+            role: folder.role,
+            updated_at: folder.updated_at,
+            created_at: folder.created_at,
             expanded: Number(folder.id) === Number(currentFolderId),
             children: Number(folder.id) === Number(currentFolderId) ? (folderStructure[folder.id] || []) : []
         }))
@@ -1052,7 +1169,7 @@ function renderFullSharedFolderTree() {
 }
 
 function renderScopedProjectTree(folderBreadcrumb, childFolders) {
-    const projectFolder = [...(folderBreadcrumb || [])].reverse().find(folder => folder.folder_type === 'project')
+    const projectFolder = (folderBreadcrumb || []).slice().reverse().find(folder => folder.folder_type === 'project')
         || (folderBreadcrumb || [])[folderBreadcrumb.length - 1];
 
     if (!projectFolder) {
@@ -1066,7 +1183,15 @@ function renderScopedProjectTree(folderBreadcrumb, childFolders) {
         folder_type: 'shared_root',
         expanded: true,
         children: sharedFolderRoots.map(folder => ({
-            ...folder,
+            id: folder.id,
+            name: folder.name,
+            folder_type: folder.folder_type,
+            client_name: folder.client_name,
+            owner_name: folder.owner_name,
+            project_id: folder.project_id,
+            role: folder.role,
+            updated_at: folder.updated_at,
+            created_at: folder.created_at,
             expanded: Number(folder.id) === Number(projectFolder.id),
             children: Number(folder.id) === Number(projectFolder.id) ? (childFolders || []) : []
         }))
@@ -1102,6 +1227,12 @@ function loadFolderContents(folderId) {
         dataType: 'json',
         success: function(data) {
             hideLoading();
+            if (data && data.error) {
+                renderProjectEntries([], []);
+                $('#fileTableBody').html(`<tr><td colspan="7" class="text-center text-muted py-5">${escapeHtml(data.error)}</td></tr>`);
+                return;
+            }
+
             const folderBreadcrumb = Array.isArray(data.breadcrumb)
                 ? data.breadcrumb.filter(folder => folder.folder_type !== 'client')
                 : [];
@@ -1109,24 +1240,19 @@ function loadFolderContents(folderId) {
                 id: SHARED_FOLDERS_ID,
                 name: 'Shared Projects',
                 virtual: true
-            }, ...folderBreadcrumb];
+            }].concat(folderBreadcrumb);
             renderBreadcrumbs(currentBreadcrumb);
 
             const folder = data.current_folder || findFolderById(folderId);
             $('#currentFolderTitle').html(`<i class="fas fa-folder-open me-2"></i>${folder ? escapeHtml(folder.name) : 'Files'}`);
 
-            const resolvedProjectId = Number(data.project_id || folder?.project_id || 0);
+            const resolvedProjectId = Number(data.project_id || (folder ? folder.project_id : 0) || 0);
             const childFolders = resolvedProjectId > 0
                 ? (data.folders || []).filter(child => child.folder_type !== 'project')
                 : (data.folders || []);
-            const isSharedProjectRoot = resolvedProjectId > 0 && folder?.folder_type === 'project';
-
-            if (isSharedProjectRoot) {
-                hideFolderBrowser();
-            } else {
-                showFolderBrowser();
-                renderProjectEntries(childFolders, data.files || []);
-            }
+            setActiveViewTab('shared');
+            showFolderBrowser();
+            renderProjectEntries(childFolders, data.files || []);
 
             if (resolvedProjectId > 0 && folder) {
                 folderStructure[folder.id] = childFolders;
@@ -1138,11 +1264,20 @@ function loadFolderContents(folderId) {
             const projectContext = data.project_context || data.project_details;
             showProjectPanel(projectContext, folderId, resolvedProjectId);
         },
-        error: function() {
+        error: function(xhr) {
             hideLoading();
-            alert('Failed to load folder contents');
+            const message = xhr.responseJSON && xhr.responseJSON.error
+                ? xhr.responseJSON.error
+                : 'Failed to load folder contents.';
+            $('#fileTableBody').html(`<tr><td colspan="7" class="text-center text-muted py-5">${escapeHtml(message)}</td></tr>`);
         }
     });
+}
+
+function showFolderLoadError(message) {
+    $('#folderTree').html(`<div class="text-center text-muted py-4">${escapeHtml(message)}</div>`);
+    renderBreadcrumbs(currentBreadcrumb);
+    $('#fileTableBody').html(`<tr><td colspan="7" class="text-center text-muted py-5">${escapeHtml(message)}</td></tr>`);
 }
 
 function renderProjectEntries(folders, files) {
@@ -1263,7 +1398,8 @@ function renderBreadcrumbs(path) {
 
 function findFolderById(id) {
     for (let parentId in folderStructure) {
-        const folder = folderStructure[parentId]?.find(f => f.id == id);
+        const children = folderStructure[parentId] || [];
+        const folder = children.find(f => f.id == id);
         if (folder) return folder;
     }
     return null;

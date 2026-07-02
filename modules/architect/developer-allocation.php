@@ -1,10 +1,26 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-workflow.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectWorkflowEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+
+$allocationRoles = [
+    'Expert Department' => ['min' => 0, 'max' => 3],
+    'UI/UX' => ['min' => 1, 'max' => 3],
+    'Frontend' => ['min' => 1, 'max' => 5],
+    'Backend' => ['min' => 1, 'max' => 5],
+    'Mobile' => ['min' => 0, 'max' => 4],
+    'Database' => ['min' => 0, 'max' => 2],
+    'DevOps' => ['min' => 0, 'max' => 2],
+    'AI' => ['min' => 0, 'max' => 3],
+    'Security' => ['min' => 0, 'max' => 2],
+    'QA' => ['min' => 1, 'max' => 3],
+    'Other Departments' => ['min' => 0, 'max' => 5],
+];
 
 function normalizeAllocationComplexity(?string $value): string
 {
@@ -25,12 +41,45 @@ if (!$project) {
     exit();
 }
 
+if (!dbColumnExists($conn, 'projects', 'included_departments')) {
+    $conn->query("ALTER TABLE projects ADD COLUMN included_departments " . (DB_DRIVER === 'pgsql' ? 'TEXT' : 'LONGTEXT') . " NULL");
+    $project = $conn->query("SELECT * FROM projects WHERE id = $projectId")->fetch_assoc();
+}
+
 // Get existing allocations
 $existingAllocations = [];
 $allocResult = $conn->query("SELECT * FROM developer_allocations WHERE project_id = $projectId");
 while($row = $allocResult->fetch_assoc()) {
-    $existingAllocations[$row['role']] = $row;
+    $normalizedRole = projectWorkflowDepartmentLabel($row['role'] ?? '');
+    $existingAllocations[$normalizedRole] = $row;
 }
+
+$includedDepartments = [];
+$includedDepartmentRaw = trim((string) ($project['included_departments'] ?? ''));
+if ($includedDepartmentRaw !== '') {
+    $decodedDepartments = json_decode($includedDepartmentRaw, true);
+    if (is_array($decodedDepartments)) {
+        $includedDepartments = array_values(array_intersect(array_map(static fn($item): string => projectWorkflowDepartmentLabel((string) $item), $decodedDepartments), array_keys($allocationRoles)));
+    }
+}
+
+if (count($includedDepartments) === 0 && count($existingAllocations) > 0) {
+    foreach ($existingAllocations as $role => $allocation) {
+        if ((int) ($allocation['required_count'] ?? 0) > 0 && isset($allocationRoles[$role])) {
+            $includedDepartments[] = $role;
+        }
+    }
+}
+
+if (count($includedDepartments) === 0) {
+    foreach ($allocationRoles as $role => $limits) {
+        if ((int) ($limits['min'] ?? 0) > 0) {
+            $includedDepartments[] = $role;
+        }
+    }
+}
+
+$includedDepartmentLookup = array_fill_keys($includedDepartments, true);
 
 $selectedComplexity = 'medium';
 if (!empty($existingAllocations)) {
@@ -41,18 +90,49 @@ if (!empty($existingAllocations)) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $postedAllocations = is_array($_POST['allocations'] ?? null) ? $_POST['allocations'] : [];
+    $selectedDepartments = [];
+    foreach ($postedAllocations as $role => $data) {
+        if (!isset($allocationRoles[$role]) || !is_array($data)) {
+            continue;
+        }
+
+        $requiredCount = max(0, (int) ($data['required'] ?? 0));
+        if (isset($data['included']) || $requiredCount > 0) {
+            $selectedDepartments[] = (string) $role;
+        }
+    }
+
+    $selectedDepartments = array_values(array_unique($selectedDepartments));
+    if (count($selectedDepartments) === 0) {
+        $_SESSION['error'] = 'Select at least one department included in this project.';
+        header('Location: developer-allocation.php?id=' . $projectId);
+        exit();
+    }
+
     $conn->query("DELETE FROM developer_allocations WHERE project_id = $projectId");
-    if(isset($_POST['allocations'])) {
-        foreach($_POST['allocations'] as $role => $data) {
-            $requiredCount = $data['required'];
+    if(count($postedAllocations) > 0) {
+        foreach($postedAllocations as $role => $data) {
+            if (!isset($allocationRoles[$role]) || !in_array((string) $role, $selectedDepartments, true) || !is_array($data)) {
+                continue;
+            }
+
+            $requiredCount = max(0, (int) ($data['required'] ?? 0));
             $complexity = normalizeAllocationComplexity($data['complexity'] ?? 'medium');
             $stmt = $conn->prepare("INSERT INTO developer_allocations (project_id, role, required_count, complexity_level) VALUES (?, ?, ?, ?)");
             $stmt->bind_param("isis", $projectId, $role, $requiredCount, $complexity);
             $stmt->execute();
         }
     }
+    $includedDepartmentsJson = json_encode($selectedDepartments, JSON_UNESCAPED_SLASHES);
+    $departmentStmt = $conn->prepare("UPDATE projects SET included_departments = ? WHERE id = ?");
+    if ($departmentStmt !== false) {
+        $departmentStmt->bind_param('si', $includedDepartmentsJson, $projectId);
+        $departmentStmt->execute();
+        $departmentStmt->close();
+    }
     logActivity($user['id'], 'developer_allocation', 'projects', $projectId, null, $_POST);
-    header('Location: upload-diagram.php?id=' . $projectId);
+    header('Location: ../roadmap/methodology.php?project_id=' . $projectId);
     exit();
 }
 
@@ -298,6 +378,29 @@ a.progress-step:hover {
     letter-spacing: 0.5px;
     color: var(--gray-600);
     border-bottom: 1px solid var(--gray-200);
+}
+
+.department-toggle-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.department-toggle-wrap input {
+    width: 1rem;
+    height: 1rem;
+}
+
+.department-role-note {
+    display: block;
+    color: var(--gray-600);
+    font-size: 0.72rem;
+    margin-top: 0.15rem;
+}
+
+.tooltip-helper {
+    color: var(--theme-primary);
+    cursor: help;
 }
 
 .allocation-table td {
@@ -577,10 +680,14 @@ a.progress-step:hover {
         <div class="progress-line completed"></div>
         <a class="progress-step active" href="developer-allocation.php?id=<?php echo $projectId; ?>"><div class="step-number">4</div><div class="step-label">Developers</div></a>
         <div class="progress-line"></div>
-        <a class="progress-step" href="upload-diagram.php?id=<?php echo $projectId; ?>"><div class="step-number">5</div><div class="step-label">Documents</div></a>
+        <a class="progress-step" href="../roadmap/methodology.php?project_id=<?php echo $projectId; ?>"><div class="step-number">5</div><div class="step-label">Roadmap</div></a>
         <div class="progress-line"></div>
-        <a class="progress-step" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">6</div><div class="step-label">Summary</div></a>
+        <a class="progress-step" href="upload-diagram.php?id=<?php echo $projectId; ?>"><div class="step-number">6</div><div class="step-label">Documents</div></a>
+        <div class="progress-line"></div>
+        <a class="progress-step" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
     </div>
+
+    <?php include '../../includes/architect-project-review-panel.php'; ?>
 
     <div class="row g-4">
         <!-- Main Form Column -->
@@ -592,7 +699,10 @@ a.progress-step:hover {
                 <div class="card-body">
                     <form method="POST" id="allocationForm">
                         <div class="mb-4">
-                            <label class="form-label">Project Complexity Level</label>
+                            <label class="form-label">
+                                Project Complexity Level
+                                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Complexity is now project-level. It guides overall resource recommendations, not per-feature sizing."></i>
+                            </label>
                             <select class="form-select-modern" id="complexityLevel" onchange="updateAllocation()">
                                 <option value="low" <?php echo $selectedComplexity === 'low' ? 'selected' : ''; ?>>Low - Simple application with basic features</option>
                                 <option value="medium" <?php echo $selectedComplexity === 'medium' ? 'selected' : ''; ?>>Medium - Standard web/mobile application</option>
@@ -604,20 +714,15 @@ a.progress-step:hover {
                         <div class="table-responsive">
                             <table class="allocation-table">
                                 <thead>
-                                    <tr><th>Role</th><th>Required Count</th><th>Available</th><th>Status</th></tr>
+                                    <tr>
+                                        <th>Included Department <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Select every department that must participate in this project before continuing to diagram upload."></i></th>
+                                        <th>Required Count</th>
+                                        <th>Available</th>
+                                        <th>Status</th>
+                                    </tr>
                                 </thead>
                                 <tbody>
                                     <?php
-                                    $roles = [
-                                        'Frontend Developer' => ['min' => 1, 'max' => 5],
-                                        'Backend Developer' => ['min' => 1, 'max' => 5],
-                                        'Full Stack Developer' => ['min' => 0, 'max' => 3],
-                                        'QA Engineer' => ['min' => 1, 'max' => 2],
-                                        'UI/UX Designer' => ['min' => 1, 'max' => 2],
-                                        'DevOps Engineer' => ['min' => 0, 'max' => 2],
-                                        'Database Administrator' => ['min' => 0, 'max' => 1]
-                                    ];
-                                    
                                     $availableDevs = [];
                                     $devQuery = $conn->query("
                                         SELECT department, COUNT(*) as count
@@ -632,20 +737,41 @@ a.progress-step:hover {
                                         $availableDevs[$dev['department']] = $dev['count'];
                                     }
                                     
-                                    foreach($roles as $role => $limits):
-                                        $existing = $existingAllocations[$role]['required_count'] ?? 0;
+                                    foreach($allocationRoles as $role => $limits):
+                                        $isIncluded = isset($includedDepartmentLookup[$role]);
+                                        $existing = array_key_exists($role, $existingAllocations)
+                                            ? (int) ($existingAllocations[$role]['required_count'] ?? 0)
+                                            : ($isIncluded ? (int) ($limits['min'] ?? 0) : 0);
                                         $existingComplexity = normalizeAllocationComplexity($existingAllocations[$role]['complexity_level'] ?? $selectedComplexity);
-                                        $available = $availableDevs[$role] ?? 0;
+                                        $available = 0;
+                                        foreach (projectWorkflowDepartmentAliases($role) as $roleAlias) {
+                                            $available += (int) ($availableDevs[$roleAlias] ?? 0);
+                                        }
                                         $isShortage = $existing > $available;
                                     ?>
                                     <tr>
-                                        <td class="fw-semibold"><?php echo $role; ?></td>
+                                        <td class="fw-semibold">
+                                            <label class="department-toggle-wrap">
+                                                <input
+                                                    type="checkbox"
+                                                    class="department-toggle"
+                                                    name="allocations[<?php echo $role; ?>][included]"
+                                                    value="1"
+                                                    data-role="<?php echo htmlspecialchars($role); ?>"
+                                                    onchange="toggleDepartmentRow(this)"
+                                                    <?php echo $isIncluded ? 'checked' : ''; ?>
+                                                >
+                                                <span><?php echo $role; ?></span>
+                                            </label>
+                                            <span class="department-role-note">SUL and team members are matched by this department.</span>
+                                        </td>
                                         <td>
                                             <input type="number" name="allocations[<?php echo $role; ?>][required]" 
                                                    class="form-control-modern form-control-sm required-count" 
                                                    value="<?php echo $existing; ?>" 
-                                                   min="<?php echo $limits['min']; ?>" 
+                                                  min="0"
                                                    max="<?php echo $limits['max']; ?>"
+                                                   data-min-recommended="<?php echo (int) ($limits['min'] ?? 0); ?>"
                                                    onchange="checkAvailability(this, '<?php echo $role; ?>')">
                                             <input type="hidden" name="allocations[<?php echo $role; ?>][complexity]" value="<?php echo htmlspecialchars($existingComplexity); ?>">
                                         </td>
@@ -705,6 +831,15 @@ a.progress-step:hover {
 </div>
 
 <script>
+function initAllocationTooltips() {
+    if (!window.bootstrap || !bootstrap.Tooltip) {
+        return;
+    }
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
+        bootstrap.Tooltip.getOrCreateInstance(element);
+    });
+}
+
 function updateAllocation() {
     const complexity = document.getElementById('complexityLevel').value;
     const recommendations = {
@@ -717,14 +852,42 @@ function updateAllocation() {
     if (rec) {
         for (const [role, count] of Object.entries(rec)) {
             const input = document.querySelector(`input[name="allocations[${role}][required]"]`);
-            if (input && !input.value) input.value = count;
+            const toggle = document.querySelector(`input[name="allocations[${role}][included]"]`);
+            if (input && toggle?.checked && (!input.value || input.value === '0')) input.value = count;
         }
     }
     document.querySelectorAll('input[name$="[complexity]"]').forEach(input => input.value = complexity);
     checkAllAvailability();
 }
 
+function toggleDepartmentRow(checkbox) {
+    const row = checkbox.closest('tr');
+    const input = row.querySelector('.required-count');
+    const statusCell = row.querySelector('.status-cell');
+
+    if (!checkbox.checked) {
+        input.value = 0;
+        statusCell.innerHTML = '<span class="text-muted">Not included</span>';
+        checkAllAvailability();
+        return;
+    }
+
+    const recommendedMin = parseInt(input.dataset.minRecommended || '0', 10);
+    if ((parseInt(input.value, 10) || 0) === 0 && recommendedMin > 0) {
+        input.value = recommendedMin;
+    }
+
+    checkAvailability(input, checkbox.dataset.role || row.cells[0].textContent.trim());
+}
+
 function checkAvailability(input, role) {
+    const toggle = input.closest('tr').querySelector('.department-toggle');
+    if (toggle && !toggle.checked) {
+        input.closest('tr').querySelector('.status-cell').innerHTML = '<span class="text-muted">Not included</span>';
+        checkAllAvailability();
+        return;
+    }
+
     const required = parseInt(input.value) || 0;
     const available = parseInt(input.closest('tr').querySelector('.badge-available').textContent) || 0;
     const statusCell = input.closest('tr').querySelector('.status-cell');
@@ -735,26 +898,36 @@ function checkAvailability(input, role) {
 }
 
 function checkAllAvailability() {
-    let shortages = [], totalRequired = 0, totalAvailable = 0;
+    let shortages = [], totalRequired = 0, totalAvailable = 0, includedCount = 0;
     document.querySelectorAll('.required-count').forEach(input => {
-        const required = parseInt(input.value) || 0;
         const row = input.closest('tr');
+        const toggle = row.querySelector('.department-toggle');
+        if (toggle && !toggle.checked) {
+            return;
+        }
+
+        includedCount++;
+        const required = parseInt(input.value) || 0;
         const available = parseInt(row.querySelector('.badge-available').textContent) || 0;
-        const role = row.cells[0].textContent;
+        const role = row.querySelector('.department-toggle')?.dataset.role || row.cells[0].textContent.trim();
         totalRequired += required; totalAvailable += available;
         if (required > available) shortages.push(`${role}: Need ${required - available} more (${available} available)`);
     });
     const alertDiv = document.getElementById('alertMessages');
     const summaryDiv = document.getElementById('resourceSummary');
-    if (shortages.length > 0) {
+    if (includedCount === 0) {
+        alertDiv.innerHTML = `<div class="alert-warning-modern"><i class="fas fa-exclamation-triangle me-2"></i><strong>Select at least one department</strong><div class="small mt-1">Architect must identify which departments are included before moving to diagram upload.</div></div>`;
+    } else if (shortages.length > 0) {
         alertDiv.innerHTML = `<div class="alert-warning-modern"><i class="fas fa-exclamation-triangle me-2"></i><strong>Resource Shortages Detected:</strong><ul class="mb-0 mt-2 ps-3">${shortages.map(s => `<li>${s}</li>`).join('')}</ul><small class="d-block mt-2">Consider adjusting allocation or requesting additional resources.</small></div>`;
     } else { alertDiv.innerHTML = ''; }
     const utilization = totalRequired > 0 ? ((totalRequired / totalAvailable) * 100).toFixed(1) : 0;
     const isOverUtilized = utilization > 100;
-    summaryDiv.innerHTML = `<div class="mb-3"><strong>Total Required:</strong> ${totalRequired} developers</div><div class="mb-3"><strong>Total Available:</strong> ${totalAvailable} developers</div><div class="mb-3"><strong>Utilization:</strong> ${utilization}%<div class="progress-modern"><div class="progress-bar-modern ${isOverUtilized ? 'danger' : 'success'}" style="width: ${Math.min(utilization, 100)}%"></div></div></div>${totalRequired > totalAvailable ? '<div class="alert-warning-modern mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Resource shortage detected! Total required exceeds available resources.</div>' : '<div class="alert-success-modern mb-0"><i class="fas fa-check-circle me-2"></i>Resource allocation looks good!</div>'}`;
+    summaryDiv.innerHTML = `<div class="mb-3"><strong>Included Departments:</strong> ${includedCount}</div><div class="mb-3"><strong>Total Required:</strong> ${totalRequired} people</div><div class="mb-3"><strong>Total Available:</strong> ${totalAvailable} people</div><div class="mb-3"><strong>Utilization:</strong> ${utilization}%<div class="progress-modern"><div class="progress-bar-modern ${isOverUtilized ? 'danger' : 'success'}" style="width: ${Math.min(utilization, 100)}%"></div></div></div>${includedCount === 0 ? '<div class="alert-warning-modern mb-0"><i class="fas fa-exclamation-triangle me-2"></i>No department selected yet.</div>' : (totalRequired > totalAvailable ? '<div class="alert-warning-modern mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Resource shortage detected! Total required exceeds available resources.</div>' : '<div class="alert-success-modern mb-0"><i class="fas fa-check-circle me-2"></i>Department allocation looks good!</div>')}`;
 }
 
+document.querySelectorAll('.department-toggle').forEach(toggleDepartmentRow);
 updateAllocation();
+initAllocationTooltips();
 </script>
 
 <?php include '../../includes/footer.php'; ?>

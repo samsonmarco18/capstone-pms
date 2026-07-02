@@ -31,6 +31,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId > 0) {
     if (!in_array($role, ['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'], true)) {
         $errors[] = 'Please select a valid role.';
     }
+
+    if ($role === 'sul' && $department === '') {
+        $errors[] = 'SUL users must be assigned to a department.';
+    }
     if (!in_array($status, ['active', 'inactive', 'suspended'], true)) {
         $errors[] = 'Please select a valid status.';
     }

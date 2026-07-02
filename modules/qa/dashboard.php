@@ -1,11 +1,13 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
+require_once '../../includes/project-workflow.php';
 requireRole('qa');
 
 $conn = getConnection();
 $user = getCurrentUser();
 workflowEnsureSchema($conn);
+projectWorkflowEnsureSchema($conn);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $taskId = (int) ($_POST['task_id'] ?? 0);
@@ -84,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 BASE_URL . 'modules/architect/final-approval.php?task_id=' . $taskId,
                 $taskId
             );
+            projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
             $_SESSION['success'] = 'Feature passed QA and moved to Architect approval.';
         } elseif (in_array($decision, ['failed', 'needs_revision'], true)) {
             $stmt = $conn->prepare("UPDATE tasks SET status = 'qa_failed', completed_at = NULL, qa_reviewed_by = ?, qa_reviewed_at = NOW() WHERE id = ?");
@@ -101,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 BASE_URL . 'modules/developer/task.php?id=' . $taskId,
                 $taskId
             );
+            projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
             $_SESSION['success'] = 'Feature returned to Developer for fixing.';
         } else {
             $_SESSION['error'] = 'Invalid QA decision.';

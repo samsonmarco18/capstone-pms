@@ -4,7 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/version-control.php';
 
-requireRole(['admin', 'architect', 'developer', 'sul']);
+requireRole(['admin', 'architect', 'developer', 'sul', 'sales']);
 
 $repositoryId = (int) ($_GET['repository_id'] ?? 0);
 if ($repositoryId <= 0) {
@@ -14,15 +14,34 @@ if ($repositoryId <= 0) {
 
 $conn = getConnection();
 $user = getCurrentUser();
-if (!$user || !vcCanAccessRepository($conn, $user, $repositoryId)) {
-    http_response_code(403);
-    exit('You do not have access to this repository.');
-}
-
 $repository = vcGetRepository($conn, $repositoryId);
 if (!$repository) {
     http_response_code(404);
     exit('Repository not found.');
+}
+
+if (!$user) {
+    http_response_code(403);
+    exit('You do not have access to this repository.');
+}
+
+$userRole = (string) ($user['role'] ?? '');
+if ($userRole === 'sales') {
+    $userId = (int) ($user['id'] ?? 0);
+    $isCompletedProject = (string) ($repository['project_status'] ?? '') === 'completed';
+    $isSalesOwner = $userId > 0
+        && (
+            (int) ($repository['project_created_by'] ?? 0) === $userId
+            || (int) ($repository['client_created_by'] ?? 0) === $userId
+        );
+
+    if (!$isCompletedProject || !$isSalesOwner) {
+        http_response_code(403);
+        exit('Sales can download repository files only for completed projects assigned to them.');
+    }
+} elseif (!vcCanAccessRepository($conn, $user, $repositoryId)) {
+    http_response_code(403);
+    exit('You do not have access to this repository.');
 }
 
 $archive = null;

@@ -3,6 +3,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/chat.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -23,6 +24,12 @@ if ($name === '') {
 }
 
 $conn = getConnection();
+if (!ensureChatGroupReadTracking($conn)) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Group message read tracking is unavailable.']);
+    exit();
+}
+
 $stmt = $conn->prepare('INSERT INTO chat_groups (name, description, created_by) VALUES (?, ?, ?)');
 $stmt->bind_param('ssi', $name, $description, $user['id']);
 
@@ -58,21 +65,17 @@ foreach ($memberIds as $memberId) {
         continue;
     }
 
-    if ($memberId !== (int) $user['id']) {
-        createNotification(
-            $memberId,
-            'Added to chat group',
-            $user['full_name'] . ' added you to "' . $name . '".',
-            'group',
-            'chat_groups',
-            $groupId,
-            BASE_URL . 'profile.php'
-        );
-    }
 }
 
 $existingMemberStmt->close();
 $insertMemberStmt->close();
+
+createChatGroupSystemMessage(
+    $conn,
+    (int) $user['id'],
+    $groupId,
+    (string) $user['full_name'] . ' created the group.'
+);
 
 logActivity((int) $user['id'], 'create_chat_group', 'chat_groups', $groupId, null, $data);
 

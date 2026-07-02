@@ -1,11 +1,13 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
+require_once '../../includes/project-workflow.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
 workflowEnsureSchema($conn);
+projectWorkflowEnsureSchema($conn);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_task'])) {
     $taskId = (int) ($_POST['task_id'] ?? 0);
@@ -54,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_task'])) {
 
     workflowAddTaskComment($conn, $taskId, (int) $user['id'], 'Architect merged to main: ' . $gitNote);
     workflowLogStatusChange((int) $user['id'], $taskId, 'qa_passed', 'completed', 'architect_merge_to_main', $mergeNotes);
+    projectWorkflowSyncRoadmap($conn, (int) $task['project_id']);
     workflowMaybeCompleteProject($conn, (int) $task['project_id']);
 
     workflowNotifyRoles(

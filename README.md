@@ -100,6 +100,7 @@ Optional Gmail SMTP for automatic email sending:
 
 return [
   'MAIL_ENABLED' => '1',
+  'MAIL_DELIVERY_METHOD' => 'smtp',
   'MAIL_HOST' => 'smtp.gmail.com',
   'MAIL_PORT' => '587',
   'MAIL_ENCRYPTION' => 'tls',
@@ -107,6 +108,7 @@ return [
   'MAIL_PASSWORD' => 'your-google-app-password',
   'MAIL_FROM_EMAIL' => 'altheapalentinos@gmail.com',
   'MAIL_FROM_NAME' => 'Erni PMS',
+  'MAIL_TIMEOUT' => '8',
 ];
 ```
 
@@ -114,6 +116,72 @@ Important for Gmail:
 - enable 2-Step Verification on the Google account
 - create a Google App Password
 - use the App Password here, not the normal Gmail password
+
+Render may not be able to connect to Gmail SMTP ports `587` or `465`. If test email fails with connection timeouts, use Gmail API over HTTPS instead:
+
+```text
+MAIL_DELIVERY_METHOD=gmail_api
+MAIL_ENABLED=1
+MAIL_USERNAME=your-gmail-address
+MAIL_FROM_EMAIL=your-gmail-address
+GMAIL_CLIENT_ID=your-google-oauth-client-id
+GMAIL_CLIENT_SECRET=your-google-oauth-client-secret
+GMAIL_REFRESH_TOKEN=your-google-oauth-refresh-token
+GMAIL_USER=your-gmail-address
+```
+
+For Gmail API, the Google OAuth consent/app must include the Gmail send scope:
+
+```text
+https://www.googleapis.com/auth/gmail.send
+```
+
+Mailer environment checklist:
+- `MAIL_ENABLED`: set to `1` to send real email.
+- `MAIL_DELIVERY_METHOD`: use `smtp` for local Gmail SMTP, or `gmail_api` for Render/hosts that block SMTP ports.
+- `MAIL_HOST`: `smtp.gmail.com` for Gmail SMTP.
+- `MAIL_PORT`: use `465` with `MAIL_ENCRYPTION=ssl`, or `587` with `MAIL_ENCRYPTION=tls`.
+- `MAIL_USERNAME`: the Gmail address used to send mail.
+- `MAIL_PASSWORD`: a Google App Password for SMTP. Do not use the normal Gmail password.
+- `MAIL_FROM_EMAIL`: usually the same Gmail address as `MAIL_USERNAME`.
+- `MAIL_FROM_NAME`: sender label shown to recipients, for example `ERNI PMS`.
+- `MAIL_VERIFY_PEER`: keep `1` unless a local certificate issue temporarily blocks SMTP testing.
+- `MAIL_TIMEOUT`: keep between `5` and `10`.
+- `MAIL_DEBUG`: keep `0`; set to `1` only while diagnosing mail configuration.
+
+If using `MAIL_DELIVERY_METHOD=gmail_api`, also fill:
+- `GMAIL_CLIENT_ID`
+- `GMAIL_CLIENT_SECRET`
+- `GMAIL_REFRESH_TOKEN`
+- `GMAIL_USER`
+
+How to add missing mail data locally:
+1. Open `config/.env.local.php`.
+2. Fill the missing values in the returned array.
+3. Save the file.
+4. Log in as Admin and open `mail-diagnostic.php` in the browser.
+5. To send a test email, open `mail-diagnostic.php?send_test=1&to=your-email@example.com`.
+
+How to add missing mail data on Render:
+1. Open the Render service dashboard.
+2. Go to Environment.
+3. Add the same keys as environment variables.
+4. Redeploy the service.
+5. Test with `https://your-app.onrender.com/mail-diagnostic.php?send_test=1&to=your-email@example.com` while logged in as Admin.
+
+Methodology workflow data checklist:
+- Sales must create the client/project with project start and end dates.
+- Architect must create feature tasks from the project requirements.
+- Architect must finish technology recommendation.
+- Architect must finish developer allocation.
+- Architect must open Roadmap and choose a methodology template such as Agile, Scrum, Waterfall, Kanban, Iterative, Spiral, or V-Model.
+- The selected methodology template generates phases inside the project timeline.
+- For every phase, Architect must enter phase dates and the number of developers present.
+- For every feature task, Architect must add a roadmap task and select the matching workflow feature task.
+- Every roadmap task date must stay inside its phase date range.
+- Experts can update people count and component notes for roadmap tasks.
+- Architect must upload the required Architecture Plan and Workflow Diagram.
+- Summary can be submitted to SUL only after every feature task is scheduled in the roadmap.
 
 ### 5. Start Application
 

@@ -5,6 +5,8 @@ require_once '../../includes/project-progress.php';
 requireRole('sales');
 
 $conn = getConnection();
+$user = getCurrentUser();
+$currentUserId = (int) ($user['id'] ?? 0);
 workflowEnsureSchema($conn);
 
 $selectedTaskId = (int) ($_GET['task_id'] ?? 0);
@@ -124,7 +126,8 @@ if ($selectedProjectId <= 0 && $projectOptions) {
 $selectedProject = null;
 if ($selectedProjectId > 0) {
     $projectStmt = $conn->prepare("
-        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone
+        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone,
+               c.created_by AS client_created_by
         FROM projects p
         JOIN clients c ON c.id = p.client_id
         WHERE p.id = ? AND p.client_id = ?
@@ -142,7 +145,8 @@ if (!$selectedProject && $projectOptions) {
     $selectedProjectId = (int) $projectOptions[0]['id'];
     $selectedProject = null;
     $projectStmt = $conn->prepare("
-        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone
+        SELECT p.*, c.name AS client_name, c.contact_person, c.email AS client_email, c.phone AS client_phone,
+               c.created_by AS client_created_by
         FROM projects p
         JOIN clients c ON c.id = p.client_id
         WHERE p.id = ? AND p.client_id = ?
@@ -163,9 +167,35 @@ $featurePendingCount = 0;
 $additionalCompleteCount = 0;
 $additionalPendingCount = 0;
 $additionalRequirementsText = '';
+$selectedProjectRepository = null;
+$canDownloadSelectedProjectRepository = false;
 
 if ($selectedProject) {
     $additionalRequirementsText = trim((string) ($selectedProject['requested_features'] ?? ''));
+    $canDownloadSelectedProjectRepository = (string) ($selectedProject['status'] ?? '') === 'completed'
+        && $currentUserId > 0
+        && (
+            (int) ($selectedProject['created_by'] ?? 0) === $currentUserId
+            || (int) ($selectedProject['client_created_by'] ?? 0) === $currentUserId
+        );
+
+    if ($canDownloadSelectedProjectRepository) {
+        $repositoryStmt = $conn->prepare("
+            SELECT id, name, default_branch_name
+            FROM project_repositories
+            WHERE project_id = ?
+              AND repository_status = 'active'
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+        ");
+
+        if ($repositoryStmt !== false) {
+            $repositoryStmt->bind_param('i', $selectedProjectId);
+            $repositoryStmt->execute();
+            $selectedProjectRepository = $repositoryStmt->get_result()->fetch_assoc() ?: null;
+            $repositoryStmt->close();
+        }
+    }
 
     $taskStmt = $conn->prepare("
         SELECT
@@ -544,6 +574,37 @@ include '../../includes/navbar.php';
     color: #047857;
 }
 
+.release-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.65rem;
+}
+
+.release-download-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 40px;
+    padding: 0.55rem 0.85rem;
+    border-radius: 8px;
+    background: var(--theme-primary);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.release-download-btn:hover {
+    background: var(--theme-dark);
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.22);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
     background: #06111e;
 }
@@ -666,6 +727,15 @@ include '../../includes/navbar.php';
     .feature-item {
         grid-template-columns: 1fr;
     }
+
+    .release-actions {
+        justify-content: stretch;
+        width: 100%;
+    }
+
+    .release-download-btn {
+        width: 100%;
+    }
 }
 </style>
 
@@ -743,13 +813,25 @@ include '../../includes/navbar.php';
                         <span>Status: <?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', (string) $selectedProject['status']))); ?></span>
                     </div>
                 </div>
-                <div class="progress-shell" style="min-width: 240px;">
-                <div class="d-flex justify-content-between gap-2">
-                    <small class="text-muted fw-semibold">Architect checklist</small>
-                    <small class="text-muted fw-semibold"><?php echo $projectCompleteCount; ?>/<?php echo $projectTotalCount; ?></small>
-                </div>
-                    <div class="progress-track">
-                        <div class="progress-bar-modern" style="width: <?php echo $projectProgress; ?>%;"></div>
+                <div class="release-actions">
+                    <?php if ($canDownloadSelectedProjectRepository && $selectedProjectRepository): ?>
+                        <a
+                            class="release-download-btn"
+                            href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . (int) $selectedProjectRepository['id']); ?>"
+                            title="Download <?php echo htmlspecialchars((string) (($selectedProjectRepository['default_branch_name'] ?? '') ?: 'main')); ?> branch code"
+                        >
+                            <i class="fas fa-download"></i>
+                            Download Main Branch
+                        </a>
+                    <?php endif; ?>
+                    <div class="progress-shell" style="min-width: 240px;">
+                        <div class="d-flex justify-content-between gap-2">
+                            <small class="text-muted fw-semibold">Architect checklist</small>
+                            <small class="text-muted fw-semibold"><?php echo $projectCompleteCount; ?>/<?php echo $projectTotalCount; ?></small>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-bar-modern" style="width: <?php echo $projectProgress; ?>%;"></div>
+                        </div>
                     </div>
                 </div>
             </div>

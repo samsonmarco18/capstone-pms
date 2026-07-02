@@ -43,14 +43,33 @@ function fetchSalesProjectChecklists(mysqli|PgsqlMysqliCompatConnection $conn, i
         SELECT
             p.id,
             p.name AS project_name,
+            p.status AS project_status,
+            p.created_by AS project_created_by,
             c.name AS client_name,
+            c.created_by AS client_created_by,
+            (
+                SELECT pr.id
+                FROM project_repositories pr
+                WHERE pr.project_id = p.id
+                  AND pr.repository_status = 'active'
+                ORDER BY pr.updated_at DESC, pr.id DESC
+                LIMIT 1
+            ) AS repository_id,
+            (
+                SELECT pr.default_branch_name
+                FROM project_repositories pr
+                WHERE pr.project_id = p.id
+                  AND pr.repository_status = 'active'
+                ORDER BY pr.updated_at DESC, pr.id DESC
+                LIMIT 1
+            ) AS repository_branch_name,
             COUNT(t.id) AS total_features,
             SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END) AS merged_features
         FROM projects p
         JOIN clients c ON c.id = p.client_id
         JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
         WHERE p.status != 'cancelled'
-        GROUP BY p.id, p.name, c.name
+        GROUP BY p.id, p.name, p.status, p.created_by, c.name, c.created_by
         ORDER BY p.updated_at DESC, p.id DESC
         LIMIT {$limit}
     ");
@@ -72,7 +91,12 @@ function fetchSalesProjectChecklists(mysqli|PgsqlMysqliCompatConnection $conn, i
         $projects[$projectId] = [
             'id' => $projectId,
             'project_name' => (string) ($project['project_name'] ?? 'Project'),
+            'project_status' => (string) ($project['project_status'] ?? ''),
+            'project_created_by' => (int) ($project['project_created_by'] ?? 0),
             'client_name' => (string) ($project['client_name'] ?? 'Client'),
+            'client_created_by' => (int) ($project['client_created_by'] ?? 0),
+            'repository_id' => (int) ($project['repository_id'] ?? 0),
+            'repository_branch_name' => (string) (($project['repository_branch_name'] ?? '') ?: 'main'),
             'total_features' => $totalFeatures,
             'merged_features' => $mergedFeatures,
             'progress' => projectProgressPercent($totalFeatures, $mergedFeatures),

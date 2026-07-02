@@ -1108,6 +1108,28 @@ include '../../includes/navbar.php';
     background: #10b981;
 }
 
+.release-download-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    margin-top: 0.55rem;
+    padding: 0.42rem 0.65rem;
+    border-radius: 8px;
+    background: rgba(31, 99, 146, 0.1);
+    border: 1px solid rgba(31, 99, 146, 0.18);
+    color: var(--theme-primary);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.release-download-btn:hover {
+    background: var(--theme-primary);
+    color: #fff;
+}
+
 .release-section-title {
     margin: 0.75rem 0 0.45rem;
     color: var(--gray-600);
@@ -1363,6 +1385,14 @@ body.dark-mode .release-progress-track {
     background: rgba(157, 182, 207, 0.18);
 }
 
+html[data-theme="dark"] .release-download-btn,
+body[data-theme="dark"] .release-download-btn,
+body.dark-mode .release-download-btn {
+    background: rgba(31, 99, 146, 0.14);
+    border-color: rgba(31, 99, 146, 0.3);
+    color: #bfe6ff;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .stats-grid {
@@ -1405,6 +1435,10 @@ body.dark-mode .release-progress-track {
         width: 100%;
         min-width: 0;
         text-align: left;
+    }
+
+    .release-download-btn {
+        width: 100%;
     }
 
     .release-feature {
@@ -1533,6 +1567,24 @@ body.dark-mode .release-progress-track {
                                             <div class="release-progress-track">
                                                 <div class="release-progress-bar" style="width: <?php echo (int) $projectChecklist['progress']; ?>%;"></div>
                                             </div>
+                                            <?php
+                                            $canDownloadChecklistRepository = (string) ($projectChecklist['project_status'] ?? '') === 'completed'
+                                                && (int) ($projectChecklist['repository_id'] ?? 0) > 0
+                                                && (
+                                                    (int) ($projectChecklist['project_created_by'] ?? 0) === $currentUserId
+                                                    || (int) ($projectChecklist['client_created_by'] ?? 0) === $currentUserId
+                                                );
+                                            ?>
+                                            <?php if ($canDownloadChecklistRepository): ?>
+                                                <a
+                                                    class="release-download-btn"
+                                                    href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . (int) $projectChecklist['repository_id']); ?>"
+                                                    title="Download <?php echo htmlspecialchars((string) (($projectChecklist['repository_branch_name'] ?? '') ?: 'main')); ?> branch code"
+                                                >
+                                                    <i class="fas fa-download"></i>
+                                                    Main Branch
+                                                </a>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
 
