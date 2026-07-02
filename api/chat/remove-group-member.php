@@ -3,6 +3,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/chat.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -31,8 +32,14 @@ if ($memberId === $currentUserId) {
 try {
     $conn = getConnection();
 
-    $groupStmt = $conn->prepare('SELECT created_by FROM chat_groups WHERE id = ? LIMIT 1');
-    $groupStmt->bind_param('i', $groupId);
+    $groupStmt = $conn->prepare(
+        'SELECT g.created_by, u.full_name AS member_name
+         FROM chat_groups g
+         LEFT JOIN users u ON u.id = ?
+         WHERE g.id = ?
+         LIMIT 1'
+    );
+    $groupStmt->bind_param('ii', $memberId, $groupId);
     $groupStmt->execute();
     $groupResult = $groupStmt->get_result();
     $group = $groupResult ? $groupResult->fetch_assoc() : null;
@@ -68,14 +75,12 @@ try {
         exit();
     }
 
-    createNotification(
-        $memberId,
-        'Removed from chat group',
-        $user['full_name'] . ' removed you from a chat group.',
-        'group',
-        'chat_groups',
+    $removedMemberName = trim((string) ($group['member_name'] ?? '')) ?: 'a member';
+    createChatGroupSystemMessage(
+        $conn,
+        $currentUserId,
         $groupId,
-        BASE_URL . 'profile.php'
+        (string) $user['full_name'] . ' removed ' . $removedMemberName . ' from the group.'
     );
 
     logActivity($currentUserId, 'remove_chat_group_member', 'chat_group_members', $groupId, null, [

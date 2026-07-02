@@ -676,8 +676,9 @@ function startChatPolling() {
 
     chatPollInterval = setInterval(function () {
         const isChatVisible = $('#chat-widget').hasClass('chat-widget-open') && !document.hidden;
+        const isThreadVisible = isChatVisible && !$('#chatThreadView').hasClass('d-none');
 
-        if (isChatVisible && (currentChatUser || currentChatGroup)) {
+        if (isThreadVisible && (currentChatUser || currentChatGroup)) {
             loadChatMessages();
         } else {
             loadConversationData();
@@ -716,6 +717,18 @@ function renderChatMessages(messages) {
     let html = '';
     messages.forEach(function (message) {
         const time = formatMessageTime(message.created_at);
+
+        if (message.message_type === 'notification') {
+            html += `
+                <div class="message system">
+                    <i class="fas fa-users"></i>
+                    <span>${escapeHtml(message.message)}</span>
+                    <small>${escapeHtml(time)}</small>
+                </div>
+            `;
+            return;
+        }
+
         const mineClass = message.is_mine ? 'sent' : 'received';
         const sender = message.is_mine ? 'You' : escapeHtml(message.sender_name || 'User');
 
@@ -762,7 +775,6 @@ function sendMessage() {
             if (response.success) {
                 input.val('');
                 loadChatMessages();
-                loadNotifications();
                 loadConversationData();
             } else {
                 showToast('Chat', response.error || 'Unable to send message.', 'error');

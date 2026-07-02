@@ -2455,6 +2455,28 @@ body {
     border-bottom-left-radius: 6px;
 }
 
+.message.system {
+    width: fit-content;
+    max-width: 92%;
+    margin: 4px auto 12px;
+    padding: 7px 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid rgba(18, 80, 127, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.72);
+    color: #61778b;
+    font-size: 0.74rem;
+    text-align: center;
+}
+
+.message.system small {
+    opacity: 0.72;
+    white-space: nowrap;
+}
+
 .message .text-muted {
     color: inherit !important;
     opacity: 0.72;

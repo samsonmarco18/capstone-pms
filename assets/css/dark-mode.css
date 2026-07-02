@@ -651,6 +651,14 @@ body.dark-mode .message.received {
     color: #d8e6f3;
 }
 
+html[data-theme="dark"] .message.system,
+body[data-theme="dark"] .message.system,
+body.dark-mode .message.system {
+    background: rgba(14, 34, 52, 0.92);
+    border-color: rgba(138, 210, 255, 0.14);
+    color: #9eb4c8;
+}
+
 html[data-theme="dark"] .message .text-muted,
 body[data-theme="dark"] .message .text-muted,
 body.dark-mode .message .text-muted {

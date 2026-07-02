@@ -35,7 +35,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_notification']
     exit();
 }
 
-$stmt = $conn->prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC');
+$stmt = $conn->prepare(
+    "SELECT *
+     FROM notifications
+     WHERE user_id = ?
+       AND (notification_type IS NULL OR notification_type NOT IN ('message', 'group'))
+     ORDER BY created_at DESC"
+);
 $stmt->bind_param('i', $user['id']);
 $stmt->execute();
 $notifications = [];
