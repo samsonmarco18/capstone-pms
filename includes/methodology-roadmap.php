@@ -451,8 +451,7 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
         SELECT t.id, t.project_id, u.department AS developer_department
         FROM tasks t
         LEFT JOIN users u ON u.id = t.assigned_to
-        WHERE t.id = {$taskId}
-          AND t.assigned_to = {$developerId}
+        WHERE t.id = {$taskId} AND t.assigned_to = {$developerId}
         LIMIT 1
     ")->fetch_assoc();
     if (!$task) {
@@ -476,7 +475,7 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
     }
 
     $roadmapTask = $conn->query("
-        SELECT mt.start_date AS task_start, mt.end_date AS task_end, mt.assigned_developer_id,
+        SELECT mt.start_date AS task_start, mt.end_date AS task_end, mt.assigned_developer_id, mt.department,
                mp.id AS phase_id, mp.sequence_no AS phase_sequence,
                mp.name AS phase_name, mp.start_date AS phase_start, mp.end_date AS phase_end
         FROM methodology_tasks mt
@@ -514,6 +513,16 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
     $assignedDeveloperId = (int) ($roadmapTask['assigned_developer_id'] ?? 0);
     if ($assignedDeveloperId > 0 && $assignedDeveloperId !== $developerId) {
         return 'This roadmap task is assigned to another developer in the methodology plan.';
+    }
+
+    $roadmapDepartment = (string) ($roadmapTask['department'] ?? '');
+    $developerDepartment = (string) ($task['developer_department'] ?? '');
+    $department = function_exists('projectWorkflowDepartmentLabel')
+        ? projectWorkflowDepartmentLabel($roadmapDepartment !== '' ? $roadmapDepartment : $developerDepartment)
+        : ($roadmapDepartment !== '' ? $roadmapDepartment : $developerDepartment);
+    $canStartAfterPreviousPhases = in_array($department, ['Frontend', 'Backend'], true);
+    if ($canStartAfterPreviousPhases) {
+        return null;
     }
 
     $today = new DateTimeImmutable('today');

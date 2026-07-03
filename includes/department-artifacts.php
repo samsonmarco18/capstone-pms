@@ -260,9 +260,10 @@ function departmentArtifactFetchForTask(mysqli|PgsqlMysqliCompatConnection $conn
     departmentArtifactEnsureSchema($conn);
 
     $stmt = $conn->prepare(
-        'SELECT tda.*, u.full_name AS user_name
+        'SELECT tda.*, u.full_name AS user_name, source_task.title AS source_task_title
          FROM task_department_artifacts tda
          LEFT JOIN users u ON u.id = tda.user_id
+         LEFT JOIN tasks source_task ON source_task.id = tda.task_id
          WHERE tda.task_id = ?
          ORDER BY tda.created_at DESC, tda.id DESC'
     );
@@ -278,6 +279,68 @@ function departmentArtifactFetchForTask(mysqli|PgsqlMysqliCompatConnection $conn
     while ($row = $result->fetch_assoc()) {
         $filePath = trim((string) ($row['file_path'] ?? ''));
         $row['file_url'] = $filePath !== '' ? BASE_URL . ltrim($filePath, '/') : '';
+        $artifacts[] = $row;
+    }
+    $stmt->close();
+
+    return $artifacts;
+}
+
+function departmentArtifactFetchVisibleForTask(mysqli|PgsqlMysqliCompatConnection $conn, int $taskId): array
+{
+    departmentArtifactEnsureSchema($conn);
+
+    $taskStmt = $conn->prepare('SELECT project_id FROM tasks WHERE id = ? LIMIT 1');
+    if ($taskStmt === false) {
+        return departmentArtifactFetchForTask($conn, $taskId);
+    }
+
+    $taskStmt->bind_param('i', $taskId);
+    $taskStmt->execute();
+    $task = $taskStmt->get_result()->fetch_assoc();
+    $taskStmt->close();
+
+    $projectId = (int) ($task['project_id'] ?? 0);
+    if ($projectId <= 0) {
+        return departmentArtifactFetchForTask($conn, $taskId);
+    }
+
+    $stmt = $conn->prepare(
+        "SELECT tda.*, u.full_name AS user_name, source_task.title AS source_task_title, source_task.status AS source_task_status
+         FROM task_department_artifacts tda
+         LEFT JOIN users u ON u.id = tda.user_id
+         LEFT JOIN tasks source_task ON source_task.id = tda.task_id
+         WHERE tda.task_id = ?
+            OR (
+                tda.project_id = ?
+                AND tda.artifact_type = 'design_handoff'
+                AND source_task.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release', 'completed')
+            )
+         ORDER BY
+            CASE WHEN tda.task_id = ? THEN 0 ELSE 1 END,
+            tda.created_at DESC,
+            tda.id DESC"
+    );
+    if ($stmt === false) {
+        return departmentArtifactFetchForTask($conn, $taskId);
+    }
+
+    $stmt->bind_param('iii', $taskId, $projectId, $taskId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $artifacts = [];
+    $seen = [];
+    while ($row = $result->fetch_assoc()) {
+        $artifactId = (int) ($row['id'] ?? 0);
+        if ($artifactId > 0 && isset($seen[$artifactId])) {
+            continue;
+        }
+        $seen[$artifactId] = true;
+        $filePath = trim((string) ($row['file_path'] ?? ''));
+        $row['file_url'] = $filePath !== '' ? BASE_URL . ltrim($filePath, '/') : '';
+        $row['is_project_design_reference'] = (int) ($row['task_id'] ?? 0) !== $taskId
+            && (string) ($row['artifact_type'] ?? '') === 'design_handoff';
         $artifacts[] = $row;
     }
     $stmt->close();
