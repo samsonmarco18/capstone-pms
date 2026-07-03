@@ -1339,6 +1339,20 @@ include '../../includes/navbar.php';
     margin-top: 0.5rem;
 }
 
+.task-roadmap-link {
+    align-items: center;
+    color: var(--theme-primary);
+    display: inline-flex;
+    font-weight: 700;
+    gap: .3rem;
+    text-decoration: none;
+}
+
+.task-roadmap-link:hover {
+    color: var(--theme-dark);
+    text-decoration: underline;
+}
+
 .task-card-actions {
     display: flex;
     align-items: center;
@@ -2042,7 +2056,7 @@ include '../../includes/navbar.php';
                             $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                             $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
                         ?>
-                    <div class="task-card">
+                    <div class="task-card is-clickable" role="button" tabindex="0" aria-label="View details for <?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); viewTaskDetails(<?php echo (int) $task['id']; ?>); }">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                             <div>
                                 <div class="d-flex align-items-center gap-2 mb-1">
@@ -2057,11 +2071,19 @@ include '../../includes/navbar.php';
                                     <?php if (!empty($task['sales_estimate_choice']) && !empty($task['sales_estimate_days'])): ?>
                                         <span class="estimation-badge"><i class="fas fa-flag-checkered"></i> Sales picked <?php echo ucfirst($task['sales_estimate_choice']); ?>: <?php echo (int) $task['sales_estimate_days']; ?> days</span>
                                     <?php endif; ?>
+                                    <a class="task-roadmap-link" href="../roadmap/methodology.php?project_id=<?php echo (int) $task['project_id']; ?>" onclick="event.stopPropagation();">
+                                        <i class="fas fa-route"></i> View Roadmap
+                                    </a>
                                 </div>
                             </div>
-                            <button class="btn-primary-modern" onclick="openAssignDeveloperModal(<?php echo $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'), '<?php echo htmlspecialchars(sulTaskAllocationAssignmentDeadlineValue($task['deadline'] ?? null, $task['department_roadmap_start'] ?? null, $task['department_roadmap_end'] ?? null), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(sulTaskAllocationDateInputValue($task['department_roadmap_start'] ?? null), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(sulTaskAllocationDateInputValue($task['department_roadmap_end'] ?? null), ENT_QUOTES); ?>')">
-                                <i class="fas fa-user-plus"></i> Assign to Developer
-                            </button>
+                            <div class="task-card-actions" onclick="event.stopPropagation();">
+                                <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
+                                    <i class="fas fa-circle-info"></i> View Info
+                                </button>
+                                <button class="btn-primary-modern" type="button" onclick="openAssignDeveloperModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'), '<?php echo htmlspecialchars(sulTaskAllocationAssignmentDeadlineValue($task['deadline'] ?? null, $task['department_roadmap_start'] ?? null, $task['department_roadmap_end'] ?? null), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(sulTaskAllocationDateInputValue($task['department_roadmap_start'] ?? null), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(sulTaskAllocationDateInputValue($task['department_roadmap_end'] ?? null), ENT_QUOTES); ?>')">
+                                    <i class="fas fa-user-plus"></i> Assign to Developer
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <?php endwhile; ?>
@@ -2496,13 +2518,16 @@ function viewTaskDetails(taskId) {
                     <div class="col-md-4">
                         <div class="p-3 bg-light rounded-3">
                             <p><strong>Assigned To:</strong> ${task.assigned_to_name || 'Unassigned'}</p>
-                            ${task.estimated_days_min ? `
-                                <p><strong>Estimation:</strong><br>
-                                Min: ${task.estimated_days_min} days<br>
-                                Likely: ${task.estimated_days_likely} days<br>
-                                Max: ${task.estimated_days_max} days</p>
-                            ` : ''}
-                        </div>
+                             ${task.estimated_days_min ? `
+                                 <p><strong>Estimation:</strong><br>
+                                 Min: ${task.estimated_days_min} days<br>
+                                 Likely: ${task.estimated_days_likely} days<br>
+                                 Max: ${task.estimated_days_max} days</p>
+                             ` : ''}
+                             <a class="btn-outline-modern d-inline-flex align-items-center gap-2 text-decoration-none" href="../roadmap/methodology.php?project_id=${Number(task.project_id || 0)}">
+                                 <i class="fas fa-route"></i> View Project Roadmap
+                             </a>
+                         </div>
                     </div>
                 </div>
             `;

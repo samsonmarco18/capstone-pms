@@ -428,10 +428,35 @@ a.progress-step:hover {
     border-radius: 16px;
     padding: 1rem;
     margin-bottom: 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    color: #213f61;
+    line-height: 1.55;
 }
 
 .alert-info-modern i {
     color: #2563eb;
+    flex: 0 0 auto;
+    margin-top: 0.2rem;
+}
+
+.submission-confirmation {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    padding: 0.25rem 0;
+}
+
+.submission-confirmation .form-check-input {
+    flex: 0 0 auto;
+    margin: 0.25rem 0 0;
+}
+
+.submission-confirmation .form-check-label {
+    color: #213f61;
+    line-height: 1.5;
 }
 
 /* Button */
@@ -703,9 +728,9 @@ a.progress-step:hover {
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
-                    <div class="alert-info-modern"><i class="fas fa-info-circle me-2"></i>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</div>
-                    <form method="POST" id="summaryForm">
-                        <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="confirmCheck" name="confirmCheck" value="1" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
+                    <div class="alert-info-modern"><i class="fas fa-info-circle"></i><span>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</span></div>
+                    <form method="POST" id="summaryForm" data-generic-draft-disabled="true">
+                        <div class="submission-confirmation"><input class="form-check-input" type="checkbox" id="confirmCheck" name="confirmCheck" value="1" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
                         <button type="submit" class="btn-submit" id="submitBtn" <?php echo $summaryReadyForSubmit ? 'disabled' : 'disabled title="Complete all required architect steps first"'; ?>><i class="fas fa-paper-plane"></i> Submit to SUL</button>
                     </form>
                 </div>

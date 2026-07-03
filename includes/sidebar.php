@@ -53,6 +53,7 @@ $menuItems = [
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
         ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Task Allocation', 'url' => '/modules/sul/task-allocation.php', 'icon' => 'tasks'],
+        ['label' => 'Roadmap Monitoring', 'url' => '/modules/roadmap/methodology.php', 'icon' => 'route'],
         ['label' => 'Resource Management', 'url' => '/modules/sul/resource-management.php', 'icon' => 'users-cog'],
         ['label' => 'Performance / Report', 'url' => '/modules/sul/performance-report.php', 'icon' => 'chart-bar'],
         ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
