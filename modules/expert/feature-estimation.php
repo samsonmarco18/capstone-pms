@@ -2,11 +2,10 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
-<<<<<<< HEAD
+
 require_once '../../includes/project-estimation.php';
-=======
+
 require_once '../../includes/project-workflow.php';
->>>>>>> 155d43bdd7a3a1ad37f5768088e935ab8bc4eb06
 requireRole('expert');
 
 $conn = getConnection();
