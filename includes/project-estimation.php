@@ -2,10 +2,22 @@
 declare(strict_types=1);
 
 const PROJECT_ESTIMATION_SALARIES = [
-    'Junior Developer' => 25000.0,
-    'Professional Developer' => 60000.0,
-    'Senior Developer' => 80000.0,
+    'Junior Dev' => 25000.0,
+    'Professional Dev' => 60000.0,
+    'Senior Dev' => 80000.0,
 ];
+
+function projectEstimationDeveloperLevel(string $value): string
+{
+    $normalized = strtolower(trim($value));
+
+    return match ($normalized) {
+        'junior developer', 'junior dev', 'junior' => 'Junior Dev',
+        'professional developer', 'professional dev', 'professional', 'mid developer', 'mid dev', 'mid-level developer' => 'Professional Dev',
+        'senior developer', 'senior dev', 'senior' => 'Senior Dev',
+        default => isset(PROJECT_ESTIMATION_SALARIES[$value]) ? $value : 'Professional Dev',
+    };
+}
 
 function projectEstimationEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
 {
@@ -154,20 +166,69 @@ function projectEstimationFetchContext(mysqli|PgsqlMysqliCompatConnection $conn,
     }
 
     $allocationRows = [];
-    $allocResult = $conn->query("
-        SELECT role, required_count, complexity_level
-        FROM developer_allocations
-        WHERE project_id = {$projectId}
-        ORDER BY FIELD(role, 'UI/UX', 'Frontend', 'Backend', 'Mobile', 'DevOps', 'Database', 'AI', 'Security', 'QA', 'Other Departments'), role ASC
-    ");
-    if ($allocResult) {
-        while ($row = $allocResult->fetch_assoc()) {
-            $label = projectEstimationDepartmentLabel((string) ($row['role'] ?? ''));
-            $allocationRows[$label] = [
-                'department' => $label,
-                'required_count' => (int) ($row['required_count'] ?? 0),
-                'complexity_level' => (string) ($row['complexity_level'] ?? 'medium'),
-            ];
+    if (dbTableExists($conn, 'methodology_task_departments')) {
+        $roadmapRequirementResult = $conn->query("
+            SELECT department, SUM(required_count) AS required_count
+            FROM methodology_task_departments
+            WHERE project_id = {$projectId}
+            GROUP BY department
+            ORDER BY department ASC
+        ");
+        if ($roadmapRequirementResult) {
+            while ($row = $roadmapRequirementResult->fetch_assoc()) {
+                $label = projectEstimationDepartmentLabel((string) ($row['department'] ?? ''));
+                $allocationRows[$label] = [
+                    'department' => $label,
+                    'required_count' => max(0, (int) ($row['required_count'] ?? 0)),
+                    'complexity_level' => 'medium',
+                    'source' => 'roadmap',
+                ];
+            }
+        }
+    }
+
+    if ($allocationRows === [] && dbTableExists($conn, 'methodology_tasks')) {
+        $roadmapTaskResult = $conn->query("
+            SELECT department, COUNT(*) AS required_count
+            FROM methodology_tasks
+            WHERE project_id = {$projectId}
+              AND COALESCE(department, '') != ''
+            GROUP BY department
+            ORDER BY department ASC
+        ");
+        if ($roadmapTaskResult) {
+            while ($row = $roadmapTaskResult->fetch_assoc()) {
+                $label = projectEstimationDepartmentLabel((string) ($row['department'] ?? ''));
+                $allocationRows[$label] = [
+                    'department' => $label,
+                    'required_count' => max(0, (int) ($row['required_count'] ?? 0)),
+                    'complexity_level' => 'medium',
+                    'source' => 'roadmap',
+                ];
+            }
+        }
+    }
+
+    if (dbTableExists($conn, 'developer_allocations')) {
+        $allocResult = $conn->query("
+            SELECT role, required_count, complexity_level
+            FROM developer_allocations
+            WHERE project_id = {$projectId}
+            ORDER BY FIELD(role, 'UI/UX', 'Frontend', 'Backend', 'Mobile', 'DevOps', 'Database', 'AI', 'Security', 'QA', 'Other Departments'), role ASC
+        ");
+        if ($allocResult) {
+            while ($row = $allocResult->fetch_assoc()) {
+                $label = projectEstimationDepartmentLabel((string) ($row['role'] ?? ''));
+                if (isset($allocationRows[$label]) && (int) ($allocationRows[$label]['required_count'] ?? 0) > 0) {
+                    continue;
+                }
+                $allocationRows[$label] = [
+                    'department' => $label,
+                    'required_count' => (int) ($row['required_count'] ?? 0),
+                    'complexity_level' => (string) ($row['complexity_level'] ?? 'medium'),
+                    'source' => 'developer_allocation',
+                ];
+            }
         }
     }
 
@@ -220,10 +281,8 @@ function projectEstimationNormalizeRows(array $postedAllocations, array $allocat
 
         for ($i = 1; $i <= $required; $i++) {
             $entry = is_array($positions[$i] ?? null) ? $positions[$i] : [];
-            $developerType = (string) ($entry['developer_type'] ?? 'Professional Developer');
-            if (!isset(PROJECT_ESTIMATION_SALARIES[$developerType])) {
-                $developerType = 'Professional Developer';
-            }
+            $developerType = (string) ($entry['developer_type'] ?? 'Professional Dev');
+            $developerType = projectEstimationDeveloperLevel($developerType);
 
             $contribution = max(0.0, min(100.0, (float) ($entry['contribution'] ?? 100)));
             $monthlySalary = PROJECT_ESTIMATION_SALARIES[$developerType];
@@ -462,13 +521,12 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                     </div>
                                     <div class="estimation-scroll">
                                         <table class="estimate-table">
-                                            <thead><tr><th>Position</th><th>Developer Level</th><th>Monthly Salary</th><th>Contribution</th></tr></thead>
+                                            <thead><tr><th>Developer Level</th><th>Monthly Salary</th><th>Contribution</th></tr></thead>
                                             <tbody>
                                             <?php if ($required <= 0): ?>
-                                                <tr><td colspan="4" class="text-muted">This department is included with no required headcount.</td></tr>
-                                            <?php else: for ($i = 1; $i <= $required; $i++): $saved = $savedRows[$department][$i] ?? []; $savedType = (string) ($saved['developer_type'] ?? 'Professional Developer'); $savedContribution = (float) ($saved['contribution_percent'] ?? 100); ?>
+                                                <tr><td colspan="3" class="text-muted">This department is included with no required headcount.</td></tr>
+                                            <?php else: for ($i = 1; $i <= $required; $i++): $saved = $savedRows[$department][$i] ?? []; $savedType = projectEstimationDeveloperLevel((string) ($saved['developer_type'] ?? 'Professional Dev')); $savedContribution = (float) ($saved['contribution_percent'] ?? 100); ?>
                                                 <tr class="allocation-input-row" data-department="<?php echo htmlspecialchars($department); ?>">
-                                                    <td><?php echo htmlspecialchars($department); ?> #<?php echo $i; ?></td>
                                                     <td>
                                                         <select class="form-control-custom developer-type-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][developer_type]">
                                                             <?php foreach (PROJECT_ESTIMATION_SALARIES as $type => $salary): ?>
@@ -477,7 +535,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                                         </select>
                                                     </td>
                                                     <td class="monthly-salary-cell"></td>
-                                                    <td><input type="number" class="form-control-custom contribution-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][contribution]" min="0" max="100" step="1" value="<?php echo htmlspecialchars((string) $savedContribution); ?>"></td>
+                                                    <td><input type="number" class="form-control-custom contribution-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][contribution]" min="0" max="100" step="1" value="<?php echo htmlspecialchars((string) $savedContribution); ?>" aria-label="<?php echo htmlspecialchars($department); ?> contribution percent"></td>
                                                 </tr>
                                             <?php endfor; endif; ?>
                                             </tbody>
@@ -549,7 +607,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             document.querySelectorAll('.allocation-input-row').forEach((row) => {
                 const typeSelect = row.querySelector('.developer-type-input');
                 const contributionInput = row.querySelector('.contribution-input');
-                const type = typeSelect?.value || 'Professional Developer';
+                const type = typeSelect?.value || 'Professional Dev';
                 const salary = Number(salaries[type] || 0);
                 const contribution = Math.max(0, Math.min(100, Number(contributionInput?.value || 0)));
                 const contributionSalary = salary * (contribution / 100);
