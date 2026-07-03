@@ -28,6 +28,33 @@ function sulTaskAllocationFormatDeadline(?string $deadline): string
     return $timestamp ? date('M d, Y', $timestamp) : 'N/A';
 }
 
+function sulTaskAllocationDateInputValue(?string $deadline): string
+{
+    $timestamp = $deadline ? strtotime($deadline) : false;
+    return $timestamp ? date('Y-m-d', $timestamp) : '';
+}
+
+function sulTaskAllocationAssignmentDeadlineValue(?string $deadline, ?string $roadmapStart, ?string $roadmapEnd): string
+{
+    $deadlineValue = sulTaskAllocationDateInputValue($deadline);
+    $startValue = sulTaskAllocationDateInputValue($roadmapStart);
+    $endValue = sulTaskAllocationDateInputValue($roadmapEnd);
+
+    if ($deadlineValue === '') {
+        return $endValue !== '' ? $endValue : $startValue;
+    }
+
+    if ($startValue !== '' && $deadlineValue < $startValue) {
+        return $endValue !== '' ? $endValue : $startValue;
+    }
+
+    if ($endValue !== '' && $deadlineValue > $endValue) {
+        return $endValue;
+    }
+
+    return $deadlineValue;
+}
+
 function sulTaskAllocationDaysLeft(?string $deadline): ?int
 {
     $timestamp = $deadline ? strtotime($deadline) : false;
@@ -85,10 +112,17 @@ if (!$hasSalesChoice) {
 
 $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 $sulDepartment = trim((string) ($user['department'] ?? ''));
+$sulDepartmentLabel = projectWorkflowDepartmentLabel($sulDepartment);
 $sulDepartmentEscaped = $conn->real_escape_string($sulDepartment);
 $sulMissingDepartment = $sulDepartment === '';
+$isExpertDepartmentSul = $sulDepartmentLabel === 'Expert Department';
+$canManageExpertWorkflow = !$sulMissingDepartment && $isExpertDepartmentSul;
+$canManageDeveloperWorkflow = !$sulMissingDepartment && !$isExpertDepartmentSul;
 $sulUserDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : ' AND 1 = 0';
 $sulProjectFilter = sulTaskAllocationProjectFilter($conn, 'p', $sulDepartment);
+$sulTaskDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
+$sulCurrentRoadmapTaskFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowCurrentRoadmapTaskClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
+$sulRoadmapTaskDepartmentFilter = $sulDepartment !== '' ? projectWorkflowMethodologyTaskDepartmentClause($conn, 'mt_department_scope', $sulDepartment) : '1 = 0';
 
 if ($sulMissingDepartment) {
     $_SESSION['error'] = 'Your SUL account must be assigned to a department before managing task allocation.';
@@ -143,6 +177,10 @@ if($projectId) {
         WHERE p.id = $projectId
           AND {$sulProjectFilter}
     ")->fetch_assoc();
+}
+
+if ($projectId && $project) {
+    projectWorkflowSyncRoadmap($conn, $projectId);
 }
 
 $ganttProjectData = null;
@@ -302,17 +340,35 @@ $projectEstimationReviews = $conn->query("
 // Get tasks ready for developer assignment (approved, waiting for developer)
 $readyForDevTasks = $conn->query("
     SELECT t.*, u.full_name as expert_name, p.name as project_name,
-           fe.min_days, fe.likely_days, fe.max_days
+           fe.min_days, fe.likely_days, fe.max_days,
+           (
+               SELECT mt_department_scope.start_date
+               FROM methodology_tasks mt_department_scope
+               WHERE mt_department_scope.project_id = t.project_id
+                 AND mt_department_scope.task_id = t.id
+                 AND {$sulRoadmapTaskDepartmentFilter}
+               ORDER BY mt_department_scope.start_date ASC, mt_department_scope.id ASC
+               LIMIT 1
+           ) AS department_roadmap_start,
+           (
+               SELECT mt_department_scope.end_date
+               FROM methodology_tasks mt_department_scope
+               WHERE mt_department_scope.project_id = t.project_id
+                 AND mt_department_scope.task_id = t.id
+                 AND {$sulRoadmapTaskDepartmentFilter}
+               ORDER BY mt_department_scope.start_date ASC, mt_department_scope.id ASC
+               LIMIT 1
+           ) AS department_roadmap_end
     FROM tasks t
-    JOIN users u ON t.assigned_to = u.id
+    LEFT JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
     JOIN feature_estimations fe ON t.id = fe.task_id AND fe.status = 'completed'
-    WHERE t.status = 'todo' 
-      AND t.assigned_to IS NOT NULL 
-      AND t.assigned_to != 0
-      AND u.role = 'expert'
-      {$sulUserDepartmentFilter}
+    WHERE (
+          (t.status = 'todo' AND (t.assigned_to IS NULL OR u.role = 'expert'))
+          OR (t.status = 'completed' AND t.architect_reviewed_at IS NULL AND t.merged_at IS NULL)
+      )
       AND {$sulProjectFilter}
+      {$sulCurrentRoadmapTaskFilter}
       AND (SELECT COUNT(*) FROM feature_estimations fe2 WHERE fe2.task_id = t.id AND fe2.status = 'completed') > 0" . ($hasSalesApproval ? " AND t.sales_approved = 1" : "") . ($hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "") . "
     ORDER BY t.deadline ASC
 ");
@@ -356,6 +412,7 @@ $completedTasks = $conn->query("
     LEFT JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
     WHERE t.status = 'completed'
+      AND (t.architect_reviewed_at IS NOT NULL OR t.merged_at IS NOT NULL)
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
     ORDER BY t.completed_at DESC
@@ -403,6 +460,12 @@ $developers = $conn->query("
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Assign task to expert
     if (isset($_POST['assign_to_expert'])) {
+        if (!$canManageExpertWorkflow) {
+            $_SESSION['error'] = "Only the Expert Department SUL can assign tasks to experts.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $expertId = (int) ($_POST['expert_id'] ?? 0);
 
@@ -465,6 +528,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Assign project to expert (bulk features)
     if (isset($_POST['assign_project_to_expert'])) {
+        if (!$canManageExpertWorkflow) {
+            $_SESSION['error'] = "Only the Expert Department SUL can assign projects to experts.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $projectId = (int) ($_POST['project_id'] ?? 0);
         $expertId = (int) ($_POST['expert_id'] ?? 0);
         if ($projectId <= 0 || $expertId <= 0) {
@@ -531,6 +600,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Assign task to developer (after estimation approved)
     if (isset($_POST['assign_to_developer'])) {
+        if (!$canManageDeveloperWorkflow) {
+            $_SESSION['error'] = "Developer assignment is available only for department SULs outside Expert Department.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $developerId = (int) ($_POST['developer_id'] ?? 0);
         $deadline = trim((string) ($_POST['deadline'] ?? ''));
@@ -566,12 +641,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             SELECT t.id, t.project_id
             FROM tasks t
             JOIN projects p ON p.id = t.project_id
+            LEFT JOIN users current_assignee ON current_assignee.id = t.assigned_to
             WHERE t.id = ?
-              AND t.status = 'todo'
-              AND t.assigned_to IS NOT NULL
-              AND t.assigned_to != 0
+              AND (
+                  (t.status = 'todo' AND (t.assigned_to IS NULL OR current_assignee.role = 'expert'))
+                  OR (t.status = 'completed' AND t.architect_reviewed_at IS NULL AND t.merged_at IS NULL)
+              )
               AND {$sulProjectFilter}
+              {$sulCurrentRoadmapTaskFilter}
               {$approvalSql}{$choiceSql}
+              AND EXISTS (
+                  SELECT 1
+                  FROM feature_estimations fe_ready
+                  WHERE fe_ready.task_id = t.id
+                    AND fe_ready.status = 'completed'
+              )
         ");
         $taskCheck->bind_param("i", $taskId);
         $taskCheck->execute();
@@ -587,61 +671,64 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $assignmentProjectId = (int) ($validTaskRow['project_id'] ?? 0);
         $roadmapPhaseCount = (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$assignmentProjectId}")->fetch_assoc()['total'] ?? 0));
+        $currentRoadmapTask = null;
         if ($roadmapPhaseCount > 0) {
-            $roadmapTask = $conn->query("
-                SELECT start_date, end_date
-                FROM methodology_tasks
-                WHERE project_id = {$assignmentProjectId}
-                  AND task_id = {$taskId}
-                LIMIT 1
-            ")->fetch_assoc();
-
-            if (!$roadmapTask) {
-                $_SESSION['error'] = "This task is not scheduled in the methodology roadmap yet.";
+            $currentRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $assignmentProjectId, $taskId, $sulDepartment);
+            if (!$currentRoadmapTask) {
+                $_SESSION['error'] = "This task is waiting for another roadmap department before your SUL allocation can start.";
                 header("Location: task-allocation.php");
                 exit();
             }
 
-            $previousOpenCount = (int) (($conn->query("
-                SELECT COUNT(*) AS total
-                FROM methodology_phases previous_phase
-                INNER JOIN methodology_phases current_phase ON current_phase.project_id = previous_phase.project_id
-                INNER JOIN methodology_tasks current_task ON current_task.phase_id = current_phase.id
-                WHERE current_task.task_id = {$taskId}
-                  AND previous_phase.project_id = {$assignmentProjectId}
-                  AND COALESCE(previous_phase.sequence_no, previous_phase.id) < COALESCE(current_phase.sequence_no, current_phase.id)
-                  AND previous_phase.status != 'completed'
-            ")->fetch_assoc()['total'] ?? 0));
-            if ($previousOpenCount > 0) {
-                $_SESSION['error'] = "Waiting for Previous Phase. This department can view the roadmap but cannot start work yet.";
+            if ((int) ($currentRoadmapTask['assigned_developer_id'] ?? 0) > 0) {
+                $_SESSION['error'] = "This roadmap task already has a developer assigned.";
                 header("Location: task-allocation.php");
                 exit();
             }
 
-            $roadmapStart = DateTime::createFromFormat('Y-m-d', (string) ($roadmapTask['start_date'] ?? ''));
-            $roadmapEnd = DateTime::createFromFormat('Y-m-d', (string) ($roadmapTask['end_date'] ?? ''));
+            $roadmapStart = DateTime::createFromFormat('Y-m-d', (string) ($currentRoadmapTask['start_date'] ?? ''));
+            $roadmapEnd = DateTime::createFromFormat('Y-m-d', (string) ($currentRoadmapTask['end_date'] ?? ''));
             if (($roadmapStart && $deadlineDate < $roadmapStart) || ($roadmapEnd && $deadlineDate > $roadmapEnd)) {
                 $_SESSION['error'] = "The developer deadline must stay inside the methodology task window: "
-                    . date('M d, Y', strtotime((string) $roadmapTask['start_date']))
+                    . date('M d, Y', strtotime((string) $currentRoadmapTask['start_date']))
                     . " to "
-                    . date('M d, Y', strtotime((string) $roadmapTask['end_date']))
+                    . date('M d, Y', strtotime((string) $currentRoadmapTask['end_date']))
                     . ".";
                 header("Location: task-allocation.php");
                 exit();
             }
         }
         
-        $stmt = $conn->prepare("UPDATE tasks SET assigned_to = ?, status = 'todo', deadline = ? WHERE id = ?");
-        $stmt->bind_param("isi", $developerId, $deadline, $taskId);
+        $stmt = $conn->prepare("
+            UPDATE tasks
+            SET assigned_to = ?,
+                assigned_by = ?,
+                status = 'todo',
+                deadline = ?,
+                completed_at = NULL,
+                pr_submitted_at = NULL,
+                sul_reviewed_by = NULL,
+                sul_reviewed_at = NULL
+            WHERE id = ?
+        ");
+        $stmt->bind_param("iisi", $developerId, $userId, $deadline, $taskId);
         
         if ($stmt->execute()) {
-            $syncRoadmapStmt = $conn->prepare("UPDATE methodology_tasks SET assigned_developer_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE task_id = ?");
-            if ($syncRoadmapStmt) {
-                $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $taskId);
-                $syncRoadmapStmt->execute();
-                $syncRoadmapStmt->close();
+            if ($currentRoadmapTask) {
+                $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
+                $syncRoadmapStmt = $conn->prepare("
+                    UPDATE methodology_tasks
+                    SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ");
+                if ($syncRoadmapStmt) {
+                    $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $currentRoadmapTaskId);
+                    $syncRoadmapStmt->execute();
+                    $syncRoadmapStmt->close();
+                }
             }
 
+            projectWorkflowSyncRoadmap($conn, $assignmentProjectId);
             $taskDetails = $conn->query("SELECT title, deadline FROM tasks WHERE id = $taskId")->fetch_assoc();
             
             createNotification(
@@ -664,6 +751,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Review developer Pull Request and move to QA or back to Developer
     if (isset($_POST['sul_approve_pr']) || isset($_POST['sul_request_revision'])) {
+        if (!$canManageDeveloperWorkflow) {
+            $_SESSION['error'] = "Developer code review is available only for department SULs outside Expert Department.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $reviewComment = trim((string) ($_POST['review_comment'] ?? ''));
         $isApproval = isset($_POST['sul_approve_pr']);
@@ -697,28 +790,85 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if ($isApproval) {
             $projectForRouting = (int) ($reviewTask['project_id'] ?? 0);
-            $nextRoadmapTask = $conn->query("
-                SELECT next_mt.department, next_mt.task_id, next_t.title
-                FROM methodology_tasks current_mt
-                INNER JOIN methodology_phases current_phase ON current_phase.id = current_mt.phase_id
-                INNER JOIN methodology_phases next_phase ON next_phase.project_id = current_phase.project_id
-                INNER JOIN methodology_tasks next_mt ON next_mt.phase_id = next_phase.id
-                LEFT JOIN tasks next_t ON next_t.id = next_mt.task_id
-                WHERE current_mt.task_id = {$taskId}
-                  AND current_mt.project_id = {$projectForRouting}
-                  AND COALESCE(next_phase.sequence_no, next_phase.id) > COALESCE(current_phase.sequence_no, current_phase.id)
-                ORDER BY COALESCE(next_phase.sequence_no, next_phase.id) ASC, next_mt.id ASC
-                LIMIT 1
-            ")->fetch_assoc();
-            $nextDepartment = projectWorkflowDepartmentLabel($nextRoadmapTask['department'] ?? '');
-            $routeToQa = $nextDepartment === 'QA' || !$nextRoadmapTask;
-            $approvedStatus = $routeToQa ? 'qa_testing' : 'completed';
+            $roadmapPhaseCount = (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$projectForRouting}")->fetch_assoc()['total'] ?? 0));
+            $currentRoadmapTask = $roadmapPhaseCount > 0
+                ? projectWorkflowCurrentRoadmapTask($conn, $projectForRouting, $taskId, $sulDepartment)
+                : null;
 
-            $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = CASE WHEN ? = 'completed' THEN NOW() ELSE completed_at END, sul_reviewed_by = ?, sul_reviewed_at = NOW() WHERE id = ?");
-            $stmt->bind_param("ssii", $approvedStatus, $approvedStatus, $user['id'], $taskId);
+            if ($roadmapPhaseCount > 0 && !$currentRoadmapTask) {
+                $_SESSION['error'] = "This work item is not the current unlocked roadmap task for your department.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+
+            $nextRoadmapTask = $currentRoadmapTask
+                ? projectWorkflowNextRoadmapTask($conn, $projectForRouting, $taskId, (int) ($currentRoadmapTask['id'] ?? 0))
+                : null;
+            $nextDepartment = projectWorkflowDepartmentLabel($nextRoadmapTask['department_label'] ?? ($nextRoadmapTask['department'] ?? ''));
+            $routeToQa = $nextDepartment === 'QA' || !$nextRoadmapTask;
+            $approvedStatus = $routeToQa ? 'qa_testing' : 'todo';
+
+            if ($currentRoadmapTask) {
+                $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
+                $completeRoadmapStmt = $conn->prepare("
+                    UPDATE methodology_tasks
+                    SET status = 'completed', updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ");
+                if ($completeRoadmapStmt) {
+                    $completeRoadmapStmt->bind_param("ii", $userId, $currentRoadmapTaskId);
+                    $completeRoadmapStmt->execute();
+                    $completeRoadmapStmt->close();
+                }
+            }
+
+            if ($routeToQa) {
+                $stmt = $conn->prepare("
+                    UPDATE tasks
+                    SET status = 'qa_testing',
+                        completed_at = NULL,
+                        sul_reviewed_by = ?,
+                        sul_reviewed_at = NOW()
+                    WHERE id = ?
+                ");
+                $stmt->bind_param("ii", $userId, $taskId);
+            } else {
+                $nextRoadmapTaskId = (int) ($nextRoadmapTask['id'] ?? 0);
+                if ($nextRoadmapTaskId > 0) {
+                    $resetNextRoadmapStmt = $conn->prepare("
+                        UPDATE methodology_tasks
+                        SET status = 'planned', assigned_developer_id = NULL, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    ");
+                    if ($resetNextRoadmapStmt) {
+                        $resetNextRoadmapStmt->bind_param("i", $nextRoadmapTaskId);
+                        $resetNextRoadmapStmt->execute();
+                        $resetNextRoadmapStmt->close();
+                    }
+                }
+
+                $stmt = $conn->prepare("
+                    UPDATE tasks
+                    SET status = 'todo',
+                        assigned_to = NULL,
+                        assigned_by = NULL,
+                        completed_at = NULL,
+                        pr_submitted_at = NULL,
+                        sul_reviewed_by = ?,
+                        sul_reviewed_at = NOW()
+                    WHERE id = ?
+                ");
+                $stmt->bind_param("ii", $userId, $taskId);
+            }
             if ($stmt->execute()) {
                 workflowLogStatusChange((int) $user['id'], $taskId, 'for_review', $approvedStatus, 'sul_approve_department_work', $reviewComment);
-                workflowAddTaskComment($conn, $taskId, (int) $user['id'], $reviewComment !== '' ? "SUL approved work: {$reviewComment}" : 'SUL approved this department work.');
+                $approvalComment = $reviewComment !== ''
+                    ? "SUL approved work: {$reviewComment}"
+                    : 'SUL approved this department work.';
+                if (!$routeToQa && $nextDepartment !== '') {
+                    $approvalComment .= ' Handoff sent to ' . $nextDepartment . '.';
+                }
+                workflowAddTaskComment($conn, $taskId, (int) $user['id'], $approvalComment);
                 projectWorkflowSyncRoadmap($conn, $projectForRouting);
 
                 if ($routeToQa) {
@@ -752,6 +902,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if ($stmt->execute()) {
                 workflowAddTaskComment($conn, $taskId, (int) $user['id'], 'SUL requested revision: ' . $reviewComment);
                 workflowLogStatusChange((int) $user['id'], $taskId, 'for_review', 'sul_revision', 'sul_request_pull_request_revision', $reviewComment);
+                projectWorkflowSyncRoadmap($conn, (int) ($reviewTask['project_id'] ?? 0));
                 workflowNotifyUser(
                     (int) $reviewTask['assigned_to'],
                     'PR Revision Requested: ' . $reviewTask['title'],
@@ -769,6 +920,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Send a completed task back to the developer for revision
     if (isset($_POST['revise_completed_task'])) {
+        if (!$canManageDeveloperWorkflow) {
+            $_SESSION['error'] = "Developer revision requests are available only for department SULs outside Expert Department.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $revisionReason = trim((string) ($_POST['revision_reason'] ?? ''));
 
@@ -779,7 +936,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $taskStmt = $conn->prepare("
-            SELECT id, title, assigned_to, architect_reviewed_at
+            SELECT t.id, t.title, t.assigned_to, t.project_id, t.architect_reviewed_at
             FROM tasks t
             JOIN projects p ON p.id = t.project_id
             JOIN users u ON u.id = t.assigned_to
@@ -807,6 +964,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->bind_param("i", $taskId);
 
         if ($stmt->execute()) {
+            projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
             createNotification(
                 (int) $task['assigned_to'],
                 "Task Revision Requested: " . $task['title'],
@@ -907,6 +1065,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Approve estimation and move to ready for dev
     if (isset($_POST['approve_estimation'])) {
+        if (!$canManageExpertWorkflow) {
+            $_SESSION['error'] = "Only the Expert Department SUL can approve expert estimations.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
 
         if ($taskId <= 0) {
@@ -920,9 +1084,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $taskCheck = $conn->prepare("
             SELECT t.id
             FROM tasks t
+            INNER JOIN projects p ON p.id = t.project_id
             INNER JOIN feature_estimations fe ON fe.task_id = t.id AND fe.status = 'completed'
             WHERE t.id = ?
               AND t.status = 'review'
+              AND {$sulProjectFilter}
               {$approvalSql}{$choiceSql}
         ");
         $taskCheck->bind_param("i", $taskId);
@@ -950,6 +1116,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     
     // Reject estimation
     if (isset($_POST['reject_estimation'])) {
+        if (!$canManageExpertWorkflow) {
+            $_SESSION['error'] = "Only the Expert Department SUL can reject expert estimations.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $rejectionReason = trim((string) ($_POST['rejection_reason'] ?? ''));
 
@@ -959,8 +1131,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         }
         
-        // Get task details for notification
-        $task = $conn->query("SELECT assigned_to, title FROM tasks WHERE id = $taskId")->fetch_assoc();
+        $taskCheck = $conn->prepare("
+            SELECT t.assigned_to, t.title
+            FROM tasks t
+            INNER JOIN projects p ON p.id = t.project_id
+            INNER JOIN feature_estimations fe ON fe.task_id = t.id AND fe.status = 'completed'
+            WHERE t.id = ?
+              AND t.status = 'review'
+              AND {$sulProjectFilter}
+            LIMIT 1
+        ");
+        $taskCheck->bind_param("i", $taskId);
+        $taskCheck->execute();
+        $task = $taskCheck->get_result()->fetch_assoc();
+        $taskCheck->close();
+
+        if (!$task) {
+            $_SESSION['error'] = "Only reviewed estimations for Expert Department projects can be rejected.";
+            header("Location: task-allocation.php");
+            exit();
+        }
         
         $stmt = $conn->prepare("UPDATE tasks SET status = 'todo' WHERE id = ?");
         $stmt->bind_param("i", $taskId);
@@ -1241,6 +1431,20 @@ include '../../includes/navbar.php';
     gap: 1rem;
     flex-wrap: wrap;
     margin-top: 0.5rem;
+}
+
+.task-roadmap-link {
+    align-items: center;
+    color: var(--theme-primary);
+    display: inline-flex;
+    font-weight: 700;
+    gap: .3rem;
+    text-decoration: none;
+}
+
+.task-roadmap-link:hover {
+    color: var(--theme-dark);
+    text-decoration: underline;
 }
 
 .task-card-actions {
@@ -1594,24 +1798,29 @@ include '../../includes/navbar.php';
 
     <!-- Tab Navigation -->
     <ul class="nav nav-tabs mb-4" id="allocationTabs" role="tablist">
+        <?php if ($canManageExpertWorkflow): ?>
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="expert-tab" data-bs-toggle="tab" data-bs-target="#expert-panel" type="button" role="tab">
                 <i class="fas fa-user-tie me-2"></i>Expert
                 <span class="badge bg-warning ms-2"><?php echo $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows + $projectEstimationReviews->num_rows + $projectsForAllocation->num_rows; ?></span>
             </button>
         </li>
+        <?php endif; ?>
+        <?php if ($canManageDeveloperWorkflow): ?>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="developer-tab" data-bs-toggle="tab" data-bs-target="#developer-panel" type="button" role="tab">
+            <button class="nav-link active" id="developer-tab" data-bs-toggle="tab" data-bs-target="#developer-panel" type="button" role="tab">
                 <i class="fas fa-code me-2"></i>Developer
                 <span class="badge bg-primary ms-2"><?php echo $readyForDevTasks->num_rows + $inProgressTasks->num_rows + $codeReviewTasks->num_rows; ?></span>
             </button>
         </li>
+        <?php endif; ?>
     </ul>
 
     <!-- Tab Content -->
     <div class="tab-content" id="allocationTabsContent">
         
         <!-- Expert Tab Panel -->
+        <?php if ($canManageExpertWorkflow): ?>
         <div class="tab-pane fade show active" id="expert-panel" role="tabpanel">
             <div class="workflow-layout">
             <ul class="nav workflow-tabs" id="expertWorkflowTabs" role="tablist">
@@ -1677,7 +1886,12 @@ include '../../includes/navbar.php';
                                     <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
                                         <i class="fas fa-circle-info"></i> View Info
                                     </button>
-                                    <button class="btn-primary-modern" type="button" onclick="openAssignExpertModal(<?php echo (int) $task['id']; ?>, <?php echo json_encode($task['title'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>)">
+                                    <button
+                                        class="btn-primary-modern js-assign-expert"
+                                        type="button"
+                                        data-task-id="<?php echo (int) $task['id']; ?>"
+                                        data-task-title="<?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>"
+                                    >
                                         <i class="fas fa-user-plus"></i> Assign to Expert
                                     </button>
                                 </div>
@@ -1936,9 +2150,11 @@ include '../../includes/navbar.php';
             </div>
             </div>
             <!-- End Expert Tab Panel -->
+        <?php endif; ?>
             
             <!-- Developer Tab Panel -->
-            <div class="tab-pane fade" id="developer-panel" role="tabpanel">
+        <?php if ($canManageDeveloperWorkflow): ?>
+            <div class="tab-pane fade show active" id="developer-panel" role="tabpanel">
             <div class="workflow-layout">
             <ul class="nav workflow-tabs" id="developerWorkflowTabs" role="tablist">
                 <li class="nav-item" role="presentation">
@@ -1979,7 +2195,7 @@ include '../../includes/navbar.php';
                             $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                             $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
                         ?>
-                    <div class="task-card">
+                    <div class="task-card is-clickable" role="button" tabindex="0" aria-label="View details for <?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); viewTaskDetails(<?php echo (int) $task['id']; ?>); }">
                         <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
                             <div>
                                 <div class="d-flex align-items-center gap-2 mb-1">
@@ -1994,11 +2210,19 @@ include '../../includes/navbar.php';
                                     <?php if (!empty($task['sales_estimate_choice']) && !empty($task['sales_estimate_days'])): ?>
                                         <span class="estimation-badge"><i class="fas fa-flag-checkered"></i> Sales picked <?php echo ucfirst($task['sales_estimate_choice']); ?>: <?php echo (int) $task['sales_estimate_days']; ?> days</span>
                                     <?php endif; ?>
+                                    <a class="task-roadmap-link" href="../roadmap/methodology.php?project_id=<?php echo (int) $task['project_id']; ?>" onclick="event.stopPropagation();">
+                                        <i class="fas fa-route"></i> View Roadmap
+                                    </a>
                                 </div>
                             </div>
-                            <button class="btn-primary-modern" onclick="openAssignDeveloperModal(<?php echo $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'), '<?php echo htmlspecialchars((string) $task['deadline'], ENT_QUOTES); ?>')">
-                                <i class="fas fa-user-plus"></i> Assign to Developer
-                            </button>
+                            <div class="task-card-actions" onclick="event.stopPropagation();">
+                                <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
+                                    <i class="fas fa-circle-info"></i> View Info
+                                </button>
+                                <button class="btn-primary-modern" type="button" onclick="openAssignDeveloperModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'), '<?php echo htmlspecialchars(sulTaskAllocationAssignmentDeadlineValue($task['deadline'] ?? null, $task['department_roadmap_start'] ?? null, $task['department_roadmap_end'] ?? null), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(sulTaskAllocationDateInputValue($task['department_roadmap_start'] ?? null), ENT_QUOTES); ?>', '<?php echo htmlspecialchars(sulTaskAllocationDateInputValue($task['department_roadmap_end'] ?? null), ENT_QUOTES); ?>')">
+                                    <i class="fas fa-user-plus"></i> Assign to Developer
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <?php endwhile; ?>
@@ -2168,12 +2392,14 @@ include '../../includes/navbar.php';
             </div>
             </div>
             <!-- End Developer Tab Panel -->
+        <?php endif; ?>
             
         </div>
         <!-- End Tab Content -->
     </div>
 
 <!-- Assign to Expert Modal -->
+<?php if ($canManageExpertWorkflow): ?>
 <div class="modal fade modal-modern" id="assignExpertModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -2183,6 +2409,7 @@ include '../../includes/navbar.php';
             </div>
             <form method="POST" data-app-loading data-loading-title="Assigning expert" data-loading-text="Please wait while the expert assignment is saved.">
                 <div class="modal-body">
+                    <input type="hidden" name="assign_to_expert" value="1">
                     <input type="hidden" name="task_id" id="expertTaskId">
                     <p><strong>Task:</strong> <span id="expertTaskTitle"></span></p>
                     <div class="mb-3">
@@ -2203,14 +2430,16 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="assign_to_expert" class="btn-primary-modern">Assign to Expert</button>
+                    <button type="submit" class="btn-primary-modern">Assign to Expert</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Assign to Developer Modal -->
+<?php if ($canManageDeveloperWorkflow): ?>
 <div class="modal fade modal-modern" id="assignDeveloperModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -2247,8 +2476,10 @@ include '../../includes/navbar.php';
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Revise Completed Task Modal -->
+<?php if ($canManageDeveloperWorkflow): ?>
 <div class="modal fade modal-modern" id="reviseCompletedModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -2273,8 +2504,10 @@ include '../../includes/navbar.php';
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Reject Estimation Modal -->
+<?php if ($canManageExpertWorkflow): ?>
 <div class="modal fade modal-modern" id="rejectModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -2299,6 +2532,7 @@ include '../../includes/navbar.php';
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Task Details Modal -->
 <div class="modal fade modal-modern" id="taskDetailsModal" tabindex="-1">
@@ -2326,10 +2560,23 @@ function openAssignExpertModal(taskId, taskTitle) {
     new bootstrap.Modal(document.getElementById('assignExpertModal')).show();
 }
 
-function openAssignDeveloperModal(taskId, taskTitle, deadline) {
+document.querySelectorAll('.js-assign-expert').forEach(button => {
+    button.addEventListener('click', event => {
+        event.stopPropagation();
+        openAssignExpertModal(
+            Number.parseInt(button.dataset.taskId || '0', 10),
+            button.dataset.taskTitle || ''
+        );
+    });
+});
+
+function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', maxDate = '') {
     document.getElementById('devTaskId').value = taskId;
     document.getElementById('devTaskTitle').textContent = taskTitle;
-    document.getElementById('devDeadline').value = deadline || '';
+    const deadlineInput = document.getElementById('devDeadline');
+    deadlineInput.min = minDate || '';
+    deadlineInput.max = maxDate || '';
+    deadlineInput.value = deadline || '';
     new bootstrap.Modal(document.getElementById('assignDeveloperModal')).show();
 }
 
@@ -2410,13 +2657,16 @@ function viewTaskDetails(taskId) {
                     <div class="col-md-4">
                         <div class="p-3 bg-light rounded-3">
                             <p><strong>Assigned To:</strong> ${task.assigned_to_name || 'Unassigned'}</p>
-                            ${task.estimated_days_min ? `
-                                <p><strong>Estimation:</strong><br>
-                                Min: ${task.estimated_days_min} days<br>
-                                Likely: ${task.estimated_days_likely} days<br>
-                                Max: ${task.estimated_days_max} days</p>
-                            ` : ''}
-                        </div>
+                             ${task.estimated_days_min ? `
+                                 <p><strong>Estimation:</strong><br>
+                                 Min: ${task.estimated_days_min} days<br>
+                                 Likely: ${task.estimated_days_likely} days<br>
+                                 Max: ${task.estimated_days_max} days</p>
+                             ` : ''}
+                             <a class="btn-outline-modern d-inline-flex align-items-center gap-2 text-decoration-none" href="../roadmap/methodology.php?project_id=${Number(task.project_id || 0)}">
+                                 <i class="fas fa-route"></i> View Project Roadmap
+                             </a>
+                         </div>
                     </div>
                 </div>
             `;

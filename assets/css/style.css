@@ -569,10 +569,10 @@ body {
     align-items: center;
     justify-content: center;
     padding: 0;
-    border: 1px solid rgba(31, 99, 146, 0.18);
+    border: 1px solid rgba(31, 99, 146, 0.28);
     border-radius: 50%;
-    background: rgba(31, 99, 146, 0.08);
-    color: var(--primary-color);
+    background: #e9f3fa;
+    color: #15567f;
     font-size: 1rem;
     cursor: help;
     box-shadow: 0 8px 18px rgba(18, 80, 127, 0.1);
@@ -587,19 +587,36 @@ body {
     outline: none;
 }
 
+.page-process-tooltip .tooltip-inner {
+    max-width: 320px;
+    padding: 0.65rem 0.8rem;
+    text-align: left;
+    line-height: 1.45;
+}
+
 .page-header-modern .page-header-help-btn,
-.profile-header .page-header-help-btn {
-    border-color: rgba(255, 255, 255, 0.34);
-    background: rgba(255, 255, 255, 0.16);
-    color: #ffffff;
-    box-shadow: 0 8px 18px rgba(5, 32, 55, 0.18);
+.profile-header .page-header-help-btn,
+.insights-hero .page-header-help-btn,
+.roadmap-header .page-header-help-btn,
+.vc-header .page-header-help-btn {
+    border-color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.94);
+    color: #15567f;
+    box-shadow: 0 8px 20px rgba(5, 32, 55, 0.28);
 }
 
 .page-header-modern .page-header-help-btn:hover,
 .page-header-modern .page-header-help-btn:focus-visible,
 .profile-header .page-header-help-btn:hover,
-.profile-header .page-header-help-btn:focus-visible {
-    background: rgba(255, 255, 255, 0.25);
+.profile-header .page-header-help-btn:focus-visible,
+.insights-hero .page-header-help-btn:hover,
+.insights-hero .page-header-help-btn:focus-visible,
+.roadmap-header .page-header-help-btn:hover,
+.roadmap-header .page-header-help-btn:focus-visible,
+.vc-header .page-header-help-btn:hover,
+.vc-header .page-header-help-btn:focus-visible {
+    background: #ffffff;
+    color: #0f496e;
 }
 
 .dropdown-item:hover {
@@ -924,8 +941,10 @@ body {
     border: 0;
 }
 
-.app-confirm-modal .modal-title {
+.app-confirm-modal .modal-title,
+.app-confirm-modal .modal-title i {
     font-weight: 700;
+    color: #ffffff !important;
 }
 
 .app-confirm-note {

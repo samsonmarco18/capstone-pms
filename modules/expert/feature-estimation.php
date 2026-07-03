@@ -2,7 +2,11 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
+<<<<<<< HEAD
 require_once '../../includes/project-estimation.php';
+=======
+require_once '../../includes/project-workflow.php';
+>>>>>>> 155d43bdd7a3a1ad37f5768088e935ab8bc4eb06
 requireRole('expert');
 
 $conn = getConnection();
@@ -10,7 +14,7 @@ $user = getCurrentUser();
 methodologyRoadmapEnsureSchema($conn);
 projectEstimationEnsureSchema($conn);
 
-$availableDepartments = [
+$availableDepartments = array_values(array_unique(array_merge(array_keys(projectWorkflowDepartments()), [
     'Frontend Developer',
     'Backend Developer',
     'Full Stack Developer',
@@ -18,7 +22,7 @@ $availableDepartments = [
     'UI/UX Designer',
     'DevOps Engineer',
     'Database Administrator',
-];
+])));
 
 function featureRecommendationSignature(string $value): string
 {
@@ -63,6 +67,141 @@ function decodeRecommendationJson(?string $json): array
 {
     $decoded = json_decode((string) $json, true);
     return is_array($decoded) ? $decoded : [];
+}
+
+function featureEstimationEmptyArchitectPlan(): array
+{
+    return [
+        'phase_name' => '',
+        'planned_start' => '',
+        'planned_end' => '',
+        'involvement_plan' => [],
+        'component_plan' => [],
+    ];
+}
+
+function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnection $conn, array $taskIds): array
+{
+    $taskIds = array_values(array_unique(array_filter(array_map('intval', $taskIds))));
+    if ($taskIds === [] || !dbTableExists($conn, 'methodology_tasks')) {
+        return [];
+    }
+
+    $plans = [];
+    $methodologyTaskMap = [];
+    $fallbackDepartments = [];
+    $taskIdList = implode(',', $taskIds);
+    $result = $conn->query("
+        SELECT
+            mt.id,
+            mt.task_id,
+            mt.component_name,
+            mt.department,
+            mt.start_date,
+            mt.end_date,
+            mp.name AS phase_name,
+            COALESCE(mp.sequence_no, mp.id) AS phase_order
+        FROM methodology_tasks mt
+        LEFT JOIN methodology_phases mp ON mp.id = mt.phase_id
+        WHERE mt.task_id IN ({$taskIdList})
+        ORDER BY mt.task_id ASC, COALESCE(mp.sequence_no, mp.id) ASC, mt.id ASC
+    ");
+
+    if (!$result) {
+        return [];
+    }
+
+    while ($row = $result->fetch_assoc()) {
+        $taskId = (int) ($row['task_id'] ?? 0);
+        $methodologyTaskId = (int) ($row['id'] ?? 0);
+        if ($taskId <= 0 || $methodologyTaskId <= 0) {
+            continue;
+        }
+
+        if (!isset($plans[$taskId])) {
+            $plans[$taskId] = featureEstimationEmptyArchitectPlan();
+            $plans[$taskId]['_department_counts'] = [];
+            $plans[$taskId]['_component_names'] = [];
+        }
+
+        $methodologyTaskMap[$methodologyTaskId] = $taskId;
+
+        $phaseName = trim((string) ($row['phase_name'] ?? ''));
+        if ($plans[$taskId]['phase_name'] === '' && $phaseName !== '') {
+            $plans[$taskId]['phase_name'] = $phaseName;
+        }
+
+        $startDate = trim((string) ($row['start_date'] ?? ''));
+        if ($plans[$taskId]['planned_start'] === '' && $startDate !== '') {
+            $plans[$taskId]['planned_start'] = $startDate;
+        }
+
+        $endDate = trim((string) ($row['end_date'] ?? ''));
+        if ($endDate !== '') {
+            $plans[$taskId]['planned_end'] = $endDate;
+        }
+
+        $componentName = trim((string) ($row['component_name'] ?? ''));
+        if ($componentName !== '') {
+            $plans[$taskId]['_component_names'][$componentName] = true;
+        }
+
+        $department = projectWorkflowDepartmentLabel((string) ($row['department'] ?? ''));
+        if ($department !== '') {
+            $fallbackDepartments[$methodologyTaskId][$department] = 1;
+        }
+    }
+
+    if ($methodologyTaskMap !== [] && dbTableExists($conn, 'methodology_task_departments')) {
+        $requirementResult = $conn->query("
+            SELECT methodology_task_id, department, required_count
+            FROM methodology_task_departments
+            WHERE methodology_task_id IN (" . implode(',', array_keys($methodologyTaskMap)) . ")
+            ORDER BY id ASC
+        ");
+
+        if ($requirementResult) {
+            while ($requirement = $requirementResult->fetch_assoc()) {
+                $methodologyTaskId = (int) ($requirement['methodology_task_id'] ?? 0);
+                $taskId = $methodologyTaskMap[$methodologyTaskId] ?? 0;
+                $department = projectWorkflowDepartmentLabel((string) ($requirement['department'] ?? ''));
+                $requiredCount = max(0, (int) ($requirement['required_count'] ?? 0));
+                if ($taskId <= 0 || $department === '' || $requiredCount <= 0) {
+                    continue;
+                }
+                $plans[$taskId]['_department_counts'][$department] = ($plans[$taskId]['_department_counts'][$department] ?? 0) + $requiredCount;
+            }
+        }
+    }
+
+    foreach ($methodologyTaskMap as $methodologyTaskId => $taskId) {
+        if (!empty($plans[$taskId]['_department_counts'])) {
+            continue;
+        }
+        foreach ($fallbackDepartments[$methodologyTaskId] ?? [] as $department => $requiredCount) {
+            $plans[$taskId]['_department_counts'][$department] = ($plans[$taskId]['_department_counts'][$department] ?? 0) + $requiredCount;
+        }
+    }
+
+    foreach ($plans as $taskId => $plan) {
+        $departmentCounts = $plan['_department_counts'] ?? [];
+        $totalCount = array_sum($departmentCounts);
+        foreach ($departmentCounts as $department => $requiredCount) {
+            $plans[$taskId]['involvement_plan'][] = [
+                'role' => $department,
+                'percentage' => $totalCount > 0 ? (int) round(($requiredCount / $totalCount) * 100) : 0,
+                'required_count' => (int) $requiredCount,
+            ];
+        }
+
+        foreach (array_keys($plan['_component_names'] ?? []) as $componentName) {
+            $plans[$taskId]['component_plan'][] = ['name' => $componentName];
+        }
+
+        unset($plans[$taskId]['_department_counts'], $plans[$taskId]['_component_names']);
+    }
+
+    return $plans;
 }
 
 // Check if phase_name column exists in feature_estimations
@@ -306,7 +445,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     $likelyDays = (int) ($_POST['likely_days'] ?? 0);
     $maxDays = (int) ($_POST['max_days'] ?? 0);
     $expectation = trim((string) ($_POST['expectation'] ?? ''));
-    $phaseName = $_POST['phase_name'] ?? null;
+    $phaseName = null;
     $plannedStart = !empty($_POST['planned_start']) ? $_POST['planned_start'] : null;
     $plannedEnd = !empty($_POST['planned_end']) ? $_POST['planned_end'] : null;
     $manualRecommendationName = trim((string) ($_POST['manual_recommendation_name'] ?? ''));
@@ -315,6 +454,47 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     $rejectedRecommendations = json_decode((string) ($_POST['rejected_recommendations_json'] ?? '[]'), true);
     $involvementPlan = json_decode((string) ($_POST['involvement_plan_json'] ?? '[]'), true);
     $componentPlan = json_decode((string) ($_POST['component_plan_json'] ?? '[]'), true);
+
+    if ($minDays <= 0 || $likelyDays <= 0 || $maxDays <= 0) {
+        $_SESSION['error'] = "Minimum, most likely, and maximum days must all be greater than zero.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($minDays > $likelyDays || $likelyDays > $maxDays) {
+        $_SESSION['error'] = "Please keep the estimate order as Minimum <= Most Likely <= Maximum.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($expectation === '') {
+        $_SESSION['error'] = "Please add an expectation description for the feature.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    $taskStmt = $conn->prepare("SELECT project_id, title FROM tasks WHERE id = ? LIMIT 1");
+    $taskStmt->bind_param('i', $taskId);
+    $taskStmt->execute();
+    $taskInfo = $taskStmt->get_result()->fetch_assoc();
+    $taskStmt->close();
+    $projectId = (int) ($taskInfo['project_id'] ?? 0);
+    $taskTitle = (string) ($taskInfo['title'] ?? '');
+
+    if ($projectId <= 0 || $taskTitle === '') {
+        $_SESSION['error'] = "We couldn't find that feature anymore. Please refresh and try again.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    $architectPlan = featureEstimationLoadArchitectPlanning($conn, [$taskId])[$taskId] ?? featureEstimationEmptyArchitectPlan();
+    $phaseName = trim((string) ($architectPlan['phase_name'] ?? '')) !== '' ? (string) $architectPlan['phase_name'] : null;
+    if (!empty($architectPlan['involvement_plan'])) {
+        $involvementPlan = $architectPlan['involvement_plan'];
+    }
+    if (!empty($architectPlan['component_plan'])) {
+        $componentPlan = $architectPlan['component_plan'];
+    }
 
     $normalizedInvolvement = [];
     if (is_array($involvementPlan)) {
@@ -330,6 +510,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
             $normalizedInvolvement[] = [
                 'role' => $role,
                 'percentage' => max(0, min(100, $percentage)),
+                'required_count' => max(0, (int) ($entry['required_count'] ?? 0)),
             ];
         }
     }
@@ -349,38 +530,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
 
     $involvementPlanJson = json_encode($normalizedInvolvement, JSON_UNESCAPED_UNICODE);
     $componentPlanJson = json_encode($normalizedComponents, JSON_UNESCAPED_UNICODE);
-
-    if ($minDays <= 0 || $likelyDays <= 0 || $maxDays <= 0) {
-        $_SESSION['error'] = "Minimum, most likely, and maximum days must all be greater than zero.";
-        header('Location: feature-estimation.php');
-        exit();
-    }
-
-    if ($minDays > $likelyDays || $likelyDays > $maxDays) {
-        $_SESSION['error'] = "Please keep the estimate order as Minimum <= Most Likely <= Maximum.";
-        header('Location: feature-estimation.php');
-        exit();
-    }
-
-    if ($expectation === '') {
-        $_SESSION['error'] = "Please add an expectation description for the feature.";
-        header('Location: feature-estimation.php');
-        exit();
-    }
-    
-    $taskStmt = $conn->prepare("SELECT project_id, title FROM tasks WHERE id = ? LIMIT 1");
-    $taskStmt->bind_param('i', $taskId);
-    $taskStmt->execute();
-    $taskInfo = $taskStmt->get_result()->fetch_assoc();
-    $taskStmt->close();
-    $projectId = (int) ($taskInfo['project_id'] ?? 0);
-    $taskTitle = (string) ($taskInfo['title'] ?? '');
-
-    if ($projectId <= 0 || $taskTitle === '') {
-        $_SESSION['error'] = "We couldn't find that feature anymore. Please refresh and try again.";
-        header('Location: feature-estimation.php');
-        exit();
-    }
     
     // Check if estimation exists
     $existing = $conn->query("SELECT id FROM feature_estimations WHERE task_id = $taskId AND expert_id = {$user['id']}");
@@ -654,6 +803,7 @@ $taskFeedbackMap = [];
 $taskIds = array_values(array_filter(array_map(static function (array $taskRow): int {
     return (int) ($taskRow['id'] ?? 0);
 }, $taskRows)));
+$architectPlanningByTask = featureEstimationLoadArchitectPlanning($conn, $taskIds);
 
 if (!empty($taskIds) && $hasRecommendationFeedbackTable) {
     $feedbackSql = "
@@ -1925,7 +2075,7 @@ textarea.form-control-custom {
             <div class="management-table-header">
                 <div>
                     <h5><i class="fas fa-table me-2"></i>Project Management Table</h5>
-                    <p>Clean planning view for features, involved teams, allocation percentages, components, and day estimates.</p>
+                    <p>Planning view from the Architect roadmap: features, involved departments, allocation percentages, and components.</p>
                 </div>
                 <div class="management-table-meta" id="managementTableMeta">Select a project to load the planning table.</div>
             </div>
@@ -1951,7 +2101,16 @@ textarea.form-control-custom {
                 $estimation = $conn->query("SELECT * FROM feature_estimations WHERE task_id = {$task['id']} AND expert_id = {$user['id']}")->fetch_assoc();
                 $isEstimated = $estimation && !empty($estimation['min_days']) && !empty($estimation['likely_days']) && !empty($estimation['max_days']);
                 $taskRecommendations = $recommendationsByTask[(int) $task['id']] ?? [];
-                $projectPhases = $roadmapPhasesByProject[(int) $task['project_id']] ?? [];
+                $architectPlan = $architectPlanningByTask[(int) $task['id']] ?? featureEstimationEmptyArchitectPlan();
+                $featurePhaseName = (string) ($architectPlan['phase_name'] ?: ($estimation['phase_name'] ?? ''));
+                $featureInvolvementPlanJson = json_encode(
+                    !empty($architectPlan['involvement_plan']) ? $architectPlan['involvement_plan'] : decodeRecommendationJson($estimation['involvement_plan_json'] ?? '[]'),
+                    JSON_UNESCAPED_UNICODE
+                );
+                $featureComponentPlanJson = json_encode(
+                    !empty($architectPlan['component_plan']) ? $architectPlan['component_plan'] : decodeRecommendationJson($estimation['component_plan_json'] ?? '[]'),
+                    JSON_UNESCAPED_UNICODE
+                );
             ?>
             <?php $isReadonly = $task['status'] !== 'todo'; ?>
             <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" style="display:none;">
@@ -1971,8 +2130,9 @@ textarea.form-control-custom {
                 
                 <form method="POST">
                     <input type="hidden" name="task_id" value="<?php echo $task['id']; ?>">
-                    <input type="hidden" name="involvement_plan_json" value="<?php echo htmlspecialchars($estimation['involvement_plan_json'] ?? '[]', ENT_QUOTES, 'UTF-8'); ?>">
-                    <input type="hidden" name="component_plan_json" value="<?php echo htmlspecialchars($estimation['component_plan_json'] ?? '[]', ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="phase_name" value="<?php echo htmlspecialchars($featurePhaseName, ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="involvement_plan_json" value="<?php echo htmlspecialchars($featureInvolvementPlanJson ?: '[]', ENT_QUOTES, 'UTF-8'); ?>">
+                    <input type="hidden" name="component_plan_json" value="<?php echo htmlspecialchars($featureComponentPlanJson ?: '[]', ENT_QUOTES, 'UTF-8'); ?>">
                     <input type="hidden" name="accepted_recommendation_type" value="">
                     <input type="hidden" name="accepted_recommendation_id" value="">
                     <input type="hidden" name="rejected_recommendations_json" value="[]">
@@ -2043,21 +2203,6 @@ textarea.form-control-custom {
                     <div class="mb-3">
                         <label class="form-label">Expectation Description</label>
                         <textarea name="expectation" class="form-control-custom" rows="2" required placeholder="What should this feature accomplish?" <?php echo $isReadonly ? 'disabled' : ''; ?>><?php echo htmlspecialchars($estimation['expectation_description'] ?? ''); ?></textarea>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Project Phase</label>
-                        <select name="phase_name" class="form-control-custom" <?php echo $isReadonly ? 'disabled' : ''; ?>>
-                            <option value=""><?php echo empty($projectPhases) ? 'Roadmap phases not ready' : '-- Select roadmap phase --'; ?></option>
-                            <?php if(!empty($projectPhases)): ?>
-                                <?php foreach($projectPhases as $phaseName): ?>
-                                    <option value="<?php echo htmlspecialchars($phaseName); ?>" <?php echo ($estimation['phase_name'] ?? '') === $phaseName ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars($phaseName); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </select>
-                        <small class="text-muted d-block mt-1">Assign this feature to a project phase</small>
                     </div>
                     
                     <div class="row g-3 mb-4">
@@ -2161,6 +2306,7 @@ textarea.form-control-custom {
 <script>
 let currentProjectId = null;
 const existingDepartments = <?php echo json_encode($availableDepartments, JSON_UNESCAPED_UNICODE); ?>;
+const architectPlanningByTask = <?php echo json_encode($architectPlanningByTask, JSON_UNESCAPED_UNICODE); ?>;
 
 function loadProjectSetup() {
     const select = document.getElementById('phaseProjectSelect');
@@ -2326,7 +2472,8 @@ function normalizeInvolvementPlan(entries, includeBlank = false) {
     const normalized = Array.isArray(entries)
         ? entries.map(entry => ({
             role: String(entry?.role || '').trim(),
-            percentage: entry?.percentage === '' ? '' : (parseInt(entry?.percentage ?? '0', 10) || 0)
+            percentage: entry?.percentage === '' ? '' : (parseInt(entry?.percentage ?? '0', 10) || 0),
+            required_count: parseInt(entry?.required_count ?? '0', 10) || 0
         })).filter(entry => includeBlank || entry.role !== '' || (entry.percentage !== '' && entry.percentage > 0))
         : [];
 
@@ -2387,6 +2534,16 @@ function setFeatureComponentPlan(taskId, entries) {
     input.value = JSON.stringify(Array.isArray(entries) ? entries : []);
 }
 
+function getArchitectPlan(taskId) {
+    return architectPlanningByTask?.[String(taskId)] || architectPlanningByTask?.[taskId] || {
+        phase_name: '',
+        planned_start: '',
+        planned_end: '',
+        involvement_plan: [],
+        component_plan: []
+    };
+}
+
 function getFeatureHiddenInput(taskId, inputName) {
     const card = getFeatureCard(taskId);
     return card ? card.querySelector(`input[name="${inputName}"]`) : null;
@@ -2429,7 +2586,6 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
     if (!card || !payload) return;
     const taskId = card.getAttribute('data-task-id');
     const expectationInput = card.querySelector('textarea[name="expectation"]');
-    const phaseInput = card.querySelector('select[name="phase_name"]');
     const minInput = card.querySelector('input[name="min_days"]');
     const likelyInput = card.querySelector('input[name="likely_days"]');
     const maxInput = card.querySelector('input[name="max_days"]');
@@ -2439,7 +2595,6 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
     const acceptedIdInput = card.querySelector('input[name="accepted_recommendation_id"]');
 
     if (expectationInput) expectationInput.value = payload.expectation || '';
-    if (phaseInput) phaseInput.value = payload.phase_name || '';
     if (minInput) minInput.value = payload.min_days || '';
     if (likelyInput) likelyInput.value = payload.likely_days || '';
     if (maxInput) maxInput.value = payload.max_days || '';
@@ -2454,9 +2609,6 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
         endDate.setDate(endDate.getDate() + duration);
         plannedEndInput.value = endDate.toISOString().slice(0, 10);
     }
-
-    setFeatureInvolvementPlan(taskId, Array.isArray(payload.involvement_plan) ? payload.involvement_plan : []);
-    setFeatureComponentPlan(taskId, Array.isArray(payload.component_plan) ? payload.component_plan : []);
 
     if (acceptedTypeInput) acceptedTypeInput.value = sourceType || '';
     if (acceptedIdInput) acceptedIdInput.value = String(sourceId || '');
@@ -2579,7 +2731,7 @@ function renderProjectManagementTable() {
     const featureRows = Array.from(document.querySelectorAll('.feature-row')).filter(row => {
         return row.id !== 'featureProgressRow' && row.getAttribute('data-project-id') === String(currentProjectId);
     });
-    meta.textContent = `${projectName || 'Selected project'} | ${featureRows.length} feature${featureRows.length === 1 ? '' : 's'} ready for planning`;
+    meta.textContent = `${projectName || 'Selected project'} | ${featureRows.length} feature${featureRows.length === 1 ? '' : 's'} from architect planning`;
 
     if (!featureRows.length) {
         container.innerHTML = '<div class="table-empty">No features are available for this project yet.</div>';
@@ -2588,48 +2740,40 @@ function renderProjectManagementTable() {
 
     const rowsHtml = featureRows.map(row => {
         const taskId = row.getAttribute('data-task-id') || '';
-        const isReadonly = row.getAttribute('data-readonly') === '1';
         const featureName = escapeHtml(row.querySelector('.feature-title')?.textContent?.trim() || 'Feature');
-        const phaseName = row.querySelector('select[name="phase_name"]')?.value?.trim() || '';
-        const plannedStart = row.querySelector('input[name="planned_start"]')?.value || '';
-        const plannedEnd = row.querySelector('input[name="planned_end"]')?.value || '';
-        const minDays = parseInt(row.querySelector('input[name="min_days"]')?.value || '0', 10) || 0;
-        const likelyDays = parseInt(row.querySelector('input[name="likely_days"]')?.value || '0', 10) || 0;
-        const maxDays = parseInt(row.querySelector('input[name="max_days"]')?.value || '0', 10) || 0;
-        const involvementPlan = getFeatureInvolvementPlan(taskId, !isReadonly);
-        const componentPlan = getFeatureComponentPlan(taskId, !isReadonly);
+        const architectPlan = getArchitectPlan(taskId);
+        const phaseName = String(architectPlan.phase_name || '').trim();
+        const plannedStart = String(architectPlan.planned_start || '').trim();
+        const plannedEnd = String(architectPlan.planned_end || '').trim();
+        const involvementPlan = normalizeInvolvementPlan(architectPlan.involvement_plan || []);
+        const componentPlan = normalizeComponentPlan(architectPlan.component_plan || []);
 
         const involvedMarkup = involvementPlan.length
-            ? involvementPlan.map((item, index) => `
+            ? involvementPlan.map((item) => `
                 <div class="table-list-item">
-                    <select class="table-input pm-role-input" data-task-id="${taskId}" data-index="${index}" ${isReadonly ? 'disabled' : ''}>
-                        ${renderDepartmentOptions(item.role || '')}
-                    </select>
+                    <strong>${escapeHtml(item.role || 'Department')}</strong>
+                    <span>${item.required_count ? `${item.required_count} planned ${item.required_count === 1 ? 'person' : 'people'}` : 'Planned by architect'}</span>
                 </div>
             `).join('')
-            : '<div class="table-list-item"><span>No department involved yet.</span></div>';
+            : '<div class="table-list-item"><span>No architect-planned department yet.</span></div>';
 
         const percentageMarkup = involvementPlan.length
-            ? involvementPlan.map((item, index) => `
+            ? involvementPlan.map((item) => `
                 <div class="table-list-item">
-                    <div class="d-flex gap-2 align-items-center">
-                        <input type="number" class="table-input pm-percentage-input" data-task-id="${taskId}" data-index="${index}" min="0" max="100" value="${item.percentage}" placeholder="%" ${isReadonly ? 'disabled' : ''}>
-                        ${!isReadonly ? `<button type="button" class="pm-inline-btn remove pm-remove-role" data-task-id="${taskId}" data-index="${index}">Remove</button>` : ''}
-                    </div>
+                    <strong>${Number(item.percentage || 0)}%</strong>
+                    <span>${escapeHtml(item.role || 'Department')}</span>
                 </div>
             `).join('')
-            : '<div class="table-list-item"><span>No percentage assigned yet.</span></div>';
+            : '<div class="table-list-item"><span>No percentage available.</span></div>';
 
         const componentMarkup = componentPlan.length
-            ? componentPlan.map((item, index) => `
+            ? componentPlan.map((item) => `
                 <div class="table-list-item">
-                    <div class="d-flex gap-2 align-items-center">
-                        <input type="text" class="table-input pm-component-input" data-task-id="${taskId}" data-index="${index}" value="${escapeHtml(item.name || '')}" placeholder="e.g. API, Dashboard, Database" ${isReadonly ? 'disabled' : ''}>
-                        ${!isReadonly ? `<button type="button" class="pm-inline-btn remove pm-remove-component" data-task-id="${taskId}" data-index="${index}">Remove</button>` : ''}
-                    </div>
+                    <strong>${escapeHtml(item.name || 'Component')}</strong>
+                    <span>Architect planning</span>
                 </div>
             `).join('')
-            : '<div class="table-list-item"><span>No components added yet.</span></div>';
+            : '<div class="table-list-item"><span>No architect-planned component yet.</span></div>';
 
         return `
             <tr>
@@ -2643,34 +2787,10 @@ function renderProjectManagementTable() {
                 </td>
                 <td>
                     <div class="table-list">${involvedMarkup}</div>
-                    ${!isReadonly ? `<div class="pm-action-row"><button type="button" class="pm-inline-btn pm-add-role" data-task-id="${taskId}">Add Department</button></div>` : ''}
                 </td>
                 <td><div class="table-list">${percentageMarkup}</div></td>
                 <td>
                     <div class="table-list">${componentMarkup}</div>
-                    ${!isReadonly ? `<div class="pm-action-row"><button type="button" class="pm-inline-btn pm-add-component" data-task-id="${taskId}">Add Component</button></div>` : ''}
-                </td>
-                <td>
-                    <div class="pm-days-grid">
-                        <div class="day-badge min">
-                            <div class="w-100">
-                                <span class="pm-day-label">Minimum</span>
-                                <input type="number" class="table-input pm-day-input" data-task-id="${taskId}" data-field="min_days" min="1" step="1" value="${minDays || ''}" placeholder="1" ${isReadonly ? 'disabled' : ''}>
-                            </div>
-                        </div>
-                        <div class="day-badge likely">
-                            <div class="w-100">
-                                <span class="pm-day-label">Most Likely</span>
-                                <input type="number" class="table-input pm-day-input" data-task-id="${taskId}" data-field="likely_days" min="1" step="1" value="${likelyDays || ''}" placeholder="1" ${isReadonly ? 'disabled' : ''}>
-                            </div>
-                        </div>
-                        <div class="day-badge max">
-                            <div class="w-100">
-                                <span class="pm-day-label">Maximum</span>
-                                <input type="number" class="table-input pm-day-input" data-task-id="${taskId}" data-field="max_days" min="1" step="1" value="${maxDays || ''}" placeholder="3" ${isReadonly ? 'disabled' : ''}>
-                            </div>
-                        </div>
-                    </div>
                 </td>
             </tr>
         `;
@@ -2684,140 +2804,11 @@ function renderProjectManagementTable() {
                     <th>Developer / Department Involved</th>
                     <th>Percentage Involved</th>
                     <th>Components</th>
-                    <th>Days</th>
                 </tr>
             </thead>
             <tbody>${rowsHtml}</tbody>
         </table>
     `;
-}
-
-function bindProjectManagementTableHandlers() {
-    document.addEventListener('click', (event) => {
-        const addRoleBtn = event.target.closest('.pm-add-role');
-        if (addRoleBtn) {
-            const taskId = addRoleBtn.getAttribute('data-task-id');
-            const plan = getFeatureInvolvementPlan(taskId);
-            plan.push({ role: '', percentage: '' });
-            setFeatureInvolvementPlan(taskId, plan);
-            renderProjectManagementTable();
-            return;
-        }
-
-        const removeRoleBtn = event.target.closest('.pm-remove-role');
-        if (removeRoleBtn) {
-            const taskId = removeRoleBtn.getAttribute('data-task-id');
-            const index = parseInt(removeRoleBtn.getAttribute('data-index') || '-1', 10);
-            const plan = getFeatureInvolvementPlan(taskId);
-            if (index >= 0) {
-                plan.splice(index, 1);
-                setFeatureInvolvementPlan(taskId, plan);
-                renderProjectManagementTable();
-            }
-            return;
-        }
-
-        const addComponentBtn = event.target.closest('.pm-add-component');
-        if (addComponentBtn) {
-            const taskId = addComponentBtn.getAttribute('data-task-id');
-            const plan = getFeatureComponentPlan(taskId);
-            plan.push({ name: '' });
-            setFeatureComponentPlan(taskId, plan);
-            renderProjectManagementTable();
-            return;
-        }
-
-        const removeComponentBtn = event.target.closest('.pm-remove-component');
-        if (removeComponentBtn) {
-            const taskId = removeComponentBtn.getAttribute('data-task-id');
-            const index = parseInt(removeComponentBtn.getAttribute('data-index') || '-1', 10);
-            const plan = getFeatureComponentPlan(taskId);
-            if (index >= 0) {
-                plan.splice(index, 1);
-                setFeatureComponentPlan(taskId, plan);
-                renderProjectManagementTable();
-            }
-        }
-    });
-
-    document.addEventListener('input', (event) => {
-        if (event.target.matches('.pm-role-input, .pm-percentage-input')) {
-            const taskId = event.target.getAttribute('data-task-id');
-            const index = parseInt(event.target.getAttribute('data-index') || '-1', 10);
-            const plan = getFeatureInvolvementPlan(taskId, true);
-            if (index >= 0 && plan[index]) {
-                const roleInput = document.querySelector(`.pm-role-input[data-task-id="${taskId}"][data-index="${index}"]`);
-                const percentageInput = document.querySelector(`.pm-percentage-input[data-task-id="${taskId}"][data-index="${index}"]`);
-                plan[index] = {
-                    role: roleInput?.value?.trim() || '',
-                    percentage: percentageInput?.value === '' ? '' : Math.max(0, Math.min(100, parseInt(percentageInput.value || '0', 10) || 0))
-                };
-                setFeatureInvolvementPlan(taskId, plan);
-            }
-            return;
-        }
-
-        if (event.target.matches('.pm-component-input')) {
-            const taskId = event.target.getAttribute('data-task-id');
-            const index = parseInt(event.target.getAttribute('data-index') || '-1', 10);
-            const plan = getFeatureComponentPlan(taskId, true);
-            if (index >= 0 && plan[index]) {
-                plan[index] = {
-                    name: event.target.value.trim()
-                };
-                setFeatureComponentPlan(taskId, plan);
-            }
-            return;
-        }
-
-        if (event.target.matches('.pm-day-input')) {
-            const taskId = event.target.getAttribute('data-task-id');
-            const field = event.target.getAttribute('data-field');
-            const cardInput = getFeatureFormInput(taskId, field);
-            if (cardInput) {
-                cardInput.value = event.target.value;
-            }
-        }
-    });
-
-    document.addEventListener('change', (event) => {
-        if (event.target.matches('.pm-role-input, .pm-percentage-input')) {
-            const taskId = event.target.getAttribute('data-task-id');
-            const index = parseInt(event.target.getAttribute('data-index') || '-1', 10);
-            const plan = getFeatureInvolvementPlan(taskId, true);
-            if (index >= 0 && plan[index]) {
-                const roleInput = document.querySelector(`.pm-role-input[data-task-id="${taskId}"][data-index="${index}"]`);
-                const percentageInput = document.querySelector(`.pm-percentage-input[data-task-id="${taskId}"][data-index="${index}"]`);
-                plan[index] = {
-                    role: roleInput?.value?.trim() || '',
-                    percentage: percentageInput?.value === '' ? '' : Math.max(0, Math.min(100, parseInt(percentageInput.value || '0', 10) || 0))
-                };
-                setFeatureInvolvementPlan(taskId, plan);
-            }
-        }
-
-        if (event.target.matches('.pm-day-input')) {
-            const taskId = event.target.getAttribute('data-task-id');
-            const field = event.target.getAttribute('data-field');
-            const card = getFeatureCard(taskId);
-            const cardInput = getFeatureFormInput(taskId, field);
-            if (cardInput && card) {
-                cardInput.value = event.target.value;
-                validateEstimateCard(card);
-                updateGanttPreview(card);
-                const minVal = parseInt(card.querySelector('input[name="min_days"]')?.value || '0', 10) || 0;
-                const likelyVal = parseInt(card.querySelector('input[name="likely_days"]')?.value || '0', 10) || 0;
-                const maxVal = parseInt(card.querySelector('input[name="max_days"]')?.value || '0', 10) || 0;
-                const isDone = (minVal > 0 && likelyVal > 0 && maxVal > 0 && minVal <= likelyVal && likelyVal <= maxVal);
-                card.setAttribute('data-estimated', isDone ? '1' : '0');
-                card.classList.toggle('complete', isDone);
-                card.classList.toggle('incomplete', !isDone);
-                renderExpertGantt();
-                renderProjectManagementTable();
-                filterFeatureList();
-            }
-        }
-    });
 }
 
 function buildGanttTasks() {
@@ -3050,9 +3041,6 @@ function bindGanttHandlers() {
                 filterFeatureList();
             }
         }
-        if (e.target.matches('select[name="phase_name"]')) {
-            renderProjectManagementTable();
-        }
     });
 
     document.addEventListener('submit', (e) => {
@@ -3064,12 +3052,6 @@ function bindGanttHandlers() {
         if (!validateEstimateCard(card)) {
             e.preventDefault();
             form.reportValidity();
-        }
-    });
-
-    document.addEventListener('change', (e) => {
-        if (e.target.matches('select[name="phase_name"]')) {
-            renderProjectManagementTable();
         }
     });
 
@@ -3117,7 +3099,6 @@ if (phaseSelect) {
     }
 }
 bindPreviewHandlers();
-bindProjectManagementTableHandlers();
 bindGanttHandlers();
 bindRecommendationHandlers();
 filterFeatureList();

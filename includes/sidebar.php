@@ -53,6 +53,7 @@ $menuItems = [
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
         ['label' => 'Decision Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb'],
         ['label' => 'Task Allocation', 'url' => '/modules/sul/task-allocation.php', 'icon' => 'tasks'],
+        ['label' => 'Roadmap Monitoring', 'url' => '/modules/roadmap/methodology.php', 'icon' => 'route'],
         ['label' => 'Resource Management', 'url' => '/modules/sul/resource-management.php', 'icon' => 'users-cog'],
         ['label' => 'Performance / Report', 'url' => '/modules/sul/performance-report.php', 'icon' => 'chart-bar'],
         ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
@@ -87,6 +88,8 @@ $menuItems = [
 ];
 
 $currentMenu = $menuItems[$role] ?? [];
+$sidebarLogoPath = __DIR__ . '/../assets/img/logoInside.png';
+$sidebarLogoVersion = file_exists($sidebarLogoPath) ? (string) filemtime($sidebarLogoPath) : '1';
 
 function isSidebarItemActive(array $item, string $currentPage, string $currentPath): bool
 {
@@ -107,7 +110,7 @@ function isSidebarItemActive(array $item, string $currentPage, string $currentPa
 <aside class="sidebar-wrapper" id="sidebar-wrapper">
     <div class="sidebar-brand">
         <div class="brand-mark">
-            <img src="<?php echo BASE_URL; ?>assets/img/logoInside.png" alt="ERNI logo">
+            <img src="<?php echo BASE_URL; ?>assets/img/logoInside.png?v=<?php echo rawurlencode($sidebarLogoVersion); ?>" alt="ERNI logo">
         </div>
         <div class="brand-copy sidebar-label">
             <div class="brand-title">ERNI</div>
