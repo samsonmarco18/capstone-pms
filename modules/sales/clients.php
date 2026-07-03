@@ -81,6 +81,21 @@ function parseSalesTimeInput(string $value): ?string
     return $trimmed . ':00';
 }
 
+function parseSalesDateInput(string $value): ?string
+{
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $trimmed);
+    if (!$parsed || $parsed->format('Y-m-d') !== $trimmed) {
+        return null;
+    }
+
+    return $trimmed;
+}
+
 function salesClientsFeatureCount(string $requestedFeatures): int
 {
     return count(array_filter(array_map('trim', preg_split('/\R/', $requestedFeatures) ?: [])));
@@ -286,8 +301,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $email = trim((string) ($_POST['email'] ?? ''));
         $phone = trim((string) ($_POST['phone'] ?? ''));
         $address = trim((string) ($_POST['address'] ?? ''));
-        $deadline = trim((string) ($_POST['deadline'] ?? ''));
-        $deadline = $deadline !== '' ? $deadline : null;
+        $clientDeadlineInput = trim((string) ($_POST['deadline'] ?? ''));
+        $clientDeadline = parseSalesDateInput($clientDeadlineInput);
 
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -302,8 +317,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $salesNotes = trim((string) ($_POST['sales_notes'] ?? ''));
         $salesBudgetInput = trim((string) ($_POST['sales_budget'] ?? ''));
         $salesBudget = parseSalesBudgetInput($salesBudgetInput);
-        $timelineStart = $_POST['timeline_start'] ?: null;
-        $timelineEnd = $_POST['timeline_end'] ?: ($deadline ?: null);
+        $timelineStartInput = trim((string) ($_POST['timeline_start'] ?? ''));
+        $timelineEndInput = trim((string) ($_POST['timeline_end'] ?? ''));
+        $timelineStart = parseSalesDateInput($timelineStartInput);
+        $timelineEnd = parseSalesDateInput($timelineEndInput);
         $timelineStartTimeInput = trim((string) ($_POST['timeline_start_time'] ?? ''));
         $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ($_POST['deadline_time'] ?? '')));
         $timelineStartTime = parseSalesTimeInput($timelineStartTimeInput);
@@ -312,8 +329,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $generatedComplexity = salesClientsProjectComplexityValue(
             projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $featureCount)
         );
-        $attachmentsJson = json_encode(salesClientsSaveAttachments($_FILES['attachments'] ?? []), JSON_UNESCAPED_SLASHES);
-
         $requirementsSummary = $requestedFeatures;
         if ($additionalRequirements !== '') {
             $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Additional Requirements:' . "\n" . $additionalRequirements;
@@ -322,18 +337,58 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Budget:' . "\n" . $salesBudgetInput;
         }
 
-        if ($name === '') {
-            $_SESSION['error'] = 'Client name is required.';
-        } elseif ($salesBudgetInput !== '' && $salesBudget === null) {
-            $_SESSION['error'] = 'Budget must be a valid number.';
-        } elseif ($timelineStartTimeInput !== '' && $timelineStartTime === null) {
+        $missingHandoffFields = [];
+        $requiredHandoffValues = [
+            'Client name' => $name,
+            'Contact person' => $contactPerson,
+            'Email' => $email,
+            'Phone' => $phone,
+            'Project name' => $projectName,
+            'Project description' => $projectDescription,
+            'At least one requested feature' => $requestedFeatures,
+            'Budget' => $salesBudgetInput,
+            'Timeline start date' => $timelineStartInput,
+            'Timeline start time' => $timelineStartTimeInput,
+            'Project deadline' => $timelineEndInput,
+            'Project deadline time' => $timelineEndTimeInput,
+        ];
+        foreach ($requiredHandoffValues as $label => $value) {
+            if (trim((string) $value) === '') {
+                $missingHandoffFields[] = $label;
+            }
+        }
+
+        $timelineStartAt = ($timelineStart && $timelineStartTime)
+            ? DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $timelineStart . ' ' . $timelineStartTime)
+            : null;
+        $timelineEndAt = ($timelineEnd && $timelineEndTime)
+            ? DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $timelineEnd . ' ' . $timelineEndTime)
+            : null;
+
+        if ($missingHandoffFields !== []) {
+            $_SESSION['error'] = 'Complete these required fields before sending to Architect: ' . implode(', ', $missingHandoffFields) . '.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $_SESSION['error'] = 'Enter a valid client email address before sending to Architect.';
+        } elseif ($salesBudget === null || $salesBudget <= 0) {
+            $_SESSION['error'] = 'Budget is required and must be greater than zero.';
+        } elseif ($timelineStart === null) {
+            $_SESSION['error'] = 'Timeline start date must be valid.';
+        } elseif ($timelineEnd === null) {
+            $_SESSION['error'] = 'Project deadline must be valid.';
+        } elseif ($timelineStartTime === null) {
             $_SESSION['error'] = 'Timeline start time must be valid.';
-        } elseif ($timelineEndTimeInput !== '' && $timelineEndTime === null) {
+        } elseif ($timelineEndTime === null) {
             $_SESSION['error'] = 'Project deadline time must be valid.';
+        } elseif ($clientDeadlineInput !== '' && $clientDeadline === null) {
+            $_SESSION['error'] = 'Client deadline must be a valid date when provided.';
+        } elseif (!$timelineStartAt || !$timelineEndAt || $timelineEndAt <= $timelineStartAt) {
+            $_SESSION['error'] = 'Project deadline must be later than the timeline start date and time.';
         } else {
+            $deadline = $clientDeadline ?: $timelineEnd;
             $conn->begin_transaction();
 
             try {
+                $attachmentsJson = json_encode(salesClientsSaveAttachments($_FILES['attachments'] ?? []), JSON_UNESCAPED_SLASHES);
                 $stmt = $conn->prepare("INSERT INTO clients (name, contact_person, email, phone, address, deadline, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
                 if ($stmt === false) {
                     throw new RuntimeException('Unable to prepare client insert.');
@@ -419,7 +474,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                 if ($projectId) {
                     logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);
-                    $_SESSION['success'] = "Client added, shared project folder created, and project details are available to all roles.";
+                    $_SESSION['success'] = 'Client and complete project intake sent to Architect review successfully.';
                 } else {
                     $_SESSION['success'] = "Client added and shared client folder created. No project created because project name was empty.";
                 }
@@ -1279,6 +1334,36 @@ include '../../includes/navbar.php';
     line-height: 1.4;
 }
 
+.modal-modern.add-client-modal .required-mark {
+    color: #dc2626;
+    margin-left: .18rem;
+}
+
+.modal-modern.add-client-modal .optional-label {
+    color: var(--gray-500);
+    font-size: .72rem;
+    font-weight: 500;
+}
+
+.modal-modern.add-client-modal .architect-handoff-note {
+    align-items: flex-start;
+    display: flex;
+    gap: .65rem;
+    margin-bottom: .85rem;
+    padding: .7rem .8rem;
+    border-radius: 10px;
+    background: #eff6ff;
+    color: #1e4f78;
+    font-size: .78rem;
+    line-height: 1.45;
+}
+
+.modal-modern.add-client-modal .architect-handoff-note i {
+    flex: 0 0 auto;
+    margin-top: .15rem;
+    color: var(--theme-primary);
+}
+
 .modal-modern.add-client-modal .info-card {
     display: grid;
     gap: 0.25rem;
@@ -1822,6 +1907,11 @@ include '../../includes/navbar.php';
     color: #9db6cf !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .architect-handoff-note {
+    background: rgba(31, 99, 146, .18);
+    color: #c4e6ff;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table th,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table td,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
@@ -2196,7 +2286,7 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close add-client-close" aria-label="Close"></button>
             </div>
-            <form method="POST" id="addClientForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Saving client" data-loading-text="Please wait while the client, project details, folders, and notifications are saved.">
+            <form method="POST" id="addClientForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Sending to Architect" data-loading-text="Please wait while the qualified client intake, project folder, and Architect notification are saved.">
                 <input type="hidden" name="client_draft_id" data-client-draft-id value="">
                 <div class="modal-body">
                     <div class="add-client-stepper" aria-label="Add client progress">
@@ -2238,32 +2328,37 @@ include '../../includes/navbar.php';
                         </div>
                     </div>
 
+                    <div class="architect-handoff-note">
+                        <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                        <span>Fields marked <strong>*</strong> are required before the project can be sent to Architect. Additional requirements and other fields marked optional may be left blank.</span>
+                    </div>
+
                     <div class="add-client-layout">
                         <div class="field-group add-client-step" data-client-step="0">
                             <div class="section-title"><i class="fas fa-id-card"></i> Client Profile</div>
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label class="form-label">Company Name</label>
+                                    <label class="form-label">Company Name<span class="required-mark">*</span></label>
                                     <input type="text" name="name" class="form-control" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Contact Person</label>
+                                    <label class="form-label">Contact Person<span class="required-mark">*</span></label>
                                     <input type="text" name="contact_person" class="form-control" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Email</label>
+                                    <label class="form-label">Email<span class="required-mark">*</span></label>
                                     <input type="email" name="email" class="form-control" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Phone</label>
+                                    <label class="form-label">Phone<span class="required-mark">*</span></label>
                                     <input type="text" name="phone" class="form-control" required>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label">Address</label>
+                                    <label class="form-label">Address <span class="optional-label">(Optional)</span></label>
                                     <textarea name="address" class="form-control" rows="2"></textarea>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Client Deadline</label>
+                                    <label class="form-label">Client Deadline <span class="optional-label">(Optional)</span></label>
                                     <input type="date" name="deadline" class="form-control">
                                 </div>
                             </div>
@@ -2273,15 +2368,15 @@ include '../../includes/navbar.php';
                             <div class="section-title"><i class="fas fa-clipboard-list"></i> Project Intake</div>
                             <div class="row g-3">
                                 <div class="col-12">
-                                    <label class="form-label">Project Name</label>
+                                    <label class="form-label">Project Name<span class="required-mark">*</span></label>
                                     <input type="text" name="project_name" class="form-control" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Project Description</label>
-                                    <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution"></textarea>
+                                    <label class="form-label">Project Description<span class="required-mark">*</span></label>
+                                    <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution" required></textarea>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Requested System Features</label>
+                                    <label class="form-label">Requested System Features<span class="required-mark">*</span></label>
                                     <div class="requested-feature-builder">
                                         <input type="hidden" name="requested_features" id="requestedFeaturesField">
                                         <div class="requested-feature-list" id="requestedFeatureList">
@@ -2297,18 +2392,19 @@ include '../../includes/navbar.php';
                                                 <i class="fas fa-plus me-1"></i> Add Feature Item
                                             </button>
                                         </div>
+                                        <div class="mini-note">Add at least one feature the Architect can evaluate.</div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Meeting Notes</label>
+                                    <label class="form-label">Meeting Notes <span class="optional-label">(Optional)</span></label>
                                     <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Minutes of the Meeting (MOM)</label>
+                                    <label class="form-label">Minutes of the Meeting (MOM) <span class="optional-label">(Optional)</span></label>
                                     <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label">Additional Requirements</label>
+                                    <label class="form-label">Additional Requirements <span class="optional-label">(Optional)</span></label>
                                     <textarea name="additional_requirements" class="form-control" rows="3" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
                                 </div>
                                 <div class="col-md-6">
@@ -2321,7 +2417,7 @@ include '../../includes/navbar.php';
                                     </select>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Attachments</label>
+                                    <label class="form-label">Attachments <span class="optional-label">(Optional)</span></label>
                                     <input type="file" name="attachments[]" class="form-control" multiple>
                                 </div>
                             </div>
@@ -2331,25 +2427,25 @@ include '../../includes/navbar.php';
                             <div class="section-title"><i class="fas fa-calendar-check"></i> Timeline & Budget</div>
                             <div class="row g-3">
                                 <div class="col-md-3">
-                                    <label class="form-label">Timeline Start</label>
-                                    <input type="date" name="timeline_start" class="form-control">
+                                    <label class="form-label">Timeline Start<span class="required-mark">*</span></label>
+                                    <input type="date" name="timeline_start" class="form-control" required>
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">Start Time</label>
-                                    <input type="time" name="timeline_start_time" class="form-control">
+                                    <label class="form-label">Start Time<span class="required-mark">*</span></label>
+                                    <input type="time" name="timeline_start_time" class="form-control" required>
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">Project Deadline</label>
-                                    <input type="date" name="timeline_end" class="form-control">
+                                    <label class="form-label">Project Deadline<span class="required-mark">*</span></label>
+                                    <input type="date" name="timeline_end" class="form-control" required>
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">Deadline Time</label>
-                                    <input type="time" name="timeline_end_time" class="form-control">
+                                    <label class="form-label">Deadline Time<span class="required-mark">*</span></label>
+                                    <input type="time" name="timeline_end_time" class="form-control" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Budget</label>
-                                    <input type="number" name="sales_budget" class="form-control" min="0" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00">
-                                    <div class="mini-note">Used as the decision insight budget baseline when provided.</div>
+                                    <label class="form-label">Budget<span class="required-mark">*</span></label>
+                                    <input type="number" name="sales_budget" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00" required>
+                                    <div class="mini-note">Required as the decision insight budget baseline.</div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Generated Complexity</label>
@@ -2357,7 +2453,7 @@ include '../../includes/navbar.php';
                                     <div class="mini-note">Calculated automatically from timeline and feature count.</div>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label">Sales Notes</label>
+                                    <label class="form-label">Sales Notes <span class="optional-label">(Optional)</span></label>
                                     <textarea name="sales_notes" class="form-control" rows="3" placeholder="Internal notes for Architect review"></textarea>
                                 </div>
                                 <div class="col-md-6">
@@ -2470,7 +2566,7 @@ include '../../includes/navbar.php';
                         <button type="button" class="btn btn-outline-primary" data-save-draft disabled>Save Draft</button>
                         <button type="button" class="btn btn-outline-secondary" data-client-prev hidden>Previous</button>
                         <button type="button" class="btn-add-modern" data-client-next>Next</button>
-                        <button type="submit" name="add_client" class="btn-add-modern" data-client-submit hidden>Add Client</button>
+                        <button type="submit" name="add_client" class="btn-add-modern" data-client-submit hidden><i class="fas fa-paper-plane me-1"></i> Add &amp; Send to Architect</button>
                     </div>
                     <div class="unsaved-close-panel" data-unsaved-close-panel>
                         <div class="unsaved-close-panel__text">
@@ -3364,10 +3460,57 @@ if (addClientModalElement && addClientForm) {
         });
     }
 
+    function prepareRequestedFeatureValidation() {
+        const featureInputs = Array.from(requestedFeatureList?.querySelectorAll('[data-requested-feature-input]') || []);
+        featureInputs.forEach((input) => input.setCustomValidity(''));
+
+        if (getRequestedFeatureValues().length > 0) {
+            return true;
+        }
+
+        const firstInput = featureInputs[0];
+        if (firstInput) {
+            firstInput.setCustomValidity('Add at least one requested feature before sending the project to Architect.');
+        }
+        return false;
+    }
+
+    function prepareTimelineValidation() {
+        const startDateField = addClientForm.elements.timeline_start;
+        const startTimeField = addClientForm.elements.timeline_start_time;
+        const endDateField = addClientForm.elements.timeline_end;
+        const endTimeField = addClientForm.elements.timeline_end_time;
+        if (!startDateField || !startTimeField || !endDateField || !endTimeField) {
+            return true;
+        }
+
+        endDateField.setCustomValidity('');
+        endTimeField.setCustomValidity('');
+        if (!startDateField.value || !startTimeField.value || !endDateField.value || !endTimeField.value) {
+            return true;
+        }
+
+        const startAt = new Date(`${startDateField.value}T${startTimeField.value}:00`);
+        const endAt = new Date(`${endDateField.value}T${endTimeField.value}:00`);
+        if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()) || endAt <= startAt) {
+            endTimeField.setCustomValidity('Project deadline must be later than the timeline start date and time.');
+            return false;
+        }
+
+        return true;
+    }
+
     function validateClientStep(stepIndex, shouldReport = true) {
         const panel = stepPanels[stepIndex];
         if (!panel) {
             return true;
+        }
+
+        if (stepIndex === 1) {
+            prepareRequestedFeatureValidation();
+        }
+        if (stepIndex === 2) {
+            prepareTimelineValidation();
         }
 
         const fields = Array.from(panel.querySelectorAll('input, select, textarea'));
@@ -3435,6 +3578,7 @@ if (addClientModalElement && addClientForm) {
     if (requestedFeatureList) {
         requestedFeatureList.addEventListener('input', (event) => {
             if (event.target.matches('[data-requested-feature-input]')) {
+                event.target.setCustomValidity('');
                 syncRequestedFeaturesField();
             }
         });
@@ -3467,6 +3611,13 @@ if (addClientModalElement && addClientForm) {
             updateDraftStatus(false);
         });
     }
+
+    ['timeline_start', 'timeline_start_time', 'timeline_end', 'timeline_end_time'].forEach((fieldName) => {
+        addClientForm.elements[fieldName]?.addEventListener('input', () => {
+            addClientForm.elements.timeline_end?.setCustomValidity('');
+            addClientForm.elements.timeline_end_time?.setCustomValidity('');
+        });
+    });
 
     if (addRequestedFeatureButton && requestedFeatureList) {
         addRequestedFeatureButton.addEventListener('click', () => {
