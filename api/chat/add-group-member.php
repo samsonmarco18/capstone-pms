@@ -3,6 +3,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/chat.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -31,6 +32,10 @@ if ($currentUserId <= 0 || $groupId <= 0 || !$memberIds) {
 try {
     $conn = getConnection();
 
+    if (!ensureChatGroupReadTracking($conn)) {
+        throw new RuntimeException('Group message read tracking is unavailable.');
+    }
+
     $groupStmt = $conn->prepare('SELECT id, name, created_by FROM chat_groups WHERE id = ? LIMIT 1');
     if ($groupStmt === false) {
         throw new RuntimeException('Failed to prepare group query: ' . $conn->error);
@@ -56,12 +61,19 @@ try {
 
     $userCheckStmt = $conn->prepare('SELECT id, full_name, status FROM users WHERE id = ? LIMIT 1');
     $membershipStmt = $conn->prepare('SELECT id, left_at FROM chat_group_members WHERE group_id = ? AND user_id = ? LIMIT 1');
-    $insertStmt = $conn->prepare('INSERT INTO chat_group_members (group_id, user_id, role) VALUES (?, ?, ?)');
-    $restoreStmt = $conn->prepare('UPDATE chat_group_members SET role = ?, left_at = NULL, joined_at = NOW() WHERE id = ?');
+    $insertStmt = $conn->prepare('INSERT INTO chat_group_members (group_id, user_id, role, last_read_message_id) VALUES (?, ?, ?, ?)');
+    $restoreStmt = $conn->prepare('UPDATE chat_group_members SET role = ?, left_at = NULL, joined_at = NOW(), last_read_message_id = ? WHERE id = ?');
+    $latestMessageStmt = $conn->prepare('SELECT COALESCE(MAX(id), 0) AS last_message_id FROM messages WHERE group_id = ?');
 
-    if ($userCheckStmt === false || $membershipStmt === false || $insertStmt === false || $restoreStmt === false) {
+    if ($userCheckStmt === false || $membershipStmt === false || $insertStmt === false || $restoreStmt === false || $latestMessageStmt === false) {
         throw new RuntimeException('Failed to prepare member queries: ' . $conn->error);
     }
+
+    $latestMessageStmt->bind_param('i', $groupId);
+    $latestMessageStmt->execute();
+    $latestMessageRow = $latestMessageStmt->get_result()->fetch_assoc();
+    $lastReadMessageId = (int) ($latestMessageRow['last_message_id'] ?? 0);
+    $latestMessageStmt->close();
 
     $addedCount = 0;
     $addedNames = [];
@@ -90,13 +102,13 @@ try {
         if ($membership) {
             $role = 'member';
             $recordId = (int) $membership['id'];
-            $restoreStmt->bind_param('si', $role, $recordId);
+            $restoreStmt->bind_param('sii', $role, $lastReadMessageId, $recordId);
             if (!$restoreStmt->execute()) {
                 continue;
             }
         } else {
             $role = 'member';
-            $insertStmt->bind_param('iis', $groupId, $memberId, $role);
+            $insertStmt->bind_param('iisi', $groupId, $memberId, $role, $lastReadMessageId);
             if (!$insertStmt->execute()) {
                 continue;
             }
@@ -104,16 +116,6 @@ try {
 
         $addedCount++;
         $addedNames[] = (string) ($memberUser['full_name'] ?? 'Member');
-
-        createNotification(
-            $memberId,
-            'Added to chat group',
-            $user['full_name'] . ' added you to "' . $group['name'] . '".',
-            'group',
-            'chat_groups',
-            $groupId,
-            BASE_URL . 'profile.php'
-        );
     }
 
     $userCheckStmt->close();
@@ -126,6 +128,14 @@ try {
         echo json_encode(['error' => 'No new members were added.']);
         exit();
     }
+
+    $memberLabel = implode(', ', $addedNames);
+    createChatGroupSystemMessage(
+        $conn,
+        $currentUserId,
+        $groupId,
+        (string) $user['full_name'] . ' added ' . $memberLabel . ' to the group.'
+    );
 
     logActivity($currentUserId, 'add_chat_group_member', 'chat_group_members', $groupId, null, [
         'added_user_ids' => $memberIds,

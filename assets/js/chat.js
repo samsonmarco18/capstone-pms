@@ -24,6 +24,7 @@ function initChatWidget() {
 
     applyChatVisibility();
     loadConversationData();
+    startChatPolling();
     loadUsersForGroup();
 
     $('.chat-tab').on('click', function () {
@@ -247,6 +248,14 @@ function updateChatUnreadBadge(countOverride = null) {
 
     badge.text(totalUnread > 99 ? '99+' : totalUnread);
     badge.toggleClass('d-none', totalUnread <= 0);
+    badge.attr('aria-label', `${totalUnread} unread ${totalUnread === 1 ? 'message' : 'messages'}`);
+
+    $('#chat-widget-minimized').attr(
+        'title',
+        totalUnread > 0
+            ? `Open chat - ${totalUnread} unread ${totalUnread === 1 ? 'message' : 'messages'}`
+            : 'Open chat'
+    );
 }
 
 function openConversation(type, id) {
@@ -291,11 +300,6 @@ function showInboxView() {
     currentChatUser = null;
     currentChatGroup = null;
     currentGroupDetails = null;
-
-    if (chatPollInterval) {
-        clearInterval(chatPollInterval);
-        chatPollInterval = null;
-    }
 }
 
 function showThreadView() {
@@ -426,12 +430,42 @@ function renderGroupInfoView(details) {
     `);
 }
 
-function removeGroupMember(memberId) {
+async function removeGroupMember(memberId) {
     if (!currentChatGroup || !memberId) {
         return;
     }
 
-    if (!window.confirm('Remove this member from the group?')) {
+    const members = currentGroupDetails && Array.isArray(currentGroupDetails.members)
+        ? currentGroupDetails.members
+        : [];
+    const member = members.find(item => Number(item.id) === Number(memberId));
+    const memberName = member && member.full_name ? member.full_name : 'this member';
+    const groupName = currentGroupDetails && currentGroupDetails.group && currentGroupDetails.group.name
+        ? currentGroupDetails.group.name
+        : 'this group';
+
+    if (
+        typeof window.appConfirm !== 'function'
+        || !document.getElementById('appConfirmModal')
+        || !window.bootstrap
+    ) {
+        showToast('Group Chat', 'The confirmation window is unavailable. Please refresh and try again.', 'warning');
+        return;
+    }
+
+    const confirmed = await window.appConfirm({
+        title: 'Remove Group Member',
+        titleIcon: 'fas fa-user-minus',
+        subject: `Remove ${memberName} from ${groupName}?`,
+        message: 'They will no longer have access to this group chat.',
+        icon: 'fas fa-user-minus fa-lg',
+        confirmIcon: 'fas fa-user-minus',
+        confirmText: 'Remove Member',
+        cancelText: 'Keep Member',
+        variant: 'danger'
+    });
+
+    if (!confirmed) {
         return;
     }
 
@@ -640,12 +674,16 @@ function startChatPolling() {
         clearInterval(chatPollInterval);
     }
 
-    if (currentChatUser || currentChatGroup) {
-        chatPollInterval = setInterval(function () {
+    chatPollInterval = setInterval(function () {
+        const isChatVisible = $('#chat-widget').hasClass('chat-widget-open') && !document.hidden;
+        const isThreadVisible = isChatVisible && !$('#chatThreadView').hasClass('d-none');
+
+        if (isThreadVisible && (currentChatUser || currentChatGroup)) {
             loadChatMessages();
+        } else {
             loadConversationData();
-        }, 5000);
-    }
+        }
+    }, 5000);
 }
 
 function loadChatMessages() {
@@ -679,6 +717,18 @@ function renderChatMessages(messages) {
     let html = '';
     messages.forEach(function (message) {
         const time = formatMessageTime(message.created_at);
+
+        if (message.message_type === 'notification') {
+            html += `
+                <div class="message system">
+                    <i class="fas fa-users"></i>
+                    <span>${escapeHtml(message.message)}</span>
+                    <small>${escapeHtml(time)}</small>
+                </div>
+            `;
+            return;
+        }
+
         const mineClass = message.is_mine ? 'sent' : 'received';
         const sender = message.is_mine ? 'You' : escapeHtml(message.sender_name || 'User');
 
@@ -725,7 +775,6 @@ function sendMessage() {
             if (response.success) {
                 input.val('');
                 loadChatMessages();
-                loadNotifications();
                 loadConversationData();
             } else {
                 showToast('Chat', response.error || 'Unable to send message.', 'error');

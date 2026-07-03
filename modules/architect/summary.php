@@ -83,8 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    $firstExecutionDepartment = '';
-    $firstExecutionRow = $conn->query("
+    $firstHandoffDepartment = '';
+    $firstHandoffRow = $conn->query("
         SELECT mt.department
         FROM methodology_tasks mt
         INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
@@ -92,16 +92,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
           AND mt.department IS NOT NULL
           AND mt.department != ''
         ORDER BY COALESCE(mp.sequence_no, mp.id) ASC, mt.id ASC
+        LIMIT 1
     ");
-    while ($departmentRow = $firstExecutionRow->fetch_assoc()) {
-        $candidate = projectWorkflowDepartmentLabel($departmentRow['department'] ?? '');
-        if ($candidate !== '' && !in_array($candidate, ['Expert Department', 'QA'], true)) {
-            $firstExecutionDepartment = $candidate;
-            break;
-        }
+    if ($departmentRow = $firstHandoffRow->fetch_assoc()) {
+        $firstHandoffDepartment = projectWorkflowDepartmentLabel($departmentRow['department'] ?? '');
     }
-    if ($firstExecutionDepartment !== 'UI/UX') {
-        $_SESSION['error'] = 'UI/UX must be the first execution department before Architect submission. Place UI/UX before development and QA phases in the roadmap.';
+    if ($firstHandoffDepartment !== 'Expert Department') {
+        $_SESSION['error'] = 'Expert Department must be the first department before Architect submission because Expert SUL receives the project for estimation first.';
         header('Location: summary.php?id=' . $projectId);
         exit();
     }
@@ -135,7 +132,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (is_array($decodedDepartments)) {
         $selectedDepartments = array_map(static fn($department): string => projectWorkflowDepartmentLabel((string) $department), $decodedDepartments);
     }
-    projectWorkflowNotifySelectedSuls($conn, $projectId, array_unique($selectedDepartments), (string) $project['name']);
+    if (!in_array('Expert Department', $selectedDepartments, true)) {
+        $_SESSION['error'] = 'Expert Department must be included so the Expert SUL can receive the project for estimation.';
+        header('Location: summary.php?id=' . $projectId);
+        exit();
+    }
+    projectWorkflowNotifySelectedSuls($conn, $projectId, ['Expert Department'], (string) $project['name']);
     
     logActivity($user['id'], 'submit_architecture', 'projects', $projectId);
     $_SESSION['success'] = "Architecture plan submitted to SUL successfully";
@@ -426,10 +428,35 @@ a.progress-step:hover {
     border-radius: 16px;
     padding: 1rem;
     margin-bottom: 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    color: #213f61;
+    line-height: 1.55;
 }
 
 .alert-info-modern i {
     color: #2563eb;
+    flex: 0 0 auto;
+    margin-top: 0.2rem;
+}
+
+.submission-confirmation {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    padding: 0.25rem 0;
+}
+
+.submission-confirmation .form-check-input {
+    flex: 0 0 auto;
+    margin: 0.25rem 0 0;
+}
+
+.submission-confirmation .form-check-label {
+    color: #213f61;
+    line-height: 1.5;
 }
 
 /* Button */
@@ -569,6 +596,8 @@ a.progress-step:hover {
         <a class="progress-step active" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
     </div>
 
+    <?php include '../../includes/architect-project-review-panel.php'; ?>
+
     <?php
     delayInsightsRenderSection($conn, $user, [
         'project_id' => $projectId,
@@ -699,9 +728,9 @@ a.progress-step:hover {
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
-                    <div class="alert-info-modern"><i class="fas fa-info-circle me-2"></i>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</div>
-                    <form method="POST" id="summaryForm">
-                        <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="confirmCheck" name="confirmCheck" value="1" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
+                    <div class="alert-info-modern"><i class="fas fa-info-circle"></i><span>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</span></div>
+                    <form method="POST" id="summaryForm" data-generic-draft-disabled="true">
+                        <div class="submission-confirmation"><input class="form-check-input" type="checkbox" id="confirmCheck" name="confirmCheck" value="1" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
                         <button type="submit" class="btn-submit" id="submitBtn" <?php echo $summaryReadyForSubmit ? 'disabled' : 'disabled title="Complete all required architect steps first"'; ?>><i class="fas fa-paper-plane"></i> Submit to SUL</button>
                     </form>
                 </div>

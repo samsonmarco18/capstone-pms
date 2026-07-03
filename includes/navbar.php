@@ -10,7 +10,14 @@ if ($user) {
 
     try {
         $conn = getConnection();
-        $stmt = $conn->prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY is_read ASC, created_at DESC LIMIT 8');
+        $stmt = $conn->prepare(
+            "SELECT *
+             FROM notifications
+             WHERE user_id = ?
+               AND (notification_type IS NULL OR notification_type NOT IN ('message', 'group'))
+             ORDER BY is_read ASC, created_at DESC
+             LIMIT 8"
+        );
 
         if ($stmt !== false) {
             $stmt->bind_param('i', $user['id']);

@@ -54,18 +54,6 @@ if (!$stmt->execute()) {
 $messageId = $stmt->insert_id;
 $stmt->close();
 
-if ($receiverId > 0) {
-    createNotification(
-        $receiverId,
-        'New message from ' . $user['full_name'],
-        $message,
-        'message',
-        'messages',
-        $messageId,
-        BASE_URL . 'profile.php'
-    );
-}
-
 logActivity((int) $user['id'], 'send_message', 'messages', $messageId, null, [
     'receiver_id' => $receiverId,
     'group_id' => $groupId,

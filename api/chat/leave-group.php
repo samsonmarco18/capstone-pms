@@ -3,6 +3,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/chat.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -92,6 +93,15 @@ try {
             $updateGroupStmt->execute();
             $updateGroupStmt->close();
         }
+    }
+
+    if ($memberCount > 0) {
+        createChatGroupSystemMessage(
+            $conn,
+            $currentUserId,
+            $groupId,
+            (string) $user['full_name'] . ' left the group.'
+        );
     }
 
     $conn->commit();

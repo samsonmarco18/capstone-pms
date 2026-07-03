@@ -238,6 +238,24 @@ CREATE TABLE methodology_tasks (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- METHODOLOGY ROADMAP TASK DEPARTMENT REQUIREMENTS TABLE
+-- =====================================================
+CREATE TABLE methodology_task_departments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    methodology_task_id INT NOT NULL,
+    project_id INT NOT NULL,
+    department VARCHAR(100) NOT NULL,
+    required_count INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (methodology_task_id) REFERENCES methodology_tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_methodology_task_department (methodology_task_id, department),
+    INDEX idx_methodology_task_department_project (project_id),
+    INDEX idx_methodology_task_department_name (department)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- ARCHITECTURE DOCUMENTS TABLE
 -- =====================================================
 CREATE TABLE architecture_documents (
@@ -436,6 +454,41 @@ CREATE TABLE cost_estimations (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- EXPERT PROJECT ESTIMATIONS TABLE
+-- =====================================================
+CREATE TABLE expert_project_estimations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    project_id INT NOT NULL,
+    expert_id INT NOT NULL,
+    status ENUM('draft','submitted','sul_rejected','sul_approved','sales_rejected','sales_approved') DEFAULT 'draft',
+    project_duration_months INT DEFAULT 1,
+    project_complexity VARCHAR(40) DEFAULT 'Medium',
+    allocation_json LONGTEXT,
+    additional_costs DECIMAL(15, 2) DEFAULT 0,
+    total_developer_cost DECIMAL(15, 2) DEFAULT 0,
+    total_technology_stack_cost DECIMAL(15, 2) DEFAULT 0,
+    overall_estimated_project_cost DECIMAL(15, 2) DEFAULT 0,
+    remaining_budget DECIMAL(15, 2) DEFAULT 0,
+    sul_reviewed_by INT NULL,
+    sul_reviewed_at DATETIME NULL,
+    sul_comment TEXT,
+    sales_reviewed_by INT NULL,
+    sales_reviewed_at DATETIME NULL,
+    sales_comment TEXT,
+    submitted_at DATETIME NULL,
+    approved_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_project_estimation (project_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (expert_id) REFERENCES users(id) ON DELETE RESTRICT,
+    FOREIGN KEY (sul_reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (sales_reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_project_estimation_status (status),
+    INDEX idx_project_estimation_expert (expert_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- SALES REPORTS TABLE
 -- =====================================================
 CREATE TABLE sales_reports (
@@ -611,6 +664,7 @@ CREATE TABLE chat_group_members (
     role ENUM('member', 'moderator', 'admin') DEFAULT 'member',
     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     left_at DATETIME,
+    last_read_message_id INT NOT NULL DEFAULT 0,
     UNIQUE KEY unique_group_user (group_id, user_id),
     FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -928,6 +982,9 @@ INSERT INTO users (username, email, password, full_name, department, role, statu
 
 -- Department dummy teams (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
+('expert_sul_1', 'expert.sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Evelyn Expert SUL', 'Expert Department', 'sul', 'active', 'Expert Service Unit Leader'),
+('expert_dept_1', 'expert.dept1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Rafael Estimation Expert', 'Expert Department', 'expert', 'active', 'Solution Estimation Expert'),
+('expert_dept_2', 'expert.dept2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Mina Senior Estimator', 'Expert Department', 'expert', 'active', 'Senior Estimation Expert'),
 ('frontend_sul_2', 'frontend.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ana Frontend SUL', 'Frontend Developer', 'sul', 'active', 'Service Unit Leader'),
 ('frontend_dev_2', 'frontend.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Liam Frontend Developer', 'Frontend Developer', 'developer', 'active', 'Frontend Developer'),
 ('frontend_dev_3', 'frontend.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Mia Frontend Developer', 'Frontend Developer', 'developer', 'active', 'Frontend Developer'),
@@ -988,11 +1045,11 @@ INSERT INTO projects (client_id, name, description, status, timeline_start, time
 (1, 'E-Commerce Platform', 'Complete e-commerce solution with payment gateway', 'requirements_gathering', '2026-03-01', '2026-12-31', 'Product Catalog
 Cart and Checkout
 Payment Gateway Integration
-Loyalty Rewards', '["Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","DevOps Engineer","Database Administrator"]', 'complex', 1, 3, 4),
+Loyalty Rewards', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","DevOps Engineer","Database Administrator"]', 'complex', 1, 3, 4),
 (2, 'Patient Management System', 'Hospital management and patient tracking system', 'pending', '2026-04-01', '2027-03-31', 'Patient Registration
 Appointment Scheduling
 Medical Records
-Insurance Export', '["Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","Database Administrator"]', 'complex', 1, NULL, NULL);
+Insurance Export', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","Database Administrator"]', 'complex', 1, NULL, NULL);
 
 -- Sample project feature checklist data
 INSERT INTO tasks (project_id, title, description, task_type, assigned_to, assigned_by, status, priority, deadline, completed_at, architect_reviewed_by, architect_reviewed_at, merged_at, release_notified_at) VALUES
