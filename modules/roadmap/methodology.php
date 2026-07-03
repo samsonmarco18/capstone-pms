@@ -1053,11 +1053,6 @@ include '../../includes/navbar.php';
     line-height: 1.2;
 }
 
-.roadmap-stat.monitor-state-not-started { border-left: 4px solid #64748b; }
-.roadmap-stat.monitor-state-in-progress { border-left: 4px solid #2563eb; }
-.roadmap-stat.monitor-state-pending { border-left: 4px solid #b45309; }
-.roadmap-stat.monitor-state-done { border-left: 4px solid #16a34a; }
-
 .roadmap-layout {
     display: grid;
     grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
