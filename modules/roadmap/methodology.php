@@ -784,7 +784,8 @@ if ($selectedProject) {
 
     $taskDepartmentRequirements = [];
     $requirementRows = $conn->query("
-        SELECT methodology_task_id, department, required_count
+        SELECT methodology_task_id, department, required_count, status,
+               assigned_developer_id, submitted_at, approved_at, revision_notes
         FROM methodology_task_departments
         WHERE project_id = {$selectedProjectId}
         ORDER BY id ASC
@@ -794,6 +795,11 @@ if ($selectedProject) {
         $taskDepartmentRequirements[$methodologyTaskId][] = [
             'department' => projectWorkflowDepartmentLabel((string) $requirement['department']),
             'required_count' => max(0, (int) $requirement['required_count']),
+            'status' => (string) ($requirement['status'] ?? 'planned'),
+            'assigned_developer_id' => (int) ($requirement['assigned_developer_id'] ?? 0),
+            'submitted_at' => (string) ($requirement['submitted_at'] ?? ''),
+            'approved_at' => (string) ($requirement['approved_at'] ?? ''),
+            'revision_notes' => (string) ($requirement['revision_notes'] ?? ''),
         ];
     }
 
@@ -816,13 +822,20 @@ if ($selectedProject) {
             $requirements[] = [
                 'department' => projectWorkflowDepartmentLabel((string) $row['department']),
                 'required_count' => 1,
+                'status' => (string) ($row['status'] ?? 'planned'),
+                'assigned_developer_id' => (int) ($row['assigned_developer_id'] ?? 0),
+                'submitted_at' => '',
+                'approved_at' => '',
+                'revision_notes' => '',
             ];
         }
         $row['department_requirements'] = $requirements;
         $row['department_summary'] = $requirements === []
             ? 'No staffing requirement'
             : implode(', ', array_map(
-                static fn(array $requirement): string => $requirement['department'] . ' (' . $requirement['required_count'] . ')',
+                static fn(array $requirement): string => $requirement['department']
+                    . ' (' . $requirement['required_count'] . ') - '
+                    . projectWorkflowPhaseStatusLabel((string) ($requirement['status'] ?? 'planned')),
                 $requirements
             ));
         $row['is_sul_department_task'] = $isSulMonitoring && $sulDepartmentLabel !== '' && count(array_filter(
@@ -2024,7 +2037,24 @@ include '../../includes/navbar.php';
                                         <div class="small text-muted"><?php echo htmlspecialchars((string) $task['component_name']); ?></div>
                                     <?php endif; ?>
                                 </td>
-                                <td><?php echo htmlspecialchars((string) $task['department_summary']); ?></td>
+                                <td>
+                                    <?php if (!empty($task['department_requirements'])): ?>
+                                        <div class="d-flex flex-column gap-1">
+                                            <?php foreach ($task['department_requirements'] as $requirement): ?>
+                                                <?php $departmentStatus = (string) ($requirement['status'] ?? 'planned'); ?>
+                                                <span>
+                                                    <strong><?php echo htmlspecialchars((string) ($requirement['department'] ?? 'Department')); ?></strong>
+                                                    <span class="small text-muted">(<?php echo (int) ($requirement['required_count'] ?? 0); ?>)</span>
+                                                    <span class="status-pill status-<?php echo htmlspecialchars($departmentStatus); ?>">
+                                                        <?php echo htmlspecialchars(projectWorkflowPhaseStatusLabel($departmentStatus)); ?>
+                                                    </span>
+                                                </span>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <span class="text-muted">No staffing requirement</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?php echo htmlspecialchars((string) $task['start_date']); ?> to <?php echo htmlspecialchars((string) $task['end_date']); ?></td>
                                 <td>
                                     <strong><?php echo (int) $task['expert_people_count']; ?></strong>

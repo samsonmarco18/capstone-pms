@@ -716,15 +716,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($stmt->execute()) {
             if ($currentRoadmapTask) {
                 $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
-                $syncRoadmapStmt = $conn->prepare("
-                    UPDATE methodology_tasks
-                    SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                ");
-                if ($syncRoadmapStmt) {
-                    $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $currentRoadmapTaskId);
-                    $syncRoadmapStmt->execute();
-                    $syncRoadmapStmt->close();
+                $currentDepartmentProgressId = (int) ($currentRoadmapTask['department_progress_id'] ?? 0);
+                if ($currentDepartmentProgressId > 0) {
+                    $syncRoadmapStmt = $conn->prepare("
+                        UPDATE methodology_task_departments
+                        SET assigned_developer_id = ?,
+                            workflow_task_id = ?,
+                            deadline = ?,
+                            status = 'planned',
+                            updated_by = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ? AND project_id = ?
+                    ");
+                    if ($syncRoadmapStmt) {
+                        $syncRoadmapStmt->bind_param("iisiii", $developerId, $taskId, $deadline, $userId, $currentDepartmentProgressId, $assignmentProjectId);
+                        $syncRoadmapStmt->execute();
+                        $syncRoadmapStmt->close();
+                    }
+                } else {
+                    $syncRoadmapStmt = $conn->prepare("
+                        UPDATE methodology_tasks
+                        SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    ");
+                    if ($syncRoadmapStmt) {
+                        $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $currentRoadmapTaskId);
+                        $syncRoadmapStmt->execute();
+                        $syncRoadmapStmt->close();
+                    }
                 }
             }
 
@@ -801,26 +820,65 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 exit();
             }
 
-            $nextRoadmapTask = $currentRoadmapTask
-                ? projectWorkflowNextRoadmapTask($conn, $projectForRouting, $taskId, (int) ($currentRoadmapTask['id'] ?? 0))
-                : null;
-            $nextDepartment = projectWorkflowDepartmentLabel($nextRoadmapTask['department_label'] ?? ($nextRoadmapTask['department'] ?? ''));
-            $routeToQa = $nextDepartment === 'QA' || !$nextRoadmapTask;
-            $approvedStatus = $routeToQa ? 'qa_testing' : 'todo';
+            $allDepartmentsComplete = true;
+            $nextRoadmapTask = null;
+            $nextDepartment = '';
 
             if ($currentRoadmapTask) {
                 $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
-                $completeRoadmapStmt = $conn->prepare("
-                    UPDATE methodology_tasks
-                    SET status = 'completed', updated_by = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                ");
-                if ($completeRoadmapStmt) {
-                    $completeRoadmapStmt->bind_param("ii", $userId, $currentRoadmapTaskId);
-                    $completeRoadmapStmt->execute();
-                    $completeRoadmapStmt->close();
+                $currentDepartmentProgressId = (int) ($currentRoadmapTask['department_progress_id'] ?? 0);
+                if ($currentDepartmentProgressId > 0) {
+                    $completeRoadmapStmt = $conn->prepare("
+                        UPDATE methodology_task_departments
+                        SET status = 'completed',
+                            submitted_at = COALESCE(submitted_at, NOW()),
+                            approved_by = ?,
+                            approved_at = NOW(),
+                            revision_notes = NULL,
+                            updated_by = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ? AND project_id = ?
+                    ");
+                    if ($completeRoadmapStmt) {
+                        $completeRoadmapStmt->bind_param("iiii", $userId, $userId, $currentDepartmentProgressId, $projectForRouting);
+                        $completeRoadmapStmt->execute();
+                        $completeRoadmapStmt->close();
+                    }
+                } else {
+                    $completeRoadmapStmt = $conn->prepare("
+                        UPDATE methodology_tasks
+                        SET status = 'completed', updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    ");
+                    if ($completeRoadmapStmt) {
+                        $completeRoadmapStmt->bind_param("ii", $userId, $currentRoadmapTaskId);
+                        $completeRoadmapStmt->execute();
+                        $completeRoadmapStmt->close();
+                    }
+                }
+
+                if (dbTableExists($conn, 'methodology_task_departments')) {
+                    $laneCounts = $conn->query("
+                        SELECT
+                            COUNT(*) AS total,
+                            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count
+                        FROM methodology_task_departments
+                        WHERE methodology_task_id = {$currentRoadmapTaskId}
+                          AND project_id = {$projectForRouting}
+                    ")->fetch_assoc();
+                    $totalLanes = (int) ($laneCounts['total'] ?? 0);
+                    $completedLanes = (int) ($laneCounts['completed_count'] ?? 0);
+                    $allDepartmentsComplete = $totalLanes <= 0 || $completedLanes >= $totalLanes;
+                }
+
+                if ($allDepartmentsComplete) {
+                    $nextRoadmapTask = projectWorkflowNextRoadmapTask($conn, $projectForRouting, $taskId, $currentRoadmapTaskId);
+                    $nextDepartment = projectWorkflowDepartmentLabel($nextRoadmapTask['department_label'] ?? ($nextRoadmapTask['department'] ?? ''));
                 }
             }
+
+            $routeToQa = $allDepartmentsComplete && ($nextDepartment === 'QA' || !$nextRoadmapTask);
+            $approvedStatus = $routeToQa ? 'qa_testing' : 'todo';
 
             if ($routeToQa) {
                 $stmt = $conn->prepare("
@@ -833,20 +891,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 ");
                 $stmt->bind_param("ii", $userId, $taskId);
             } else {
-                $nextRoadmapTaskId = (int) ($nextRoadmapTask['id'] ?? 0);
-                if ($nextRoadmapTaskId > 0) {
-                    $resetNextRoadmapStmt = $conn->prepare("
-                        UPDATE methodology_tasks
-                        SET status = 'planned', assigned_developer_id = NULL, updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    ");
-                    if ($resetNextRoadmapStmt) {
-                        $resetNextRoadmapStmt->bind_param("i", $nextRoadmapTaskId);
-                        $resetNextRoadmapStmt->execute();
-                        $resetNextRoadmapStmt->close();
-                    }
-                }
-
                 $stmt = $conn->prepare("
                     UPDATE tasks
                     SET status = 'todo',
@@ -865,7 +909,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $approvalComment = $reviewComment !== ''
                     ? "SUL approved work: {$reviewComment}"
                     : 'SUL approved this department work.';
-                if (!$routeToQa && $nextDepartment !== '') {
+                if (!$allDepartmentsComplete) {
+                    $approvalComment .= ' Waiting for remaining department work before the parent task can move forward.';
+                } elseif (!$routeToQa && $nextDepartment !== '') {
                     $approvalComment .= ' Handoff sent to ' . $nextDepartment . '.';
                 }
                 workflowAddTaskComment($conn, $taskId, (int) $user['id'], $approvalComment);
@@ -881,7 +927,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $taskId
                     );
                     $_SESSION['success'] = "Work approved and moved to QA Testing.";
-                } else {
+                } elseif ($allDepartmentsComplete && $nextDepartment !== '') {
                     projectWorkflowNotifyDepartmentSuls(
                         $conn,
                         $nextDepartment,
@@ -891,6 +937,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $projectForRouting
                     );
                     $_SESSION['success'] = "Work approved. The next department has been notified.";
+                } else {
+                    $_SESSION['success'] = "Department work approved. The parent task remains in progress until every department is approved.";
                 }
                 header("Location: task-allocation.php");
                 exit();
