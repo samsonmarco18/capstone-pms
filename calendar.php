@@ -505,7 +505,6 @@ include __DIR__ . '/includes/navbar.php';
     display: block;
     overflow: hidden;
     padding: 0.22rem 0.35rem;
-    border-left: 3px solid var(--event-color, #1f6392);
     border-radius: 6px;
     background: #f7fafc;
     color: #293548;
