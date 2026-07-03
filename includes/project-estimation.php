@@ -166,86 +166,24 @@ function projectEstimationFetchContext(mysqli|PgsqlMysqliCompatConnection $conn,
     }
 
     $allocationRows = [];
-    if (dbTableExists($conn, 'methodology_task_departments')) {
-        $roadmapRequirementResult = $conn->query("
-            SELECT department, SUM(required_count) AS required_count
-            FROM methodology_task_departments
+    if (dbTableExists($conn, 'methodology_phases')) {
+        $roadmapHeadcountResult = $conn->query("
+            SELECT MAX(COALESCE(developer_count, 0)) AS required_count
+            FROM methodology_phases
             WHERE project_id = {$projectId}
-            GROUP BY department
-            ORDER BY department ASC
         ");
-        if ($roadmapRequirementResult) {
-            while ($row = $roadmapRequirementResult->fetch_assoc()) {
-                $label = projectEstimationDepartmentLabel((string) ($row['department'] ?? ''));
-                $allocationRows[$label] = [
-                    'department' => $label,
-                    'required_count' => max(0, (int) ($row['required_count'] ?? 0)),
-                    'complexity_level' => 'medium',
-                    'source' => 'roadmap',
-                ];
-            }
-        }
-    }
+        $roadmapHeadcount = $roadmapHeadcountResult
+            ? max(0, (int) ($roadmapHeadcountResult->fetch_assoc()['required_count'] ?? 0))
+            : 0;
 
-    if ($allocationRows === [] && dbTableExists($conn, 'methodology_tasks')) {
-        $roadmapTaskResult = $conn->query("
-            SELECT department, COUNT(*) AS required_count
-            FROM methodology_tasks
-            WHERE project_id = {$projectId}
-              AND COALESCE(department, '') != ''
-            GROUP BY department
-            ORDER BY department ASC
-        ");
-        if ($roadmapTaskResult) {
-            while ($row = $roadmapTaskResult->fetch_assoc()) {
-                $label = projectEstimationDepartmentLabel((string) ($row['department'] ?? ''));
-                $allocationRows[$label] = [
-                    'department' => $label,
-                    'required_count' => max(0, (int) ($row['required_count'] ?? 0)),
-                    'complexity_level' => 'medium',
-                    'source' => 'roadmap',
-                ];
-            }
-        }
-    }
-
-    if (dbTableExists($conn, 'developer_allocations')) {
-        $allocResult = $conn->query("
-            SELECT role, required_count, complexity_level
-            FROM developer_allocations
-            WHERE project_id = {$projectId}
-            ORDER BY FIELD(role, 'UI/UX', 'Frontend', 'Backend', 'Mobile', 'DevOps', 'Database', 'AI', 'Security', 'QA', 'Other Departments'), role ASC
-        ");
-        if ($allocResult) {
-            while ($row = $allocResult->fetch_assoc()) {
-                $label = projectEstimationDepartmentLabel((string) ($row['role'] ?? ''));
-                if (isset($allocationRows[$label]) && (int) ($allocationRows[$label]['required_count'] ?? 0) > 0) {
-                    continue;
-                }
-                $allocationRows[$label] = [
-                    'department' => $label,
-                    'required_count' => (int) ($row['required_count'] ?? 0),
-                    'complexity_level' => (string) ($row['complexity_level'] ?? 'medium'),
-                    'source' => 'developer_allocation',
-                ];
-            }
-        }
-    }
-
-    $includedRaw = trim((string) ($project['included_departments'] ?? ''));
-    if ($includedRaw !== '') {
-        $included = json_decode($includedRaw, true);
-        if (is_array($included)) {
-            foreach ($included as $department) {
-                $label = projectEstimationDepartmentLabel((string) $department);
-                if (!isset($allocationRows[$label])) {
-                    $allocationRows[$label] = [
-                        'department' => $label,
-                        'required_count' => 0,
-                        'complexity_level' => 'medium',
-                    ];
-                }
-            }
+        if ($roadmapHeadcount > 0) {
+            $label = 'Roadmap Architect Headcount';
+            $allocationRows[$label] = [
+                'department' => $label,
+                'required_count' => $roadmapHeadcount,
+                'complexity_level' => 'medium',
+                'source' => 'roadmap_phase_headcount',
+            ];
         }
     }
 
@@ -509,22 +447,22 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     </div>
 
                     <div class="estimation-panel mb-3">
-                        <div class="estimation-panel-head"><h5>Developer Allocation by Department</h5></div>
+                        <div class="estimation-panel-head"><h5>Developer Allocation by Roadmap Headcount</h5></div>
                         <div class="estimation-panel-body">
                             <?php if (count($allocations) === 0): ?>
-                                <div class="text-muted">No department allocation was selected by the Architect.</div>
+                                <div class="text-muted">No Roadmap Architect headcount has been entered yet.</div>
                             <?php else: foreach ($allocations as $allocation): $department = (string) $allocation['department']; $required = max(0, (int) $allocation['required_count']); ?>
                                 <div class="department-estimate">
                                     <div class="department-estimate-title">
                                         <span><?php echo htmlspecialchars($department); ?></span>
-                                        <span>Required headcount: <?php echo $required; ?></span>
+                                        <span>Roadmap headcount: <?php echo $required; ?></span>
                                     </div>
                                     <div class="estimation-scroll">
                                         <table class="estimate-table">
                                             <thead><tr><th>Developer Level</th><th>Monthly Salary</th><th>Contribution</th></tr></thead>
                                             <tbody>
                                             <?php if ($required <= 0): ?>
-                                                <tr><td colspan="3" class="text-muted">This department is included with no required headcount.</td></tr>
+                                                <tr><td colspan="3" class="text-muted">This roadmap entry has no required headcount.</td></tr>
                                             <?php else: for ($i = 1; $i <= $required; $i++): $saved = $savedRows[$department][$i] ?? []; $savedType = projectEstimationDeveloperLevel((string) ($saved['developer_type'] ?? 'Professional Dev')); $savedContribution = (float) ($saved['contribution_percent'] ?? 100); ?>
                                                 <tr class="allocation-input-row" data-department="<?php echo htmlspecialchars($department); ?>">
                                                     <td>

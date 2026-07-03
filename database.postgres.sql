@@ -464,10 +464,16 @@ CREATE TABLE receipts (
     amount_paid DECIMAL(12, 2) DEFAULT 0,
     due_date DATE,
     status TEXT CHECK (status IN ('draft', 'sent', 'viewed', 'paid', 'overdue')) DEFAULT 'draft',
+    payment_proof_path TEXT,
+    payment_proof_name TEXT,
+    payment_verified_by INT,
+    payment_verified_at TIMESTAMP,
+    email_sent_at TIMESTAMP,
     generated_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (report_id) REFERENCES sales_reports(id) ON DELETE CASCADE,
+    FOREIGN KEY (payment_verified_by) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (generated_by) REFERENCES users(id) ON DELETE RESTRICT
 );
 

@@ -10,10 +10,32 @@ $receiptId = (int) ($_GET['receipt_id'] ?? 0);
 $clientId = (int) ($_GET['client_id'] ?? 0);
 $contextClientId = $clientId;
 
+function salesReceiptEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
+{
+    $textType = DB_DRIVER === 'pgsql' ? 'TEXT' : 'VARCHAR(500)';
+    $shortTextType = DB_DRIVER === 'pgsql' ? 'TEXT' : 'VARCHAR(255)';
+    $timestampType = DB_DRIVER === 'pgsql' ? 'TIMESTAMP' : 'DATETIME';
+    $intType = 'INT NULL';
+    $columns = [
+        'payment_proof_path' => "{$textType} NULL",
+        'payment_proof_name' => "{$shortTextType} NULL",
+        'payment_verified_by' => $intType,
+        'payment_verified_at' => "{$timestampType} NULL",
+        'email_sent_at' => "{$timestampType} NULL",
+    ];
+
+    foreach ($columns as $column => $definition) {
+        if (!dbColumnExists($conn, 'receipts', $column)) {
+            $conn->query("ALTER TABLE receipts ADD COLUMN {$column} {$definition}");
+        }
+    }
+}
+
 function salesReceiptStatusLabel(string $status): string
 {
     return match ($status) {
         'draft' => 'For Review',
+        'sent' => 'Sent to Client',
         default => ucfirst(str_replace('_', ' ', $status)),
     };
 }
@@ -27,7 +49,7 @@ function salesReceiptRedirect(int $receiptId, int $clientId = 0): string
     return 'receipt.php' . ($clientId > 0 ? '?client_id=' . $clientId : '');
 }
 
-function salesReceiptDownload(mysqli|PgsqlMysqliCompatConnection $conn, int $receiptId): void
+function salesReceiptFetchForDelivery(mysqli|PgsqlMysqliCompatConnection $conn, int $receiptId): ?array
 {
     $stmt = $conn->prepare("
         SELECT r.*, sr.total_cost, sr.notes, p.name AS project_name,
@@ -41,8 +63,7 @@ function salesReceiptDownload(mysqli|PgsqlMysqliCompatConnection $conn, int $rec
     ");
 
     if ($stmt === false) {
-        http_response_code(500);
-        exit('Unable to prepare receipt download.');
+        return null;
     }
 
     $stmt->bind_param('i', $receiptId);
@@ -50,34 +71,123 @@ function salesReceiptDownload(mysqli|PgsqlMysqliCompatConnection $conn, int $rec
     $receipt = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
+    return $receipt ?: null;
+}
+
+function salesReceiptRenderHtml(array $receipt, bool $official = false): string
+{
+    $clientName = (string) (($receipt['client_name'] ?? '') ?: ($receipt['fallback_client_name'] ?? 'Client'));
+    $clientEmail = (string) (($receipt['client_email'] ?? '') ?: ($receipt['fallback_client_email'] ?? ''));
+    $amountDue = (float) (($receipt['amount_due'] ?? null) ?: ($receipt['total_cost'] ?? 0));
+    $dueDate = !empty($receipt['due_date']) ? date('M d, Y', strtotime((string) $receipt['due_date'])) : 'Not set';
+    $title = $official ? 'Official Paid Receipt' : 'Billing Receipt for Payment Review';
+
+    $html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt #' . htmlspecialchars((string) $receipt['receipt_number']) . '</title>';
+    $html .= '<style>body{font-family:Arial,sans-serif;color:#1f2937;padding:40px}.wrap{max-width:760px;margin:auto}.head{border-bottom:3px solid #1f6392;padding-bottom:20px;margin-bottom:28px}.brand{font-size:24px;font-weight:700;color:#1f6392}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}.box{border:1px solid #d1d5db;border-radius:8px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #d1d5db;padding:12px;text-align:left}th{background:#f3f4f6}.total{font-size:20px;font-weight:700;color:#1f6392}.notice{padding:12px 14px;background:#eef6ff;border:1px solid #bfdbfe;border-radius:8px;margin:18px 0}</style>';
+    $html .= '</head><body><div class="wrap"><div class="head"><div class="brand">ERNI Development Center Philippines Inc.</div><h1>' . htmlspecialchars($title) . '</h1><p>Receipt # ' . htmlspecialchars((string) $receipt['receipt_number']) . '</p><p>Status: ' . htmlspecialchars(salesReceiptStatusLabel((string) $receipt['status'])) . '</p></div>';
+    if (!$official) {
+        $html .= '<div class="notice">Please review this billing receipt and send your payment confirmation or proof of payment to Sales. The official paid receipt will be issued after Sales verifies the payment.</div>';
+    }
+    $html .= '<div class="grid"><div class="box"><strong>Bill To</strong><br>' . htmlspecialchars($clientName) . '<br>' . htmlspecialchars($clientEmail) . '</div><div class="box"><strong>Project</strong><br>' . htmlspecialchars((string) $receipt['project_name']) . '<br>Due: ' . htmlspecialchars($dueDate) . '</div></div>';
+    $html .= '<table><thead><tr><th>Description</th><th>Amount</th></tr></thead><tbody><tr><td>Final project delivery</td><td>$' . number_format($amountDue, 2) . '</td></tr><tr><td class="total">Total Amount Due</td><td class="total">$' . number_format($amountDue, 2) . '</td></tr></tbody></table>';
+    if (!empty($receipt['notes'])) {
+        $html .= '<p><strong>Notes:</strong> ' . htmlspecialchars((string) $receipt['notes']) . '</p>';
+    }
+    if ($official && !empty($receipt['payment_verified_at'])) {
+        $html .= '<p><strong>Payment verified:</strong> ' . htmlspecialchars(date('M d, Y h:i A', strtotime((string) $receipt['payment_verified_at']))) . '</p>';
+    }
+    $html .= '</div></body></html>';
+
+    return $html;
+}
+
+function salesReceiptDownload(mysqli|PgsqlMysqliCompatConnection $conn, int $receiptId): void
+{
+    $receipt = salesReceiptFetchForDelivery($conn, $receiptId);
     if (!$receipt) {
         http_response_code(404);
         exit('Receipt not found.');
     }
 
     $receiptNumber = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($receipt['receipt_number'] ?? 'receipt'));
-    $clientName = (string) (($receipt['client_name'] ?? '') ?: ($receipt['fallback_client_name'] ?? 'Client'));
-    $clientEmail = (string) (($receipt['client_email'] ?? '') ?: ($receipt['fallback_client_email'] ?? ''));
-    $amountDue = (float) (($receipt['amount_due'] ?? null) ?: ($receipt['total_cost'] ?? 0));
-    $dueDate = !empty($receipt['due_date']) ? date('M d, Y', strtotime((string) $receipt['due_date'])) : 'Not set';
-
     header('Content-Type: text/html; charset=utf-8');
     header('Content-Disposition: attachment; filename="receipt_' . $receiptNumber . '.html"');
     header('Cache-Control: no-store, no-cache, must-revalidate');
-
-    echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt #' . htmlspecialchars((string) $receipt['receipt_number']) . '</title>';
-    echo '<style>body{font-family:Arial,sans-serif;color:#1f2937;padding:40px}.wrap{max-width:760px;margin:auto}.head{border-bottom:3px solid #1f6392;padding-bottom:20px;margin-bottom:28px}.brand{font-size:24px;font-weight:700;color:#1f6392}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}.box{border:1px solid #d1d5db;border-radius:8px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #d1d5db;padding:12px;text-align:left}th{background:#f3f4f6}.total{font-size:20px;font-weight:700;color:#1f6392}</style>';
-    echo '</head><body><div class="wrap"><div class="head"><div class="brand">ERNI Development Center Philippines Inc.</div><h1>Receipt #' . htmlspecialchars((string) $receipt['receipt_number']) . '</h1><p>Status: ' . htmlspecialchars(salesReceiptStatusLabel((string) $receipt['status'])) . '</p></div>';
-    echo '<div class="grid"><div class="box"><strong>Bill To</strong><br>' . htmlspecialchars($clientName) . '<br>' . htmlspecialchars($clientEmail) . '</div><div class="box"><strong>Project</strong><br>' . htmlspecialchars((string) $receipt['project_name']) . '<br>Due: ' . htmlspecialchars($dueDate) . '</div></div>';
-    echo '<table><thead><tr><th>Description</th><th>Amount</th></tr></thead><tbody><tr><td>Final project delivery</td><td>$' . number_format($amountDue, 2) . '</td></tr><tr><td class="total">Total Amount Due</td><td class="total">$' . number_format($amountDue, 2) . '</td></tr></tbody></table>';
-    if (!empty($receipt['notes'])) {
-        echo '<p><strong>Notes:</strong> ' . htmlspecialchars((string) $receipt['notes']) . '</p>';
-    }
-    echo '</div></body></html>';
+    echo salesReceiptRenderHtml($receipt, (string) ($receipt['status'] ?? '') === 'paid');
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review']) || isset($_POST['finalize_receipt']))) {
+function salesReceiptSendToClient(mysqli|PgsqlMysqliCompatConnection $conn, int $receiptId): array
+{
+    $receipt = salesReceiptFetchForDelivery($conn, $receiptId);
+    if (!$receipt) {
+        return ['success' => false, 'error' => 'Receipt not found.'];
+    }
+
+    $clientEmail = (string) (($receipt['client_email'] ?? '') ?: ($receipt['fallback_client_email'] ?? ''));
+    if (!filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+        return ['success' => false, 'error' => 'Client email is missing or invalid.'];
+    }
+
+    $receiptHtml = salesReceiptRenderHtml($receipt, false);
+    $receiptNumber = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($receipt['receipt_number'] ?? 'receipt'));
+    $subject = 'ERNI PMS Billing Receipt #' . (string) ($receipt['receipt_number'] ?? '');
+    $body = '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;">'
+        . '<h2 style="color:#1f6392;">Billing receipt for review</h2>'
+        . '<p>Good day,</p>'
+        . '<p>Please review the attached billing receipt. Kindly reply to this email with your payment confirmation or proof of payment.</p>'
+        . '<p>Sales will verify the payment first before issuing the official paid receipt.</p>'
+        . '<p>Thank you.</p>'
+        . '</div>';
+    $text = "Please review the attached billing receipt and reply with your payment confirmation or proof of payment. Sales will verify payment before issuing the official paid receipt.";
+
+    return sendSystemEmail(
+        $clientEmail,
+        $subject,
+        $body,
+        $text,
+        [[
+            'name' => 'billing_receipt_' . $receiptNumber . '.html',
+            'mime' => 'text/html',
+            'content' => $receiptHtml,
+        ]]
+    );
+}
+
+function salesReceiptSavePaymentProof(array $file): ?array
+{
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        return null;
+    }
+
+    $originalName = basename((string) ($file['name'] ?? 'payment-proof'));
+    $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    $allowed = ['pdf', 'png', 'jpg', 'jpeg', 'webp'];
+    if (!in_array($extension, $allowed, true)) {
+        throw new RuntimeException('Payment proof must be a PDF or image file.');
+    }
+
+    $relativeDir = 'uploads/payment-proofs/' . date('Y/m/d');
+    $uploadDir = __DIR__ . '/../../' . $relativeDir;
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0775, true);
+    }
+
+    $fileName = uniqid('proof_', true) . '.' . $extension;
+    $targetPath = $uploadDir . '/' . $fileName;
+    if (!move_uploaded_file((string) ($file['tmp_name'] ?? ''), $targetPath)) {
+        throw new RuntimeException('Unable to save payment proof attachment.');
+    }
+
+    return [
+        'name' => $originalName,
+        'path' => $relativeDir . '/' . $fileName,
+    ];
+}
+
+salesReceiptEnsureSchema($conn);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review']) || isset($_POST['finalize_receipt']) || isset($_POST['verify_payment']))) {
     $postedReceiptId = (int) ($_POST['receipt_id'] ?? 0);
 
     if ($postedReceiptId <= 0) {
@@ -96,7 +206,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review'
             $reportStmt->close();
         }
 
-        $stmt = $conn->prepare("UPDATE receipts SET status = 'sent' WHERE id = ?");
+        $emailResult = salesReceiptSendToClient($conn, $postedReceiptId);
+        if (!$emailResult['success']) {
+            $_SESSION['error'] = 'Receipt was not finalized because email failed: ' . (string) ($emailResult['error'] ?? 'Unknown mail error.');
+            header('Location: ' . salesReceiptRedirect($postedReceiptId, $clientId));
+            exit;
+        }
+
+        $stmt = $conn->prepare("UPDATE receipts SET status = 'sent', email_sent_at = NOW() WHERE id = ?");
         if ($stmt !== false) {
             $stmt->bind_param('i', $postedReceiptId);
             $stmt->execute();
@@ -109,8 +226,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review'
                 $reportUpdateStmt->execute();
                 $reportUpdateStmt->close();
             }
-            $_SESSION['success'] = 'Receipt finalized and ready for client review.';
         }
+        $_SESSION['success'] = 'Receipt finalized and emailed to the client for payment confirmation.';
+        header('Location: ' . salesReceiptRedirect($postedReceiptId, $clientId));
+        exit;
+    }
+
+    if (isset($_POST['verify_payment'])) {
+        try {
+            $proof = salesReceiptSavePaymentProof($_FILES['payment_proof'] ?? []);
+            if (!$proof) {
+                throw new RuntimeException('Please attach the client payment proof before marking the receipt as paid.');
+            }
+
+            $receiptData = salesReceiptFetchForDelivery($conn, $postedReceiptId);
+            if (!$receiptData) {
+                throw new RuntimeException('Receipt not found.');
+            }
+
+            $amountPaid = (float) (($receiptData['amount_due'] ?? null) ?: ($receiptData['total_cost'] ?? 0));
+            $proofName = (string) $proof['name'];
+            $proofPath = (string) $proof['path'];
+            $verifiedBy = (int) ($user['id'] ?? 0);
+            $stmt = $conn->prepare("
+                UPDATE receipts
+                SET status = 'paid',
+                    amount_paid = ?,
+                    payment_proof_path = ?,
+                    payment_proof_name = ?,
+                    payment_verified_by = ?,
+                    payment_verified_at = NOW()
+                WHERE id = ?
+            ");
+            if ($stmt !== false) {
+                $stmt->bind_param('dssii', $amountPaid, $proofPath, $proofName, $verifiedBy, $postedReceiptId);
+                $stmt->execute();
+                $stmt->close();
+            }
+
+            logActivity($verifiedBy, 'verify_payment_receipt', 'receipts', $postedReceiptId, null, [
+                'payment_proof_name' => $proofName,
+                'payment_proof_path' => $proofPath,
+            ]);
+
+            $_SESSION['success'] = 'Payment proof verified. The official paid receipt is now available.';
+        } catch (Throwable $e) {
+            $_SESSION['error'] = $e->getMessage();
+        }
+
         header('Location: ' . salesReceiptRedirect($postedReceiptId, $clientId));
         exit;
     }
@@ -120,7 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review'
     $amountDueInput = str_replace(',', '', trim((string) ($_POST['amount_due'] ?? '')));
     $dueDateInput = trim((string) ($_POST['due_date'] ?? ''));
     $statusInput = trim((string) ($_POST['status'] ?? 'draft'));
-    $allowedStatuses = ['draft', 'sent', 'viewed', 'paid', 'overdue'];
+    $allowedStatuses = ['draft', 'sent', 'viewed', 'overdue'];
 
     if ($clientNameInput === '' || !is_numeric($amountDueInput) || (float) $amountDueInput < 0 || !in_array($statusInput, $allowedStatuses, true)) {
         $_SESSION['error'] = 'Please check the receipt details before saving.';
@@ -510,8 +673,30 @@ include '../../includes/navbar.php';
     transform: translateY(-1px);
 }
 
+.btn-icon-sm.verify {
+    background: #eef6ff;
+    color: var(--theme-primary);
+}
+
+.btn-icon-sm.verify:hover {
+    background: var(--theme-primary);
+    color: white;
+    transform: translateY(-1px);
+}
+
 .action-buttons form {
     margin: 0;
+}
+
+.proof-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--theme-primary);
+    text-decoration: none;
 }
 
 /* Button Styles */
@@ -774,6 +959,8 @@ include '../../includes/navbar.php';
                         'due_date' => (string) ($receipt['due_date'] ?? ''),
                         'status' => $receiptStatus,
                     ];
+                    $proofPath = trim((string) ($receipt['payment_proof_path'] ?? ''));
+                    $proofName = trim((string) ($receipt['payment_proof_name'] ?? ''));
                     ?>
                     <tr>
                         <td>
@@ -788,6 +975,12 @@ include '../../includes/navbar.php';
                             <span class="badge-status <?php echo htmlspecialchars($receiptStatus); ?>">
                                 <?php echo htmlspecialchars(salesReceiptStatusLabel($receiptStatus)); ?>
                             </span>
+                            <?php if ($proofPath !== ''): ?>
+                                <a class="proof-link" href="<?php echo htmlspecialchars(BASE_URL . $proofPath); ?>" target="_blank" rel="noopener">
+                                    <i class="fas fa-paperclip"></i>
+                                    <?php echo htmlspecialchars($proofName !== '' ? $proofName : 'Payment proof'); ?>
+                                </a>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <div class="action-buttons">
@@ -801,9 +994,14 @@ include '../../includes/navbar.php';
                                     <form method="POST">
                                         <input type="hidden" name="receipt_id" value="<?php echo (int) $receipt['id']; ?>">
                                         <button type="submit" name="finalize_receipt" class="btn-icon-sm finalize" title="Finalize receipt">
-                                            <i class="fas fa-check"></i>
+                                            <i class="fas fa-paper-plane"></i>
                                         </button>
                                     </form>
+                                <?php endif; ?>
+                                <?php if (in_array($receiptStatus, ['sent', 'viewed', 'overdue'], true)): ?>
+                                    <button type="button" class="btn-icon-sm verify" onclick="verifyPayment(<?php echo (int) $receipt['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $receipt['receipt_number']), ENT_QUOTES, 'UTF-8'); ?>)" title="Verify payment proof">
+                                        <i class="fas fa-file-circle-check"></i>
+                                    </button>
                                 <?php endif; ?>
                                 <button class="btn-icon-sm view" onclick="viewReceipt(<?php echo $receipt['id']; ?>)">
                                     <i class="fas fa-eye"></i>
@@ -863,7 +1061,7 @@ include '../../includes/navbar.php';
                         <option value="draft">For Review</option>
                         <option value="sent">Sent</option>
                         <option value="viewed">Viewed</option>
-                        <option value="paid">Paid</option>
+                        <option value="paid" disabled>Paid (Verified)</option>
                         <option value="overdue">Overdue</option>
                     </select>
                 </div>
@@ -872,6 +1070,38 @@ include '../../includes/navbar.php';
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" name="save_receipt_review" class="btn btn-primary">
                     <i class="fas fa-save me-1"></i> Save Review
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal fade" id="verifyPaymentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" enctype="multipart/form-data" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-file-circle-check me-2 text-primary"></i>Verify Payment</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="receipt_id" id="verify_receipt_id">
+                <p class="text-muted mb-3">
+                    Attach the client email screenshot, payment slip, bank confirmation, or other proof before issuing the official paid receipt.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label">Receipt #</label>
+                    <input type="text" id="verify_receipt_number" class="form-control" readonly>
+                </div>
+                <div>
+                    <label class="form-label">Payment Proof</label>
+                    <input type="file" name="payment_proof" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.webp" required>
+                    <div class="form-text">Accepted files: PDF, PNG, JPG, JPEG, WEBP.</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" name="verify_payment" class="btn btn-primary">
+                    <i class="fas fa-check me-1"></i> Verify and Mark Paid
                 </button>
             </div>
         </form>
@@ -892,6 +1122,12 @@ function editReceipt(receipt) {
     document.getElementById('edit_receipt_due_date').value = receipt.due_date || '';
     document.getElementById('edit_receipt_status').value = receipt.status || 'draft';
     bootstrap.Modal.getOrCreateInstance(document.getElementById('editReceiptModal')).show();
+}
+
+function verifyPayment(id, receiptNumber) {
+    document.getElementById('verify_receipt_id').value = id || '';
+    document.getElementById('verify_receipt_number').value = receiptNumber || '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('verifyPaymentModal')).show();
 }
 </script>
 

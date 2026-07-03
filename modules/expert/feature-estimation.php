@@ -440,9 +440,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['project_setup'])) {
 // Handle task estimation save (draft)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($_POST['submit_all'])) {
     $taskId = (int) ($_POST['task_id'] ?? 0);
-    $minDays = (int) ($_POST['min_days'] ?? 0);
-    $likelyDays = (int) ($_POST['likely_days'] ?? 0);
-    $maxDays = (int) ($_POST['max_days'] ?? 0);
+    $minDays = 0;
+    $likelyDays = 0;
+    $maxDays = 0;
     $expectation = trim((string) ($_POST['expectation'] ?? ''));
     $phaseName = null;
     $plannedStart = !empty($_POST['planned_start']) ? $_POST['planned_start'] : null;
@@ -454,25 +454,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     $involvementPlan = json_decode((string) ($_POST['involvement_plan_json'] ?? '[]'), true);
     $componentPlan = json_decode((string) ($_POST['component_plan_json'] ?? '[]'), true);
 
-    if ($minDays <= 0 || $likelyDays <= 0 || $maxDays <= 0) {
-        $_SESSION['error'] = "Minimum, most likely, and maximum days must all be greater than zero.";
-        header('Location: feature-estimation.php');
-        exit();
-    }
-
-    if ($minDays > $likelyDays || $likelyDays > $maxDays) {
-        $_SESSION['error'] = "Please keep the estimate order as Minimum <= Most Likely <= Maximum.";
-        header('Location: feature-estimation.php');
-        exit();
-    }
-
     if ($expectation === '') {
         $_SESSION['error'] = "Please add an expectation description for the feature.";
         header('Location: feature-estimation.php');
         exit();
     }
 
-    $taskStmt = $conn->prepare("SELECT project_id, title FROM tasks WHERE id = ? LIMIT 1");
+    $taskStmt = $conn->prepare("
+        SELECT t.project_id, t.title, p.timeline_start, p.timeline_end
+        FROM tasks t
+        JOIN projects p ON p.id = t.project_id
+        WHERE t.id = ?
+        LIMIT 1
+    ");
     $taskStmt->bind_param('i', $taskId);
     $taskStmt->execute();
     $taskInfo = $taskStmt->get_result()->fetch_assoc();
@@ -488,6 +482,55 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
 
     $architectPlan = featureEstimationLoadArchitectPlanning($conn, [$taskId])[$taskId] ?? featureEstimationEmptyArchitectPlan();
     $phaseName = trim((string) ($architectPlan['phase_name'] ?? '')) !== '' ? (string) $architectPlan['phase_name'] : null;
+    $projectTimelineStart = trim((string) ($taskInfo['timeline_start'] ?? ''));
+    $projectTimelineEnd = trim((string) ($taskInfo['timeline_end'] ?? ''));
+    $architectPlannedStart = trim((string) ($architectPlan['planned_start'] ?? ''));
+    $architectDeadline = trim((string) ($architectPlan['planned_end'] ?? ''));
+    if ($architectDeadline === '') {
+        $architectDeadline = $projectTimelineEnd;
+    }
+    if ($plannedStart === null) {
+        $plannedStart = $architectPlannedStart !== '' ? $architectPlannedStart : ($projectTimelineStart !== '' ? $projectTimelineStart : null);
+    }
+
+    if ($plannedStart === null || $plannedEnd === null) {
+        $_SESSION['error'] = "Please select a planned start and end date for this feature.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($architectDeadline === '') {
+        $_SESSION['error'] = "This project needs an Architect deadline before feature estimation can be saved.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    $plannedStartDate = DateTimeImmutable::createFromFormat('Y-m-d', $plannedStart);
+    $plannedEndDate = DateTimeImmutable::createFromFormat('Y-m-d', $plannedEnd);
+    $architectDeadlineDate = DateTimeImmutable::createFromFormat('Y-m-d', $architectDeadline);
+
+    if (!$plannedStartDate || !$plannedEndDate || !$architectDeadlineDate) {
+        $_SESSION['error'] = "Please use valid feature dates.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($plannedEndDate < $plannedStartDate) {
+        $_SESSION['error'] = "Feature end date must be the same as or later than the start date.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($plannedEndDate > $architectDeadlineDate) {
+        $_SESSION['error'] = "Feature deadline cannot be later than the Architect deadline.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    $deadlineDuration = max(1, (int) $plannedStartDate->diff($plannedEndDate)->days + 1);
+    $minDays = max(1, (int) ceil($deadlineDuration * 0.70));
+    $likelyDays = max($minDays, (int) ceil($deadlineDuration * 0.85));
+    $maxDays = $deadlineDuration;
     if (!empty($architectPlan['involvement_plan'])) {
         $involvementPlan = $architectPlan['involvement_plan'];
     }
@@ -2110,9 +2153,22 @@ textarea.form-control-custom {
                     !empty($architectPlan['component_plan']) ? $architectPlan['component_plan'] : decodeRecommendationJson($estimation['component_plan_json'] ?? '[]'),
                     JSON_UNESCAPED_UNICODE
                 );
+                $architectDeadlineValue = trim((string) ($architectPlan['planned_end'] ?: ($task['timeline_end'] ?? '')));
+                $featurePlannedStartValue = !empty($task['started_at'])
+                    ? date('Y-m-d', strtotime((string) $task['started_at']))
+                    : (trim((string) ($architectPlan['planned_start'] ?? '')) ?: trim((string) ($task['timeline_start'] ?? '')));
+                $featurePlannedEndValue = !empty($task['deadline'])
+                    ? date('Y-m-d', strtotime((string) $task['deadline']))
+                    : trim((string) ($architectPlan['planned_end'] ?? ''));
+                if ($featurePlannedEndValue !== '' && $architectDeadlineValue !== '' && strtotime($featurePlannedEndValue) > strtotime($architectDeadlineValue)) {
+                    $featurePlannedEndValue = $architectDeadlineValue;
+                }
+                $architectDeadlineLabel = $architectDeadlineValue !== ''
+                    ? date('M d, Y', strtotime($architectDeadlineValue))
+                    : 'not set';
             ?>
             <?php $isReadonly = $task['status'] !== 'todo'; ?>
-            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" style="display:none;">
+            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars((string) ($task['timeline_start'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars((string) ($task['timeline_end'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" style="display:none;">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                     <div>
                         <div class="feature-title"><?php echo htmlspecialchars($task['title']); ?></div>
@@ -2206,22 +2262,22 @@ textarea.form-control-custom {
                     
                     <div class="row g-3 mb-4">
                         <div class="col-md-4">
-                            <label class="form-label">Minimum Days (Best)</label>
-                            <input type="number" name="min_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                            <label class="form-label">Minimum Days (70%)</label>
+                            <input type="number" name="min_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo $estimation['min_days'] ?? ''; ?>" required placeholder="1">
-                            <small class="text-muted d-block mt-1">Optimistic estimate</small>
+                            <small class="text-muted d-block mt-1">Auto-generated from the selected duration</small>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Most Likely Days</label>
-                            <input type="number" name="likely_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                            <label class="form-label">Most Likely Days (85%)</label>
+                            <input type="number" name="likely_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo $estimation['likely_days'] ?? ''; ?>" required placeholder="1">
-                            <small class="text-muted d-block mt-1">Realistic estimate</small>
+                            <small class="text-muted d-block mt-1">Auto-generated from the selected duration</small>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Maximum Days (Worst)</label>
-                            <input type="number" name="max_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                            <label class="form-label">Maximum Days (100%)</label>
+                            <input type="number" name="max_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo $estimation['max_days'] ?? ''; ?>" required placeholder="3">
-                            <small class="text-muted d-block mt-1">Pessimistic estimate</small>
+                            <small class="text-muted d-block mt-1">Never exceeds the selected deadline</small>
                         </div>
                     </div>
 
@@ -2229,14 +2285,14 @@ textarea.form-control-custom {
                         <div class="col-md-6">
                             <label class="form-label">Planned Start Date</label>
                             <input type="date" name="planned_start" class="form-control-custom estimate-start" <?php echo $isReadonly ? 'disabled' : ''; ?>
-                                   value="<?php echo !empty($task['started_at']) ? date('Y-m-d', strtotime((string) $task['started_at'])) : ''; ?>">
+                                   value="<?php echo htmlspecialchars($featurePlannedStartValue, ENT_QUOTES, 'UTF-8'); ?>">
                             <small class="text-muted d-block mt-1">Set the task start for Gantt</small>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Planned End Date</label>
                             <input type="date" name="planned_end" class="form-control-custom estimate-end" <?php echo $isReadonly ? 'disabled' : ''; ?>
-                                   value="<?php echo !empty($task['deadline']) ? date('Y-m-d', strtotime((string) $task['deadline'])) : ''; ?>">
-                            <small class="text-muted d-block mt-1">Set the task end for Gantt</small>
+                                   value="<?php echo htmlspecialchars($featurePlannedEndValue, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $architectDeadlineValue !== '' ? 'max="' . htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>
+                            <small class="text-muted d-block mt-1">Can be earlier than the Architect deadline, never later than <?php echo htmlspecialchars($architectDeadlineLabel); ?></small>
                         </div>
                     </div>
 
@@ -2408,25 +2464,113 @@ function updateGanttPreview(card) {
     if (maxBar) maxBar.style.width = `${maxWidth}%`;
 }
 
+function parseDateInputValue(value) {
+    if (!value) return null;
+    const parsed = new Date(`${value}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function inclusiveDurationDays(startValue, endValue) {
+    const startDate = parseDateInputValue(startValue);
+    const endDate = parseDateInputValue(endValue);
+    if (!startDate || !endDate || endDate < startDate) {
+        return 0;
+    }
+    return Math.floor((endDate - startDate) / 86400000) + 1;
+}
+
+function syncEstimateFromDeadline(card) {
+    if (!card) return false;
+    const isReadonly = card.getAttribute('data-readonly') === '1';
+    const startInput = card.querySelector('input[name="planned_start"]');
+    const endInput = card.querySelector('input[name="planned_end"]');
+    const minInput = card.querySelector('input[name="min_days"]');
+    const likelyInput = card.querySelector('input[name="likely_days"]');
+    const maxInput = card.querySelector('input[name="max_days"]');
+    const architectDeadline = card.getAttribute('data-architect-deadline') || card.getAttribute('data-project-end') || '';
+
+    if (endInput && architectDeadline) {
+        endInput.max = architectDeadline;
+    }
+
+    if (isReadonly) {
+        updateGanttPreview(card);
+        return true;
+    }
+
+    if (startInput && !startInput.value) {
+        startInput.value = card.getAttribute('data-project-start') || '';
+    }
+
+    if (endInput && endInput.value && architectDeadline) {
+        const endDate = parseDateInputValue(endInput.value);
+        const architectDate = parseDateInputValue(architectDeadline);
+        if (endDate && architectDate && endDate > architectDate) {
+            endInput.value = architectDeadline;
+        }
+    }
+
+    const duration = inclusiveDurationDays(startInput?.value || '', endInput?.value || '');
+    if (duration > 0 && minInput && likelyInput && maxInput) {
+        minInput.value = Math.max(1, Math.ceil(duration * 0.70));
+        likelyInput.value = Math.max(parseInt(minInput.value || '1', 10), Math.ceil(duration * 0.85));
+        maxInput.value = duration;
+    }
+
+    updateGanttPreview(card);
+    const isValid = validateEstimateCard(card);
+    updateEstimateCardState(card, isValid);
+    return isValid;
+}
+
 function validateEstimateCard(card) {
     if (!card) return true;
     const minInput = card.querySelector('input[name="min_days"]');
     const likelyInput = card.querySelector('input[name="likely_days"]');
     const maxInput = card.querySelector('input[name="max_days"]');
+    const startInput = card.querySelector('input[name="planned_start"]');
+    const endInput = card.querySelector('input[name="planned_end"]');
     if (!minInput || !likelyInput || !maxInput) return true;
 
     const minVal = parseInt(minInput.value || '0', 10);
     const likelyVal = parseInt(likelyInput.value || '0', 10);
     const maxVal = parseInt(maxInput.value || '0', 10);
+    const duration = inclusiveDurationDays(startInput?.value || '', endInput?.value || '');
+    const architectDeadline = card.getAttribute('data-architect-deadline') || card.getAttribute('data-project-end') || '';
 
     minInput.setCustomValidity('');
     likelyInput.setCustomValidity('');
     maxInput.setCustomValidity('');
+    if (startInput) startInput.setCustomValidity('');
+    if (endInput) endInput.setCustomValidity('');
+
+    if (startInput?.value && endInput?.value && duration <= 0) {
+        const message = 'Feature end date must be the same as or later than the start date.';
+        startInput.setCustomValidity(message);
+        endInput.setCustomValidity(message);
+        return false;
+    }
+
+    if (endInput?.value && architectDeadline) {
+        const endDate = parseDateInputValue(endInput.value);
+        const architectDate = parseDateInputValue(architectDeadline);
+        if (endDate && architectDate && endDate > architectDate) {
+            const message = 'Feature deadline cannot be later than the Architect deadline.';
+            endInput.setCustomValidity(message);
+            return false;
+        }
+    }
 
     if ((minInput.value || likelyInput.value || maxInput.value) && (minVal <= 0 || likelyVal <= 0 || maxVal <= 0)) {
         const message = 'All day estimates must be greater than zero.';
         minInput.setCustomValidity(message);
         likelyInput.setCustomValidity(message);
+        maxInput.setCustomValidity(message);
+        return false;
+    }
+
+    if (duration > 0 && maxVal > duration) {
+        const message = 'Maximum estimate cannot exceed the selected deadline duration.';
         maxInput.setCustomValidity(message);
         return false;
     }
@@ -2442,13 +2586,41 @@ function validateEstimateCard(card) {
     return true;
 }
 
+function updateEstimateCardState(card, isValid = validateEstimateCard(card)) {
+    if (!card) return false;
+    const minVal = parseInt(card.querySelector('input[name="min_days"]')?.value || '0', 10) || 0;
+    const likelyVal = parseInt(card.querySelector('input[name="likely_days"]')?.value || '0', 10) || 0;
+    const maxVal = parseInt(card.querySelector('input[name="max_days"]')?.value || '0', 10) || 0;
+    const startValue = card.querySelector('input[name="planned_start"]')?.value || '';
+    const endValue = card.querySelector('input[name="planned_end"]')?.value || '';
+    const isDone = startValue !== '' && endValue !== '' && minVal > 0 && likelyVal > 0 && maxVal > 0 && minVal <= likelyVal && likelyVal <= maxVal && isValid;
+    card.setAttribute('data-estimated', isDone ? '1' : '0');
+    card.classList.toggle('complete', isDone);
+    card.classList.toggle('incomplete', !isDone);
+    return isDone;
+}
+
 function bindPreviewHandlers() {
     document.querySelectorAll('.estimation-card').forEach(card => {
         const inputs = card.querySelectorAll('.estimate-input');
         inputs.forEach(input => {
             input.addEventListener('input', () => updateGanttPreview(card));
         });
-        updateGanttPreview(card);
+        card.querySelectorAll('input[name="planned_start"], input[name="planned_end"]').forEach(input => {
+            input.addEventListener('input', () => {
+                syncEstimateFromDeadline(card);
+                renderExpertGantt();
+                renderProjectManagementTable();
+                filterFeatureList();
+            });
+            input.addEventListener('change', () => {
+                syncEstimateFromDeadline(card);
+                renderExpertGantt();
+                renderProjectManagementTable();
+                filterFeatureList();
+            });
+        });
+        syncEstimateFromDeadline(card);
     });
 }
 
@@ -2605,7 +2777,7 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
     if (plannedEndInput && !plannedEndInput.value && plannedStartInput?.value) {
         const duration = Math.max(1, parseInt(payload.likely_days || payload.max_days || payload.min_days || '1', 10));
         const endDate = new Date(`${plannedStartInput.value}T00:00:00`);
-        endDate.setDate(endDate.getDate() + duration);
+        endDate.setDate(endDate.getDate() + duration - 1);
         plannedEndInput.value = endDate.toISOString().slice(0, 10);
     }
 
@@ -2625,8 +2797,7 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
         );
     });
 
-    validateEstimateCard(card);
-    updateGanttPreview(card);
+    syncEstimateFromDeadline(card);
     card.setAttribute('data-estimated', '1');
     card.classList.add('complete');
     card.classList.remove('incomplete');
@@ -2830,14 +3001,14 @@ function buildGanttTasks() {
 
         if (startDate && !endDate && maxDays > 0) {
             const start = new Date(startDate + 'T00:00:00');
-            start.setDate(start.getDate() + Math.max(1, maxDays));
+            start.setDate(start.getDate() + Math.max(1, maxDays) - 1);
             endDate = start.toISOString().slice(0, 10);
         }
 
         if (!endDate) {
             const duration = maxDays || likelyDays || minDays || 1;
             const start = new Date(startDate + 'T00:00:00');
-            start.setDate(start.getDate() + Math.max(1, duration));
+            start.setDate(start.getDate() + Math.max(1, duration) - 1);
             endDate = start.toISOString().slice(0, 10);
         }
 
@@ -2858,7 +3029,7 @@ function buildGanttTasks() {
 }
 
 function diffDays(startDate, endDate) {
-    return Math.max(1, Math.round((endDate - startDate) / 86400000));
+    return Math.max(1, Math.round((endDate - startDate) / 86400000) + 1);
 }
 
 function buildThreePointChartRows(tasks) {
@@ -2868,9 +3039,9 @@ function buildThreePointChartRows(tasks) {
         const dateDuration = Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())
             ? 1
             : diffDays(startDate, endDate);
-        const minDays = Math.max(0, parseInt(task.min_days || '0', 10));
-        const likelyDays = Math.max(minDays, parseInt(task.likely_days || '0', 10));
-        const maxDays = Math.max(likelyDays, parseInt(task.max_days || '0', 10), dateDuration);
+        const maxDays = dateDuration;
+        const minDays = Math.min(maxDays, Math.max(0, parseInt(task.min_days || '0', 10)));
+        const likelyDays = Math.min(maxDays, Math.max(minDays, parseInt(task.likely_days || '0', 10)));
 
         return {
             name: task.name,
@@ -3025,18 +3196,12 @@ function bindGanttHandlers() {
         if (e.target.matches('input[name="planned_start"], input[name="planned_end"], input[name="likely_days"], input[name="min_days"], input[name="max_days"]')) {
             const row = e.target.closest('.feature-row');
             if (row) {
-                validateEstimateCard(row);
+                syncEstimateFromDeadline(row);
             }
             renderExpertGantt();
             renderProjectManagementTable();
             if (row) {
-                const minVal = parseInt(row.querySelector('input[name="min_days"]')?.value || '0', 10) || 0;
-                const likelyVal = parseInt(row.querySelector('input[name="likely_days"]')?.value || '0', 10) || 0;
-                const maxVal = parseInt(row.querySelector('input[name="max_days"]')?.value || '0', 10) || 0;
-                const isDone = (minVal > 0 && likelyVal > 0 && maxVal > 0 && minVal <= likelyVal && likelyVal <= maxVal);
-                row.setAttribute('data-estimated', isDone ? '1' : '0');
-                row.classList.toggle('complete', isDone);
-                row.classList.toggle('incomplete', !isDone);
+                updateEstimateCardState(row);
                 filterFeatureList();
             }
         }

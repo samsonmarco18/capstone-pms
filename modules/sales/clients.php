@@ -301,8 +301,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $email = trim((string) ($_POST['email'] ?? ''));
         $phone = trim((string) ($_POST['phone'] ?? ''));
         $address = trim((string) ($_POST['address'] ?? ''));
-        $clientDeadlineInput = trim((string) ($_POST['deadline'] ?? ''));
-        $clientDeadline = parseSalesDateInput($clientDeadlineInput);
+        $deadline = trim((string) ($_POST['deadline'] ?? ''));
+        $deadline = $deadline !== '' ? $deadline : null;
 
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -317,12 +317,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $salesNotes = trim((string) ($_POST['sales_notes'] ?? ''));
         $salesBudgetInput = trim((string) ($_POST['sales_budget'] ?? ''));
         $salesBudget = parseSalesBudgetInput($salesBudgetInput);
-        $timelineStartInput = trim((string) ($_POST['timeline_start'] ?? ''));
-        $timelineEndInput = trim((string) ($_POST['timeline_end'] ?? ''));
-        $timelineStart = parseSalesDateInput($timelineStartInput);
-        $timelineEnd = parseSalesDateInput($timelineEndInput);
+        $timelineStart = $_POST['timeline_start'] ?: null;
+        $timelineEnd = $_POST['timeline_end'] ?: ($deadline ?: null);
         $timelineStartTimeInput = trim((string) ($_POST['timeline_start_time'] ?? ''));
-        $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ($_POST['deadline_time'] ?? '')));
+        $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ''));
         $timelineStartTime = parseSalesTimeInput($timelineStartTimeInput);
         $timelineEndTime = parseSalesTimeInput($timelineEndTimeInput);
         $featureCount = salesClientsFeatureCount($requestedFeatures);
@@ -337,52 +335,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Budget:' . "\n" . $salesBudgetInput;
         }
 
-        $missingHandoffFields = [];
-        $requiredHandoffValues = [
-            'Client name' => $name,
-            'Contact person' => $contactPerson,
-            'Email' => $email,
-            'Phone' => $phone,
-            'Project name' => $projectName,
-            'Project description' => $projectDescription,
-            'At least one requested feature' => $requestedFeatures,
-            'Budget' => $salesBudgetInput,
-            'Timeline start date' => $timelineStartInput,
-            'Timeline start time' => $timelineStartTimeInput,
-            'Project deadline' => $timelineEndInput,
-            'Project deadline time' => $timelineEndTimeInput,
-        ];
-        foreach ($requiredHandoffValues as $label => $value) {
-            if (trim((string) $value) === '') {
-                $missingHandoffFields[] = $label;
-            }
-        }
-
-        $timelineStartAt = ($timelineStart && $timelineStartTime)
-            ? DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $timelineStart . ' ' . $timelineStartTime)
-            : null;
-        $timelineEndAt = ($timelineEnd && $timelineEndTime)
-            ? DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $timelineEnd . ' ' . $timelineEndTime)
-            : null;
-
-        if ($missingHandoffFields !== []) {
-            $_SESSION['error'] = 'Complete these required fields before sending to Architect: ' . implode(', ', $missingHandoffFields) . '.';
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $_SESSION['error'] = 'Enter a valid client email address before sending to Architect.';
-        } elseif ($salesBudget === null || $salesBudget <= 0) {
-            $_SESSION['error'] = 'Budget is required and must be greater than zero.';
-        } elseif ($timelineStart === null) {
-            $_SESSION['error'] = 'Timeline start date must be valid.';
-        } elseif ($timelineEnd === null) {
-            $_SESSION['error'] = 'Project deadline must be valid.';
-        } elseif ($timelineStartTime === null) {
+        if ($name === '') {
+            $_SESSION['error'] = 'Client name is required.';
+        } elseif ($salesBudgetInput !== '' && $salesBudget === null) {
+            $_SESSION['error'] = 'Budget must be a valid number.';
+        } elseif ($timelineStartTimeInput !== '' && $timelineStartTime === null) {
             $_SESSION['error'] = 'Timeline start time must be valid.';
-        } elseif ($timelineEndTime === null) {
+        } elseif ($timelineEndTimeInput !== '' && $timelineEndTime === null) {
             $_SESSION['error'] = 'Project deadline time must be valid.';
-        } elseif ($clientDeadlineInput !== '' && $clientDeadline === null) {
-            $_SESSION['error'] = 'Client deadline must be a valid date when provided.';
-        } elseif (!$timelineStartAt || !$timelineEndAt || $timelineEndAt <= $timelineStartAt) {
-            $_SESSION['error'] = 'Project deadline must be later than the timeline start date and time.';
         } else {
             $deadline = $clientDeadline ?: $timelineEnd;
             $conn->begin_transaction();
@@ -492,13 +452,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $phone = $_POST['phone'];
         $address = $_POST['address'];
         $status = $_POST['status'];
-        $deadline = $_POST['deadline'];
         
         $oldResult = salesClientsQuery($conn, "SELECT * FROM clients WHERE id = $id");
         $oldData = $oldResult ? $oldResult->fetch_assoc() : null;
         
-        $stmt = $conn->prepare("UPDATE clients SET name=?, contact_person=?, email=?, phone=?, address=?, status=?, deadline=? WHERE id=?");
-        $stmt->bind_param("sssssssi", $name, $contact_person, $email, $phone, $address, $status, $deadline, $id);
+        $stmt = $conn->prepare("UPDATE clients SET name=?, contact_person=?, email=?, phone=?, address=?, status=? WHERE id=?");
+        $stmt->bind_param("ssssssi", $name, $contact_person, $email, $phone, $address, $status, $id);
         
         if ($stmt->execute()) {
             logActivity($user['id'], 'update_client', 'clients', $id, $oldData, $_POST);
@@ -2189,7 +2148,7 @@ include '../../includes/navbar.php';
                         <th>Contact Person</th>
                         <th>Status</th>
                         <th>Progress</th>
-                        <th>Deadline</th>
+                        <th>Project Deadline</th>
                         <th>Actions</th>
                     </thead>
                 <tbody>
@@ -2295,7 +2254,7 @@ include '../../includes/navbar.php';
                                 <span>1</span>
                                 <strong>Client Profile</strong>
                             </button>
-                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Enter the client's company, contact details, address, and deadline." aria-label="About Client Profile">
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Enter the client's company and contact details." aria-label="About Client Profile">
                                 <i class="fas fa-info" aria-hidden="true"></i>
                             </button>
                         </div>
@@ -2358,7 +2317,7 @@ include '../../includes/navbar.php';
                                     <textarea name="address" class="form-control" rows="2"></textarea>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Client Deadline <span class="optional-label">(Optional)</span></label>
+                                    <label class="form-label">Client Deadline</label>
                                     <input type="date" name="deadline" class="form-control">
                                 </div>
                             </div>
@@ -2427,20 +2386,20 @@ include '../../includes/navbar.php';
                             <div class="section-title"><i class="fas fa-calendar-check"></i> Timeline & Budget</div>
                             <div class="row g-3">
                                 <div class="col-md-3">
-                                    <label class="form-label">Timeline Start<span class="required-mark">*</span></label>
-                                    <input type="date" name="timeline_start" class="form-control" required>
+                                    <label class="form-label">Timeline Start</label>
+                                    <input type="date" name="timeline_start" class="form-control">
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Start Time<span class="required-mark">*</span></label>
                                     <input type="time" name="timeline_start_time" class="form-control" required>
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">Project Deadline<span class="required-mark">*</span></label>
-                                    <input type="date" name="timeline_end" class="form-control" required>
+                                    <label class="form-label">Project Deadline</label>
+                                    <input type="date" name="timeline_end" class="form-control">
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">Deadline Time<span class="required-mark">*</span></label>
-                                    <input type="time" name="timeline_end_time" class="form-control" required>
+                                    <label class="form-label">Deadline Time</label>
+                                    <input type="time" name="timeline_end_time" class="form-control">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Budget<span class="required-mark">*</span></label>
@@ -2486,10 +2445,6 @@ include '../../includes/navbar.php';
                                         <div>
                                             <dt>Phone</dt>
                                             <dd data-summary-field="phone">Not provided</dd>
-                                        </div>
-                                        <div>
-                                            <dt>Client Deadline</dt>
-                                            <dd data-summary-field="deadline">Not set</dd>
                                         </div>
                                     </dl>
                                 </div>
@@ -2621,7 +2576,7 @@ include '../../includes/navbar.php';
                             <label class="form-label">Address</label>
                             <textarea name="address" id="edit_address" class="form-control" rows="2"></textarea>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label">Status</label>
                             <select name="status" id="edit_status" class="form-select">
                                 <option value="active">Active</option>
@@ -2629,13 +2584,9 @@ include '../../includes/navbar.php';
                                 <option value="pending">Pending</option>
                             </select>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label">Progress (%)</label>
                             <input type="number" name="progress" id="edit_progress" class="form-control" min="0" max="100">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Project Deadline</label>
-                            <input type="date" name="deadline" id="edit_deadline" class="form-control">
                         </div>
                     </div>
                 </div>
@@ -2751,7 +2702,6 @@ function editClient(client) {
     document.getElementById('edit_address').value = client.address;
     document.getElementById('edit_status').value = client.status;
     document.getElementById('edit_progress').value = client.progress;
-    document.getElementById('edit_deadline').value = client.deadline;
     
     new bootstrap.Modal(document.getElementById('editClientModal')).show();
 }
@@ -2787,7 +2737,7 @@ function viewClient(id) {
                             <div class="progress mb-2">
                                 <div class="progress-bar" style="width: ${client.progress}%"></div>
                             </div>
-                            <p><strong>Deadline:</strong> ${client.deadline ? new Date(client.deadline).toLocaleDateString() : 'Not set'}</p>
+                            <p><strong>Project Deadline:</strong> ${client.deadline ? new Date(client.deadline).toLocaleDateString() : 'Not set'}</p>
                         </div>
                     </div>
                 </div>
@@ -2983,7 +2933,7 @@ if (addClientModalElement && addClientForm) {
     function calculateGeneratedComplexity() {
         const featureCount = getRequestedFeatureValues().length;
         const startValue = addClientForm.elements.timeline_start?.value || '';
-        const endValue = addClientForm.elements.timeline_end?.value || addClientForm.elements.deadline?.value || '';
+        const endValue = addClientForm.elements.timeline_end?.value || '';
         let days = 0;
 
         if (startValue && endValue) {
@@ -3406,7 +3356,7 @@ if (addClientModalElement && addClientForm) {
 
     function buildTimelineSummary() {
         const start = formatDateTime(getFormValue('timeline_start'), getFormValue('timeline_start_time'));
-        const endDate = getFormValue('timeline_end') || getFormValue('deadline');
+        const endDate = getFormValue('timeline_end');
         const end = formatDateTime(endDate, getFormValue('timeline_end_time'));
 
         if (start && end) {
@@ -3436,7 +3386,6 @@ if (addClientModalElement && addClientForm) {
             contact_person: getFormValue('contact_person'),
             email: getFormValue('email'),
             phone: getFormValue('phone'),
-            deadline: formatDateInput(getFormValue('deadline')),
             project_name: getFormValue('project_name'),
             timeline: buildTimelineSummary(),
             sales_budget: formatBudget(getFormValue('sales_budget')),
@@ -3453,7 +3402,7 @@ if (addClientModalElement && addClientForm) {
 
         summaryFields.forEach((field) => {
             const key = field.dataset.summaryField || '';
-            const fallback = key === 'deadline' || key === 'timeline'
+            const fallback = key === 'timeline'
                 ? 'Not set'
                 : (key === 'attachments' ? 'No attachments' : 'Not provided');
             field.textContent = summaryData[key] || fallback;

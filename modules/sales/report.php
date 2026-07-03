@@ -42,15 +42,26 @@ if ($selectedClient) {
             WHERE tr.project_id = {$project['id']}
         ");
         
-        // Get developer allocation costs
-        $allocations = $conn->query("
-            SELECT * FROM developer_allocations 
+        // Calculate developer cost from the Architect Roadmap planned headcount.
+        $roadmapDeveloperRows = [];
+        $roadmapHeadcountResult = $conn->query("
+            SELECT MAX(COALESCE(developer_count, 0)) AS required_count
+            FROM methodology_phases
             WHERE project_id = {$project['id']}
         ");
-        
-        // Calculate developer cost (estimated $500 per day per developer)
+        $roadmapHeadcount = $roadmapHeadcountResult
+            ? max(0, (int) ($roadmapHeadcountResult->fetch_assoc()['required_count'] ?? 0))
+            : 0;
+        if ($roadmapHeadcount > 0) {
+            $roadmapDeveloperRows[] = [
+                'role' => 'Roadmap Architect Headcount',
+                'required_count' => $roadmapHeadcount,
+            ];
+        }
+
+        // Estimated $500 per day per developer.
         $developerCost = 0;
-        while($alloc = $allocations->fetch_assoc()) {
+        foreach ($roadmapDeveloperRows as $alloc) {
             $developerCost += $alloc['required_count'] * 500 * 30; // Monthly cost
         }
         
@@ -65,7 +76,8 @@ if ($selectedClient) {
             'project' => $project,
             'technology_cost' => $resourceCost,
             'developer_cost' => $developerCost,
-            'resource_cost' => $resourceCost
+            'resource_cost' => $resourceCost,
+            'developer_rows' => $roadmapDeveloperRows,
         ];
     }
 }
@@ -640,7 +652,7 @@ include '../../includes/navbar.php';
                         </h5>
                     </div>
                     <div class="card-body">
-                        <small class="text-muted d-block mb-3">Based on developer allocation and daily rates ($500/day per developer)</small>
+                        <small class="text-muted d-block mb-3">Based on Architect Roadmap headcount and daily rates ($500/day per developer)</small>
                         <div class="table-responsive">
                             <table class="data-table">
                                 <thead>
@@ -651,9 +663,16 @@ include '../../includes/navbar.php';
                                     </thead>
                                 <tbody>
                                     <?php
-                                    $allocations->data_seek(0);
+                                    $roadmapDeveloperRows = $reportData['developer_rows'] ?? [];
                                     $devTotal = 0;
-                                    while($alloc = $allocations->fetch_assoc()):
+                                    if (empty($roadmapDeveloperRows)):
+                                    ?>
+                                    <tr>
+                                        <td colspan="3" class="text-muted text-center">No Roadmap Architect headcount has been entered yet.</td>
+                                    </tr>
+                                    <?php
+                                    else:
+                                    foreach($roadmapDeveloperRows as $alloc):
                                         $cost = $alloc['required_count'] * 500 * 30;
                                         $devTotal += $cost;
                                     ?>
@@ -662,7 +681,7 @@ include '../../includes/navbar.php';
                                         <td class="text-center"><?php echo $alloc['required_count']; ?></td>
                                         <td class="text-end">$<?php echo number_format($cost, 2); ?></td>
                                     </tr>
-                                    <?php endwhile; ?>
+                                    <?php endforeach; endif; ?>
                                     <tr class="total-row">
                                         <td colspan="2"><strong>Total Developer Cost</strong></td>
                                         <td class="text-end"><strong>$<?php echo number_format($devTotal, 2); ?></strong></td>
