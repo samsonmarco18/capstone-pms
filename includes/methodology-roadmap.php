@@ -447,15 +447,32 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
 {
     methodologyRoadmapEnsureSchema($conn);
 
-    $task = $conn->query("SELECT id, project_id FROM tasks WHERE id = {$taskId} AND assigned_to = {$developerId} LIMIT 1")->fetch_assoc();
+    $task = $conn->query("
+        SELECT t.id, t.project_id, u.department AS developer_department
+        FROM tasks t
+        LEFT JOIN users u ON u.id = t.assigned_to
+        WHERE t.id = {$taskId}
+          AND t.assigned_to = {$developerId}
+        LIMIT 1
+    ")->fetch_assoc();
     if (!$task) {
         return 'You can only start tasks assigned to you.';
     }
 
     $projectId = (int) ($task['project_id'] ?? 0);
+    if (function_exists('projectWorkflowSyncRoadmap')) {
+        projectWorkflowSyncRoadmap($conn, $projectId);
+    }
+
     $phaseCount = (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$projectId}")->fetch_assoc()['total'] ?? 0));
     if ($phaseCount <= 0) {
         return null;
+    }
+
+    $developerDepartment = trim((string) ($task['developer_department'] ?? ''));
+    $departmentFilter = '';
+    if ($developerDepartment !== '' && function_exists('projectWorkflowMethodologyTaskDepartmentClause')) {
+        $departmentFilter = ' OR ' . projectWorkflowMethodologyTaskDepartmentClause($conn, 'mt', $developerDepartment);
     }
 
     $roadmapTask = $conn->query("
@@ -466,8 +483,9 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
         INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
         WHERE mt.task_id = {$taskId}
           AND mt.project_id = {$projectId}
-          {$roadmapDepartmentFilter}
-        ORDER BY mt.start_date ASC, mt.id ASC
+          AND COALESCE(mt.status, 'planned') != 'completed'
+          AND (mt.assigned_developer_id = {$developerId}{$departmentFilter})
+        ORDER BY COALESCE(NULLIF(mp.sequence_no, 0), mp.id) ASC, mt.start_date ASC, mt.id ASC
         LIMIT 1
     ")->fetch_assoc();
 
@@ -480,12 +498,13 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
 
     $phaseId = (int) ($roadmapTask['phase_id'] ?? 0);
     $phaseSequence = (int) ($roadmapTask['phase_sequence'] ?? 0);
+    $phasePosition = $phaseSequence > 0 ? $phaseSequence : $phaseId;
     $previousOpenCount = (int) (($conn->query("
         SELECT COUNT(*) AS total
         FROM methodology_phases
         WHERE project_id = {$projectId}
           AND id <> {$phaseId}
-          AND COALESCE(sequence_no, id) < " . ($phaseSequence > 0 ? $phaseSequence : $phaseId) . "
+          AND COALESCE(NULLIF(sequence_no, 0), id) < {$phasePosition}
           AND status != 'completed'
     ")->fetch_assoc()['total'] ?? 0));
     if ($previousOpenCount > 0) {

@@ -119,6 +119,7 @@ $canManageDeveloperWorkflow = !$sulMissingDepartment && !$isExpertDepartmentSul;
 $sulUserDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : ' AND 1 = 0';
 $sulProjectFilter = sulTaskAllocationProjectFilter($conn, 'p', $sulDepartment);
 $sulTaskDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
+$sulCurrentRoadmapTaskFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowCurrentRoadmapTaskClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
 $sulRoadmapTaskDepartmentFilter = $sulDepartment !== '' ? projectWorkflowMethodologyTaskDepartmentClause($conn, 'mt_department_scope', $sulDepartment) : '1 = 0';
 
 if ($sulMissingDepartment) {
@@ -174,6 +175,10 @@ if($projectId) {
         WHERE p.id = $projectId
           AND {$sulProjectFilter}
     ")->fetch_assoc();
+}
+
+if ($projectId && $project) {
+    projectWorkflowSyncRoadmap($conn, $projectId);
 }
 
 $ganttProjectData = null;
@@ -342,15 +347,15 @@ $readyForDevTasks = $conn->query("
                LIMIT 1
            ) AS department_roadmap_end
     FROM tasks t
-    JOIN users u ON t.assigned_to = u.id
+    LEFT JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
     JOIN feature_estimations fe ON t.id = fe.task_id AND fe.status = 'completed'
-    WHERE t.status = 'todo' 
-      AND t.assigned_to IS NOT NULL 
-      AND t.assigned_to != 0
-      AND u.role = 'expert'
+    WHERE (
+          (t.status = 'todo' AND (t.assigned_to IS NULL OR u.role = 'expert'))
+          OR (t.status = 'completed' AND t.architect_reviewed_at IS NULL AND t.merged_at IS NULL)
+      )
       AND {$sulProjectFilter}
-      {$sulTaskDepartmentFilter}
+      {$sulCurrentRoadmapTaskFilter}
       AND (SELECT COUNT(*) FROM feature_estimations fe2 WHERE fe2.task_id = t.id AND fe2.status = 'completed') > 0" . ($hasSalesApproval ? " AND t.sales_approved = 1" : "") . ($hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "") . "
     ORDER BY t.deadline ASC
 ");
@@ -394,6 +399,7 @@ $completedTasks = $conn->query("
     LEFT JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
     WHERE t.status = 'completed'
+      AND (t.architect_reviewed_at IS NOT NULL OR t.merged_at IS NOT NULL)
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
     ORDER BY t.completed_at DESC
@@ -622,13 +628,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             SELECT t.id, t.project_id
             FROM tasks t
             JOIN projects p ON p.id = t.project_id
+            LEFT JOIN users current_assignee ON current_assignee.id = t.assigned_to
             WHERE t.id = ?
-              AND t.status = 'todo'
-              AND t.assigned_to IS NOT NULL
-              AND t.assigned_to != 0
+              AND (
+                  (t.status = 'todo' AND (t.assigned_to IS NULL OR current_assignee.role = 'expert'))
+                  OR (t.status = 'completed' AND t.architect_reviewed_at IS NULL AND t.merged_at IS NULL)
+              )
               AND {$sulProjectFilter}
-              {$sulTaskDepartmentFilter}
+              {$sulCurrentRoadmapTaskFilter}
               {$approvalSql}{$choiceSql}
+              AND EXISTS (
+                  SELECT 1
+                  FROM feature_estimations fe_ready
+                  WHERE fe_ready.task_id = t.id
+                    AND fe_ready.status = 'completed'
+              )
         ");
         $taskCheck->bind_param("i", $taskId);
         $taskCheck->execute();
@@ -644,48 +658,64 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $assignmentProjectId = (int) ($validTaskRow['project_id'] ?? 0);
         $roadmapPhaseCount = (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$assignmentProjectId}")->fetch_assoc()['total'] ?? 0));
+        $currentRoadmapTask = null;
         if ($roadmapPhaseCount > 0) {
-            $roadmapDepartmentMatchForSelect = projectWorkflowMethodologyTaskDepartmentClause($conn, 'mt', $sulDepartment);
-            $roadmapTask = $conn->query("
-                SELECT mt.start_date, mt.end_date
-                FROM methodology_tasks mt
-                WHERE mt.project_id = {$assignmentProjectId}
-                  AND mt.task_id = {$taskId}
-                  AND {$roadmapDepartmentMatchForSelect}
-                ORDER BY mt.start_date ASC, mt.id ASC
-                LIMIT 1
-            ")->fetch_assoc();
+            $currentRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $assignmentProjectId, $taskId, $sulDepartment);
+            if (!$currentRoadmapTask) {
+                $_SESSION['error'] = "This task is waiting for another roadmap department before your SUL allocation can start.";
+                header("Location: task-allocation.php");
+                exit();
+            }
 
-            $roadmapStart = $roadmapTask ? DateTime::createFromFormat('Y-m-d', (string) ($roadmapTask['start_date'] ?? '')) : false;
-            $roadmapEnd = $roadmapTask ? DateTime::createFromFormat('Y-m-d', (string) ($roadmapTask['end_date'] ?? '')) : false;
-            if ($roadmapTask && (($roadmapStart && $deadlineDate < $roadmapStart) || ($roadmapEnd && $deadlineDate > $roadmapEnd))) {
+            if ((int) ($currentRoadmapTask['assigned_developer_id'] ?? 0) > 0) {
+                $_SESSION['error'] = "This roadmap task already has a developer assigned.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+
+            $roadmapStart = DateTime::createFromFormat('Y-m-d', (string) ($currentRoadmapTask['start_date'] ?? ''));
+            $roadmapEnd = DateTime::createFromFormat('Y-m-d', (string) ($currentRoadmapTask['end_date'] ?? ''));
+            if (($roadmapStart && $deadlineDate < $roadmapStart) || ($roadmapEnd && $deadlineDate > $roadmapEnd)) {
                 $_SESSION['error'] = "The developer deadline must stay inside the methodology task window: "
-                    . date('M d, Y', strtotime((string) $roadmapTask['start_date']))
+                    . date('M d, Y', strtotime((string) $currentRoadmapTask['start_date']))
                     . " to "
-                    . date('M d, Y', strtotime((string) $roadmapTask['end_date']))
+                    . date('M d, Y', strtotime((string) $currentRoadmapTask['end_date']))
                     . ".";
                 header("Location: task-allocation.php");
                 exit();
             }
         }
         
-        $stmt = $conn->prepare("UPDATE tasks SET assigned_to = ?, status = 'todo', deadline = ? WHERE id = ?");
-        $stmt->bind_param("isi", $developerId, $deadline, $taskId);
+        $stmt = $conn->prepare("
+            UPDATE tasks
+            SET assigned_to = ?,
+                assigned_by = ?,
+                status = 'todo',
+                deadline = ?,
+                completed_at = NULL,
+                pr_submitted_at = NULL,
+                sul_reviewed_by = NULL,
+                sul_reviewed_at = NULL
+            WHERE id = ?
+        ");
+        $stmt->bind_param("iisi", $developerId, $userId, $deadline, $taskId);
         
         if ($stmt->execute()) {
-            $roadmapDepartmentMatch = projectWorkflowMethodologyTaskDepartmentClause($conn, 'methodology_tasks', $sulDepartment);
-            $syncRoadmapStmt = $conn->prepare("
-                UPDATE methodology_tasks
-                SET assigned_developer_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
-                WHERE task_id = ?
-                  AND {$roadmapDepartmentMatch}
-            ");
-            if ($syncRoadmapStmt) {
-                $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $taskId);
-                $syncRoadmapStmt->execute();
-                $syncRoadmapStmt->close();
+            if ($currentRoadmapTask) {
+                $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
+                $syncRoadmapStmt = $conn->prepare("
+                    UPDATE methodology_tasks
+                    SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ");
+                if ($syncRoadmapStmt) {
+                    $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $currentRoadmapTaskId);
+                    $syncRoadmapStmt->execute();
+                    $syncRoadmapStmt->close();
+                }
             }
 
+            projectWorkflowSyncRoadmap($conn, $assignmentProjectId);
             $taskDetails = $conn->query("SELECT title, deadline FROM tasks WHERE id = $taskId")->fetch_assoc();
             
             createNotification(
@@ -747,28 +777,85 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if ($isApproval) {
             $projectForRouting = (int) ($reviewTask['project_id'] ?? 0);
-            $nextRoadmapTask = $conn->query("
-                SELECT next_mt.department, next_mt.task_id, next_t.title
-                FROM methodology_tasks current_mt
-                INNER JOIN methodology_phases current_phase ON current_phase.id = current_mt.phase_id
-                INNER JOIN methodology_phases next_phase ON next_phase.project_id = current_phase.project_id
-                INNER JOIN methodology_tasks next_mt ON next_mt.phase_id = next_phase.id
-                LEFT JOIN tasks next_t ON next_t.id = next_mt.task_id
-                WHERE current_mt.task_id = {$taskId}
-                  AND current_mt.project_id = {$projectForRouting}
-                  AND COALESCE(next_phase.sequence_no, next_phase.id) > COALESCE(current_phase.sequence_no, current_phase.id)
-                ORDER BY COALESCE(next_phase.sequence_no, next_phase.id) ASC, next_mt.id ASC
-                LIMIT 1
-            ")->fetch_assoc();
-            $nextDepartment = projectWorkflowDepartmentLabel($nextRoadmapTask['department'] ?? '');
-            $routeToQa = $nextDepartment === 'QA' || !$nextRoadmapTask;
-            $approvedStatus = $routeToQa ? 'qa_testing' : 'completed';
+            $roadmapPhaseCount = (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$projectForRouting}")->fetch_assoc()['total'] ?? 0));
+            $currentRoadmapTask = $roadmapPhaseCount > 0
+                ? projectWorkflowCurrentRoadmapTask($conn, $projectForRouting, $taskId, $sulDepartment)
+                : null;
 
-            $stmt = $conn->prepare("UPDATE tasks SET status = ?, completed_at = CASE WHEN ? = 'completed' THEN NOW() ELSE completed_at END, sul_reviewed_by = ?, sul_reviewed_at = NOW() WHERE id = ?");
-            $stmt->bind_param("ssii", $approvedStatus, $approvedStatus, $user['id'], $taskId);
+            if ($roadmapPhaseCount > 0 && !$currentRoadmapTask) {
+                $_SESSION['error'] = "This work item is not the current unlocked roadmap task for your department.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+
+            $nextRoadmapTask = $currentRoadmapTask
+                ? projectWorkflowNextRoadmapTask($conn, $projectForRouting, $taskId, (int) ($currentRoadmapTask['id'] ?? 0))
+                : null;
+            $nextDepartment = projectWorkflowDepartmentLabel($nextRoadmapTask['department_label'] ?? ($nextRoadmapTask['department'] ?? ''));
+            $routeToQa = $nextDepartment === 'QA' || !$nextRoadmapTask;
+            $approvedStatus = $routeToQa ? 'qa_testing' : 'todo';
+
+            if ($currentRoadmapTask) {
+                $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
+                $completeRoadmapStmt = $conn->prepare("
+                    UPDATE methodology_tasks
+                    SET status = 'completed', updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ");
+                if ($completeRoadmapStmt) {
+                    $completeRoadmapStmt->bind_param("ii", $userId, $currentRoadmapTaskId);
+                    $completeRoadmapStmt->execute();
+                    $completeRoadmapStmt->close();
+                }
+            }
+
+            if ($routeToQa) {
+                $stmt = $conn->prepare("
+                    UPDATE tasks
+                    SET status = 'qa_testing',
+                        completed_at = NULL,
+                        sul_reviewed_by = ?,
+                        sul_reviewed_at = NOW()
+                    WHERE id = ?
+                ");
+                $stmt->bind_param("ii", $userId, $taskId);
+            } else {
+                $nextRoadmapTaskId = (int) ($nextRoadmapTask['id'] ?? 0);
+                if ($nextRoadmapTaskId > 0) {
+                    $resetNextRoadmapStmt = $conn->prepare("
+                        UPDATE methodology_tasks
+                        SET status = 'planned', assigned_developer_id = NULL, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    ");
+                    if ($resetNextRoadmapStmt) {
+                        $resetNextRoadmapStmt->bind_param("i", $nextRoadmapTaskId);
+                        $resetNextRoadmapStmt->execute();
+                        $resetNextRoadmapStmt->close();
+                    }
+                }
+
+                $stmt = $conn->prepare("
+                    UPDATE tasks
+                    SET status = 'todo',
+                        assigned_to = NULL,
+                        assigned_by = NULL,
+                        completed_at = NULL,
+                        pr_submitted_at = NULL,
+                        sul_reviewed_by = ?,
+                        sul_reviewed_at = NOW()
+                    WHERE id = ?
+                ");
+                $stmt->bind_param("ii", $userId, $taskId);
+            }
             if ($stmt->execute()) {
                 workflowLogStatusChange((int) $user['id'], $taskId, 'for_review', $approvedStatus, 'sul_approve_department_work', $reviewComment);
-                workflowAddTaskComment($conn, $taskId, (int) $user['id'], $reviewComment !== '' ? "SUL approved work: {$reviewComment}" : 'SUL approved this department work.');
+                $approvalComment = $reviewComment !== ''
+                    ? "SUL approved work: {$reviewComment}"
+                    : 'SUL approved this department work.';
+                if (!$routeToQa && $nextDepartment !== '') {
+                    $approvalComment .= ' Handoff sent to ' . $nextDepartment . '.';
+                }
+                workflowAddTaskComment($conn, $taskId, (int) $user['id'], $approvalComment);
                 projectWorkflowSyncRoadmap($conn, $projectForRouting);
 
                 if ($routeToQa) {
@@ -802,6 +889,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             if ($stmt->execute()) {
                 workflowAddTaskComment($conn, $taskId, (int) $user['id'], 'SUL requested revision: ' . $reviewComment);
                 workflowLogStatusChange((int) $user['id'], $taskId, 'for_review', 'sul_revision', 'sul_request_pull_request_revision', $reviewComment);
+                projectWorkflowSyncRoadmap($conn, (int) ($reviewTask['project_id'] ?? 0));
                 workflowNotifyUser(
                     (int) $reviewTask['assigned_to'],
                     'PR Revision Requested: ' . $reviewTask['title'],
@@ -835,7 +923,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $taskStmt = $conn->prepare("
-            SELECT id, title, assigned_to, architect_reviewed_at
+            SELECT t.id, t.title, t.assigned_to, t.project_id, t.architect_reviewed_at
             FROM tasks t
             JOIN projects p ON p.id = t.project_id
             JOIN users u ON u.id = t.assigned_to
@@ -863,6 +951,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->bind_param("i", $taskId);
 
         if ($stmt->execute()) {
+            projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
             createNotification(
                 (int) $task['assigned_to'],
                 "Task Revision Requested: " . $task['title'],

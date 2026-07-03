@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json');
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/workflow.php';
 require_once __DIR__ . '/../includes/project-workflow.php';
 
 if (!isLoggedIn()) {
@@ -18,6 +19,7 @@ if (($user['role'] ?? '') !== 'sul') {
 }
 
 $conn = getConnection();
+workflowEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
 $taskId = (int) ($_POST['task_id'] ?? 0);
 $assigneeId = (int) ($_POST['user_id'] ?? 0);
@@ -52,7 +54,9 @@ $taskDepartmentFilter = $sulDepartment !== '' ? projectWorkflowTaskDepartmentCla
 $salesApprovedSelect = $hasSalesApproval ? "t.sales_approved" : "0 AS sales_approved";
 $salesEstimateDaysSelect = $hasSalesChoice ? "t.sales_estimate_days" : "0 AS sales_estimate_days";
 $taskStmt = $conn->prepare("
-    SELECT t.id, t.title, t.assigned_to, t.status, {$salesApprovedSelect}, {$salesEstimateDaysSelect},
+    SELECT t.id, t.title, t.project_id, t.assigned_to, t.status, t.architect_reviewed_at, t.merged_at,
+           current_assignee.role AS current_assignee_role,
+           {$salesApprovedSelect}, {$salesEstimateDaysSelect},
            CASE WHEN EXISTS (
                SELECT 1
                FROM feature_estimations fe
@@ -60,6 +64,7 @@ $taskStmt = $conn->prepare("
            ) THEN 1 ELSE 0 END AS has_completed_estimation
     FROM tasks t
     JOIN projects p ON p.id = t.project_id
+    LEFT JOIN users current_assignee ON current_assignee.id = t.assigned_to
     WHERE t.id = ?
       AND {$projectFilter}
 ");
@@ -95,16 +100,53 @@ if ($assignee['role'] === 'expert') {
 
     $salesApproved = !$hasSalesApproval || (int) ($task['sales_approved'] ?? 0) === 1;
     $daysSelected = !$hasSalesChoice || (int) ($task['sales_estimate_days'] ?? 0) > 0;
-    $taskBelongsToDepartment = (bool) ($conn->query("SELECT t.id FROM tasks t WHERE t.id = {$taskId} AND {$taskDepartmentFilter} LIMIT 1")->fetch_assoc() ?? null);
-    if (($task['status'] ?? '') !== 'todo' || !$salesApproved || !$daysSelected || !$taskBelongsToDepartment || (int) ($task['has_completed_estimation'] ?? 0) <= 0) {
+    $currentAssigneeRole = (string) ($task['current_assignee_role'] ?? '');
+    $isLegacyCompletedHandoff = ($task['status'] ?? '') === 'completed'
+        && empty($task['architect_reviewed_at'] ?? null)
+        && empty($task['merged_at'] ?? null);
+    $isReadyAssignee = $isLegacyCompletedHandoff || empty($task['assigned_to']) || $currentAssigneeRole === 'expert';
+    $projectId = (int) ($task['project_id'] ?? 0);
+    $roadmapPhaseCount = dbTableExists($conn, 'methodology_phases') && dbTableExists($conn, 'methodology_tasks')
+        ? (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$projectId}")->fetch_assoc()['total'] ?? 0))
+        : 0;
+    if ($roadmapPhaseCount > 0) {
+        projectWorkflowSyncRoadmap($conn, $projectId);
+    }
+    $currentRoadmapTask = $roadmapPhaseCount > 0
+        ? projectWorkflowCurrentRoadmapTask($conn, $projectId, $taskId, $sulDepartment)
+        : null;
+    $taskBelongsToDepartment = $roadmapPhaseCount > 0
+        ? (bool) $currentRoadmapTask
+        : (bool) ($conn->query("SELECT t.id FROM tasks t WHERE t.id = {$taskId} AND {$taskDepartmentFilter} LIMIT 1")->fetch_assoc() ?? null);
+
+    if (
+        !in_array((string) ($task['status'] ?? ''), ['todo', 'completed'], true)
+        || (($task['status'] ?? '') === 'completed' && !$isLegacyCompletedHandoff)
+        || !$salesApproved
+        || !$daysSelected
+        || !$isReadyAssignee
+        || !$taskBelongsToDepartment
+        || (int) ($task['has_completed_estimation'] ?? 0) <= 0
+        || ($currentRoadmapTask && (int) ($currentRoadmapTask['assigned_developer_id'] ?? 0) > 0)
+    ) {
         http_response_code(400);
-        echo json_encode(['success' => false, 'error' => 'Only Sales-approved tasks with selected days can be assigned to developers.']);
+        echo json_encode(['success' => false, 'error' => 'Only the current unlocked, Sales-approved roadmap task can be assigned to a developer.']);
         exit();
     }
 }
 
-$stmt = $conn->prepare("UPDATE tasks SET assigned_to = ?, status = 'todo' WHERE id = ?");
-$stmt->bind_param('ii', $assigneeId, $taskId);
+$stmt = $conn->prepare("
+    UPDATE tasks
+    SET assigned_to = ?,
+        assigned_by = ?,
+        status = 'todo',
+        completed_at = NULL,
+        pr_submitted_at = NULL,
+        sul_reviewed_by = NULL,
+        sul_reviewed_at = NULL
+    WHERE id = ?
+");
+$stmt->bind_param('iii', $assigneeId, $userId, $taskId);
 
 if (!$stmt->execute()) {
     http_response_code(500);
@@ -114,18 +156,20 @@ if (!$stmt->execute()) {
 $stmt->close();
 
 if (($assignee['role'] ?? '') === 'developer' && dbTableExists($conn, 'methodology_tasks')) {
-    $roadmapDepartmentMatch = projectWorkflowMethodologyTaskDepartmentClause($conn, 'methodology_tasks', $sulDepartment);
+    $currentRoadmapTask = $currentRoadmapTask ?? projectWorkflowCurrentRoadmapTask($conn, (int) ($task['project_id'] ?? 0), $taskId, $sulDepartment);
+    $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
     $syncRoadmapStmt = $conn->prepare("
         UPDATE methodology_tasks
-        SET assigned_developer_id = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE task_id = ?
-          AND {$roadmapDepartmentMatch}
+        SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
     ");
-    if ($syncRoadmapStmt) {
-        $syncRoadmapStmt->bind_param('iii', $assigneeId, $userId, $taskId);
+    if ($syncRoadmapStmt && $currentRoadmapTaskId > 0) {
+        $syncRoadmapStmt->bind_param('iii', $assigneeId, $userId, $currentRoadmapTaskId);
         $syncRoadmapStmt->execute();
         $syncRoadmapStmt->close();
     }
+
+    projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
 }
 
 createNotification(

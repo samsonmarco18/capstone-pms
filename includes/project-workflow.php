@@ -373,15 +373,14 @@ function projectWorkflowNotifySelectedSuls(mysqli|PgsqlMysqliCompatConnection $c
 
 function projectWorkflowTaskDepartment(mysqli|PgsqlMysqliCompatConnection $conn, int $taskId): string
 {
-    $row = $conn->query("
-        SELECT mt.department
-        FROM methodology_tasks mt
-        WHERE mt.task_id = {$taskId}
-        ORDER BY mt.id ASC
-        LIMIT 1
-    ")->fetch_assoc();
+    $task = $conn->query("SELECT project_id FROM tasks WHERE id = {$taskId} LIMIT 1")->fetch_assoc();
+    $projectId = (int) ($task['project_id'] ?? 0);
+    $rows = projectWorkflowRoadmapTaskRows($conn, $projectId, $taskId);
+    if ($rows !== []) {
+        return projectWorkflowDepartmentLabel((string) ($rows[0]['department_label'] ?? ($rows[0]['department'] ?? '')));
+    }
 
-    return projectWorkflowDepartmentLabel($row['department'] ?? '');
+    return '';
 }
 
 function projectWorkflowRoadmapTaskStatus(?string $workflowStatus): string
@@ -401,6 +400,206 @@ function projectWorkflowRoadmapTaskStatus(?string $workflowStatus): string
     }
 
     return 'planned';
+}
+
+function projectWorkflowRoadmapTaskRows(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId, int $taskId): array
+{
+    if (
+        $projectId <= 0
+        || $taskId <= 0
+        || !dbTableExists($conn, 'methodology_phases')
+        || !dbTableExists($conn, 'methodology_tasks')
+    ) {
+        return [];
+    }
+
+    $rowsResult = $conn->query("
+        SELECT mt.*, mp.sequence_no AS phase_sequence, mp.name AS phase_name,
+               mp.start_date AS phase_start_date, mp.end_date AS phase_end_date
+        FROM methodology_tasks mt
+        INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
+        WHERE mt.project_id = {$projectId}
+          AND mt.task_id = {$taskId}
+        ORDER BY
+            COALESCE(NULLIF(mp.sequence_no, 0), mp.id) ASC,
+            mt.start_date ASC,
+            mt.id ASC
+    ");
+
+    if (!$rowsResult) {
+        return [];
+    }
+
+    $rows = [];
+    $rowIds = [];
+    while ($row = $rowsResult->fetch_assoc()) {
+        $rowId = (int) ($row['id'] ?? 0);
+        if ($rowId <= 0) {
+            continue;
+        }
+
+        $row['department_labels'] = [];
+        $rows[$rowId] = $row;
+        $rowIds[] = $rowId;
+    }
+
+    if ($rowIds && dbTableExists($conn, 'methodology_task_departments')) {
+        $idList = implode(',', array_map('intval', $rowIds));
+        $departmentRows = $conn->query("
+            SELECT methodology_task_id, department
+            FROM methodology_task_departments
+            WHERE methodology_task_id IN ({$idList})
+            ORDER BY id ASC
+        ");
+
+        if ($departmentRows) {
+            while ($departmentRow = $departmentRows->fetch_assoc()) {
+                $methodologyTaskId = (int) ($departmentRow['methodology_task_id'] ?? 0);
+                if (!isset($rows[$methodologyTaskId])) {
+                    continue;
+                }
+
+                $department = projectWorkflowDepartmentLabel((string) ($departmentRow['department'] ?? ''));
+                if ($department !== '') {
+                    $rows[$methodologyTaskId]['department_labels'][] = $department;
+                }
+            }
+        }
+    }
+
+    foreach ($rows as &$row) {
+        if ($row['department_labels'] === []) {
+            $department = projectWorkflowDepartmentLabel((string) ($row['department'] ?? ''));
+            if ($department !== '') {
+                $row['department_labels'][] = $department;
+            }
+        }
+        $row['department_labels'] = array_values(array_unique($row['department_labels']));
+        $row['department_label'] = (string) ($row['department_labels'][0] ?? projectWorkflowDepartmentLabel((string) ($row['department'] ?? '')));
+    }
+    unset($row);
+
+    return array_values($rows);
+}
+
+function projectWorkflowRoadmapTaskMatchesDepartment(array $roadmapTask, string $department): bool
+{
+    $departmentLabel = projectWorkflowDepartmentLabel($department);
+    if ($departmentLabel === '') {
+        return false;
+    }
+
+    foreach (($roadmapTask['department_labels'] ?? []) as $rowDepartment) {
+        if (strcasecmp(projectWorkflowDepartmentLabel((string) $rowDepartment), $departmentLabel) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function projectWorkflowCurrentRoadmapTask(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    int $projectId,
+    int $taskId,
+    ?string $department = null
+): ?array {
+    $rows = projectWorkflowRoadmapTaskRows($conn, $projectId, $taskId);
+    if ($rows === []) {
+        return null;
+    }
+
+    foreach ($rows as $row) {
+        if ((string) ($row['status'] ?? 'planned') === 'completed') {
+            continue;
+        }
+
+        if ($department === null || $department === '' || projectWorkflowRoadmapTaskMatchesDepartment($row, $department)) {
+            return $row;
+        }
+
+        return null;
+    }
+
+    return null;
+}
+
+function projectWorkflowNextRoadmapTask(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    int $projectId,
+    int $taskId,
+    int $currentRoadmapTaskId
+): ?array {
+    $rows = projectWorkflowRoadmapTaskRows($conn, $projectId, $taskId);
+    if ($rows === []) {
+        return null;
+    }
+
+    $currentIndex = null;
+    foreach ($rows as $index => $row) {
+        if ((int) ($row['id'] ?? 0) === $currentRoadmapTaskId) {
+            $currentIndex = $index;
+            break;
+        }
+    }
+
+    $startIndex = $currentIndex === null ? 0 : $currentIndex + 1;
+    for ($index = $startIndex; $index < count($rows); $index++) {
+        if ((string) ($rows[$index]['status'] ?? 'planned') !== 'completed') {
+            return $rows[$index];
+        }
+    }
+
+    return null;
+}
+
+function projectWorkflowCurrentRoadmapTaskClause(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    string $taskAlias,
+    string $department,
+    bool $allowUnscheduledFallback = false
+): string {
+    if (!dbTableExists($conn, 'methodology_phases') || !dbTableExists($conn, 'methodology_tasks')) {
+        return $allowUnscheduledFallback ? '1 = 1' : '1 = 0';
+    }
+
+    $departmentMatch = projectWorkflowMethodologyTaskDepartmentClause($conn, 'mt_ready', $department);
+    $positionReady = 'COALESCE(NULLIF(mp_ready.sequence_no, 0), mp_ready.id)';
+    $positionPrev = 'COALESCE(NULLIF(mp_prev.sequence_no, 0), mp_prev.id)';
+
+    $clause = "EXISTS (
+        SELECT 1
+        FROM methodology_tasks mt_ready
+        INNER JOIN methodology_phases mp_ready ON mp_ready.id = mt_ready.phase_id
+        WHERE mt_ready.project_id = {$taskAlias}.project_id
+          AND mt_ready.task_id = {$taskAlias}.id
+          AND COALESCE(mt_ready.status, 'planned') != 'completed'
+          AND {$departmentMatch}
+          AND NOT EXISTS (
+              SELECT 1
+              FROM methodology_tasks mt_prev
+              INNER JOIN methodology_phases mp_prev ON mp_prev.id = mt_prev.phase_id
+              WHERE mt_prev.project_id = mt_ready.project_id
+                AND mt_prev.task_id = mt_ready.task_id
+                AND mt_prev.id != mt_ready.id
+                AND (
+                    {$positionPrev} < {$positionReady}
+                    OR ({$positionPrev} = {$positionReady} AND mt_prev.id < mt_ready.id)
+                )
+                AND COALESCE(mt_prev.status, 'planned') != 'completed'
+          )
+    )";
+
+    if (!$allowUnscheduledFallback) {
+        return $clause;
+    }
+
+    return "({$clause} OR NOT EXISTS (
+        SELECT 1
+        FROM methodology_tasks mt_any
+        WHERE mt_any.project_id = {$taskAlias}.project_id
+          AND mt_any.task_id = {$taskAlias}.id
+    ))";
 }
 
 function projectWorkflowAutomaticPhaseStatus(array $phase, array $counts, ?DateTimeImmutable $today = null): string
@@ -443,24 +642,88 @@ function projectWorkflowSyncRoadmap(mysqli|PgsqlMysqliCompatConnection $conn, in
         return;
     }
 
-    $roadmapTaskRows = $conn->query("
-        SELECT mt.id, mt.status AS roadmap_status, t.status AS workflow_status
-        FROM methodology_tasks mt
-        INNER JOIN tasks t ON t.id = mt.task_id
-        WHERE mt.project_id = {$projectId}
+    $workflowRows = $conn->query("
+        SELECT id, status, assigned_to, architect_reviewed_at, merged_at
+        FROM tasks
+        WHERE project_id = {$projectId}
     ");
-    if ($roadmapTaskRows) {
+
+    if ($workflowRows) {
         $updateRoadmapTask = $conn->prepare('UPDATE methodology_tasks SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND project_id = ?');
         if ($updateRoadmapTask) {
-            while ($roadmapTask = $roadmapTaskRows->fetch_assoc()) {
-                $automaticTaskStatus = projectWorkflowRoadmapTaskStatus($roadmapTask['workflow_status'] ?? '');
-                if ($automaticTaskStatus === (string) ($roadmapTask['roadmap_status'] ?? '')) {
+            while ($workflowTask = $workflowRows->fetch_assoc()) {
+                $taskId = (int) ($workflowTask['id'] ?? 0);
+                $rows = projectWorkflowRoadmapTaskRows($conn, $projectId, $taskId);
+                if ($rows === []) {
                     continue;
                 }
 
-                $roadmapTaskId = (int) ($roadmapTask['id'] ?? 0);
-                $updateRoadmapTask->bind_param('sii', $automaticTaskStatus, $roadmapTaskId, $projectId);
-                $updateRoadmapTask->execute();
+                $workflowStatus = strtolower((string) ($workflowTask['status'] ?? 'todo'));
+                $isFinalComplete = in_array($workflowStatus, ['merged', 'ready_for_release'], true)
+                    || ($workflowStatus === 'completed' && (!empty($workflowTask['architect_reviewed_at']) || !empty($workflowTask['merged_at'])));
+
+                $currentIndex = null;
+                if (!$isFinalComplete) {
+                    $assignedTo = (int) ($workflowTask['assigned_to'] ?? 0);
+                    if ($assignedTo > 0) {
+                        foreach ($rows as $index => $row) {
+                            if (
+                                (int) ($row['assigned_developer_id'] ?? 0) === $assignedTo
+                                && (string) ($row['status'] ?? 'planned') !== 'completed'
+                            ) {
+                                $currentIndex = $index;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($currentIndex === null) {
+                        foreach ($rows as $index => $row) {
+                            if ((string) ($row['status'] ?? 'planned') !== 'completed') {
+                                $currentIndex = $index;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($currentIndex === null && $assignedTo > 0) {
+                        foreach ($rows as $index => $row) {
+                            if ((int) ($row['assigned_developer_id'] ?? 0) === $assignedTo) {
+                                $currentIndex = $index;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                foreach ($rows as $index => $row) {
+                    $rowId = (int) ($row['id'] ?? 0);
+                    if ($rowId <= 0) {
+                        continue;
+                    }
+
+                    if ($isFinalComplete) {
+                        $automaticTaskStatus = 'completed';
+                    } elseif ($currentIndex === null) {
+                        $automaticTaskStatus = (string) ($row['status'] ?? 'planned');
+                    } elseif ($index < $currentIndex) {
+                        $automaticTaskStatus = 'completed';
+                    } elseif ($index > $currentIndex) {
+                        $automaticTaskStatus = 'planned';
+                    } else {
+                        $automaticTaskStatus = projectWorkflowRoadmapTaskStatus($workflowStatus);
+                        if ($workflowStatus === 'todo' && (int) ($row['assigned_developer_id'] ?? 0) > 0) {
+                            $automaticTaskStatus = 'planned';
+                        }
+                    }
+
+                    if ($automaticTaskStatus === (string) ($row['status'] ?? 'planned')) {
+                        continue;
+                    }
+
+                    $updateRoadmapTask->bind_param('sii', $automaticTaskStatus, $rowId, $projectId);
+                    $updateRoadmapTask->execute();
+                }
             }
             $updateRoadmapTask->close();
         }
@@ -477,9 +740,9 @@ function projectWorkflowSyncRoadmap(mysqli|PgsqlMysqliCompatConnection $conn, in
         $counts = $conn->query("
             SELECT
                 COUNT(mt.id) AS total,
-                SUM(CASE WHEN t.status IN ('completed', 'merged', 'ready_for_release') THEN 1 ELSE 0 END) AS done_count,
-                SUM(CASE WHEN t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review') THEN 1 ELSE 0 END) AS approval_count,
-                SUM(CASE WHEN t.status IN ('in_progress', 'sul_revision', 'qa_failed', 'overdue', 'blocked') THEN 1 ELSE 0 END) AS progress_count
+                SUM(CASE WHEN mt.status = 'completed' THEN 1 ELSE 0 END) AS done_count,
+                SUM(CASE WHEN COALESCE(mt.status, 'planned') != 'completed' AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review') THEN 1 ELSE 0 END) AS approval_count,
+                SUM(CASE WHEN mt.status IN ('in_progress', 'blocked') OR (COALESCE(mt.status, 'planned') != 'completed' AND t.status IN ('in_progress', 'sul_revision', 'qa_failed', 'overdue', 'blocked')) THEN 1 ELSE 0 END) AS progress_count
             FROM methodology_tasks mt
             LEFT JOIN tasks t ON t.id = mt.task_id
             WHERE mt.phase_id = {$phaseId}

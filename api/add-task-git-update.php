@@ -4,6 +4,7 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/workflow.php';
+require_once __DIR__ . '/../includes/project-workflow.php';
 
 requireLogin();
 
@@ -48,6 +49,7 @@ if ($user['role'] === 'developer' && (in_array($gitAction, ['merged', 'deployed'
 
 $conn = getConnection();
 workflowEnsureSchema($conn);
+projectWorkflowEnsureSchema($conn);
 
 $taskStmt = $conn->prepare(
     'SELECT t.id, t.title, t.status, t.project_id, t.assigned_to, t.assigned_by, p.name AS project_name, p.sul_id
@@ -129,6 +131,7 @@ if ($isPullRequestSubmission) {
         $updateStmt->execute();
         $updateStmt->close();
     }
+    projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
 
     workflowLogStatusChange((int) $user['id'], $taskId, $currentStatus, 'for_review', 'developer_submit_pull_request', $notes);
     workflowAddTaskComment(
@@ -190,6 +193,7 @@ if ($isReleaseMovement) {
     if ($currentStatus !== 'completed') {
         workflowLogStatusChange((int) $user['id'], $taskId, $currentStatus, 'completed', 'git_' . $movementVerb, $notes);
     }
+    projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
 
     workflowAddTaskComment(
         $conn,

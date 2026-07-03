@@ -10,6 +10,8 @@ $conn = getConnection();
 $user = getCurrentUser();
 workflowEnsureSchema($conn);
 departmentArtifactEnsureSchema($conn);
+methodologyRoadmapEnsureSchema($conn);
+projectWorkflowEnsureSchema($conn);
 
 $userDepartment = trim((string) ($user['department'] ?? ''));
 $userDepartmentCanonical = projectWorkflowDepartmentLabel($userDepartment);
@@ -22,7 +24,14 @@ $taskBaseQuery = "
            latest_git.commit_hash AS git_commit_hash,
            latest_git.status AS git_status,
            latest_git.git_action AS git_action,
-           latest_git.pull_request_url AS git_pull_request_url
+           latest_git.pull_request_url AS git_pull_request_url,
+           (
+               SELECT MAX(mt_done.updated_at)
+               FROM methodology_tasks mt_done
+               WHERE mt_done.task_id = t.id
+                 AND mt_done.assigned_developer_id = {$user['id']}
+                 AND mt_done.status = 'completed'
+           ) AS developer_completed_at
     FROM tasks t
     LEFT JOIN projects p ON p.id = t.project_id
     LEFT JOIN task_git_updates latest_git ON latest_git.id = (
@@ -41,7 +50,18 @@ $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 $todoTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'todo' ORDER BY t.deadline ASC");
 $inProgressTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status IN ('in_progress', 'sul_revision', 'qa_failed') ORDER BY t.deadline ASC");
 $reviewTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release') ORDER BY t.deadline ASC");
-$completedTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'completed' ORDER BY t.completed_at DESC LIMIT 10");
+$completedTasks = $conn->query($taskBaseQuery . "
+    WHERE (t.assigned_to = {$user['id']} AND t.status = 'completed')
+       OR EXISTS (
+           SELECT 1
+           FROM methodology_tasks mt_done
+           WHERE mt_done.task_id = t.id
+             AND mt_done.assigned_developer_id = {$user['id']}
+             AND mt_done.status = 'completed'
+       )
+    ORDER BY COALESCE(t.completed_at, t.updated_at) DESC
+    LIMIT 10
+");
 
 $departmentProjects = [];
 $departmentProjectsResult = $conn->query("
@@ -1504,7 +1524,8 @@ include '../../includes/navbar.php';
                     <div class="completed-card">
                         <div class="d-flex justify-content-between">
                             <small><s><?php echo htmlspecialchars($task['title']); ?></s></small>
-                            <small class="text-muted"><?php echo !empty($task['completed_at']) ? date('M d', strtotime((string) $task['completed_at'])) : 'No date'; ?></small>
+                            <?php $doneAt = $task['completed_at'] ?: ($task['developer_completed_at'] ?? null); ?>
+                            <small class="text-muted"><?php echo !empty($doneAt) ? date('M d', strtotime((string) $doneAt)) : 'No date'; ?></small>
                         </div>
                     </div>
                     <?php endwhile; ?>
