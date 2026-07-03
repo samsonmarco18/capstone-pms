@@ -1937,7 +1937,7 @@ include '../../includes/navbar.php';
                 <div class="col-lg-7">
                     <label class="form-label">Methodology Template</label>
                     <select class="form-select" name="methodology_template" required>
-                        <option value="">Select Agile, Waterfall, Scrum, etc.</option>
+                        <option value="" disabled <?php echo empty($selectedProject['methodology_template']) ? 'selected' : ''; ?>>Select Agile, Waterfall, Scrum, etc.</option>
                         <?php foreach ($methodologyTemplates as $templateKey => $template): ?>
                             <option value="<?php echo htmlspecialchars((string) $templateKey); ?>" <?php echo (string) ($selectedProject['methodology_template'] ?? '') === (string) $templateKey ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars((string) $template['name']); ?> - <?php echo htmlspecialchars((string) $template['description']); ?>
@@ -2290,7 +2290,7 @@ include '../../includes/navbar.php';
                     <div class="col-md-12">
                         <label class="form-label">Workflow Feature Task</label>
                         <select class="form-select" name="workflow_task_id" id="workflowTaskId" <?php echo !$canEditArchitecture ? 'disabled' : 'required'; ?>>
-                            <option value="">Select the real workflow task</option>
+                            <option value="" disabled selected>Select the real workflow task</option>
                             <?php foreach ($workflowTasks as $workflowTask): ?>
                                 <option value="<?php echo (int) $workflowTask['id']; ?>">
                                     <?php echo htmlspecialchars($workflowTask['title'] . ' - ' . ucwords(str_replace('_', ' ', (string) $workflowTask['status']))); ?>

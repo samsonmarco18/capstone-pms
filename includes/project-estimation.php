@@ -363,38 +363,194 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             }
         }
     }
+
+    $statusLabels = [
+        'draft' => 'Draft',
+        'submitted' => 'Submitted',
+        'sul_rejected' => 'Changes Requested',
+        'sul_approved' => 'SUL Approved',
+        'sales_rejected' => 'Sales Changes Requested',
+        'sales_approved' => 'Sales Approved',
+    ];
+    $estimationStatusLabel = $statusLabels[$estimationStatus] ?? ucwords(str_replace('_', ' ', $estimationStatus));
+    $sulReviewComplete = in_array($estimationStatus, ['sul_approved', 'sales_approved'], true);
+    $salesReviewComplete = $estimationStatus === 'sales_approved';
+    $reviewHeadline = 'Sent to Expert SUL for review';
+    $reviewMessage = 'Your estimate is safely submitted. Editing is locked while the Expert SUL checks the cost breakdown.';
+    if ($estimationStatus === 'sul_approved') {
+        $reviewHeadline = 'Approved by Expert SUL';
+        $reviewMessage = 'The SUL review is complete and the estimate has moved to Sales for the next decision.';
+    } elseif ($estimationStatus === 'sales_approved') {
+        $reviewHeadline = 'Project estimation approved';
+        $reviewMessage = 'The estimate completed both review stages. No further action is required from you.';
+    }
     ?>
     <style>
-    .estimation-workspace { display: grid; gap: 1rem; margin-bottom: 1.5rem; }
-    .estimation-panel { background: #fff; border: 1px solid #e5edf5; border-radius: 18px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04); overflow: hidden; }
-    .estimation-panel-head { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid #e5edf5; align-items: center; flex-wrap: wrap; }
-    .estimation-panel-head h5 { margin: 0; font-size: 1rem; font-weight: 700; color: #1f2937; }
+    .estimation-workspace {
+        --pe-primary: #1f6392;
+        --pe-primary-dark: #184f73;
+        --pe-ink: #172033;
+        --pe-muted: #64748b;
+        --pe-line: #dfe8f1;
+        display: grid;
+        gap: 1rem;
+        margin-bottom: 1.75rem;
+    }
+    .estimation-panel { background: #fff; border: 1px solid var(--pe-line); border-radius: 16px; overflow: hidden; }
+    .project-estimation-shell { border-radius: 22px; box-shadow: 0 16px 40px rgba(15, 42, 64, 0.08); }
+    .estimation-panel-head { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--pe-line); align-items: center; flex-wrap: wrap; }
+    .estimation-panel-head h5 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--pe-ink); }
     .estimation-panel-body { padding: 1.25rem; }
-    .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.8rem; }
-    .overview-cell { padding: 0.85rem; background: #f8fafc; border: 1px solid #e5edf5; border-radius: 12px; min-width: 0; }
-    .overview-cell span { display: block; color: #64748b; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
-    .overview-cell strong { display: block; color: #172033; font-size: 0.95rem; margin-top: 0.2rem; overflow-wrap: anywhere; }
-    .estimate-table { width: 100%; border-collapse: collapse; }
-    .estimate-table th, .estimate-table td { padding: 0.72rem; border-bottom: 1px solid #e5edf5; vertical-align: middle; font-size: 0.84rem; }
-    .estimate-table th { color: #64748b; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; background: #f8fafc; }
-    .department-estimate { border: 1px solid #e5edf5; border-radius: 14px; overflow: hidden; margin-bottom: 0.85rem; }
-    .department-estimate-title { padding: 0.8rem 1rem; background: #f8fafc; display: flex; justify-content: space-between; gap: 1rem; font-weight: 700; color: #1f2937; }
-    .money-positive { color: #047857; }
-    .money-negative { color: #b91c1c; }
+    .project-estimation-toolbar { padding: 1.2rem 1.4rem; background: linear-gradient(135deg, #fff 0%, #f7fbfe 100%); }
+    .project-estimation-heading { display: flex; align-items: center; gap: 0.85rem; min-width: 0; }
+    .project-estimation-heading__icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 44px; height: 44px; border-radius: 13px; background: #e8f3fa; color: var(--pe-primary); font-size: 1.05rem; }
+    .project-estimation-eyebrow { display: block; margin-bottom: 0.12rem; color: var(--pe-primary); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+    .project-estimation-heading p { margin: 0.22rem 0 0; color: var(--pe-muted); font-size: 0.8rem; }
+    .project-estimation-picker { display: grid; grid-template-columns: auto minmax(220px, 310px); align-items: center; gap: 0.65rem; }
+    .project-estimation-picker label { margin: 0; color: var(--pe-muted); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+    .project-estimation-picker .form-control-custom { min-height: 44px; background: #fff; }
+    .project-estimation-body { background: #f8fbfd; }
+    .project-estimation-status-pill { display: inline-flex; align-items: center; gap: 0.38rem; padding: 0.38rem 0.68rem; border-radius: 999px; background: #e8f3fa; color: var(--pe-primary); font-size: 0.72rem; font-weight: 800; white-space: nowrap; }
+    .project-estimation-status-pill.is-submitted { background: #dcfce7; color: #166534; }
+    .estimation-section { margin-bottom: 1rem; border-color: #e3ebf3; box-shadow: 0 2px 8px rgba(15, 42, 64, 0.025); }
+    .estimation-section:last-child { margin-bottom: 0; }
+    .estimation-section > .estimation-panel-head { padding: 0.9rem 1.05rem; background: #fff; }
+    .estimation-section-title { display: flex; align-items: center; gap: 0.68rem; }
+    .estimation-section-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 9px; background: #edf6fb; color: var(--pe-primary); font-size: 0.78rem; }
+    .estimation-section-title small { display: block; margin-top: 0.1rem; color: var(--pe-muted); font-size: 0.72rem; font-weight: 500; }
+    .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 0.8rem; }
+    .overview-cell { padding: 0.95rem; background: #f8fafc; border: 1px solid var(--pe-line); border-radius: 12px; min-width: 0; }
+    .overview-cell span { display: block; color: var(--pe-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
+    .overview-cell strong { display: block; color: var(--pe-ink); font-size: 0.9rem; margin-top: 0.28rem; overflow-wrap: anywhere; }
+    .estimate-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    .estimate-table th, .estimate-table td { padding: 0.78rem; border-bottom: 1px solid var(--pe-line); vertical-align: middle; font-size: 0.82rem; }
+    .estimate-table th { color: var(--pe-muted); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.045em; background: #f6f9fc; }
+    .estimate-table tbody tr:last-child td { border-bottom: 0; }
+    .estimate-table tbody tr:hover td { background: #fbfdff; }
+    .department-estimate { border: 1px solid var(--pe-line); border-radius: 14px; overflow: hidden; margin-bottom: 0.85rem; background: #fff; }
+    .department-estimate:last-child { margin-bottom: 0; }
+    .department-estimate-title { padding: 0.78rem 1rem; background: #f6f9fc; display: flex; justify-content: space-between; gap: 1rem; font-size: 0.82rem; font-weight: 700; color: var(--pe-ink); }
+    .department-estimate-title span:last-child { color: var(--pe-muted); font-size: 0.76rem; }
+    .money-positive { color: #047857 !important; }
+    .money-negative { color: #b91c1c !important; }
     .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.8rem; }
-    .summary-cell { padding: 0.9rem; border-radius: 12px; border: 1px solid #e5edf5; background: #fff; }
-    .summary-cell span { display: block; font-size: 0.72rem; color: #64748b; font-weight: 700; text-transform: uppercase; }
-    .summary-cell strong { display: block; font-size: 1.15rem; color: #1f6392; margin-top: 0.2rem; }
-    .project-estimation-actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
-    @media (max-width: 768px) { .estimate-table { min-width: 860px; } .estimation-scroll { overflow-x: auto; } }
+    .summary-cell { padding: 1rem; border-radius: 12px; border: 1px solid var(--pe-line); background: #fff; }
+    .summary-cell span { display: block; font-size: 0.68rem; color: var(--pe-muted); font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
+    .summary-cell strong { display: block; font-size: 1.08rem; color: var(--pe-primary); margin-top: 0.28rem; }
+    .summary-cell:nth-child(4) { background: #eef7fc; border-color: #cfe5f3; }
+    .project-estimation-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding-top: 1rem; border-top: 1px solid var(--pe-line); }
+    .project-estimation-submit-note { display: flex; align-items: center; gap: 0.55rem; max-width: 560px; color: var(--pe-muted); font-size: 0.76rem; line-height: 1.45; }
+    .project-estimation-submit-note i { color: var(--pe-primary); }
+    .project-estimation-submit { min-width: 225px; justify-content: center; }
+    .project-estimation-submit.is-loading { pointer-events: none; opacity: 0.82; }
+    .project-estimation-locked-note { display: flex; align-items: center; gap: 0.65rem; color: #166534; font-size: 0.8rem; font-weight: 700; }
+    .project-estimation-locked-note i { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #dcfce7; }
+    .project-estimation-dashboard-link { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 40px; padding: 0.58rem 0.85rem; border: 1px solid #b9d5e6; border-radius: 10px; color: var(--pe-primary); font-size: 0.8rem; font-weight: 700; text-decoration: none; }
+    .project-estimation-dashboard-link:hover { background: #edf6fb; color: var(--pe-primary-dark); }
+    .project-estimation-form.is-locked .form-control-custom:disabled { background: #f1f5f9; color: #64748b; cursor: not-allowed; opacity: 1; }
+    .project-estimation-feedback {
+        display: flex;
+        align-items: center;
+        gap: 0.95rem;
+        margin-bottom: 1rem;
+        padding: 1.05rem 1.1rem;
+        border: 0 !important;
+        border-left: 0 !important;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #ecfdf5 0%, #f4fff8 100%);
+        color: #166534;
+        box-shadow: 0 8px 22px rgba(15, 42, 64, 0.06);
+    }
+    .project-estimation-feedback__icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: #16a34a;
+        color: #fff;
+        font-size: 1rem;
+        box-shadow: 0 6px 14px rgba(22, 163, 74, 0.2);
+    }
+    .project-estimation-feedback__content { display: grid; gap: 0.12rem; min-width: 0; flex: 1 1 auto; }
+    .project-estimation-feedback__content small { color: #15803d; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+    .project-estimation-feedback__content strong { color: inherit; font-size: 0.95rem; }
+    .project-estimation-feedback__content span { font-size: 0.8rem; line-height: 1.45; }
+    .project-estimation-feedback.is-arrival { animation: projectEstimationArrival 0.8s ease; }
+    .review-progress { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 0.7rem; margin-bottom: 1rem; padding: 0.95rem 1.05rem; border: 1px solid var(--pe-line); border-radius: 14px; background: #fff; }
+    .review-progress__step { display: flex; align-items: center; gap: 0.65rem; min-width: 0; color: #94a3b8; }
+    .review-progress__marker { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; background: #eef2f6; color: #64748b; font-size: 0.72rem; font-weight: 800; }
+    .review-progress__step strong { display: block; color: inherit; font-size: 0.76rem; }
+    .review-progress__step span { display: block; margin-top: 0.08rem; font-size: 0.66rem; }
+    .review-progress__step.is-complete { color: #15803d; }
+    .review-progress__step.is-complete .review-progress__marker { background: #dcfce7; color: #16a34a; }
+    .review-progress__step.is-current { color: var(--pe-primary); }
+    .review-progress__step.is-current .review-progress__marker { background: var(--pe-primary); color: #fff; box-shadow: 0 5px 12px rgba(31, 99, 146, 0.22); }
+    .review-progress__connector { width: 44px; height: 2px; background: #e2e8f0; }
+    .review-progress__connector.is-complete { background: #86efac; }
+    .estimation-empty-state { display: grid; justify-items: center; gap: 0.55rem; padding: 2.2rem 1rem; text-align: center; color: var(--pe-muted); }
+    .estimation-empty-state i { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 14px; background: #edf6fb; color: var(--pe-primary); font-size: 1.05rem; }
+    .estimation-empty-state strong { color: var(--pe-ink); }
+    @keyframes projectEstimationArrival { 0% { transform: translateY(-6px); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.22); } 100% { transform: translateY(0); box-shadow: 0 8px 22px rgba(15, 42, 64, 0.06); } }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-shell,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-panel,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-estimate,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-cell,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .review-progress { background: #0d1b2a; border-color: #20364a; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-toolbar,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-section > .estimation-panel-head { background: #102235; border-color: #20364a; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-body { background: #091725; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-panel-head h5,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-cell strong,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-estimate-title,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-empty-state strong { color: #e7f0f8; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-cell,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-estimate-title,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-table th { background: #12263a; border-color: #20364a; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-table td,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-actions { border-color: #20364a; color: #d7e4f2; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-table tbody tr:hover td { background: #102235; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-cell:nth-child(4) { background: rgba(31, 99, 146, 0.18); border-color: rgba(102, 200, 255, 0.28); }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-feedback {
+        background: rgba(22, 101, 52, 0.2);
+        color: #bbf7d0;
+        box-shadow: 0 12px 28px rgba(3, 14, 25, 0.24);
+    }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-feedback__icon {
+        background: #22c55e;
+        color: #052e16;
+    }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-feedback__content small { color: #86efac; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-dashboard-link { border-color: #2c4b65; color: #7cc0ee; }
+    @media (max-width: 768px) {
+        .project-estimation-toolbar { align-items: stretch; }
+        .project-estimation-picker { grid-template-columns: 1fr; width: 100%; }
+        .project-estimation-picker .form-control-custom { width: 100%; }
+        .estimate-table { min-width: 760px; }
+        .estimation-scroll { overflow-x: auto; }
+        .review-progress { grid-template-columns: 1fr; }
+        .review-progress__connector { width: 2px; height: 18px; margin-left: 14px; }
+        .project-estimation-actions { align-items: stretch; }
+        .project-estimation-submit, .project-estimation-dashboard-link { width: 100%; justify-content: center; }
+    }
     </style>
 
     <div class="estimation-workspace" id="projectEstimationModule">
-        <div class="estimation-panel">
-            <div class="estimation-panel-head">
-                <h5><i class="fas fa-file-invoice-dollar me-2"></i>Project Cost Estimation</h5>
-                <form method="GET" class="d-flex gap-2 align-items-center">
-                    <select name="project_estimation_id" class="form-control-custom" onchange="this.form.submit()">
+        <div class="estimation-panel project-estimation-shell">
+            <div class="estimation-panel-head project-estimation-toolbar">
+                <div class="project-estimation-heading">
+                    <span class="project-estimation-heading__icon" aria-hidden="true"><i class="fas fa-file-invoice-dollar"></i></span>
+                    <div>
+                        <span class="project-estimation-eyebrow">Expert workspace</span>
+                        <h5>Project Cost Estimation</h5>
+                        <p>Review project inputs, calculate delivery costs, and submit the estimate for approval.</p>
+                    </div>
+                </div>
+                <form method="GET" class="project-estimation-picker">
+                    <label for="projectEstimationSelect">Project</label>
+                    <select id="projectEstimationSelect" name="project_estimation_id" class="form-control-custom" onchange="this.form.submit()">
                         <?php foreach ($projects as $candidate): ?>
                             <option value="<?php echo (int) $candidate['id']; ?>" <?php echo (int) $candidate['id'] === $selectedProjectId ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars((string) $candidate['name']); ?>
@@ -403,24 +559,51 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     </select>
                 </form>
             </div>
-            <div class="estimation-panel-body">
+            <div class="estimation-panel-body project-estimation-body">
                 <?php if (!$project): ?>
-                    <div class="text-muted">No assigned project is ready for project estimation yet.</div>
+                    <div class="estimation-empty-state">
+                        <i class="fas fa-inbox" aria-hidden="true"></i>
+                        <strong>No project is ready for estimation</strong>
+                        <span>An assigned project will appear here after its roadmap and staffing inputs are available.</span>
+                    </div>
                 <?php else: ?>
                 <?php if ($estimationLockedForReview): ?>
-                    <div class="alert alert-success mb-3">
-                        <i class="fas fa-check-circle me-1"></i>
-                        Project estimation submitted successfully. Status: <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $estimationStatus))); ?>.
+                    <div class="project-estimation-feedback" role="status" tabindex="-1" data-project-estimation-submitted>
+                        <span class="project-estimation-feedback__icon" aria-hidden="true"><i class="fas fa-check"></i></span>
+                        <div class="project-estimation-feedback__content">
+                            <small>Submission complete</small>
+                            <strong><?php echo htmlspecialchars($reviewHeadline); ?></strong>
+                            <span><?php echo htmlspecialchars($reviewMessage); ?></span>
+                        </div>
+                        <span class="project-estimation-status-pill is-submitted"><i class="fas fa-circle-check" aria-hidden="true"></i><?php echo htmlspecialchars($estimationStatusLabel); ?></span>
+                    </div>
+                    <div class="review-progress" aria-label="Estimation review progress">
+                        <div class="review-progress__step is-complete">
+                            <span class="review-progress__marker"><i class="fas fa-check" aria-hidden="true"></i></span>
+                            <div><strong>Estimate submitted</strong><span>Completed by Expert</span></div>
+                        </div>
+                        <span class="review-progress__connector is-complete" aria-hidden="true"></span>
+                        <div class="review-progress__step <?php echo $sulReviewComplete ? 'is-complete' : 'is-current'; ?>">
+                            <span class="review-progress__marker"><?php echo $sulReviewComplete ? '<i class="fas fa-check" aria-hidden="true"></i>' : '2'; ?></span>
+                            <div><strong>Expert SUL review</strong><span><?php echo $sulReviewComplete ? 'Review completed' : 'Current step'; ?></span></div>
+                        </div>
+                        <span class="review-progress__connector <?php echo $sulReviewComplete ? 'is-complete' : ''; ?>" aria-hidden="true"></span>
+                        <div class="review-progress__step <?php echo $salesReviewComplete ? 'is-complete' : ($sulReviewComplete ? 'is-current' : ''); ?>">
+                            <span class="review-progress__marker"><?php echo $salesReviewComplete ? '<i class="fas fa-check" aria-hidden="true"></i>' : '3'; ?></span>
+                            <div><strong>Sales decision</strong><span><?php echo $salesReviewComplete ? 'Approved' : ($sulReviewComplete ? 'Current step' : 'Up next'); ?></span></div>
+                        </div>
                     </div>
                 <?php endif; ?>
-                <form method="POST" id="projectCostEstimationForm" <?php echo $estimationLockedForReview ? 'onsubmit="return false;"' : ''; ?>>
+                <form method="POST" id="projectCostEstimationForm" class="project-estimation-form <?php echo $estimationLockedForReview ? 'is-locked' : ''; ?>" <?php echo $estimationLockedForReview ? 'onsubmit="return false;"' : ''; ?>>
                     <input type="hidden" name="save_project_estimation" value="1">
                     <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
                     <input type="hidden" id="projectDurationMonths" value="<?php echo $durationMonths; ?>">
                     <input type="hidden" id="techMonthlyTotal" value="<?php echo htmlspecialchars((string) $techMonthlyTotal); ?>">
 
-                    <div class="estimation-panel mb-3">
-                        <div class="estimation-panel-head"><h5>Project Overview</h5></div>
+                    <div class="estimation-panel estimation-section">
+                        <div class="estimation-panel-head">
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-briefcase"></i></span><span>Project Overview<small>Client scope and planning inputs</small></span></h5>
+                        </div>
                         <div class="estimation-panel-body">
                             <div class="overview-grid">
                                 <div class="overview-cell"><span>Project Name</span><strong><?php echo htmlspecialchars((string) $project['name']); ?></strong></div>
@@ -433,8 +616,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         </div>
                     </div>
 
-                    <div class="estimation-panel mb-3">
-                        <div class="estimation-panel-head"><h5>Technology Stack Cost</h5></div>
+                    <div class="estimation-panel estimation-section">
+                        <div class="estimation-panel-head">
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-layer-group"></i></span><span>Technology Stack Cost<small>Software cost across the project duration</small></span></h5>
+                        </div>
                         <div class="estimation-panel-body estimation-scroll">
                             <table class="estimate-table">
                                 <thead><tr><th>Technology/Software</th><th>Monthly Cost</th><th>Project Duration</th><th>Total Cost per Technology</th></tr></thead>
@@ -454,8 +639,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         </div>
                     </div>
 
-                    <div class="estimation-panel mb-3">
-                        <div class="estimation-panel-head"><h5>Developer Allocation by Roadmap Headcount</h5></div>
+                    <div class="estimation-panel estimation-section">
+                        <div class="estimation-panel-head">
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-users"></i></span><span>Developer Allocation<small>Set level and contribution for each roadmap position</small></span></h5>
+                        </div>
                         <div class="estimation-panel-body">
                             <?php if (count($allocations) === 0): ?>
                                 <div class="text-muted">No Roadmap Architect headcount has been entered yet.</div>
@@ -474,14 +661,14 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                             <?php else: for ($i = 1; $i <= $required; $i++): $saved = $savedRows[$department][$i] ?? []; $savedType = projectEstimationDeveloperLevel((string) ($saved['developer_type'] ?? 'Professional Dev')); $savedContribution = max(0.0, min(100.0, (float) ($saved['contribution_percent'] ?? 100))); ?>
                                                 <tr class="allocation-input-row" data-department="<?php echo htmlspecialchars($department); ?>">
                                                     <td>
-                                                        <select class="form-control-custom developer-type-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][developer_type]">
+                                                        <select class="form-control-custom developer-type-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][developer_type]" <?php echo $estimationLockedForReview ? 'disabled' : ''; ?>>
                                                             <?php foreach (PROJECT_ESTIMATION_SALARIES as $type => $salary): ?>
                                                                 <option value="<?php echo htmlspecialchars($type); ?>" data-salary="<?php echo $salary; ?>" <?php echo $savedType === $type ? 'selected' : ''; ?>><?php echo htmlspecialchars($type); ?></option>
                                                             <?php endforeach; ?>
                                                         </select>
                                                     </td>
                                                     <td class="monthly-salary-cell"></td>
-                                                    <td><input type="number" class="form-control-custom contribution-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][contribution]" min="0" max="100" step="1" value="<?php echo htmlspecialchars((string) $savedContribution); ?>" aria-label="<?php echo htmlspecialchars($department); ?> contribution percent"></td>
+                                                    <td><input type="number" class="form-control-custom contribution-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][contribution]" min="0" max="100" step="1" value="<?php echo htmlspecialchars((string) $savedContribution); ?>" aria-label="<?php echo htmlspecialchars($department); ?> contribution percent" <?php echo $estimationLockedForReview ? 'disabled' : ''; ?>></td>
                                                 </tr>
                                             <?php endfor; endif; ?>
                                             </tbody>
@@ -492,8 +679,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         </div>
                     </div>
 
-                    <div class="estimation-panel mb-3">
-                        <div class="estimation-panel-head"><h5>Developer Cost Estimation</h5></div>
+                    <div class="estimation-panel estimation-section">
+                        <div class="estimation-panel-head">
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-calculator"></i></span><span>Developer Cost Estimation<small>Calculated staffing and technology totals</small></span></h5>
+                        </div>
                         <div class="estimation-panel-body estimation-scroll">
                             <table class="estimate-table">
                                 <thead>
@@ -508,16 +697,16 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         </div>
                     </div>
 
-                    <div class="estimation-panel">
-                        <div class="estimation-panel-head"><h5>Project Cost Summary</h5></div>
+                    <div class="estimation-panel estimation-section">
+                        <div class="estimation-panel-head">
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-chart-pie"></i></span><span>Project Cost Summary<small>Final estimate compared with the client budget</small></span></h5>
+                            <span class="project-estimation-status-pill <?php echo $estimationLockedForReview ? 'is-submitted' : ''; ?>"><i class="fas fa-<?php echo $estimationLockedForReview ? 'lock' : 'pen'; ?>" aria-hidden="true"></i><?php echo htmlspecialchars($estimationStatusLabel); ?></span>
+                        </div>
                         <div class="estimation-panel-body">
                             <div class="row g-3 align-items-end mb-3">
                                 <div class="col-md-4">
                                     <label class="form-label">Additional Project Costs</label>
-                                    <input type="number" name="additional_costs" id="additionalCostsInput" class="form-control-custom" min="0" step="0.01" value="<?php echo htmlspecialchars((string) ($estimation['additional_costs'] ?? 0)); ?>">
-                                </div>
-                                <div class="col-md-8 text-md-end">
-                                    <span class="badge bg-light text-dark">Status: <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) ($estimation['status'] ?? 'draft')))); ?></span>
+                                    <input type="number" name="additional_costs" id="additionalCostsInput" class="form-control-custom" min="0" step="0.01" value="<?php echo htmlspecialchars((string) ($estimation['additional_costs'] ?? 0)); ?>" <?php echo $estimationLockedForReview ? 'disabled' : ''; ?>>
                                 </div>
                             </div>
                             <div class="summary-grid">
@@ -530,9 +719,14 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                             </div>
                             <div class="project-estimation-actions mt-3">
                                 <?php if ($estimationLockedForReview): ?>
-                                    <span class="badge bg-success-subtle text-success">Submitted for review</span>
+                                    <div class="project-estimation-locked-note">
+                                        <i class="fas fa-lock" aria-hidden="true"></i>
+                                        <span>Editing is locked while this estimate moves through review.</span>
+                                    </div>
+                                    <a class="project-estimation-dashboard-link" href="<?php echo BASE_URL; ?>modules/expert/dashboard.php"><i class="fas fa-arrow-left" aria-hidden="true"></i>Back to Dashboard</a>
                                 <?php else: ?>
-                                    <button type="submit" class="btn-save-phases"><i class="fas fa-paper-plane"></i> Submit Project Estimation</button>
+                                    <div class="project-estimation-submit-note"><i class="fas fa-circle-info" aria-hidden="true"></i><span>Review all amounts before submitting. The estimate will be locked and sent to the Expert SUL.</span></div>
+                                    <button type="submit" class="btn-save-phases project-estimation-submit"><i class="fas fa-paper-plane"></i>Submit for SUL Review</button>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -550,6 +744,41 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         const techMonthly = Number(document.getElementById('techMonthlyTotal')?.value || 0);
         const clientBudget = <?php echo json_encode((float) ($project['sales_budget'] ?? 0)); ?>;
         const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
+        const estimationForm = document.getElementById('projectCostEstimationForm');
+        const submissionStatus = document.querySelector('[data-project-estimation-submitted]');
+
+        if (estimationForm && !estimationForm.classList.contains('is-locked')) {
+            estimationForm.addEventListener('submit', () => {
+                try {
+                    sessionStorage.setItem('projectEstimationJustSubmitted', '1');
+                } catch (error) {
+                    // Submission still works when browser storage is unavailable.
+                }
+                const submitButton = estimationForm.querySelector('.project-estimation-submit');
+                if (submitButton) {
+                    submitButton.classList.add('is-loading');
+                    submitButton.disabled = true;
+                    submitButton.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Submitting estimate...';
+                }
+            });
+        }
+
+        if (submissionStatus) {
+            let shouldHighlightSubmission = false;
+            try {
+                shouldHighlightSubmission = sessionStorage.getItem('projectEstimationJustSubmitted') === '1';
+                sessionStorage.removeItem('projectEstimationJustSubmitted');
+            } catch (error) {
+                shouldHighlightSubmission = false;
+            }
+            if (shouldHighlightSubmission) {
+                window.setTimeout(() => {
+                    submissionStatus.classList.add('is-arrival');
+                    submissionStatus.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    submissionStatus.focus({ preventScroll: true });
+                }, 120);
+            }
+        }
 
         function updateProjectEstimation() {
             const groupedRows = new Map();

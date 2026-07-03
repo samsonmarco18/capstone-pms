@@ -1009,13 +1009,23 @@ include '../../includes/navbar.php';
 }
 
 /* Page Header */
+.expert-estimation-page {
+    max-width: 1540px;
+    margin: 0 auto;
+}
+
 .page-header-modern {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
-    border-radius: 24px;
-    padding: 2rem;
-    margin-bottom: 2rem;
+    border-radius: 22px;
+    padding: 1.55rem 1.75rem;
+    margin-bottom: 1.5rem;
     position: relative;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    box-shadow: 0 14px 32px rgba(24, 79, 115, 0.16);
 }
 
 .page-header-modern::before {
@@ -1030,9 +1040,9 @@ include '../../includes/navbar.php';
 }
 
 .page-header-modern h2 {
-    font-size: 1.75rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
+    font-size: 1.65rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
     color: white;
 }
 
@@ -1045,6 +1055,60 @@ include '../../includes/navbar.php';
     margin-bottom: 0;
     font-size: 0.9rem;
     color: rgba(255, 255, 255, 0.9);
+}
+
+.page-header-content {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+}
+
+.page-header-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.42rem;
+    color: #cfeeff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.page-header-workflow {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.page-header-workflow__step {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 36px;
+    padding: 0.48rem 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    backdrop-filter: blur(4px);
+}
+
+.page-header-workflow__number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.18);
+    font-size: 0.66rem;
 }
 
 /* Timeline Section */
@@ -2031,11 +2095,22 @@ textarea.form-control-custom {
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
-        padding: 1.5rem;
+        padding: 1.35rem;
+        align-items: flex-start;
+        flex-direction: column;
     }
     
     .page-header-modern h2 {
-        font-size: 1.5rem;
+        font-size: 1.4rem;
+    }
+
+    .page-header-workflow {
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .page-header-workflow__step {
+        flex: 1 1 135px;
     }
     
     .phase-item {
@@ -2053,15 +2128,21 @@ textarea.form-control-custom {
 }
 </style>
 
-<div class="container-fluid px-4 py-4">
+<div class="container-fluid px-4 py-4 expert-estimation-page">
     <!-- Page Header -->
     <div class="page-header-modern">
-        <div>
+        <div class="page-header-content">
+            <span class="page-header-eyebrow"><i class="fas fa-user-check" aria-hidden="true"></i>Expert estimation workspace</span>
             <h2>
                 <i class="fas fa-calculator me-2"></i> 
-                Timeline Feature Recommendations
+                Project &amp; Feature Estimation
             </h2>
-            <p>Provide three-point estimations and build the realtime project timeline</p>
+            <p>Build the project cost plan, estimate feature timelines, and submit a review-ready recommendation.</p>
+        </div>
+        <div class="page-header-workflow" aria-label="Estimation workflow">
+            <span class="page-header-workflow__step"><span class="page-header-workflow__number">1</span>Cost planning</span>
+            <span class="page-header-workflow__step"><span class="page-header-workflow__number">2</span>Feature timeline</span>
+            <span class="page-header-workflow__step"><span class="page-header-workflow__number">3</span>Submit for review</span>
         </div>
     </div>
 

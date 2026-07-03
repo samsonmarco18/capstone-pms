@@ -11,23 +11,43 @@ $hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
 $projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
 $projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
+function architectDashboardRequestedFeatureCount(?string $requestedFeatures): int
+{
+    $features = [];
+    foreach (preg_split('/\R/', trim((string) $requestedFeatures)) ?: [] as $line) {
+        $line = trim((string) $line);
+        if ($line === '') {
+            continue;
+        }
+        if (preg_match('/^(additional requirements|budget)\s*:/i', $line)) {
+            break;
+        }
+
+        $line = trim((string) preg_replace('/^\s*(?:[-*]|\d+[.)])\s*/', '', $line));
+        if ($line !== '') {
+            $features[strtolower($line)] = true;
+        }
+    }
+
+    return count($features);
+}
+
 // Get statistics
 $totalProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE architect_id = {$user['id']} OR architect_id IS NULL")->fetch_assoc()['count'];
 $pendingProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (architect_id = {$user['id']} OR architect_id IS NULL) AND status = 'pending'")->fetch_assoc()['count'];
 $inProgressProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (architect_id = {$user['id']} OR architect_id IS NULL) AND status = 'in_progress'")->fetch_assoc()['count'];
 $completedProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE (architect_id = {$user['id']} OR architect_id IS NULL) AND status = 'completed'")->fetch_assoc()['count'];
 
-// Get projects ready for architect review with quick readiness context
+// Sales creates new architecture-review intakes as pending projects.
 $reviewProjects = $conn->query("
     SELECT 
         p.*, 
         c.name as client_name,
-        (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) as task_count,
-        (SELECT COUNT(*) FROM architecture_documents ad WHERE ad.project_id = p.id) as document_count
+        (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) as task_count
     FROM projects p 
     JOIN clients c ON p.client_id = c.id 
     WHERE (p.architect_id = {$user['id']} OR p.architect_id IS NULL) 
-    AND p.status = 'review'
+    AND p.status IN ('pending', 'review')
     ORDER BY COALESCE(p.timeline_end, DATE(p.created_at)) ASC, p.created_at DESC 
     LIMIT 5
 ");
@@ -191,6 +211,81 @@ include '../../includes/navbar.php';
     color: #6c757d;
 }
 
+.review-project-list {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.review-project-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem;
+    border: 1px solid #e5edf3;
+    border-radius: 12px;
+    background: #fbfdff;
+}
+
+.review-project-main {
+    min-width: 0;
+}
+
+.review-project-title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+}
+
+.review-project-title-row h6 {
+    margin: 0;
+    color: #1f2937;
+    font-size: 0.9rem;
+}
+
+.review-project-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.48rem;
+    border-radius: 999px;
+    background: #e0f2fe;
+    color: #0369a1;
+    font-size: 0.62rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.review-project-client {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: #64748b;
+    font-size: 0.75rem;
+}
+
+.review-project-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.85rem;
+    margin-top: 0.55rem;
+}
+
+.review-project-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: #64748b;
+    font-size: 0.7rem;
+}
+
+.review-project-meta i,
+.review-project-client i {
+    color: var(--theme-primary);
+}
+
 .btn-review {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
     color: white;
@@ -208,6 +303,18 @@ include '../../includes/navbar.php';
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
     color: white;
+}
+
+@media (max-width: 576px) {
+    .review-project-item {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .review-project-item .btn-review {
+        justify-content: center;
+        width: 100%;
+    }
 }
 
 .empty-state-mini {
@@ -266,6 +373,25 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table th {
     color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .review-project-item {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .review-project-title-row h6 {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .review-project-client,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .review-project-meta span {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .review-project-badge {
+    background: rgba(31, 99, 146, 0.2);
+    color: #8fd3ff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-preview {
@@ -430,44 +556,57 @@ include '../../includes/navbar.php';
     <div class="row g-3">
         <div class="col-xl-6">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0 fw-semibold" style="color: #1f6392;">Projects Ready for Review</h5>
+                <div class="card-header bg-white border-0 pt-4 px-4 pb-2">
+                    <h5 class="mb-1 fw-semibold" style="color: #1f6392;">Projects Ready for Review</h5>
+                    <small class="text-muted">New Sales intakes awaiting architecture planning</small>
                 </div>
                 <div class="card-body p-4">
                     <?php if($reviewProjects->num_rows > 0): ?>
+                        <div class="review-project-list">
                         <?php while($project = $reviewProjects->fetch_assoc()): ?>
-                        <div class="d-flex justify-content-between align-items-start mb-3 pb-3 border-bottom">
-                            <div>
-                                <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($project['name']); ?></h6>
-                                <small class="text-muted">
-                                    <i class="fas fa-building me-1"></i>
-                                    <?php echo htmlspecialchars($project['client_name']); ?>
-                                </small>
-                                <div class="mt-1">
-                                    <small class="text-muted">
-                                        <i class="far fa-calendar-alt me-1"></i>
-                                        Target: <?php echo !empty($project['timeline_end']) ? date('M d, Y', strtotime((string) $project['timeline_end'])) : 'No target date'; ?>
-                                    </small>
+                            <?php
+                            $requestedFeatureCount = architectDashboardRequestedFeatureCount($project['requested_features'] ?? '');
+                            $reviewStarted = (int) ($project['task_count'] ?? 0) > 0;
+                            ?>
+                            <article class="review-project-item">
+                                <div class="review-project-main">
+                                    <div class="review-project-title-row">
+                                        <h6><?php echo htmlspecialchars((string) $project['name']); ?></h6>
+                                        <span class="review-project-badge">
+                                            <i class="fas <?php echo $reviewStarted ? 'fa-pen-ruler' : 'fa-inbox'; ?>"></i>
+                                            <?php echo $reviewStarted ? 'Planning started' : 'New Sales intake'; ?>
+                                        </span>
+                                    </div>
+                                    <div class="review-project-client">
+                                        <i class="fas fa-building"></i>
+                                        <span><?php echo htmlspecialchars((string) $project['client_name']); ?></span>
+                                    </div>
+                                    <div class="review-project-meta">
+                                        <span>
+                                            <i class="far fa-calendar-alt"></i>
+                                            Target <?php echo !empty($project['timeline_end']) ? date('M d, Y', strtotime((string) $project['timeline_end'])) : 'not set'; ?>
+                                        </span>
+                                        <span>
+                                            <i class="fas fa-list-check"></i>
+                                            <?php echo $requestedFeatureCount; ?> requested feature<?php echo $requestedFeatureCount === 1 ? '' : 's'; ?>
+                                        </span>
+                                        <span>
+                                            <i class="far fa-clock"></i>
+                                            Received <?php echo !empty($project['created_at']) ? date('M d, Y', strtotime((string) $project['created_at'])) : 'recently'; ?>
+                                        </span>
+                                    </div>
                                 </div>
-                                <div class="mt-1">
-                                    <small class="text-muted">
-                                        <i class="fas fa-list-check me-1"></i>
-                                        <?php echo (int) $project['task_count']; ?> task<?php echo (int) $project['task_count'] === 1 ? '' : 's'; ?>
-                                        &bull;
-                                        <i class="fas fa-file-alt me-1"></i>
-                                        <?php echo (int) $project['document_count']; ?> document<?php echo (int) $project['document_count'] === 1 ? '' : 's'; ?>
-                                    </small>
-                                </div>
-                            </div>
-                            <a href="project-review.php?id=<?php echo $project['id']; ?>" class="btn-review">
-                                <i class="fas fa-eye"></i> Review
-                            </a>
-                        </div>
+                                <a href="project-review.php?id=<?php echo (int) $project['id']; ?>" class="btn-review">
+                                    <i class="fas fa-arrow-right"></i>
+                                    <?php echo $reviewStarted ? 'Continue' : 'Start Review'; ?>
+                                </a>
+                            </article>
                         <?php endwhile; ?>
+                        </div>
                     <?php else: ?>
                         <div class="empty-state-mini">
                             <i class="fas fa-check-circle"></i>
-                            <p>No projects ready for review</p>
+                            <p>No new Sales intakes are waiting for review.</p>
                         </div>
                     <?php endif; ?>
                 </div>

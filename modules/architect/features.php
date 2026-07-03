@@ -328,20 +328,102 @@ include '../../includes/navbar.php';
     padding-top: 1.25rem;
 }
 
+.feature-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1.25rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--gray-200);
+}
+
+.feature-action-primary {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+}
+
 .btn-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
     background: transparent;
     border: 1px dashed var(--gray-600);
     color: var(--gray-600);
-    padding: 0.5rem 1rem;
+    padding: 0.65rem 1rem;
     border-radius: 40px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-add:hover {
+    border-color: var(--theme-primary);
+    background: rgba(31, 99, 146, 0.07);
+    color: var(--theme-primary);
 }
 
 .btn-save {
+    order: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
     color: white;
     border: none;
-    padding: 0.7rem 1.5rem;
+    min-height: 42px;
+    padding: 0.68rem 1.35rem;
     border-radius: 40px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.18);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-save:hover {
+    transform: translateY(-1px);
+    color: #ffffff;
+    box-shadow: 0 11px 22px rgba(31, 99, 146, 0.26);
+}
+
+.feature-action-primary [data-generic-save-draft] {
+    order: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    margin: 0 !important;
+    padding: 0.62rem 1rem;
+    border-color: rgba(31, 99, 146, 0.45);
+    border-radius: 40px;
+    background: #ffffff;
+    color: var(--theme-primary);
+    font-size: 0.78rem;
+    font-weight: 650;
+}
+
+.feature-action-primary [data-generic-save-draft]:hover {
+    border-color: var(--theme-primary);
+    background: #eef7fd;
+    color: var(--theme-dark);
+}
+
+.feature-action-primary [data-generic-draft-status] {
+    order: 0;
+    margin: 0 !important;
+    color: #047857 !important;
+    font-size: 0.7rem !important;
+    font-weight: 700;
+}
+
+.feature-action-primary [data-generic-draft-status]:empty {
+    display: none;
 }
 
 .btn-remove {
@@ -506,6 +588,26 @@ a.progress-step:hover {
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
     .saved-feature { grid-template-columns: 1fr; }
     .sales-requested-feature { grid-template-columns: 1fr; }
+    .feature-action-bar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    .feature-action-bar .btn-add {
+        align-self: flex-start;
+    }
+    .feature-action-primary {
+        display: grid;
+        grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+        width: 100%;
+    }
+    .feature-action-primary [data-generic-draft-status] {
+        grid-column: 1 / -1;
+        text-align: right;
+    }
+    .feature-action-primary [data-generic-save-draft],
+    .feature-action-primary .btn-save {
+        width: 100%;
+    }
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
     background: #06111e;
@@ -553,6 +655,33 @@ a.progress-step:hover {
     background: #071321 !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
     color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-action-bar {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-add {
+    border-color: #6f8ba5;
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-add:hover {
+    border-color: #8fd3ff;
+    background: rgba(31, 99, 146, 0.18);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-action-primary [data-generic-save-draft] {
+    border-color: rgba(86, 171, 224, 0.38);
+    background: #0a1b2c;
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-action-primary [data-generic-save-draft]:hover {
+    border-color: #8fd3ff;
+    background: rgba(31, 99, 146, 0.22);
+    color: #ffffff;
 }
 </style>
 
@@ -681,13 +810,15 @@ a.progress-step:hover {
             </div>
         </div>
 
-        <div class="d-flex justify-content-between flex-wrap gap-2 mt-3">
+        <div class="feature-action-bar">
             <button type="button" class="btn-add" onclick="addFeature()">
-                <i class="fas fa-plus me-1"></i> Add Feature
+                <i class="fas fa-plus"></i> Add Feature
             </button>
-            <button type="submit" class="btn-save">
-                <i class="fas fa-arrow-right me-1"></i> Save Features & Continue
-            </button>
+            <div class="feature-action-primary">
+                <button type="submit" class="btn-save">
+                    Save Features &amp; Continue <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
         </div>
     </form>
     <?php endif; ?>

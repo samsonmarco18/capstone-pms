@@ -545,6 +545,58 @@ include '../../includes/navbar.php';
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
 }
 
+.client-flash {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-bottom: 1rem;
+    padding: 0.9rem 3.25rem 0.9rem 1rem;
+    border: 0 !important;
+    border-left: 0 !important;
+    border-radius: 14px;
+    box-shadow: 0 8px 22px rgba(15, 42, 64, 0.08);
+}
+
+.client-flash--success {
+    background: #ecfdf5;
+    color: #166534;
+}
+
+.client-flash__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #16a34a;
+    color: #ffffff;
+    font-size: 1rem;
+    box-shadow: 0 6px 14px rgba(22, 163, 74, 0.2);
+}
+
+.client-flash__content {
+    display: grid;
+    gap: 0.08rem;
+    min-width: 0;
+}
+
+.client-flash__content strong {
+    color: inherit;
+    font-size: 0.84rem;
+}
+
+.client-flash__content span {
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+.client-flash .btn-close {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
 /* Page Header */
 .page-header-modern {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
@@ -2082,6 +2134,17 @@ include '../../includes/navbar.php';
     background: #06111e;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-flash--success {
+    background: rgba(22, 101, 52, 0.2);
+    color: #bbf7d0;
+    box-shadow: 0 12px 28px rgba(3, 14, 25, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-flash__icon {
+    background: #22c55e;
+    color: #052e16;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
@@ -2415,8 +2478,12 @@ include '../../includes/navbar.php';
 
 <div class="container-fluid px-4 py-4">
     <?php if (!empty($_SESSION['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="fas fa-check-circle me-2"></i><?php echo htmlspecialchars((string) $_SESSION['success']); ?>
+        <div class="alert alert-success client-flash client-flash--success alert-dismissible fade show" role="status">
+            <span class="client-flash__icon" aria-hidden="true"><i class="fas fa-check"></i></span>
+            <div class="client-flash__content">
+                <strong>Success</strong>
+                <span><?php echo htmlspecialchars((string) $_SESSION['success']); ?></span>
+            </div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         <?php unset($_SESSION['success']); ?>

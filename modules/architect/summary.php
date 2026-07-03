@@ -181,10 +181,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    projectWorkflowNotifySelectedSuls($conn, $projectId, ['Expert Department'], (string) $project['name']);
+    projectWorkflowNotifyDepartmentSuls(
+        $conn,
+        'Expert Department',
+        'Project Ready for Expert Estimation: ' . (string) $project['name'],
+        'Architect submitted the completed plan. Assign the project feature tasks to an Expert Developer for estimation.',
+        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
+        $projectId
+    );
     
     logActivity($user['id'], 'submit_architecture', 'projects', $projectId);
-    $_SESSION['success'] = 'Architecture plan submitted successfully. The project is now awaiting SUL review.';
+    $_SESSION['success'] = 'Architecture plan submitted successfully. The Expert Department SUL has been notified for estimation assignment.';
     
     header('Location: projects.php?submitted=' . $projectId);
     exit();
