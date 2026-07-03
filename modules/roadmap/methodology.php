@@ -1142,6 +1142,10 @@ include '../../includes/navbar.php';
     transform: translateY(-50%);
 }
 
+.roadmap-monitoring-notice {
+    border-left: 0;
+}
+
 .breadcrumb-modern {
     align-items: center;
     background: #fff;
@@ -1983,7 +1987,7 @@ include '../../includes/navbar.php';
         </div>
 
         <?php if ($isSulMonitoring): ?>
-            <div class="alert alert-info d-flex align-items-start gap-2 small" role="status">
+            <div class="alert alert-info roadmap-monitoring-notice d-flex align-items-start gap-2 small" role="status">
                 <i class="fas fa-arrows-rotate mt-1"></i>
                 <span>Statuses are read-only here and update automatically from developer work, SUL review, QA, and final completion.</span>
             </div>

@@ -26,15 +26,20 @@ if ($sulMissingDepartment) {
     $_SESSION['error'] = 'Your SUL account must be assigned to a department before managing resources.';
 }
 
-function sulQueryResultOrNull($conn, $sql, $label)
+function sulQueryRows($conn, $sql, $label): array
 {
     $result = $conn->query($sql);
     if ($result === false) {
         error_log("Resource Management {$label} query failed: " . $conn->error);
-        return null;
+        return [];
     }
 
-    return $result;
+    $rows = [];
+    while ($row = $result->fetch_assoc()) {
+        $rows[] = $row;
+    }
+
+    return $rows;
 }
 
 function sulQueryAssocOrDefault($conn, $sql, array $default, $label)
@@ -50,16 +55,16 @@ function sulQueryAssocOrDefault($conn, $sql, array $default, $label)
 }
 
 // Get developers
-$developers = sulQueryResultOrNull($conn, "
+$developers = sulQueryRows($conn, "
     SELECT u.*, 
            COUNT(t.id) as total_tasks,
            SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-           SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as active_tasks,
+           SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks,
            SUM(CASE WHEN t.status = 'todo' THEN 1 ELSE 0 END) as pending_tasks,
            SUM(CASE WHEN t.status != 'completed' AND t.deadline < NOW() THEN 1 ELSE 0 END) as overdue_tasks,
-           ROUND(AVG(CASE WHEN t.status = 'completed' AND t.completed_at IS NOT NULL 
+           AVG(CASE WHEN t.status = 'completed' AND t.completed_at IS NOT NULL
                THEN TIMESTAMPDIFF(HOUR, t.created_at, t.completed_at) / 24 
-               ELSE NULL END), 1) as avg_completion_days
+               ELSE NULL END) as avg_completion_days
     FROM users u
      LEFT JOIN tasks t ON u.id = t.assigned_to{$developerTaskJoinFilter}
      WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
@@ -93,7 +98,7 @@ $taskStats = sulQueryAssocOrDefault($conn, "
 ", ['active_tasks' => 0, 'overdue_tasks' => 0, 'avg_completion_days' => 0], 'taskStats');
 
 // Get available developers (not already in SUL's team)
-$availableDevelopers = sulQueryResultOrNull($conn, "
+$availableDevelopers = sulQueryRows($conn, "
     SELECT u.id, u.full_name, u.email, u.department
     FROM users u
     WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
@@ -101,21 +106,23 @@ $availableDevelopers = sulQueryResultOrNull($conn, "
 ", 'availableDevelopers');
 
 // Get projects with resource allocation
-$projects = sulQueryResultOrNull($conn, "
+$projects = sulQueryRows($conn, "
     SELECT p.*, c.name as client_name,
-           COUNT(DISTINCT t.id) as total_tasks,
-           COUNT(DISTINCT u.id) as assigned_resources,
-           SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
+           COUNT(DISTINCT CASE WHEN u.id IS NOT NULL THEN t.id END) as total_tasks,
+           COUNT(DISTINCT CASE WHEN u.id IS NOT NULL AND t.status != 'completed' THEN u.id END) as assigned_resources,
+           SUM(CASE WHEN u.id IS NOT NULL AND t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks,
+           SUM(CASE WHEN u.id IS NOT NULL AND t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks
     FROM projects p
     JOIN clients c ON p.client_id = c.id
-     LEFT JOIN tasks t ON p.id = t.project_id AND {$taskDepartmentFilter}
+     LEFT JOIN tasks t ON p.id = t.project_id AND {$assignedTaskDepartmentFilter}
      LEFT JOIN users u ON u.id = t.assigned_to
          AND u.role = 'developer'
          AND u.status = 'active'{$resourceDepartmentFilter}
-    WHERE p.status != 'completed'
+    WHERE p.status NOT IN ('completed', 'cancelled')
       AND {$projectDepartmentFilter}
-    GROUP BY p.id
-    ORDER BY p.created_at DESC
+    GROUP BY p.id, c.id, c.name
+    HAVING COUNT(DISTINCT CASE WHEN u.id IS NOT NULL AND t.status != 'completed' THEN u.id END) > 0
+    ORDER BY active_tasks DESC, p.created_at DESC
     LIMIT 10
 ", 'projects');
 
@@ -124,19 +131,17 @@ $utilization = [
     'optimal' => 0,
     'overloaded' => 0,
 ];
-if ($developers instanceof mysqli_result) {
-    $developers->data_seek(0);
-    while ($resource = $developers->fetch_assoc()) {
-        $activeTasks = (int) ($resource['active_tasks'] ?? 0);
-        if ($activeTasks >= 5) {
-            $utilization['overloaded']++;
-        } elseif ($activeTasks >= 3) {
-            $utilization['optimal']++;
-        } else {
-            $utilization['underutilized']++;
-        }
+$totalAssignedTasks = 0;
+foreach ($developers as $resource) {
+    $activeTasks = (int) ($resource['active_tasks'] ?? 0);
+    $totalAssignedTasks += $activeTasks;
+    if ($activeTasks >= 5) {
+        $utilization['overloaded']++;
+    } elseif ($activeTasks >= 3) {
+        $utilization['optimal']++;
+    } else {
+        $utilization['underutilized']++;
     }
-    $developers->data_seek(0);
 }
 
 // Handle resource updates
@@ -767,7 +772,13 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <h5><i class="fas fa-chart-bar me-2"></i>Resource Workload Overview</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="workloadChart" style="height: 300px; width: 100%;"></canvas>
+                    <?php if ($developers !== []): ?>
+                        <div style="position: relative; height: 300px;">
+                            <canvas id="workloadChart"></canvas>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-center text-muted py-5">No active developer resources are available for this department.</div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -802,8 +813,8 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php if ($developers instanceof mysqli_result && $developers->num_rows > 0): ?>
-                                    <?php while($resource = $developers->fetch_assoc()): 
+                                <?php if ($developers !== []): ?>
+                                    <?php foreach ($developers as $resource):
                                         $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
                                         $statusClass = $resource['active_tasks'] >= 5 ? 'overloaded' : ($resource['active_tasks'] >= 3 ? 'busy' : ($resource['active_tasks'] > 0 ? 'available' : 'free'));
                                         $statusText = $resource['active_tasks'] >= 5 ? 'Overloaded' : ($resource['active_tasks'] >= 3 ? 'Busy' : ($resource['active_tasks'] > 0 ? 'Available' : 'Free'));
@@ -818,7 +829,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                                         <td><?php echo $resource['completed_tasks']; ?></td>
                                         <td><?php echo $resource['pending_tasks']; ?></td>
                                         <td><?php if($resource['overdue_tasks'] > 0): ?><span class="badge-status-overloaded"><?php echo $resource['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
-                                        <td><?php echo $resource['avg_completion_days'] ?? 'N/A'; ?>d</td>
+                                        <td><?php echo $resource['avg_completion_days'] !== null ? round((float) $resource['avg_completion_days'], 1) . 'd' : 'N/A'; ?></td>
                                         <td>
                                             <div class="progress-modern" style="width: 100px;">
                                                 <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resource['active_tasks'] >= 5 ? '#dc2626' : ($resource['active_tasks'] >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
@@ -835,7 +846,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                                             </button>
                                         </td>
                                     </tr>
-                                    <?php endwhile; ?>
+                                    <?php endforeach; ?>
                                 <?php else: ?>
                                     <tr><td colspan="10" class="text-center text-muted py-4">No developer data available.</td></tr>
                                 <?php endif; ?>
@@ -852,8 +863,8 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <h5><i class="fas fa-project-diagram me-2"></i>Projects with Active Resources</h5>
                 </div>
                 <div class="card-body p-0">
-                    <?php if ($projects instanceof mysqli_result && $projects->num_rows > 0): ?>
-                    <?php while($project = $projects->fetch_assoc()): ?>
+                    <?php if ($projects !== []): ?>
+                    <?php foreach ($projects as $project): ?>
                     <div class="list-group-item">
                         <div class="d-flex justify-content-between align-items-start">
                             <div>
@@ -869,7 +880,9 @@ unset($_SESSION['success'], $_SESSION['error']);
                             </a>
                         </div>
                         <?php 
-                        $completionPercent = $project['total_tasks'] > 0 ? round(($project['total_tasks'] - $project['active_tasks']) / $project['total_tasks'] * 100) : 0;
+                        $completionPercent = $project['total_tasks'] > 0
+                            ? round(((int) $project['completed_tasks'] / (int) $project['total_tasks']) * 100)
+                            : 0;
                         ?>
                         <div class="mt-2">
                             <div class="progress-modern">
@@ -878,9 +891,9 @@ unset($_SESSION['success'], $_SESSION['error']);
                             <small class="text-muted"><?php echo $completionPercent; ?>% Complete</small>
                         </div>
                     </div>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                     <?php else: ?>
-                    <div class="list-group-item text-muted py-4 text-center">No project data available.</div>
+                    <div class="list-group-item text-muted py-4 text-center">No projects currently have active department resources.</div>
                     <?php endif; ?>
                 </div>
             </div>
@@ -892,17 +905,28 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <h5><i class="fas fa-chart-pie me-2"></i>Resource Utilization</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="utilizationChart" style="height: 220px; width: 100%;"></canvas>
+                    <?php if ($developers !== []): ?>
+                        <div style="position: relative; height: 220px;">
+                            <canvas id="utilizationChart"></canvas>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-center text-muted py-5">No utilization data is available for this department.</div>
+                    <?php endif; ?>
                     <div class="mt-3 p-3 bg-light rounded-3">
                         <i class="fas fa-info-circle text-primary me-2"></i>
-                        <strong>Utilization Rate:</strong> 
+                        <strong>Utilization Rate:</strong>
                         <?php 
                         $totalResources = (int) $skills['total'];
-                        $overloaded = (int) $utilization['overloaded'];
-                        
-                        $utilizationRate = $totalResources > 0 ? round(($overloaded / $totalResources) * 100) : 0;
+                        $standardCapacity = $totalResources * 5;
+                        $utilizationRate = $standardCapacity > 0
+                            ? round(($totalAssignedTasks / $standardCapacity) * 100)
+                            : 0;
                         ?>
-                        <strong><?php echo $overloaded; ?></strong> out of <strong><?php echo $totalResources; ?></strong> resources are overloaded (<?php echo $utilizationRate; ?>%)
+                        <strong><?php echo $utilizationRate; ?>%</strong>
+                        <span class="text-muted">
+                            (<?php echo $totalAssignedTasks; ?> open tasks across <?php echo $totalResources; ?> resources;
+                            <?php echo (int) $utilization['overloaded']; ?> at or over capacity)
+                        </span>
                     </div>
                 </div>
             </div>
@@ -925,15 +949,13 @@ unset($_SESSION['success'], $_SESSION['error']);
                         <label class="form-label">Select Developer</label>
                             <select name="user_id" class="form-select" required>
                                 <option value="">Choose a developer...</option>
-                            <?php if ($availableDevelopers instanceof mysqli_result): ?>
-                                <?php $availableDevelopers->data_seek(0); while($dev = $availableDevelopers->fetch_assoc()): ?>
+                            <?php foreach ($availableDevelopers as $dev): ?>
                                 <option value="<?php echo $dev['id']; ?>">
                                     <?php echo htmlspecialchars($dev['full_name']); ?> 
                                     (<?php echo htmlspecialchars($dev['email']); ?>)
                                     <?php if($dev['department']): ?> - <?php echo htmlspecialchars($dev['department']); ?><?php endif; ?>
                                 </option>
-                                <?php endwhile; ?>
-                            <?php endif; ?>
+                            <?php endforeach; ?>
                             </select>
                         <small class="text-muted">Only developers created by admin are available for assignment</small>
                     </div>
@@ -1010,58 +1032,62 @@ const workloadData = <?php
     $names = [];
     $active = [];
     $completed = [];
-    if ($developers instanceof mysqli_result) {
-        $developers->data_seek(0);
-        while($row = $developers->fetch_assoc()) {
-            $names[] = $row['full_name'] . ' (Dev)';
-            $active[] = $row['active_tasks'];
-            $completed[] = $row['completed_tasks'];
-        }
+    foreach ($developers as $row) {
+        $names[] = $row['full_name'] . ' (Dev)';
+        $active[] = (int) ($row['active_tasks'] ?? 0);
+        $completed[] = (int) ($row['completed_tasks'] ?? 0);
     }
-    echo json_encode(['names' => $names, 'active' => $active, 'completed' => $completed]);
+    echo json_encode(
+        ['names' => $names, 'active' => $active, 'completed' => $completed],
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    );
 ?>;
 
-const workloadCtx = document.getElementById('workloadChart').getContext('2d');
-new Chart(workloadCtx, {
-    type: 'bar',
-    data: {
-        labels: workloadData.names,
-        datasets: [
-            { label: 'Active Tasks', data: workloadData.active, backgroundColor: '#f59e0b', borderRadius: 8 },
-            { label: 'Completed Tasks', data: workloadData.completed, backgroundColor: '#10b981', borderRadius: 8 }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        scales: { y: { beginAtZero: true, title: { display: true, text: 'Number of Tasks' } } },
-        plugins: { legend: { position: 'top' } }
-    }
-});
+const workloadCanvas = document.getElementById('workloadChart');
+if (workloadCanvas) {
+    new Chart(workloadCanvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: workloadData.names,
+            datasets: [
+                { label: 'Open Tasks', data: workloadData.active, backgroundColor: '#f59e0b', borderRadius: 8 },
+                { label: 'Completed Tasks', data: workloadData.completed, backgroundColor: '#10b981', borderRadius: 8 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: { y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Number of Tasks' } } },
+            plugins: { legend: { position: 'top' } }
+        }
+    });
+}
 
 // Utilization Chart
-const utilCtx = document.getElementById('utilizationChart').getContext('2d');
-new Chart(utilCtx, {
-    type: 'doughnut',
-    data: {
-        labels: ['Underutilized (0-2 tasks)', 'Optimal (3-4 tasks)', 'Overloaded (5+ tasks)'],
-        datasets: [{
-            data: [
-                <?php echo (int) $utilization['underutilized']; ?>,
-                <?php echo (int) $utilization['optimal']; ?>,
-                <?php echo (int) $utilization['overloaded']; ?>
-            ],
-            backgroundColor: ['#10b981', '#f59e0b', '#dc2626'],
-            borderWidth: 0
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        cutout: '60%',
-        plugins: { legend: { position: 'bottom' } }
-    }
-});
+const utilizationCanvas = document.getElementById('utilizationChart');
+if (utilizationCanvas) {
+    new Chart(utilizationCanvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Underutilized (0-2 tasks)', 'Optimal (3-4 tasks)', 'At/over capacity (5+ tasks)'],
+            datasets: [{
+                data: [
+                    <?php echo (int) $utilization['underutilized']; ?>,
+                    <?php echo (int) $utilization['optimal']; ?>,
+                    <?php echo (int) $utilization['overloaded']; ?>
+                ],
+                backgroundColor: ['#10b981', '#f59e0b', '#dc2626'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '60%',
+            plugins: { legend: { position: 'bottom' } }
+        }
+    });
+}
 
 function editAllocation(userId, userName, currentTasks) {
     document.getElementById('alloc_user_id').value = userId;
