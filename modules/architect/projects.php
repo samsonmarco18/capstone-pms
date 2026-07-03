@@ -6,6 +6,10 @@ requireRole('architect');
 $conn = getConnection();
 $user = getCurrentUser();
 methodologyRoadmapEnsureSchema($conn);
+$flashSuccess = trim((string) ($_SESSION['success'] ?? ''));
+$flashError = trim((string) ($_SESSION['error'] ?? ''));
+$submittedProjectId = max(0, (int) ($_GET['submitted'] ?? 0));
+unset($_SESSION['success'], $_SESSION['error']);
 
 function architectProjectNextStep(array $project): array
 {
@@ -15,6 +19,17 @@ function architectProjectNextStep(array $project): array
     $allocationCount = (int) ($project['allocation_count'] ?? 0);
     $roadmapCount = (int) ($project['roadmap_count'] ?? 0);
     $documentCount = (int) ($project['document_count'] ?? 0);
+    $expertAssignmentCount = (int) ($project['expert_assignment_count'] ?? 0);
+
+    if (trim((string) ($project['workflow_status'] ?? '')) === 'architect_submitted') {
+        $isAwaitingSulReview = $expertAssignmentCount === 0
+            && trim((string) ($project['status'] ?? '')) === 'in_progress';
+        return [
+            'url' => 'summary.php?id=' . $projectId,
+            'label' => 'View Submitted Summary',
+            'step' => $isAwaitingSulReview ? 'Awaiting SUL review' : 'Handoff complete',
+        ];
+    }
 
     if ($featureCount <= 0) {
         return ['url' => 'project-review.php?id=' . $projectId, 'label' => 'Start Review', 'step' => 'Step 1 of 7'];
@@ -42,7 +57,8 @@ $projects = $conn->query("
            (SELECT COUNT(*) FROM tech_recommendations tr WHERE tr.project_id = p.id) AS tech_count,
            (SELECT COUNT(*) FROM developer_allocations da WHERE da.project_id = p.id) AS allocation_count,
            (SELECT COUNT(*) FROM methodology_phases mp WHERE mp.project_id = p.id) AS roadmap_count,
-           (SELECT COUNT(*) FROM architecture_documents ad WHERE ad.project_id = p.id) AS document_count
+           (SELECT COUNT(*) FROM architecture_documents ad WHERE ad.project_id = p.id) AS document_count,
+           (SELECT COUNT(*) FROM tasks ta WHERE ta.project_id = p.id AND ta.task_type = 'feature' AND ta.assigned_to IS NOT NULL AND ta.assigned_to != 0) AS expert_assignment_count
     FROM projects p 
     JOIN clients c ON p.client_id = c.id 
     WHERE p.architect_id = {$user['id']} OR p.architect_id IS NULL
@@ -55,13 +71,18 @@ $pendingProjects = 0;
 $inProgressProjects = 0;
 $completedProjects = 0;
 $reviewProjects = 0;
+$awaitingSulProjects = 0;
 
 $projects->data_seek(0);
 while($project = $projects->fetch_assoc()) {
+    $isAwaitingSulReview = trim((string) ($project['workflow_status'] ?? '')) === 'architect_submitted'
+        && (int) ($project['expert_assignment_count'] ?? 0) === 0
+        && trim((string) ($project['status'] ?? '')) === 'in_progress';
     if($project['status'] == 'pending') $pendingProjects++;
-    elseif($project['status'] == 'in_progress') $inProgressProjects++;
+    elseif($project['status'] == 'in_progress' && !$isAwaitingSulReview) $inProgressProjects++;
     elseif($project['status'] == 'completed') $completedProjects++;
     elseif($project['status'] == 'review') $reviewProjects++;
+    if ($isAwaitingSulReview) $awaitingSulProjects++;
 }
 $projects->data_seek(0);
 
@@ -131,6 +152,87 @@ include '../../includes/navbar.php';
     margin-bottom: 0;
     font-size: 0.9rem;
     color: rgba(255, 255, 255, 0.9);
+}
+
+.workflow-flash {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid;
+    border-radius: 16px;
+    box-shadow: var(--shadow-sm);
+}
+
+.workflow-flash__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    color: white;
+}
+
+.workflow-flash__content {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.workflow-flash h5 {
+    margin: 0 0 0.2rem;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.workflow-flash p {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.workflow-flash.success {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #065f46;
+}
+
+.workflow-flash.success .workflow-flash__icon {
+    background: #10b981;
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.22);
+}
+
+.workflow-flash.error {
+    background: #fff1f2;
+    border-color: #fecdd3;
+    color: #9f1239;
+}
+
+.workflow-flash.error .workflow-flash__icon {
+    background: #e11d48;
+}
+
+.workflow-flash__action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid rgba(5, 150, 105, 0.3);
+    border-radius: 9px;
+    background: white;
+    color: #047857;
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.workflow-flash__action:hover {
+    background: #d1fae5;
+    color: #065f46;
 }
 
 /* Stats Row */
@@ -253,6 +355,11 @@ include '../../includes/navbar.php';
     background: var(--gray-50);
 }
 
+.project-table tr.is-submitted-highlight {
+    background: #f0fdf4;
+    box-shadow: inset 4px 0 0 #10b981;
+}
+
 .project-name {
     font-weight: 600;
     color: var(--gray-900);
@@ -281,6 +388,11 @@ include '../../includes/navbar.php';
 .badge-status.in_progress {
     background: #e0e7ff;
     color: #4f46e5;
+}
+
+.badge-status.awaiting_sul_review {
+    background: #e0f2fe;
+    color: #0369a1;
 }
 
 .badge-status.completed {
@@ -374,6 +486,16 @@ include '../../includes/navbar.php';
         flex-direction: column;
         align-items: stretch;
     }
+
+    .workflow-flash {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .workflow-flash__action {
+        width: 100%;
+        justify-content: center;
+    }
     
     .project-table th,
     .project-table td {
@@ -420,6 +542,28 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table td {
     border-color: rgba(31, 99, 146, 0.24) !important;
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-flash.success {
+    background: #08251f;
+    border-color: rgba(52, 211, 153, 0.38);
+    color: #a7f3d0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-flash.error {
+    background: #2b1118;
+    border-color: rgba(251, 113, 133, 0.38);
+    color: #fecdd3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-flash__action {
+    background: #0a1b2c;
+    border-color: rgba(52, 211, 153, 0.38);
+    color: #a7f3d0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table tr.is-submitted-highlight {
+    background: #08251f;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -433,6 +577,28 @@ include '../../includes/navbar.php';
             <p>Review and evaluate project requirements, provide technical recommendations</p>
         </div>
     </div>
+
+    <?php if ($flashSuccess !== ''): ?>
+        <div class="workflow-flash success" role="status">
+            <span class="workflow-flash__icon"><i class="fas fa-paper-plane" aria-hidden="true"></i></span>
+            <div class="workflow-flash__content">
+                <h5>Sent to Service Unit Leader</h5>
+                <p><?php echo htmlspecialchars($flashSuccess); ?></p>
+            </div>
+            <?php if ($submittedProjectId > 0): ?>
+                <a href="summary.php?id=<?php echo $submittedProjectId; ?>" class="workflow-flash__action"><i class="fas fa-eye" aria-hidden="true"></i> View submitted summary</a>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+    <?php if ($flashError !== ''): ?>
+        <div class="workflow-flash error" role="alert">
+            <span class="workflow-flash__icon"><i class="fas fa-circle-exclamation" aria-hidden="true"></i></span>
+            <div class="workflow-flash__content">
+                <h5>Submission needs attention</h5>
+                <p><?php echo htmlspecialchars($flashError); ?></p>
+            </div>
+        </div>
+    <?php endif; ?>
 
     <!-- Statistics Cards -->
     <div class="stats-row">
@@ -450,6 +616,11 @@ include '../../includes/navbar.php';
             <i class="fas fa-spinner stat-icon"></i>
             <div class="stat-label">In Progress</div>
             <div class="stat-number" style="color: #3b82f6;"><?php echo $inProgressProjects; ?></div>
+        </div>
+        <div class="stat-card-modern">
+            <i class="fas fa-paper-plane stat-icon"></i>
+            <div class="stat-label">Awaiting SUL Review</div>
+            <div class="stat-number" style="color: #0284c7;"><?php echo $awaitingSulProjects; ?></div>
         </div>
         <div class="stat-card-modern">
             <i class="fas fa-check-circle stat-icon"></i>
@@ -485,14 +656,21 @@ include '../../includes/navbar.php';
                     </thead>
                 <tbody>
                     <?php while($project = $projects->fetch_assoc()): ?>
-                    <tr>
+                    <?php
+                        $isAwaitingSul = trim((string) ($project['workflow_status'] ?? '')) === 'architect_submitted'
+                            && (int) ($project['expert_assignment_count'] ?? 0) === 0
+                            && trim((string) ($project['status'] ?? '')) === 'in_progress';
+                        $statusClass = $isAwaitingSul ? 'awaiting_sul_review' : preg_replace('/[^a-z0-9_-]/', '', strtolower((string) ($project['status'] ?? 'pending')));
+                        $statusLabel = $isAwaitingSul ? 'Awaiting SUL Review' : ucfirst(str_replace('_', ' ', (string) ($project['status'] ?? 'pending')));
+                    ?>
+                    <tr class="<?php echo $submittedProjectId === (int) $project['id'] ? 'is-submitted-highlight' : ''; ?>">
                         <td>
                             <div class="project-name"><?php echo htmlspecialchars($project['name']); ?></div>
                         </td>
                         <td><?php echo htmlspecialchars($project['client_name']); ?></td>
                         <td>
-                            <span class="badge-status <?php echo $project['status']; ?>">
-                                <?php echo ucfirst(str_replace('_', ' ', $project['status'])); ?>
+                            <span class="badge-status <?php echo htmlspecialchars((string) $statusClass); ?>">
+                                <?php echo htmlspecialchars($statusLabel); ?>
                             </span>
                         </td>
                         <td>
