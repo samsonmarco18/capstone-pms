@@ -577,22 +577,6 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         </div>
                         <span class="project-estimation-status-pill is-submitted"><i class="fas fa-circle-check" aria-hidden="true"></i><?php echo htmlspecialchars($estimationStatusLabel); ?></span>
                     </div>
-                    <div class="review-progress" aria-label="Estimation review progress">
-                        <div class="review-progress__step is-complete">
-                            <span class="review-progress__marker"><i class="fas fa-check" aria-hidden="true"></i></span>
-                            <div><strong>Estimate submitted</strong><span>Completed by Expert</span></div>
-                        </div>
-                        <span class="review-progress__connector is-complete" aria-hidden="true"></span>
-                        <div class="review-progress__step <?php echo $sulReviewComplete ? 'is-complete' : 'is-current'; ?>">
-                            <span class="review-progress__marker"><?php echo $sulReviewComplete ? '<i class="fas fa-check" aria-hidden="true"></i>' : '2'; ?></span>
-                            <div><strong>Expert SUL review</strong><span><?php echo $sulReviewComplete ? 'Review completed' : 'Current step'; ?></span></div>
-                        </div>
-                        <span class="review-progress__connector <?php echo $sulReviewComplete ? 'is-complete' : ''; ?>" aria-hidden="true"></span>
-                        <div class="review-progress__step <?php echo $salesReviewComplete ? 'is-complete' : ($sulReviewComplete ? 'is-current' : ''); ?>">
-                            <span class="review-progress__marker"><?php echo $salesReviewComplete ? '<i class="fas fa-check" aria-hidden="true"></i>' : '3'; ?></span>
-                            <div><strong>Sales decision</strong><span><?php echo $salesReviewComplete ? 'Approved' : ($sulReviewComplete ? 'Current step' : 'Up next'); ?></span></div>
-                        </div>
-                    </div>
                 <?php endif; ?>
                 <form method="POST" id="projectCostEstimationForm" class="project-estimation-form <?php echo $estimationLockedForReview ? 'is-locked' : ''; ?>" <?php echo $estimationLockedForReview ? 'onsubmit="return false;"' : ''; ?>>
                     <input type="hidden" name="save_project_estimation" value="1">
