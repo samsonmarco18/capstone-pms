@@ -734,7 +734,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             createNotification(
                 (int) $developerId,
                 "New Task Assignment: " . $taskDetails['title'],
-                "You have been assigned a new task. Deadline: " . date('M d, Y', strtotime($taskDetails['deadline'])),
+                "You have been assigned a new task. Deadline: " . sulTaskAllocationFormatDeadline($taskDetails['deadline'] ?? null),
                 'task',
                 'tasks',
                 (int) $taskId,
@@ -2364,7 +2364,7 @@ include '../../includes/navbar.php';
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
                                     <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($task['assigned_to_name']); ?></span>
-                                    <span><i class="fas fa-check-circle text-success"></i> Completed: <?php echo date('M d, Y', strtotime($task['completed_at'])); ?></span>
+                                    <span><i class="fas fa-check-circle text-success"></i> Completed: <?php echo sulTaskAllocationFormatDeadline($task['completed_at'] ?? null); ?></span>
                                 </div>
                             </div>
                             <div class="d-flex gap-2 flex-wrap">

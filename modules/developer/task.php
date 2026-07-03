@@ -980,6 +980,58 @@ include '../../includes/navbar.php';
     color: #d97706;
 }
 
+.design-reference-strip {
+    border: 1px solid rgba(31, 99, 146, 0.18);
+    border-radius: 8px;
+    background: #fff;
+    margin-bottom: 1rem;
+    padding: 0.9rem;
+}
+
+.design-reference-strip__header {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.design-reference-strip__header h6 {
+    margin: 0;
+}
+
+.design-reference-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.75rem;
+}
+
+.design-reference-card {
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--gray-50);
+}
+
+.design-reference-card img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    object-fit: contain;
+    background: #fff;
+}
+
+.design-reference-card__body {
+    padding: 0.6rem;
+}
+
+.design-reference-card__title {
+    color: var(--gray-900);
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-bottom: 0.45rem;
+}
+
 @media (max-width: 767.98px) {
     .task-facts-grid,
     .git-latest-grid,
@@ -1163,6 +1215,8 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-preview,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-ready-banner,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .design-reference-strip,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .design-reference-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact {
@@ -1206,6 +1260,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-panel h6,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel h6,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .design-reference-card__title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact-value,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-latest-value,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-project-title,
@@ -1714,57 +1769,134 @@ function transformKanbanCardForReviewColumn(card, taskId) {
     `;
 }
 
-function moveKanbanTaskToReview(taskId) {
-    const card = document.querySelector(`.kanban-card[data-task-id="${String(taskId)}"]`);
-    const reviewColumn = document.getElementById('review-column');
+function transformKanbanCardForProgressColumn(card, taskId) {
+    const footer = card.querySelector('.d-flex.justify-content-between.align-items-center');
+    if (!footer) {
+        return;
+    }
 
-    if (!card || !reviewColumn || card.closest('.kanban-body') === reviewColumn) {
+    const dueLabel = footer.querySelector('small');
+    const dueHtml = dueLabel ? dueLabel.outerHTML : '';
+    footer.innerHTML = `
+        ${dueHtml}
+        <div>
+            <button class="btn-action me-1" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details and submit the PR through the Git update form.">
+                <i class="fas fa-code-pull-request"></i> Submit PR
+            </button>
+            <button class="btn-action me-1" onclick="reviewTask(${taskId})" data-bs-toggle="tooltip" title="Move this task back to To Do if work has not started cleanly.">
+                <i class="fas fa-undo"></i> Back
+            </button>
+            <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
+                <i class="fas fa-eye"></i>
+            </button>
+        </div>
+    `;
+}
+
+function transformKanbanCardForTodoColumn(card, taskId) {
+    const footer = card.querySelector('.d-flex.justify-content-between.align-items-center');
+    if (!footer) {
+        return;
+    }
+
+    const dueLabel = footer.querySelector('small');
+    const dueHtml = dueLabel ? dueLabel.outerHTML : '';
+    footer.innerHTML = `
+        ${dueHtml}
+        <div>
+            <button class="btn-action me-1" onclick="startTask(${taskId})" data-bs-toggle="tooltip" title="Start this task and open the UI/UX design references.">
+                <i class="fas fa-play"></i> Start
+            </button>
+            <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
+                <i class="fas fa-eye"></i>
+            </button>
+        </div>
+    `;
+}
+
+function moveKanbanTaskToColumn(taskId, status) {
+    const card = document.querySelector(`.kanban-card[data-task-id="${String(taskId)}"]`);
+    const targetColumn = status === 'todo'
+        ? document.getElementById('todo-column')
+        : status === 'in_progress'
+            ? document.getElementById('progress-column')
+            : status === 'for_review'
+                ? document.getElementById('review-column')
+                : null;
+
+    if (!card || !targetColumn || card.closest('.kanban-body') === targetColumn) {
         return;
     }
 
     const sourceColumn = card.closest('.kanban-body');
-    transformKanbanCardForReviewColumn(card, taskId);
-    reviewColumn.querySelector('.empty-state-mini')?.remove();
-    reviewColumn.appendChild(card);
+    if (status === 'todo') {
+        transformKanbanCardForTodoColumn(card, taskId);
+    } else if (status === 'in_progress') {
+        transformKanbanCardForProgressColumn(card, taskId);
+    } else if (status === 'for_review') {
+        transformKanbanCardForReviewColumn(card, taskId);
+    }
 
+    targetColumn.querySelector('.empty-state-mini')?.remove();
+    targetColumn.appendChild(card);
     updateKanbanColumnCount(sourceColumn);
-    updateKanbanColumnCount(reviewColumn);
+    updateKanbanColumnCount(targetColumn);
+    initTooltips(card);
+}
+
+function moveKanbanTaskToReview(taskId) {
+    moveKanbanTaskToColumn(taskId, 'for_review');
 }
 
 function startTask(taskId) {
-    updateTaskStatus(taskId, 'in_progress');
+    updateTaskStatus(taskId, 'in_progress', { openDetails: true });
 }
 
 function reviewTask(taskId) {
     updateTaskStatus(taskId, 'todo');
 }
 
-async function updateTaskStatus(taskId, status) {
+async function updateTaskStatus(taskId, status, options = {}) {
     const confirmed = typeof window.appConfirm === 'function'
         ? await window.appConfirm({
             title: 'Confirm Task Update',
-            subject: status === 'for_review' ? 'Submit design for review?' : 'Update this task status?',
+            subject: status === 'for_review' ? 'Submit design for review?' : (status === 'in_progress' ? 'Start this task?' : 'Update this task status?'),
             message: status === 'for_review'
                 ? 'Your UI/UX design handoff will be sent to the SUL for approval.'
-                : 'The task status will be saved and activity logged.',
+                : status === 'in_progress'
+                    ? 'The task will move to In Progress and its UI/UX designs/uploads will open for reference.'
+                    : 'The task status will be saved and activity logged.',
             icon: 'fas fa-circle-check fa-lg',
             confirmIcon: 'fas fa-check',
-            confirmText: status === 'for_review' ? 'Submit Design' : 'Update'
+            confirmText: status === 'for_review' ? 'Submit Design' : (status === 'in_progress' ? 'Start Task' : 'Update')
         })
         : window.confirm('Update this task status?');
     if (!confirmed) {
         return;
     }
 
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.innerHTML = `
-        <input type="hidden" name="action" value="update_status">
-        <input type="hidden" name="task_id" value="${taskId}">
-        <input type="hidden" name="new_status" value="${status}">
-    `;
-    document.body.appendChild(form);
-    form.submit();
+    $.ajax({
+        url: '../../api/update-task-status.php',
+        method: 'POST',
+        dataType: 'json',
+        data: {
+            task_id: taskId,
+            new_status: status
+        },
+        success: function(response) {
+            moveKanbanTaskToColumn(taskId, response.new_status || status);
+            if (options.openDetails || status === 'in_progress') {
+                viewTask(taskId);
+                return;
+            }
+            if (status === 'for_review') {
+                viewTask(taskId);
+            }
+        },
+        error: function(xhr) {
+            alert(xhr.responseJSON?.error || 'Unable to update task status.');
+        }
+    });
 }
 
 function showGanttModal(project) {
@@ -2011,6 +2143,7 @@ function viewTask(taskId) {
             const estimateText = [task.estimated_days_min, task.estimated_days_likely, task.estimated_days_max].every(value => value)
                 ? `Min ${task.estimated_days_min}d | Likely ${task.estimated_days_likely}d | Max ${task.estimated_days_max}d`
                 : 'No estimate available';
+            const designReferenceStrip = buildDesignReferenceStrip(task);
             const departmentPanel = buildDepartmentPanel(task);
             const roadmapBanner = buildRoadmapReadyBanner(task);
             const isUiUxDepartment = currentDepartmentCanonical === 'UI/UX';
@@ -2078,6 +2211,7 @@ function viewTask(taskId) {
                         </div>
 
                         ${roadmapBanner}
+                        ${designReferenceStrip}
                         ${departmentPanel}
 
                         <div class="task-detail-panel">
@@ -2156,6 +2290,62 @@ function viewTask(taskId) {
             new bootstrap.Modal(document.getElementById('taskModal')).show();
         }
     });
+}
+
+function buildDesignReferenceStrip(task) {
+    if (currentDepartmentCanonical === 'UI/UX') {
+        return '';
+    }
+
+    const artifacts = Array.isArray(task.department_artifacts) ? task.department_artifacts : [];
+    const designArtifacts = artifacts.filter((artifact) => artifact.artifact_type === 'design_handoff');
+    if (designArtifacts.length === 0) {
+        return `
+            <div class="design-reference-strip">
+                <div class="design-reference-strip__header">
+                    <h6><i class="fas fa-pen-ruler me-2 text-primary"></i>UI/UX Design References</h6>
+                    <span class="badge bg-light text-muted border">No upload yet</span>
+                </div>
+                <p class="text-muted small mb-0">No UI/UX design upload or prototype link has been saved for this feature yet.</p>
+            </div>
+        `;
+    }
+
+    const cards = designArtifacts.slice(0, 4).map((artifact) => {
+        const preview = artifact.file_url
+            ? `<a href="${escapeAttribute(artifact.file_url)}" target="_blank" rel="noopener">
+                    <img src="${escapeAttribute(artifact.file_url)}" alt="${escapeAttribute(artifact.original_file_name || artifact.title || 'Design preview')}" loading="lazy">
+               </a>`
+            : `<div class="empty-state-mini py-3"><i class="fas fa-link"></i><p>Prototype link</p></div>`;
+        const sourceTask = artifact.source_task_title ? `<div class="small text-muted mb-2">${escapeHtml(artifact.source_task_title)}</div>` : '';
+        const fileLink = artifact.file_url
+            ? `<a class="btn btn-sm btn-outline-primary" href="${escapeAttribute(artifact.file_url)}" target="_blank" rel="noopener"><i class="fas fa-image me-1"></i>Open</a>`
+            : '';
+        const externalLink = artifact.external_url
+            ? `<a class="btn btn-sm btn-outline-primary" href="${escapeAttribute(artifact.external_url)}" target="_blank" rel="noopener"><i class="fas fa-link me-1"></i>Prototype</a>`
+            : '';
+
+        return `
+            <div class="design-reference-card">
+                ${preview}
+                <div class="design-reference-card__body">
+                    <div class="design-reference-card__title">${escapeHtml(artifact.title || 'UI/UX design')}</div>
+                    ${sourceTask}
+                    <div class="d-flex gap-2 flex-wrap">${fileLink}${externalLink}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="design-reference-strip">
+            <div class="design-reference-strip__header">
+                <h6><i class="fas fa-pen-ruler me-2 text-primary"></i>UI/UX Design References</h6>
+                <span class="badge bg-light text-primary border">${designArtifacts.length} reference${designArtifacts.length === 1 ? '' : 's'}</span>
+            </div>
+            <div class="design-reference-grid">${cards}</div>
+        </div>
+    `;
 }
 
 function buildRoadmapReadyBanner(task) {

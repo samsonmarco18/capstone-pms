@@ -447,7 +447,13 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
 {
     methodologyRoadmapEnsureSchema($conn);
 
-    $task = $conn->query("SELECT id, project_id FROM tasks WHERE id = {$taskId} AND assigned_to = {$developerId} LIMIT 1")->fetch_assoc();
+    $task = $conn->query("
+        SELECT t.id, t.project_id, u.department AS developer_department
+        FROM tasks t
+        LEFT JOIN users u ON u.id = t.assigned_to
+        WHERE t.id = {$taskId} AND t.assigned_to = {$developerId}
+        LIMIT 1
+    ")->fetch_assoc();
     if (!$task) {
         return 'You can only start tasks assigned to you.';
     }

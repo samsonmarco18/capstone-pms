@@ -1319,7 +1319,7 @@ new Chart(utilCtx, {
                     echo $optimal;
                 ?>,
                 <?php 
-                    $overloadedRow = sulQueryAssocOrDefault($conn, "SELECT COUNT(*) as count FROM (SELECT u.id, COUNT(t.id) as task_count FROM users u LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed' WHERE u.role IN ('expert', 'developer') GROUP BY u.id HAVING task_count >= 5) as over", ['count' => 0], 'overloadedResourcesChart');
+                    $overloadedRow = sulQueryAssocOrDefault($conn, "SELECT COUNT(*) as count FROM (SELECT u.id, COUNT(t.id) as task_count FROM users u LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed' WHERE u.role IN ('expert', 'developer') GROUP BY u.id HAVING task_count >= 5) as overloaded_resources", ['count' => 0], 'overloadedResourcesChart');
                     $overloaded = $overloadedRow['count'];
                     echo $overloaded;
                 ?>
