@@ -74,18 +74,59 @@ $checklistReadyForSummary = $hasArchitecturePlan && $hasWorkflowDiagram;
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $docType = normalizeArchitectureDocumentType($_POST['document_type'] ?? '');
     $description = trim($_POST['description'] ?? '');
-    
-    if(isset($_FILES['diagram']) && $_FILES['diagram']['error'] == 0) {
-        $target = storageBuildUploadTarget((string) $_FILES['diagram']['name'], 'architecture');
-        $originalFileName = $target['original_name'];
-        
-        if (move_uploaded_file($_FILES['diagram']['tmp_name'], $target['absolute_path'])) {
-            $stmt = $conn->prepare("INSERT INTO architecture_documents (project_id, document_type, file_name, file_path, description, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("issssi", $projectId, $docType, $originalFileName, $target['relative_path'], $description, $user['id']);
-            $stmt->execute();
-            
-            logActivity($user['id'], 'upload_diagram', 'projects', $projectId, null, $_POST);
-            $_SESSION['success'] = "Document uploaded successfully";
+
+    $uploadErrorLabels = [
+        UPLOAD_ERR_INI_SIZE => 'The selected file is larger than the server upload limit.',
+        UPLOAD_ERR_FORM_SIZE => 'The selected file is larger than the form upload limit.',
+        UPLOAD_ERR_PARTIAL => 'The file was only partially uploaded. Please try again.',
+        UPLOAD_ERR_NO_FILE => 'Please choose a file to upload.',
+        UPLOAD_ERR_NO_TMP_DIR => 'The server upload folder is missing.',
+        UPLOAD_ERR_CANT_WRITE => 'The server could not write the uploaded file.',
+        UPLOAD_ERR_EXTENSION => 'A server extension blocked the upload.',
+    ];
+
+    $file = $_FILES['diagram'] ?? null;
+    $uploadError = is_array($file) ? (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
+    if ($uploadError !== UPLOAD_ERR_OK) {
+        $_SESSION['error'] = $uploadErrorLabels[$uploadError] ?? 'Document upload failed. Please try again.';
+    } else {
+        $originalName = (string) ($file['name'] ?? '');
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        $allowedExtensions = ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'];
+        $maxFileSize = 10 * 1024 * 1024;
+
+        if (!in_array($extension, $allowedExtensions, true)) {
+            $_SESSION['error'] = 'Only PDF, PNG, JPG, DOC, and DOCX files are allowed.';
+        } elseif ((int) ($file['size'] ?? 0) > $maxFileSize) {
+            $_SESSION['error'] = 'The selected file must be 10MB or smaller.';
+        } else {
+            try {
+                $target = storageBuildUploadTarget($originalName, 'architecture');
+                $originalFileName = $target['original_name'];
+
+                if (!is_uploaded_file((string) $file['tmp_name']) || !move_uploaded_file((string) $file['tmp_name'], $target['absolute_path'])) {
+                    $_SESSION['error'] = 'The document could not be saved. Please try uploading it again.';
+                } else {
+                    $stmt = $conn->prepare("INSERT INTO architecture_documents (project_id, document_type, file_name, file_path, description, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)");
+                    if ($stmt === false) {
+                        $_SESSION['error'] = 'The document was uploaded, but the database record could not be prepared.';
+                    } else {
+                        $stmt->bind_param("issssi", $projectId, $docType, $originalFileName, $target['relative_path'], $description, $user['id']);
+                        if ($stmt->execute()) {
+                            logActivity($user['id'], 'upload_diagram', 'projects', $projectId, null, [
+                                'document_type' => $docType,
+                                'file_name' => $originalFileName,
+                            ]);
+                            $_SESSION['success'] = 'Document uploaded successfully';
+                        } else {
+                            $_SESSION['error'] = 'The document was uploaded, but it could not be saved to the document list.';
+                        }
+                        $stmt->close();
+                    }
+                }
+            } catch (Throwable $e) {
+                $_SESSION['error'] = 'Document upload failed because the upload folder could not be prepared.';
+            }
         }
     }
     

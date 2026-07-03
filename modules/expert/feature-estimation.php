@@ -2284,13 +2284,13 @@ textarea.form-control-custom {
                     <div class="row g-3 mb-4">
                         <div class="col-md-6">
                             <label class="form-label">Planned Start Date</label>
-                            <input type="date" name="planned_start" class="form-control-custom estimate-start" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                            <input type="date" name="planned_start" class="form-control-custom estimate-start" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo htmlspecialchars($featurePlannedStartValue, ENT_QUOTES, 'UTF-8'); ?>">
                             <small class="text-muted d-block mt-1">Set the task start for Gantt</small>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Planned End Date</label>
-                            <input type="date" name="planned_end" class="form-control-custom estimate-end" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                            <input type="date" name="planned_end" class="form-control-custom estimate-end" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo htmlspecialchars($featurePlannedEndValue, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $architectDeadlineValue !== '' ? 'max="' . htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>
                             <small class="text-muted d-block mt-1">Can be earlier than the Architect deadline, never later than <?php echo htmlspecialchars($architectDeadlineLabel); ?></small>
                         </div>

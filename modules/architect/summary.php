@@ -837,9 +837,9 @@ a.progress-step:hover {
                             <thead><tr><th>Technology</th><th>Category</th><th>Service Type</th><th class="text-end">Monthly Cost</th></tr></thead>
                             <tbody>
                                 <?php $totalCost = 0; while($tech = $techRecommendations->fetch_assoc()): $totalCost += $tech['estimated_cost']; ?>
-                                <tr><td class="fw-semibold"><?php echo htmlspecialchars($tech['tech_name']); ?></td><td><?php echo htmlspecialchars($tech['category']); ?></td><td><?php echo htmlspecialchars($tech['service_type']); ?></td><td class="text-end">$<?php echo number_format($tech['estimated_cost'], 2); ?></td></tr>
+                                <tr><td class="fw-semibold"><?php echo htmlspecialchars($tech['tech_name']); ?></td><td><?php echo htmlspecialchars($tech['category']); ?></td><td><?php echo htmlspecialchars($tech['service_type']); ?></td><td class="text-end">&#8369;<?php echo number_format($tech['estimated_cost'], 2); ?></td></tr>
                                 <?php endwhile; ?>
-                                <tr class="total-row"><td colspan="3"><strong>Total Monthly Cost</strong></td><td class="text-end"><strong>$<?php echo number_format($totalCost, 2); ?></strong></td></tr>
+                                <tr class="total-row"><td colspan="3"><strong>Total Monthly Cost</strong></td><td class="text-end"><strong>&#8369;<?php echo number_format($totalCost, 2); ?></strong></td></tr>
                             </tbody>
                         </table>
                     </div>

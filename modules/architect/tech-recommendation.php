@@ -645,7 +645,7 @@ a.progress-step:hover {
                                         </select>
                                     </div>
                                     <div class="col-md-2">
-                                        <label class="form-label">Monthly Cost ($)</label>
+                                        <label class="form-label">Monthly Cost (PHP)</label>
                                         <input type="number" name="technologies[<?php echo $tech['id']; ?>][cost]" 
                                                class="form-control-modern" step="0.01" 
                                                value="<?php echo htmlspecialchars((string) ($savedRecommendation['estimated_cost'] ?? $tech['price'])); ?>" <?php echo $savedRecommendation ? '' : 'disabled'; ?>>
@@ -716,7 +716,7 @@ a.progress-step:hover {
                     <hr>
                     <div class="d-flex justify-content-between align-items-center">
                         <strong>Total Monthly Cost:</strong>
-                        <h4 class="text-primary mb-0" id="totalCost">$0.00</h4>
+                        <h4 class="text-primary mb-0" id="totalCost">&#8369;0.00</h4>
                     </div>
                 </div>
             </div>
@@ -757,12 +757,12 @@ $(document).ready(function() {
             const name = container.find('.form-check-label').text().trim();
             const cost = parseFloat(container.find('input[type="number"]').val()) || 0;
             total += cost;
-            summaryHtml += `<tr><td>${name}</td><td class="text-end">$${cost.toFixed(2)}</td></tr>`;
+            summaryHtml += `<tr><td>${name}</td><td class="text-end">PHP ${cost.toFixed(2)}</td></tr>`;
         });
-        summaryHtml += `<tr class="total-row"><td><strong>Total</strong></td><td class="text-end"><strong>$${total.toFixed(2)}</strong></td></tr></table>`;
+        summaryHtml += `<tr class="total-row"><td><strong>Total</strong></td><td class="text-end"><strong>PHP ${total.toFixed(2)}</strong></td></tr></table>`;
         if($('.tech-checkbox:checked').length > 0) { $('#costSummary').html(summaryHtml); } 
         else { $('#costSummary').html('<p class="text-muted text-center py-3">Select technologies to see cost summary</p>'); }
-        $('#totalCost').text('$' + total.toFixed(2));
+        $('#totalCost').text('PHP ' + total.toFixed(2));
     }
 
     updateCostSummary();

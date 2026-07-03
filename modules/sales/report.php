@@ -59,7 +59,7 @@ if ($selectedClient) {
             ];
         }
 
-        // Estimated $500 per day per developer.
+        // Estimated PHP 500 per day per developer.
         $developerCost = 0;
         foreach ($roadmapDeveloperRows as $alloc) {
             $developerCost += $alloc['required_count'] * 500 * 30; // Monthly cost
@@ -629,12 +629,12 @@ include '../../includes/navbar.php';
                                     <tr>
                                         <td><?php echo htmlspecialchars($tech['tech_name']); ?></td>
                                         <td><?php echo htmlspecialchars($tech['category']); ?></td>
-                                        <td class="text-end">$<?php echo number_format($tech['estimated_cost'], 2); ?></td>
+                                        <td class="text-end">&#8369;<?php echo number_format($tech['estimated_cost'], 2); ?></td>
                                     </tr>
                                     <?php endwhile; ?>
                                     <tr class="total-row">
                                         <td colspan="2"><strong>Total Technology Cost</strong></td>
-                                        <td class="text-end"><strong>$<?php echo number_format($techTotal, 2); ?></strong></td>
+                                        <td class="text-end"><strong>&#8369;<?php echo number_format($techTotal, 2); ?></strong></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -652,7 +652,7 @@ include '../../includes/navbar.php';
                         </h5>
                     </div>
                     <div class="card-body">
-                        <small class="text-muted d-block mb-3">Based on Architect Roadmap headcount and daily rates ($500/day per developer)</small>
+                        <small class="text-muted d-block mb-3">Based on Architect Roadmap headcount and daily rates (PHP 500/day per developer)</small>
                         <div class="table-responsive">
                             <table class="data-table">
                                 <thead>
@@ -679,12 +679,12 @@ include '../../includes/navbar.php';
                                     <tr>
                                         <td><?php echo htmlspecialchars($alloc['role']); ?></td>
                                         <td class="text-center"><?php echo $alloc['required_count']; ?></td>
-                                        <td class="text-end">$<?php echo number_format($cost, 2); ?></td>
+                                        <td class="text-end">&#8369;<?php echo number_format($cost, 2); ?></td>
                                     </tr>
                                     <?php endforeach; endif; ?>
                                     <tr class="total-row">
                                         <td colspan="2"><strong>Total Developer Cost</strong></td>
-                                        <td class="text-end"><strong>$<?php echo number_format($devTotal, 2); ?></strong></td>
+                                        <td class="text-end"><strong>&#8369;<?php echo number_format($devTotal, 2); ?></strong></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -704,7 +704,7 @@ include '../../includes/navbar.php';
                     <div class="card-body">
                         <div class="alert alert-info bg-light border-0 p-3 rounded-3">
                             <i class="fas fa-info-circle me-2 text-primary"></i>
-                            <strong>Total Resource Cost:</strong> $<?php echo number_format($techTotal, 2); ?>/month
+                            <strong>Total Resource Cost:</strong> &#8369;<?php echo number_format($techTotal, 2); ?>/month
                         </div>
                         <input type="hidden" name="resource_cost" value="<?php echo $techTotal; ?>">
                     </div>
@@ -725,7 +725,7 @@ include '../../includes/navbar.php';
                                     <input type="text" name="other_fees_list[0][name]" class="form-control" placeholder="Fee Name" style="border-radius: 10px;">
                                 </div>
                                 <div class="col-md-4">
-                                    <input type="number" name="other_fees_list[0][cost]" class="form-control fee-cost" placeholder="Cost ($)" step="0.01" onchange="updateSummary()" style="border-radius: 10px;">
+                                    <input type="number" name="other_fees_list[0][cost]" class="form-control fee-cost" placeholder="Cost (PHP)" step="0.01" onchange="updateSummary()" style="border-radius: 10px;">
                                 </div>
                                 <div class="col-md-2">
                                     <button type="button" class="btn-danger-modern w-100" onclick="removeFee(this)">
@@ -755,23 +755,23 @@ include '../../includes/navbar.php';
                                 <table class="summary-table">
                                     <tr>
                                         <td>Technology Costs:</td>
-                                        <td class="text-end">$<span id="summaryTech"><?php echo number_format($techTotal, 2); ?></span></td>
+                                        <td class="text-end">&#8369;<span id="summaryTech"><?php echo number_format($techTotal, 2); ?></span></td>
                                     </tr>
                                     <tr>
                                         <td>Developer Costs:</td>
-                                        <td class="text-end">$<span id="summaryDev"><?php echo number_format($devTotal, 2); ?></span></td>
+                                        <td class="text-end">&#8369;<span id="summaryDev"><?php echo number_format($devTotal, 2); ?></span></td>
                                     </tr>
                                     <tr>
                                         <td>Resource Costs:</td>
-                                        <td class="text-end">$<span id="summaryResource"><?php echo number_format($techTotal, 2); ?></span></td>
+                                        <td class="text-end">&#8369;<span id="summaryResource"><?php echo number_format($techTotal, 2); ?></span></td>
                                     </tr>
                                     <tr id="otherFeesSummary" style="display: none;">
                                         <td>Other Fees:</td>
-                                        <td class="text-end">$<span id="summaryOther">0.00</span></td>
+                                        <td class="text-end">&#8369;<span id="summaryOther">0.00</span></td>
                                     </tr>
                                     <tr class="total-row">
                                         <td><strong>Total Monthly Cost:</strong></td>
-                                        <td class="text-end"><strong>$<span id="summaryTotal"><?php echo number_format($techTotal + $devTotal + $techTotal, 2); ?></span></strong></td>
+                                        <td class="text-end"><strong>&#8369;<span id="summaryTotal"><?php echo number_format($techTotal + $devTotal + $techTotal, 2); ?></span></strong></td>
                                     </tr>
                                 </table>
                             </div>
@@ -813,7 +813,7 @@ function addFee() {
                 <input type="text" name="other_fees_list[${feeIndex}][name]" class="form-control" placeholder="Fee Name" style="border-radius: 10px;">
             </div>
             <div class="col-md-4">
-                <input type="number" name="other_fees_list[${feeIndex}][cost]" class="form-control fee-cost" placeholder="Cost ($)" step="0.01" onchange="updateSummary()" style="border-radius: 10px;">
+                <input type="number" name="other_fees_list[${feeIndex}][cost]" class="form-control fee-cost" placeholder="Cost (PHP)" step="0.01" onchange="updateSummary()" style="border-radius: 10px;">
             </div>
             <div class="col-md-2">
                 <button type="button" class="btn-danger-modern w-100" onclick="removeFee(this)">

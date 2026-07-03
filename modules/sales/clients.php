@@ -2316,10 +2316,6 @@ include '../../includes/navbar.php';
                                     <label class="form-label">Address <span class="optional-label">(Optional)</span></label>
                                     <textarea name="address" class="form-control" rows="2"></textarea>
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Client Deadline</label>
-                                    <input type="date" name="deadline" class="form-control">
-                                </div>
                             </div>
                         </div>
 

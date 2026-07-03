@@ -579,7 +579,7 @@ include '../../includes/navbar.php';
                                         </select>
                                     </div>
                                     <div class="col-md-3">
-                                        <label class="form-label">Monthly Cost ($)</label>
+                                        <label class="form-label">Monthly Cost (PHP)</label>
                                         <input type="number" name="components[<?php echo $index; ?>][cost]" 
                                                class="form-control-custom cost-input" step="0.01" 
                                                value="<?php echo $existing[$comp['name']]['monthly_cost'] ?? $comp['cost']; ?>" 
@@ -607,7 +607,7 @@ include '../../includes/navbar.php';
                         
                         <div class="cost-summary">
                             <h5>Total Estimated Monthly Cost</h5>
-                            <div class="total-cost" id="totalCost">$0.00</div>
+                            <div class="total-cost" id="totalCost">&#8369;0.00</div>
                             <small class="text-muted">* Estimated costs based on Azure pricing calculator</small>
                         </div>
                     </form>
@@ -658,7 +658,7 @@ include '../../includes/navbar.php';
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label class="form-label">Monthly Cost ($)</label>
+                                <label class="form-label">Monthly Cost (PHP)</label>
                                 <input type="number" name="components[${componentIndex}][cost]" class="form-control-custom cost-input" step="0.01" onchange="updateTotal()" required>
                             </div>
                             <div class="col-md-2">
@@ -685,7 +685,7 @@ include '../../includes/navbar.php';
                 document.querySelectorAll('.cost-input').forEach(input => {
                     total += parseFloat(input.value) || 0;
                 });
-                document.getElementById('totalCost').textContent = '$' + total.toFixed(2);
+                document.getElementById('totalCost').textContent = 'PHP ' + total.toFixed(2);
             }
             
             updateTotal();

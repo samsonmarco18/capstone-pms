@@ -346,6 +346,8 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     $allocations = $context['allocations'] ?? [];
     $estimation = $context['estimation'] ?? null;
     $durationMonths = $project ? projectEstimationMonths($project['timeline_start'] ?? null, $project['timeline_end'] ?? null) : 1;
+    $estimationStatus = strtolower((string) ($estimation['status'] ?? 'draft'));
+    $estimationLockedForReview = in_array($estimationStatus, ['submitted', 'sul_approved', 'sales_approved'], true);
     $techMonthlyTotal = array_sum(array_map(static fn(array $row): float => (float) ($row['estimated_cost'] ?? 0), $technologies));
     $complexity = projectEstimationComplexity(
         $durationMonths,
@@ -405,7 +407,13 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                 <?php if (!$project): ?>
                     <div class="text-muted">No assigned project is ready for project estimation yet.</div>
                 <?php else: ?>
-                <form method="POST" id="projectCostEstimationForm">
+                <?php if ($estimationLockedForReview): ?>
+                    <div class="alert alert-success mb-3">
+                        <i class="fas fa-check-circle me-1"></i>
+                        Project estimation submitted successfully. Status: <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', $estimationStatus))); ?>.
+                    </div>
+                <?php endif; ?>
+                <form method="POST" id="projectCostEstimationForm" <?php echo $estimationLockedForReview ? 'onsubmit="return false;"' : ''; ?>>
                     <input type="hidden" name="save_project_estimation" value="1">
                     <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
                     <input type="hidden" id="projectDurationMonths" value="<?php echo $durationMonths; ?>">
@@ -463,7 +471,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                             <tbody>
                                             <?php if ($required <= 0): ?>
                                                 <tr><td colspan="3" class="text-muted">This roadmap entry has no required headcount.</td></tr>
-                                            <?php else: for ($i = 1; $i <= $required; $i++): $saved = $savedRows[$department][$i] ?? []; $savedType = projectEstimationDeveloperLevel((string) ($saved['developer_type'] ?? 'Professional Dev')); $savedContribution = (float) ($saved['contribution_percent'] ?? 100); ?>
+                                            <?php else: for ($i = 1; $i <= $required; $i++): $saved = $savedRows[$department][$i] ?? []; $savedType = projectEstimationDeveloperLevel((string) ($saved['developer_type'] ?? 'Professional Dev')); $savedContribution = max(0.0, min(100.0, (float) ($saved['contribution_percent'] ?? 100))); ?>
                                                 <tr class="allocation-input-row" data-department="<?php echo htmlspecialchars($department); ?>">
                                                     <td>
                                                         <select class="form-control-custom developer-type-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][developer_type]">
@@ -521,7 +529,11 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                 <div class="summary-cell"><span>Remaining Budget</span><strong id="summaryRemainingBudget">&#8369;0.00</strong></div>
                             </div>
                             <div class="project-estimation-actions mt-3">
-                                <button type="submit" class="btn-save-phases"><i class="fas fa-paper-plane"></i> Submit Project Estimation</button>
+                                <?php if ($estimationLockedForReview): ?>
+                                    <span class="badge bg-success-subtle text-success">Submitted for review</span>
+                                <?php else: ?>
+                                    <button type="submit" class="btn-save-phases"><i class="fas fa-paper-plane"></i> Submit Project Estimation</button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -540,7 +552,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
 
         function updateProjectEstimation() {
-            const rows = [];
+            const groupedRows = new Map();
             let developerMonthly = 0;
             document.querySelectorAll('.allocation-input-row').forEach((row) => {
                 const typeSelect = row.querySelector('.developer-type-input');
@@ -548,11 +560,24 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                 const type = typeSelect?.value || 'Professional Dev';
                 const salary = Number(salaries[type] || 0);
                 const contribution = Math.max(0, Math.min(100, Number(contributionInput?.value || 0)));
+                if (contributionInput && Number(contributionInput.value || 0) !== contribution) {
+                    contributionInput.value = contribution;
+                }
                 const contributionSalary = salary * (contribution / 100);
                 developerMonthly += contributionSalary;
                 const salaryCell = row.querySelector('.monthly-salary-cell');
                 if (salaryCell) salaryCell.textContent = peso.format(salary);
-                rows.push({ type, salary, contribution, contributionSalary });
+                const current = groupedRows.get(type) || {
+                    type,
+                    salary,
+                    contributionTotal: 0,
+                    contributionSalary: 0,
+                    count: 0
+                };
+                current.contributionTotal += contribution;
+                current.contributionSalary += contributionSalary;
+                current.count += 1;
+                groupedRows.set(type, current);
             });
 
             const developerTotal = developerMonthly * durationMonths;
@@ -563,13 +588,17 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
             const tbody = document.getElementById('developerCostRows');
             if (tbody) {
+                const rows = Array.from(groupedRows.values()).map((row) => ({
+                    ...row,
+                    averageContribution: row.count > 0 ? row.contributionTotal / row.count : 0
+                }));
                 tbody.innerHTML = rows.length ? rows.map((row) => `
                     <tr>
                         <td>${row.type}</td>
                         <td>${peso.format(row.salary)}</td>
-                        <td>${row.contribution.toFixed(0)}%</td>
+                        <td>${row.averageContribution.toFixed(0)}% avg</td>
                         <td>${peso.format(row.contributionSalary)}</td>
-                        <td>1</td>
+                        <td>${row.count}</td>
                         <td>${peso.format(row.contributionSalary * durationMonths)}</td>
                         <td>${peso.format(techMonthly)}</td>
                         <td>${durationMonths} month${durationMonths === 1 ? '' : 's'}</td>
