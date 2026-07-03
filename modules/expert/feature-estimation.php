@@ -2,11 +2,13 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
+require_once '../../includes/project-estimation.php';
 requireRole('expert');
 
 $conn = getConnection();
 $user = getCurrentUser();
 methodologyRoadmapEnsureSchema($conn);
+projectEstimationEnsureSchema($conn);
 
 $availableDepartments = [
     'Frontend Developer',
@@ -207,6 +209,54 @@ if (!$hasSalesApproval) {
     } catch (Throwable $e) {
         // Leave $hasSalesApproval as false; sales approval will be skipped
     }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimation'])) {
+    $projectId = (int) ($_POST['project_id'] ?? 0);
+    $context = $projectId > 0 ? projectEstimationFetchContext($conn, $projectId) : [];
+    $project = $context['project'] ?? null;
+    $allocations = $context['allocations'] ?? [];
+    $technologies = $context['technologies'] ?? [];
+    $postedAllocations = is_array($_POST['allocations'] ?? null) ? $_POST['allocations'] : [];
+
+    $assignedCheck = $projectId > 0
+        ? $conn->query("SELECT id FROM tasks WHERE project_id = {$projectId} AND assigned_to = " . (int) $user['id'] . " LIMIT 1")->fetch_assoc()
+        : null;
+
+    if (!$project || !$assignedCheck) {
+        $_SESSION['error'] = 'Please select one of your assigned projects before submitting a project estimation.';
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    $durationMonths = projectEstimationMonths($project['timeline_start'] ?? null, $project['timeline_end'] ?? null);
+    $techMonthlyCost = array_sum(array_map(static fn(array $row): float => (float) ($row['estimated_cost'] ?? 0), $technologies));
+    $complexity = projectEstimationComplexity(
+        $durationMonths,
+        array_sum(array_map(static fn(array $row): int => (int) ($row['required_count'] ?? 0), $allocations)),
+        count($technologies)
+    );
+    $additionalCosts = max(0.0, (float) ($_POST['additional_costs'] ?? 0));
+
+    if (projectEstimationSave($conn, $projectId, (int) $user['id'], $allocations, $durationMonths, $techMonthlyCost, $additionalCosts, $complexity, $postedAllocations)) {
+        workflowNotifyRoles(
+            $conn,
+            ['sul'],
+            'Project Estimation Ready for Review',
+            'An Expert Developer submitted a project cost estimation for SUL review.',
+            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
+            $projectId,
+            'approval',
+            'projects'
+        );
+        logActivity((int) $user['id'], 'submit_project_estimation', 'projects', $projectId, null, $_POST);
+        $_SESSION['success'] = 'Project estimation submitted to Expert SUL for review.';
+    } else {
+        $_SESSION['error'] = 'Failed to submit project estimation.';
+    }
+
+    header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
+    exit();
 }
 
 // Get tasks assigned to this expert that are pending estimation (status = 'todo')
@@ -1822,6 +1872,8 @@ textarea.form-control-custom {
             <p>Provide three-point estimations and build the realtime project timeline</p>
         </div>
     </div>
+
+    <?php projectEstimationRenderExpertModule($conn, $user); ?>
 
     <div class="phase-management-card">
         <div class="phase-header">

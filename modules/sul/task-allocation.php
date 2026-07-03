@@ -3,6 +3,7 @@ require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
 require_once '../../includes/project-workflow.php';
+require_once '../../includes/project-estimation.php';
 requireRole('sul');
 
 $conn = getConnection();
@@ -11,6 +12,7 @@ $userId = (int) ($user['id'] ?? 0);
 workflowEnsureSchema($conn);
 methodologyRoadmapEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
+projectEstimationEnsureSchema($conn);
 
 $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
 $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
@@ -284,6 +286,17 @@ $reviewTasks = $conn->query("
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
     ORDER BY t.deadline ASC
+");
+
+$projectEstimationReviews = $conn->query("
+    SELECT e.*, p.name AS project_name, p.sales_budget, c.name AS client_name, u.full_name AS expert_name
+    FROM expert_project_estimations e
+    JOIN projects p ON p.id = e.project_id
+    JOIN clients c ON c.id = p.client_id
+    JOIN users u ON u.id = e.expert_id
+    WHERE e.status = 'submitted'
+      AND {$sulProjectFilter}
+    ORDER BY e.submitted_at ASC, e.id ASC
 ");
 
 // Get tasks ready for developer assignment (approved, waiting for developer)
@@ -811,6 +824,87 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
+    if (isset($_POST['approve_project_estimation'])) {
+        $estimationId = (int) ($_POST['estimation_id'] ?? 0);
+        $comment = trim((string) ($_POST['review_comment'] ?? ''));
+
+        $estimation = $estimationId > 0 ? $conn->query("
+            SELECT e.*, p.name AS project_name
+            FROM expert_project_estimations e
+            JOIN projects p ON p.id = e.project_id
+            WHERE e.id = {$estimationId} AND e.status = 'submitted'
+            LIMIT 1
+        ")->fetch_assoc() : null;
+
+        if (!$estimation) {
+            $_SESSION['error'] = "Please select a submitted project estimation.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $stmt = $conn->prepare("UPDATE expert_project_estimations SET status = 'sul_approved', sul_reviewed_by = ?, sul_reviewed_at = NOW(), sul_comment = ? WHERE id = ?");
+        $stmt->bind_param('isi', $userId, $comment, $estimationId);
+        if ($stmt->execute()) {
+            workflowNotifyRoles(
+                $conn,
+                ['sales'],
+                'Project Estimation Ready for Final Approval',
+                'Expert SUL approved a project cost estimation for Sales final approval.',
+                BASE_URL . 'modules/sales/estimation-approval.php',
+                (int) $estimation['project_id'],
+                'approval',
+                'projects'
+            );
+            logActivity($userId, 'sul_approve_project_estimation', 'expert_project_estimations', $estimationId, null, $_POST);
+            $_SESSION['success'] = "Project estimation approved and forwarded to Sales.";
+        } else {
+            $_SESSION['error'] = "Failed to approve project estimation.";
+        }
+        $stmt->close();
+        header("Location: task-allocation.php");
+        exit();
+    }
+
+    if (isset($_POST['reject_project_estimation'])) {
+        $estimationId = (int) ($_POST['estimation_id'] ?? 0);
+        $reason = trim((string) ($_POST['rejection_reason'] ?? ''));
+
+        $estimation = $estimationId > 0 ? $conn->query("
+            SELECT e.*, p.name AS project_name
+            FROM expert_project_estimations e
+            JOIN projects p ON p.id = e.project_id
+            WHERE e.id = {$estimationId} AND e.status = 'submitted'
+            LIMIT 1
+        ")->fetch_assoc() : null;
+
+        if (!$estimation || $reason === '') {
+            $_SESSION['error'] = "Please provide a project estimation and rejection reason.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $stmt = $conn->prepare("UPDATE expert_project_estimations SET status = 'sul_rejected', sul_reviewed_by = ?, sul_reviewed_at = NOW(), sul_comment = ? WHERE id = ?");
+        $stmt->bind_param('isi', $userId, $reason, $estimationId);
+        if ($stmt->execute()) {
+            createNotification(
+                (int) $estimation['expert_id'],
+                "Project Estimation Revision Requested: " . ($estimation['project_name'] ?? 'Project'),
+                "Expert SUL requested revisions. Reason: " . $reason,
+                'approval',
+                'expert_project_estimations',
+                $estimationId,
+                BASE_URL . 'modules/expert/feature-estimation.php?project_estimation_id=' . (int) $estimation['project_id']
+            );
+            logActivity($userId, 'sul_reject_project_estimation', 'expert_project_estimations', $estimationId, null, $_POST);
+            $_SESSION['success'] = "Project estimation returned to Expert Developer for revision.";
+        } else {
+            $_SESSION['error'] = "Failed to reject project estimation.";
+        }
+        $stmt->close();
+        header("Location: task-allocation.php");
+        exit();
+    }
+
     // Approve estimation and move to ready for dev
     if (isset($_POST['approve_estimation'])) {
         $taskId = (int) ($_POST['task_id'] ?? 0);
@@ -1503,7 +1597,7 @@ include '../../includes/navbar.php';
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="expert-tab" data-bs-toggle="tab" data-bs-target="#expert-panel" type="button" role="tab">
                 <i class="fas fa-user-tie me-2"></i>Expert
-                <span class="badge bg-warning ms-2"><?php echo $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows + $projectsForAllocation->num_rows; ?></span>
+                <span class="badge bg-warning ms-2"><?php echo $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows + $projectEstimationReviews->num_rows + $projectsForAllocation->num_rows; ?></span>
             </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -1533,7 +1627,7 @@ include '../../includes/navbar.php';
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="expert-review-tab" data-bs-toggle="tab" data-bs-target="#expert-review-panel" type="button" role="tab" aria-controls="expert-review-panel" aria-selected="false">
-                        <i class="fas fa-clipboard-list"></i> Ready for Review <span class="badge-count"><?php echo $reviewTasks->num_rows; ?></span>
+                        <i class="fas fa-clipboard-list"></i> Ready for Review <span class="badge-count"><?php echo $reviewTasks->num_rows + $projectEstimationReviews->num_rows; ?></span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -1652,6 +1746,51 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
+                    <?php if($projectEstimationReviews->num_rows > 0): ?>
+                        <?php while($estimate = $projectEstimationReviews->fetch_assoc()): ?>
+                        <div class="task-card">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <span class="task-priority priority-high">Project Cost</span>
+                                        <span class="task-title"><?php echo htmlspecialchars((string) $estimate['project_name']); ?></span>
+                                    </div>
+                                    <div class="task-meta">
+                                        <span><i class="fas fa-building"></i> Client: <?php echo htmlspecialchars((string) $estimate['client_name']); ?></span>
+                                        <span><i class="fas fa-user"></i> Expert: <?php echo htmlspecialchars((string) $estimate['expert_name']); ?></span>
+                                        <span><i class="fas fa-gauge-high"></i> <?php echo htmlspecialchars((string) $estimate['project_complexity']); ?></span>
+                                        <span><i class="fas fa-calendar"></i> <?php echo (int) $estimate['project_duration_months']; ?> month<?php echo (int) $estimate['project_duration_months'] === 1 ? '' : 's'; ?></span>
+                                    </div>
+                                    <div class="mt-2 p-2 bg-light rounded-2">
+                                        <small class="text-muted">
+                                            Developer: <?php echo projectEstimationPeso((float) $estimate['total_developer_cost']); ?> |
+                                            Tech Stack: <?php echo projectEstimationPeso((float) $estimate['total_technology_stack_cost']); ?> |
+                                            Overall: <strong><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></strong> |
+                                            Remaining Budget: <?php echo projectEstimationPeso((float) $estimate['remaining_budget']); ?>
+                                        </small>
+                                    </div>
+                                </div>
+                                <div style="min-width: 280px; max-width: 360px;">
+                                    <form method="POST" class="mb-2" data-app-loading data-loading-title="Approving estimation" data-loading-text="Forwarding project estimation to Sales.">
+                                        <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
+                                        <textarea name="review_comment" class="form-control-custom mb-2" rows="2" placeholder="Optional SUL comment"></textarea>
+                                        <button type="submit" name="approve_project_estimation" class="btn-success-modern w-100">
+                                            <i class="fas fa-check"></i> Approve and Forward to Sales
+                                        </button>
+                                    </form>
+                                    <form method="POST" data-app-loading data-loading-title="Returning estimation" data-loading-text="Sending the estimation back for revision.">
+                                        <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
+                                        <textarea name="rejection_reason" class="form-control-custom mb-2" rows="2" required placeholder="Revision reason"></textarea>
+                                        <button type="submit" name="reject_project_estimation" class="btn-warning-modern w-100">
+                                            <i class="fas fa-times"></i> Return for Revision
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endwhile; ?>
+                    <?php endif; ?>
+
                     <?php if($reviewTasks->num_rows > 0): ?>
                         <?php while($task = $reviewTasks->fetch_assoc()): 
                             $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
@@ -1685,7 +1824,7 @@ include '../../includes/navbar.php';
                         </div>
                     </div>
                     <?php endwhile; ?>
-                <?php else: ?>
+                <?php elseif($projectEstimationReviews->num_rows === 0): ?>
                     <div class="empty-state">
                         <i class="fas fa-check-circle"></i>
                         <p>No tasks ready for review</p>
