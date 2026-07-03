@@ -1071,37 +1071,15 @@ include '../../includes/navbar.php';
 }
 
 .phase-card-roadmap {
-    border-left: 5px solid #64748b;
     padding: 1rem;
     cursor: pointer;
     transition: border-color .2s ease, transform .2s ease;
-}
-
-.phase-card-roadmap.phase-state-done {
-    border-left-color: #16a34a;
-}
-
-.phase-card-roadmap.phase-state-pending {
-    border-left-color: #b45309;
-}
-
-.phase-card-roadmap.phase-state-in-progress {
-    border-left-color: #2563eb;
-}
-
-.phase-card-roadmap.phase-state-not-started {
-    border-left-color: #64748b;
 }
 
 .phase-card-roadmap:hover {
     border-color: rgba(31, 99, 146, .35);
     transform: translateY(-1px);
 }
-
-.phase-card-roadmap.phase-state-done:hover { border-left-color: #16a34a; }
-.phase-card-roadmap.phase-state-pending:hover { border-left-color: #b45309; }
-.phase-card-roadmap.phase-state-in-progress:hover { border-left-color: #2563eb; }
-.phase-card-roadmap.phase-state-not-started:hover { border-left-color: #64748b; }
 
 .phase-card-roadmap.is-readonly {
     cursor: default;
