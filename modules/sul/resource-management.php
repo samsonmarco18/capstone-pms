@@ -1,14 +1,26 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-workflow.php';
 requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
-$sulDepartment = trim((string) ($user['department'] ?? ''));
-$sulDepartmentEscaped = $conn->real_escape_string($sulDepartment);
+$sulDepartment = projectWorkflowDepartmentLabel((string) ($user['department'] ?? ''));
 $sulMissingDepartment = $sulDepartment === '';
-$resourceDepartmentFilter = $sulDepartment !== '' ? " AND u.department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
-$resourceDepartmentWhere = $sulDepartment !== '' ? " AND department = '{$sulDepartmentEscaped}'" : ' AND 1 = 0';
+$resourceDepartmentFilter = ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment);
+$resourceDepartmentWhere = ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment);
+$projectDepartmentFilter = projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment);
+$taskDepartmentFilter = projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment);
+$assignedTaskDepartmentFilter = projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true);
+$taskProjectDepartmentFilter = projectWorkflowProjectDepartmentClause($conn, 'p_task_scope', $sulDepartment);
+$developerTaskJoinFilter = "
+    AND {$assignedTaskDepartmentFilter}
+    AND EXISTS (
+        SELECT 1
+        FROM projects p_task_scope
+        WHERE p_task_scope.id = t.project_id
+          AND {$taskProjectDepartmentFilter}
+    )";
 
 if ($sulMissingDepartment) {
     $_SESSION['error'] = 'Your SUL account must be assigned to a department before managing resources.';
@@ -37,32 +49,6 @@ function sulQueryAssocOrDefault($conn, $sql, array $default, $label)
     return $row ?: $default;
 }
 
-function sulResourceProjectFilter($conn, string $projectAlias, string $department): string
-{
-    $department = trim($department);
-    if ($department === '') {
-        return '1 = 0';
-    }
-
-    $escapedDepartment = $conn->real_escape_string($department);
-    $clauses = [];
-    if (dbTableExists($conn, 'developer_allocations')) {
-        $clauses[] = "EXISTS (
-            SELECT 1
-            FROM developer_allocations da_scope
-            WHERE da_scope.project_id = {$projectAlias}.id
-              AND da_scope.role = '{$escapedDepartment}'
-        )";
-    }
-    if (dbColumnExists($conn, 'projects', 'included_departments')) {
-        $clauses[] = "{$projectAlias}.included_departments LIKE '%\"{$escapedDepartment}\"%'";
-    }
-
-    return count($clauses) > 0 ? '(' . implode(' OR ', $clauses) . ')' : '1 = 1';
-}
-
-$projectDepartmentFilter = sulResourceProjectFilter($conn, 'p', $sulDepartment);
-
 // Get developers
 $developers = sulQueryResultOrNull($conn, "
     SELECT u.*, 
@@ -75,52 +61,36 @@ $developers = sulQueryResultOrNull($conn, "
                THEN TIMESTAMPDIFF(HOUR, t.created_at, t.completed_at) / 24 
                ELSE NULL END), 1) as avg_completion_days
     FROM users u
-    LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
+     LEFT JOIN tasks t ON u.id = t.assigned_to{$developerTaskJoinFilter}
+     WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
     GROUP BY u.id
     ORDER BY active_tasks DESC
 ", 'developers');
 
-// Get experts
-$experts = sulQueryResultOrNull($conn, "
-    SELECT u.*, 
-           COUNT(t.id) as total_tasks,
-           SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-           SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as active_tasks,
-           SUM(CASE WHEN t.status = 'todo' THEN 1 ELSE 0 END) as pending_tasks,
-           SUM(CASE WHEN t.status != 'completed' AND t.deadline < NOW() THEN 1 ELSE 0 END) as overdue_tasks,
-           ROUND(AVG(CASE WHEN t.status = 'completed' AND t.completed_at IS NOT NULL 
-               THEN TIMESTAMPDIFF(HOUR, t.created_at, t.completed_at) / 24 
-               ELSE NULL END), 1) as avg_completion_days
-    FROM users u
-    LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role = 'expert' AND u.status = 'active'{$resourceDepartmentFilter}
-    GROUP BY u.id
-    ORDER BY active_tasks DESC
-", 'experts');
-
-// Get workload distribution by role
-$workloadByRole = sulQueryResultOrNull($conn, "
-    SELECT u.role, 
-           COUNT(DISTINCT u.id) as member_count,
-           COUNT(t.id) as total_tasks,
-           SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-           SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
-    FROM users u
-    LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'{$resourceDepartmentFilter}
-    GROUP BY u.role
-", 'workloadByRole');
-
-// Get skill distribution
+// Get the developer count for this SUL's department only.
 $skills = sulQueryAssocOrDefault($conn, "
     SELECT 
-        SUM(CASE WHEN role = 'expert' THEN 1 ELSE 0 END) as experts,
-        SUM(CASE WHEN role = 'developer' THEN 1 ELSE 0 END) as developers,
+        COUNT(*) as developers,
         COUNT(*) as total
-    FROM users 
-    WHERE role IN ('expert', 'developer') AND status = 'active'{$resourceDepartmentWhere}
-", ['experts' => 0, 'developers' => 0, 'total' => 0], 'skills');
+    FROM users u
+    WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
+", ['developers' => 0, 'total' => 0], 'skills');
+
+// Task totals are restricted to both the SUL's project scope and task department.
+$taskStats = sulQueryAssocOrDefault($conn, "
+    SELECT
+        SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks,
+        SUM(CASE WHEN t.status != 'completed' AND t.deadline < NOW() THEN 1 ELSE 0 END) as overdue_tasks,
+        AVG(CASE
+            WHEN t.status = 'completed' AND t.completed_at IS NOT NULL
+            THEN TIMESTAMPDIFF(HOUR, t.created_at, t.completed_at) / 24
+            ELSE NULL
+        END) as avg_completion_days
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE {$projectDepartmentFilter}
+      AND {$taskDepartmentFilter}
+", ['active_tasks' => 0, 'overdue_tasks' => 0, 'avg_completion_days' => 0], 'taskStats');
 
 // Get available developers (not already in SUL's team)
 $availableDevelopers = sulQueryResultOrNull($conn, "
@@ -130,23 +100,18 @@ $availableDevelopers = sulQueryResultOrNull($conn, "
     ORDER BY u.full_name
 ", 'availableDevelopers');
 
-// Get available experts (not already in SUL's team)
-$availableExperts = sulQueryResultOrNull($conn, "
-    SELECT u.id, u.full_name, u.email, u.department
-    FROM users u
-    WHERE u.role = 'expert' AND u.status = 'active'{$resourceDepartmentFilter}
-    ORDER BY u.full_name
-", 'availableExperts');
-
 // Get projects with resource allocation
 $projects = sulQueryResultOrNull($conn, "
     SELECT p.*, c.name as client_name,
            COUNT(DISTINCT t.id) as total_tasks,
-           COUNT(DISTINCT t.assigned_to) as assigned_resources,
+           COUNT(DISTINCT u.id) as assigned_resources,
            SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
     FROM projects p
     JOIN clients c ON p.client_id = c.id
-    LEFT JOIN tasks t ON p.id = t.project_id
+     LEFT JOIN tasks t ON p.id = t.project_id AND {$taskDepartmentFilter}
+     LEFT JOIN users u ON u.id = t.assigned_to
+         AND u.role = 'developer'
+         AND u.status = 'active'{$resourceDepartmentFilter}
     WHERE p.status != 'completed'
       AND {$projectDepartmentFilter}
     GROUP BY p.id
@@ -154,18 +119,48 @@ $projects = sulQueryResultOrNull($conn, "
     LIMIT 10
 ", 'projects');
 
+$utilization = [
+    'underutilized' => 0,
+    'optimal' => 0,
+    'overloaded' => 0,
+];
+if ($developers instanceof mysqli_result) {
+    $developers->data_seek(0);
+    while ($resource = $developers->fetch_assoc()) {
+        $activeTasks = (int) ($resource['active_tasks'] ?? 0);
+        if ($activeTasks >= 5) {
+            $utilization['overloaded']++;
+        } elseif ($activeTasks >= 3) {
+            $utilization['optimal']++;
+        } else {
+            $utilization['underutilized']++;
+        }
+    }
+    $developers->data_seek(0);
+}
+
 // Handle resource updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if ($sulMissingDepartment) {
+        header('Location: resource-management.php');
+        exit();
+    }
+
     if (isset($_POST['update_allocation'])) {
-        $userId = $_POST['user_id'];
-        $maxTasks = $_POST['max_tasks'];
-        
-        $stmt = $conn->prepare("UPDATE users SET max_concurrent_tasks = ? WHERE id = ?{$resourceDepartmentWhere}");
+        $userId = (int) ($_POST['user_id'] ?? 0);
+        $maxTasks = max(1, min(10, (int) ($_POST['max_tasks'] ?? 5)));
+
+        $stmt = $conn->prepare("UPDATE users SET max_concurrent_tasks = ? WHERE id = ? AND role = 'developer'{$resourceDepartmentWhere}");
         $stmt->bind_param("ii", $maxTasks, $userId);
         $stmt->execute();
-        
-        logActivity($user['id'], 'update_resource_allocation', 'users', $userId, null, $_POST);
-        $_SESSION['success'] = "Resource allocation updated successfully";
+
+        if ($stmt->affected_rows > 0) {
+            logActivity($user['id'], 'update_resource_allocation', 'users', $userId, null, $_POST);
+            $_SESSION['success'] = "Resource allocation updated successfully";
+        } else {
+            $_SESSION['error'] = "Developer not found in your department or no changes were made";
+        }
+        $stmt->close();
         header('Location: resource-management.php');
         exit();
     }
@@ -174,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $userId = $_POST['user_id'];
         $status = $_POST['availability_status'];
         
-        $stmt = $conn->prepare("UPDATE users SET availability_status = ? WHERE id = ?{$resourceDepartmentWhere}");
+        $stmt = $conn->prepare("UPDATE users SET availability_status = ? WHERE id = ? AND role = 'developer'{$resourceDepartmentWhere}");
         $stmt->bind_param("si", $status, $userId);
         $stmt->execute();
         
@@ -188,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $userId = (int) $_POST['user_id'];
         $role = $_POST['role'];
 
-        if (!in_array($role, ['developer', 'expert'])) {
+        if ($role !== 'developer') {
             $_SESSION['error'] = "Invalid role selected";
         } else {
             // Check if user exists and is the correct role
@@ -419,33 +414,7 @@ unset($_SESSION['success'], $_SESSION['error']);
     transition: width 0.3s ease;
 }
 
-/* Role Workload */
-.role-card-body {
-    display: block !important;
-    text-align: left !important;
-}
-
-.role-chart {
-    position: relative;
-    height: 140px;
-    width: 100%;
-    margin-top: 0.75rem;
-}
-
-.role-breakdown {
-    text-align: left;
-}
-
 /* Badges */
-.badge-role-expert {
-    background: #fef3c7;
-    color: #d97706;
-    padding: 0.25rem 0.6rem;
-    border-radius: 20px;
-    font-size: 0.7rem;
-    font-weight: 600;
-}
-
 .badge-role-developer {
     background: #dbeafe;
     color: #2563eb;
@@ -769,94 +738,36 @@ unset($_SESSION['success'], $_SESSION['error']);
             <i class="fas fa-users stat-icon"></i>
             <div class="stat-label">Total Resources</div>
             <div class="stat-number"><?php echo $skills['total']; ?></div>
-            <div class="stat-sub"><?php echo $skills['experts']; ?> Experts | <?php echo $skills['developers']; ?> Developers</div>
+            <div class="stat-sub"><?php echo htmlspecialchars($sulDepartment); ?> developers</div>
         </div>
         <div class="stat-card-modern">
             <i class="fas fa-tasks stat-icon"></i>
             <div class="stat-label">Active Tasks</div>
-            <div class="stat-number"><?php 
-                $activeTotal = 0;
-                if ($workloadByRole instanceof mysqli_result) {
-                    $workloadByRole->data_seek(0);
-                    while($row = $workloadByRole->fetch_assoc()) {
-                        $activeTotal += (int) $row['active_tasks'];
-                    }
-                }
-                echo $activeTotal;
-            ?></div>
-            <div class="stat-sub">Across all resources</div>
+            <div class="stat-number"><?php echo (int) ($taskStats['active_tasks'] ?? 0); ?></div>
+            <div class="stat-sub">In <?php echo htmlspecialchars($sulDepartment); ?></div>
         </div>
         <div class="stat-card-modern">
             <i class="fas fa-clock stat-icon"></i>
             <div class="stat-label">Avg Completion Time</div>
-            <div class="stat-number"><?php 
-                $avgTimeRow = sulQueryAssocOrDefault($conn, "
-                    SELECT AVG(TIMESTAMPDIFF(DAY, created_at, completed_at)) as avg_days 
-                    FROM tasks 
-                    WHERE status = 'completed' AND completed_at IS NOT NULL
-                ", ['avg_days' => 0], 'avgCompletionTime');
-                $avgTime = $avgTimeRow['avg_days'];
-                echo round($avgTime ?? 0, 1);
-            ?></div>
+            <div class="stat-number"><?php echo round((float) ($taskStats['avg_completion_days'] ?? 0), 1); ?></div>
             <div class="stat-sub">days per task</div>
         </div>
         <div class="stat-card-modern">
             <i class="fas fa-exclamation-triangle stat-icon"></i>
             <div class="stat-label">Overdue Tasks</div>
-            <div class="stat-number" style="color: #dc2626;"><?php 
-                $overdueRow = sulQueryAssocOrDefault($conn, "
-                    SELECT COUNT(*) as count FROM tasks 
-                    WHERE status != 'completed' AND deadline < NOW()
-                ", ['count' => 0], 'overdueTasks');
-                $overdue = $overdueRow['count'];
-                echo $overdue;
-            ?></div>
+            <div class="stat-number" style="color: #dc2626;"><?php echo (int) ($taskStats['overdue_tasks'] ?? 0); ?></div>
             <div class="stat-sub">Need immediate attention</div>
         </div>
     </div>
 
     <div class="row g-4 mb-4">
-        <div class="col-lg-8">
+        <div class="col-12">
             <div class="card">
                 <div class="card-header">
                     <h5><i class="fas fa-chart-bar me-2"></i>Resource Workload Overview</h5>
                 </div>
                 <div class="card-body">
                     <canvas id="workloadChart" style="height: 300px; width: 100%;"></canvas>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-lg-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-chart-pie me-2"></i>Workload by Role</h5>
-                </div>
-                <div class="card-body role-card-body">
-                    <div class="role-breakdown">
-                        <?php if ($workloadByRole instanceof mysqli_result): ?>
-                            <?php $workloadByRole->data_seek(0); ?>
-                            <?php while($role = $workloadByRole->fetch_assoc()): 
-                                $avgPerMember = $role['member_count'] > 0 ? round($role['active_tasks'] / $role['member_count'], 1) : 0;
-                            ?>
-                            <div class="mb-2">
-                                <div class="d-flex justify-content-between mb-1">
-                                    <span><strong><?php echo ucfirst($role['role']); ?></strong> (<?php echo $role['member_count']; ?> members)</span>
-                                    <span><?php echo $role['active_tasks']; ?> active tasks</span>
-                                </div>
-                                <div class="progress-modern">
-                                    <div class="progress-bar-modern" style="width: <?php echo min(100, ($role['active_tasks'] / ($role['member_count'] * 5)) * 100); ?>%; background: var(--theme-primary);"></div>
-                                </div>
-                                <small class="text-muted"><?php echo $avgPerMember; ?> avg per member</small>
-                            </div>
-                            <?php endwhile; ?>
-                        <?php else: ?>
-                            <div class="text-muted small">No role workload data available.</div>
-                        <?php endif; ?>
-                    </div>
-                    <div class="role-chart">
-                        <canvas id="roleWorkloadChart"></canvas>
-                    </div>
                 </div>
             </div>
         </div>
@@ -868,33 +779,13 @@ unset($_SESSION['success'], $_SESSION['error']);
             <h5><i class="fas fa-list me-2"></i>Resource Details & Workload</h5>
         </div>
         <div class="card-body">
-            <!-- Nav tabs -->
-            <ul class="nav nav-tabs" id="resourceTabs" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="developers-tab" data-bs-toggle="tab" data-bs-target="#developers" type="button" role="tab" aria-controls="developers" aria-selected="true">
-                        <i class="fas fa-code me-2"></i>Developers
-                        <span class="badge bg-primary ms-2"><?php echo $skills['developers']; ?></span>
-                    </button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="experts-tab" data-bs-toggle="tab" data-bs-target="#experts" type="button" role="tab" aria-controls="experts" aria-selected="false">
-                        <i class="fas fa-brain me-2"></i>Experts
-                        <span class="badge bg-warning ms-2"><?php echo $skills['experts']; ?></span>
-                    </button>
-                </li>
-            </ul>
-
-            <!-- Tab content -->
-            <div class="tab-content mt-4" id="resourceTabsContent">
-                <!-- Developers Tab -->
-                <div class="tab-pane fade show active" id="developers" role="tabpanel" aria-labelledby="developers-tab">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0">Developer Resources</h6>
-                        <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#addDeveloperModal">
-                            <i class="fas fa-user-plus me-2"></i>Assign Developer
-                        </button>
-                    </div>
-                    <div class="table-container">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0">Developer Resources</h6>
+                <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#addDeveloperModal">
+                    <i class="fas fa-user-plus me-2"></i>Assign Developer
+                </button>
+            </div>
+            <div class="table-container">
                         <table class="data-table">
                             <thead>
                                 <tr>
@@ -911,7 +802,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php if ($developers instanceof mysqli_result): ?>
+                                <?php if ($developers instanceof mysqli_result && $developers->num_rows > 0): ?>
                                     <?php while($resource = $developers->fetch_assoc()): 
                                         $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
                                         $statusClass = $resource['active_tasks'] >= 5 ? 'overloaded' : ($resource['active_tasks'] >= 3 ? 'busy' : ($resource['active_tasks'] > 0 ? 'available' : 'free'));
@@ -950,75 +841,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 <?php endif; ?>
                             </tbody>
                         </table>
-                    </div>
-                </div>
-
-                <!-- Experts Tab -->
-                <div class="tab-pane fade" id="experts" role="tabpanel" aria-labelledby="experts-tab">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0">Expert Resources</h6>
-                        <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#addExpertModal">
-                            <i class="fas fa-user-plus me-2"></i>Assign Expert
-                        </button>
-                    </div>
-                    <div class="table-container">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Resource</th>
-                                    <th>Role</th>
-                                    <th>Active</th>
-                                    <th>Completed</th>
-                                    <th>Pending</th>
-                                    <th>Overdue</th>
-                                    <th>Avg Days</th>
-                                    <th>Workload</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if ($experts instanceof mysqli_result): ?>
-                                    <?php while($resource = $experts->fetch_assoc()): 
-                                        $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
-                                        $statusClass = $resource['active_tasks'] >= 5 ? 'overloaded' : ($resource['active_tasks'] >= 3 ? 'busy' : ($resource['active_tasks'] > 0 ? 'available' : 'free'));
-                                        $statusText = $resource['active_tasks'] >= 5 ? 'Overloaded' : ($resource['active_tasks'] >= 3 ? 'Busy' : ($resource['active_tasks'] > 0 ? 'Available' : 'Free'));
-                                    ?>
-                                    <tr>
-                                        <td>
-                                            <div class="fw-semibold"><?php echo htmlspecialchars($resource['full_name']); ?></div>
-                                            <small class="text-muted"><?php echo htmlspecialchars($resource['email']); ?></small>
-                                        </td>
-                                        <td><span class="badge-role-<?php echo $resource['role']; ?>"><?php echo strtoupper($resource['role']); ?></span></td>
-                                        <td><?php echo $resource['active_tasks']; ?></td>
-                                        <td><?php echo $resource['completed_tasks']; ?></td>
-                                        <td><?php echo $resource['pending_tasks']; ?></td>
-                                        <td><?php if($resource['overdue_tasks'] > 0): ?><span class="badge-status-overloaded"><?php echo $resource['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
-                                        <td><?php echo $resource['avg_completion_days'] ?? 'N/A'; ?>d</td>
-                                        <td>
-                                            <div class="progress-modern" style="width: 100px;">
-                                                <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resource['active_tasks'] >= 5 ? '#dc2626' : ($resource['active_tasks'] >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
-                                            </div>
-                                            <small><?php echo $workloadPercent; ?>%</small>
-                                        </td>
-                                        <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
-                                        <td>
-                                            <button class="btn-primary-modern btn-sm-modern" onclick="editAllocation(<?php echo $resource['id']; ?>, '<?php echo htmlspecialchars($resource['full_name']); ?>', <?php echo $resource['active_tasks']; ?>)">
-                                                <i class="fas fa-sliders-h"></i>
-                                            </button>
-                                            <button class="btn-secondary-modern btn-sm-modern" onclick="viewResourceTasks(<?php echo $resource['id']; ?>)">
-                                                <i class="fas fa-tasks"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    <?php endwhile; ?>
-                                <?php else: ?>
-                                    <tr><td colspan="10" class="text-center text-muted py-4">No expert data available.</td></tr>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -1030,7 +852,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <h5><i class="fas fa-project-diagram me-2"></i>Projects with Active Resources</h5>
                 </div>
                 <div class="card-body p-0">
-                    <?php if ($projects instanceof mysqli_result): ?>
+                    <?php if ($projects instanceof mysqli_result && $projects->num_rows > 0): ?>
                     <?php while($project = $projects->fetch_assoc()): ?>
                     <div class="list-group-item">
                         <div class="d-flex justify-content-between align-items-start">
@@ -1076,17 +898,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                         <strong>Utilization Rate:</strong> 
                         <?php 
                         $totalResources = (int) $skills['total'];
-                        $overloadedRow = sulQueryAssocOrDefault($conn, "
-                            SELECT COUNT(*) as count FROM (
-                                SELECT u.id, COUNT(t.id) as task_count
-                                FROM users u
-                                LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
-                                WHERE u.role IN ('expert', 'developer')
-                                GROUP BY u.id
-                                HAVING task_count >= 5
-                            ) as overloaded
-                        ", ['count' => 0], 'overloadedResources');
-                        $overloaded = (int) $overloadedRow['count'];
+                        $overloaded = (int) $utilization['overloaded'];
                         
                         $utilizationRate = $totalResources > 0 ? round(($overloaded / $totalResources) * 100) : 0;
                         ?>
@@ -1129,43 +941,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                 <div class="modal-footer">
                     <button type="button" class="btn-secondary-modern" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" name="add_resource" class="btn-primary-modern">Assign Developer</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Add Expert Modal -->
-<div class="modal fade modal-modern" id="addExpertModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-brain me-2"></i>Assign Expert to Team</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST">
-                <div class="modal-body">
-                    <input type="hidden" name="role" value="expert">
-                    <div class="mb-3">
-                        <label class="form-label">Select Expert</label>
-                            <select name="user_id" class="form-select" required>
-                                <option value="">Choose an expert...</option>
-                            <?php if ($availableExperts instanceof mysqli_result): ?>
-                                <?php $availableExperts->data_seek(0); while($exp = $availableExperts->fetch_assoc()): ?>
-                                <option value="<?php echo $exp['id']; ?>">
-                                    <?php echo htmlspecialchars($exp['full_name']); ?> 
-                                    (<?php echo htmlspecialchars($exp['email']); ?>)
-                                    <?php if($exp['department']): ?> - <?php echo htmlspecialchars($exp['department']); ?><?php endif; ?>
-                                </option>
-                                <?php endwhile; ?>
-                            <?php endif; ?>
-                            </select>
-                        <small class="text-muted">Only experts created by admin are available for assignment</small>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn-secondary-modern" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="add_resource" class="btn-primary-modern">Assign Expert</button>
                 </div>
             </form>
         </div>
@@ -1243,14 +1018,6 @@ const workloadData = <?php
             $completed[] = $row['completed_tasks'];
         }
     }
-    if ($experts instanceof mysqli_result) {
-        $experts->data_seek(0);
-        while($row = $experts->fetch_assoc()) {
-            $names[] = $row['full_name'] . ' (Exp)';
-            $active[] = $row['active_tasks'];
-            $completed[] = $row['completed_tasks'];
-        }
-    }
     echo json_encode(['names' => $names, 'active' => $active, 'completed' => $completed]);
 ?>;
 
@@ -1272,34 +1039,6 @@ new Chart(workloadCtx, {
     }
 });
 
-// Role Workload Chart
-const roleData = <?php 
-    $roles = [];
-    $activeTasks = [];
-    if ($workloadByRole instanceof mysqli_result) {
-        $workloadByRole->data_seek(0);
-        while($row = $workloadByRole->fetch_assoc()) {
-            $roles[] = ucfirst($row['role']);
-            $activeTasks[] = $row['active_tasks'];
-        }
-    }
-    echo json_encode(['roles' => $roles, 'active' => $activeTasks]);
-?>;
-
-const roleCtx = document.getElementById('roleWorkloadChart').getContext('2d');
-new Chart(roleCtx, {
-    type: 'pie',
-    data: {
-        labels: roleData.roles,
-        datasets: [{ data: roleData.active, backgroundColor: ['#1f6392', '#3a7ca3'], borderWidth: 0 }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } }
-    }
-});
-
 // Utilization Chart
 const utilCtx = document.getElementById('utilizationChart').getContext('2d');
 new Chart(utilCtx, {
@@ -1308,21 +1047,9 @@ new Chart(utilCtx, {
         labels: ['Underutilized (0-2 tasks)', 'Optimal (3-4 tasks)', 'Overloaded (5+ tasks)'],
         datasets: [{
             data: [
-                <?php 
-                    $underutilizedRow = sulQueryAssocOrDefault($conn, "SELECT COUNT(*) as count FROM (SELECT u.id, COUNT(t.id) as task_count FROM users u LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed' WHERE u.role IN ('expert', 'developer') GROUP BY u.id HAVING task_count <= 2) as under", ['count' => 0], 'underutilizedResources');
-                    $underutilized = $underutilizedRow['count'];
-                    echo $underutilized;
-                ?>,
-                <?php 
-                    $optimalRow = sulQueryAssocOrDefault($conn, "SELECT COUNT(*) as count FROM (SELECT u.id, COUNT(t.id) as task_count FROM users u LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed' WHERE u.role IN ('expert', 'developer') GROUP BY u.id HAVING task_count BETWEEN 3 AND 4) as opt", ['count' => 0], 'optimalResources');
-                    $optimal = $optimalRow['count'];
-                    echo $optimal;
-                ?>,
-                <?php 
-                    $overloadedRow = sulQueryAssocOrDefault($conn, "SELECT COUNT(*) as count FROM (SELECT u.id, COUNT(t.id) as task_count FROM users u LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed' WHERE u.role IN ('expert', 'developer') GROUP BY u.id HAVING task_count >= 5) as overloaded_resources", ['count' => 0], 'overloadedResourcesChart');
-                    $overloaded = $overloadedRow['count'];
-                    echo $overloaded;
-                ?>
+                <?php echo (int) $utilization['underutilized']; ?>,
+                <?php echo (int) $utilization['optimal']; ?>,
+                <?php echo (int) $utilization['overloaded']; ?>
             ],
             backgroundColor: ['#10b981', '#f59e0b', '#dc2626'],
             borderWidth: 0
@@ -1349,19 +1076,28 @@ function viewResourceTasks(userId) {
         url: '../../api/get-resource-tasks.php',
         method: 'GET',
         data: { user_id: userId },
+        dataType: 'json',
         success: function(response) {
-            const tasks = JSON.parse(response);
+            if (!Array.isArray(response)) {
+                $('#resourceTasksContent').html(`<div class="alert alert-danger mb-0">${escapeHtml(response.error || 'Unable to load tasks.')}</div>`);
+                new bootstrap.Modal(document.getElementById('resourceTasksModal')).show();
+                return;
+            }
+
+            const tasks = response;
             let html = '<div class="table-responsive"><table class="data-table">';
             html += '<thead><tr><th>Task</th><th>Project</th><th>Priority</th><th>Status</th><th>Deadline</th><th>Actions</th></tr></thead><tbody>';
             tasks.forEach(task => {
+                const description = String(task.description || '').substring(0, 60);
+                const deadline = task.deadline ? new Date(task.deadline).toLocaleDateString() : 'Not set';
                 html += `
                     <tr>
-                        <td><div class="fw-semibold">${escapeHtml(task.title)}</div><small>${escapeHtml(task.description.substring(0, 60))}</small></td>
+                        <td><div class="fw-semibold">${escapeHtml(task.title || '')}</div><small>${escapeHtml(description)}</small></td>
                         <td>${escapeHtml(task.project_name)}</td>
-                        <td><span class="badge-priority-${task.priority}">${task.priority}</span></td>
-                        <td><span class="badge-status-${task.status}">${task.status}</span></td>
-                        <td>${new Date(task.deadline).toLocaleDateString()}</td>
-                        <td><button class="btn-primary-modern btn-sm-modern" onclick="viewTaskDetail(${task.id})"><i class="fas fa-eye"></i></button></td>
+                        <td>${escapeHtml(task.priority || '')}</td>
+                        <td>${escapeHtml(task.status || '')}</td>
+                        <td>${escapeHtml(deadline)}</td>
+                        <td><button class="btn-primary-modern btn-sm-modern" onclick="viewProjectTasks(${Number(task.project_id)})"><i class="fas fa-eye"></i></button></td>
                     </tr>
                 `;
             });
@@ -1369,12 +1105,17 @@ function viewResourceTasks(userId) {
             if(tasks.length === 0) html = '<p class="text-center text-muted py-4">No tasks assigned to this resource</p>';
             $('#resourceTasksContent').html(html);
             new bootstrap.Modal(document.getElementById('resourceTasksModal')).show();
+        },
+        error: function(xhr) {
+            const message = xhr.responseJSON?.error || 'Unable to load tasks for this resource.';
+            $('#resourceTasksContent').html(`<div class="alert alert-danger mb-0">${escapeHtml(message)}</div>`);
+            new bootstrap.Modal(document.getElementById('resourceTasksModal')).show();
         }
     });
 }
 
-function viewTaskDetail(taskId) {
-    window.location.href = '../../modules/developer/task.php?id=' + taskId;
+function viewProjectTasks(projectId) {
+    window.location.href = 'task-allocation.php?project_id=' + projectId;
 }
 
 function escapeHtml(text) {

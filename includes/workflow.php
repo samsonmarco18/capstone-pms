@@ -58,6 +58,8 @@ function workflowEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
         'architect_reviewed_at' => "{$timestampType} NULL",
         'merged_at' => "{$timestampType} NULL",
         'release_notified_at' => "{$timestampType} NULL",
+        'parent_task_id' => 'INT NULL',
+        'department_scope' => 'VARCHAR(100) NULL',
     ];
 
     foreach ($workflowColumns as $column => $definition) {
