@@ -171,6 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 
     if ($newStatus === 'in_progress') {
+        projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
         $roadmapBlockReason = methodologyRoadmapStartBlockReason($conn, $taskId, (int) $user['id']);
         if ($roadmapBlockReason !== null) {
             $_SESSION['error'] = $roadmapBlockReason;
@@ -889,10 +890,67 @@ include '../../includes/navbar.php';
     gap: 0.5rem;
 }
 
+.artifact-preview {
+    display: block;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 0.55rem;
+    background: var(--gray-50);
+}
+
+.artifact-preview img {
+    display: block;
+    width: 100%;
+    max-height: 220px;
+    object-fit: contain;
+}
+
+.artifact-reference-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: 999px;
+    background: rgba(31, 99, 146, 0.1);
+    color: var(--theme-primary);
+    border: 1px solid rgba(31, 99, 146, 0.18);
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.2rem 0.5rem;
+    margin-bottom: 0.45rem;
+}
+
 .artifact-note {
     color: var(--gray-600);
     font-size: 0.8rem;
     margin-top: 0.45rem;
+}
+
+.roadmap-ready-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    border: 1px solid rgba(31, 99, 146, 0.18);
+    border-radius: 8px;
+    background: rgba(31, 99, 146, 0.08);
+    color: var(--gray-700);
+    padding: 0.75rem 0.85rem;
+    margin-bottom: 1rem;
+    font-size: 0.82rem;
+}
+
+.roadmap-ready-banner i {
+    color: var(--theme-primary);
+    margin-top: 0.15rem;
+}
+
+.roadmap-ready-banner.is-locked {
+    border-color: rgba(217, 119, 6, 0.22);
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.roadmap-ready-banner.is-locked i {
+    color: #d97706;
 }
 
 @media (max-width: 767.98px) {
@@ -1076,6 +1134,8 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-update-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-preview,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-ready-banner,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact {
@@ -1135,6 +1195,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-requirements li,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-item__meta,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-ready-banner,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-mini p,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card small,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-desc,
@@ -1909,6 +1970,7 @@ function viewTask(taskId) {
                 ? `Min ${task.estimated_days_min}d | Likely ${task.estimated_days_likely}d | Max ${task.estimated_days_max}d`
                 : 'No estimate available';
             const departmentPanel = buildDepartmentPanel(task);
+            const roadmapBanner = buildRoadmapReadyBanner(task);
             const isUiUxDepartment = currentDepartmentCanonical === 'UI/UX';
             const gitToolsPanel = isUiUxDepartment ? '' : `
                         <div class="task-side-panel">
@@ -1973,6 +2035,7 @@ function viewTask(taskId) {
                             </div>
                         </div>
 
+                        ${roadmapBanner}
                         ${departmentPanel}
 
                         <div class="task-detail-panel">
@@ -2053,6 +2116,29 @@ function viewTask(taskId) {
     });
 }
 
+function buildRoadmapReadyBanner(task) {
+    if (!['Frontend', 'Backend'].includes(currentDepartmentCanonical)) {
+        return '';
+    }
+
+    const blockReason = task.roadmap_start_block_reason || '';
+    if (blockReason) {
+        return `
+            <div class="roadmap-ready-banner is-locked">
+                <i class="fas fa-lock"></i>
+                <div><strong>Waiting to start.</strong> ${escapeHtml(blockReason)}</div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="roadmap-ready-banner">
+            <i class="fas fa-lock-open"></i>
+            <div><strong>Ready to start.</strong> Earlier roadmap phases are complete, so ${escapeHtml(currentDepartmentCanonical.toLowerCase())} work can begin.</div>
+        </div>
+    `;
+}
+
 function buildDepartmentPanel(task) {
     const isUiUx = currentDepartmentCanonical === 'UI/UX';
     const requirements = Array.isArray(task.project_requirements) ? task.project_requirements : [];
@@ -2075,6 +2161,7 @@ function buildDepartmentPanel(task) {
            </div>`
         : '';
     const panelLabel = isUiUx ? 'Client Requirements' : 'Project Inputs';
+    const handoffHeading = isUiUx ? 'Department Handoffs' : 'Handoffs and UI/UX Designs';
 
     return `
         <div class="task-detail-panel department-modal-panel">
@@ -2127,7 +2214,7 @@ function buildDepartmentPanel(task) {
                 </div>
                 <div class="col-md-6">
                     <div class="task-side-panel mb-0">
-                        <h6 class="mb-2">Department Handoffs</h6>
+                        <h6 class="mb-2">${handoffHeading}</h6>
                         <div id="departmentArtifactList" class="artifact-list">
                             ${renderDepartmentArtifacts(task.department_artifacts || [])}
                         </div>
@@ -2140,22 +2227,35 @@ function buildDepartmentPanel(task) {
 
 function renderDepartmentArtifacts(artifacts) {
     if (!Array.isArray(artifacts) || artifacts.length === 0) {
-        return '<p class="text-muted mb-0 small">No department handoffs saved yet.</p>';
+        return '<p class="text-muted mb-0 small">No department handoffs or UI/UX design references saved yet.</p>';
     }
 
     return artifacts.map((artifact) => {
+        const isDesign = artifact.artifact_type === 'design_handoff';
+        const isProjectDesignReference = Boolean(artifact.is_project_design_reference);
+        const preview = artifact.file_url
+            ? `<a class="artifact-preview" href="${escapeAttribute(artifact.file_url)}" target="_blank" rel="noopener">
+                    <img src="${escapeAttribute(artifact.file_url)}" alt="${escapeAttribute(artifact.original_file_name || artifact.title || 'Design preview')}" loading="lazy">
+               </a>`
+            : '';
         const fileLink = artifact.file_url
-            ? `<a class="btn btn-sm btn-outline-primary" href="${escapeAttribute(artifact.file_url)}" target="_blank" rel="noopener"><i class="fas fa-image me-1"></i>Design File</a>`
+            ? `<a class="btn btn-sm btn-outline-primary" href="${escapeAttribute(artifact.file_url)}" target="_blank" rel="noopener"><i class="fas fa-image me-1"></i>${isDesign ? 'Open Design' : 'Open File'}</a>`
             : '';
         const externalLink = artifact.external_url
             ? `<a class="btn btn-sm btn-outline-primary" href="${escapeAttribute(artifact.external_url)}" target="_blank" rel="noopener"><i class="fas fa-link me-1"></i>Reference</a>`
             : '';
         const note = artifact.notes ? `<div class="artifact-note">${escapeHtml(artifact.notes)}</div>` : '';
+        const referenceBadge = isDesign
+            ? `<div class="artifact-reference-badge"><i class="fas fa-pen-ruler"></i>${isProjectDesignReference ? 'Project UI/UX Design' : 'UI/UX Design'}</div>`
+            : '';
+        const sourceTask = artifact.source_task_title ? ` | Task: ${escapeHtml(artifact.source_task_title)}` : '';
 
         return `
             <div class="artifact-item">
+                ${referenceBadge}
+                ${preview}
                 <div class="artifact-item__title">${escapeHtml(artifact.title || 'Department handoff')}</div>
-                <div class="artifact-item__meta">${escapeHtml(artifact.department || 'Department')} | ${escapeHtml(artifact.user_name || 'User')} | ${formatDateTime(artifact.created_at)}</div>
+                <div class="artifact-item__meta">${escapeHtml(artifact.department || 'Department')} | ${escapeHtml(artifact.user_name || 'User')} | ${formatDateTime(artifact.created_at)}${sourceTask}</div>
                 <div class="artifact-item__links">${fileLink}${externalLink}${!fileLink && !externalLink ? '<span class="text-muted small">No links attached</span>' : ''}</div>
                 ${note}
             </div>

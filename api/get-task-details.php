@@ -3,6 +3,8 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/department-artifacts.php';
+require_once __DIR__ . '/../includes/methodology-roadmap.php';
+require_once __DIR__ . '/../includes/project-workflow.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -81,7 +83,13 @@ if ($task = $result->fetch_assoc()) {
 
     $task['project_requirements'] = departmentArtifactParseRequirements($task['requested_features'] ?? '');
     $task['additional_requirements'] = departmentArtifactAdditionalRequirements($task['requested_features'] ?? '');
-    $task['department_artifacts'] = departmentArtifactFetchForTask($conn, $taskId);
+    if (($user['role'] ?? '') === 'developer' && (int) ($task['assigned_to'] ?? 0) === (int) ($user['id'] ?? 0)) {
+        projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
+        $task['roadmap_start_block_reason'] = methodologyRoadmapStartBlockReason($conn, $taskId, (int) $user['id']);
+    } else {
+        $task['roadmap_start_block_reason'] = null;
+    }
+    $task['department_artifacts'] = departmentArtifactFetchVisibleForTask($conn, $taskId);
     
     echo json_encode($task);
 } else {
