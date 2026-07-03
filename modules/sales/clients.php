@@ -207,6 +207,77 @@ function salesClientsSaveAttachments(array $files): array
     return $saved;
 }
 
+function salesClientsDownloadableRepositoryForClient(mysqli|PgsqlMysqliCompatConnection $conn, int $clientId, int $salesUserId): ?array
+{
+    if ($clientId <= 0 || $salesUserId <= 0) {
+        return null;
+    }
+
+    $featureCondition = projectProgressFeatureCondition('t');
+    $mergedCondition = projectProgressMergedCondition('t');
+    $stmt = $conn->prepare("
+        SELECT
+            p.id AS project_id,
+            p.status AS project_status,
+            p.created_by AS project_created_by,
+            c.created_by AS client_created_by,
+            pr.id AS repository_id,
+            pr.default_branch_name,
+            COUNT(t.id) AS total_features,
+            SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END) AS merged_features
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id
+        JOIN project_repositories pr ON pr.project_id = p.id AND pr.repository_status = 'active'
+        LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
+        WHERE p.client_id = ?
+          AND p.status != 'cancelled'
+        GROUP BY p.id, p.status, p.created_by, c.created_by, pr.id, pr.default_branch_name, p.updated_at, pr.updated_at
+        ORDER BY p.updated_at DESC, pr.updated_at DESC, pr.id DESC
+        LIMIT 10
+    ");
+
+    if ($stmt === false) {
+        return null;
+    }
+
+    $stmt->bind_param('i', $clientId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    while ($row = $result->fetch_assoc()) {
+        $totalFeatures = (int) ($row['total_features'] ?? 0);
+        $mergedFeatures = (int) ($row['merged_features'] ?? 0);
+        $isOwner = (int) ($row['project_created_by'] ?? 0) === $salesUserId
+            || (int) ($row['client_created_by'] ?? 0) === $salesUserId;
+
+        if ($totalFeatures <= 0 || $mergedFeatures < $totalFeatures || !$isOwner) {
+            continue;
+        }
+
+        $projectId = (int) ($row['project_id'] ?? 0);
+        if ((string) ($row['project_status'] ?? '') !== 'completed' && $projectId > 0) {
+            $completeStmt = $conn->prepare("UPDATE projects SET status = 'completed' WHERE id = ?");
+            if ($completeStmt !== false) {
+                $completeStmt->bind_param('i', $projectId);
+                $completeStmt->execute();
+                $completeStmt->close();
+            }
+            workflowEnsureFinalReceiptForProject($conn, $projectId, $salesUserId);
+        }
+
+        $stmt->close();
+
+        return [
+            'repository_id' => (int) ($row['repository_id'] ?? 0),
+            'default_branch_name' => (string) (($row['default_branch_name'] ?? '') ?: 'main'),
+        ];
+    }
+
+    $stmt->close();
+
+    return null;
+}
+
 // Handle client operations (same logic as before)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['add_client'])) {
@@ -941,6 +1012,16 @@ include '../../includes/navbar.php';
 
 .btn-icon.edit:hover {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    color: white;
+}
+
+.btn-icon.download {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.btn-icon.download:hover {
+    background: #059669;
     color: white;
 }
 
@@ -2029,6 +2110,9 @@ include '../../includes/navbar.php';
     $daysLeft = $clientDeadlineTimestamp !== false ? ceil(($clientDeadlineTimestamp - time()) / (60 * 60 * 24)) : null;
     $deadlineClass = $daysLeft === null ? 'normal' : ($daysLeft <= 7 ? 'urgent' : ($daysLeft <= 30 ? 'warning' : 'normal'));
     $featureProgress = projectProgressPercent((int) ($client['total_features'] ?? 0), (int) ($client['merged_features'] ?? 0));
+    $downloadableRepository = $featureProgress === 100
+        ? salesClientsDownloadableRepositoryForClient($conn, (int) $client['id'], (int) ($user['id'] ?? 0))
+        : null;
     ?>
     <tr>
         <td>
@@ -2069,6 +2153,15 @@ include '../../includes/navbar.php';
                 <button class="btn-icon edit" onclick="editClient(<?php echo htmlspecialchars(json_encode($client)); ?>)">
                     <i class="fas fa-edit"></i>
                 </button>
+                <?php if ($downloadableRepository && (int) ($downloadableRepository['repository_id'] ?? 0) > 0): ?>
+                    <a
+                        class="btn-icon download"
+                        href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . (int) $downloadableRepository['repository_id']); ?>"
+                        title="Download <?php echo htmlspecialchars((string) ($downloadableRepository['default_branch_name'] ?? 'main')); ?> branch"
+                    >
+                        <i class="fas fa-download"></i>
+                    </a>
+                <?php endif; ?>
                 <button class="btn-icon delete" onclick="openDeleteClientModal(<?php echo (int) $client['id']; ?>, <?php echo htmlspecialchars(json_encode($client['name'])); ?>)">
                     <i class="fas fa-trash"></i>
                 </button>

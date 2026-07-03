@@ -390,17 +390,11 @@ function workflowEnsureFinalReceiptForProject(mysqli|PgsqlMysqliCompatConnection
             $reportId = (int) $existing['report_id'];
             $receiptId = (int) $existing['receipt_id'];
 
-            if ((string) ($existing['report_status'] ?? '') !== 'invoiced') {
-                $conn->query("UPDATE sales_reports SET status = 'invoiced' WHERE id = {$reportId}");
-            }
-            if ((string) ($existing['receipt_status'] ?? '') === 'draft') {
-                $conn->query("UPDATE receipts SET status = 'sent' WHERE id = {$receiptId}");
-            }
-
             return [
                 'report_id' => $reportId,
                 'receipt_id' => $receiptId,
                 'receipt_number' => (string) ($existing['receipt_number'] ?? ''),
+                'status' => (string) ($existing['receipt_status'] ?? 'draft'),
                 'created' => false,
             ];
         }
@@ -412,13 +406,13 @@ function workflowEnsureFinalReceiptForProject(mysqli|PgsqlMysqliCompatConnection
     if ($reportId <= 0) {
         $costs = workflowProjectFinalCostSnapshot($conn, $projectId);
         $otherFees = json_encode($costs['other_fees'], JSON_UNESCAPED_UNICODE);
-        $notes = 'Automatically finalized when all project tasks were completed.';
+        $notes = 'Automatically prepared when all project tasks were completed. Sales must review before final release.';
 
         $reportStmt = $conn->prepare(
             "INSERT INTO sales_reports (
                 project_id, client_id, technology_cost, developer_cost, resource_cost, other_fees,
                 total_cost, status, notes, created_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'invoiced', ?, ?)"
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)"
         );
         if ($reportStmt === false) {
             return null;
@@ -453,7 +447,7 @@ function workflowEnsureFinalReceiptForProject(mysqli|PgsqlMysqliCompatConnection
             'cost_source' => $costs['source'],
         ]);
     } else {
-        $conn->query("UPDATE sales_reports SET status = 'invoiced' WHERE id = {$reportId}");
+        $conn->query("UPDATE sales_reports SET status = 'draft' WHERE id = {$reportId} AND status != 'invoiced'");
     }
 
     $receiptNumber = workflowGenerateReceiptNumber($conn, $reportId);
@@ -463,7 +457,7 @@ function workflowEnsureFinalReceiptForProject(mysqli|PgsqlMysqliCompatConnection
 
     $receiptStmt = $conn->prepare(
         "INSERT INTO receipts (report_id, receipt_number, client_name, client_email, amount_due, due_date, status, generated_by)
-         VALUES (?, ?, ?, ?, ?, ?, 'sent', ?)"
+         VALUES (?, ?, ?, ?, ?, ?, 'draft', ?)"
     );
     if ($receiptStmt === false) {
         return null;
@@ -486,6 +480,7 @@ function workflowEnsureFinalReceiptForProject(mysqli|PgsqlMysqliCompatConnection
         'report_id' => $reportId,
         'receipt_id' => $receiptId,
         'receipt_number' => $receiptNumber,
+        'status' => 'draft',
         'created' => true,
     ];
 }

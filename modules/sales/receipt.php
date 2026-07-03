@@ -10,10 +10,150 @@ $receiptId = (int) ($_GET['receipt_id'] ?? 0);
 $clientId = (int) ($_GET['client_id'] ?? 0);
 $contextClientId = $clientId;
 
+function salesReceiptStatusLabel(string $status): string
+{
+    return match ($status) {
+        'draft' => 'For Review',
+        default => ucfirst(str_replace('_', ' ', $status)),
+    };
+}
+
+function salesReceiptRedirect(int $receiptId, int $clientId = 0): string
+{
+    if ($receiptId > 0) {
+        return 'receipt.php?receipt_id=' . $receiptId;
+    }
+
+    return 'receipt.php' . ($clientId > 0 ? '?client_id=' . $clientId : '');
+}
+
+function salesReceiptDownload(mysqli|PgsqlMysqliCompatConnection $conn, int $receiptId): void
+{
+    $stmt = $conn->prepare("
+        SELECT r.*, sr.total_cost, sr.notes, p.name AS project_name,
+               c.name AS fallback_client_name, c.email AS fallback_client_email
+        FROM receipts r
+        JOIN sales_reports sr ON r.report_id = sr.id
+        JOIN projects p ON sr.project_id = p.id
+        JOIN clients c ON sr.client_id = c.id
+        WHERE r.id = ?
+        LIMIT 1
+    ");
+
+    if ($stmt === false) {
+        http_response_code(500);
+        exit('Unable to prepare receipt download.');
+    }
+
+    $stmt->bind_param('i', $receiptId);
+    $stmt->execute();
+    $receipt = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$receipt) {
+        http_response_code(404);
+        exit('Receipt not found.');
+    }
+
+    $receiptNumber = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($receipt['receipt_number'] ?? 'receipt'));
+    $clientName = (string) (($receipt['client_name'] ?? '') ?: ($receipt['fallback_client_name'] ?? 'Client'));
+    $clientEmail = (string) (($receipt['client_email'] ?? '') ?: ($receipt['fallback_client_email'] ?? ''));
+    $amountDue = (float) (($receipt['amount_due'] ?? null) ?: ($receipt['total_cost'] ?? 0));
+    $dueDate = !empty($receipt['due_date']) ? date('M d, Y', strtotime((string) $receipt['due_date'])) : 'Not set';
+
+    header('Content-Type: text/html; charset=utf-8');
+    header('Content-Disposition: attachment; filename="receipt_' . $receiptNumber . '.html"');
+    header('Cache-Control: no-store, no-cache, must-revalidate');
+
+    echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt #' . htmlspecialchars((string) $receipt['receipt_number']) . '</title>';
+    echo '<style>body{font-family:Arial,sans-serif;color:#1f2937;padding:40px}.wrap{max-width:760px;margin:auto}.head{border-bottom:3px solid #1f6392;padding-bottom:20px;margin-bottom:28px}.brand{font-size:24px;font-weight:700;color:#1f6392}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}.box{border:1px solid #d1d5db;border-radius:8px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #d1d5db;padding:12px;text-align:left}th{background:#f3f4f6}.total{font-size:20px;font-weight:700;color:#1f6392}</style>';
+    echo '</head><body><div class="wrap"><div class="head"><div class="brand">ERNI Development Center Philippines Inc.</div><h1>Receipt #' . htmlspecialchars((string) $receipt['receipt_number']) . '</h1><p>Status: ' . htmlspecialchars(salesReceiptStatusLabel((string) $receipt['status'])) . '</p></div>';
+    echo '<div class="grid"><div class="box"><strong>Bill To</strong><br>' . htmlspecialchars($clientName) . '<br>' . htmlspecialchars($clientEmail) . '</div><div class="box"><strong>Project</strong><br>' . htmlspecialchars((string) $receipt['project_name']) . '<br>Due: ' . htmlspecialchars($dueDate) . '</div></div>';
+    echo '<table><thead><tr><th>Description</th><th>Amount</th></tr></thead><tbody><tr><td>Final project delivery</td><td>$' . number_format($amountDue, 2) . '</td></tr><tr><td class="total">Total Amount Due</td><td class="total">$' . number_format($amountDue, 2) . '</td></tr></tbody></table>';
+    if (!empty($receipt['notes'])) {
+        echo '<p><strong>Notes:</strong> ' . htmlspecialchars((string) $receipt['notes']) . '</p>';
+    }
+    echo '</div></body></html>';
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['save_receipt_review']) || isset($_POST['finalize_receipt']))) {
+    $postedReceiptId = (int) ($_POST['receipt_id'] ?? 0);
+
+    if ($postedReceiptId <= 0) {
+        $_SESSION['error'] = 'Receipt not found.';
+        header('Location: ' . salesReceiptRedirect(0, $clientId));
+        exit;
+    }
+
+    if (isset($_POST['finalize_receipt'])) {
+        $reportIdForReceipt = 0;
+        $reportStmt = $conn->prepare('SELECT report_id FROM receipts WHERE id = ? LIMIT 1');
+        if ($reportStmt !== false) {
+            $reportStmt->bind_param('i', $postedReceiptId);
+            $reportStmt->execute();
+            $reportIdForReceipt = (int) (($reportStmt->get_result()->fetch_assoc()['report_id'] ?? 0));
+            $reportStmt->close();
+        }
+
+        $stmt = $conn->prepare("UPDATE receipts SET status = 'sent' WHERE id = ?");
+        if ($stmt !== false) {
+            $stmt->bind_param('i', $postedReceiptId);
+            $stmt->execute();
+            $stmt->close();
+        }
+        if ($reportIdForReceipt > 0) {
+            $reportUpdateStmt = $conn->prepare("UPDATE sales_reports SET status = 'invoiced' WHERE id = ?");
+            if ($reportUpdateStmt !== false) {
+                $reportUpdateStmt->bind_param('i', $reportIdForReceipt);
+                $reportUpdateStmt->execute();
+                $reportUpdateStmt->close();
+            }
+            $_SESSION['success'] = 'Receipt finalized and ready for client review.';
+        }
+        header('Location: ' . salesReceiptRedirect($postedReceiptId, $clientId));
+        exit;
+    }
+
+    $clientNameInput = trim((string) ($_POST['client_name'] ?? ''));
+    $clientEmailInput = trim((string) ($_POST['client_email'] ?? ''));
+    $amountDueInput = str_replace(',', '', trim((string) ($_POST['amount_due'] ?? '')));
+    $dueDateInput = trim((string) ($_POST['due_date'] ?? ''));
+    $statusInput = trim((string) ($_POST['status'] ?? 'draft'));
+    $allowedStatuses = ['draft', 'sent', 'viewed', 'paid', 'overdue'];
+
+    if ($clientNameInput === '' || !is_numeric($amountDueInput) || (float) $amountDueInput < 0 || !in_array($statusInput, $allowedStatuses, true)) {
+        $_SESSION['error'] = 'Please check the receipt details before saving.';
+        header('Location: ' . salesReceiptRedirect($postedReceiptId, $clientId));
+        exit;
+    }
+
+    $amountDue = (float) $amountDueInput;
+    $dueDate = $dueDateInput !== '' ? $dueDateInput : null;
+    $stmt = $conn->prepare("
+        UPDATE receipts
+        SET client_name = ?, client_email = ?, amount_due = ?, due_date = ?, status = ?
+        WHERE id = ?
+    ");
+    if ($stmt !== false) {
+        $stmt->bind_param('ssdssi', $clientNameInput, $clientEmailInput, $amountDue, $dueDate, $statusInput, $postedReceiptId);
+        $stmt->execute();
+        $stmt->close();
+        $_SESSION['success'] = 'Receipt review details saved.';
+    }
+
+    header('Location: ' . salesReceiptRedirect($postedReceiptId, $clientId));
+    exit;
+}
+
+if (isset($_GET['download']) && $receiptId > 0) {
+    salesReceiptDownload($conn, $receiptId);
+}
+
 // Get receipts for client or specific report
 if ($receiptId) {
     $receipts = $conn->query("
-        SELECT r.*, sr.total_cost, c.name as client_name 
+        SELECT r.*, sr.total_cost, COALESCE(NULLIF(r.client_name, ''), c.name) AS display_client_name
         FROM receipts r 
         JOIN sales_reports sr ON r.report_id = sr.id 
         JOIN clients c ON sr.client_id = c.id 
@@ -22,7 +162,7 @@ if ($receiptId) {
     ");
 } elseif ($reportId) {
     $receipts = $conn->query("
-        SELECT r.*, sr.total_cost, c.name as client_name 
+        SELECT r.*, sr.total_cost, COALESCE(NULLIF(r.client_name, ''), c.name) AS display_client_name
         FROM receipts r 
         JOIN sales_reports sr ON r.report_id = sr.id 
         JOIN clients c ON sr.client_id = c.id 
@@ -31,7 +171,7 @@ if ($receiptId) {
     ");
 } elseif ($clientId) {
     $receipts = $conn->query("
-        SELECT r.*, sr.total_cost, c.name as client_name 
+        SELECT r.*, sr.total_cost, COALESCE(NULLIF(r.client_name, ''), c.name) AS display_client_name
         FROM receipts r 
         JOIN sales_reports sr ON r.report_id = sr.id 
         JOIN clients c ON sr.client_id = c.id 
@@ -40,7 +180,7 @@ if ($receiptId) {
     ");
 } else {
     $receipts = $conn->query("
-        SELECT r.*, sr.total_cost, c.name as client_name 
+        SELECT r.*, sr.total_cost, COALESCE(NULLIF(r.client_name, ''), c.name) AS display_client_name
         FROM receipts r 
         JOIN sales_reports sr ON r.report_id = sr.id 
         JOIN clients c ON sr.client_id = c.id 
@@ -348,6 +488,32 @@ include '../../includes/navbar.php';
     transform: translateY(-1px);
 }
 
+.btn-icon-sm.edit {
+    background: #e9ecef;
+    color: var(--theme-primary);
+}
+
+.btn-icon-sm.edit:hover {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.btn-icon-sm.finalize {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.btn-icon-sm.finalize:hover {
+    background: #059669;
+    color: white;
+    transform: translateY(-1px);
+}
+
+.action-buttons form {
+    margin: 0;
+}
+
 /* Button Styles */
 .btn-secondary-modern {
     background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
@@ -509,6 +675,22 @@ include '../../includes/navbar.php';
 </style>
 
 <div class="container-fluid px-4 py-4">
+    <?php if (!empty($_SESSION['success'])): ?>
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="fas fa-check-circle me-2"></i><?php echo htmlspecialchars((string) $_SESSION['success']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        <?php unset($_SESSION['success']); ?>
+    <?php endif; ?>
+
+    <?php if (!empty($_SESSION['error'])): ?>
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-circle me-2"></i><?php echo htmlspecialchars((string) $_SESSION['error']); ?>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        <?php unset($_SESSION['error']); ?>
+    <?php endif; ?>
+
     <!-- Page Header -->
     <div class="page-header-modern">
         <div>
@@ -581,18 +763,30 @@ include '../../includes/navbar.php';
                     </thead>
                 <tbody>
                     <?php while($receipt = $receipts->fetch_assoc()): ?>
+                    <?php
+                    $receiptStatus = (string) ($receipt['status'] ?? 'draft');
+                    $receiptPayload = [
+                        'id' => (int) $receipt['id'],
+                        'receipt_number' => (string) ($receipt['receipt_number'] ?? ''),
+                        'client_name' => (string) (($receipt['client_name'] ?? '') ?: ($receipt['display_client_name'] ?? '')),
+                        'client_email' => (string) ($receipt['client_email'] ?? ''),
+                        'amount_due' => number_format((float) ($receipt['amount_due'] ?? 0), 2, '.', ''),
+                        'due_date' => (string) ($receipt['due_date'] ?? ''),
+                        'status' => $receiptStatus,
+                    ];
+                    ?>
                     <tr>
                         <td>
                             <span class="receipt-number">#<?php echo htmlspecialchars($receipt['receipt_number']); ?></span>
                         </td>
                         <td>
-                            <div class="client-name"><?php echo htmlspecialchars($receipt['client_name']); ?></div>
+                            <div class="client-name"><?php echo htmlspecialchars((string) ($receipt['display_client_name'] ?? $receipt['client_name'] ?? '')); ?></div>
                         </td>
                         <td><?php echo !empty($receipt['created_at']) ? date('M d, Y', strtotime((string) $receipt['created_at'])) : 'No date'; ?></td>
                         <td class="fw-semibold">$<?php echo number_format($receipt['amount_due'], 2); ?></td>
                         <td>
-                            <span class="badge-status <?php echo $receipt['status']; ?>">
-                                <?php echo ucfirst(str_replace('_', ' ', $receipt['status'])); ?>
+                            <span class="badge-status <?php echo htmlspecialchars($receiptStatus); ?>">
+                                <?php echo htmlspecialchars(salesReceiptStatusLabel($receiptStatus)); ?>
                             </span>
                         </td>
                         <td>
@@ -600,6 +794,17 @@ include '../../includes/navbar.php';
                                 <a href="?download=1&receipt_id=<?php echo (int) $receipt['id']; ?>" class="btn-icon-sm download" target="_blank">
                                     <i class="fas fa-download"></i>
                                 </a>
+                                <button type="button" class="btn-icon-sm edit" onclick="editReceipt(<?php echo htmlspecialchars(json_encode($receiptPayload), ENT_QUOTES, 'UTF-8'); ?>)" title="Review and edit receipt">
+                                    <i class="fas fa-pen"></i>
+                                </button>
+                                <?php if ($receiptStatus === 'draft'): ?>
+                                    <form method="POST">
+                                        <input type="hidden" name="receipt_id" value="<?php echo (int) $receipt['id']; ?>">
+                                        <button type="submit" name="finalize_receipt" class="btn-icon-sm finalize" title="Finalize receipt">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
                                 <button class="btn-icon-sm view" onclick="viewReceipt(<?php echo $receipt['id']; ?>)">
                                     <i class="fas fa-eye"></i>
                                 </button>
@@ -621,9 +826,72 @@ include '../../includes/navbar.php';
     </div>
 </div>
 
+<div class="modal fade" id="editReceiptModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-receipt me-2 text-primary"></i>Review Receipt</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="receipt_id" id="edit_receipt_id">
+                <div class="mb-3">
+                    <label class="form-label">Receipt #</label>
+                    <input type="text" id="edit_receipt_number" class="form-control" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Client Name</label>
+                    <input type="text" name="client_name" id="edit_receipt_client_name" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Client Email</label>
+                    <input type="email" name="client_email" id="edit_receipt_client_email" class="form-control">
+                </div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Amount Due</label>
+                        <input type="number" name="amount_due" id="edit_receipt_amount_due" class="form-control" min="0" step="0.01" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Due Date</label>
+                        <input type="date" name="due_date" id="edit_receipt_due_date" class="form-control">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" id="edit_receipt_status" class="form-select">
+                        <option value="draft">For Review</option>
+                        <option value="sent">Sent</option>
+                        <option value="viewed">Viewed</option>
+                        <option value="paid">Paid</option>
+                        <option value="overdue">Overdue</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" name="save_receipt_review" class="btn btn-primary">
+                    <i class="fas fa-save me-1"></i> Save Review
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 function viewReceipt(id) {
     window.open(`../../api/get-receipt-details.php?id=${id}`, '_blank');
+}
+
+function editReceipt(receipt) {
+    document.getElementById('edit_receipt_id').value = receipt.id || '';
+    document.getElementById('edit_receipt_number').value = receipt.receipt_number || '';
+    document.getElementById('edit_receipt_client_name').value = receipt.client_name || '';
+    document.getElementById('edit_receipt_client_email').value = receipt.client_email || '';
+    document.getElementById('edit_receipt_amount_due').value = receipt.amount_due || '0.00';
+    document.getElementById('edit_receipt_due_date').value = receipt.due_date || '';
+    document.getElementById('edit_receipt_status').value = receipt.status || 'draft';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('editReceiptModal')).show();
 }
 </script>
 

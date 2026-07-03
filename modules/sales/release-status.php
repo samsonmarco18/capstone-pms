@@ -881,13 +881,14 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="release-actions">
                     <?php if ($selectedProjectReceipt && (int) ($selectedProjectReceipt['receipt_id'] ?? 0) > 0): ?>
+                        <?php $selectedReceiptStatus = (string) ($selectedProjectReceipt['status'] ?? 'draft'); ?>
                         <a
                             class="release-receipt-btn"
                             href="<?php echo htmlspecialchars(BASE_URL . 'modules/sales/receipt.php?receipt_id=' . (int) $selectedProjectReceipt['receipt_id']); ?>"
-                            title="Open finalized receipt for last review"
+                            title="Open receipt for Sales review"
                         >
                             <i class="fas fa-receipt"></i>
-                            Final Receipt
+                            <?php echo $selectedReceiptStatus === 'draft' ? 'Review Receipt' : 'Final Receipt'; ?>
                         </a>
                     <?php endif; ?>
                     <?php if ($canDownloadSelectedProjectRepository && $selectedProjectRepository): ?>
