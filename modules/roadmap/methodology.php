@@ -325,6 +325,17 @@ function roadmapValidateTask(array $phase, DateTimeImmutable $start, DateTimeImm
     return null;
 }
 
+function roadmapReturnToEditor(int $projectId, string $editor, string $message, array $submittedData): void
+{
+    $_SESSION['roadmap_editor_state'] = [
+        'editor' => $editor,
+        'message' => $message,
+        'data' => $submittedData,
+    ];
+    header('Location: methodology.php?project_id=' . $projectId);
+    exit();
+}
+
 function roadmapGetProject(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId, array $user): ?array
 {
     if ($projectId <= 0) {
@@ -448,30 +459,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $sequenceNo = max(0, (int) ($_POST['sequence_no'] ?? 0));
 
         if ($name === '' || !$start || !$end) {
-            $_SESSION['error'] = 'Phase name, start date, and end date are required.';
-            header('Location: methodology.php?project_id=' . $postedProjectId);
-            exit();
+            roadmapReturnToEditor($postedProjectId, 'phase', 'Phase name, start date, and end date are required.', $_POST);
         }
 
         if ($developerCount > $postedDeveloperCapacity) {
-            $_SESSION['error'] = 'Phase headcount cannot exceed the ' . $postedDeveloperCapacity . ' developers configured in Developer Allocation.';
-            header('Location: methodology.php?project_id=' . $postedProjectId);
-            exit();
+            roadmapReturnToEditor(
+                $postedProjectId,
+                'phase',
+                'Phase headcount cannot exceed the ' . $postedDeveloperCapacity . ' developers configured in Developer Allocation.',
+                $_POST
+            );
         }
 
         $validation = roadmapValidatePhase($postedProject, $start, $end);
         if ($validation !== null) {
-            $_SESSION['error'] = $validation;
-            header('Location: methodology.php?project_id=' . $postedProjectId);
-            exit();
+            roadmapReturnToEditor($postedProjectId, 'phase', $validation, $_POST);
         }
 
         if ($phaseId > 0) {
             $phaseCheck = $conn->query("SELECT id FROM methodology_phases WHERE id = {$phaseId} AND project_id = {$postedProjectId} LIMIT 1")->fetch_assoc();
             if (!$phaseCheck) {
-                $_SESSION['error'] = 'Phase not found.';
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+                roadmapReturnToEditor($postedProjectId, 'phase', 'Phase not found.', $_POST);
             }
 
             $stmt = $conn->prepare("
@@ -510,9 +518,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $phase = $conn->query("SELECT * FROM methodology_phases WHERE id = {$phaseId} AND project_id = {$postedProjectId} LIMIT 1")->fetch_assoc();
 
         if (!$phase) {
-            $_SESSION['error'] = 'Select a valid methodology phase first.';
-            header('Location: methodology.php?project_id=' . $postedProjectId);
-            exit();
+            roadmapReturnToEditor($postedProjectId, 'task', 'Select a valid methodology phase first.', $_POST);
         }
 
         if ($canEditArchitecture) {
@@ -524,9 +530,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $end = roadmapParseDate($_POST['task_end'] ?? null);
 
             if ($title === '' || !$start || !$end) {
-                $_SESSION['error'] = 'Task title, start date, and end date are required.';
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+                roadmapReturnToEditor($postedProjectId, 'task', 'Task title, start date, and end date are required.', $_POST);
             }
 
             $workflowTask = null;
@@ -544,9 +548,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if (!$workflowTask) {
-                $_SESSION['error'] = 'Choose the real workflow feature task this roadmap task controls.';
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+                roadmapReturnToEditor($postedProjectId, 'task', 'Choose the real workflow feature task this roadmap task controls.', $_POST);
             }
 
             $status = projectWorkflowRoadmapTaskStatus($workflowTask['status'] ?? '');
@@ -563,9 +565,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $duplicateStmt->close();
 
             if ($duplicateTask) {
-                $_SESSION['error'] = 'That workflow task is already scheduled in this phase. You can add it to another phase.';
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+                roadmapReturnToEditor(
+                    $postedProjectId,
+                    'task',
+                    'That workflow task is already scheduled in this phase. You can add it to another phase.',
+                    $_POST
+                );
             }
 
             $selectedDepartmentValues = $_POST['task_departments'] ?? [];
@@ -579,40 +584,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach (array_unique($selectedDepartmentValues) as $selectedDepartment) {
                 $department = projectWorkflowDepartmentLabel((string) $selectedDepartment);
                 if (!array_key_exists($department, $postedDepartmentAllocations)) {
-                    $_SESSION['error'] = 'Every task department must come from this project\'s Developer Allocation.';
-                    header('Location: methodology.php?project_id=' . $postedProjectId);
-                    exit();
+                    roadmapReturnToEditor(
+                        $postedProjectId,
+                        'task',
+                        'Every task department must come from this project\'s Developer Allocation.',
+                        $_POST
+                    );
                 }
 
                 $availableCount = max(0, (int) $postedDepartmentAllocations[$department]);
                 $requiredCount = max(0, (int) ($postedDepartmentCounts[$department] ?? 0));
                 if ($availableCount <= 0 || $requiredCount < 1 || $requiredCount > $availableCount) {
-                    $_SESSION['error'] = $department . ' task headcount must be between 1 and its Developer Allocation limit of ' . $availableCount . '.';
-                    header('Location: methodology.php?project_id=' . $postedProjectId);
-                    exit();
+                    roadmapReturnToEditor(
+                        $postedProjectId,
+                        'task',
+                        $department . ' task headcount must be between 1 and its Developer Allocation limit of ' . $availableCount . '.',
+                        $_POST
+                    );
                 }
                 $departmentRequirements[$department] = $requiredCount;
             }
 
             if ($departmentRequirements === []) {
-                $_SESSION['error'] = 'Select at least one department staffing requirement for this roadmap task.';
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+                roadmapReturnToEditor(
+                    $postedProjectId,
+                    'task',
+                    'Select at least one department staffing requirement for this roadmap task.',
+                    $_POST
+                );
             }
 
             if (array_sum($departmentRequirements) > $postedDeveloperCapacity) {
-                $_SESSION['error'] = 'Task headcount cannot exceed the project Developer Allocation capacity of ' . $postedDeveloperCapacity . '.';
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+                roadmapReturnToEditor(
+                    $postedProjectId,
+                    'task',
+                    'Task headcount cannot exceed the project Developer Allocation capacity of ' . $postedDeveloperCapacity . '.',
+                    $_POST
+                );
             }
 
             $department = (string) array_key_first($departmentRequirements);
 
             $validation = roadmapValidateTask($phase, $start, $end);
             if ($validation !== null) {
-                $_SESSION['error'] = $validation;
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+                roadmapReturnToEditor($postedProjectId, 'task', $validation, $_POST);
             }
 
             $conn->begin_transaction();
@@ -676,9 +691,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['success'] = $successMessage;
             } catch (Throwable $exception) {
                 $conn->rollback();
-                $_SESSION['error'] = $exception->getMessage();
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+                roadmapReturnToEditor($postedProjectId, 'task', $exception->getMessage(), $_POST);
             }
         } elseif ($canEditExpertInput && $taskId > 0) {
             $expertPeopleCount = max(0, (int) ($_POST['expert_people_count'] ?? 0));
@@ -686,21 +699,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $expertNotes = trim((string) ($_POST['expert_notes'] ?? ''));
 
             if ($expertDeveloperType !== '' && !in_array($expertDeveloperType, $postedProjectDepartments, true)) {
-                $_SESSION['error'] = 'Select an expert developer type included in this project\'s Developer Allocation team requirements.';
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+                roadmapReturnToEditor(
+                    $postedProjectId,
+                    'task',
+                    'Select an expert developer type included in this project\'s Developer Allocation team requirements.',
+                    $_POST
+                );
             }
 
             if ($expertPeopleCount > 0 && $expertDeveloperType === '') {
-                $_SESSION['error'] = 'Select the expert developer type for the requested expert headcount.';
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+                roadmapReturnToEditor(
+                    $postedProjectId,
+                    'task',
+                    'Select the expert developer type for the requested expert headcount.',
+                    $_POST
+                );
             }
 
             if ($expertDeveloperType !== '' && $expertPeopleCount > (int) ($postedDepartmentAllocations[$expertDeveloperType] ?? 0)) {
-                $_SESSION['error'] = 'Expert headcount cannot exceed the Developer Allocation limit for ' . $expertDeveloperType . '.';
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+                roadmapReturnToEditor(
+                    $postedProjectId,
+                    'task',
+                    'Expert headcount cannot exceed the Developer Allocation limit for ' . $expertDeveloperType . '.',
+                    $_POST
+                );
             }
 
             $stmt = $conn->prepare("
@@ -722,6 +744,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: methodology.php?project_id=' . $postedProjectId);
         exit();
     }
+}
+
+$roadmapEditorState = $_SESSION['roadmap_editor_state'] ?? null;
+unset($_SESSION['roadmap_editor_state']);
+if (
+    !is_array($roadmapEditorState)
+    || !is_array($roadmapEditorState['data'] ?? null)
+    || (int) ($roadmapEditorState['data']['project_id'] ?? 0) !== $selectedProjectId
+    || !in_array((string) ($roadmapEditorState['editor'] ?? ''), ['phase', 'task'], true)
+) {
+    $roadmapEditorState = null;
 }
 
 $phases = [];
@@ -871,6 +904,21 @@ $timelineTotalDays = max(1, ((int) $timelineStart->diff($timelineEnd)->format('%
 $phaseCount = count($phases);
 $taskCount = count($allTasks);
 $expertPeopleTotal = array_sum(array_map(static fn(array $task): int => (int) ($task['expert_people_count'] ?? 0), $allTasks));
+$phaseDateRanges = [];
+foreach ($phases as $phaseId => $phase) {
+    $phaseDateRanges[(string) $phaseId] = [
+        'start' => (string) ($phase['start_date'] ?? ''),
+        'end' => (string) ($phase['end_date'] ?? ''),
+    ];
+}
+$scheduledWorkflowTasks = array_map(
+    static fn(array $task): array => [
+        'id' => (int) ($task['id'] ?? 0),
+        'phase_id' => (int) ($task['phase_id'] ?? 0),
+        'task_id' => (int) ($task['task_id'] ?? 0),
+    ],
+    $allTasks
+);
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -906,6 +954,68 @@ include '../../includes/navbar.php';
     font-size: 1.45rem;
     font-weight: 700;
     margin-bottom: .25rem;
+}
+
+.roadmap-feedback {
+    align-items: center;
+    display: flex;
+    gap: .85rem;
+    margin-bottom: 1rem;
+    padding: .9rem 3.25rem .9rem 1rem;
+    border: 0 !important;
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, .07);
+}
+
+.roadmap-feedback__icon {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 38px;
+    justify-content: center;
+    width: 38px;
+    border-radius: 50%;
+    font-size: 1rem;
+}
+
+.roadmap-feedback__content {
+    min-width: 0;
+    line-height: 1.45;
+}
+
+.roadmap-feedback__content strong {
+    display: block;
+    margin-bottom: .1rem;
+    font-size: .82rem;
+}
+
+.roadmap-feedback__content span {
+    font-size: .88rem;
+}
+
+.roadmap-feedback--success {
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.roadmap-feedback--success .roadmap-feedback__icon {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.roadmap-feedback--error {
+    background: #fff5f5;
+    color: #991b1b;
+}
+
+.roadmap-feedback--error .roadmap-feedback__icon {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.roadmap-feedback .btn-close {
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 .breadcrumb-modern {
@@ -1374,6 +1484,34 @@ include '../../includes/navbar.php';
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.editor-validation-alert {
+    align-items: flex-start;
+    display: flex;
+    flex: 1 0 100%;
+    gap: .6rem;
+    margin: 0 0 .35rem;
+    padding: .75rem .85rem;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    background: #fff1f2;
+    color: #991b1b;
+    font-size: .82rem;
+    line-height: 1.45;
+    text-align: left;
+}
+
+.editor-validation-alert i {
+    flex: 0 0 auto;
+    margin-top: .15rem;
+}
+
+.department-requirement-grid.is-invalid {
+    padding: .65rem;
+    border: 1px solid #dc3545;
+    border-radius: 10px;
+    background: #fff8f8;
+}
+
 .department-requirement-item {
     align-items: center;
     background: #f8fafc;
@@ -1443,6 +1581,36 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-row,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-label-cell {
     border-color: #263244;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .editor-validation-alert {
+    background: #32151a;
+    border-color: rgba(248, 113, 113, .45);
+    color: #fecaca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-requirement-grid.is-invalid {
+    background: rgba(127, 29, 29, .14);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-feedback--success {
+    background: #0c251a;
+    color: #bbf7d0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-feedback--success .roadmap-feedback__icon {
+    background: rgba(34, 197, 94, .18);
+    color: #4ade80;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-feedback--error {
+    background: #301518;
+    color: #fecaca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-feedback--error .roadmap-feedback__icon {
+    background: rgba(239, 68, 68, .18);
+    color: #f87171;
 }
 
 @media (max-width: 992px) {
@@ -1518,15 +1686,23 @@ include '../../includes/navbar.php';
     </div>
 
     <?php if (!empty($_SESSION['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <?php echo htmlspecialchars((string) $_SESSION['success']); unset($_SESSION['success']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="alert roadmap-feedback roadmap-feedback--success alert-dismissible fade show" role="status">
+            <span class="roadmap-feedback__icon"><i class="fas fa-circle-check" aria-hidden="true"></i></span>
+            <div class="roadmap-feedback__content">
+                <strong>Success</strong>
+                <span><?php echo htmlspecialchars((string) $_SESSION['success']); unset($_SESSION['success']); ?></span>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss success message"></button>
         </div>
     <?php endif; ?>
     <?php if (!empty($_SESSION['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <?php echo htmlspecialchars((string) $_SESSION['error']); unset($_SESSION['error']); ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="alert roadmap-feedback roadmap-feedback--error alert-dismissible fade show" role="alert">
+            <span class="roadmap-feedback__icon"><i class="fas fa-circle-exclamation" aria-hidden="true"></i></span>
+            <div class="roadmap-feedback__content">
+                <strong>Needs attention</strong>
+                <span><?php echo htmlspecialchars((string) $_SESSION['error']); unset($_SESSION['error']); ?></span>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss error message"></button>
         </div>
     <?php endif; ?>
 
@@ -1873,7 +2049,7 @@ include '../../includes/navbar.php';
 <?php if ($selectedProject): ?>
 <div class="modal fade" id="phaseModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <form method="POST" class="modal-content" data-app-loading data-loading-title="Saving phase" data-loading-text="Please wait while the roadmap phase is saved.">
+        <form method="POST" class="modal-content" id="phaseForm" data-generic-draft-disabled="1" data-app-loading data-loading-title="Saving phase" data-loading-text="Please wait while the roadmap phase is saved.">
             <div class="modal-header">
                 <h5 class="modal-title">Methodology Phase</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -1917,6 +2093,10 @@ include '../../includes/navbar.php';
                 </div>
             </div>
             <div class="modal-footer">
+                <div class="editor-validation-alert d-none" id="phaseFormError" role="alert" aria-live="assertive">
+                    <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
+                    <span></span>
+                </div>
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i> Save Phase</button>
             </div>
@@ -1926,7 +2106,7 @@ include '../../includes/navbar.php';
 
 <div class="modal fade" id="taskModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
-        <form method="POST" class="modal-content" data-generic-draft-disabled="1" data-app-loading data-loading-title="Saving task" data-loading-text="Please wait while the roadmap task is saved.">
+        <form method="POST" class="modal-content" id="taskForm" data-generic-draft-disabled="1" data-app-loading data-loading-title="Saving task" data-loading-text="Please wait while the roadmap task is saved.">
             <div class="modal-header">
                 <h5 class="modal-title"><?php echo $isSulMonitoring ? 'Task Monitoring Details' : 'Roadmap Task'; ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -2074,6 +2254,10 @@ include '../../includes/navbar.php';
                 </div>
             </div>
             <div class="modal-footer">
+                <div class="editor-validation-alert d-none" id="taskFormError" role="alert" aria-live="assertive">
+                    <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
+                    <span></span>
+                </div>
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><?php echo $isSulMonitoring ? 'Close' : 'Cancel'; ?></button>
                 <?php if ($canEditArchitecture || $canEditExpertInput): ?>
                     <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i> Save Task</button>
@@ -2090,9 +2274,15 @@ const taskModalElement = document.getElementById('taskModal');
 const phaseModal = phaseModalElement ? new bootstrap.Modal(phaseModalElement) : null;
 const taskModal = taskModalElement ? new bootstrap.Modal(taskModalElement) : null;
 const canEditArchitecture = <?php echo json_encode($canEditArchitecture); ?>;
+const canEditExpertInput = <?php echo json_encode($canEditExpertInput); ?>;
 const isSulMonitoring = <?php echo json_encode($isSulMonitoring); ?>;
 const projectStart = <?php echo json_encode($selectedProject['timeline_start'] ?? ''); ?>;
 const projectEnd = <?php echo json_encode($selectedProject['timeline_end'] ?? ''); ?>;
+const phaseDateRanges = <?php echo json_encode($phaseDateRanges, JSON_UNESCAPED_SLASHES); ?>;
+const scheduledWorkflowTasks = <?php echo json_encode($scheduledWorkflowTasks, JSON_UNESCAPED_SLASHES); ?>;
+const roadmapEditorState = <?php echo json_encode($roadmapEditorState, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+const phaseForm = document.getElementById('phaseForm');
+const taskForm = document.getElementById('taskForm');
 const methodologyTemplateForm = document.getElementById('methodologyTemplateForm');
 const replaceExistingTemplate = document.getElementById('replaceExistingTemplate');
 const taskDepartmentToggles = Array.from(document.querySelectorAll('.task-department-toggle'));
@@ -2141,6 +2331,129 @@ function setValue(id, value) {
 function setText(id, value) {
     const element = document.getElementById(id);
     if (element) element.textContent = value ?? '';
+}
+
+function clearEditorValidation(editor) {
+    const form = editor === 'phase' ? phaseForm : taskForm;
+    const alert = document.getElementById(`${editor}FormError`);
+    alert?.classList.add('d-none');
+    form?.querySelectorAll('.is-invalid').forEach((element) => element.classList.remove('is-invalid'));
+}
+
+function showEditorValidation(editor, message, fieldIds = [], focusField = true) {
+    const alert = document.getElementById(`${editor}FormError`);
+    const messageElement = alert?.querySelector('span');
+    if (messageElement) messageElement.textContent = message;
+    alert?.classList.remove('d-none');
+
+    const fields = fieldIds
+        .map((fieldId) => document.getElementById(fieldId))
+        .filter(Boolean);
+    fields.forEach((field) => field.classList.add('is-invalid'));
+
+    if (focusField && fields[0]) {
+        fields[0].focus();
+        fields[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+function stopInvalidEditorSubmit(event, editor, validation) {
+    if (!validation) return false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    showEditorValidation(editor, validation.message, validation.fields || []);
+    return true;
+}
+
+function validatePhaseEditor() {
+    if (!canEditArchitecture) return null;
+    const start = document.getElementById('phaseStart')?.value || '';
+    const end = document.getElementById('phaseEnd')?.value || '';
+
+    if (start && end && end < start) {
+        return { message: 'Phase end date must be on or after the phase start date.', fields: ['phaseStart', 'phaseEnd'] };
+    }
+    if (projectStart && start && start < projectStart) {
+        return { message: 'Phase start date cannot be earlier than the project start date.', fields: ['phaseStart'] };
+    }
+    if (projectEnd && end && end > projectEnd) {
+        return { message: 'Phase end date cannot be later than the project end date.', fields: ['phaseEnd'] };
+    }
+
+    return null;
+}
+
+function syncTaskDateLimits() {
+    const phaseId = String(document.getElementById('taskPhaseId')?.value || '');
+    const range = phaseDateRanges[phaseId] || {};
+    const startInput = document.getElementById('taskStart');
+    const endInput = document.getElementById('taskEnd');
+    if (!startInput || !endInput) return;
+
+    startInput.min = range.start || '';
+    startInput.max = range.end || '';
+    endInput.min = startInput.value && (!range.start || startInput.value > range.start)
+        ? startInput.value
+        : (range.start || '');
+    endInput.max = range.end || '';
+}
+
+function validateTaskEditor() {
+    if (!canEditArchitecture) return null;
+
+    const taskId = Number(document.getElementById('taskId')?.value || 0);
+    const phaseId = String(document.getElementById('taskPhaseId')?.value || '');
+    const workflowTaskId = Number(document.getElementById('workflowTaskId')?.value || 0);
+    const start = document.getElementById('taskStart')?.value || '';
+    const end = document.getElementById('taskEnd')?.value || '';
+    const range = phaseDateRanges[phaseId];
+
+    if (!range) {
+        return { message: 'Select a valid methodology phase first.', fields: ['taskPhaseId'] };
+    }
+    if (start && end && end < start) {
+        return { message: 'Task end date must be on or after the task start date.', fields: ['taskStart', 'taskEnd'] };
+    }
+    if (range.start && start && start < range.start) {
+        return { message: 'Task start date cannot be earlier than the selected phase start date.', fields: ['taskStart'] };
+    }
+    if (range.end && end && end > range.end) {
+        return { message: 'Task end date cannot be later than the selected phase end date.', fields: ['taskEnd'] };
+    }
+
+    const selectedDepartments = taskDepartmentToggles.filter((toggle) => toggle.checked && !toggle.disabled);
+    if (selectedDepartments.length === 0) {
+        return {
+            message: 'Select at least one department staffing requirement for this roadmap task.',
+            fields: ['taskDepartmentRequirements']
+        };
+    }
+
+    for (const toggle of selectedDepartments) {
+        const capacity = Number(toggle.dataset.capacity || 0);
+        const countInput = toggle.closest('.department-requirement-item')?.querySelector('.department-requirement-count');
+        const count = Number(countInput?.value || 0);
+        if (count < 1 || count > capacity) {
+            return {
+                message: `${toggle.dataset.department || 'Department'} task headcount must be between 1 and its Developer Allocation limit of ${capacity}.`,
+                fields: countInput?.id ? [countInput.id] : ['taskDepartmentRequirements']
+            };
+        }
+    }
+
+    const hasDuplicate = scheduledWorkflowTasks.some((scheduledTask) =>
+        Number(scheduledTask.id || 0) !== taskId
+        && String(scheduledTask.phase_id || '') === phaseId
+        && Number(scheduledTask.task_id || 0) === workflowTaskId
+    );
+    if (workflowTaskId > 0 && hasDuplicate) {
+        return {
+            message: 'That workflow task is already scheduled in this phase. You can add it to another phase.',
+            fields: ['workflowTaskId']
+        };
+    }
+
+    return null;
 }
 
 function formatMonitoringDate(value) {
@@ -2208,8 +2521,38 @@ taskDepartmentToggles.forEach((toggle) => {
     toggle.addEventListener('change', () => updateTaskDepartmentControl(toggle));
 });
 
+phaseForm?.addEventListener('submit', (event) => {
+    clearEditorValidation('phase');
+    stopInvalidEditorSubmit(event, 'phase', validatePhaseEditor());
+});
+
+taskForm?.addEventListener('submit', (event) => {
+    clearEditorValidation('task');
+    stopInvalidEditorSubmit(event, 'task', validateTaskEditor());
+});
+
+[phaseForm, taskForm].forEach((form) => {
+    form?.addEventListener('input', (event) => event.target?.classList?.remove('is-invalid'));
+    form?.addEventListener('change', (event) => event.target?.classList?.remove('is-invalid'));
+});
+
+const phaseStartInput = document.getElementById('phaseStart');
+const phaseEndInput = document.getElementById('phaseEnd');
+if (phaseStartInput) {
+    phaseStartInput.min = projectStart || '';
+    phaseStartInput.max = projectEnd || '';
+}
+if (phaseEndInput) {
+    phaseEndInput.min = projectStart || '';
+    phaseEndInput.max = projectEnd || '';
+}
+
+document.getElementById('taskPhaseId')?.addEventListener('change', syncTaskDateLimits);
+document.getElementById('taskStart')?.addEventListener('input', syncTaskDateLimits);
+
 function openPhaseModal(source) {
     if (!phaseModal || !canEditArchitecture) return;
+    clearEditorValidation('phase');
     const phase = source ? parseData(source, 'phase') : {};
     setValue('phaseId', phase.id || '');
     setValue('phaseName', phase.name || '');
@@ -2240,6 +2583,7 @@ function openTaskModalFromTask(source) {
 }
 
 function openTaskModal(task) {
+    clearEditorValidation('task');
     setValue('taskId', task.id || '');
     setValue('taskPhaseId', task.phase_id || '');
     setValue('workflowTaskId', task.task_id || '');
@@ -2253,6 +2597,7 @@ function openTaskModal(task) {
     setValue('expertDeveloperType', task.expert_developer_type || '');
     setValue('expertDeveloperTypeHidden', task.expert_developer_type || '');
     setValue('expertNotes', task.expert_notes || '');
+    syncTaskDateLimits();
 
     if (isSulMonitoring) {
         const statusKey = String(task.monitoring_status_key || 'not-started');
@@ -2285,6 +2630,56 @@ document.getElementById('workflowTaskId')?.addEventListener('change', (event) =>
         titleInput.value = selected.textContent.split(' - ')[0].trim();
     }
 });
+
+function restoreRoadmapEditor(state) {
+    if (!state || !state.data || !state.message) return;
+    const data = state.data;
+
+    if (state.editor === 'phase' && phaseModal && canEditArchitecture) {
+        clearEditorValidation('phase');
+        setValue('phaseId', data.phase_id || '');
+        setValue('phaseName', data.phase_name || '');
+        setValue('phaseStart', data.phase_start || projectStart || '');
+        setValue('phaseEnd', data.phase_end || projectEnd || projectStart || '');
+        setValue('developerCount', data.developer_count || 0);
+        setValue('sequenceNo', data.sequence_no || 0);
+        setValue('phaseDescription', data.phase_description || '');
+        phaseModal.show();
+        showEditorValidation('phase', String(state.message), [], false);
+        return;
+    }
+
+    if (state.editor === 'task' && taskModal) {
+        const selectedDepartments = Array.isArray(data.task_departments)
+            ? data.task_departments
+            : (data.task_departments ? [data.task_departments] : []);
+        const departmentCounts = data.task_department_counts && typeof data.task_department_counts === 'object'
+            ? data.task_department_counts
+            : {};
+        const requirements = selectedDepartments.map((department) => ({
+            department: String(department),
+            required_count: Number(departmentCounts[department] || 1)
+        }));
+
+        openTaskModal({
+            id: data.task_id || '',
+            phase_id: data.phase_id || '',
+            task_id: data.workflow_task_id || '',
+            title: data.task_title || '',
+            component_name: data.component_name || '',
+            department_requirements: requirements,
+            start_date: data.task_start || '',
+            end_date: data.task_end || '',
+            description: data.task_description || '',
+            expert_people_count: data.expert_people_count || 0,
+            expert_developer_type: data.expert_developer_type || '',
+            expert_notes: data.expert_notes || ''
+        });
+        showEditorValidation('task', String(state.message), [], false);
+    }
+}
+
+restoreRoadmapEditor(roadmapEditorState);
 </script>
 
 <?php include '../../includes/footer.php'; ?>
