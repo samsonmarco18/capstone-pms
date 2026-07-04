@@ -418,8 +418,8 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .estimation-section-title { display: flex; align-items: center; gap: 0.68rem; }
     .estimation-section-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 9px; background: #edf6fb; color: var(--pe-primary); font-size: 0.78rem; }
     .estimation-section-title small { display: block; margin-top: 0.1rem; color: var(--pe-muted); font-size: 0.72rem; font-weight: 500; }
-    .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(185px, 1fr)); gap: 0.8rem; }
-    .overview-cell { padding: 0.95rem; background: #f8fafc; border: 1px solid var(--pe-line); border-radius: 12px; min-width: 0; }
+    .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); column-gap: 2rem; margin: 0; }
+    .overview-cell { min-width: 0; padding: 0.85rem 0; background: transparent; border: 0; border-bottom: 1px solid var(--pe-line); border-radius: 0; }
     .overview-cell span { display: block; color: var(--pe-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
     .overview-cell strong { display: block; color: var(--pe-ink); font-size: 0.9rem; margin-top: 0.28rem; overflow-wrap: anywhere; }
     .estimate-table { width: 100%; border-collapse: separate; border-spacing: 0; }
@@ -506,9 +506,9 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-cell strong,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-estimate-title,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-empty-state strong { color: #e7f0f8; }
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-cell,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-estimate-title,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-table th { background: #12263a; border-color: #20364a; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-cell { background: transparent; border-color: #20364a; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-table td,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-actions { border-color: #20364a; color: #d7e4f2; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-table tbody tr:hover td { background: #102235; }
@@ -534,6 +534,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         .review-progress__connector { width: 2px; height: 18px; margin-left: 14px; }
         .project-estimation-actions { align-items: stretch; }
         .project-estimation-submit, .project-estimation-dashboard-link { width: 100%; justify-content: center; }
+        .overview-grid { grid-template-columns: 1fr; }
     }
     </style>
 

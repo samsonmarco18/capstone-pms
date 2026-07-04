@@ -1310,6 +1310,21 @@ include '../../includes/navbar.php';
     margin-bottom: 1rem;
 }
 
+.roadmap-toolbar-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.roadmap-toolbar-actions .btn {
+    align-items: center;
+    display: inline-flex;
+    font-weight: 700;
+    justify-content: center;
+    min-height: 38px;
+}
+
 .roadmap-stats {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -1971,21 +1986,29 @@ include '../../includes/navbar.php';
                     <?php endif; ?>
                 </div>
             </div>
-            <?php if ($canEditArchitecture && $selectedProject): ?>
-                <div class="d-flex flex-wrap gap-2">
-                    <button class="btn btn-light btn-sm" type="button" onclick="openPhaseModal()">
-                        <i class="fas fa-plus me-1"></i> Phase
-                    </button>
-                    <a class="btn btn-outline-light btn-sm" href="<?php echo BASE_URL; ?>modules/architect/upload-diagram.php?id=<?php echo (int) $selectedProjectId; ?>">
-                        <i class="fas fa-arrow-right me-1"></i> Documents
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <?php
+                $returnToUrl = '';
+                if (!empty($_GET['return_to'])) {
+                    $returnToUrl = trim((string) $_GET['return_to']);
+                } elseif (!empty($_SERVER['HTTP_REFERER'])) {
+                    $referer = trim((string) $_SERVER['HTTP_REFERER']);
+                    if ($referer !== '' && strpos($referer, 'modules/expert/feature-estimation.php') !== false) {
+                        $returnToUrl = $referer;
+                    }
+                }
+                ?>
+                <?php if ($returnToUrl !== ''): ?>
+                    <a class="btn btn-outline-light btn-sm" href="<?php echo htmlspecialchars($returnToUrl, ENT_QUOTES, 'UTF-8'); ?>">
+                        <i class="fas fa-arrow-left me-1"></i> Back to Feature Estimation
                     </a>
-                </div>
-            <?php endif; ?>
-            <?php if ($isSulMonitoring): ?>
-                <a class="btn btn-outline-light btn-sm" href="<?php echo BASE_URL; ?>modules/sul/task-allocation.php">
-                    <i class="fas fa-list-check me-1"></i> Task Allocation
-                </a>
-            <?php endif; ?>
+                <?php endif; ?>
+                <?php if ($isSulMonitoring): ?>
+                    <a class="btn btn-outline-light btn-sm" href="<?php echo BASE_URL; ?>modules/sul/task-allocation.php">
+                        <i class="fas fa-list-check me-1"></i> Task Allocation
+                    </a>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
 
@@ -2085,6 +2108,16 @@ include '../../includes/navbar.php';
                     <strong><?php echo htmlspecialchars((string) $selectedProject['name']); ?></strong>
                     <span class="text-muted ms-2"><?php echo htmlspecialchars((string) ($selectedProject['client_name'] ?? '')); ?></span>
                 </div>
+                <?php if ($canEditArchitecture): ?>
+                    <div class="roadmap-toolbar-actions" aria-label="Roadmap actions">
+                        <button class="btn btn-primary" type="button" onclick="openPhaseModal()">
+                            <i class="fas fa-plus me-2" aria-hidden="true"></i> Add Phase
+                        </button>
+                        <a class="btn btn-outline-primary" href="<?php echo BASE_URL; ?>modules/architect/upload-diagram.php?id=<?php echo (int) $selectedProjectId; ?>">
+                            Continue to Documents <i class="fas fa-arrow-right ms-2" aria-hidden="true"></i>
+                        </a>
+                    </div>
+                <?php endif; ?>
             </div>
         <?php else: ?>
             <form method="GET" class="row g-3 align-items-end">

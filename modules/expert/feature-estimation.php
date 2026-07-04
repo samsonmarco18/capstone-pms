@@ -1016,16 +1016,12 @@ include '../../includes/navbar.php';
 
 .page-header-modern {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
-    border-radius: 22px;
-    padding: 1.55rem 1.75rem;
-    margin-bottom: 1.5rem;
+    border-radius: 16px;
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 1.25rem;
     position: relative;
     overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1.5rem;
-    box-shadow: 0 14px 32px rgba(24, 79, 115, 0.16);
+    box-shadow: 0 8px 24px rgba(24, 79, 115, 0.14);
 }
 
 .page-header-modern::before {
@@ -1033,14 +1029,14 @@ include '../../includes/navbar.php';
     position: absolute;
     top: 0;
     right: 0;
-    width: 300px;
+    width: 220px;
     height: 100%;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1));
     pointer-events: none;
 }
 
 .page-header-modern h2 {
-    font-size: 1.65rem;
+    font-size: 1.5rem;
     font-weight: 700;
     margin-bottom: 0.35rem;
     color: white;
@@ -1075,49 +1071,52 @@ include '../../includes/navbar.php';
     text-transform: uppercase;
 }
 
-.page-header-workflow {
-    position: relative;
-    z-index: 1;
+.expert-workspace-switcher {
+    align-items: flex-end;
+    border-bottom: 1px solid var(--gray-300);
     display: flex;
-    align-items: center;
-    gap: 0.55rem;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    gap: 0.25rem;
+    margin-bottom: 1.25rem;
+    overflow-x: auto;
 }
 
-.page-header-workflow__step {
-    display: inline-flex;
+.expert-workspace-tab {
     align-items: center;
-    gap: 0.45rem;
-    min-height: 36px;
-    padding: 0.48rem 0.7rem;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
-    font-size: 0.72rem;
+    background: transparent;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    color: var(--gray-600);
+    display: inline-flex;
+    font-size: 0.86rem;
     font-weight: 700;
-    backdrop-filter: blur(4px);
+    gap: 0.5rem;
+    margin-bottom: -1px;
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
 }
 
-.page-header-workflow__number {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.18);
-    font-size: 0.66rem;
+.expert-workspace-tab:hover,
+.expert-workspace-tab:focus-visible {
+    color: var(--theme-primary);
+    outline: none;
+}
+
+.expert-workspace-tab.is-active {
+    border-bottom-color: var(--theme-primary);
+    color: var(--theme-primary);
+}
+
+.expert-workspace-panel[hidden] {
+    display: none !important;
 }
 
 /* Timeline Section */
     .timeline-section {
         background: white;
-        border-radius: 20px;
+        border-radius: 14px;
         border: 1px solid var(--gray-200);
         box-shadow: var(--shadow-sm);
-        margin-bottom: 2rem;
+        margin-bottom: 1.25rem;
     }
 
 .timeline-header {
@@ -1144,11 +1143,11 @@ include '../../includes/navbar.php';
 /* Phase Management Section */
 .phase-management-card {
     background: white;
-    border-radius: 20px;
+    border-radius: 14px;
     border: 1px solid var(--gray-200);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
-    margin-bottom: 2rem;
+    margin-bottom: 1.25rem;
 }
 
 .phase-header {
@@ -1239,7 +1238,7 @@ include '../../includes/navbar.php';
     border: 1px dashed var(--gray-400);
     color: var(--gray-600);
     padding: 0.5rem 1rem;
-    border-radius: 40px;
+    border-radius: 9px;
     font-size: 0.8rem;
     margin-top: 1rem;
     cursor: pointer;
@@ -1256,7 +1255,7 @@ include '../../includes/navbar.php';
     color: white;
     border: none;
     padding: 0.5rem 1.5rem;
-    border-radius: 40px;
+    border-radius: 9px;
     font-size: 0.8rem;
     font-weight: 500;
     cursor: pointer;
@@ -1363,7 +1362,7 @@ include '../../includes/navbar.php';
 
 .management-table-section {
     background: white;
-    border-radius: 20px;
+    border-radius: 14px;
     border: 1px solid var(--gray-200);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
@@ -1589,7 +1588,7 @@ include '../../includes/navbar.php';
 /* Feature List */
 .feature-list {
     background: white;
-    border-radius: 20px;
+    border-radius: 14px;
     border: 1px solid var(--gray-200);
     box-shadow: var(--shadow-sm);
 }
@@ -1645,6 +1644,11 @@ include '../../includes/navbar.php';
     color: #d97706;
 }
 
+.progress-badge.empty {
+    background: #e2e8f0;
+    color: #475569;
+}
+
 /* Form Elements */
 .form-label {
     font-size: 0.7rem;
@@ -1682,7 +1686,7 @@ textarea.form-control-custom {
     color: white;
     border: none;
     padding: 0.7rem;
-    border-radius: 40px;
+    border-radius: 9px;
     font-weight: 500;
     transition: all 0.2s;
     width: 100%;
@@ -1901,7 +1905,7 @@ textarea.form-control-custom {
     text-align: center;
     padding: 4rem 2rem;
     background: white;
-    border-radius: 20px;
+    border-radius: 14px;
     border: 1px solid var(--gray-200);
 }
 
@@ -1945,6 +1949,24 @@ textarea.form-control-custom {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern p {
     color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-switcher {
+    border-color: rgba(157, 182, 207, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-tab {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-tab:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-tab:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-tab.is-active {
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-tab.is-active {
+    border-bottom-color: #7cc0ee;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-section,
@@ -2078,6 +2100,11 @@ textarea.form-control-custom {
     color: #fbbf24;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-badge.empty {
+    background: rgba(100, 116, 139, 0.22);
+    color: #cbd5e1;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pm-inline-btn,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-add-phase {
     background: rgba(31, 99, 146, 0.12);
@@ -2096,23 +2123,12 @@ textarea.form-control-custom {
 @media (max-width: 768px) {
     .page-header-modern {
         padding: 1.35rem;
-        align-items: flex-start;
-        flex-direction: column;
     }
     
     .page-header-modern h2 {
         font-size: 1.4rem;
     }
 
-    .page-header-workflow {
-        justify-content: flex-start;
-        width: 100%;
-    }
-
-    .page-header-workflow__step {
-        flex: 1 1 135px;
-    }
-    
     .phase-item {
         flex-direction: column;
         align-items: stretch;
@@ -2137,18 +2153,43 @@ textarea.form-control-custom {
                 <i class="fas fa-calculator me-2"></i> 
                 Project &amp; Feature Estimation
             </h2>
-            <p>Build the project cost plan, estimate feature timelines, and submit a review-ready recommendation.</p>
-        </div>
-        <div class="page-header-workflow" aria-label="Estimation workflow">
-            <span class="page-header-workflow__step"><span class="page-header-workflow__number">1</span>Cost planning</span>
-            <span class="page-header-workflow__step"><span class="page-header-workflow__number">2</span>Feature timeline</span>
-            <span class="page-header-workflow__step"><span class="page-header-workflow__number">3</span>Submit for review</span>
+            <p>Review project requirements, estimate feature effort, and prepare a clear recommendation for review.</p>
         </div>
     </div>
 
-    <?php projectEstimationRenderExpertModule($conn, $user); ?>
+    <nav class="expert-workspace-switcher" role="tablist" aria-label="Estimation workspace">
+        <button
+            class="expert-workspace-tab is-active"
+            id="costEstimationTab"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="costEstimationWorkspace"
+            data-expert-workspace="cost"
+        >
+            <i class="fas fa-file-invoice-dollar" aria-hidden="true"></i>
+            Cost Estimation
+        </button>
+        <button
+            class="expert-workspace-tab"
+            id="featureEstimationTab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="featureEstimationWorkspace"
+            data-expert-workspace="features"
+        >
+            <i class="fas fa-list-check" aria-hidden="true"></i>
+            Feature Estimation
+        </button>
+    </nav>
 
-    <div class="phase-management-card">
+    <section class="expert-workspace-panel" id="costEstimationWorkspace" role="tabpanel" aria-labelledby="costEstimationTab" data-expert-workspace-panel="cost">
+        <?php projectEstimationRenderExpertModule($conn, $user); ?>
+    </section>
+
+    <section class="expert-workspace-panel" id="featureEstimationWorkspace" role="tabpanel" aria-labelledby="featureEstimationTab" data-expert-workspace-panel="features" hidden>
+    <div class="phase-management-card" id="featureProjectChooser">
         <div class="phase-header">
             <h5><i class="fas fa-folder-open me-2"></i>Select Project</h5>
         </div>
@@ -2187,9 +2228,14 @@ textarea.form-control-custom {
                         <div class="fw-semibold" id="selectedRoadmapProjectName">Selected project</div>
                         <small class="text-muted">Architect manages phases and phase developer count. Experts edit staffing count and developer type inside each roadmap task.</small>
                     </div>
-                    <a class="btn-save-phases text-center text-decoration-none" id="inlineRoadmapBtn" href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php">
-                        <i class="fas fa-user-plus"></i> Edit Task Staffing
-                    </a>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" id="changeFeatureProjectBtn">
+                            <i class="fas fa-arrow-left me-1" aria-hidden="true"></i> Change Project
+                        </button>
+                        <a class="btn-save-phases text-center text-decoration-none" id="inlineRoadmapBtn" href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php">
+                            <i class="fas fa-user-plus"></i> Edit Task Staffing
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2208,7 +2254,6 @@ textarea.form-control-custom {
         </div>
 
         <!-- Feature List -->
-        <?php if(count($taskRows) > 0): ?>
         <div class="feature-list">
             <div class="feature-row" id="featureProgressRow">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -2218,8 +2263,9 @@ textarea.form-control-custom {
                         <span class="progress-badge pending" id="featureProgressBadge">Not Ready</span>
                     </div>
                 </div>
-                <small class="text-muted">All features must be estimated before submission to Sales.</small>
+                <small class="text-muted" id="featureProgressHelp">All features must be estimated before submission to Sales.</small>
             </div>
+            <?php if(count($taskRows) > 0): ?>
             <?php foreach($taskRows as $task): 
                 $estimation = $conn->query("SELECT * FROM feature_estimations WHERE task_id = {$task['id']} AND expert_id = {$user['id']}")->fetch_assoc();
                 $isEstimated = $estimation && !empty($estimation['min_days']) && !empty($estimation['likely_days']) && !empty($estimation['max_days']);
@@ -2427,42 +2473,98 @@ textarea.form-control-custom {
         <?php endif; ?>
     </div>
             <?php endforeach; ?>
+            <?php endif; ?>
         </div>
-        <?php else: ?>
-        <div class="empty-state">
-            <i class="fas fa-check-circle"></i>
-            <h5>No pending estimations</h5>
-            <p>All assigned features have been estimated. Great job!</p>
-        </div>
-        <?php endif; ?>
 
     </div>
+    </section>
 </div>
 
 <script>
 let currentProjectId = null;
 const existingDepartments = <?php echo json_encode($availableDepartments, JSON_UNESCAPED_UNICODE); ?>;
 const architectPlanningByTask = <?php echo json_encode($architectPlanningByTask, JSON_UNESCAPED_UNICODE); ?>;
+const expertWorkspaceStorageKey = 'expert-estimation-active-workspace';
+
+function updateFeatureProjectView(hasProject) {
+    const chooser = document.getElementById('featureProjectChooser');
+    const sections = document.getElementById('projectSections');
+    if (chooser) chooser.style.display = hasProject ? 'none' : 'block';
+    if (sections) sections.style.display = hasProject ? 'block' : 'none';
+}
+
+function setExpertWorkspace(workspace, persist = true) {
+    const activeWorkspace = workspace === 'features' ? 'features' : 'cost';
+    document.querySelectorAll('[data-expert-workspace]').forEach((tab) => {
+        const isActive = tab.dataset.expertWorkspace === activeWorkspace;
+        tab.classList.toggle('is-active', isActive);
+        tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        tab.tabIndex = isActive ? 0 : -1;
+    });
+    document.querySelectorAll('[data-expert-workspace-panel]').forEach((panel) => {
+        panel.hidden = panel.dataset.expertWorkspacePanel !== activeWorkspace;
+    });
+
+    if (persist) {
+        try {
+            window.localStorage.setItem(expertWorkspaceStorageKey, activeWorkspace);
+        } catch (error) {
+            // The workspace still switches when browser storage is unavailable.
+        }
+    }
+
+    if (activeWorkspace === 'features') {
+        window.requestAnimationFrame(() => {
+            renderProjectManagementTable();
+            renderExpertGantt();
+        });
+    }
+}
+
+document.querySelectorAll('[data-expert-workspace]').forEach((tab) => {
+    tab.addEventListener('click', () => setExpertWorkspace(tab.dataset.expertWorkspace || 'cost'));
+    tab.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const nextWorkspace = tab.dataset.expertWorkspace === 'cost' ? 'features' : 'cost';
+        setExpertWorkspace(nextWorkspace);
+        document.querySelector(`[data-expert-workspace="${nextWorkspace}"]`)?.focus();
+    });
+});
+
+let initialExpertWorkspace = 'cost';
+try {
+    initialExpertWorkspace = window.localStorage.getItem(expertWorkspaceStorageKey) || 'cost';
+} catch (error) {
+    initialExpertWorkspace = 'cost';
+}
+setExpertWorkspace(initialExpertWorkspace, false);
+
+function buildRoadmapUrl(projectId) {
+    const baseUrl = (window.BASE_URL || '<?php echo BASE_URL; ?>').replace(/\/$/, '');
+    const roadmapUrl = `${baseUrl}/modules/roadmap/methodology.php?project_id=${encodeURIComponent(projectId)}`;
+    const returnToUrl = `${baseUrl}/modules/expert/feature-estimation.php?project_estimation_id=${encodeURIComponent(projectId)}`;
+    return `${roadmapUrl}&return_to=${encodeURIComponent(returnToUrl)}`;
+}
 
 function loadProjectSetup() {
     const select = document.getElementById('phaseProjectSelect');
     if (!select) return;
     const projectId = select.value;
-    const selectedOption = select.options[select.selectedIndex];
     
     if (!projectId) {
         currentProjectId = null;
         const openRoadmapBtn = document.getElementById('openRoadmapBtn');
         if (openRoadmapBtn) openRoadmapBtn.style.display = 'none';
-        const sections = document.getElementById('projectSections');
-        if (sections) sections.style.display = 'none';
+        updateFeatureProjectView(false);
         renderProjectManagementTable();
+        filterFeatureList();
         return;
     }
     
     currentProjectId = projectId;
 
-    const roadmapUrl = `${window.BASE_URL || '<?php echo BASE_URL; ?>'}modules/roadmap/methodology.php?project_id=${encodeURIComponent(projectId)}`;
+    const roadmapUrl = buildRoadmapUrl(projectId);
     const openRoadmapBtn = document.getElementById('openRoadmapBtn');
     const inlineRoadmapBtn = document.getElementById('inlineRoadmapBtn');
     if (openRoadmapBtn) {
@@ -2479,9 +2581,16 @@ function loadProjectSetup() {
 
     renderProjectManagementTable();
 
-    const sections = document.getElementById('projectSections');
-    if (sections) sections.style.display = 'block';
+    updateFeatureProjectView(true);
     filterFeatureList();
+}
+
+function resetFeatureProjectSelection() {
+    const select = document.getElementById('phaseProjectSelect');
+    if (!select) return;
+    select.value = '';
+    loadProjectSetup();
+    select.focus();
 }
 
 function escapeHtml(text) {
@@ -3322,14 +3431,22 @@ function filterFeatureList() {
     });
     const progressText = document.getElementById('featureProgressText');
     const progressBadge = document.getElementById('featureProgressBadge');
+    const progressHelp = document.getElementById('featureProgressHelp');
     if (progressText) {
         progressText.textContent = `Estimated: ${estimated} / ${total}`;
     }
     if (progressBadge) {
+        const empty = total === 0;
         const ready = total > 0 && estimated === total;
-        progressBadge.textContent = ready ? 'Ready' : 'Not Ready';
+        progressBadge.textContent = empty ? 'No Features' : (ready ? 'Ready' : 'Not Ready');
         progressBadge.classList.toggle('ready', ready);
-        progressBadge.classList.toggle('pending', !ready);
+        progressBadge.classList.toggle('pending', !ready && !empty);
+        progressBadge.classList.toggle('empty', empty);
+    }
+    if (progressHelp) {
+        progressHelp.textContent = total === 0
+            ? 'No features are available for estimation in this project yet.'
+            : 'All features must be estimated before submission to Sales.';
     }
 }
 
@@ -3337,12 +3454,10 @@ function filterFeatureList() {
 const phaseSelect = document.getElementById('phaseProjectSelect');
 if (phaseSelect) {
     phaseSelect.addEventListener('change', loadProjectSetup);
-    // Auto-select first project if none selected
-    if (!phaseSelect.value && phaseSelect.options.length > 1) {
-        phaseSelect.value = phaseSelect.options[1].value;
-        loadProjectSetup();
-    }
+    phaseSelect.value = '';
+    loadProjectSetup();
 }
+document.getElementById('changeFeatureProjectBtn')?.addEventListener('click', resetFeatureProjectSelection);
 bindPreviewHandlers();
 bindGanttHandlers();
 bindRecommendationHandlers();
