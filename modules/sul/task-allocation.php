@@ -313,6 +313,10 @@ if ($projectId && $project) {
     }
 }
 
+$selectedExpertProjectFilter = $projectId > 0 ? " AND t.project_id = {$projectId}" : " AND 1 = 0";
+$selectedExpertEstimationProjectFilter = $projectId > 0 ? " AND e.project_id = {$projectId}" : " AND 1 = 0";
+$selectedProjectAllocationFilter = $projectId > 0 ? " AND p.id = {$projectId}" : " AND 1 = 0";
+
 // Get all unassigned tasks (need expert assignment)
 $unassignedTasks = $conn->query("
     SELECT t.*, p.name as project_name, p.client_id,
@@ -321,6 +325,7 @@ $unassignedTasks = $conn->query("
     JOIN projects p ON t.project_id = p.id
     WHERE (t.assigned_to IS NULL OR t.assigned_to = 0) AND t.status = 'todo'
       AND {$sulProjectFilter}
+      {$selectedExpertProjectFilter}
     ORDER BY 
         CASE t.priority 
             WHEN 'critical' THEN 1 
@@ -344,6 +349,7 @@ $pendingEstimationTasks = $conn->query("
       AND u.role = 'expert'
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
+      {$selectedExpertProjectFilter}
       AND (SELECT COUNT(*) FROM feature_estimations fe WHERE fe.task_id = t.id AND fe.status = 'completed') = 0
     ORDER BY t.deadline ASC
 ");
@@ -366,6 +372,7 @@ $reviewTasks = $conn->query("
     WHERE t.status = 'review'{$salesApprovalFilter}
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
+      {$selectedExpertProjectFilter}
     ORDER BY t.deadline ASC
 ");
 
@@ -377,6 +384,7 @@ $projectEstimationReviews = $conn->query("
     JOIN users u ON u.id = e.expert_id
     WHERE e.status = 'submitted'
       AND {$sulProjectFilter}
+      {$selectedExpertEstimationProjectFilter}
     ORDER BY e.submitted_at ASC, e.id ASC
 ");
 
@@ -487,9 +495,72 @@ $projectsForAllocation = $conn->query("
       AND (t.assigned_to IS NULL OR t.assigned_to = 0)
       AND t.status = 'todo'
       AND {$sulProjectFilter}
+      {$selectedProjectAllocationFilter}
     GROUP BY p.id, p.name
     ORDER BY p.created_at DESC
 ");
+
+$expertProjectOptions = [];
+if ($canManageExpertWorkflow) {
+    $expertProjectOptionsResult = $conn->query("
+        SELECT
+            p.id,
+            p.name,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                WHERE t.project_id = p.id
+                  AND (t.assigned_to IS NULL OR t.assigned_to = 0)
+                  AND t.status = 'todo'
+            ) AS unassigned_count,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                JOIN users u ON t.assigned_to = u.id
+                WHERE t.project_id = p.id
+                  AND t.status = 'todo'
+                  AND t.assigned_to IS NOT NULL
+                  AND t.assigned_to != 0
+                  AND u.role = 'expert'
+                  {$sulUserDepartmentFilter}
+                  AND (SELECT COUNT(*) FROM feature_estimations fe WHERE fe.task_id = t.id AND fe.status = 'completed') = 0
+            ) AS pending_count,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                JOIN users u ON t.assigned_to = u.id
+                WHERE t.project_id = p.id
+                  AND t.status = 'review'{$salesApprovalFilter}
+                  {$sulUserDepartmentFilter}
+            ) AS review_count,
+            (
+                SELECT COUNT(DISTINCT e.id)
+                FROM expert_project_estimations e
+                WHERE e.project_id = p.id
+                  AND e.status = 'submitted'
+            ) AS project_review_count
+        FROM projects p
+        WHERE p.status != 'completed'
+          AND {$sulProjectFilter}
+        ORDER BY p.name ASC
+    ");
+
+    if ($expertProjectOptionsResult) {
+        while ($expertProjectOption = $expertProjectOptionsResult->fetch_assoc()) {
+            $expertProjectOptions[] = $expertProjectOption;
+        }
+    }
+}
+
+$expertProjectOptionTaskCount = 0;
+foreach ($expertProjectOptions as $expertProjectOption) {
+    $expertProjectOptionTaskCount += (int) ($expertProjectOption['unassigned_count'] ?? 0)
+        + (int) ($expertProjectOption['pending_count'] ?? 0)
+        + (int) ($expertProjectOption['review_count'] ?? 0)
+        + (int) ($expertProjectOption['project_review_count'] ?? 0);
+}
+$selectedExpertTaskCount = $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows + $projectEstimationReviews->num_rows;
+$expertAllocationBadgeCount = ($projectId && $project) ? $selectedExpertTaskCount : $expertProjectOptionTaskCount;
 
 // Get available developers
 $developers = $conn->query("
@@ -602,7 +673,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         ");
         $taskCheck->bind_param("i", $taskId);
         $taskCheck->execute();
-        $validTask = $taskCheck->get_result()->num_rows > 0;
+        $validTaskRow = $taskCheck->get_result()->fetch_assoc();
+        $validTask = (bool) $validTaskRow;
         $taskCheck->close();
 
         if (!$validExpert || !$validTask) {
@@ -615,6 +687,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->bind_param("ii", $expertId, $taskId);
         
         if ($stmt->execute()) {
+            $assignmentProjectId = (int) ($validTaskRow['project_id'] ?? $projectId);
             $taskDetails = $conn->query("SELECT title FROM tasks WHERE id = $taskId")->fetch_assoc();
             
             createNotification(
@@ -628,7 +701,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             );
             
             $_SESSION['success'] = "Task assigned to Expert successfully";
-            header("Location: task-allocation.php");
+            header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
             exit();
         } else {
             $_SESSION['error'] = "Failed to assign task";
@@ -639,7 +712,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['assign_project_to_expert'])) {
         if (!$canManageExpertWorkflow) {
             $_SESSION['error'] = "Only the Expert Department SUL can assign projects to experts.";
-            header("Location: task-allocation.php");
+            header("Location: task-allocation.php?project_id=" . $projectId);
             exit();
         }
 
@@ -2028,7 +2101,7 @@ include '../../includes/navbar.php';
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="expert-tab" data-bs-toggle="tab" data-bs-target="#expert-panel" type="button" role="tab">
                 <i class="fas fa-user-tie me-2"></i>Expert
-                <span class="badge bg-warning ms-2"><?php echo $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows + $projectEstimationReviews->num_rows + $projectsForAllocation->num_rows; ?></span>
+                <span class="badge bg-warning ms-2"><?php echo $expertAllocationBadgeCount; ?></span>
             </button>
         </li>
         <?php endif; ?>
@@ -2048,6 +2121,42 @@ include '../../includes/navbar.php';
         <!-- Expert Tab Panel -->
         <?php if ($canManageExpertWorkflow): ?>
         <div class="tab-pane fade show active" id="expert-panel" role="tabpanel">
+            <div class="section-card mb-4">
+                <div class="section-header">
+                    <div>
+                        <h5>
+                            <i class="fas fa-folder-open"></i>
+                            Project Allocation
+                        </h5>
+                        <?php if ($projectId && $project): ?>
+                            <small class="text-muted"><?php echo htmlspecialchars((string) $project['name']); ?></small>
+                        <?php else: ?>
+                            <small class="text-muted"><?php echo htmlspecialchars($sulDepartmentLabel); ?></small>
+                        <?php endif; ?>
+                    </div>
+                    <form method="GET" class="d-flex align-items-center gap-2 flex-wrap">
+                        <select name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for expert allocation" required>
+                            <option value="">Select project</option>
+                            <?php foreach ($expertProjectOptions as $expertProjectOption): ?>
+                                <?php
+                                    $optionUnassigned = (int) ($expertProjectOption['unassigned_count'] ?? 0);
+                                    $optionPending = (int) ($expertProjectOption['pending_count'] ?? 0);
+                                    $optionReview = (int) ($expertProjectOption['review_count'] ?? 0) + (int) ($expertProjectOption['project_review_count'] ?? 0);
+                                ?>
+                                <option value="<?php echo (int) $expertProjectOption['id']; ?>" <?php echo (int) $expertProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars((string) $expertProjectOption['name']); ?>
+                                    (<?php echo $optionUnassigned; ?> unassigned, <?php echo $optionPending; ?> pending, <?php echo $optionReview; ?> review)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php if ($projectId && $project): ?>
+                            <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $projectId; ?>" class="btn-outline-modern text-decoration-none">
+                                <i class="fas fa-route"></i> Roadmap
+                            </a>
+                        <?php endif; ?>
+                    </form>
+                </div>
+            </div>
             <div class="workflow-layout">
             <ul class="nav workflow-tabs" id="expertWorkflowTabs" role="tablist">
                 <li class="nav-item" role="presentation">
@@ -2089,7 +2198,12 @@ include '../../includes/navbar.php';
                     
                 </div>
                 <div class="p-3 allocation-column-body">
-                        <?php if($unassignedTasks->num_rows > 0): ?>
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for expert assignment</p>
+                        </div>
+                    <?php elseif($unassignedTasks->num_rows > 0): ?>
                         <?php while($task = $unassignedTasks->fetch_assoc()): 
                             $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                         ?>
@@ -2128,8 +2242,8 @@ include '../../includes/navbar.php';
                         <div class="empty-state">
                             <i class="fas fa-check-circle"></i>
                             <p>No unassigned tasks</p>
-                </div>
-            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
         </div>
     </div>
 
@@ -2143,7 +2257,12 @@ include '../../includes/navbar.php';
             </h5>
         </div>
                 <div class="p-3 allocation-column-body">
-                    <?php if($pendingEstimationTasks->num_rows > 0): ?>
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for pending estimations</p>
+                        </div>
+                    <?php elseif($pendingEstimationTasks->num_rows > 0): ?>
                         <?php while($task = $pendingEstimationTasks->fetch_assoc()): 
                             $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                         ?>
@@ -2186,6 +2305,12 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for reviews</p>
+                        </div>
+                    <?php else: ?>
                     <?php if($projectEstimationReviews->num_rows > 0): ?>
                         <?php while($estimate = $projectEstimationReviews->fetch_assoc()): ?>
                         <div class="task-card">
@@ -2270,6 +2395,7 @@ include '../../includes/navbar.php';
                         <p>No tasks ready for review</p>
                     </div>
                 <?php endif; ?>
+                <?php endif; ?>
                 </div>
             </div>
             <div class="tab-pane fade section-card allocation-column" id="expert-assign-panel" role="tabpanel" aria-labelledby="expert-assign-tab">
@@ -2281,7 +2407,12 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
-                    <?php if($projectsForAllocation->num_rows > 0): ?>
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for expert allocation</p>
+                        </div>
+                    <?php elseif($projectsForAllocation->num_rows > 0): ?>
                         <form method="POST" class="row g-3 align-items-end" data-app-loading data-loading-title="Assigning project" data-loading-text="Please wait while the project features are assigned to the expert.">
                             <div class="col-md-6">
                                 <label class="form-label">Project</label>
@@ -2692,6 +2823,7 @@ include '../../includes/navbar.php';
             <form method="POST" data-app-loading data-loading-title="Assigning expert" data-loading-text="Please wait while the expert assignment is saved.">
                 <div class="modal-body">
                     <input type="hidden" name="assign_to_expert" value="1">
+                    <input type="hidden" name="project_id" value="<?php echo (int) $projectId; ?>">
                     <input type="hidden" name="task_id" id="expertTaskId">
                     <p><strong>Task:</strong> <span id="expertTaskTitle"></span></p>
                     <div class="mb-3">
