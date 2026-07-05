@@ -1428,7 +1428,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $approvalSql = $hasSalesApproval ? " AND t.sales_approved = 1" : "";
         $choiceSql = $hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "";
         $taskCheck = $conn->prepare("
-            SELECT t.id
+            SELECT t.id, t.project_id, t.title, p.name AS project_name
             FROM tasks t
             INNER JOIN projects p ON p.id = t.project_id
             INNER JOIN feature_estimations fe ON fe.task_id = t.id AND fe.status = 'completed'
@@ -1439,7 +1439,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         ");
         $taskCheck->bind_param("i", $taskId);
         $taskCheck->execute();
-        $validTask = $taskCheck->get_result()->num_rows > 0;
+        $validTask = $taskCheck->get_result()->fetch_assoc() ?: null;
         $taskCheck->close();
 
         if (!$validTask) {
@@ -1452,8 +1452,54 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->bind_param("i", $taskId);
         
         if ($stmt->execute()) {
+            $projectForAllocation = (int) ($validTask['project_id'] ?? 0);
+            $taskTitle = (string) ($validTask['title'] ?? 'Feature');
+            $projectName = (string) ($validTask['project_name'] ?? 'Project');
+            $assignedDepartments = [];
+            $roadmapRows = projectWorkflowRoadmapTaskRows($conn, $projectForAllocation, $taskId);
+            $completeExpertLane = $conn->prepare("
+                UPDATE methodology_task_departments
+                SET status = 'completed', approved_by = ?, approved_at = NOW(), updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND project_id = ?
+            ");
+
+            foreach ($roadmapRows as $roadmapRow) {
+                $department = projectWorkflowDepartmentLabel((string) ($roadmapRow['department_label'] ?? ''));
+                $departmentProgressId = (int) ($roadmapRow['department_progress_id'] ?? 0);
+                $requiredCount = max(0, (int) ($roadmapRow['required_count'] ?? 0));
+
+                if ($department === 'Expert Department') {
+                    if ($completeExpertLane && $departmentProgressId > 0) {
+                        $completeExpertLane->bind_param('iii', $userId, $departmentProgressId, $projectForAllocation);
+                        $completeExpertLane->execute();
+                    }
+                    continue;
+                }
+
+                if ($department !== '' && $requiredCount > 0) {
+                    $assignedDepartments[] = $department;
+                }
+            }
+
+            if ($completeExpertLane) {
+                $completeExpertLane->close();
+            }
+
+            projectWorkflowSyncRoadmap($conn, $projectForAllocation);
+            $assignedDepartments = array_values(array_unique($assignedDepartments));
+            foreach ($assignedDepartments as $department) {
+                projectWorkflowNotifyDepartmentSuls(
+                    $conn,
+                    $department,
+                    $taskTitle . ' Ready for ' . $department . ' Assignment',
+                    $projectName . ': the feature estimation is approved and ready for developer assignment.',
+                    BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectForAllocation,
+                    $projectForAllocation
+                );
+            }
+
             $_SESSION['success'] = "Estimation approved! Task is now ready for Developer assignment.";
-            header("Location: task-allocation.php");
+            header("Location: task-allocation.php?project_id=" . $projectForAllocation);
             exit();
         } else {
             $_SESSION['error'] = "Failed to approve estimation";

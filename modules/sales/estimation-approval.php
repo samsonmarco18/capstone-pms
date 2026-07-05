@@ -70,33 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $conn->query("UPDATE projects SET status = 'in_development' WHERE id = {$projectId} AND status != 'completed'");
             projectWorkflowSyncRoadmap($conn, $projectId);
             $projectDetails = $conn->query("SELECT * FROM projects WHERE id = {$projectId} LIMIT 1")->fetch_assoc() ?: [];
-            $assignedDepartments = projectWorkflowSelectedDepartments($conn, $projectId, $projectDetails);
-            $taskAllocationUrl = BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId;
             $roadmapUrl = BASE_URL . 'modules/roadmap/methodology.php?project_id=' . $projectId;
-
-            foreach ($assignedDepartments as $department) {
-                projectWorkflowNotifyDepartmentSuls(
-                    $conn,
-                    (string) $department,
-                    'Project Ready for ' . (string) $department . ' Allocation',
-                    'Sales approved the project estimation. Assign the required ' . (string) $department . ' developers for the active roadmap work.',
-                    $taskAllocationUrl,
-                    $projectId
-                );
-            }
-
-            if ($assignedDepartments === []) {
-                workflowNotifyRoles(
-                    $conn,
-                    ['sul'],
-                    'Project Ready for Task Allocation',
-                    'Sales approved the project estimation. Review the active roadmap work and assign the required developers.',
-                    $taskAllocationUrl,
-                    $projectId,
-                    'project',
-                    'projects'
-                );
-            }
 
             $architectId = (int) ($projectDetails['architect_id'] ?? 0);
             if ($architectId > 0) {
