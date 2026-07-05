@@ -14,7 +14,7 @@ methodologyRoadmapEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
 projectEstimationEnsureSchema($conn);
 
-$projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
+$projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : (isset($_POST['project_id']) ? intval($_POST['project_id']) : 0);
 $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
 
 function sulTaskAllocationProjectFilter($conn, string $projectAlias, string $department): string
@@ -208,19 +208,6 @@ $ganttProjectOptions = $conn->query("
     ORDER BY p.created_at DESC
 ");
 
-// Default to first available project if none selected
-if (!$projectId) {
-    $firstProject = $conn->query("
-        SELECT p.id 
-        FROM projects p 
-        WHERE p.status != 'completed'
-          AND {$sulProjectFilter}
-        ORDER BY p.created_at DESC 
-        LIMIT 1
-    ")->fetch_assoc();
-    $projectId = (int) ($firstProject['id'] ?? 0);
-}
-
 // Get project details
 $project = null;
 if($projectId) {
@@ -366,6 +353,8 @@ $salesApprovalFilter = $hasSalesApproval ? " AND t.sales_approved = 1" : "";
 if ($hasSalesChoice) {
     $salesApprovalFilter .= " AND t.sales_estimate_days IS NOT NULL";
 }
+$developerReadyApprovalFilter = ($hasSalesApproval ? " AND t.sales_approved = 1" : "") . ($hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "");
+$selectedDeveloperProjectFilter = $projectId > 0 ? " AND t.project_id = {$projectId}" : " AND 1 = 0";
 $reviewTasks = $conn->query("
     SELECT t.*, u.full_name as expert_name, p.name as project_name,
            fe.min_days, fe.likely_days, fe.max_days, fe.expectation_description,
@@ -422,8 +411,9 @@ $readyForDevTasks = $conn->query("
           OR (t.status = 'completed' AND t.architect_reviewed_at IS NULL AND t.merged_at IS NULL)
       )
       AND {$sulProjectFilter}
+      {$selectedDeveloperProjectFilter}
       {$sulCurrentRoadmapTaskFilter}
-      AND (SELECT COUNT(*) FROM feature_estimations fe2 WHERE fe2.task_id = t.id AND fe2.status = 'completed') > 0" . ($hasSalesApproval ? " AND t.sales_approved = 1" : "") . ($hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "") . "
+      AND (SELECT COUNT(*) FROM feature_estimations fe2 WHERE fe2.task_id = t.id AND fe2.status = 'completed') > 0{$developerReadyApprovalFilter}
     ORDER BY t.deadline ASC
 ");
 
@@ -436,6 +426,7 @@ $inProgressTasks = $conn->query("
     WHERE t.status = 'in_progress'
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
+      {$selectedDeveloperProjectFilter}
     ORDER BY t.deadline ASC
 ");
 
@@ -456,6 +447,7 @@ $codeReviewTasks = $conn->query("
     WHERE t.status = 'for_review'
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
+      {$selectedDeveloperProjectFilter}
     ORDER BY t.pr_submitted_at ASC, t.updated_at ASC
 ");
 
@@ -469,6 +461,7 @@ $completedTasks = $conn->query("
       AND (t.architect_reviewed_at IS NOT NULL OR t.merged_at IS NOT NULL)
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
+      {$selectedDeveloperProjectFilter}
     ORDER BY t.completed_at DESC
     LIMIT 10
 ");
@@ -509,6 +502,68 @@ $developers = $conn->query("
     GROUP BY u.id
     ORDER BY assigned_tasks ASC
 ");
+
+$developerProjectOptions = [];
+if ($canManageDeveloperWorkflow) {
+    $developerProjectOptionsResult = $conn->query("
+        SELECT
+            p.id,
+            p.name,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                LEFT JOIN users current_assignee ON current_assignee.id = t.assigned_to
+                WHERE t.project_id = p.id
+                  AND (
+                      (t.status = 'todo' AND (t.assigned_to IS NULL OR current_assignee.role = 'expert'))
+                      OR (t.status = 'completed' AND t.architect_reviewed_at IS NULL AND t.merged_at IS NULL)
+                  )
+                  {$sulCurrentRoadmapTaskFilter}
+                  {$developerReadyApprovalFilter}
+                  AND EXISTS (
+                      SELECT 1
+                      FROM feature_estimations fe_ready
+                      WHERE fe_ready.task_id = t.id
+                        AND fe_ready.status = 'completed'
+                  )
+            ) AS ready_count,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                JOIN users u ON t.assigned_to = u.id
+                WHERE t.project_id = p.id
+                  AND t.status = 'in_progress'
+                  {$sulUserDepartmentFilter}
+            ) AS in_progress_count,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                JOIN users u ON t.assigned_to = u.id
+                WHERE t.project_id = p.id
+                  AND t.status = 'for_review'
+                  {$sulUserDepartmentFilter}
+            ) AS review_count
+        FROM projects p
+        WHERE p.status != 'completed'
+          AND {$sulProjectFilter}
+        ORDER BY p.name ASC
+    ");
+
+    if ($developerProjectOptionsResult) {
+        while ($developerProjectOption = $developerProjectOptionsResult->fetch_assoc()) {
+            $developerProjectOptions[] = $developerProjectOption;
+        }
+    }
+}
+
+$developerProjectOptionTaskCount = 0;
+foreach ($developerProjectOptions as $developerProjectOption) {
+    $developerProjectOptionTaskCount += (int) ($developerProjectOption['ready_count'] ?? 0)
+        + (int) ($developerProjectOption['in_progress_count'] ?? 0)
+        + (int) ($developerProjectOption['review_count'] ?? 0);
+}
+$selectedDeveloperTaskCount = $readyForDevTasks->num_rows + $inProgressTasks->num_rows + $codeReviewTasks->num_rows;
+$developerAllocationBadgeCount = ($projectId && $project) ? $selectedDeveloperTaskCount : $developerProjectOptionTaskCount;
 
 // Handle task operations
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -728,6 +783,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $currentRoadmapTask = null;
         $assignmentTaskIds = [$taskId => $taskId];
         $assignmentRoadmapTaskIds = [];
+        $assignmentDepartmentProgressByTaskId = [];
         if ($roadmapPhaseCount > 0) {
             $currentRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $assignmentProjectId, $taskId, $sulDepartment);
             if (!$currentRoadmapTask) {
@@ -758,7 +814,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
 
                 $assignmentTaskIds[(int) $entityTaskId] = (int) $entityTaskId;
-                $assignmentRoadmapTaskIds[] = (int) ($roadmapEntityRow['id'] ?? 0);
+                $roadmapEntityRowId = (int) ($roadmapEntityRow['id'] ?? 0);
+                if ($roadmapEntityRowId > 0) {
+                    $assignmentRoadmapTaskIds[$roadmapEntityRowId] = $roadmapEntityRowId;
+                }
+                $departmentProgressId = (int) ($roadmapEntityRow['department_progress_id'] ?? 0);
+                if ($departmentProgressId > 0) {
+                    $assignmentDepartmentProgressByTaskId[$departmentProgressId] = (int) $entityTaskId;
+                }
             }
 
             $assignmentTaskIdList = implode(',', array_map('intval', array_values($assignmentTaskIds)));
@@ -816,35 +879,67 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         if ($stmt->execute()) {
             if ($currentRoadmapTask) {
-                $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
-                $syncRoadmapStmt = $conn->prepare("
-                    UPDATE methodology_tasks
-                    SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                ");
-                if ($syncRoadmapStmt) {
-                    $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $currentRoadmapTaskId);
-                    $syncRoadmapStmt->execute();
-                    $syncRoadmapStmt->close();
+                if ($assignmentRoadmapTaskIds === []) {
+                    $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
+                    if ($currentRoadmapTaskId > 0) {
+                        $assignmentRoadmapTaskIds[$currentRoadmapTaskId] = $currentRoadmapTaskId;
+                    }
+                }
+                $assignmentRoadmapTaskIdList = implode(',', array_map('intval', array_values($assignmentRoadmapTaskIds)));
+                if ($assignmentRoadmapTaskIdList !== '') {
+                    $syncRoadmapStmt = $conn->prepare("
+                        UPDATE methodology_tasks
+                        SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE id IN ({$assignmentRoadmapTaskIdList})
+                          AND project_id = ?
+                    ");
+                    if ($syncRoadmapStmt) {
+                        $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $assignmentProjectId);
+                        $syncRoadmapStmt->execute();
+                        $syncRoadmapStmt->close();
+                    }
+                }
+
+                if ($assignmentDepartmentProgressByTaskId !== []) {
+                    $syncDepartmentStmt = $conn->prepare("
+                        UPDATE methodology_task_departments
+                        SET assigned_developer_id = ?,
+                            workflow_task_id = ?,
+                            deadline = ?,
+                            status = 'planned',
+                            updated_by = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ? AND project_id = ?
+                    ");
+                    if ($syncDepartmentStmt) {
+                        foreach ($assignmentDepartmentProgressByTaskId as $departmentProgressId => $workflowTaskId) {
+                            $syncDepartmentStmt->bind_param("iisiii", $developerId, $workflowTaskId, $deadline, $userId, $departmentProgressId, $assignmentProjectId);
+                            $syncDepartmentStmt->execute();
+                        }
+                        $syncDepartmentStmt->close();
+                    }
                 }
             }
 
             projectWorkflowSyncRoadmap($conn, $assignmentProjectId);
-            $taskDetails = $conn->query("SELECT title, deadline FROM tasks WHERE id = $taskId")->fetch_assoc();
-            
-            createNotification(
-                (int) $developerId,
-                "New Task Assignment: " . $taskDetails['title'],
-                "You have been assigned a new task. Deadline: " . date('M d, Y', strtotime($taskDetails['deadline'])),
-                'task',
-                'tasks',
-                (int) $taskId,
-                BASE_URL . 'modules/developer/task.php?id=' . $taskId
-            );
+            $assignedTaskRows = $conn->query("SELECT id, title, deadline FROM tasks WHERE id IN ({$assignmentTaskIdList})");
+            if ($assignedTaskRows) {
+                while ($assignedTask = $assignedTaskRows->fetch_assoc()) {
+                    createNotification(
+                        (int) $developerId,
+                        "New Task Assignment: " . $assignedTask['title'],
+                        "You have been assigned a new task. Deadline: " . date('M d, Y', strtotime((string) $assignedTask['deadline'])),
+                        'task',
+                        'tasks',
+                        (int) $assignedTask['id'],
+                        BASE_URL . 'modules/developer/task.php?id=' . (int) $assignedTask['id']
+                    );
+                }
+            }
             
             $assignedCount = count($assignmentTaskIds);
-            $_SESSION['success'] = $assignedCount . " task" . ($assignedCount === 1 ? "" : "s") . " assigned to Developer successfully";
-            header("Location: task-allocation.php");
+            $_SESSION['success'] = $assignedCount . " task" . ($assignedCount === 1 ? "" : "s") . " assigned to one Developer successfully";
+            header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
             exit();
         } else {
             $_SESSION['error'] = "Failed to assign task";
@@ -1941,7 +2036,7 @@ include '../../includes/navbar.php';
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="developer-tab" data-bs-toggle="tab" data-bs-target="#developer-panel" type="button" role="tab">
                 <i class="fas fa-code me-2"></i>Developer
-                <span class="badge bg-primary ms-2"><?php echo $readyForDevTasks->num_rows + $inProgressTasks->num_rows + $codeReviewTasks->num_rows; ?></span>
+                <span class="badge bg-primary ms-2"><?php echo $developerAllocationBadgeCount; ?></span>
             </button>
         </li>
         <?php endif; ?>
@@ -2286,6 +2381,42 @@ include '../../includes/navbar.php';
             <!-- Developer Tab Panel -->
         <?php if ($canManageDeveloperWorkflow): ?>
             <div class="tab-pane fade show active" id="developer-panel" role="tabpanel">
+            <div class="section-card mb-4">
+                <div class="section-header">
+                    <div>
+                        <h5>
+                            <i class="fas fa-folder-open"></i>
+                            Project Allocation
+                        </h5>
+                        <?php if ($projectId && $project): ?>
+                            <small class="text-muted"><?php echo htmlspecialchars((string) $project['name']); ?></small>
+                        <?php else: ?>
+                            <small class="text-muted"><?php echo htmlspecialchars($sulDepartmentLabel); ?></small>
+                        <?php endif; ?>
+                    </div>
+                    <form method="GET" class="d-flex align-items-center gap-2 flex-wrap">
+                        <select name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for developer allocation" required>
+                            <option value="">Select project</option>
+                            <?php foreach ($developerProjectOptions as $developerProjectOption): ?>
+                                <?php
+                                    $optionReady = (int) ($developerProjectOption['ready_count'] ?? 0);
+                                    $optionProgress = (int) ($developerProjectOption['in_progress_count'] ?? 0);
+                                    $optionReview = (int) ($developerProjectOption['review_count'] ?? 0);
+                                ?>
+                                <option value="<?php echo (int) $developerProjectOption['id']; ?>" <?php echo (int) $developerProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars((string) $developerProjectOption['name']); ?>
+                                    (<?php echo $optionReady; ?> ready, <?php echo $optionProgress; ?> active, <?php echo $optionReview; ?> review)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php if ($projectId && $project): ?>
+                            <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $projectId; ?>" class="btn-outline-modern text-decoration-none">
+                                <i class="fas fa-route"></i> Roadmap
+                            </a>
+                        <?php endif; ?>
+                    </form>
+                </div>
+            </div>
             <div class="workflow-layout">
             <ul class="nav workflow-tabs" id="developerWorkflowTabs" role="tablist">
                 <li class="nav-item" role="presentation">
@@ -2321,7 +2452,12 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
-                    <?php if($readyForDevTasks->num_rows > 0): ?>
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for developer assignment</p>
+                        </div>
+                    <?php elseif($readyForDevTasks->num_rows > 0): ?>
                         <?php while($task = $readyForDevTasks->fetch_assoc()): 
                             $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                             $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
@@ -2376,7 +2512,12 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
-                    <?php if($inProgressTasks->num_rows > 0): ?>
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for active work</p>
+                        </div>
+                    <?php elseif($inProgressTasks->num_rows > 0): ?>
                     <?php while($task = $inProgressTasks->fetch_assoc()): 
                         $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                     ?>
@@ -2423,7 +2564,12 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3">
-                <?php if($codeReviewTasks->num_rows > 0): ?>
+                <?php if(!$projectId || !$project): ?>
+                    <div class="empty-state">
+                        <i class="fas fa-folder-open"></i>
+                        <p>Select a project for code review</p>
+                    </div>
+                <?php elseif($codeReviewTasks->num_rows > 0): ?>
                     <?php while($task = $codeReviewTasks->fetch_assoc()): ?>
                     <div class="task-card">
                         <form method="POST" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
@@ -2484,7 +2630,12 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
-                <?php if($completedTasks->num_rows > 0): ?>
+                <?php if(!$projectId || !$project): ?>
+                    <div class="empty-state">
+                        <i class="fas fa-folder-open"></i>
+                        <p>Select a project for completed tasks</p>
+                    </div>
+                <?php elseif($completedTasks->num_rows > 0): ?>
                     <?php while($task = $completedTasks->fetch_assoc()): ?>
                     <div class="task-card bg-light">
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -2580,6 +2731,7 @@ include '../../includes/navbar.php';
             </div>
             <form method="POST" data-app-loading data-loading-title="Assigning developer" data-loading-text="Please wait while the developer assignment is saved.">
                 <div class="modal-body">
+                    <input type="hidden" name="project_id" value="<?php echo (int) $projectId; ?>">
                     <input type="hidden" name="task_id" id="devTaskId">
                     <p><strong>Task:</strong> <span id="devTaskTitle"></span></p>
                     <div class="mb-3">
