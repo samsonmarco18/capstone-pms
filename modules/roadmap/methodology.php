@@ -73,6 +73,7 @@ function roadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
                 description TEXT,
                 start_date DATE NOT NULL,
                 end_date DATE NOT NULL,
+                developer_entity_key VARCHAR(80) NULL,
                 assigned_developer_id INT NULL,
                 expert_people_count INT DEFAULT 0,
                 expert_developer_type VARCHAR(100) NULL,
@@ -102,6 +103,7 @@ function roadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
                 description TEXT,
                 start_date DATE NOT NULL,
                 end_date DATE NOT NULL,
+                developer_entity_key VARCHAR(80) NULL,
                 assigned_developer_id INT NULL,
                 expert_people_count INT DEFAULT 0,
                 expert_developer_type VARCHAR(100) NULL,
@@ -121,6 +123,7 @@ function roadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
                 CONSTRAINT fk_methodology_task_expert FOREIGN KEY (expert_updated_by) REFERENCES users(id) ON DELETE SET NULL,
                 INDEX idx_methodology_task_project (project_id),
                 INDEX idx_methodology_task_phase (phase_id),
+                INDEX idx_methodology_task_entity (developer_entity_key),
                 INDEX idx_methodology_task_dates (start_date, end_date),
                 INDEX idx_methodology_task_developer (assigned_developer_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -147,6 +150,62 @@ function roadmapParseDate(?string $value): ?DateTimeImmutable
 function roadmapDateString(?DateTimeImmutable $date): ?string
 {
     return $date ? $date->format('Y-m-d') : null;
+}
+
+function roadmapDeveloperEntityKey(int $projectId, string $scope): string
+{
+    try {
+        $token = bin2hex(random_bytes(8));
+    } catch (Throwable $exception) {
+        $token = str_replace('.', '', uniqid('', true));
+    }
+
+    return substr($scope . '-' . $projectId . '-' . $token, 0, 80);
+}
+
+function roadmapCollectDepartmentRequirements(
+    mixed $selectedDepartmentValues,
+    mixed $postedDepartmentCounts,
+    array $postedDepartmentAllocations,
+    int $postedDeveloperCapacity,
+    ?string &$error
+): array {
+    $error = null;
+    $departmentRequirements = [];
+
+    if (!is_array($selectedDepartmentValues) || !is_array($postedDepartmentCounts)) {
+        $selectedDepartmentValues = [];
+        $postedDepartmentCounts = [];
+    }
+
+    foreach (array_unique($selectedDepartmentValues) as $selectedDepartment) {
+        $department = projectWorkflowDepartmentLabel((string) $selectedDepartment);
+        if (!array_key_exists($department, $postedDepartmentAllocations)) {
+            $error = 'Every task department must come from this project\'s Developer Allocation.';
+            return [];
+        }
+
+        $availableCount = max(0, (int) $postedDepartmentAllocations[$department]);
+        $requiredCount = max(0, (int) ($postedDepartmentCounts[$department] ?? 0));
+        if ($availableCount <= 0 || $requiredCount < 1 || $requiredCount > $availableCount) {
+            $error = $department . ' task headcount must be between 1 and its Developer Allocation limit of ' . $availableCount . '.';
+            return [];
+        }
+
+        $departmentRequirements[$department] = $requiredCount;
+    }
+
+    if ($departmentRequirements === []) {
+        $error = 'Select at least one department staffing requirement for this roadmap task.';
+        return [];
+    }
+
+    if (array_sum($departmentRequirements) > $postedDeveloperCapacity) {
+        $error = 'Task headcount cannot exceed the project Developer Allocation capacity of ' . $postedDeveloperCapacity . '.';
+        return [];
+    }
+
+    return $departmentRequirements;
 }
 
 function roadmapDaysBetween(string $start, string $end): int
@@ -523,42 +582,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    if (isset($_POST['delete_task'])) {
-        if (!$canEditArchitecture) {
-            $_SESSION['error'] = 'Only architects can delete roadmap tasks.';
-            header('Location: methodology.php?project_id=' . $postedProjectId);
-            exit();
-        }
-
-        $taskId = (int) ($_POST['task_id'] ?? 0);
-        $taskStmt = $conn->prepare('SELECT id, title, phase_id, task_id FROM methodology_tasks WHERE id = ? AND project_id = ? LIMIT 1');
-        $taskStmt->bind_param('ii', $taskId, $postedProjectId);
-        $taskStmt->execute();
-        $taskToDelete = $taskStmt->get_result()->fetch_assoc();
-        $taskStmt->close();
-
-        if (!$taskToDelete) {
-            $_SESSION['error'] = 'Roadmap task not found.';
-            header('Location: methodology.php?project_id=' . $postedProjectId);
-            exit();
-        }
-
-        $deleteStmt = $conn->prepare('DELETE FROM methodology_tasks WHERE id = ? AND project_id = ?');
-        $deleteStmt->bind_param('ii', $taskId, $postedProjectId);
-        $deleted = $deleteStmt->execute();
-        $deleteStmt->close();
-
-        if (!$deleted) {
-            $_SESSION['error'] = 'Unable to delete the roadmap task.';
-        } else {
-            $_SESSION['success'] = 'Roadmap task deleted.';
-            logActivity($userId, 'delete_methodology_task', 'methodology_tasks', $taskId, $taskToDelete, null);
-        }
-
-        header('Location: methodology.php?project_id=' . $postedProjectId);
-        exit();
-    }
-
     if (isset($_POST['save_task'])) {
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $phaseId = (int) ($_POST['phase_id'] ?? 0);
@@ -698,43 +721,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach (array_unique($selectedDepartmentValues) as $selectedDepartment) {
                 $department = projectWorkflowDepartmentLabel((string) $selectedDepartment);
                 if (!array_key_exists($department, $postedDepartmentAllocations)) {
-                    roadmapReturnToEditor(
-                        $postedProjectId,
-                        'task',
-                        'Every task department must come from this project\'s Developer Allocation.',
-                        $_POST
-                    );
+                    $_SESSION['error'] = 'Every task department must come from this project\'s Developer Allocation.';
+                    header('Location: methodology.php?project_id=' . $postedProjectId);
+                    exit();
                 }
 
                 $availableCount = max(0, (int) $postedDepartmentAllocations[$department]);
                 $requiredCount = max(0, (int) ($postedDepartmentCounts[$department] ?? 0));
                 if ($availableCount <= 0 || $requiredCount < 1 || $requiredCount > $availableCount) {
-                    roadmapReturnToEditor(
-                        $postedProjectId,
-                        'task',
-                        $department . ' task headcount must be between 1 and its Developer Allocation limit of ' . $availableCount . '.',
-                        $_POST
-                    );
+                    $_SESSION['error'] = $department . ' task headcount must be between 1 and its Developer Allocation limit of ' . $availableCount . '.';
+                    header('Location: methodology.php?project_id=' . $postedProjectId);
+                    exit();
                 }
                 $departmentRequirements[$department] = $requiredCount;
             }
 
             if ($departmentRequirements === []) {
-                roadmapReturnToEditor(
-                    $postedProjectId,
-                    'task',
-                    'Select at least one department staffing requirement for this roadmap task.',
-                    $_POST
-                );
+                $_SESSION['error'] = 'Select at least one department staffing requirement for this roadmap task.';
+                header('Location: methodology.php?project_id=' . $postedProjectId);
+                exit();
             }
 
             if (array_sum($departmentRequirements) > $postedDeveloperCapacity) {
-                roadmapReturnToEditor(
-                    $postedProjectId,
-                    'task',
-                    'Task headcount cannot exceed the project Developer Allocation capacity of ' . $postedDeveloperCapacity . '.',
-                    $_POST
-                );
+                $_SESSION['error'] = 'Task headcount cannot exceed the project Developer Allocation capacity of ' . $postedDeveloperCapacity . '.';
+                header('Location: methodology.php?project_id=' . $postedProjectId);
+                exit();
             }
 
             $department = (string) array_key_first($departmentRequirements);
@@ -746,74 +757,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $conn->begin_transaction();
             try {
-                if ($bulkPlaceFeatures) {
-                    $stmt = $conn->prepare("
-                        INSERT INTO methodology_tasks (phase_id, project_id, task_id, title, component_name, department, description, start_date, end_date, status, created_by, updated_by)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ");
-                    $insertRequirement = $conn->prepare("
-                        INSERT INTO methodology_task_departments (methodology_task_id, project_id, department, required_count)
-                        VALUES (?, ?, ?, ?)
-                    ");
-                    $startValue = roadmapDateString($start);
-                    $endValue = roadmapDateString($end);
-                    $createdTaskIds = [];
-
-                    foreach ($bulkWorkflowTaskIds as $bulkWorkflowTaskId) {
-                        $bulkTask = $bulkWorkflowTasks[$bulkWorkflowTaskId] ?? null;
-                        if (!$bulkTask) {
-                            continue;
-                        }
-
-                        $bulkTitle = (string) ($bulkTask['title'] ?? 'Feature');
-                        $bulkDescription = $description !== '' ? $description : (string) ($bulkTask['description'] ?? '');
-                        $bulkStatus = projectWorkflowRoadmapTaskStatus($bulkTask['status'] ?? '');
-                        $stmt->bind_param('iiisssssssii', $phaseId, $postedProjectId, $bulkWorkflowTaskId, $bulkTitle, $componentName, $department, $bulkDescription, $startValue, $endValue, $bulkStatus, $userId, $userId);
-                        if (!$stmt->execute()) {
-                            throw new RuntimeException('Unable to add a bulk roadmap task.');
-                        }
-                        $newTaskId = (int) $conn->insert_id;
-                        $createdTaskIds[] = $newTaskId;
-
-                        foreach ($departmentRequirements as $requirementDepartment => $requiredCount) {
-                            $insertRequirement->bind_param('iisi', $newTaskId, $postedProjectId, $requirementDepartment, $requiredCount);
-                            if (!$insertRequirement->execute()) {
-                                throw new RuntimeException('Unable to save a department staffing requirement.');
-                            }
-                        }
-                    }
-                    $stmt->close();
-                    $insertRequirement->close();
-                    $taskId = (int) ($createdTaskIds[0] ?? 0);
-                    $successMessage = 'Bulk roadmap placement added ' . count($createdTaskIds) . ' feature task' . (count($createdTaskIds) === 1 ? '.' : 's.');
-                } elseif ($taskId > 0) {
+                if ($taskId > 0) {
                     $taskCheck = $conn->query("SELECT id FROM methodology_tasks WHERE id = {$taskId} AND project_id = {$postedProjectId} LIMIT 1")->fetch_assoc();
                     if (!$taskCheck) {
                         throw new RuntimeException('Roadmap task not found.');
                     }
 
+                    $developerEntityKey = trim((string) ($taskCheck['developer_entity_key'] ?? ''));
+                    if ($developerEntityKey === '') {
+                        $developerEntityKey = roadmapDeveloperEntityKey($postedProjectId, 'single');
+                    }
+
                     $stmt = $conn->prepare("
                         UPDATE methodology_tasks
-                        SET phase_id = ?, task_id = ?, title = ?, department = ?, description = ?, start_date = ?, end_date = ?,
+                        SET phase_id = ?, task_id = ?, title = ?, component_name = ?, department = ?, description = ?, start_date = ?, end_date = ?,
                             status = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
                         WHERE id = ? AND project_id = ?
                     ");
                     $startValue = roadmapDateString($start);
                     $endValue = roadmapDateString($end);
-                    $stmt->bind_param('iissssssiii', $phaseId, $workflowTaskId, $title, $department, $description, $startValue, $endValue, $status, $userId, $taskId, $postedProjectId);
+                    $stmt->bind_param('iisssssssiii', $phaseId, $workflowTaskId, $title, $componentName, $department, $description, $startValue, $endValue, $status, $userId, $taskId, $postedProjectId);
                     if (!$stmt->execute()) {
                         throw new RuntimeException('Unable to update the roadmap task.');
                     }
                     $stmt->close();
                     $successMessage = 'Roadmap task updated.';
                 } else {
+                    $developerEntityKey = roadmapDeveloperEntityKey($postedProjectId, 'single');
                     $stmt = $conn->prepare("
-                        INSERT INTO methodology_tasks (phase_id, project_id, task_id, title, component_name, department, description, start_date, end_date, status, created_by, updated_by)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO methodology_tasks (phase_id, project_id, task_id, title, component_name, department, description, start_date, end_date, status, developer_entity_key, created_by, updated_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ");
                     $startValue = roadmapDateString($start);
                     $endValue = roadmapDateString($end);
-                    $stmt->bind_param('iiisssssssii', $phaseId, $postedProjectId, $workflowTaskId, $title, $componentName, $department, $description, $startValue, $endValue, $status, $userId, $userId);
+                    $stmt->bind_param('iiissssssssii', $phaseId, $postedProjectId, $workflowTaskId, $title, $componentName, $department, $description, $startValue, $endValue, $status, $developerEntityKey, $userId, $userId);
                     if (!$stmt->execute()) {
                         throw new RuntimeException('Unable to add the roadmap task.');
                     }
@@ -1833,6 +1810,42 @@ include '../../includes/navbar.php';
     flex: 0 0 88px;
 }
 
+.bulk-task-picker {
+    border: 1px solid var(--roadmap-line);
+    border-radius: 8px;
+    max-height: 280px;
+    overflow: auto;
+}
+
+.bulk-task-picker .form-check {
+    align-items: flex-start;
+    border-bottom: 1px solid var(--roadmap-line);
+    display: flex;
+    gap: .65rem;
+    margin: 0;
+    padding: .75rem;
+}
+
+.bulk-task-picker .form-check:last-child {
+    border-bottom: 0;
+}
+
+.bulk-task-picker .form-check-input {
+    flex: 0 0 auto;
+    margin-top: .2rem;
+}
+
+.bulk-task-picker .form-check-label {
+    color: var(--roadmap-ink);
+    font-weight: 700;
+}
+
+.bulk-task-picker .form-check-label small {
+    color: var(--roadmap-muted);
+    display: block;
+    font-weight: 500;
+}
+
 .empty-roadmap {
     color: var(--roadmap-muted);
     padding: 2rem;
@@ -1844,7 +1857,6 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-gantt,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-table-wrap,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-requirement-item,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-feature-option,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .breadcrumb-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-indicator {
     background: #111827;
@@ -1884,6 +1896,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-stat strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-card-roadmap h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-label-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-task-picker .form-check-label,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-status-legend-title {
     color: #f8fafc;
 }
@@ -2262,6 +2275,9 @@ include '../../includes/navbar.php';
                                     <?php endif; ?>
                                 >
                                     <i class="fas fa-plus me-1" aria-hidden="true"></i> Add Task
+                                </button>
+                                <button class="btn btn-outline-primary btn-sm" type="button" onclick="event.stopPropagation(); openBulkTaskModalForPhase(this.closest('.phase-card-roadmap'));">
+                                    <i class="fas fa-layer-group me-1"></i> Bulk
                                 </button>
                             <?php endif; ?>
                         </div>
@@ -2677,20 +2693,15 @@ include '../../includes/navbar.php';
         </form>
     </div>
 </div>
-<?php if ($canEditArchitecture): ?>
-    <form method="POST" id="deleteTaskForm" class="d-none" data-app-loading data-loading-title="Deleting task" data-loading-text="Please wait while the roadmap task is deleted.">
-        <input type="hidden" name="delete_task" value="1">
-        <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
-        <input type="hidden" name="task_id" id="deleteTaskId">
-    </form>
-<?php endif; ?>
 <?php endif; ?>
 
 <script>
 const phaseModalElement = document.getElementById('phaseModal');
 const taskModalElement = document.getElementById('taskModal');
+const bulkTaskModalElement = document.getElementById('bulkTaskModal');
 const phaseModal = phaseModalElement ? new bootstrap.Modal(phaseModalElement) : null;
 const taskModal = taskModalElement ? new bootstrap.Modal(taskModalElement) : null;
+const bulkTaskModal = bulkTaskModalElement ? new bootstrap.Modal(bulkTaskModalElement) : null;
 const canEditArchitecture = <?php echo json_encode($canEditArchitecture); ?>;
 const canEditExpertInput = <?php echo json_encode($canEditExpertInput); ?>;
 const isSulMonitoring = <?php echo json_encode($isSulMonitoring); ?>;
@@ -2708,10 +2719,6 @@ const deleteTaskButton = document.getElementById('deleteTaskButton');
 const methodologyTemplateForm = document.getElementById('methodologyTemplateForm');
 const replaceExistingTemplate = document.getElementById('replaceExistingTemplate');
 const taskDepartmentToggles = Array.from(document.querySelectorAll('.task-department-toggle'));
-const bulkPlaceFeaturesInput = document.getElementById('bulkPlaceFeatures');
-const bulkFeaturePickerWrap = document.getElementById('bulkFeaturePickerWrap');
-const bulkWorkflowTaskIdsField = document.getElementById('bulkWorkflowTaskIds');
-const bulkWorkflowTaskInputs = Array.from(document.querySelectorAll('.bulk-workflow-task-checkbox'));
 
 methodologyTemplateForm?.addEventListener('submit', async (event) => {
     if (!replaceExistingTemplate?.checked || methodologyTemplateForm.dataset.replaceConfirmed === '1') {
@@ -3021,6 +3028,17 @@ function updateTaskDepartmentControl(toggle) {
     }
 }
 
+function updateBulkTaskDepartmentControl(toggle) {
+    const countInput = toggle.closest('.department-requirement-item')?.querySelector('.department-requirement-count');
+    if (!countInput) return;
+
+    const capacity = Number(toggle.dataset.capacity || 0);
+    countInput.disabled = !canEditArchitecture || !toggle.checked || capacity <= 0;
+    if (toggle.checked && Number(countInput.value || 0) < 1) {
+        countInput.value = 1;
+    }
+}
+
 function setTaskDepartmentRequirements(requirements = []) {
     const requirementMap = new Map(
         (Array.isArray(requirements) ? requirements : []).map((requirement) => [
@@ -3039,54 +3057,18 @@ function setTaskDepartmentRequirements(requirements = []) {
     });
 }
 
+function resetBulkTaskDepartmentRequirements() {
+    bulkTaskDepartmentToggles.forEach((toggle) => {
+        const countInput = toggle.closest('.department-requirement-item')?.querySelector('.department-requirement-count');
+        toggle.checked = false;
+        if (countInput) countInput.value = 1;
+        updateBulkTaskDepartmentControl(toggle);
+    });
+}
+
 taskDepartmentToggles.forEach((toggle) => {
     toggle.addEventListener('change', () => updateTaskDepartmentControl(toggle));
 });
-bulkPlaceFeaturesInput?.addEventListener('change', syncBulkFeatureControls);
-document.getElementById('bulkSelectAllFeatures')?.addEventListener('click', () => {
-    bulkWorkflowTaskInputs.forEach((input) => {
-        if (!input.disabled) input.checked = true;
-    });
-    bulkWorkflowTaskIdsField?.classList.remove('is-invalid');
-});
-document.getElementById('bulkClearFeatures')?.addEventListener('click', () => {
-    bulkWorkflowTaskInputs.forEach((input) => {
-        input.checked = false;
-    });
-});
-bulkWorkflowTaskInputs.forEach((input) => {
-    input.addEventListener('change', () => bulkWorkflowTaskIdsField?.classList.remove('is-invalid'));
-});
-
-phaseForm?.addEventListener('submit', (event) => {
-    clearEditorValidation('phase');
-    stopInvalidEditorSubmit(event, 'phase', validatePhaseEditor());
-});
-
-taskForm?.addEventListener('submit', (event) => {
-    clearEditorValidation('task');
-    syncBulkFeatureControls();
-    stopInvalidEditorSubmit(event, 'task', validateTaskEditor());
-});
-
-[phaseForm, taskForm].forEach((form) => {
-    form?.addEventListener('input', (event) => event.target?.classList?.remove('is-invalid'));
-    form?.addEventListener('change', (event) => event.target?.classList?.remove('is-invalid'));
-});
-
-const phaseStartInput = document.getElementById('phaseStart');
-const phaseEndInput = document.getElementById('phaseEnd');
-if (phaseStartInput) {
-    phaseStartInput.min = projectStart || '';
-    phaseStartInput.max = projectEnd || '';
-}
-if (phaseEndInput) {
-    phaseEndInput.min = projectStart || '';
-    phaseEndInput.max = projectEnd || '';
-}
-
-document.getElementById('taskPhaseId')?.addEventListener('change', syncTaskDateLimits);
-document.getElementById('taskStart')?.addEventListener('input', syncTaskDateLimits);
 
 function openPhaseModal(source) {
     if (!phaseModal || !canEditArchitecture) return;
@@ -3119,6 +3101,21 @@ function openTaskModalFromTask(source) {
     if (!taskModal) return;
     const task = parseData(source, 'task');
     openTaskModal(task);
+}
+
+function openBulkTaskModalForPhase(source) {
+    if (!bulkTaskModal || !canEditArchitecture) return;
+    const phase = parseData(source, 'phase');
+    setValue('bulkTaskPhaseId', phase.id || '');
+    setValue('bulkTaskStart', phase.start_date || '');
+    setValue('bulkTaskEnd', phase.end_date || '');
+    setValue('bulkComponentName', '');
+    setValue('bulkTaskDescription', '');
+    bulkWorkflowTaskToggles.forEach((toggle) => {
+        toggle.checked = false;
+    });
+    resetBulkTaskDepartmentRequirements();
+    bulkTaskModal.show();
 }
 
 function openTaskModal(task) {

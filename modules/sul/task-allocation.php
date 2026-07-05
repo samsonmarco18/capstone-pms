@@ -86,6 +86,60 @@ function sulTaskAllocationExcerpt(?string $text, int $limit = 120): string
     return substr($clean, 0, $limit - 1) . '…';
 }
 
+function sulTaskAllocationRoadmapEntityRows(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    int $projectId,
+    int $taskId,
+    array $currentRoadmapTask,
+    string $department,
+    ?string &$error
+): array {
+    $error = null;
+    $entityKey = trim((string) ($currentRoadmapTask['developer_entity_key'] ?? ''));
+    if ($entityKey === '') {
+        return [$taskId => $currentRoadmapTask];
+    }
+
+    $safeEntityKey = $conn->real_escape_string($entityKey);
+    $entityTaskRows = $conn->query("
+        SELECT DISTINCT task_id
+        FROM methodology_tasks
+        WHERE project_id = {$projectId}
+          AND developer_entity_key = '{$safeEntityKey}'
+          AND task_id IS NOT NULL
+          AND task_id > 0
+        ORDER BY task_id ASC
+    ");
+
+    if (!$entityTaskRows) {
+        $error = 'Unable to load the roadmap developer entity.';
+        return [];
+    }
+
+    $rows = [];
+    while ($entityTask = $entityTaskRows->fetch_assoc()) {
+        $entityTaskId = (int) ($entityTask['task_id'] ?? 0);
+        if ($entityTaskId <= 0) {
+            continue;
+        }
+
+        $entityCurrentRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $projectId, $entityTaskId, $department);
+        if (!$entityCurrentRoadmapTask || trim((string) ($entityCurrentRoadmapTask['developer_entity_key'] ?? '')) !== $entityKey) {
+            $error = 'Every task in this roadmap developer entity must be current and unlocked before assignment.';
+            return [];
+        }
+
+        if ((int) ($entityCurrentRoadmapTask['assigned_developer_id'] ?? 0) > 0) {
+            $error = 'This roadmap developer entity already has a developer assigned.';
+            return [];
+        }
+
+        $rows[$entityTaskId] = $entityCurrentRoadmapTask;
+    }
+
+    return $rows !== [] ? $rows : [$taskId => $currentRoadmapTask];
+}
+
 // Ensure sales approval columns exist
 $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 if (!$hasSalesApproval) {
@@ -672,6 +726,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $assignmentProjectId = (int) ($validTaskRow['project_id'] ?? 0);
         $roadmapPhaseCount = (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$assignmentProjectId}")->fetch_assoc()['total'] ?? 0));
         $currentRoadmapTask = null;
+        $assignmentTaskIds = [$taskId => $taskId];
+        $assignmentRoadmapTaskIds = [];
         if ($roadmapPhaseCount > 0) {
             $currentRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $assignmentProjectId, $taskId, $sulDepartment);
             if (!$currentRoadmapTask) {
@@ -680,24 +736,69 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 exit();
             }
 
-            if ((int) ($currentRoadmapTask['assigned_developer_id'] ?? 0) > 0) {
-                $_SESSION['error'] = "This roadmap task already has a developer assigned.";
+            $entityError = null;
+            $roadmapEntityRows = sulTaskAllocationRoadmapEntityRows($conn, $assignmentProjectId, $taskId, $currentRoadmapTask, $sulDepartment, $entityError);
+            if ($entityError !== null) {
+                $_SESSION['error'] = $entityError;
                 header("Location: task-allocation.php");
                 exit();
             }
 
-            $roadmapStart = DateTime::createFromFormat('Y-m-d', (string) ($currentRoadmapTask['start_date'] ?? ''));
-            $roadmapEnd = DateTime::createFromFormat('Y-m-d', (string) ($currentRoadmapTask['end_date'] ?? ''));
-            if (($roadmapStart && $deadlineDate < $roadmapStart) || ($roadmapEnd && $deadlineDate > $roadmapEnd)) {
-                $_SESSION['error'] = "The developer deadline must stay inside the methodology task window: "
-                    . date('M d, Y', strtotime((string) $currentRoadmapTask['start_date']))
-                    . " to "
-                    . date('M d, Y', strtotime((string) $currentRoadmapTask['end_date']))
-                    . ".";
+            foreach ($roadmapEntityRows as $entityTaskId => $roadmapEntityRow) {
+                $roadmapStart = DateTime::createFromFormat('Y-m-d', (string) ($roadmapEntityRow['start_date'] ?? ''));
+                $roadmapEnd = DateTime::createFromFormat('Y-m-d', (string) ($roadmapEntityRow['end_date'] ?? ''));
+                if (($roadmapStart && $deadlineDate < $roadmapStart) || ($roadmapEnd && $deadlineDate > $roadmapEnd)) {
+                    $_SESSION['error'] = "The developer deadline must stay inside the methodology task window: "
+                        . date('M d, Y', strtotime((string) $roadmapEntityRow['start_date']))
+                        . " to "
+                        . date('M d, Y', strtotime((string) $roadmapEntityRow['end_date']))
+                        . ".";
+                    header("Location: task-allocation.php");
+                    exit();
+                }
+
+                $assignmentTaskIds[(int) $entityTaskId] = (int) $entityTaskId;
+                $assignmentRoadmapTaskIds[] = (int) ($roadmapEntityRow['id'] ?? 0);
+            }
+
+            $assignmentTaskIdList = implode(',', array_map('intval', array_values($assignmentTaskIds)));
+            $readyRows = $conn->query("
+                SELECT t.id
+                FROM tasks t
+                JOIN projects p ON p.id = t.project_id
+                LEFT JOIN users current_assignee ON current_assignee.id = t.assigned_to
+                WHERE t.id IN ({$assignmentTaskIdList})
+                  AND (
+                      (t.status = 'todo' AND (t.assigned_to IS NULL OR current_assignee.role = 'expert'))
+                      OR (t.status = 'completed' AND t.architect_reviewed_at IS NULL AND t.merged_at IS NULL)
+                  )
+                  AND {$sulProjectFilter}
+                  {$sulCurrentRoadmapTaskFilter}
+                  {$approvalSql}{$choiceSql}
+                  AND EXISTS (
+                      SELECT 1
+                      FROM feature_estimations fe_ready
+                      WHERE fe_ready.task_id = t.id
+                        AND fe_ready.status = 'completed'
+                  )
+            ");
+            $readyTaskIds = [];
+            if (!$readyRows) {
+                $_SESSION['error'] = "Unable to verify every task in this roadmap developer entity.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+            while ($readyRow = $readyRows->fetch_assoc()) {
+                $readyTaskIds[(int) $readyRow['id']] = true;
+            }
+            if (count($readyTaskIds) !== count($assignmentTaskIds)) {
+                $_SESSION['error'] = "Every task in this roadmap developer entity must be approved and ready before assignment.";
                 header("Location: task-allocation.php");
                 exit();
             }
         }
+
+        $assignmentTaskIdList = implode(',', array_map('intval', array_values($assignmentTaskIds)));
         
         $stmt = $conn->prepare("
             UPDATE tasks
@@ -709,41 +810,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 pr_submitted_at = NULL,
                 sul_reviewed_by = NULL,
                 sul_reviewed_at = NULL
-            WHERE id = ?
+            WHERE id IN ({$assignmentTaskIdList})
         ");
-        $stmt->bind_param("iisi", $developerId, $userId, $deadline, $taskId);
+        $stmt->bind_param("iis", $developerId, $userId, $deadline);
         
         if ($stmt->execute()) {
             if ($currentRoadmapTask) {
                 $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
-                $currentDepartmentProgressId = (int) ($currentRoadmapTask['department_progress_id'] ?? 0);
-                if ($currentDepartmentProgressId > 0) {
-                    $syncRoadmapStmt = $conn->prepare("
-                        UPDATE methodology_task_departments
-                        SET assigned_developer_id = ?,
-                            workflow_task_id = ?,
-                            deadline = ?,
-                            status = 'planned',
-                            updated_by = ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ? AND project_id = ?
-                    ");
-                    if ($syncRoadmapStmt) {
-                        $syncRoadmapStmt->bind_param("iisiii", $developerId, $taskId, $deadline, $userId, $currentDepartmentProgressId, $assignmentProjectId);
-                        $syncRoadmapStmt->execute();
-                        $syncRoadmapStmt->close();
-                    }
-                } else {
-                    $syncRoadmapStmt = $conn->prepare("
-                        UPDATE methodology_tasks
-                        SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    ");
-                    if ($syncRoadmapStmt) {
-                        $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $currentRoadmapTaskId);
-                        $syncRoadmapStmt->execute();
-                        $syncRoadmapStmt->close();
-                    }
+                $syncRoadmapStmt = $conn->prepare("
+                    UPDATE methodology_tasks
+                    SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ");
+                if ($syncRoadmapStmt) {
+                    $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $currentRoadmapTaskId);
+                    $syncRoadmapStmt->execute();
+                    $syncRoadmapStmt->close();
                 }
             }
 
@@ -753,14 +835,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             createNotification(
                 (int) $developerId,
                 "New Task Assignment: " . $taskDetails['title'],
-                "You have been assigned a new task. Deadline: " . sulTaskAllocationFormatDeadline($taskDetails['deadline'] ?? null),
+                "You have been assigned a new task. Deadline: " . date('M d, Y', strtotime($taskDetails['deadline'])),
                 'task',
                 'tasks',
                 (int) $taskId,
                 BASE_URL . 'modules/developer/task.php?id=' . $taskId
             );
             
-            $_SESSION['success'] = "Task assigned to Developer successfully";
+            $assignedCount = count($assignmentTaskIds);
+            $_SESSION['success'] = $assignedCount . " task" . ($assignedCount === 1 ? "" : "s") . " assigned to Developer successfully";
             header("Location: task-allocation.php");
             exit();
         } else {

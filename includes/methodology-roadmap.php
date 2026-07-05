@@ -66,6 +66,7 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
                 description TEXT,
                 start_date DATE NOT NULL,
                 end_date DATE NOT NULL,
+                developer_entity_key VARCHAR(80) NULL,
                 assigned_developer_id INT NULL,
                 expert_people_count INT DEFAULT 0,
                 expert_developer_type VARCHAR(100) NULL,
@@ -97,6 +98,7 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
                 description TEXT,
                 start_date DATE NOT NULL,
                 end_date DATE NOT NULL,
+                developer_entity_key VARCHAR(80) NULL,
                 assigned_developer_id INT NULL,
                 expert_people_count INT DEFAULT 0,
                 expert_developer_type VARCHAR(100) NULL,
@@ -118,6 +120,7 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
                 INDEX idx_methodology_task_project (project_id),
                 INDEX idx_methodology_task_phase (phase_id),
                 INDEX idx_methodology_task_workflow_task (task_id),
+                INDEX idx_methodology_task_entity (developer_entity_key),
                 INDEX idx_methodology_task_dates (start_date, end_date),
                 INDEX idx_methodology_task_developer (assigned_developer_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -129,6 +132,23 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
 
     if (dbTableExists($conn, 'methodology_tasks') && !dbColumnExists($conn, 'methodology_tasks', 'expert_developer_type')) {
         $conn->query("ALTER TABLE methodology_tasks ADD COLUMN expert_developer_type VARCHAR(100) NULL");
+    }
+
+    if (dbTableExists($conn, 'methodology_tasks') && !dbColumnExists($conn, 'methodology_tasks', 'developer_entity_key')) {
+        $conn->query("ALTER TABLE methodology_tasks ADD COLUMN developer_entity_key VARCHAR(80) NULL");
+        if (defined('DB_DRIVER') && DB_DRIVER === 'mysql') {
+            $conn->query("ALTER TABLE methodology_tasks ADD INDEX idx_methodology_task_entity (developer_entity_key)");
+        }
+    }
+
+    if (dbTableExists($conn, 'methodology_tasks') && dbColumnExists($conn, 'methodology_tasks', 'developer_entity_key')) {
+        $conn->query(defined('DB_DRIVER') && DB_DRIVER === 'pgsql'
+            ? "UPDATE methodology_tasks SET developer_entity_key = 'task-' || id WHERE developer_entity_key IS NULL OR developer_entity_key = ''"
+            : "UPDATE methodology_tasks SET developer_entity_key = CONCAT('task-', id) WHERE developer_entity_key IS NULL OR developer_entity_key = ''"
+        );
+        if (defined('DB_DRIVER') && DB_DRIVER === 'pgsql') {
+            $conn->query("CREATE INDEX IF NOT EXISTS idx_methodology_task_entity ON methodology_tasks (developer_entity_key)");
+        }
     }
 
     if (!dbTableExists($conn, 'methodology_task_departments')) {
