@@ -351,6 +351,10 @@ foreach ($tasksByProject as $pid => $tasks) {
     ];
 }
 
+$flashSuccess = trim((string) ($_SESSION['success'] ?? ''));
+$flashError = trim((string) ($_SESSION['error'] ?? ''));
+unset($_SESSION['success'], $_SESSION['error']);
+
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
@@ -390,6 +394,40 @@ include '../../includes/navbar.php';
     font-size: 0.9rem;
     color: rgba(255, 255, 255, 0.9);
 }
+
+.approval-feedback {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid;
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+}
+
+.approval-feedback__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    color: #fff;
+}
+
+.approval-feedback__content strong,
+.approval-feedback__content span {
+    display: block;
+}
+
+.approval-feedback__content strong { margin-bottom: 0.08rem; font-size: 0.82rem; }
+.approval-feedback__content span { font-size: 0.76rem; line-height: 1.4; }
+.approval-feedback.is-success { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+.approval-feedback.is-success .approval-feedback__icon { background: #16a34a; }
+.approval-feedback.is-error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+.approval-feedback.is-error .approval-feedback__icon { background: #dc2626; }
 
 .project-approval-group {
     display: grid;
@@ -519,6 +557,178 @@ include '../../includes/navbar.php';
     display: grid;
     gap: 1.1rem;
 }
+
+.sales-cost-list {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.sales-cost-card {
+    overflow: hidden;
+    border: 1px solid #e1eaf2;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sales-cost-card.is-open {
+    border-color: rgba(31, 99, 146, 0.45);
+    box-shadow: 0 12px 28px rgba(15, 42, 64, 0.08);
+}
+
+.sales-cost-toggle {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.95rem 1rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sales-cost-toggle:hover { background: #f8fbfd; }
+.sales-cost-toggle:focus-visible { outline: 3px solid rgba(31, 99, 146, 0.2); outline-offset: -3px; }
+
+.sales-cost-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.sales-cost-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: #eaf5fb;
+    color: var(--theme-primary);
+}
+
+.sales-cost-copy { min-width: 0; }
+.sales-cost-title { display: block; overflow: hidden; color: #1f2937; font-size: 0.92rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.sales-cost-meta { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; margin-top: 0.22rem; color: #64748b; font-size: 0.7rem; }
+.sales-cost-meta span { display: inline-flex; align-items: center; gap: 0.3rem; }
+
+.sales-cost-amount {
+    display: grid;
+    gap: 0.08rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.sales-cost-amount small { color: #64748b; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.sales-cost-amount strong { color: var(--theme-primary); font-size: 0.94rem; }
+
+.sales-cost-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.sales-cost-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: #f1f5f9;
+    color: #64748b;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.sales-cost-toggle[aria-expanded="true"] .sales-cost-chevron { transform: rotate(180deg); background: #e8f3fa; color: var(--theme-primary); }
+
+.sales-cost-details {
+    padding: 1rem;
+    border-top: 1px solid #e5edf5;
+    background: #fbfcfe;
+}
+
+.sales-cost-breakdown {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.sales-cost-metric {
+    min-width: 0;
+    padding: 0.78rem 0.85rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.sales-cost-metric span { display: block; color: #64748b; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.035em; text-transform: uppercase; }
+.sales-cost-metric strong { display: block; margin-top: 0.2rem; overflow-wrap: anywhere; color: #334155; font-size: 0.9rem; }
+.sales-cost-metric.is-primary { border-color: #bfdbfe; background: #eff6ff; }
+.sales-cost-metric.is-primary strong { color: #1d4ed8; }
+.sales-cost-metric.is-negative { border-color: #fecaca; background: #fef2f2; }
+.sales-cost-metric.is-negative strong { color: #b91c1c; }
+
+.sales-sul-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid #dbe7f0;
+    border-radius: 12px;
+    background: #f5f9fc;
+    color: #475569;
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
+.sales-sul-note i { margin-top: 0.15rem; color: var(--theme-primary); }
+
+.sales-cost-decisions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.85rem;
+}
+
+.sales-decision-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0.9rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 13px;
+    background: #fff;
+}
+
+.sales-decision-head { display: flex; align-items: flex-start; gap: 0.55rem; }
+.sales-decision-head i { margin-top: 0.12rem; }
+.sales-decision-head strong, .sales-decision-head span { display: block; }
+.sales-decision-head strong { color: #334155; font-size: 0.8rem; }
+.sales-decision-head span { margin-top: 0.1rem; color: #64748b; font-size: 0.68rem; line-height: 1.35; }
+.sales-decision-card.is-approve .sales-decision-head i { color: #059669; }
+.sales-decision-card.is-revision .sales-decision-head i { color: #d97706; }
+.sales-decision-card label { margin-bottom: -0.35rem; color: #475569; font-size: 0.7rem; font-weight: 700; }
+.sales-decision-card label span { color: #94a3b8; font-weight: 500; }
+.sales-decision-card textarea { min-height: 76px; resize: vertical; }
+.sales-decision-card button { justify-content: center; min-height: 40px; margin-top: auto; }
 
 .project-gantt-panel {
     padding: 1rem 1.1rem;
@@ -1072,6 +1282,66 @@ include '../../includes/navbar.php';
     box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-decision-card {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-toggle:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-details,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-sul-note {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-decision-head strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-amount small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-sul-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-decision-head span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-decision-card label {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-decision-card .form-control {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-decision-card .form-control:focus {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.45);
+    color: #d7e4f2;
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric.is-primary {
+    background: rgba(29, 78, 216, 0.14);
+    border-color: rgba(96, 165, 250, 0.34);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric.is-primary strong { color: #93c5fd; }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric.is-negative {
+    background: rgba(185, 28, 28, 0.14);
+    border-color: rgba(248, 113, 113, 0.32);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric.is-negative strong { color: #fca5a5; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-status { background: rgba(29, 78, 216, 0.18); color: #93c5fd; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-chevron { background: #10263a; color: #9db6cf; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-feedback.is-success { border-color: rgba(34, 197, 94, 0.34); background: rgba(22, 101, 52, 0.2); color: #bbf7d0; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-feedback.is-error { border-color: rgba(248, 113, 113, 0.32); background: rgba(153, 27, 27, 0.2); color: #fecaca; }
+
 @media (max-width: 991.98px) {
     .approval-actions {
         justify-content: flex-end;
@@ -1119,18 +1389,41 @@ include '../../includes/navbar.php';
     .approval-actions .btn-action {
         flex: 1 1 100%;
     }
+
+    .sales-cost-toggle {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.55rem 0.75rem;
+    }
+
+    .sales-cost-identity { grid-column: 1; grid-row: 1; }
+    .sales-cost-chevron { grid-column: 2; grid-row: 1; }
+    .sales-cost-amount { grid-column: 1; grid-row: 2; padding-left: 3.4rem; text-align: left; }
+    .sales-cost-status { display: none; }
+    .sales-cost-breakdown, .sales-cost-decisions { grid-template-columns: 1fr; }
 }
 </style>
 
 <div class="container-fluid px-4 py-4">
     <div class="page-header-modern">
         <h2><i class="fas fa-clipboard-check me-2"></i> Estimation Approval</h2>
-        <p>Review expert estimations and approve before SUL assignment.</p>
+        <p>Review project costs and feature timelines, then make the final Sales decision.</p>
     </div>
 
+    <?php if ($flashSuccess !== ''): ?>
+        <div class="approval-feedback is-success" role="status">
+            <span class="approval-feedback__icon" aria-hidden="true"><i class="fas fa-check"></i></span>
+            <span class="approval-feedback__content"><strong>Action completed successfully</strong><span><?php echo htmlspecialchars($flashSuccess); ?></span></span>
+        </div>
+    <?php elseif ($flashError !== ''): ?>
+        <div class="approval-feedback is-error" role="alert">
+            <span class="approval-feedback__icon" aria-hidden="true"><i class="fas fa-exclamation"></i></span>
+            <span class="approval-feedback__content"><strong>Action could not be completed</strong><span><?php echo htmlspecialchars($flashError); ?></span></span>
+        </div>
+    <?php endif; ?>
+
     <?php if ($pendingProjectEstimations->num_rows > 0): ?>
-        <section class="project-approval-group is-open" data-project-group data-project-id="project-costs">
-            <button type="button" class="project-approval-toggle" data-project-toggle aria-expanded="true" aria-controls="projectCostApprovalBody">
+        <section class="project-approval-group" data-project-group data-project-id="project-costs">
+            <button type="button" class="project-approval-toggle" data-project-toggle aria-expanded="false" aria-controls="projectCostApprovalBody">
                 <div class="project-approval-toggle-main project-approval-head">
                     <span class="project-approval-kicker"><i class="fas fa-file-invoice-dollar"></i> Final Project Cost Approval</span>
                     <h5>Project Estimation Packages</h5>
@@ -1143,56 +1436,76 @@ include '../../includes/navbar.php';
                     <span class="project-approval-chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                 </div>
             </button>
-            <div class="project-approval-body" id="projectCostApprovalBody" data-project-body>
-                <div class="project-feature-stack">
+            <div class="project-approval-body" id="projectCostApprovalBody" data-project-body hidden>
+                <div class="sales-cost-list">
                     <?php while ($estimate = $pendingProjectEstimations->fetch_assoc()): ?>
-                        <div class="task-card approval-task-card">
-                            <div class="approval-card-main">
-                                <div class="approval-card-content">
-                                    <div class="approval-feature-header">
-                                        <span class="approval-feature-eyebrow"><i class="fas fa-file-invoice-dollar"></i> Project Cost Package</span>
-                                        <h5 class="approval-feature-title"><?php echo htmlspecialchars((string) $estimate['project_name']); ?></h5>
-                                        <div class="task-meta approval-meta-list">
-                                            <span><i class="fas fa-building"></i> Client: <?php echo htmlspecialchars((string) $estimate['client_name']); ?></span>
-                                            <span><i class="fas fa-user-tie"></i> Expert: <?php echo htmlspecialchars((string) $estimate['expert_name']); ?></span>
-                                            <span><i class="fas fa-gauge-high"></i> <?php echo htmlspecialchars((string) $estimate['project_complexity']); ?></span>
-                                            <span><i class="fas fa-calendar"></i> <?php echo (int) $estimate['project_duration_months']; ?> month<?php echo (int) $estimate['project_duration_months'] === 1 ? '' : 's'; ?></span>
-                                        </div>
-                                    </div>
+                        <?php $salesCostPanelId = 'salesCostReview' . (int) $estimate['id']; ?>
+                        <article class="sales-cost-card" data-sales-cost-card>
+                            <button type="button" class="sales-cost-toggle" data-sales-cost-toggle aria-expanded="false" aria-controls="<?php echo $salesCostPanelId; ?>">
+                                <span class="sales-cost-identity">
+                                    <span class="sales-cost-icon" aria-hidden="true"><i class="fas fa-file-invoice-dollar"></i></span>
+                                    <span class="sales-cost-copy">
+                                        <span class="sales-cost-title"><?php echo htmlspecialchars((string) $estimate['project_name']); ?></span>
+                                        <span class="sales-cost-meta">
+                                            <span><i class="fas fa-building" aria-hidden="true"></i><?php echo htmlspecialchars((string) $estimate['client_name']); ?></span>
+                                            <span><i class="fas fa-user-tie" aria-hidden="true"></i><?php echo htmlspecialchars((string) $estimate['expert_name']); ?></span>
+                                            <span><i class="fas fa-gauge-high" aria-hidden="true"></i><?php echo htmlspecialchars((string) $estimate['project_complexity']); ?></span>
+                                            <span><i class="far fa-calendar" aria-hidden="true"></i><?php echo (int) $estimate['project_duration_months']; ?> month<?php echo (int) $estimate['project_duration_months'] === 1 ? '' : 's'; ?></span>
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="sales-cost-amount">
+                                    <small>Overall estimate</small>
+                                    <strong><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></strong>
+                                </span>
+                                <span class="sales-cost-status"><i class="fas fa-clock" aria-hidden="true"></i>Final review</span>
+                                <span class="sales-cost-chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            </button>
 
-                                    <div class="timeline-panel">
-                                        <div class="row g-3">
-                                            <div class="col-md-4"><strong>Total Developer Cost</strong><div><?php echo projectEstimationPeso((float) $estimate['total_developer_cost']); ?></div></div>
-                                            <div class="col-md-4"><strong>Total Tech Stack Cost</strong><div><?php echo projectEstimationPeso((float) $estimate['total_technology_stack_cost']); ?></div></div>
-                                            <div class="col-md-4"><strong>Overall Estimated Cost</strong><div><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></div></div>
-                                            <div class="col-md-4"><strong>Client Budget</strong><div><?php echo projectEstimationPeso((float) $estimate['sales_budget']); ?></div></div>
-                                            <div class="col-md-4"><strong>Remaining Budget</strong><div><?php echo projectEstimationPeso((float) $estimate['remaining_budget']); ?></div></div>
-                                            <div class="col-md-4"><strong>Additional Costs</strong><div><?php echo projectEstimationPeso((float) $estimate['additional_costs']); ?></div></div>
-                                        </div>
-                                        <?php if (!empty($estimate['sul_comment'])): ?>
-                                            <p class="expectation-note mt-3 mb-0"><strong>SUL comment:</strong> <?php echo htmlspecialchars((string) $estimate['sul_comment']); ?></p>
-                                        <?php endif; ?>
-                                    </div>
+                            <div class="sales-cost-details" id="<?php echo $salesCostPanelId; ?>" hidden>
+                                <div class="sales-cost-breakdown" aria-label="Project cost breakdown">
+                                    <div class="sales-cost-metric"><span>Developer cost</span><strong><?php echo projectEstimationPeso((float) $estimate['total_developer_cost']); ?></strong></div>
+                                    <div class="sales-cost-metric"><span>Technology stack</span><strong><?php echo projectEstimationPeso((float) $estimate['total_technology_stack_cost']); ?></strong></div>
+                                    <div class="sales-cost-metric is-primary"><span>Overall estimate</span><strong><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></strong></div>
+                                    <div class="sales-cost-metric"><span>Client budget</span><strong><?php echo projectEstimationPeso((float) $estimate['sales_budget']); ?></strong></div>
+                                    <div class="sales-cost-metric <?php echo (float) $estimate['remaining_budget'] < 0 ? 'is-negative' : ''; ?>"><span>Remaining budget</span><strong><?php echo projectEstimationPeso((float) $estimate['remaining_budget']); ?></strong></div>
+                                    <div class="sales-cost-metric"><span>Additional costs</span><strong><?php echo projectEstimationPeso((float) $estimate['additional_costs']); ?></strong></div>
                                 </div>
 
-                                <div class="approval-actions">
-                                    <form method="POST" class="w-100" data-app-loading data-loading-title="Approving project estimation" data-loading-text="Completing Planning and opening the next phase.">
+                                <div class="sales-sul-note">
+                                    <i class="fas fa-message" aria-hidden="true"></i>
+                                    <span><strong>SUL review note:</strong> <?php echo !empty($estimate['sul_comment']) ? htmlspecialchars((string) $estimate['sul_comment']) : 'No additional comment was provided.'; ?></span>
+                                </div>
+
+                                <div class="sales-cost-decisions">
+                                    <form method="POST" class="sales-decision-card is-approve" data-generic-draft-disabled="1" data-app-loading data-loading-title="Approving project estimation" data-loading-text="Completing Planning and opening the next phase.">
                                         <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
-                                        <textarea name="approval_comment" class="form-control mb-2" rows="2" placeholder="Optional Sales comment"></textarea>
-                                        <button class="btn-action btn-approve w-100" type="submit" name="approve_project_estimation">
+                                        <div class="sales-decision-head">
+                                            <i class="fas fa-circle-check" aria-hidden="true"></i>
+                                            <span><strong>Approve project estimate</strong><span>Finalize the cost, complete Planning, and activate the next roadmap phase.</span></span>
+                                        </div>
+                                        <label for="salesApprovalNote<?php echo (int) $estimate['id']; ?>">Sales note <span>(optional)</span></label>
+                                        <textarea id="salesApprovalNote<?php echo (int) $estimate['id']; ?>" name="approval_comment" class="form-control" rows="2" placeholder="Add a short final approval note"></textarea>
+                                        <button class="btn-action btn-approve" type="submit" name="approve_project_estimation">
                                             <i class="fas fa-check me-1"></i> Final Approve
                                         </button>
                                     </form>
-                                    <form method="POST" class="w-100 mt-2" data-app-loading data-loading-title="Rejecting project estimation" data-loading-text="Returning the estimation to the expert.">
+
+                                    <form method="POST" class="sales-decision-card is-revision" data-generic-draft-disabled="1" data-app-loading data-loading-title="Rejecting project estimation" data-loading-text="Returning the estimation to the expert.">
                                         <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
-                                        <textarea name="rejection_reason" class="form-control mb-2" rows="2" required placeholder="Rejection reason"></textarea>
-                                        <button class="btn-action btn-reject w-100" type="submit" name="reject_project_estimation">
-                                            <i class="fas fa-times me-1"></i> Reject
+                                        <div class="sales-decision-head">
+                                            <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                                            <span><strong>Request revision</strong><span>Return the package to the Expert with specific changes.</span></span>
+                                        </div>
+                                        <label for="salesRevisionReason<?php echo (int) $estimate['id']; ?>">Revision reason <span>(required)</span></label>
+                                        <textarea id="salesRevisionReason<?php echo (int) $estimate['id']; ?>" name="rejection_reason" class="form-control" rows="2" required placeholder="Explain what needs to be revised"></textarea>
+                                        <button class="btn-action btn-reject" type="submit" name="reject_project_estimation">
+                                            <i class="fas fa-rotate-left me-1"></i> Return for Revision
                                         </button>
                                     </form>
                                 </div>
                             </div>
-                        </div>
+                        </article>
                     <?php endwhile; ?>
                 </div>
             </div>
@@ -1204,14 +1517,13 @@ include '../../includes/navbar.php';
             <?php
                 $projectTitle = (string) ($projectTasks[0]['project_name'] ?? 'Project');
                 $featureCount = count($projectTasks);
-                $isInitiallyOpen = array_key_first($tasksByProject) === $pid;
             ?>
-            <section class="project-approval-group<?php echo $isInitiallyOpen ? ' is-open' : ''; ?>" data-project-group data-project-id="<?php echo (int) $pid; ?>">
+            <section class="project-approval-group" data-project-group data-project-id="<?php echo (int) $pid; ?>">
                 <button
                     type="button"
                     class="project-approval-toggle"
                     data-project-toggle
-                    aria-expanded="<?php echo $isInitiallyOpen ? 'true' : 'false'; ?>"
+                    aria-expanded="false"
                     aria-controls="projectApprovalBody_<?php echo (int) $pid; ?>"
                 >
                     <div class="project-approval-toggle-main project-approval-head">
@@ -1231,7 +1543,7 @@ include '../../includes/navbar.php';
                     class="project-approval-body"
                     id="projectApprovalBody_<?php echo (int) $pid; ?>"
                     data-project-body
-                    <?php echo $isInitiallyOpen ? '' : 'hidden'; ?>
+                    hidden
                 >
                     <div class="project-gantt-panel">
                         <div class="project-gantt-head">
@@ -1740,10 +2052,18 @@ function setProjectGroupOpen(group, shouldOpen) {
         }
     } else {
         body.hidden = true;
+        body.querySelectorAll('[data-sales-cost-toggle]').forEach((costToggle) => {
+            const costDetails = document.getElementById(costToggle.getAttribute('aria-controls') || '');
+            costToggle.setAttribute('aria-expanded', 'false');
+            costToggle.closest('[data-sales-cost-card]')?.classList.remove('is-open');
+            if (costDetails) costDetails.hidden = true;
+        });
     }
 }
 
-document.querySelectorAll('[data-project-group]').forEach((group) => {
+const projectApprovalGroups = document.querySelectorAll('[data-project-group]');
+
+projectApprovalGroups.forEach((group) => {
     const toggle = group.querySelector('[data-project-toggle]');
     if (!toggle) {
         return;
@@ -1751,6 +2071,7 @@ document.querySelectorAll('[data-project-group]').forEach((group) => {
 
     toggle.addEventListener('click', () => {
         const shouldOpen = !group.classList.contains('is-open');
+        projectApprovalGroups.forEach(otherGroup => setProjectGroupOpen(otherGroup, false));
         setProjectGroupOpen(group, shouldOpen);
     });
 
@@ -1759,6 +2080,23 @@ document.querySelectorAll('[data-project-group]').forEach((group) => {
     } else {
         setProjectGroupOpen(group, false);
     }
+});
+
+const salesCostToggles = document.querySelectorAll('[data-sales-cost-toggle]');
+
+function setSalesCostOpen(toggle, shouldOpen) {
+    const details = document.getElementById(toggle.getAttribute('aria-controls') || '');
+    toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    toggle.closest('[data-sales-cost-card]')?.classList.toggle('is-open', shouldOpen);
+    if (details) details.hidden = !shouldOpen;
+}
+
+salesCostToggles.forEach(toggle => {
+    toggle.addEventListener('click', () => {
+        const shouldOpen = toggle.getAttribute('aria-expanded') !== 'true';
+        salesCostToggles.forEach(otherToggle => setSalesCostOpen(otherToggle, false));
+        setSalesCostOpen(toggle, shouldOpen);
+    });
 });
 
 document.querySelectorAll('.gantt-preview .gantt-bar').forEach((bar) => {

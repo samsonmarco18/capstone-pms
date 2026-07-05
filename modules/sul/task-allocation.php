@@ -1344,7 +1344,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $stmt = $conn->prepare("UPDATE expert_project_estimations SET status = 'sul_approved', sul_reviewed_by = ?, sul_reviewed_at = NOW(), sul_comment = ? WHERE id = ?");
         $stmt->bind_param('isi', $userId, $comment, $estimationId);
-        if ($stmt->execute()) {
+        $approvalSaved = $stmt->execute();
+        if ($approvalSaved) {
             workflowNotifyRoles(
                 $conn,
                 ['sales'],
@@ -1356,12 +1357,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 'projects'
             );
             logActivity($userId, 'sul_approve_project_estimation', 'expert_project_estimations', $estimationId, null, $_POST);
-            $_SESSION['success'] = "Project estimation approved and forwarded to Sales.";
+            $_SESSION['success'] = ($estimation['project_name'] ?? 'Project') . " estimation approved and forwarded to Sales successfully.";
         } else {
             $_SESSION['error'] = "Failed to approve project estimation.";
         }
         $stmt->close();
-        header("Location: task-allocation.php");
+        $approvalResult = $approvalSaved ? 'approved' : 'error';
+        header("Location: task-allocation.php?project_id=" . (int) $estimation['project_id'] . "&review_result={$approvalResult}#expert-review-panel");
         exit();
     }
 
@@ -1385,7 +1387,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $stmt = $conn->prepare("UPDATE expert_project_estimations SET status = 'sul_rejected', sul_reviewed_by = ?, sul_reviewed_at = NOW(), sul_comment = ? WHERE id = ?");
         $stmt->bind_param('isi', $userId, $reason, $estimationId);
-        if ($stmt->execute()) {
+        $revisionSaved = $stmt->execute();
+        if ($revisionSaved) {
             createNotification(
                 (int) $estimation['expert_id'],
                 "Project Estimation Revision Requested: " . ($estimation['project_name'] ?? 'Project'),
@@ -1401,7 +1404,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['error'] = "Failed to reject project estimation.";
         }
         $stmt->close();
-        header("Location: task-allocation.php");
+        $revisionResult = $revisionSaved ? 'revision_requested' : 'error';
+        header("Location: task-allocation.php?project_id=" . (int) $estimation['project_id'] . "&review_result={$revisionResult}#expert-review-panel");
         exit();
     }
 
@@ -1518,6 +1522,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 
+$flashSuccess = trim((string) ($_SESSION['success'] ?? ''));
+$flashError = trim((string) ($_SESSION['error'] ?? ''));
+unset($_SESSION['success'], $_SESSION['error']);
+
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
@@ -1580,6 +1588,73 @@ include '../../includes/navbar.php';
     margin-bottom: 0;
     font-size: 0.9rem;
     color: rgba(255, 255, 255, 0.9);
+}
+
+.workflow-feedback {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin-bottom: 1.25rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid;
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+    animation: workflowFeedbackArrival 0.35s ease-out;
+}
+
+.workflow-feedback__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    color: #fff;
+}
+
+.workflow-feedback__content {
+    min-width: 0;
+}
+
+.workflow-feedback__content strong,
+.workflow-feedback__content span {
+    display: block;
+}
+
+.workflow-feedback__content strong {
+    margin-bottom: 0.08rem;
+    font-size: 0.82rem;
+}
+
+.workflow-feedback__content span {
+    font-size: 0.76rem;
+    line-height: 1.4;
+}
+
+.workflow-feedback.is-success {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.workflow-feedback.is-success .workflow-feedback__icon {
+    background: #16a34a;
+}
+
+.workflow-feedback.is-error {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #991b1b;
+}
+
+.workflow-feedback.is-error .workflow-feedback__icon {
+    background: #dc2626;
+}
+
+@keyframes workflowFeedbackArrival {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* Section Cards */
@@ -2473,6 +2548,18 @@ include '../../includes/navbar.php';
     color: #9db6cf;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-feedback.is-success {
+    border-color: rgba(34, 197, 94, 0.34);
+    background: rgba(22, 101, 52, 0.2);
+    color: #bbf7d0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-feedback.is-error {
+    border-color: rgba(248, 113, 113, 0.32);
+    background: rgba(153, 27, 27, 0.2);
+    color: #fecaca;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .expert-utility-grid {
@@ -2558,6 +2645,24 @@ include '../../includes/navbar.php';
             <p>Manage tasks from creation to completion</p>
         </div>
     </div>
+
+    <?php if ($flashSuccess !== ''): ?>
+        <div class="workflow-feedback is-success" role="status" tabindex="-1" data-workflow-feedback>
+            <span class="workflow-feedback__icon" aria-hidden="true"><i class="fas fa-check"></i></span>
+            <span class="workflow-feedback__content">
+                <strong>Action completed successfully</strong>
+                <span><?php echo htmlspecialchars($flashSuccess); ?></span>
+            </span>
+        </div>
+    <?php elseif ($flashError !== ''): ?>
+        <div class="workflow-feedback is-error" role="alert" tabindex="-1" data-workflow-feedback>
+            <span class="workflow-feedback__icon" aria-hidden="true"><i class="fas fa-exclamation"></i></span>
+            <span class="workflow-feedback__content">
+                <strong>Action could not be completed</strong>
+                <span><?php echo htmlspecialchars($flashError); ?></span>
+            </span>
+        </div>
+    <?php endif; ?>
 
     <!-- Tab Navigation -->
     <ul class="nav nav-tabs mb-4" id="allocationTabs" role="tablist">
@@ -3517,6 +3622,18 @@ projectReviewToggles.forEach(toggle => {
         setProjectReviewOpen(toggle, shouldOpen);
     });
 });
+
+const reviewResult = new URLSearchParams(window.location.search).get('review_result');
+if (reviewResult) {
+    const reviewTab = document.getElementById('expert-review-tab');
+    if (reviewTab && window.bootstrap?.Tab) {
+        bootstrap.Tab.getOrCreateInstance(reviewTab).show();
+    }
+
+    window.requestAnimationFrame(() => {
+        document.querySelector('[data-workflow-feedback]')?.focus({ preventScroll: true });
+    });
+}
 
 function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', maxDate = '') {
     document.getElementById('devTaskId').value = taskId;
