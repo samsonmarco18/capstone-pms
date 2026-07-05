@@ -633,27 +633,5 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
         return 'This roadmap task is assigned to another developer in the methodology plan.';
     }
 
-    $roadmapDepartment = (string) ($roadmapTask['department'] ?? '');
-    $developerDepartment = (string) ($task['developer_department'] ?? '');
-    $department = function_exists('projectWorkflowDepartmentLabel')
-        ? projectWorkflowDepartmentLabel($roadmapDepartment !== '' ? $roadmapDepartment : $developerDepartment)
-        : ($roadmapDepartment !== '' ? $roadmapDepartment : $developerDepartment);
-    $canStartAfterPreviousPhases = in_array($department, ['Frontend', 'Backend'], true);
-    if ($canStartAfterPreviousPhases) {
-        return null;
-    }
-
-    $today = new DateTimeImmutable('today');
-    $phaseStart = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $roadmapTask['phase_start']);
-    $taskStart = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $roadmapTask['task_start']);
-
-    if ($phaseStart && $today < $phaseStart) {
-        return 'This phase has not started yet. Scheduled phase: ' . (string) $roadmapTask['phase_name'] . ' on ' . $phaseStart->format('M d, Y') . '.';
-    }
-
-    if ($taskStart && $today < $taskStart) {
-        return 'This task is scheduled to start on ' . $taskStart->format('M d, Y') . ' in the methodology roadmap.';
-    }
-
     return null;
 }
