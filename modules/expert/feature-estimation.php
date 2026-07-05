@@ -1173,6 +1173,19 @@ include '../../includes/navbar.php';
     border-bottom: 1px solid var(--gray-200);
 }
 
+.feature-project-action {
+    align-items: center;
+    display: flex;
+    height: 100%;
+    justify-content: center;
+    min-height: 42px;
+    width: 100%;
+}
+
+.feature-project-action[hidden] {
+    display: none;
+}
+
 .phase-list {
     padding: 1.5rem;
 }
@@ -2209,8 +2222,8 @@ textarea.form-control-custom {
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <a class="btn-save-phases text-center text-decoration-none" id="openRoadmapBtn" href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php" style="display: none;">
-                        <i class="fas fa-route"></i> Open Roadmap
+                    <a class="btn-save-phases feature-project-action text-center text-decoration-none" id="editTaskStaffingBtn" href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php" hidden>
+                        <i class="fas fa-user-plus"></i> Edit Task Staffing
                     </a>
                 </div>
             </div>
@@ -2218,28 +2231,6 @@ textarea.form-control-custom {
     </div>
 
     <div id="projectSections" style="display: none;">
-        <div class="phase-management-card">
-            <div class="phase-header">
-                <h5><i class="fas fa-route"></i> Methodology Roadmap</h5>
-            </div>
-            <div class="project-selector" style="border-top: 1px solid var(--gray-200);">
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                    <div>
-                        <div class="fw-semibold" id="selectedRoadmapProjectName">Selected project</div>
-                        <small class="text-muted">Architect manages phases and phase developer count. Experts edit staffing count and developer type inside each roadmap task.</small>
-                    </div>
-                    <div class="d-flex flex-wrap gap-2">
-                        <button class="btn btn-outline-secondary btn-sm" type="button" id="changeFeatureProjectBtn">
-                            <i class="fas fa-arrow-left me-1" aria-hidden="true"></i> Change Project
-                        </button>
-                        <a class="btn-save-phases text-center text-decoration-none" id="inlineRoadmapBtn" href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php">
-                            <i class="fas fa-user-plus"></i> Edit Task Staffing
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <div class="management-table-section">
             <div class="management-table-header">
                 <div>
@@ -2487,9 +2478,7 @@ const architectPlanningByTask = <?php echo json_encode($architectPlanningByTask,
 const expertWorkspaceStorageKey = 'expert-estimation-active-workspace';
 
 function updateFeatureProjectView(hasProject) {
-    const chooser = document.getElementById('featureProjectChooser');
     const sections = document.getElementById('projectSections');
-    if (chooser) chooser.style.display = hasProject ? 'none' : 'block';
     if (sections) sections.style.display = hasProject ? 'block' : 'none';
 }
 
@@ -2554,8 +2543,8 @@ function loadProjectSetup() {
     
     if (!projectId) {
         currentProjectId = null;
-        const openRoadmapBtn = document.getElementById('openRoadmapBtn');
-        if (openRoadmapBtn) openRoadmapBtn.style.display = 'none';
+        const editTaskStaffingBtn = document.getElementById('editTaskStaffingBtn');
+        if (editTaskStaffingBtn) editTaskStaffingBtn.hidden = true;
         updateFeatureProjectView(false);
         renderProjectManagementTable();
         filterFeatureList();
@@ -2565,32 +2554,16 @@ function loadProjectSetup() {
     currentProjectId = projectId;
 
     const roadmapUrl = buildRoadmapUrl(projectId);
-    const openRoadmapBtn = document.getElementById('openRoadmapBtn');
-    const inlineRoadmapBtn = document.getElementById('inlineRoadmapBtn');
-    if (openRoadmapBtn) {
-        openRoadmapBtn.href = roadmapUrl;
-        openRoadmapBtn.style.display = 'block';
-    }
-    if (inlineRoadmapBtn) {
-        inlineRoadmapBtn.href = roadmapUrl;
-    }
-    const selectedName = document.getElementById('selectedRoadmapProjectName');
-    if (selectedName) {
-        selectedName.textContent = getSelectedProjectName() || 'Selected project';
+    const editTaskStaffingBtn = document.getElementById('editTaskStaffingBtn');
+    if (editTaskStaffingBtn) {
+        editTaskStaffingBtn.href = roadmapUrl;
+        editTaskStaffingBtn.hidden = false;
     }
 
     renderProjectManagementTable();
 
     updateFeatureProjectView(true);
     filterFeatureList();
-}
-
-function resetFeatureProjectSelection() {
-    const select = document.getElementById('phaseProjectSelect');
-    if (!select) return;
-    select.value = '';
-    loadProjectSetup();
-    select.focus();
 }
 
 function escapeHtml(text) {
@@ -3457,7 +3430,6 @@ if (phaseSelect) {
     phaseSelect.value = '';
     loadProjectSetup();
 }
-document.getElementById('changeFeatureProjectBtn')?.addEventListener('click', resetFeatureProjectSelection);
 bindPreviewHandlers();
 bindGanttHandlers();
 bindRecommendationHandlers();
