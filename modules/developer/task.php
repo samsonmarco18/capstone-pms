@@ -2366,7 +2366,7 @@ function buildRoadmapReadyBanner(task) {
     return `
         <div class="roadmap-ready-banner">
             <i class="fas fa-lock-open"></i>
-            <div><strong>Ready to start.</strong> Earlier roadmap phases are complete, so ${escapeHtml(currentDepartmentCanonical.toLowerCase())} work can begin.</div>
+            <div><strong>Ready to start.</strong> Earlier roadmap phase gates are clear, so ${escapeHtml(currentDepartmentCanonical.toLowerCase())} work can begin even if the schedule was planned for later.</div>
         </div>
     `;
 }

@@ -364,7 +364,7 @@ function projectWorkflowNotifySelectedSuls(mysqli|PgsqlMysqliCompatConnection $c
             $conn,
             (string) $department,
             'Project Roadmap Ready: ' . $projectName,
-            'Architect submitted the plan. Your department can view the roadmap and will unlock when its phase becomes active.',
+            'Architect submitted the plan. Your department can view the roadmap and begin assigned work once earlier phase gates are clear.',
             BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
             $projectId
         );
