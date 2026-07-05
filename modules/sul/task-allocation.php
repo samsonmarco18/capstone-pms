@@ -601,7 +601,8 @@ foreach ($expertProjectOptions as $expertProjectOption) {
         + (int) ($expertProjectOption['review_count'] ?? 0)
         + (int) ($expertProjectOption['project_review_count'] ?? 0);
 }
-$selectedExpertTaskCount = $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows + $projectEstimationReviews->num_rows;
+$expertReviewCount = $reviewTasks->num_rows + $projectEstimationReviews->num_rows;
+$selectedExpertTaskCount = $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $expertReviewCount;
 $expertAllocationBadgeCount = ($projectId && $project) ? $selectedExpertTaskCount : $expertProjectOptionTaskCount;
 
 // Get available developers
@@ -1795,6 +1796,318 @@ include '../../includes/navbar.php';
     flex-wrap: wrap;
 }
 
+/* Review queue */
+.review-queue-hint {
+    color: var(--gray-600);
+    font-size: 0.75rem;
+}
+
+.review-queue-group + .review-queue-group {
+    margin-top: 1.25rem;
+}
+
+.review-queue-group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.6rem;
+    color: var(--gray-700);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+}
+
+.review-queue-group-head span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.review-queue-group-head small {
+    color: var(--gray-500);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.review-queue-list {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.project-review-card {
+    overflow: hidden;
+    border: 1px solid var(--gray-200);
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.project-review-card.is-open {
+    border-color: rgba(31, 99, 146, 0.45);
+    box-shadow: 0 10px 28px rgba(15, 42, 64, 0.08);
+}
+
+.project-review-toggle {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.9rem 1rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.project-review-toggle:hover {
+    background: #f8fbfd;
+}
+
+.project-review-toggle:focus-visible {
+    outline: 3px solid rgba(31, 99, 146, 0.2);
+    outline-offset: -3px;
+}
+
+.project-review-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.project-review-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    background: #fff7ed;
+    color: #c2410c;
+}
+
+.project-review-title {
+    display: block;
+    overflow: hidden;
+    color: var(--gray-900);
+    font-size: 0.9rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.project-review-copy {
+    min-width: 0;
+}
+
+.project-review-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.8rem;
+    margin-top: 0.2rem;
+    color: var(--gray-500);
+    font-size: 0.7rem;
+}
+
+.project-review-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.project-review-amount {
+    display: grid;
+    gap: 0.08rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.project-review-amount small {
+    color: var(--gray-500);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.project-review-amount strong {
+    color: var(--theme-primary);
+    font-size: 0.92rem;
+}
+
+.project-review-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.34rem 0.62rem;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.project-review-chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: var(--gray-100);
+    color: var(--gray-600);
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.project-review-toggle[aria-expanded="true"] .project-review-chevron {
+    transform: rotate(180deg);
+    background: #e8f3fa;
+    color: var(--theme-primary);
+}
+
+.project-review-details {
+    padding: 1rem;
+    border-top: 1px solid var(--gray-200);
+    background: #fbfcfe;
+}
+
+.project-review-costs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 0.9rem;
+}
+
+.project-review-cost {
+    min-width: 0;
+    padding: 0.75rem 0.8rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 11px;
+    background: #fff;
+}
+
+.project-review-cost span {
+    display: block;
+    color: var(--gray-500);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+}
+
+.project-review-cost strong {
+    display: block;
+    margin-top: 0.18rem;
+    overflow-wrap: anywhere;
+    color: var(--gray-800);
+    font-size: 0.88rem;
+}
+
+.project-review-cost.is-primary {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+}
+
+.project-review-cost.is-primary strong {
+    color: #1d4ed8;
+}
+
+.project-review-cost.is-negative {
+    border-color: #fecaca;
+    background: #fef2f2;
+}
+
+.project-review-cost.is-negative strong {
+    color: #b91c1c;
+}
+
+.project-review-decisions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.project-review-decision {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    min-width: 0;
+    margin: 0;
+    padding: 0.85rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    background: #fff;
+}
+
+.project-review-decision-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+}
+
+.project-review-decision-head i {
+    margin-top: 0.12rem;
+}
+
+.project-review-decision-head strong,
+.project-review-decision-head span {
+    display: block;
+}
+
+.project-review-decision-head strong {
+    color: var(--gray-800);
+    font-size: 0.78rem;
+}
+
+.project-review-decision-head span {
+    margin-top: 0.1rem;
+    color: var(--gray-500);
+    font-size: 0.68rem;
+    line-height: 1.35;
+}
+
+.project-review-decision.is-approve .project-review-decision-head i {
+    color: #059669;
+}
+
+.project-review-decision.is-revision .project-review-decision-head i {
+    color: #d97706;
+}
+
+.project-review-decision label {
+    margin-bottom: -0.35rem;
+    color: var(--gray-700);
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.project-review-decision label span {
+    color: var(--gray-500);
+    font-weight: 500;
+}
+
+.project-review-decision textarea {
+    min-height: 74px;
+    resize: vertical;
+}
+
+.project-review-decision button {
+    justify-content: center;
+    min-height: 38px;
+    margin-top: auto;
+}
+
 /* Estimation Badge */
 .estimation-badge {
     background: #f0fdf4;
@@ -2110,6 +2423,56 @@ include '../../includes/navbar.php';
     color: #fb923c;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-decision {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-toggle:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-details {
+    background: #0a1b2c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-details {
+    border-color: rgba(31, 99, 146, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-decision-head strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost.is-primary {
+    background: rgba(29, 78, 216, 0.14);
+    border-color: rgba(96, 165, 250, 0.34);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost.is-primary strong {
+    color: #93c5fd;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost.is-negative {
+    background: rgba(185, 28, 28, 0.14);
+    border-color: rgba(248, 113, 113, 0.32);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost.is-negative strong {
+    color: #fca5a5;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-status {
+    background: rgba(29, 78, 216, 0.18);
+    color: #93c5fd;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-chevron {
+    background: #10263a;
+    color: #9db6cf;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .expert-utility-grid {
@@ -2144,6 +2507,37 @@ include '../../includes/navbar.php';
     
     .task-meta {
         gap: 0.5rem;
+    }
+
+    .project-review-toggle {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.55rem 0.75rem;
+    }
+
+    .project-review-identity {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .project-review-chevron {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .project-review-amount {
+        grid-column: 1;
+        grid-row: 2;
+        padding-left: 3.1rem;
+        text-align: left;
+    }
+
+    .project-review-status {
+        display: none;
+    }
+
+    .project-review-costs,
+    .project-review-decisions {
+        grid-template-columns: 1fr;
     }
     
     #allocationTabs .nav-link {
@@ -2241,7 +2635,7 @@ include '../../includes/navbar.php';
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="expert-review-tab" data-bs-toggle="tab" data-bs-target="#expert-review-panel" type="button" role="tab" aria-controls="expert-review-panel" aria-selected="false">
-                        <i class="fas fa-clipboard-list"></i> Ready for Review <span class="badge-count"><?php echo $reviewTasks->num_rows + $projectEstimationReviews->num_rows; ?></span>
+                        <i class="fas fa-clipboard-list"></i> Ready for Review <span class="badge-count"><?php echo $expertReviewCount; ?></span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -2373,8 +2767,9 @@ include '../../includes/navbar.php';
                     <h5>
                         <i class="fas fa-clipboard-list"></i>
                         Ready for Review
-                        <span class="badge-count"><?php echo $reviewTasks->num_rows; ?> tasks</span>
+                        <span class="badge-count"><?php echo $expertReviewCount; ?> <?php echo $expertReviewCount === 1 ? 'item' : 'items'; ?></span>
                     </h5>
+                    <span class="review-queue-hint">Open an item to review its details</span>
                 </div>
                 <div class="p-3 allocation-column-body">
                     <?php if(!$projectId || !$project): ?>
@@ -2384,51 +2779,94 @@ include '../../includes/navbar.php';
                         </div>
                     <?php else: ?>
                     <?php if($projectEstimationReviews->num_rows > 0): ?>
+                        <div class="review-queue-group">
+                            <div class="review-queue-group-head">
+                                <span><i class="fas fa-file-invoice-dollar"></i> Project cost estimations</span>
+                                <small><?php echo $projectEstimationReviews->num_rows; ?> awaiting decision</small>
+                            </div>
+                            <div class="review-queue-list">
                         <?php while($estimate = $projectEstimationReviews->fetch_assoc()): ?>
-                        <div class="task-card">
-                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-                                <div class="flex-grow-1">
-                                    <div class="d-flex align-items-center gap-2 mb-1">
-                                        <span class="task-priority priority-high">Project Cost</span>
-                                        <span class="task-title"><?php echo htmlspecialchars((string) $estimate['project_name']); ?></span>
+                        <?php $projectReviewPanelId = 'projectEstimationReview' . (int) $estimate['id']; ?>
+                        <article class="project-review-card" data-project-review-card>
+                            <button type="button" class="project-review-toggle" aria-expanded="false" aria-controls="<?php echo $projectReviewPanelId; ?>">
+                                <span class="project-review-identity">
+                                    <span class="project-review-icon" aria-hidden="true"><i class="fas fa-calculator"></i></span>
+                                    <span class="project-review-copy">
+                                        <span class="project-review-title"><?php echo htmlspecialchars((string) $estimate['project_name']); ?></span>
+                                        <span class="project-review-meta">
+                                            <span><i class="fas fa-building" aria-hidden="true"></i><?php echo htmlspecialchars((string) $estimate['client_name']); ?></span>
+                                            <span><i class="fas fa-user" aria-hidden="true"></i><?php echo htmlspecialchars((string) $estimate['expert_name']); ?></span>
+                                            <span><i class="fas fa-gauge-high" aria-hidden="true"></i><?php echo htmlspecialchars((string) $estimate['project_complexity']); ?></span>
+                                            <span><i class="far fa-calendar" aria-hidden="true"></i><?php echo (int) $estimate['project_duration_months']; ?> month<?php echo (int) $estimate['project_duration_months'] === 1 ? '' : 's'; ?></span>
+                                        </span>
+                                    </span>
+                                </span>
+                                <span class="project-review-amount">
+                                    <small>Overall estimate</small>
+                                    <strong><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></strong>
+                                </span>
+                                <span class="project-review-status"><i class="fas fa-clock" aria-hidden="true"></i>Awaiting review</span>
+                                <span class="project-review-chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            </button>
+                            <div class="project-review-details" id="<?php echo $projectReviewPanelId; ?>" hidden>
+                                <div class="project-review-costs" aria-label="Project estimation cost breakdown">
+                                    <div class="project-review-cost">
+                                        <span>Developer cost</span>
+                                        <strong><?php echo projectEstimationPeso((float) $estimate['total_developer_cost']); ?></strong>
                                     </div>
-                                    <div class="task-meta">
-                                        <span><i class="fas fa-building"></i> Client: <?php echo htmlspecialchars((string) $estimate['client_name']); ?></span>
-                                        <span><i class="fas fa-user"></i> Expert: <?php echo htmlspecialchars((string) $estimate['expert_name']); ?></span>
-                                        <span><i class="fas fa-gauge-high"></i> <?php echo htmlspecialchars((string) $estimate['project_complexity']); ?></span>
-                                        <span><i class="fas fa-calendar"></i> <?php echo (int) $estimate['project_duration_months']; ?> month<?php echo (int) $estimate['project_duration_months'] === 1 ? '' : 's'; ?></span>
+                                    <div class="project-review-cost">
+                                        <span>Technology stack</span>
+                                        <strong><?php echo projectEstimationPeso((float) $estimate['total_technology_stack_cost']); ?></strong>
                                     </div>
-                                    <div class="mt-2 p-2 bg-light rounded-2">
-                                        <small class="text-muted">
-                                            Developer: <?php echo projectEstimationPeso((float) $estimate['total_developer_cost']); ?> |
-                                            Tech Stack: <?php echo projectEstimationPeso((float) $estimate['total_technology_stack_cost']); ?> |
-                                            Overall: <strong><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></strong> |
-                                            Remaining Budget: <?php echo projectEstimationPeso((float) $estimate['remaining_budget']); ?>
-                                        </small>
+                                    <div class="project-review-cost is-primary">
+                                        <span>Overall estimate</span>
+                                        <strong><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></strong>
+                                    </div>
+                                    <div class="project-review-cost <?php echo (float) $estimate['remaining_budget'] < 0 ? 'is-negative' : ''; ?>">
+                                        <span>Remaining budget</span>
+                                        <strong><?php echo projectEstimationPeso((float) $estimate['remaining_budget']); ?></strong>
                                     </div>
                                 </div>
-                                <div style="min-width: 280px; max-width: 360px;">
-                                    <form method="POST" class="mb-2" data-app-loading data-loading-title="Approving estimation" data-loading-text="Forwarding project estimation to Sales.">
+
+                                <div class="project-review-decisions">
+                                    <form method="POST" class="project-review-decision is-approve" data-generic-draft-disabled="1" data-app-loading data-loading-title="Approving estimation" data-loading-text="Forwarding project estimation to Sales.">
                                         <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
-                                        <textarea name="review_comment" class="form-control-custom mb-2" rows="2" placeholder="Optional SUL comment"></textarea>
-                                        <button type="submit" name="approve_project_estimation" class="btn-success-modern w-100">
+                                        <div class="project-review-decision-head">
+                                            <i class="fas fa-circle-check" aria-hidden="true"></i>
+                                            <span><strong>Approve estimation</strong><span>Confirm the costing and forward it to Sales.</span></span>
+                                        </div>
+                                        <label for="approvalNote<?php echo (int) $estimate['id']; ?>">Approval note <span>(optional)</span></label>
+                                        <textarea id="approvalNote<?php echo (int) $estimate['id']; ?>" name="review_comment" class="form-control-custom" rows="2" placeholder="Add a short note for Sales"></textarea>
+                                        <button type="submit" name="approve_project_estimation" class="btn-success-modern">
                                             <i class="fas fa-check"></i> Approve and Forward to Sales
                                         </button>
                                     </form>
-                                    <form method="POST" data-app-loading data-loading-title="Returning estimation" data-loading-text="Sending the estimation back for revision.">
+                                    <form method="POST" class="project-review-decision is-revision" data-generic-draft-disabled="1" data-app-loading data-loading-title="Returning estimation" data-loading-text="Sending the estimation back for revision.">
                                         <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
-                                        <textarea name="rejection_reason" class="form-control-custom mb-2" rows="2" required placeholder="Revision reason"></textarea>
-                                        <button type="submit" name="reject_project_estimation" class="btn-warning-modern w-100">
-                                            <i class="fas fa-times"></i> Return for Revision
+                                        <div class="project-review-decision-head">
+                                            <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                                            <span><strong>Request revision</strong><span>Return the estimate with clear changes for the Expert.</span></span>
+                                        </div>
+                                        <label for="revisionReason<?php echo (int) $estimate['id']; ?>">Revision reason <span>(required)</span></label>
+                                        <textarea id="revisionReason<?php echo (int) $estimate['id']; ?>" name="rejection_reason" class="form-control-custom" rows="2" required placeholder="Explain what needs to be revised"></textarea>
+                                        <button type="submit" name="reject_project_estimation" class="btn-warning-modern">
+                                            <i class="fas fa-rotate-left"></i> Return for Revision
                                         </button>
                                     </form>
                                 </div>
                             </div>
-                        </div>
+                        </article>
                         <?php endwhile; ?>
+                            </div>
+                        </div>
                     <?php endif; ?>
 
                     <?php if($reviewTasks->num_rows > 0): ?>
+                        <div class="review-queue-group">
+                            <div class="review-queue-group-head">
+                                <span><i class="fas fa-chart-line"></i> Task duration estimates</span>
+                                <small><?php echo $reviewTasks->num_rows; ?> awaiting decision</small>
+                            </div>
                         <?php while($task = $reviewTasks->fetch_assoc()): 
                             $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                             $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
@@ -2462,6 +2900,7 @@ include '../../includes/navbar.php';
                         </div>
                     </div>
                     <?php endwhile; ?>
+                        </div>
                 <?php elseif($projectEstimationReviews->num_rows === 0): ?>
                     <div class="empty-state">
                         <i class="fas fa-check-circle"></i>
@@ -3059,6 +3498,23 @@ document.querySelectorAll('.js-assign-expert').forEach(button => {
             Number.parseInt(button.dataset.taskId || '0', 10),
             button.dataset.taskTitle || ''
         );
+    });
+});
+
+const projectReviewToggles = document.querySelectorAll('.project-review-toggle');
+
+function setProjectReviewOpen(toggle, isOpen) {
+    const details = document.getElementById(toggle.getAttribute('aria-controls') || '');
+    toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    toggle.closest('[data-project-review-card]')?.classList.toggle('is-open', isOpen);
+    if (details) details.hidden = !isOpen;
+}
+
+projectReviewToggles.forEach(toggle => {
+    toggle.addEventListener('click', () => {
+        const shouldOpen = toggle.getAttribute('aria-expanded') !== 'true';
+        projectReviewToggles.forEach(otherToggle => setProjectReviewOpen(otherToggle, false));
+        setProjectReviewOpen(toggle, shouldOpen);
     });
 });
 
