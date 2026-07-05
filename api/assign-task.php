@@ -2,6 +2,7 @@
 header('Content-Type: application/json');
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/workflow.php';
+require_once __DIR__ . '/../includes/methodology-roadmap.php';
 require_once __DIR__ . '/../includes/project-workflow.php';
 
 if (!isLoggedIn()) {
@@ -20,6 +21,7 @@ if (($user['role'] ?? '') !== 'sul') {
 
 $conn = getConnection();
 workflowEnsureSchema($conn);
+methodologyRoadmapEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
 $taskId = (int) ($_POST['task_id'] ?? 0);
 $assigneeId = (int) ($_POST['user_id'] ?? 0);
@@ -79,6 +81,10 @@ if (!$task) {
     exit();
 }
 
+$assignmentTaskIds = [$taskId => $taskId];
+$assignmentRoadmapTaskIds = [];
+$assignmentProjectId = (int) ($task['project_id'] ?? 0);
+
 if ($assignee['role'] === 'expert') {
     if (!$isExpertDepartmentSul) {
         http_response_code(403);
@@ -133,8 +139,88 @@ if ($assignee['role'] === 'expert') {
         echo json_encode(['success' => false, 'error' => 'Only the current unlocked, Sales-approved roadmap task can be assigned to a developer.']);
         exit();
     }
+
+    if ($currentRoadmapTask) {
+        $entityKey = trim((string) ($currentRoadmapTask['developer_entity_key'] ?? ''));
+        $entityTaskIds = [$taskId];
+        if ($entityKey !== '') {
+            $safeEntityKey = $conn->real_escape_string($entityKey);
+            $entityRows = $conn->query("
+                SELECT DISTINCT task_id
+                FROM methodology_tasks
+                WHERE project_id = {$projectId}
+                  AND developer_entity_key = '{$safeEntityKey}'
+                  AND task_id IS NOT NULL
+                  AND task_id > 0
+                ORDER BY task_id ASC
+            ");
+            $entityTaskIds = [];
+            if (!$entityRows) {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'error' => 'Unable to load the roadmap developer entity.']);
+                exit();
+            }
+            while ($entityRow = $entityRows->fetch_assoc()) {
+                $entityTaskIds[] = (int) ($entityRow['task_id'] ?? 0);
+            }
+        }
+
+        foreach (array_values(array_unique(array_filter($entityTaskIds))) as $entityTaskId) {
+            $entityCurrentRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $projectId, $entityTaskId, $sulDepartment);
+            if (
+                !$entityCurrentRoadmapTask
+                || trim((string) ($entityCurrentRoadmapTask['developer_entity_key'] ?? '')) !== $entityKey
+                || (int) ($entityCurrentRoadmapTask['assigned_developer_id'] ?? 0) > 0
+            ) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'error' => 'Every task in this roadmap developer entity must be current, unlocked, and unassigned before assignment.']);
+                exit();
+            }
+
+            $assignmentTaskIds[$entityTaskId] = $entityTaskId;
+            $assignmentRoadmapTaskIds[] = (int) ($entityCurrentRoadmapTask['id'] ?? 0);
+        }
+
+        $assignmentTaskIdList = implode(',', array_map('intval', array_values($assignmentTaskIds)));
+        $salesReadySql = $hasSalesApproval ? ' AND t.sales_approved = 1' : '';
+        $daysReadySql = $hasSalesChoice ? ' AND t.sales_estimate_days > 0' : '';
+        $readyRows = $conn->query("
+            SELECT t.id
+            FROM tasks t
+            JOIN projects p ON p.id = t.project_id
+            LEFT JOIN users current_assignee ON current_assignee.id = t.assigned_to
+            WHERE t.id IN ({$assignmentTaskIdList})
+              AND (
+                  (t.status = 'todo' AND (t.assigned_to IS NULL OR current_assignee.role = 'expert'))
+                  OR (t.status = 'completed' AND t.architect_reviewed_at IS NULL AND t.merged_at IS NULL)
+              )
+              AND {$projectFilter}
+              {$salesReadySql}{$daysReadySql}
+              AND EXISTS (
+                  SELECT 1
+                  FROM feature_estimations fe_ready
+                  WHERE fe_ready.task_id = t.id
+                    AND fe_ready.status = 'completed'
+              )
+        ");
+        $readyTaskIds = [];
+        if (!$readyRows) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Unable to verify every task in this roadmap developer entity.']);
+            exit();
+        }
+        while ($readyRow = $readyRows->fetch_assoc()) {
+            $readyTaskIds[(int) $readyRow['id']] = true;
+        }
+        if (count($readyTaskIds) !== count($assignmentTaskIds)) {
+            http_response_code(400);
+            echo json_encode(['success' => false, 'error' => 'Every task in this roadmap developer entity must be approved and ready before assignment.']);
+            exit();
+        }
+    }
 }
 
+$assignmentTaskIdList = implode(',', array_map('intval', array_values($assignmentTaskIds)));
 $stmt = $conn->prepare("
     UPDATE tasks
     SET assigned_to = ?,
@@ -144,9 +230,9 @@ $stmt = $conn->prepare("
         pr_submitted_at = NULL,
         sul_reviewed_by = NULL,
         sul_reviewed_at = NULL
-    WHERE id = ?
+    WHERE id IN ({$assignmentTaskIdList})
 ");
-$stmt->bind_param('iii', $assigneeId, $userId, $taskId);
+$stmt->bind_param('ii', $assigneeId, $userId);
 
 if (!$stmt->execute()) {
     http_response_code(500);
@@ -157,31 +243,39 @@ $stmt->close();
 
 if (($assignee['role'] ?? '') === 'developer' && dbTableExists($conn, 'methodology_tasks')) {
     $currentRoadmapTask = $currentRoadmapTask ?? projectWorkflowCurrentRoadmapTask($conn, (int) ($task['project_id'] ?? 0), $taskId, $sulDepartment);
-    $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
-    $syncRoadmapStmt = $conn->prepare("
-        UPDATE methodology_tasks
-        SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    ");
-    if ($syncRoadmapStmt && $currentRoadmapTaskId > 0) {
-        $syncRoadmapStmt->bind_param('iii', $assigneeId, $userId, $currentRoadmapTaskId);
-        $syncRoadmapStmt->execute();
-        $syncRoadmapStmt->close();
+    if ($assignmentRoadmapTaskIds === []) {
+        $assignmentRoadmapTaskIds[] = (int) ($currentRoadmapTask['id'] ?? 0);
+    }
+    $assignmentRoadmapTaskIdList = implode(',', array_filter(array_map('intval', $assignmentRoadmapTaskIds)));
+    if ($assignmentRoadmapTaskIdList !== '') {
+        $syncRoadmapStmt = $conn->prepare("
+            UPDATE methodology_tasks
+            SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id IN ({$assignmentRoadmapTaskIdList})
+        ");
+        if ($syncRoadmapStmt) {
+            $syncRoadmapStmt->bind_param('ii', $assigneeId, $userId);
+            $syncRoadmapStmt->execute();
+            $syncRoadmapStmt->close();
+        }
     }
 
-    projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
+    projectWorkflowSyncRoadmap($conn, $assignmentProjectId);
 }
 
-createNotification(
-    $assigneeId,
-    'New Task Assignment: ' . $task['title'],
-    'You have been assigned a task by the Service Unit Leader.',
-    'task',
-    'tasks',
-    $taskId,
-    BASE_URL . (($assignee['role'] === 'developer') ? 'modules/developer/task.php?id=' . $taskId : 'modules/expert/feature-estimation.php')
-);
+$assignedTaskRows = $conn->query("SELECT id, title FROM tasks WHERE id IN ({$assignmentTaskIdList})");
+while ($assignedTask = $assignedTaskRows->fetch_assoc()) {
+    createNotification(
+        $assigneeId,
+        'New Task Assignment: ' . $assignedTask['title'],
+        'You have been assigned a task by the Service Unit Leader.',
+        'task',
+        'tasks',
+        (int) $assignedTask['id'],
+        BASE_URL . (($assignee['role'] === 'developer') ? 'modules/developer/task.php?id=' . (int) $assignedTask['id'] : 'modules/expert/feature-estimation.php')
+    );
+}
 
-logActivity($userId, 'assign_task', 'tasks', $taskId, null, ['assigned_to' => $assigneeId]);
+logActivity($userId, 'assign_task', 'tasks', $taskId, null, ['assigned_to' => $assigneeId, 'task_ids' => array_values($assignmentTaskIds)]);
 
 echo json_encode(['success' => true]);

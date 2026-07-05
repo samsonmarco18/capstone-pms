@@ -213,6 +213,7 @@ CREATE TABLE methodology_tasks (
     description TEXT,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
+    developer_entity_key VARCHAR(80) NULL,
     assigned_developer_id INT NULL,
     expert_people_count INT DEFAULT 0,
     expert_developer_type VARCHAR(100) NULL,
@@ -233,6 +234,7 @@ CREATE TABLE methodology_tasks (
     INDEX idx_methodology_task_project (project_id),
     INDEX idx_methodology_task_phase (phase_id),
     INDEX idx_methodology_task_workflow_task (task_id),
+    INDEX idx_methodology_task_entity (developer_entity_key),
     INDEX idx_methodology_task_dates (start_date, end_date),
     INDEX idx_methodology_task_developer (assigned_developer_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

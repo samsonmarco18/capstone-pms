@@ -204,6 +204,7 @@ CREATE TABLE methodology_tasks (
     description TEXT,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
+    developer_entity_key VARCHAR(80) NULL,
     assigned_developer_id INT NULL,
     expert_people_count INT DEFAULT 0,
     expert_developer_type VARCHAR(100) NULL,
