@@ -86,6 +86,40 @@ function sulTaskAllocationExcerpt(?string $text, int $limit = 120): string
     return substr($clean, 0, $limit - 1) . '…';
 }
 
+function sulTaskAllocationBulkEntityCountSelect(string $taskAlias = 't'): string
+{
+    $taskAlias = preg_replace('/[^A-Za-z0-9_]/', '', $taskAlias) ?: 't';
+
+    return "(
+        SELECT COUNT(DISTINCT mt_bulk.task_id)
+        FROM methodology_tasks mt_current
+        INNER JOIN methodology_tasks mt_bulk
+            ON mt_bulk.project_id = mt_current.project_id
+           AND mt_bulk.developer_entity_key = mt_current.developer_entity_key
+           AND mt_bulk.task_id IS NOT NULL
+           AND mt_bulk.task_id > 0
+        WHERE mt_current.project_id = {$taskAlias}.project_id
+          AND mt_current.task_id = {$taskAlias}.id
+          AND COALESCE(mt_current.developer_entity_key, '') <> ''
+    ) AS bulk_entity_task_count";
+}
+
+function sulTaskAllocationBulkEntityBadge(array $task): string
+{
+    $bulkCount = (int) ($task['bulk_entity_task_count'] ?? 0);
+    if ($bulkCount <= 1) {
+        return '';
+    }
+
+    $label = 'Bulk assignment: ' . $bulkCount . ' features';
+    $title = 'Architect bulk placement: these features share one roadmap developer/entity and should move together.';
+
+    return '<span class="bulk-entity-badge" title="' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '">'
+        . '<i class="fas fa-layer-group" aria-hidden="true"></i> '
+        . htmlspecialchars($label, ENT_QUOTES, 'UTF-8')
+        . '</span>';
+}
+
 function sulTaskAllocationRoadmapEntityRows(
     mysqli|PgsqlMysqliCompatConnection $conn,
     int $projectId,
@@ -316,10 +350,12 @@ if ($projectId && $project) {
 $selectedExpertProjectFilter = $projectId > 0 ? " AND t.project_id = {$projectId}" : " AND 1 = 0";
 $selectedExpertEstimationProjectFilter = $projectId > 0 ? " AND e.project_id = {$projectId}" : " AND 1 = 0";
 $selectedProjectAllocationFilter = $projectId > 0 ? " AND p.id = {$projectId}" : " AND 1 = 0";
+$bulkEntityCountSelect = sulTaskAllocationBulkEntityCountSelect('t');
 
 // Get all unassigned tasks (need expert assignment)
 $unassignedTasks = $conn->query("
     SELECT t.*, p.name as project_name, p.client_id,
+           {$bulkEntityCountSelect},
            (SELECT COUNT(*) FROM feature_estimations fe WHERE fe.task_id = t.id AND fe.status = 'completed') as has_estimation
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
@@ -339,6 +375,7 @@ $unassignedTasks = $conn->query("
 // Get tasks pending expert estimation (assigned to expert but not yet estimated)
 $pendingEstimationTasks = $conn->query("
     SELECT t.*, u.full_name as expert_name, p.name as project_name,
+           {$bulkEntityCountSelect},
            (SELECT COUNT(*) FROM feature_estimations fe WHERE fe.task_id = t.id AND fe.status = 'completed') as has_estimation
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
@@ -363,6 +400,7 @@ $developerReadyApprovalFilter = ($hasSalesApproval ? " AND t.sales_approved = 1"
 $selectedDeveloperProjectFilter = $projectId > 0 ? " AND t.project_id = {$projectId}" : " AND 1 = 0";
 $reviewTasks = $conn->query("
     SELECT t.*, u.full_name as expert_name, p.name as project_name,
+           {$bulkEntityCountSelect},
            fe.min_days, fe.likely_days, fe.max_days, fe.expectation_description,
            (SELECT COUNT(*) FROM feature_estimations fe2 WHERE fe2.task_id = t.id AND fe2.status = 'completed') as has_estimation
     FROM tasks t
@@ -391,6 +429,7 @@ $projectEstimationReviews = $conn->query("
 // Get tasks ready for developer assignment (approved, waiting for developer)
 $readyForDevTasks = $conn->query("
     SELECT t.*, u.full_name as expert_name, p.name as project_name,
+           {$bulkEntityCountSelect},
            fe.min_days, fe.likely_days, fe.max_days,
            (
                SELECT mt_department_scope.start_date
@@ -427,7 +466,8 @@ $readyForDevTasks = $conn->query("
 
 // Get tasks assigned to developers (in progress)
 $inProgressTasks = $conn->query("
-    SELECT t.*, u.full_name as developer_name, p.name as project_name
+    SELECT t.*, u.full_name as developer_name, p.name as project_name,
+           {$bulkEntityCountSelect}
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
@@ -441,6 +481,7 @@ $inProgressTasks = $conn->query("
 // Get developer Pull Requests waiting for SUL code review
 $codeReviewTasks = $conn->query("
     SELECT t.*, u.full_name as developer_name, p.name as project_name,
+           {$bulkEntityCountSelect},
            latest_git.branch_name, latest_git.commit_hash, latest_git.pull_request_url, latest_git.repository_url, latest_git.notes AS git_notes
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
@@ -461,7 +502,8 @@ $codeReviewTasks = $conn->query("
 
 // Get completed tasks
 $completedTasks = $conn->query("
-    SELECT t.*, u.full_name as assigned_to_name, p.name as project_name
+    SELECT t.*, u.full_name as assigned_to_name, p.name as project_name,
+           {$bulkEntityCountSelect}
     FROM tasks t
     LEFT JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
@@ -1766,6 +1808,24 @@ include '../../includes/navbar.php';
     gap: 0.25rem;
 }
 
+.bulk-entity-badge {
+    align-items: center;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 20px;
+    color: #9a3412;
+    display: inline-flex;
+    font-size: 0.65rem;
+    font-weight: 700;
+    gap: 0.25rem;
+    padding: 0.22rem 0.6rem;
+    white-space: nowrap;
+}
+
+.bulk-entity-badge i {
+    color: #c2410c;
+}
+
 /* Buttons */
 .btn-primary-modern {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
@@ -2040,6 +2100,16 @@ include '../../includes/navbar.php';
     color: #9db6cf;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-entity-badge {
+    background: rgba(194, 65, 12, 0.16);
+    border-color: rgba(251, 146, 60, 0.32);
+    color: #fdba74;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-entity-badge i {
+    color: #fb923c;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .expert-utility-grid {
@@ -2213,6 +2283,7 @@ include '../../includes/navbar.php';
                                     <div class="d-flex align-items-center gap-2 mb-1">
                                         <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
                                         <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                     </div>
                                     <div class="task-meta">
                                         <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -2272,6 +2343,7 @@ include '../../includes/navbar.php';
                                     <div class="d-flex align-items-center gap-2 mb-1">
                                         <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
                                         <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                     </div>
                                     <div class="task-meta">
                                         <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -2367,6 +2439,7 @@ include '../../includes/navbar.php';
                                     <div class="d-flex align-items-center gap-2 mb-1">
                                         <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
                                         <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                         </div>
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -2599,6 +2672,7 @@ include '../../includes/navbar.php';
                                 <div class="d-flex align-items-center gap-2 mb-1">
                                     <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
                                     <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                    <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                 </div>
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -2658,6 +2732,7 @@ include '../../includes/navbar.php';
                                 <div class="d-flex align-items-center gap-2 mb-1">
                                     <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
                                     <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                    <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                 </div>
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -2710,6 +2785,7 @@ include '../../includes/navbar.php';
                                     <div class="d-flex align-items-center gap-2 mb-1">
                                         <span class="task-priority priority-<?php echo htmlspecialchars((string) $task['priority']); ?>"><?php echo ucfirst((string) $task['priority']); ?></span>
                                         <span class="task-title"><?php echo htmlspecialchars((string) $task['title']); ?></span>
+                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                     </div>
                                     <div class="task-meta">
                                         <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars((string) $task['project_name']); ?></span>
@@ -2773,6 +2849,7 @@ include '../../includes/navbar.php';
                             <div>
                                 <div class="d-flex align-items-center gap-2">
                                     <s class="task-title"><?php echo htmlspecialchars($task['title']); ?></s>
+                                    <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                 </div>
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -3050,10 +3127,14 @@ function viewTaskDetails(taskId) {
         data: { id: taskId },
         success: function(response) {
             const task = response;
+            const bulkEntityCount = Number(task.bulk_entity_task_count || 0);
+            const bulkEntityBadge = bulkEntityCount > 1
+                ? `<span class="bulk-entity-badge ms-2" title="Architect bulk placement: these features share one roadmap developer/entity and should move together."><i class="fas fa-layer-group" aria-hidden="true"></i> Bulk assignment: ${bulkEntityCount} features</span>`
+                : '';
             let html = `
                 <div class="row g-4">
                     <div class="col-md-8">
-                        <h5 class="mb-3">${escapeHtml(task.title)}</h5>
+                        <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">${escapeHtml(task.title)}${bulkEntityBadge}</h5>
                         <div class="mb-3">
                             <strong>Description:</strong>
                             <p class="mt-2">${escapeHtml(task.description)}</p>

@@ -15,6 +15,7 @@ if (!isLoggedIn()) {
 $user = getCurrentUser();
 $conn = getConnection();
 departmentArtifactEnsureSchema($conn);
+methodologyRoadmapEnsureSchema($conn);
 
 $taskId = intval($_GET['id'] ?? 0);
 
@@ -31,6 +32,18 @@ $stmt = $conn->prepare("
            p.requested_features, p.timeline_start, p.timeline_end,
            c.name as client_name,
            u.full_name as assigned_to_name, au.full_name as assigned_by_name,
+           (
+               SELECT COUNT(DISTINCT mt_bulk.task_id)
+               FROM methodology_tasks mt_current
+               INNER JOIN methodology_tasks mt_bulk
+                   ON mt_bulk.project_id = mt_current.project_id
+                  AND mt_bulk.developer_entity_key = mt_current.developer_entity_key
+                  AND mt_bulk.task_id IS NOT NULL
+                  AND mt_bulk.task_id > 0
+               WHERE mt_current.project_id = t.project_id
+                 AND mt_current.task_id = t.id
+                 AND COALESCE(mt_current.developer_entity_key, '') <> ''
+           ) AS bulk_entity_task_count,
            fe.min_days, fe.likely_days, fe.max_days, fe.expectation_description as estimation_notes
     FROM tasks t
     LEFT JOIN projects p ON t.project_id = p.id
