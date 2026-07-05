@@ -69,16 +69,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             projectEstimationCompletePlanningPhase($conn, $projectId, (int) $user['id']);
             $conn->query("UPDATE projects SET status = 'in_development' WHERE id = {$projectId} AND status != 'completed'");
             projectWorkflowSyncRoadmap($conn, $projectId);
-            workflowNotifyRoles(
-                $conn,
-                ['architect', 'sul'],
-                'Project Estimation Approved',
-                'Sales approved the project estimation. Planning is complete and the next project phase is now active.',
-                BASE_URL . 'modules/roadmap/methodology.php?project_id=' . $projectId,
-                $projectId,
-                'approval',
-                'projects'
-            );
+            $projectDetails = $conn->query("SELECT * FROM projects WHERE id = {$projectId} LIMIT 1")->fetch_assoc() ?: [];
+            $assignedDepartments = projectWorkflowSelectedDepartments($conn, $projectId, $projectDetails);
+            $taskAllocationUrl = BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId;
+            $roadmapUrl = BASE_URL . 'modules/roadmap/methodology.php?project_id=' . $projectId;
+
+            foreach ($assignedDepartments as $department) {
+                projectWorkflowNotifyDepartmentSuls(
+                    $conn,
+                    (string) $department,
+                    'Project Ready for ' . (string) $department . ' Allocation',
+                    'Sales approved the project estimation. Assign the required ' . (string) $department . ' developers for the active roadmap work.',
+                    $taskAllocationUrl,
+                    $projectId
+                );
+            }
+
+            if ($assignedDepartments === []) {
+                workflowNotifyRoles(
+                    $conn,
+                    ['sul'],
+                    'Project Ready for Task Allocation',
+                    'Sales approved the project estimation. Review the active roadmap work and assign the required developers.',
+                    $taskAllocationUrl,
+                    $projectId,
+                    'project',
+                    'projects'
+                );
+            }
+
+            $architectId = (int) ($projectDetails['architect_id'] ?? 0);
+            if ($architectId > 0) {
+                createNotification(
+                    $architectId,
+                    'Project Estimation Approved',
+                    'Sales approved the project estimation. Planning is complete and the next project phase is now active.',
+                    'approval',
+                    'projects',
+                    $projectId,
+                    $roadmapUrl
+                );
+            } else {
+                workflowNotifyRoles(
+                    $conn,
+                    ['architect'],
+                    'Project Estimation Approved',
+                    'Sales approved the project estimation. Planning is complete and the next project phase is now active.',
+                    $roadmapUrl,
+                    $projectId,
+                    'approval',
+                    'projects'
+                );
+            }
             logActivity((int) $user['id'], 'sales_approve_project_estimation', 'expert_project_estimations', $estimationId, null, $_POST);
             $_SESSION['success'] = "Project estimation approved. Planning phase completed and the next phase is active.";
         } else {
