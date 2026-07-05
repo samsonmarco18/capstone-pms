@@ -83,6 +83,7 @@ if (!$task) {
 
 $assignmentTaskIds = [$taskId => $taskId];
 $assignmentRoadmapTaskIds = [];
+$assignmentDepartmentProgressByTaskId = [];
 $assignmentProjectId = (int) ($task['project_id'] ?? 0);
 
 if ($assignee['role'] === 'expert') {
@@ -178,7 +179,14 @@ if ($assignee['role'] === 'expert') {
             }
 
             $assignmentTaskIds[$entityTaskId] = $entityTaskId;
-            $assignmentRoadmapTaskIds[] = (int) ($entityCurrentRoadmapTask['id'] ?? 0);
+            $roadmapTaskId = (int) ($entityCurrentRoadmapTask['id'] ?? 0);
+            if ($roadmapTaskId > 0) {
+                $assignmentRoadmapTaskIds[$roadmapTaskId] = $roadmapTaskId;
+            }
+            $departmentProgressId = (int) ($entityCurrentRoadmapTask['department_progress_id'] ?? 0);
+            if ($departmentProgressId > 0) {
+                $assignmentDepartmentProgressByTaskId[$departmentProgressId] = $entityTaskId;
+            }
         }
 
         $assignmentTaskIdList = implode(',', array_map('intval', array_values($assignmentTaskIds)));
@@ -244,19 +252,46 @@ $stmt->close();
 if (($assignee['role'] ?? '') === 'developer' && dbTableExists($conn, 'methodology_tasks')) {
     $currentRoadmapTask = $currentRoadmapTask ?? projectWorkflowCurrentRoadmapTask($conn, (int) ($task['project_id'] ?? 0), $taskId, $sulDepartment);
     if ($assignmentRoadmapTaskIds === []) {
-        $assignmentRoadmapTaskIds[] = (int) ($currentRoadmapTask['id'] ?? 0);
+        $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
+        if ($currentRoadmapTaskId > 0) {
+            $assignmentRoadmapTaskIds[$currentRoadmapTaskId] = $currentRoadmapTaskId;
+        }
+        $currentDepartmentProgressId = (int) ($currentRoadmapTask['department_progress_id'] ?? 0);
+        if ($currentDepartmentProgressId > 0) {
+            $assignmentDepartmentProgressByTaskId[$currentDepartmentProgressId] = $taskId;
+        }
     }
-    $assignmentRoadmapTaskIdList = implode(',', array_filter(array_map('intval', $assignmentRoadmapTaskIds)));
+    $assignmentRoadmapTaskIdList = implode(',', array_filter(array_map('intval', array_values($assignmentRoadmapTaskIds))));
     if ($assignmentRoadmapTaskIdList !== '') {
         $syncRoadmapStmt = $conn->prepare("
             UPDATE methodology_tasks
             SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id IN ({$assignmentRoadmapTaskIdList})
+              AND project_id = ?
         ");
         if ($syncRoadmapStmt) {
-            $syncRoadmapStmt->bind_param('ii', $assigneeId, $userId);
+            $syncRoadmapStmt->bind_param('iii', $assigneeId, $userId, $assignmentProjectId);
             $syncRoadmapStmt->execute();
             $syncRoadmapStmt->close();
+        }
+    }
+
+    if ($assignmentDepartmentProgressByTaskId !== []) {
+        $syncDepartmentStmt = $conn->prepare("
+            UPDATE methodology_task_departments
+            SET assigned_developer_id = ?,
+                workflow_task_id = ?,
+                status = 'planned',
+                updated_by = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND project_id = ?
+        ");
+        if ($syncDepartmentStmt) {
+            foreach ($assignmentDepartmentProgressByTaskId as $departmentProgressId => $workflowTaskId) {
+                $syncDepartmentStmt->bind_param('iiiii', $assigneeId, $workflowTaskId, $userId, $departmentProgressId, $assignmentProjectId);
+                $syncDepartmentStmt->execute();
+            }
+            $syncDepartmentStmt->close();
         }
     }
 

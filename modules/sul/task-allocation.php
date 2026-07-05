@@ -14,7 +14,7 @@ methodologyRoadmapEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
 projectEstimationEnsureSchema($conn);
 
-$projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
+$projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : (isset($_POST['project_id']) ? intval($_POST['project_id']) : 0);
 $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
 
 function sulTaskAllocationProjectFilter($conn, string $projectAlias, string $department): string
@@ -84,6 +84,40 @@ function sulTaskAllocationExcerpt(?string $text, int $limit = 120): string
     }
 
     return substr($clean, 0, $limit - 1) . '…';
+}
+
+function sulTaskAllocationBulkEntityCountSelect(string $taskAlias = 't'): string
+{
+    $taskAlias = preg_replace('/[^A-Za-z0-9_]/', '', $taskAlias) ?: 't';
+
+    return "(
+        SELECT COUNT(DISTINCT mt_bulk.task_id)
+        FROM methodology_tasks mt_current
+        INNER JOIN methodology_tasks mt_bulk
+            ON mt_bulk.project_id = mt_current.project_id
+           AND mt_bulk.developer_entity_key = mt_current.developer_entity_key
+           AND mt_bulk.task_id IS NOT NULL
+           AND mt_bulk.task_id > 0
+        WHERE mt_current.project_id = {$taskAlias}.project_id
+          AND mt_current.task_id = {$taskAlias}.id
+          AND COALESCE(mt_current.developer_entity_key, '') <> ''
+    ) AS bulk_entity_task_count";
+}
+
+function sulTaskAllocationBulkEntityBadge(array $task): string
+{
+    $bulkCount = (int) ($task['bulk_entity_task_count'] ?? 0);
+    if ($bulkCount <= 1) {
+        return '';
+    }
+
+    $label = 'Bulk assignment: ' . $bulkCount . ' features';
+    $title = 'Architect bulk placement: these features share one roadmap developer/entity and should move together.';
+
+    return '<span class="bulk-entity-badge" title="' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '">'
+        . '<i class="fas fa-layer-group" aria-hidden="true"></i> '
+        . htmlspecialchars($label, ENT_QUOTES, 'UTF-8')
+        . '</span>';
 }
 
 function sulTaskAllocationRoadmapEntityRows(
@@ -208,19 +242,6 @@ $ganttProjectOptions = $conn->query("
     ORDER BY p.created_at DESC
 ");
 
-// Default to first available project if none selected
-if (!$projectId) {
-    $firstProject = $conn->query("
-        SELECT p.id 
-        FROM projects p 
-        WHERE p.status != 'completed'
-          AND {$sulProjectFilter}
-        ORDER BY p.created_at DESC 
-        LIMIT 1
-    ")->fetch_assoc();
-    $projectId = (int) ($firstProject['id'] ?? 0);
-}
-
 // Get project details
 $project = null;
 if($projectId) {
@@ -326,14 +347,21 @@ if ($projectId && $project) {
     }
 }
 
+$selectedExpertProjectFilter = $projectId > 0 ? " AND t.project_id = {$projectId}" : " AND 1 = 0";
+$selectedExpertEstimationProjectFilter = $projectId > 0 ? " AND e.project_id = {$projectId}" : " AND 1 = 0";
+$selectedProjectAllocationFilter = $projectId > 0 ? " AND p.id = {$projectId}" : " AND 1 = 0";
+$bulkEntityCountSelect = sulTaskAllocationBulkEntityCountSelect('t');
+
 // Get all unassigned tasks (need expert assignment)
 $unassignedTasks = $conn->query("
     SELECT t.*, p.name as project_name, p.client_id,
+           {$bulkEntityCountSelect},
            (SELECT COUNT(*) FROM feature_estimations fe WHERE fe.task_id = t.id AND fe.status = 'completed') as has_estimation
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
     WHERE (t.assigned_to IS NULL OR t.assigned_to = 0) AND t.status = 'todo'
       AND {$sulProjectFilter}
+      {$selectedExpertProjectFilter}
     ORDER BY 
         CASE t.priority 
             WHEN 'critical' THEN 1 
@@ -347,6 +375,7 @@ $unassignedTasks = $conn->query("
 // Get tasks pending expert estimation (assigned to expert but not yet estimated)
 $pendingEstimationTasks = $conn->query("
     SELECT t.*, u.full_name as expert_name, p.name as project_name,
+           {$bulkEntityCountSelect},
            (SELECT COUNT(*) FROM feature_estimations fe WHERE fe.task_id = t.id AND fe.status = 'completed') as has_estimation
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
@@ -357,6 +386,7 @@ $pendingEstimationTasks = $conn->query("
       AND u.role = 'expert'
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
+      {$selectedExpertProjectFilter}
       AND (SELECT COUNT(*) FROM feature_estimations fe WHERE fe.task_id = t.id AND fe.status = 'completed') = 0
     ORDER BY t.deadline ASC
 ");
@@ -366,8 +396,11 @@ $salesApprovalFilter = $hasSalesApproval ? " AND t.sales_approved = 1" : "";
 if ($hasSalesChoice) {
     $salesApprovalFilter .= " AND t.sales_estimate_days IS NOT NULL";
 }
+$developerReadyApprovalFilter = ($hasSalesApproval ? " AND t.sales_approved = 1" : "") . ($hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "");
+$selectedDeveloperProjectFilter = $projectId > 0 ? " AND t.project_id = {$projectId}" : " AND 1 = 0";
 $reviewTasks = $conn->query("
     SELECT t.*, u.full_name as expert_name, p.name as project_name,
+           {$bulkEntityCountSelect},
            fe.min_days, fe.likely_days, fe.max_days, fe.expectation_description,
            (SELECT COUNT(*) FROM feature_estimations fe2 WHERE fe2.task_id = t.id AND fe2.status = 'completed') as has_estimation
     FROM tasks t
@@ -377,6 +410,7 @@ $reviewTasks = $conn->query("
     WHERE t.status = 'review'{$salesApprovalFilter}
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
+      {$selectedExpertProjectFilter}
     ORDER BY t.deadline ASC
 ");
 
@@ -388,12 +422,14 @@ $projectEstimationReviews = $conn->query("
     JOIN users u ON u.id = e.expert_id
     WHERE e.status = 'submitted'
       AND {$sulProjectFilter}
+      {$selectedExpertEstimationProjectFilter}
     ORDER BY e.submitted_at ASC, e.id ASC
 ");
 
 // Get tasks ready for developer assignment (approved, waiting for developer)
 $readyForDevTasks = $conn->query("
     SELECT t.*, u.full_name as expert_name, p.name as project_name,
+           {$bulkEntityCountSelect},
            fe.min_days, fe.likely_days, fe.max_days,
            (
                SELECT mt_department_scope.start_date
@@ -422,26 +458,30 @@ $readyForDevTasks = $conn->query("
           OR (t.status = 'completed' AND t.architect_reviewed_at IS NULL AND t.merged_at IS NULL)
       )
       AND {$sulProjectFilter}
+      {$selectedDeveloperProjectFilter}
       {$sulCurrentRoadmapTaskFilter}
-      AND (SELECT COUNT(*) FROM feature_estimations fe2 WHERE fe2.task_id = t.id AND fe2.status = 'completed') > 0" . ($hasSalesApproval ? " AND t.sales_approved = 1" : "") . ($hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "") . "
+      AND (SELECT COUNT(*) FROM feature_estimations fe2 WHERE fe2.task_id = t.id AND fe2.status = 'completed') > 0{$developerReadyApprovalFilter}
     ORDER BY t.deadline ASC
 ");
 
 // Get tasks assigned to developers (in progress)
 $inProgressTasks = $conn->query("
-    SELECT t.*, u.full_name as developer_name, p.name as project_name
+    SELECT t.*, u.full_name as developer_name, p.name as project_name,
+           {$bulkEntityCountSelect}
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
     WHERE t.status = 'in_progress'
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
+      {$selectedDeveloperProjectFilter}
     ORDER BY t.deadline ASC
 ");
 
 // Get developer Pull Requests waiting for SUL code review
 $codeReviewTasks = $conn->query("
     SELECT t.*, u.full_name as developer_name, p.name as project_name,
+           {$bulkEntityCountSelect},
            latest_git.branch_name, latest_git.commit_hash, latest_git.pull_request_url, latest_git.repository_url, latest_git.notes AS git_notes
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
@@ -456,12 +496,14 @@ $codeReviewTasks = $conn->query("
     WHERE t.status = 'for_review'
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
+      {$selectedDeveloperProjectFilter}
     ORDER BY t.pr_submitted_at ASC, t.updated_at ASC
 ");
 
 // Get completed tasks
 $completedTasks = $conn->query("
-    SELECT t.*, u.full_name as assigned_to_name, p.name as project_name
+    SELECT t.*, u.full_name as assigned_to_name, p.name as project_name,
+           {$bulkEntityCountSelect}
     FROM tasks t
     LEFT JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
@@ -469,6 +511,7 @@ $completedTasks = $conn->query("
       AND (t.architect_reviewed_at IS NOT NULL OR t.merged_at IS NOT NULL)
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
+      {$selectedDeveloperProjectFilter}
     ORDER BY t.completed_at DESC
     LIMIT 10
 ");
@@ -494,9 +537,72 @@ $projectsForAllocation = $conn->query("
       AND (t.assigned_to IS NULL OR t.assigned_to = 0)
       AND t.status = 'todo'
       AND {$sulProjectFilter}
+      {$selectedProjectAllocationFilter}
     GROUP BY p.id, p.name
     ORDER BY p.created_at DESC
 ");
+
+$expertProjectOptions = [];
+if ($canManageExpertWorkflow) {
+    $expertProjectOptionsResult = $conn->query("
+        SELECT
+            p.id,
+            p.name,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                WHERE t.project_id = p.id
+                  AND (t.assigned_to IS NULL OR t.assigned_to = 0)
+                  AND t.status = 'todo'
+            ) AS unassigned_count,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                JOIN users u ON t.assigned_to = u.id
+                WHERE t.project_id = p.id
+                  AND t.status = 'todo'
+                  AND t.assigned_to IS NOT NULL
+                  AND t.assigned_to != 0
+                  AND u.role = 'expert'
+                  {$sulUserDepartmentFilter}
+                  AND (SELECT COUNT(*) FROM feature_estimations fe WHERE fe.task_id = t.id AND fe.status = 'completed') = 0
+            ) AS pending_count,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                JOIN users u ON t.assigned_to = u.id
+                WHERE t.project_id = p.id
+                  AND t.status = 'review'{$salesApprovalFilter}
+                  {$sulUserDepartmentFilter}
+            ) AS review_count,
+            (
+                SELECT COUNT(DISTINCT e.id)
+                FROM expert_project_estimations e
+                WHERE e.project_id = p.id
+                  AND e.status = 'submitted'
+            ) AS project_review_count
+        FROM projects p
+        WHERE p.status != 'completed'
+          AND {$sulProjectFilter}
+        ORDER BY p.name ASC
+    ");
+
+    if ($expertProjectOptionsResult) {
+        while ($expertProjectOption = $expertProjectOptionsResult->fetch_assoc()) {
+            $expertProjectOptions[] = $expertProjectOption;
+        }
+    }
+}
+
+$expertProjectOptionTaskCount = 0;
+foreach ($expertProjectOptions as $expertProjectOption) {
+    $expertProjectOptionTaskCount += (int) ($expertProjectOption['unassigned_count'] ?? 0)
+        + (int) ($expertProjectOption['pending_count'] ?? 0)
+        + (int) ($expertProjectOption['review_count'] ?? 0)
+        + (int) ($expertProjectOption['project_review_count'] ?? 0);
+}
+$selectedExpertTaskCount = $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows + $projectEstimationReviews->num_rows;
+$expertAllocationBadgeCount = ($projectId && $project) ? $selectedExpertTaskCount : $expertProjectOptionTaskCount;
 
 // Get available developers
 $developers = $conn->query("
@@ -509,6 +615,68 @@ $developers = $conn->query("
     GROUP BY u.id
     ORDER BY assigned_tasks ASC
 ");
+
+$developerProjectOptions = [];
+if ($canManageDeveloperWorkflow) {
+    $developerProjectOptionsResult = $conn->query("
+        SELECT
+            p.id,
+            p.name,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                LEFT JOIN users current_assignee ON current_assignee.id = t.assigned_to
+                WHERE t.project_id = p.id
+                  AND (
+                      (t.status = 'todo' AND (t.assigned_to IS NULL OR current_assignee.role = 'expert'))
+                      OR (t.status = 'completed' AND t.architect_reviewed_at IS NULL AND t.merged_at IS NULL)
+                  )
+                  {$sulCurrentRoadmapTaskFilter}
+                  {$developerReadyApprovalFilter}
+                  AND EXISTS (
+                      SELECT 1
+                      FROM feature_estimations fe_ready
+                      WHERE fe_ready.task_id = t.id
+                        AND fe_ready.status = 'completed'
+                  )
+            ) AS ready_count,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                JOIN users u ON t.assigned_to = u.id
+                WHERE t.project_id = p.id
+                  AND t.status = 'in_progress'
+                  {$sulUserDepartmentFilter}
+            ) AS in_progress_count,
+            (
+                SELECT COUNT(DISTINCT t.id)
+                FROM tasks t
+                JOIN users u ON t.assigned_to = u.id
+                WHERE t.project_id = p.id
+                  AND t.status = 'for_review'
+                  {$sulUserDepartmentFilter}
+            ) AS review_count
+        FROM projects p
+        WHERE p.status != 'completed'
+          AND {$sulProjectFilter}
+        ORDER BY p.name ASC
+    ");
+
+    if ($developerProjectOptionsResult) {
+        while ($developerProjectOption = $developerProjectOptionsResult->fetch_assoc()) {
+            $developerProjectOptions[] = $developerProjectOption;
+        }
+    }
+}
+
+$developerProjectOptionTaskCount = 0;
+foreach ($developerProjectOptions as $developerProjectOption) {
+    $developerProjectOptionTaskCount += (int) ($developerProjectOption['ready_count'] ?? 0)
+        + (int) ($developerProjectOption['in_progress_count'] ?? 0)
+        + (int) ($developerProjectOption['review_count'] ?? 0);
+}
+$selectedDeveloperTaskCount = $readyForDevTasks->num_rows + $inProgressTasks->num_rows + $codeReviewTasks->num_rows;
+$developerAllocationBadgeCount = ($projectId && $project) ? $selectedDeveloperTaskCount : $developerProjectOptionTaskCount;
 
 // Handle task operations
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -547,7 +715,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         ");
         $taskCheck->bind_param("i", $taskId);
         $taskCheck->execute();
-        $validTask = $taskCheck->get_result()->num_rows > 0;
+        $validTaskRow = $taskCheck->get_result()->fetch_assoc();
+        $validTask = (bool) $validTaskRow;
         $taskCheck->close();
 
         if (!$validExpert || !$validTask) {
@@ -560,6 +729,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $stmt->bind_param("ii", $expertId, $taskId);
         
         if ($stmt->execute()) {
+            $assignmentProjectId = (int) ($validTaskRow['project_id'] ?? $projectId);
             $taskDetails = $conn->query("SELECT title FROM tasks WHERE id = $taskId")->fetch_assoc();
             
             createNotification(
@@ -573,7 +743,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             );
             
             $_SESSION['success'] = "Task assigned to Expert successfully";
-            header("Location: task-allocation.php");
+            header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
             exit();
         } else {
             $_SESSION['error'] = "Failed to assign task";
@@ -584,7 +754,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['assign_project_to_expert'])) {
         if (!$canManageExpertWorkflow) {
             $_SESSION['error'] = "Only the Expert Department SUL can assign projects to experts.";
-            header("Location: task-allocation.php");
+            header("Location: task-allocation.php?project_id=" . $projectId);
             exit();
         }
 
@@ -728,6 +898,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $currentRoadmapTask = null;
         $assignmentTaskIds = [$taskId => $taskId];
         $assignmentRoadmapTaskIds = [];
+        $assignmentDepartmentProgressByTaskId = [];
         if ($roadmapPhaseCount > 0) {
             $currentRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $assignmentProjectId, $taskId, $sulDepartment);
             if (!$currentRoadmapTask) {
@@ -758,7 +929,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
 
                 $assignmentTaskIds[(int) $entityTaskId] = (int) $entityTaskId;
-                $assignmentRoadmapTaskIds[] = (int) ($roadmapEntityRow['id'] ?? 0);
+                $roadmapEntityRowId = (int) ($roadmapEntityRow['id'] ?? 0);
+                if ($roadmapEntityRowId > 0) {
+                    $assignmentRoadmapTaskIds[$roadmapEntityRowId] = $roadmapEntityRowId;
+                }
+                $departmentProgressId = (int) ($roadmapEntityRow['department_progress_id'] ?? 0);
+                if ($departmentProgressId > 0) {
+                    $assignmentDepartmentProgressByTaskId[$departmentProgressId] = (int) $entityTaskId;
+                }
             }
 
             $assignmentTaskIdList = implode(',', array_map('intval', array_values($assignmentTaskIds)));
@@ -816,35 +994,67 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         
         if ($stmt->execute()) {
             if ($currentRoadmapTask) {
-                $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
-                $syncRoadmapStmt = $conn->prepare("
-                    UPDATE methodology_tasks
-                    SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                ");
-                if ($syncRoadmapStmt) {
-                    $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $currentRoadmapTaskId);
-                    $syncRoadmapStmt->execute();
-                    $syncRoadmapStmt->close();
+                if ($assignmentRoadmapTaskIds === []) {
+                    $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
+                    if ($currentRoadmapTaskId > 0) {
+                        $assignmentRoadmapTaskIds[$currentRoadmapTaskId] = $currentRoadmapTaskId;
+                    }
+                }
+                $assignmentRoadmapTaskIdList = implode(',', array_map('intval', array_values($assignmentRoadmapTaskIds)));
+                if ($assignmentRoadmapTaskIdList !== '') {
+                    $syncRoadmapStmt = $conn->prepare("
+                        UPDATE methodology_tasks
+                        SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                        WHERE id IN ({$assignmentRoadmapTaskIdList})
+                          AND project_id = ?
+                    ");
+                    if ($syncRoadmapStmt) {
+                        $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $assignmentProjectId);
+                        $syncRoadmapStmt->execute();
+                        $syncRoadmapStmt->close();
+                    }
+                }
+
+                if ($assignmentDepartmentProgressByTaskId !== []) {
+                    $syncDepartmentStmt = $conn->prepare("
+                        UPDATE methodology_task_departments
+                        SET assigned_developer_id = ?,
+                            workflow_task_id = ?,
+                            deadline = ?,
+                            status = 'planned',
+                            updated_by = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ? AND project_id = ?
+                    ");
+                    if ($syncDepartmentStmt) {
+                        foreach ($assignmentDepartmentProgressByTaskId as $departmentProgressId => $workflowTaskId) {
+                            $syncDepartmentStmt->bind_param("iisiii", $developerId, $workflowTaskId, $deadline, $userId, $departmentProgressId, $assignmentProjectId);
+                            $syncDepartmentStmt->execute();
+                        }
+                        $syncDepartmentStmt->close();
+                    }
                 }
             }
 
             projectWorkflowSyncRoadmap($conn, $assignmentProjectId);
-            $taskDetails = $conn->query("SELECT title, deadline FROM tasks WHERE id = $taskId")->fetch_assoc();
-            
-            createNotification(
-                (int) $developerId,
-                "New Task Assignment: " . $taskDetails['title'],
-                "You have been assigned a new task. Deadline: " . date('M d, Y', strtotime($taskDetails['deadline'])),
-                'task',
-                'tasks',
-                (int) $taskId,
-                BASE_URL . 'modules/developer/task.php?id=' . $taskId
-            );
+            $assignedTaskRows = $conn->query("SELECT id, title, deadline FROM tasks WHERE id IN ({$assignmentTaskIdList})");
+            if ($assignedTaskRows) {
+                while ($assignedTask = $assignedTaskRows->fetch_assoc()) {
+                    createNotification(
+                        (int) $developerId,
+                        "New Task Assignment: " . $assignedTask['title'],
+                        "You have been assigned a new task. Deadline: " . date('M d, Y', strtotime((string) $assignedTask['deadline'])),
+                        'task',
+                        'tasks',
+                        (int) $assignedTask['id'],
+                        BASE_URL . 'modules/developer/task.php?id=' . (int) $assignedTask['id']
+                    );
+                }
+            }
             
             $assignedCount = count($assignmentTaskIds);
-            $_SESSION['success'] = $assignedCount . " task" . ($assignedCount === 1 ? "" : "s") . " assigned to Developer successfully";
-            header("Location: task-allocation.php");
+            $_SESSION['success'] = $assignedCount . " task" . ($assignedCount === 1 ? "" : "s") . " assigned to one Developer successfully";
+            header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
             exit();
         } else {
             $_SESSION['error'] = "Failed to assign task";
@@ -1598,6 +1808,24 @@ include '../../includes/navbar.php';
     gap: 0.25rem;
 }
 
+.bulk-entity-badge {
+    align-items: center;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 20px;
+    color: #9a3412;
+    display: inline-flex;
+    font-size: 0.65rem;
+    font-weight: 700;
+    gap: 0.25rem;
+    padding: 0.22rem 0.6rem;
+    white-space: nowrap;
+}
+
+.bulk-entity-badge i {
+    color: #c2410c;
+}
+
 /* Buttons */
 .btn-primary-modern {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
@@ -1872,6 +2100,16 @@ include '../../includes/navbar.php';
     color: #9db6cf;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-entity-badge {
+    background: rgba(194, 65, 12, 0.16);
+    border-color: rgba(251, 146, 60, 0.32);
+    color: #fdba74;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-entity-badge i {
+    color: #fb923c;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .expert-utility-grid {
@@ -1933,7 +2171,7 @@ include '../../includes/navbar.php';
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="expert-tab" data-bs-toggle="tab" data-bs-target="#expert-panel" type="button" role="tab">
                 <i class="fas fa-user-tie me-2"></i>Expert
-                <span class="badge bg-warning ms-2"><?php echo $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $reviewTasks->num_rows + $projectEstimationReviews->num_rows + $projectsForAllocation->num_rows; ?></span>
+                <span class="badge bg-warning ms-2"><?php echo $expertAllocationBadgeCount; ?></span>
             </button>
         </li>
         <?php endif; ?>
@@ -1941,7 +2179,7 @@ include '../../includes/navbar.php';
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="developer-tab" data-bs-toggle="tab" data-bs-target="#developer-panel" type="button" role="tab">
                 <i class="fas fa-code me-2"></i>Developer
-                <span class="badge bg-primary ms-2"><?php echo $readyForDevTasks->num_rows + $inProgressTasks->num_rows + $codeReviewTasks->num_rows; ?></span>
+                <span class="badge bg-primary ms-2"><?php echo $developerAllocationBadgeCount; ?></span>
             </button>
         </li>
         <?php endif; ?>
@@ -1953,6 +2191,42 @@ include '../../includes/navbar.php';
         <!-- Expert Tab Panel -->
         <?php if ($canManageExpertWorkflow): ?>
         <div class="tab-pane fade show active" id="expert-panel" role="tabpanel">
+            <div class="section-card mb-4">
+                <div class="section-header">
+                    <div>
+                        <h5>
+                            <i class="fas fa-folder-open"></i>
+                            Project Allocation
+                        </h5>
+                        <?php if ($projectId && $project): ?>
+                            <small class="text-muted"><?php echo htmlspecialchars((string) $project['name']); ?></small>
+                        <?php else: ?>
+                            <small class="text-muted"><?php echo htmlspecialchars($sulDepartmentLabel); ?></small>
+                        <?php endif; ?>
+                    </div>
+                    <form method="GET" class="d-flex align-items-center gap-2 flex-wrap">
+                        <select name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for expert allocation" required>
+                            <option value="">Select project</option>
+                            <?php foreach ($expertProjectOptions as $expertProjectOption): ?>
+                                <?php
+                                    $optionUnassigned = (int) ($expertProjectOption['unassigned_count'] ?? 0);
+                                    $optionPending = (int) ($expertProjectOption['pending_count'] ?? 0);
+                                    $optionReview = (int) ($expertProjectOption['review_count'] ?? 0) + (int) ($expertProjectOption['project_review_count'] ?? 0);
+                                ?>
+                                <option value="<?php echo (int) $expertProjectOption['id']; ?>" <?php echo (int) $expertProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars((string) $expertProjectOption['name']); ?>
+                                    (<?php echo $optionUnassigned; ?> unassigned, <?php echo $optionPending; ?> pending, <?php echo $optionReview; ?> review)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php if ($projectId && $project): ?>
+                            <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $projectId; ?>" class="btn-outline-modern text-decoration-none">
+                                <i class="fas fa-route"></i> Roadmap
+                            </a>
+                        <?php endif; ?>
+                    </form>
+                </div>
+            </div>
             <div class="workflow-layout">
             <ul class="nav workflow-tabs" id="expertWorkflowTabs" role="tablist">
                 <li class="nav-item" role="presentation">
@@ -1994,7 +2268,12 @@ include '../../includes/navbar.php';
                     
                 </div>
                 <div class="p-3 allocation-column-body">
-                        <?php if($unassignedTasks->num_rows > 0): ?>
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for expert assignment</p>
+                        </div>
+                    <?php elseif($unassignedTasks->num_rows > 0): ?>
                         <?php while($task = $unassignedTasks->fetch_assoc()): 
                             $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                         ?>
@@ -2004,6 +2283,7 @@ include '../../includes/navbar.php';
                                     <div class="d-flex align-items-center gap-2 mb-1">
                                         <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
                                         <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                     </div>
                                     <div class="task-meta">
                                         <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -2033,8 +2313,8 @@ include '../../includes/navbar.php';
                         <div class="empty-state">
                             <i class="fas fa-check-circle"></i>
                             <p>No unassigned tasks</p>
-                </div>
-            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
         </div>
     </div>
 
@@ -2048,7 +2328,12 @@ include '../../includes/navbar.php';
             </h5>
         </div>
                 <div class="p-3 allocation-column-body">
-                    <?php if($pendingEstimationTasks->num_rows > 0): ?>
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for pending estimations</p>
+                        </div>
+                    <?php elseif($pendingEstimationTasks->num_rows > 0): ?>
                         <?php while($task = $pendingEstimationTasks->fetch_assoc()): 
                             $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                         ?>
@@ -2058,6 +2343,7 @@ include '../../includes/navbar.php';
                                     <div class="d-flex align-items-center gap-2 mb-1">
                                         <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
                                         <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                     </div>
                                     <div class="task-meta">
                                         <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -2091,6 +2377,12 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for reviews</p>
+                        </div>
+                    <?php else: ?>
                     <?php if($projectEstimationReviews->num_rows > 0): ?>
                         <?php while($estimate = $projectEstimationReviews->fetch_assoc()): ?>
                         <div class="task-card">
@@ -2147,6 +2439,7 @@ include '../../includes/navbar.php';
                                     <div class="d-flex align-items-center gap-2 mb-1">
                                         <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
                                         <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                         </div>
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -2175,6 +2468,7 @@ include '../../includes/navbar.php';
                         <p>No tasks ready for review</p>
                     </div>
                 <?php endif; ?>
+                <?php endif; ?>
                 </div>
             </div>
             <div class="tab-pane fade section-card allocation-column" id="expert-assign-panel" role="tabpanel" aria-labelledby="expert-assign-tab">
@@ -2186,7 +2480,12 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
-                    <?php if($projectsForAllocation->num_rows > 0): ?>
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for expert allocation</p>
+                        </div>
+                    <?php elseif($projectsForAllocation->num_rows > 0): ?>
                         <form method="POST" class="row g-3 align-items-end" data-app-loading data-loading-title="Assigning project" data-loading-text="Please wait while the project features are assigned to the expert.">
                             <div class="col-md-6">
                                 <label class="form-label">Project</label>
@@ -2286,6 +2585,42 @@ include '../../includes/navbar.php';
             <!-- Developer Tab Panel -->
         <?php if ($canManageDeveloperWorkflow): ?>
             <div class="tab-pane fade show active" id="developer-panel" role="tabpanel">
+            <div class="section-card mb-4">
+                <div class="section-header">
+                    <div>
+                        <h5>
+                            <i class="fas fa-folder-open"></i>
+                            Project Allocation
+                        </h5>
+                        <?php if ($projectId && $project): ?>
+                            <small class="text-muted"><?php echo htmlspecialchars((string) $project['name']); ?></small>
+                        <?php else: ?>
+                            <small class="text-muted"><?php echo htmlspecialchars($sulDepartmentLabel); ?></small>
+                        <?php endif; ?>
+                    </div>
+                    <form method="GET" class="d-flex align-items-center gap-2 flex-wrap">
+                        <select name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for developer allocation" required>
+                            <option value="">Select project</option>
+                            <?php foreach ($developerProjectOptions as $developerProjectOption): ?>
+                                <?php
+                                    $optionReady = (int) ($developerProjectOption['ready_count'] ?? 0);
+                                    $optionProgress = (int) ($developerProjectOption['in_progress_count'] ?? 0);
+                                    $optionReview = (int) ($developerProjectOption['review_count'] ?? 0);
+                                ?>
+                                <option value="<?php echo (int) $developerProjectOption['id']; ?>" <?php echo (int) $developerProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars((string) $developerProjectOption['name']); ?>
+                                    (<?php echo $optionReady; ?> ready, <?php echo $optionProgress; ?> active, <?php echo $optionReview; ?> review)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <?php if ($projectId && $project): ?>
+                            <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $projectId; ?>" class="btn-outline-modern text-decoration-none">
+                                <i class="fas fa-route"></i> Roadmap
+                            </a>
+                        <?php endif; ?>
+                    </form>
+                </div>
+            </div>
             <div class="workflow-layout">
             <ul class="nav workflow-tabs" id="developerWorkflowTabs" role="tablist">
                 <li class="nav-item" role="presentation">
@@ -2321,7 +2656,12 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
-                    <?php if($readyForDevTasks->num_rows > 0): ?>
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for developer assignment</p>
+                        </div>
+                    <?php elseif($readyForDevTasks->num_rows > 0): ?>
                         <?php while($task = $readyForDevTasks->fetch_assoc()): 
                             $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                             $pertEstimate = round(($task['min_days'] + 4*$task['likely_days'] + $task['max_days'])/6, 1);
@@ -2332,6 +2672,7 @@ include '../../includes/navbar.php';
                                 <div class="d-flex align-items-center gap-2 mb-1">
                                     <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
                                     <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                    <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                 </div>
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -2376,7 +2717,12 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
-                    <?php if($inProgressTasks->num_rows > 0): ?>
+                    <?php if(!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for active work</p>
+                        </div>
+                    <?php elseif($inProgressTasks->num_rows > 0): ?>
                     <?php while($task = $inProgressTasks->fetch_assoc()): 
                         $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
                     ?>
@@ -2386,6 +2732,7 @@ include '../../includes/navbar.php';
                                 <div class="d-flex align-items-center gap-2 mb-1">
                                     <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
                                     <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                                    <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                 </div>
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -2423,7 +2770,12 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3">
-                <?php if($codeReviewTasks->num_rows > 0): ?>
+                <?php if(!$projectId || !$project): ?>
+                    <div class="empty-state">
+                        <i class="fas fa-folder-open"></i>
+                        <p>Select a project for code review</p>
+                    </div>
+                <?php elseif($codeReviewTasks->num_rows > 0): ?>
                     <?php while($task = $codeReviewTasks->fetch_assoc()): ?>
                     <div class="task-card">
                         <form method="POST" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
@@ -2433,6 +2785,7 @@ include '../../includes/navbar.php';
                                     <div class="d-flex align-items-center gap-2 mb-1">
                                         <span class="task-priority priority-<?php echo htmlspecialchars((string) $task['priority']); ?>"><?php echo ucfirst((string) $task['priority']); ?></span>
                                         <span class="task-title"><?php echo htmlspecialchars((string) $task['title']); ?></span>
+                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                     </div>
                                     <div class="task-meta">
                                         <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars((string) $task['project_name']); ?></span>
@@ -2484,13 +2837,19 @@ include '../../includes/navbar.php';
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
-                <?php if($completedTasks->num_rows > 0): ?>
+                <?php if(!$projectId || !$project): ?>
+                    <div class="empty-state">
+                        <i class="fas fa-folder-open"></i>
+                        <p>Select a project for completed tasks</p>
+                    </div>
+                <?php elseif($completedTasks->num_rows > 0): ?>
                     <?php while($task = $completedTasks->fetch_assoc()): ?>
                     <div class="task-card bg-light">
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <div>
                                 <div class="d-flex align-items-center gap-2">
                                     <s class="task-title"><?php echo htmlspecialchars($task['title']); ?></s>
+                                    <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                 </div>
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
@@ -2541,6 +2900,7 @@ include '../../includes/navbar.php';
             <form method="POST" data-app-loading data-loading-title="Assigning expert" data-loading-text="Please wait while the expert assignment is saved.">
                 <div class="modal-body">
                     <input type="hidden" name="assign_to_expert" value="1">
+                    <input type="hidden" name="project_id" value="<?php echo (int) $projectId; ?>">
                     <input type="hidden" name="task_id" id="expertTaskId">
                     <p><strong>Task:</strong> <span id="expertTaskTitle"></span></p>
                     <div class="mb-3">
@@ -2580,6 +2940,7 @@ include '../../includes/navbar.php';
             </div>
             <form method="POST" data-app-loading data-loading-title="Assigning developer" data-loading-text="Please wait while the developer assignment is saved.">
                 <div class="modal-body">
+                    <input type="hidden" name="project_id" value="<?php echo (int) $projectId; ?>">
                     <input type="hidden" name="task_id" id="devTaskId">
                     <p><strong>Task:</strong> <span id="devTaskTitle"></span></p>
                     <div class="mb-3">
@@ -2766,10 +3127,14 @@ function viewTaskDetails(taskId) {
         data: { id: taskId },
         success: function(response) {
             const task = response;
+            const bulkEntityCount = Number(task.bulk_entity_task_count || 0);
+            const bulkEntityBadge = bulkEntityCount > 1
+                ? `<span class="bulk-entity-badge ms-2" title="Architect bulk placement: these features share one roadmap developer/entity and should move together."><i class="fas fa-layer-group" aria-hidden="true"></i> Bulk assignment: ${bulkEntityCount} features</span>`
+                : '';
             let html = `
                 <div class="row g-4">
                     <div class="col-md-8">
-                        <h5 class="mb-3">${escapeHtml(task.title)}</h5>
+                        <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">${escapeHtml(task.title)}${bulkEntityBadge}</h5>
                         <div class="mb-3">
                             <strong>Description:</strong>
                             <p class="mt-2">${escapeHtml(task.description)}</p>

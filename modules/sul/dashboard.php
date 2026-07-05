@@ -2,11 +2,13 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/project-delay-insights.php';
 require_once '../../includes/schedule-calendar.php';
+require_once '../../includes/methodology-roadmap.php';
 require_once '../../includes/project-workflow.php';
 requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+methodologyRoadmapEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
 $sulDepartment = trim((string) ($user['department'] ?? ''));
 $sulDepartmentLabel = projectWorkflowDepartmentLabel($sulDepartment);
@@ -38,6 +40,40 @@ function sulDashboardQuery($conn, string $sql)
     return (is_object($result) && method_exists($result, 'fetch_assoc')) ? $result : null;
 }
 
+function sulDashboardBulkEntityCountSelect(string $taskAlias = 't'): string
+{
+    $taskAlias = preg_replace('/[^A-Za-z0-9_]/', '', $taskAlias) ?: 't';
+
+    return "(
+        SELECT COUNT(DISTINCT mt_bulk.task_id)
+        FROM methodology_tasks mt_current
+        INNER JOIN methodology_tasks mt_bulk
+            ON mt_bulk.project_id = mt_current.project_id
+           AND mt_bulk.developer_entity_key = mt_current.developer_entity_key
+           AND mt_bulk.task_id IS NOT NULL
+           AND mt_bulk.task_id > 0
+        WHERE mt_current.project_id = {$taskAlias}.project_id
+          AND mt_current.task_id = {$taskAlias}.id
+          AND COALESCE(mt_current.developer_entity_key, '') <> ''
+    ) AS bulk_entity_task_count";
+}
+
+function sulDashboardBulkEntityBadge(array $task): string
+{
+    $bulkCount = (int) ($task['bulk_entity_task_count'] ?? 0);
+    if ($bulkCount <= 1) {
+        return '';
+    }
+
+    $label = 'Bulk assignment: ' . $bulkCount . ' features';
+    $title = 'Architect bulk placement: these features share one roadmap developer/entity and should move together.';
+
+    return '<span class="bulk-entity-badge" title="' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '">'
+        . '<i class="fas fa-layer-group" aria-hidden="true"></i> '
+        . htmlspecialchars($label, ENT_QUOTES, 'UTF-8')
+        . '</span>';
+}
+
 $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
 $hasSalesChoice = dbColumnExists($conn, 'tasks', 'sales_estimate_days');
 $salesApprovalCondition = $hasSalesApproval ? "t.sales_approved = 1" : "1 = 1";
@@ -46,6 +82,7 @@ $hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
 $projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
 $projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
+$bulkEntityCountSelect = sulDashboardBulkEntityCountSelect('t');
 
 // Get statistics
 $totalExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users u WHERE u.role IN ('expert', 'developer') AND {$sulUserDepartmentClause}");
@@ -132,7 +169,8 @@ $projectsNeedingAllocation = sulDashboardQuery($conn, "
 
 // Get recent tasks
 $recentTasks = sulDashboardQuery($conn, "
-    SELECT t.*, p.name as project_name, u.full_name as assigned_to_name
+    SELECT t.*, p.name as project_name, u.full_name as assigned_to_name,
+           {$bulkEntityCountSelect}
     FROM tasks t
     LEFT JOIN projects p ON t.project_id = p.id
     LEFT JOIN users u ON t.assigned_to = u.id
@@ -755,6 +793,25 @@ include '../../includes/navbar.php';
     word-break: break-word;
 }
 
+.bulk-entity-badge {
+    align-items: center;
+    align-self: flex-start;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 20px;
+    color: #9a3412;
+    display: inline-flex;
+    font-size: 0.65rem;
+    font-weight: 700;
+    gap: 0.25rem;
+    padding: 0.22rem 0.6rem;
+    white-space: nowrap;
+}
+
+.bulk-entity-badge i {
+    color: #c2410c;
+}
+
 .recent-task-description {
     color: var(--gray-600);
     font-size: 0.8rem;
@@ -814,6 +871,16 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-status-tag {
     background: #0a1b2c !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-entity-badge {
+    background: rgba(194, 65, 12, 0.16);
+    border-color: rgba(251, 146, 60, 0.32);
+    color: #fdba74;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-entity-badge i {
+    color: #fb923c;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h1,
@@ -1159,6 +1226,7 @@ include '../../includes/navbar.php';
                             <div class="recent-task-card-head">
                                 <div class="recent-task-card-head-main">
                                     <h6 class="recent-task-title"><?php echo htmlspecialchars($task['title']); ?></h6>
+                                    <?php echo sulDashboardBulkEntityBadge($task); ?>
                                     <?php if(!empty($task['description'])): ?>
                                         <div class="recent-task-description"><?php echo nl2br(htmlspecialchars((string) $task['description'])); ?></div>
                                     <?php endif; ?>
@@ -1456,10 +1524,14 @@ function viewTask(taskId) {
             if (task.error) {
                 $('#taskDetailsContent').html(`<div class="alert alert-danger mb-0">${escapeHtml(task.error)}</div>`);
             } else {
+                const bulkEntityCount = Number(task.bulk_entity_task_count || 0);
+                const bulkEntityBadge = bulkEntityCount > 1
+                    ? `<span class="bulk-entity-badge ms-2" title="Architect bulk placement: these features share one roadmap developer/entity and should move together."><i class="fas fa-layer-group" aria-hidden="true"></i> Bulk assignment: ${bulkEntityCount} features</span>`
+                    : '';
                 $('#taskDetailsContent').html(`
                     <div class="row g-4">
                         <div class="col-md-8">
-                            <h5 class="mb-3">${escapeHtml(task.title || '')}</h5>
+                            <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">${escapeHtml(task.title || '')}${bulkEntityBadge}</h5>
                             <p class="text-muted">${escapeHtml(task.description || 'No description provided.')}</p>
                             <div class="mb-2"><strong>Project:</strong> ${escapeHtml(task.project_name || 'No project')}</div>
                             <div class="mb-2"><strong>Client:</strong> ${escapeHtml(task.client_name || 'No client')}</div>
