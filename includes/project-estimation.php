@@ -339,7 +339,9 @@ function projectEstimationCompletePlanningPhase(mysqli|PgsqlMysqliCompatConnecti
 function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection $conn, array $user): void
 {
     $projects = projectEstimationFetchProjects($conn, (int) $user['id']);
-    $selectedProjectId = (int) ($_GET['project_estimation_id'] ?? ($projects[0]['id'] ?? 0));
+    $selectedProjectId = isset($_GET['project_estimation_id'])
+        ? max(0, (int) $_GET['project_estimation_id'])
+        : 0;
     $context = $selectedProjectId > 0 ? projectEstimationFetchContext($conn, $selectedProjectId) : [];
     $project = $context['project'] ?? null;
     $technologies = $context['technologies'] ?? [];
@@ -415,6 +417,13 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .estimation-section { margin-bottom: 1rem; border-color: #e3ebf3; box-shadow: 0 2px 8px rgba(15, 42, 64, 0.025); }
     .estimation-section:last-child { margin-bottom: 0; }
     .estimation-section > .estimation-panel-head { padding: 0.9rem 1.05rem; background: #fff; }
+    .estimation-section-toggle { width: 100%; border: 0; border-bottom: 1px solid var(--pe-line); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+    .estimation-section-toggle[aria-expanded="false"] { border-bottom-color: transparent; }
+    .estimation-section-toggle:hover { background: #f8fbfd; }
+    .estimation-section-toggle:focus-visible { position: relative; z-index: 1; outline: 3px solid rgba(31, 99, 146, 0.2); outline-offset: -3px; }
+    .estimation-section-toggle__meta { display: inline-flex; align-items: center; gap: 0.65rem; margin-left: auto; }
+    .estimation-section-toggle__chevron { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; background: #edf6fb; color: var(--pe-primary); transition: transform 0.2s ease, background 0.2s ease; }
+    .estimation-section-toggle[aria-expanded="true"] .estimation-section-toggle__chevron { transform: rotate(180deg); background: #dceef8; }
     .estimation-section-title { display: flex; align-items: center; gap: 0.68rem; }
     .estimation-section-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 9px; background: #edf6fb; color: var(--pe-primary); font-size: 0.78rem; }
     .estimation-section-title small { display: block; margin-top: 0.1rem; color: var(--pe-muted); font-size: 0.72rem; font-weight: 500; }
@@ -501,6 +510,8 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .review-progress { background: #0d1b2a; border-color: #20364a; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-toolbar,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-section > .estimation-panel-head { background: #102235; border-color: #20364a; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-section-toggle:hover { background: #132a40; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-section-toggle__chevron { background: #18334b; color: #7cc0ee; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-body { background: #091725; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-panel-head h5,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-cell strong,
@@ -552,6 +563,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                 <form method="GET" class="project-estimation-picker">
                     <label for="projectEstimationSelect">Project</label>
                     <select id="projectEstimationSelect" name="project_estimation_id" class="form-control-custom" onchange="this.form.submit()">
+                        <option value="" disabled <?php echo $selectedProjectId === 0 ? 'selected' : ''; ?>>Select a project to view details</option>
                         <?php foreach ($projects as $candidate): ?>
                             <option value="<?php echo (int) $candidate['id']; ?>" <?php echo (int) $candidate['id'] === $selectedProjectId ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars((string) $candidate['name']); ?>
@@ -563,9 +575,14 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             <div class="estimation-panel-body project-estimation-body">
                 <?php if (!$project): ?>
                     <div class="estimation-empty-state">
-                        <i class="fas fa-inbox" aria-hidden="true"></i>
-                        <strong>No project is ready for estimation</strong>
-                        <span>An assigned project will appear here after its roadmap and staffing inputs are available.</span>
+                        <i class="fas fa-<?php echo count($projects) > 0 ? 'folder-open' : 'inbox'; ?>" aria-hidden="true"></i>
+                        <?php if (count($projects) > 0): ?>
+                            <strong>Select a project to begin</strong>
+                            <span>Choose a project from the dropdown above, then open only the sections you want to review.</span>
+                        <?php else: ?>
+                            <strong>No project is ready for estimation</strong>
+                            <span>An assigned project will appear here after its roadmap and staffing inputs are available.</span>
+                        <?php endif; ?>
                     </div>
                 <?php else: ?>
                 <?php if ($estimationLockedForReview): ?>
@@ -586,10 +603,11 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     <input type="hidden" id="techMonthlyTotal" value="<?php echo htmlspecialchars((string) $techMonthlyTotal); ?>">
 
                     <div class="estimation-panel estimation-section">
-                        <div class="estimation-panel-head">
+                        <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="projectOverviewDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-briefcase"></i></span><span>Project Overview<small>Client scope and planning inputs</small></span></h5>
-                        </div>
-                        <div class="estimation-panel-body">
+                            <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                        </button>
+                        <div class="estimation-panel-body" id="projectOverviewDetails" hidden>
                             <div class="overview-grid">
                                 <div class="overview-cell"><span>Project Name</span><strong><?php echo htmlspecialchars((string) $project['name']); ?></strong></div>
                                 <div class="overview-cell"><span>Client Name</span><strong><?php echo htmlspecialchars((string) $project['client_name']); ?></strong></div>
@@ -602,10 +620,11 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     </div>
 
                     <div class="estimation-panel estimation-section">
-                        <div class="estimation-panel-head">
+                        <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="technologyCostDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-layer-group"></i></span><span>Technology Stack Cost<small>Software cost across the project duration</small></span></h5>
-                        </div>
-                        <div class="estimation-panel-body estimation-scroll">
+                            <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                        </button>
+                        <div class="estimation-panel-body estimation-scroll" id="technologyCostDetails" hidden>
                             <table class="estimate-table">
                                 <thead><tr><th>Technology/Software</th><th>Monthly Cost</th><th>Project Duration</th><th>Total Cost per Technology</th></tr></thead>
                                 <tbody>
@@ -625,10 +644,11 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     </div>
 
                     <div class="estimation-panel estimation-section">
-                        <div class="estimation-panel-head">
+                        <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="developerAllocationDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-users"></i></span><span>Developer Allocation<small>Set level and contribution for each roadmap position</small></span></h5>
-                        </div>
-                        <div class="estimation-panel-body">
+                            <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                        </button>
+                        <div class="estimation-panel-body" id="developerAllocationDetails" hidden>
                             <?php if (count($allocations) === 0): ?>
                                 <div class="text-muted">No Roadmap Architect headcount has been entered yet.</div>
                             <?php else: foreach ($allocations as $allocation): $department = (string) $allocation['department']; $required = max(0, (int) $allocation['required_count']); ?>
@@ -665,10 +685,11 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     </div>
 
                     <div class="estimation-panel estimation-section">
-                        <div class="estimation-panel-head">
+                        <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="developerCostDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-calculator"></i></span><span>Developer Cost Estimation<small>Calculated staffing and technology totals</small></span></h5>
-                        </div>
-                        <div class="estimation-panel-body estimation-scroll">
+                            <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                        </button>
+                        <div class="estimation-panel-body estimation-scroll" id="developerCostDetails" hidden>
                             <table class="estimate-table">
                                 <thead>
                                     <tr>
@@ -683,11 +704,14 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     </div>
 
                     <div class="estimation-panel estimation-section">
-                        <div class="estimation-panel-head">
+                        <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="projectCostSummaryDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-chart-pie"></i></span><span>Project Cost Summary<small>Final estimate compared with the client budget</small></span></h5>
-                            <span class="project-estimation-status-pill <?php echo $estimationLockedForReview ? 'is-submitted' : ''; ?>"><i class="fas fa-<?php echo $estimationLockedForReview ? 'lock' : 'pen'; ?>" aria-hidden="true"></i><?php echo htmlspecialchars($estimationStatusLabel); ?></span>
-                        </div>
-                        <div class="estimation-panel-body">
+                            <span class="estimation-section-toggle__meta">
+                                <span class="project-estimation-status-pill <?php echo $estimationLockedForReview ? 'is-submitted' : ''; ?>"><i class="fas fa-<?php echo $estimationLockedForReview ? 'lock' : 'pen'; ?>" aria-hidden="true"></i><?php echo htmlspecialchars($estimationStatusLabel); ?></span>
+                                <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            </span>
+                        </button>
+                        <div class="estimation-panel-body" id="projectCostSummaryDetails" hidden>
                             <div class="row g-3 align-items-end mb-3">
                                 <div class="col-md-4">
                                     <label class="form-label">Additional Project Costs</label>
@@ -731,6 +755,22 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
         const estimationForm = document.getElementById('projectCostEstimationForm');
         const submissionStatus = document.querySelector('[data-project-estimation-submitted]');
+
+        estimationForm?.querySelectorAll('.estimation-section-toggle').forEach((toggle) => {
+            toggle.addEventListener('click', () => {
+                const shouldOpen = toggle.getAttribute('aria-expanded') !== 'true';
+
+                estimationForm.querySelectorAll('.estimation-section-toggle').forEach((otherToggle) => {
+                    const otherDetails = document.getElementById(otherToggle.getAttribute('aria-controls') || '');
+                    otherToggle.setAttribute('aria-expanded', 'false');
+                    if (otherDetails) otherDetails.hidden = true;
+                });
+
+                const details = document.getElementById(toggle.getAttribute('aria-controls') || '');
+                toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+                if (details) details.hidden = !shouldOpen;
+            });
+        });
 
         if (estimationForm && !estimationForm.classList.contains('is-locked')) {
             estimationForm.addEventListener('submit', () => {
