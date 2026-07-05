@@ -159,6 +159,15 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
                 project_id INT NOT NULL,
                 department VARCHAR(100) NOT NULL,
                 required_count INT NOT NULL DEFAULT 1,
+                status VARCHAR(30) NOT NULL DEFAULT 'planned',
+                assigned_developer_id INT NULL,
+                workflow_task_id INT NULL,
+                deadline DATE NULL,
+                submitted_at TIMESTAMP NULL,
+                approved_by INT NULL,
+                approved_at TIMESTAMP NULL,
+                revision_notes TEXT,
+                updated_by INT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 CONSTRAINT fk_methodology_task_department_task FOREIGN KEY (methodology_task_id) REFERENCES methodology_tasks(id) ON DELETE CASCADE,
@@ -172,6 +181,15 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
                 project_id INT NOT NULL,
                 department VARCHAR(100) NOT NULL,
                 required_count INT NOT NULL DEFAULT 1,
+                status ENUM('planned', 'in_progress', 'for_review', 'for_revision', 'completed', 'blocked') NOT NULL DEFAULT 'planned',
+                assigned_developer_id INT NULL,
+                workflow_task_id INT NULL,
+                deadline DATE NULL,
+                submitted_at DATETIME NULL,
+                approved_by INT NULL,
+                approved_at DATETIME NULL,
+                revision_notes TEXT,
+                updated_by INT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 CONSTRAINT fk_methodology_task_department_task FOREIGN KEY (methodology_task_id) REFERENCES methodology_tasks(id) ON DELETE CASCADE,
@@ -189,6 +207,86 @@ function methodologyRoadmapEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn
                 FROM methodology_tasks
                 WHERE department IS NOT NULL AND department <> ''
             ");
+        }
+    }
+
+    if (dbTableExists($conn, 'methodology_task_departments')) {
+        $timestampType = DB_DRIVER === 'pgsql' ? 'TIMESTAMP' : 'DATETIME';
+        $progressColumns = [
+            'status' => DB_DRIVER === 'pgsql'
+                ? "VARCHAR(30) NOT NULL DEFAULT 'planned'"
+                : "ENUM('planned', 'in_progress', 'for_review', 'for_revision', 'completed', 'blocked') NOT NULL DEFAULT 'planned'",
+            'assigned_developer_id' => 'INT NULL',
+            'workflow_task_id' => 'INT NULL',
+            'deadline' => 'DATE NULL',
+            'submitted_at' => "{$timestampType} NULL",
+            'approved_by' => 'INT NULL',
+            'approved_at' => "{$timestampType} NULL",
+            'revision_notes' => 'TEXT NULL',
+            'updated_by' => 'INT NULL',
+        ];
+        $addedProgressStatus = false;
+
+        foreach ($progressColumns as $column => $definition) {
+            if (dbColumnExists($conn, 'methodology_task_departments', $column)) {
+                continue;
+            }
+            if ($conn->query("ALTER TABLE methodology_task_departments ADD COLUMN {$column} {$definition}")) {
+                $addedProgressStatus = $addedProgressStatus || $column === 'status';
+            }
+        }
+
+        // Existing single-department roadmap rows inherit their prior status and
+        // assignee. Multi-department rows intentionally do not inherit a shared
+        // completion because that would recreate the original completion leak.
+        if ($addedProgressStatus) {
+            $legacyRows = $conn->query("
+                SELECT mtd.id, mtd.methodology_task_id, mtd.department,
+                       mt.status AS roadmap_status, mt.assigned_developer_id,
+                       u.department AS developer_department,
+                       (
+                           SELECT COUNT(*)
+                           FROM methodology_task_departments mtd_count
+                           WHERE mtd_count.methodology_task_id = mtd.methodology_task_id
+                       ) AS department_count
+                FROM methodology_task_departments mtd
+                JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+                LEFT JOIN users u ON u.id = mt.assigned_developer_id
+            ");
+            $updateLegacy = $conn->prepare("
+                UPDATE methodology_task_departments
+                SET status = ?, assigned_developer_id = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ");
+            if ($legacyRows && $updateLegacy) {
+                while ($legacy = $legacyRows->fetch_assoc()) {
+                    $departmentCount = (int) ($legacy['department_count'] ?? 0);
+                    $assignedDeveloperId = (int) ($legacy['assigned_developer_id'] ?? 0);
+                    $rowDepartment = function_exists('projectWorkflowDepartmentLabel')
+                        ? projectWorkflowDepartmentLabel((string) ($legacy['department'] ?? ''))
+                        : trim((string) ($legacy['department'] ?? ''));
+                    $developerDepartment = function_exists('projectWorkflowDepartmentLabel')
+                        ? projectWorkflowDepartmentLabel((string) ($legacy['developer_department'] ?? ''))
+                        : trim((string) ($legacy['developer_department'] ?? ''));
+                    $belongsToAssignedDeveloper = $assignedDeveloperId > 0
+                        && $rowDepartment !== ''
+                        && strcasecmp($rowDepartment, $developerDepartment) === 0;
+                    $inheritSharedState = $departmentCount <= 1 || $belongsToAssignedDeveloper;
+                    $progressStatus = $inheritSharedState
+                        ? (string) ($legacy['roadmap_status'] ?? 'planned')
+                        : 'planned';
+                    if (!in_array($progressStatus, ['planned', 'in_progress', 'completed', 'blocked'], true)) {
+                        $progressStatus = 'planned';
+                    }
+                    $progressAssignee = $inheritSharedState && $assignedDeveloperId > 0
+                        ? $assignedDeveloperId
+                        : null;
+                    $legacyId = (int) ($legacy['id'] ?? 0);
+                    $updateLegacy->bind_param('sii', $progressStatus, $progressAssignee, $legacyId);
+                    $updateLegacy->execute();
+                }
+                $updateLegacy->close();
+            }
         }
     }
 
@@ -471,8 +569,7 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
         SELECT t.id, t.project_id, u.department AS developer_department
         FROM tasks t
         LEFT JOIN users u ON u.id = t.assigned_to
-        WHERE t.id = {$taskId}
-          AND t.assigned_to = {$developerId}
+        WHERE t.id = {$taskId} AND t.assigned_to = {$developerId}
         LIMIT 1
     ")->fetch_assoc();
     if (!$task) {
@@ -496,7 +593,7 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
     }
 
     $roadmapTask = $conn->query("
-        SELECT mt.start_date AS task_start, mt.end_date AS task_end, mt.assigned_developer_id,
+        SELECT mt.start_date AS task_start, mt.end_date AS task_end, mt.assigned_developer_id, mt.department,
                mp.id AS phase_id, mp.sequence_no AS phase_sequence,
                mp.name AS phase_name, mp.start_date AS phase_start, mp.end_date AS phase_end
         FROM methodology_tasks mt
@@ -534,6 +631,16 @@ function methodologyRoadmapStartBlockReason(mysqli|PgsqlMysqliCompatConnection $
     $assignedDeveloperId = (int) ($roadmapTask['assigned_developer_id'] ?? 0);
     if ($assignedDeveloperId > 0 && $assignedDeveloperId !== $developerId) {
         return 'This roadmap task is assigned to another developer in the methodology plan.';
+    }
+
+    $roadmapDepartment = (string) ($roadmapTask['department'] ?? '');
+    $developerDepartment = (string) ($task['developer_department'] ?? '');
+    $department = function_exists('projectWorkflowDepartmentLabel')
+        ? projectWorkflowDepartmentLabel($roadmapDepartment !== '' ? $roadmapDepartment : $developerDepartment)
+        : ($roadmapDepartment !== '' ? $roadmapDepartment : $developerDepartment);
+    $canStartAfterPreviousPhases = in_array($department, ['Frontend', 'Backend'], true);
+    if ($canStartAfterPreviousPhases) {
+        return null;
     }
 
     $today = new DateTimeImmutable('today');

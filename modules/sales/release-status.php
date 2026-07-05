@@ -168,34 +168,11 @@ $additionalCompleteCount = 0;
 $additionalPendingCount = 0;
 $additionalRequirementsText = '';
 $selectedProjectRepository = null;
+$selectedProjectReceipt = null;
 $canDownloadSelectedProjectRepository = false;
 
 if ($selectedProject) {
     $additionalRequirementsText = trim((string) ($selectedProject['requested_features'] ?? ''));
-    $canDownloadSelectedProjectRepository = (string) ($selectedProject['status'] ?? '') === 'completed'
-        && $currentUserId > 0
-        && (
-            (int) ($selectedProject['created_by'] ?? 0) === $currentUserId
-            || (int) ($selectedProject['client_created_by'] ?? 0) === $currentUserId
-        );
-
-    if ($canDownloadSelectedProjectRepository) {
-        $repositoryStmt = $conn->prepare("
-            SELECT id, name, default_branch_name
-            FROM project_repositories
-            WHERE project_id = ?
-              AND repository_status = 'active'
-            ORDER BY updated_at DESC, id DESC
-            LIMIT 1
-        ");
-
-        if ($repositoryStmt !== false) {
-            $repositoryStmt->bind_param('i', $selectedProjectId);
-            $repositoryStmt->execute();
-            $selectedProjectRepository = $repositoryStmt->get_result()->fetch_assoc() ?: null;
-            $repositoryStmt->close();
-        }
-    }
 
     $taskStmt = $conn->prepare("
         SELECT
@@ -213,11 +190,10 @@ if ($selectedProject) {
             architect.full_name AS architect_name,
             developer.full_name AS developer_name
         FROM tasks t
-        JOIN users architect ON architect.id = t.assigned_by
+        LEFT JOIN users architect ON architect.id = t.assigned_by
         LEFT JOIN users developer ON developer.id = t.assigned_to
         WHERE t.project_id = ?
           AND t.task_type IN ('feature', 'enhancement')
-          AND architect.role = 'architect'
         ORDER BY CASE WHEN t.task_type = 'feature' THEN 0 ELSE 1 END, t.created_at ASC, t.id ASC
     ");
 
@@ -258,6 +234,67 @@ $projectAdditionalCount = count($additionalItems);
 $projectTotalCount = $projectFeatureCount + $projectAdditionalCount;
 $projectCompleteCount = $featureCompleteCount + $additionalCompleteCount;
 $projectProgress = $projectTotalCount > 0 ? (int) round(($projectCompleteCount / $projectTotalCount) * 100) : 0;
+
+if ($selectedProject) {
+    $isProjectReleaseComplete = (string) ($selectedProject['status'] ?? '') === 'completed'
+        || ($projectTotalCount > 0 && $projectCompleteCount === $projectTotalCount);
+
+    if ($isProjectReleaseComplete && (string) ($selectedProject['status'] ?? '') !== 'completed') {
+        $completeProjectStmt = $conn->prepare("UPDATE projects SET status = 'completed' WHERE id = ?");
+        if ($completeProjectStmt !== false) {
+            $completeProjectStmt->bind_param('i', $selectedProjectId);
+            $completeProjectStmt->execute();
+            $completeProjectStmt->close();
+            $selectedProject['status'] = 'completed';
+        }
+    }
+
+    if ($isProjectReleaseComplete) {
+        $selectedProjectReceipt = workflowEnsureFinalReceiptForProject($conn, $selectedProjectId, $currentUserId);
+    }
+
+    $canDownloadSelectedProjectRepository = (string) ($selectedProject['status'] ?? '') === 'completed'
+        && $currentUserId > 0
+        && (
+            (int) ($selectedProject['created_by'] ?? 0) === $currentUserId
+            || (int) ($selectedProject['client_created_by'] ?? 0) === $currentUserId
+        );
+
+    if ($canDownloadSelectedProjectRepository) {
+        $repositoryStmt = $conn->prepare("
+            SELECT id, name, default_branch_name
+            FROM project_repositories
+            WHERE project_id = ?
+              AND repository_status = 'active'
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+        ");
+
+        if ($repositoryStmt !== false) {
+            $repositoryStmt->bind_param('i', $selectedProjectId);
+            $repositoryStmt->execute();
+            $selectedProjectRepository = $repositoryStmt->get_result()->fetch_assoc() ?: null;
+            $repositoryStmt->close();
+        }
+    }
+
+    if (!$selectedProjectReceipt) {
+        $receiptStmt = $conn->prepare("
+            SELECT r.id AS receipt_id, r.receipt_number, r.status, r.report_id
+            FROM receipts r
+            JOIN sales_reports sr ON sr.id = r.report_id
+            WHERE sr.project_id = ?
+            ORDER BY r.created_at DESC, r.id DESC
+            LIMIT 1
+        ");
+        if ($receiptStmt !== false) {
+            $receiptStmt->bind_param('i', $selectedProjectId);
+            $receiptStmt->execute();
+            $selectedProjectReceipt = $receiptStmt->get_result()->fetch_assoc() ?: null;
+            $receiptStmt->close();
+        }
+    }
+}
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -605,6 +642,31 @@ include '../../includes/navbar.php';
     box-shadow: 0 8px 18px rgba(31, 99, 146, 0.22);
 }
 
+.release-receipt-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 40px;
+    padding: 0.55rem 0.85rem;
+    border-radius: 8px;
+    background: #ecfdf5;
+    border: 1px solid #bbf7d0;
+    color: #047857;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.release-receipt-btn:hover {
+    background: #d1fae5;
+    color: #047857;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(4, 120, 87, 0.16);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
     background: #06111e;
 }
@@ -736,6 +798,10 @@ include '../../includes/navbar.php';
     .release-download-btn {
         width: 100%;
     }
+
+    .release-receipt-btn {
+        width: 100%;
+    }
 }
 </style>
 
@@ -814,6 +880,17 @@ include '../../includes/navbar.php';
                     </div>
                 </div>
                 <div class="release-actions">
+                    <?php if ($selectedProjectReceipt && (int) ($selectedProjectReceipt['receipt_id'] ?? 0) > 0): ?>
+                        <?php $selectedReceiptStatus = (string) ($selectedProjectReceipt['status'] ?? 'draft'); ?>
+                        <a
+                            class="release-receipt-btn"
+                            href="<?php echo htmlspecialchars(BASE_URL . 'modules/sales/receipt.php?receipt_id=' . (int) $selectedProjectReceipt['receipt_id']); ?>"
+                            title="Open receipt for Sales review"
+                        >
+                            <i class="fas fa-receipt"></i>
+                            <?php echo $selectedReceiptStatus === 'draft' ? 'Review Receipt' : 'Final Receipt'; ?>
+                        </a>
+                    <?php endif; ?>
                     <?php if ($canDownloadSelectedProjectRepository && $selectedProjectRepository): ?>
                         <a
                             class="release-download-btn"

@@ -2,12 +2,16 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
+
+require_once '../../includes/project-estimation.php';
+
 require_once '../../includes/project-workflow.php';
 requireRole('expert');
 
 $conn = getConnection();
 $user = getCurrentUser();
 methodologyRoadmapEnsureSchema($conn);
+projectEstimationEnsureSchema($conn);
 
 $availableDepartments = array_values(array_unique(array_merge(array_keys(projectWorkflowDepartments()), [
     'Frontend Developer',
@@ -345,6 +349,54 @@ if (!$hasSalesApproval) {
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimation'])) {
+    $projectId = (int) ($_POST['project_id'] ?? 0);
+    $context = $projectId > 0 ? projectEstimationFetchContext($conn, $projectId) : [];
+    $project = $context['project'] ?? null;
+    $allocations = $context['allocations'] ?? [];
+    $technologies = $context['technologies'] ?? [];
+    $postedAllocations = is_array($_POST['allocations'] ?? null) ? $_POST['allocations'] : [];
+
+    $assignedCheck = $projectId > 0
+        ? $conn->query("SELECT id FROM tasks WHERE project_id = {$projectId} AND assigned_to = " . (int) $user['id'] . " LIMIT 1")->fetch_assoc()
+        : null;
+
+    if (!$project || !$assignedCheck) {
+        $_SESSION['error'] = 'Please select one of your assigned projects before submitting a project estimation.';
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    $durationMonths = projectEstimationMonths($project['timeline_start'] ?? null, $project['timeline_end'] ?? null);
+    $techMonthlyCost = array_sum(array_map(static fn(array $row): float => (float) ($row['estimated_cost'] ?? 0), $technologies));
+    $complexity = projectEstimationComplexity(
+        $durationMonths,
+        array_sum(array_map(static fn(array $row): int => (int) ($row['required_count'] ?? 0), $allocations)),
+        count($technologies)
+    );
+    $additionalCosts = max(0.0, (float) ($_POST['additional_costs'] ?? 0));
+
+    if (projectEstimationSave($conn, $projectId, (int) $user['id'], $allocations, $durationMonths, $techMonthlyCost, $additionalCosts, $complexity, $postedAllocations)) {
+        workflowNotifyRoles(
+            $conn,
+            ['sul'],
+            'Project Estimation Ready for Review',
+            'An Expert Developer submitted a project cost estimation for SUL review.',
+            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
+            $projectId,
+            'approval',
+            'projects'
+        );
+        logActivity((int) $user['id'], 'submit_project_estimation', 'projects', $projectId, null, $_POST);
+        $_SESSION['success'] = 'Project estimation submitted to Expert SUL for review.';
+    } else {
+        $_SESSION['error'] = 'Failed to submit project estimation.';
+    }
+
+    header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
+    exit();
+}
+
 // Get tasks assigned to this expert that are pending estimation (status = 'todo')
 $tasks = $conn->query("
     SELECT t.*, p.name as project_name, p.id as project_id,
@@ -388,9 +440,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['project_setup'])) {
 // Handle task estimation save (draft)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($_POST['submit_all'])) {
     $taskId = (int) ($_POST['task_id'] ?? 0);
-    $minDays = (int) ($_POST['min_days'] ?? 0);
-    $likelyDays = (int) ($_POST['likely_days'] ?? 0);
-    $maxDays = (int) ($_POST['max_days'] ?? 0);
+    $minDays = 0;
+    $likelyDays = 0;
+    $maxDays = 0;
     $expectation = trim((string) ($_POST['expectation'] ?? ''));
     $phaseName = null;
     $plannedStart = !empty($_POST['planned_start']) ? $_POST['planned_start'] : null;
@@ -402,25 +454,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     $involvementPlan = json_decode((string) ($_POST['involvement_plan_json'] ?? '[]'), true);
     $componentPlan = json_decode((string) ($_POST['component_plan_json'] ?? '[]'), true);
 
-    if ($minDays <= 0 || $likelyDays <= 0 || $maxDays <= 0) {
-        $_SESSION['error'] = "Minimum, most likely, and maximum days must all be greater than zero.";
-        header('Location: feature-estimation.php');
-        exit();
-    }
-
-    if ($minDays > $likelyDays || $likelyDays > $maxDays) {
-        $_SESSION['error'] = "Please keep the estimate order as Minimum <= Most Likely <= Maximum.";
-        header('Location: feature-estimation.php');
-        exit();
-    }
-
     if ($expectation === '') {
         $_SESSION['error'] = "Please add an expectation description for the feature.";
         header('Location: feature-estimation.php');
         exit();
     }
 
-    $taskStmt = $conn->prepare("SELECT project_id, title FROM tasks WHERE id = ? LIMIT 1");
+    $taskStmt = $conn->prepare("
+        SELECT t.project_id, t.title, p.timeline_start, p.timeline_end
+        FROM tasks t
+        JOIN projects p ON p.id = t.project_id
+        WHERE t.id = ?
+        LIMIT 1
+    ");
     $taskStmt->bind_param('i', $taskId);
     $taskStmt->execute();
     $taskInfo = $taskStmt->get_result()->fetch_assoc();
@@ -436,6 +482,55 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
 
     $architectPlan = featureEstimationLoadArchitectPlanning($conn, [$taskId])[$taskId] ?? featureEstimationEmptyArchitectPlan();
     $phaseName = trim((string) ($architectPlan['phase_name'] ?? '')) !== '' ? (string) $architectPlan['phase_name'] : null;
+    $projectTimelineStart = trim((string) ($taskInfo['timeline_start'] ?? ''));
+    $projectTimelineEnd = trim((string) ($taskInfo['timeline_end'] ?? ''));
+    $architectPlannedStart = trim((string) ($architectPlan['planned_start'] ?? ''));
+    $architectDeadline = trim((string) ($architectPlan['planned_end'] ?? ''));
+    if ($architectDeadline === '') {
+        $architectDeadline = $projectTimelineEnd;
+    }
+    if ($plannedStart === null) {
+        $plannedStart = $architectPlannedStart !== '' ? $architectPlannedStart : ($projectTimelineStart !== '' ? $projectTimelineStart : null);
+    }
+
+    if ($plannedStart === null || $plannedEnd === null) {
+        $_SESSION['error'] = "Please select a planned start and end date for this feature.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($architectDeadline === '') {
+        $_SESSION['error'] = "This project needs an Architect deadline before feature estimation can be saved.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    $plannedStartDate = DateTimeImmutable::createFromFormat('Y-m-d', $plannedStart);
+    $plannedEndDate = DateTimeImmutable::createFromFormat('Y-m-d', $plannedEnd);
+    $architectDeadlineDate = DateTimeImmutable::createFromFormat('Y-m-d', $architectDeadline);
+
+    if (!$plannedStartDate || !$plannedEndDate || !$architectDeadlineDate) {
+        $_SESSION['error'] = "Please use valid feature dates.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($plannedEndDate < $plannedStartDate) {
+        $_SESSION['error'] = "Feature end date must be the same as or later than the start date.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    if ($plannedEndDate > $architectDeadlineDate) {
+        $_SESSION['error'] = "Feature deadline cannot be later than the Architect deadline.";
+        header('Location: feature-estimation.php');
+        exit();
+    }
+
+    $deadlineDuration = max(1, (int) $plannedStartDate->diff($plannedEndDate)->days + 1);
+    $minDays = max(1, (int) ceil($deadlineDuration * 0.70));
+    $likelyDays = max($minDays, (int) ceil($deadlineDuration * 0.85));
+    $maxDays = $deadlineDuration;
     if (!empty($architectPlan['involvement_plan'])) {
         $involvementPlan = $architectPlan['involvement_plan'];
     }
@@ -914,13 +1009,19 @@ include '../../includes/navbar.php';
 }
 
 /* Page Header */
+.expert-estimation-page {
+    max-width: 1540px;
+    margin: 0 auto;
+}
+
 .page-header-modern {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
-    border-radius: 24px;
-    padding: 2rem;
-    margin-bottom: 2rem;
+    border-radius: 16px;
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 1.25rem;
     position: relative;
     overflow: hidden;
+    box-shadow: 0 8px 24px rgba(24, 79, 115, 0.14);
 }
 
 .page-header-modern::before {
@@ -928,16 +1029,16 @@ include '../../includes/navbar.php';
     position: absolute;
     top: 0;
     right: 0;
-    width: 300px;
+    width: 220px;
     height: 100%;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1));
     pointer-events: none;
 }
 
 .page-header-modern h2 {
-    font-size: 1.75rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
     color: white;
 }
 
@@ -952,13 +1053,70 @@ include '../../includes/navbar.php';
     color: rgba(255, 255, 255, 0.9);
 }
 
+.page-header-content {
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+}
+
+.page-header-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.42rem;
+    color: #cfeeff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.expert-workspace-switcher {
+    align-items: flex-end;
+    border-bottom: 1px solid var(--gray-300);
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1.25rem;
+    overflow-x: auto;
+}
+
+.expert-workspace-tab {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    color: var(--gray-600);
+    display: inline-flex;
+    font-size: 0.86rem;
+    font-weight: 700;
+    gap: 0.5rem;
+    margin-bottom: -1px;
+    padding: 0.75rem 1rem;
+    white-space: nowrap;
+}
+
+.expert-workspace-tab:hover,
+.expert-workspace-tab:focus-visible {
+    color: var(--theme-primary);
+    outline: none;
+}
+
+.expert-workspace-tab.is-active {
+    border-bottom-color: var(--theme-primary);
+    color: var(--theme-primary);
+}
+
+.expert-workspace-panel[hidden] {
+    display: none !important;
+}
+
 /* Timeline Section */
     .timeline-section {
         background: white;
-        border-radius: 20px;
+        border-radius: 14px;
         border: 1px solid var(--gray-200);
         box-shadow: var(--shadow-sm);
-        margin-bottom: 2rem;
+        margin-bottom: 1.25rem;
     }
 
 .timeline-header {
@@ -985,11 +1143,11 @@ include '../../includes/navbar.php';
 /* Phase Management Section */
 .phase-management-card {
     background: white;
-    border-radius: 20px;
+    border-radius: 14px;
     border: 1px solid var(--gray-200);
     overflow: hidden;
     box-shadow: var(--shadow-sm);
-    margin-bottom: 2rem;
+    margin-bottom: 1.25rem;
 }
 
 .phase-header {
@@ -1080,7 +1238,7 @@ include '../../includes/navbar.php';
     border: 1px dashed var(--gray-400);
     color: var(--gray-600);
     padding: 0.5rem 1rem;
-    border-radius: 40px;
+    border-radius: 9px;
     font-size: 0.8rem;
     margin-top: 1rem;
     cursor: pointer;
@@ -1097,7 +1255,7 @@ include '../../includes/navbar.php';
     color: white;
     border: none;
     padding: 0.5rem 1.5rem;
-    border-radius: 40px;
+    border-radius: 9px;
     font-size: 0.8rem;
     font-weight: 500;
     cursor: pointer;
@@ -1204,7 +1362,7 @@ include '../../includes/navbar.php';
 
 .management-table-section {
     background: white;
-    border-radius: 20px;
+    border-radius: 14px;
     border: 1px solid var(--gray-200);
     box-shadow: var(--shadow-sm);
     overflow: hidden;
@@ -1430,7 +1588,7 @@ include '../../includes/navbar.php';
 /* Feature List */
 .feature-list {
     background: white;
-    border-radius: 20px;
+    border-radius: 14px;
     border: 1px solid var(--gray-200);
     box-shadow: var(--shadow-sm);
 }
@@ -1486,6 +1644,11 @@ include '../../includes/navbar.php';
     color: #d97706;
 }
 
+.progress-badge.empty {
+    background: #e2e8f0;
+    color: #475569;
+}
+
 /* Form Elements */
 .form-label {
     font-size: 0.7rem;
@@ -1523,7 +1686,7 @@ textarea.form-control-custom {
     color: white;
     border: none;
     padding: 0.7rem;
-    border-radius: 40px;
+    border-radius: 9px;
     font-weight: 500;
     transition: all 0.2s;
     width: 100%;
@@ -1742,7 +1905,7 @@ textarea.form-control-custom {
     text-align: center;
     padding: 4rem 2rem;
     background: white;
-    border-radius: 20px;
+    border-radius: 14px;
     border: 1px solid var(--gray-200);
 }
 
@@ -1786,6 +1949,24 @@ textarea.form-control-custom {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern p {
     color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-switcher {
+    border-color: rgba(157, 182, 207, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-tab {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-tab:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-tab:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-tab.is-active {
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workspace-tab.is-active {
+    border-bottom-color: #7cc0ee;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-section,
@@ -1919,6 +2100,11 @@ textarea.form-control-custom {
     color: #fbbf24;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-badge.empty {
+    background: rgba(100, 116, 139, 0.22);
+    color: #cbd5e1;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pm-inline-btn,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-add-phase {
     background: rgba(31, 99, 146, 0.12);
@@ -1936,13 +2122,13 @@ textarea.form-control-custom {
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
-        padding: 1.5rem;
+        padding: 1.35rem;
     }
     
     .page-header-modern h2 {
-        font-size: 1.5rem;
+        font-size: 1.4rem;
     }
-    
+
     .phase-item {
         flex-direction: column;
         align-items: stretch;
@@ -1958,19 +2144,52 @@ textarea.form-control-custom {
 }
 </style>
 
-<div class="container-fluid px-4 py-4">
+<div class="container-fluid px-4 py-4 expert-estimation-page">
     <!-- Page Header -->
     <div class="page-header-modern">
-        <div>
+        <div class="page-header-content">
+            <span class="page-header-eyebrow"><i class="fas fa-user-check" aria-hidden="true"></i>Expert estimation workspace</span>
             <h2>
                 <i class="fas fa-calculator me-2"></i> 
-                Timeline Feature Recommendations
+                Project &amp; Feature Estimation
             </h2>
-            <p>Provide three-point estimations and build the realtime project timeline</p>
+            <p>Review project requirements, estimate feature effort, and prepare a clear recommendation for review.</p>
         </div>
     </div>
 
-    <div class="phase-management-card">
+    <nav class="expert-workspace-switcher" role="tablist" aria-label="Estimation workspace">
+        <button
+            class="expert-workspace-tab is-active"
+            id="costEstimationTab"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="costEstimationWorkspace"
+            data-expert-workspace="cost"
+        >
+            <i class="fas fa-file-invoice-dollar" aria-hidden="true"></i>
+            Cost Estimation
+        </button>
+        <button
+            class="expert-workspace-tab"
+            id="featureEstimationTab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="featureEstimationWorkspace"
+            data-expert-workspace="features"
+        >
+            <i class="fas fa-list-check" aria-hidden="true"></i>
+            Feature Estimation
+        </button>
+    </nav>
+
+    <section class="expert-workspace-panel" id="costEstimationWorkspace" role="tabpanel" aria-labelledby="costEstimationTab" data-expert-workspace-panel="cost">
+        <?php projectEstimationRenderExpertModule($conn, $user); ?>
+    </section>
+
+    <section class="expert-workspace-panel" id="featureEstimationWorkspace" role="tabpanel" aria-labelledby="featureEstimationTab" data-expert-workspace-panel="features" hidden>
+    <div class="phase-management-card" id="featureProjectChooser">
         <div class="phase-header">
             <h5><i class="fas fa-folder-open me-2"></i>Select Project</h5>
         </div>
@@ -2009,9 +2228,14 @@ textarea.form-control-custom {
                         <div class="fw-semibold" id="selectedRoadmapProjectName">Selected project</div>
                         <small class="text-muted">Architect manages phases and phase developer count. Experts edit staffing count and developer type inside each roadmap task.</small>
                     </div>
-                    <a class="btn-save-phases text-center text-decoration-none" id="inlineRoadmapBtn" href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php">
-                        <i class="fas fa-user-plus"></i> Edit Task Staffing
-                    </a>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-secondary btn-sm" type="button" id="changeFeatureProjectBtn">
+                            <i class="fas fa-arrow-left me-1" aria-hidden="true"></i> Change Project
+                        </button>
+                        <a class="btn-save-phases text-center text-decoration-none" id="inlineRoadmapBtn" href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php">
+                            <i class="fas fa-user-plus"></i> Edit Task Staffing
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2030,7 +2254,6 @@ textarea.form-control-custom {
         </div>
 
         <!-- Feature List -->
-        <?php if(count($taskRows) > 0): ?>
         <div class="feature-list">
             <div class="feature-row" id="featureProgressRow">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -2040,8 +2263,9 @@ textarea.form-control-custom {
                         <span class="progress-badge pending" id="featureProgressBadge">Not Ready</span>
                     </div>
                 </div>
-                <small class="text-muted">All features must be estimated before submission to Sales.</small>
+                <small class="text-muted" id="featureProgressHelp">All features must be estimated before submission to Sales.</small>
             </div>
+            <?php if(count($taskRows) > 0): ?>
             <?php foreach($taskRows as $task): 
                 $estimation = $conn->query("SELECT * FROM feature_estimations WHERE task_id = {$task['id']} AND expert_id = {$user['id']}")->fetch_assoc();
                 $isEstimated = $estimation && !empty($estimation['min_days']) && !empty($estimation['likely_days']) && !empty($estimation['max_days']);
@@ -2056,9 +2280,22 @@ textarea.form-control-custom {
                     !empty($architectPlan['component_plan']) ? $architectPlan['component_plan'] : decodeRecommendationJson($estimation['component_plan_json'] ?? '[]'),
                     JSON_UNESCAPED_UNICODE
                 );
+                $architectDeadlineValue = trim((string) ($architectPlan['planned_end'] ?: ($task['timeline_end'] ?? '')));
+                $featurePlannedStartValue = !empty($task['started_at'])
+                    ? date('Y-m-d', strtotime((string) $task['started_at']))
+                    : (trim((string) ($architectPlan['planned_start'] ?? '')) ?: trim((string) ($task['timeline_start'] ?? '')));
+                $featurePlannedEndValue = !empty($task['deadline'])
+                    ? date('Y-m-d', strtotime((string) $task['deadline']))
+                    : trim((string) ($architectPlan['planned_end'] ?? ''));
+                if ($featurePlannedEndValue !== '' && $architectDeadlineValue !== '' && strtotime($featurePlannedEndValue) > strtotime($architectDeadlineValue)) {
+                    $featurePlannedEndValue = $architectDeadlineValue;
+                }
+                $architectDeadlineLabel = $architectDeadlineValue !== ''
+                    ? date('M d, Y', strtotime($architectDeadlineValue))
+                    : 'not set';
             ?>
             <?php $isReadonly = $task['status'] !== 'todo'; ?>
-            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" style="display:none;">
+            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars((string) ($task['timeline_start'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars((string) ($task['timeline_end'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" style="display:none;">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                     <div>
                         <div class="feature-title"><?php echo htmlspecialchars($task['title']); ?></div>
@@ -2152,37 +2389,37 @@ textarea.form-control-custom {
                     
                     <div class="row g-3 mb-4">
                         <div class="col-md-4">
-                            <label class="form-label">Minimum Days (Best)</label>
-                            <input type="number" name="min_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                            <label class="form-label">Minimum Days (70%)</label>
+                            <input type="number" name="min_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo $estimation['min_days'] ?? ''; ?>" required placeholder="1">
-                            <small class="text-muted d-block mt-1">Optimistic estimate</small>
+                            <small class="text-muted d-block mt-1">Auto-generated from the selected duration</small>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Most Likely Days</label>
-                            <input type="number" name="likely_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                            <label class="form-label">Most Likely Days (85%)</label>
+                            <input type="number" name="likely_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo $estimation['likely_days'] ?? ''; ?>" required placeholder="1">
-                            <small class="text-muted d-block mt-1">Realistic estimate</small>
+                            <small class="text-muted d-block mt-1">Auto-generated from the selected duration</small>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Maximum Days (Worst)</label>
-                            <input type="number" name="max_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
+                            <label class="form-label">Maximum Days (100%)</label>
+                            <input type="number" name="max_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo $estimation['max_days'] ?? ''; ?>" required placeholder="3">
-                            <small class="text-muted d-block mt-1">Pessimistic estimate</small>
+                            <small class="text-muted d-block mt-1">Never exceeds the selected deadline</small>
                         </div>
                     </div>
 
                     <div class="row g-3 mb-4">
                         <div class="col-md-6">
                             <label class="form-label">Planned Start Date</label>
-                            <input type="date" name="planned_start" class="form-control-custom estimate-start" <?php echo $isReadonly ? 'disabled' : ''; ?>
-                                   value="<?php echo !empty($task['started_at']) ? date('Y-m-d', strtotime((string) $task['started_at'])) : ''; ?>">
+                            <input type="date" name="planned_start" class="form-control-custom estimate-start" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
+                                   value="<?php echo htmlspecialchars($featurePlannedStartValue, ENT_QUOTES, 'UTF-8'); ?>">
                             <small class="text-muted d-block mt-1">Set the task start for Gantt</small>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Planned End Date</label>
-                            <input type="date" name="planned_end" class="form-control-custom estimate-end" <?php echo $isReadonly ? 'disabled' : ''; ?>
-                                   value="<?php echo !empty($task['deadline']) ? date('Y-m-d', strtotime((string) $task['deadline'])) : ''; ?>">
-                            <small class="text-muted d-block mt-1">Set the task end for Gantt</small>
+                            <input type="date" name="planned_end" class="form-control-custom estimate-end" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
+                                   value="<?php echo htmlspecialchars($featurePlannedEndValue, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $architectDeadlineValue !== '' ? 'max="' . htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>
+                            <small class="text-muted d-block mt-1">Can be earlier than the Architect deadline, never later than <?php echo htmlspecialchars($architectDeadlineLabel); ?></small>
                         </div>
                     </div>
 
@@ -2236,42 +2473,98 @@ textarea.form-control-custom {
         <?php endif; ?>
     </div>
             <?php endforeach; ?>
+            <?php endif; ?>
         </div>
-        <?php else: ?>
-        <div class="empty-state">
-            <i class="fas fa-check-circle"></i>
-            <h5>No pending estimations</h5>
-            <p>All assigned features have been estimated. Great job!</p>
-        </div>
-        <?php endif; ?>
 
     </div>
+    </section>
 </div>
 
 <script>
 let currentProjectId = null;
 const existingDepartments = <?php echo json_encode($availableDepartments, JSON_UNESCAPED_UNICODE); ?>;
 const architectPlanningByTask = <?php echo json_encode($architectPlanningByTask, JSON_UNESCAPED_UNICODE); ?>;
+const expertWorkspaceStorageKey = 'expert-estimation-active-workspace';
+
+function updateFeatureProjectView(hasProject) {
+    const chooser = document.getElementById('featureProjectChooser');
+    const sections = document.getElementById('projectSections');
+    if (chooser) chooser.style.display = hasProject ? 'none' : 'block';
+    if (sections) sections.style.display = hasProject ? 'block' : 'none';
+}
+
+function setExpertWorkspace(workspace, persist = true) {
+    const activeWorkspace = workspace === 'features' ? 'features' : 'cost';
+    document.querySelectorAll('[data-expert-workspace]').forEach((tab) => {
+        const isActive = tab.dataset.expertWorkspace === activeWorkspace;
+        tab.classList.toggle('is-active', isActive);
+        tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        tab.tabIndex = isActive ? 0 : -1;
+    });
+    document.querySelectorAll('[data-expert-workspace-panel]').forEach((panel) => {
+        panel.hidden = panel.dataset.expertWorkspacePanel !== activeWorkspace;
+    });
+
+    if (persist) {
+        try {
+            window.localStorage.setItem(expertWorkspaceStorageKey, activeWorkspace);
+        } catch (error) {
+            // The workspace still switches when browser storage is unavailable.
+        }
+    }
+
+    if (activeWorkspace === 'features') {
+        window.requestAnimationFrame(() => {
+            renderProjectManagementTable();
+            renderExpertGantt();
+        });
+    }
+}
+
+document.querySelectorAll('[data-expert-workspace]').forEach((tab) => {
+    tab.addEventListener('click', () => setExpertWorkspace(tab.dataset.expertWorkspace || 'cost'));
+    tab.addEventListener('keydown', (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const nextWorkspace = tab.dataset.expertWorkspace === 'cost' ? 'features' : 'cost';
+        setExpertWorkspace(nextWorkspace);
+        document.querySelector(`[data-expert-workspace="${nextWorkspace}"]`)?.focus();
+    });
+});
+
+let initialExpertWorkspace = 'cost';
+try {
+    initialExpertWorkspace = window.localStorage.getItem(expertWorkspaceStorageKey) || 'cost';
+} catch (error) {
+    initialExpertWorkspace = 'cost';
+}
+setExpertWorkspace(initialExpertWorkspace, false);
+
+function buildRoadmapUrl(projectId) {
+    const baseUrl = (window.BASE_URL || '<?php echo BASE_URL; ?>').replace(/\/$/, '');
+    const roadmapUrl = `${baseUrl}/modules/roadmap/methodology.php?project_id=${encodeURIComponent(projectId)}`;
+    const returnToUrl = `${baseUrl}/modules/expert/feature-estimation.php?project_estimation_id=${encodeURIComponent(projectId)}`;
+    return `${roadmapUrl}&return_to=${encodeURIComponent(returnToUrl)}`;
+}
 
 function loadProjectSetup() {
     const select = document.getElementById('phaseProjectSelect');
     if (!select) return;
     const projectId = select.value;
-    const selectedOption = select.options[select.selectedIndex];
     
     if (!projectId) {
         currentProjectId = null;
         const openRoadmapBtn = document.getElementById('openRoadmapBtn');
         if (openRoadmapBtn) openRoadmapBtn.style.display = 'none';
-        const sections = document.getElementById('projectSections');
-        if (sections) sections.style.display = 'none';
+        updateFeatureProjectView(false);
         renderProjectManagementTable();
+        filterFeatureList();
         return;
     }
     
     currentProjectId = projectId;
 
-    const roadmapUrl = `${window.BASE_URL || '<?php echo BASE_URL; ?>'}modules/roadmap/methodology.php?project_id=${encodeURIComponent(projectId)}`;
+    const roadmapUrl = buildRoadmapUrl(projectId);
     const openRoadmapBtn = document.getElementById('openRoadmapBtn');
     const inlineRoadmapBtn = document.getElementById('inlineRoadmapBtn');
     if (openRoadmapBtn) {
@@ -2288,9 +2581,16 @@ function loadProjectSetup() {
 
     renderProjectManagementTable();
 
-    const sections = document.getElementById('projectSections');
-    if (sections) sections.style.display = 'block';
+    updateFeatureProjectView(true);
     filterFeatureList();
+}
+
+function resetFeatureProjectSelection() {
+    const select = document.getElementById('phaseProjectSelect');
+    if (!select) return;
+    select.value = '';
+    loadProjectSetup();
+    select.focus();
 }
 
 function escapeHtml(text) {
@@ -2354,25 +2654,113 @@ function updateGanttPreview(card) {
     if (maxBar) maxBar.style.width = `${maxWidth}%`;
 }
 
+function parseDateInputValue(value) {
+    if (!value) return null;
+    const parsed = new Date(`${value}T00:00:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function inclusiveDurationDays(startValue, endValue) {
+    const startDate = parseDateInputValue(startValue);
+    const endDate = parseDateInputValue(endValue);
+    if (!startDate || !endDate || endDate < startDate) {
+        return 0;
+    }
+    return Math.floor((endDate - startDate) / 86400000) + 1;
+}
+
+function syncEstimateFromDeadline(card) {
+    if (!card) return false;
+    const isReadonly = card.getAttribute('data-readonly') === '1';
+    const startInput = card.querySelector('input[name="planned_start"]');
+    const endInput = card.querySelector('input[name="planned_end"]');
+    const minInput = card.querySelector('input[name="min_days"]');
+    const likelyInput = card.querySelector('input[name="likely_days"]');
+    const maxInput = card.querySelector('input[name="max_days"]');
+    const architectDeadline = card.getAttribute('data-architect-deadline') || card.getAttribute('data-project-end') || '';
+
+    if (endInput && architectDeadline) {
+        endInput.max = architectDeadline;
+    }
+
+    if (isReadonly) {
+        updateGanttPreview(card);
+        return true;
+    }
+
+    if (startInput && !startInput.value) {
+        startInput.value = card.getAttribute('data-project-start') || '';
+    }
+
+    if (endInput && endInput.value && architectDeadline) {
+        const endDate = parseDateInputValue(endInput.value);
+        const architectDate = parseDateInputValue(architectDeadline);
+        if (endDate && architectDate && endDate > architectDate) {
+            endInput.value = architectDeadline;
+        }
+    }
+
+    const duration = inclusiveDurationDays(startInput?.value || '', endInput?.value || '');
+    if (duration > 0 && minInput && likelyInput && maxInput) {
+        minInput.value = Math.max(1, Math.ceil(duration * 0.70));
+        likelyInput.value = Math.max(parseInt(minInput.value || '1', 10), Math.ceil(duration * 0.85));
+        maxInput.value = duration;
+    }
+
+    updateGanttPreview(card);
+    const isValid = validateEstimateCard(card);
+    updateEstimateCardState(card, isValid);
+    return isValid;
+}
+
 function validateEstimateCard(card) {
     if (!card) return true;
     const minInput = card.querySelector('input[name="min_days"]');
     const likelyInput = card.querySelector('input[name="likely_days"]');
     const maxInput = card.querySelector('input[name="max_days"]');
+    const startInput = card.querySelector('input[name="planned_start"]');
+    const endInput = card.querySelector('input[name="planned_end"]');
     if (!minInput || !likelyInput || !maxInput) return true;
 
     const minVal = parseInt(minInput.value || '0', 10);
     const likelyVal = parseInt(likelyInput.value || '0', 10);
     const maxVal = parseInt(maxInput.value || '0', 10);
+    const duration = inclusiveDurationDays(startInput?.value || '', endInput?.value || '');
+    const architectDeadline = card.getAttribute('data-architect-deadline') || card.getAttribute('data-project-end') || '';
 
     minInput.setCustomValidity('');
     likelyInput.setCustomValidity('');
     maxInput.setCustomValidity('');
+    if (startInput) startInput.setCustomValidity('');
+    if (endInput) endInput.setCustomValidity('');
+
+    if (startInput?.value && endInput?.value && duration <= 0) {
+        const message = 'Feature end date must be the same as or later than the start date.';
+        startInput.setCustomValidity(message);
+        endInput.setCustomValidity(message);
+        return false;
+    }
+
+    if (endInput?.value && architectDeadline) {
+        const endDate = parseDateInputValue(endInput.value);
+        const architectDate = parseDateInputValue(architectDeadline);
+        if (endDate && architectDate && endDate > architectDate) {
+            const message = 'Feature deadline cannot be later than the Architect deadline.';
+            endInput.setCustomValidity(message);
+            return false;
+        }
+    }
 
     if ((minInput.value || likelyInput.value || maxInput.value) && (minVal <= 0 || likelyVal <= 0 || maxVal <= 0)) {
         const message = 'All day estimates must be greater than zero.';
         minInput.setCustomValidity(message);
         likelyInput.setCustomValidity(message);
+        maxInput.setCustomValidity(message);
+        return false;
+    }
+
+    if (duration > 0 && maxVal > duration) {
+        const message = 'Maximum estimate cannot exceed the selected deadline duration.';
         maxInput.setCustomValidity(message);
         return false;
     }
@@ -2388,13 +2776,41 @@ function validateEstimateCard(card) {
     return true;
 }
 
+function updateEstimateCardState(card, isValid = validateEstimateCard(card)) {
+    if (!card) return false;
+    const minVal = parseInt(card.querySelector('input[name="min_days"]')?.value || '0', 10) || 0;
+    const likelyVal = parseInt(card.querySelector('input[name="likely_days"]')?.value || '0', 10) || 0;
+    const maxVal = parseInt(card.querySelector('input[name="max_days"]')?.value || '0', 10) || 0;
+    const startValue = card.querySelector('input[name="planned_start"]')?.value || '';
+    const endValue = card.querySelector('input[name="planned_end"]')?.value || '';
+    const isDone = startValue !== '' && endValue !== '' && minVal > 0 && likelyVal > 0 && maxVal > 0 && minVal <= likelyVal && likelyVal <= maxVal && isValid;
+    card.setAttribute('data-estimated', isDone ? '1' : '0');
+    card.classList.toggle('complete', isDone);
+    card.classList.toggle('incomplete', !isDone);
+    return isDone;
+}
+
 function bindPreviewHandlers() {
     document.querySelectorAll('.estimation-card').forEach(card => {
         const inputs = card.querySelectorAll('.estimate-input');
         inputs.forEach(input => {
             input.addEventListener('input', () => updateGanttPreview(card));
         });
-        updateGanttPreview(card);
+        card.querySelectorAll('input[name="planned_start"], input[name="planned_end"]').forEach(input => {
+            input.addEventListener('input', () => {
+                syncEstimateFromDeadline(card);
+                renderExpertGantt();
+                renderProjectManagementTable();
+                filterFeatureList();
+            });
+            input.addEventListener('change', () => {
+                syncEstimateFromDeadline(card);
+                renderExpertGantt();
+                renderProjectManagementTable();
+                filterFeatureList();
+            });
+        });
+        syncEstimateFromDeadline(card);
     });
 }
 
@@ -2551,7 +2967,7 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
     if (plannedEndInput && !plannedEndInput.value && plannedStartInput?.value) {
         const duration = Math.max(1, parseInt(payload.likely_days || payload.max_days || payload.min_days || '1', 10));
         const endDate = new Date(`${plannedStartInput.value}T00:00:00`);
-        endDate.setDate(endDate.getDate() + duration);
+        endDate.setDate(endDate.getDate() + duration - 1);
         plannedEndInput.value = endDate.toISOString().slice(0, 10);
     }
 
@@ -2571,8 +2987,7 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
         );
     });
 
-    validateEstimateCard(card);
-    updateGanttPreview(card);
+    syncEstimateFromDeadline(card);
     card.setAttribute('data-estimated', '1');
     card.classList.add('complete');
     card.classList.remove('incomplete');
@@ -2776,14 +3191,14 @@ function buildGanttTasks() {
 
         if (startDate && !endDate && maxDays > 0) {
             const start = new Date(startDate + 'T00:00:00');
-            start.setDate(start.getDate() + Math.max(1, maxDays));
+            start.setDate(start.getDate() + Math.max(1, maxDays) - 1);
             endDate = start.toISOString().slice(0, 10);
         }
 
         if (!endDate) {
             const duration = maxDays || likelyDays || minDays || 1;
             const start = new Date(startDate + 'T00:00:00');
-            start.setDate(start.getDate() + Math.max(1, duration));
+            start.setDate(start.getDate() + Math.max(1, duration) - 1);
             endDate = start.toISOString().slice(0, 10);
         }
 
@@ -2804,7 +3219,7 @@ function buildGanttTasks() {
 }
 
 function diffDays(startDate, endDate) {
-    return Math.max(1, Math.round((endDate - startDate) / 86400000));
+    return Math.max(1, Math.round((endDate - startDate) / 86400000) + 1);
 }
 
 function buildThreePointChartRows(tasks) {
@@ -2814,9 +3229,9 @@ function buildThreePointChartRows(tasks) {
         const dateDuration = Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())
             ? 1
             : diffDays(startDate, endDate);
-        const minDays = Math.max(0, parseInt(task.min_days || '0', 10));
-        const likelyDays = Math.max(minDays, parseInt(task.likely_days || '0', 10));
-        const maxDays = Math.max(likelyDays, parseInt(task.max_days || '0', 10), dateDuration);
+        const maxDays = dateDuration;
+        const minDays = Math.min(maxDays, Math.max(0, parseInt(task.min_days || '0', 10)));
+        const likelyDays = Math.min(maxDays, Math.max(minDays, parseInt(task.likely_days || '0', 10)));
 
         return {
             name: task.name,
@@ -2971,18 +3386,12 @@ function bindGanttHandlers() {
         if (e.target.matches('input[name="planned_start"], input[name="planned_end"], input[name="likely_days"], input[name="min_days"], input[name="max_days"]')) {
             const row = e.target.closest('.feature-row');
             if (row) {
-                validateEstimateCard(row);
+                syncEstimateFromDeadline(row);
             }
             renderExpertGantt();
             renderProjectManagementTable();
             if (row) {
-                const minVal = parseInt(row.querySelector('input[name="min_days"]')?.value || '0', 10) || 0;
-                const likelyVal = parseInt(row.querySelector('input[name="likely_days"]')?.value || '0', 10) || 0;
-                const maxVal = parseInt(row.querySelector('input[name="max_days"]')?.value || '0', 10) || 0;
-                const isDone = (minVal > 0 && likelyVal > 0 && maxVal > 0 && minVal <= likelyVal && likelyVal <= maxVal);
-                row.setAttribute('data-estimated', isDone ? '1' : '0');
-                row.classList.toggle('complete', isDone);
-                row.classList.toggle('incomplete', !isDone);
+                updateEstimateCardState(row);
                 filterFeatureList();
             }
         }
@@ -3022,14 +3431,22 @@ function filterFeatureList() {
     });
     const progressText = document.getElementById('featureProgressText');
     const progressBadge = document.getElementById('featureProgressBadge');
+    const progressHelp = document.getElementById('featureProgressHelp');
     if (progressText) {
         progressText.textContent = `Estimated: ${estimated} / ${total}`;
     }
     if (progressBadge) {
+        const empty = total === 0;
         const ready = total > 0 && estimated === total;
-        progressBadge.textContent = ready ? 'Ready' : 'Not Ready';
+        progressBadge.textContent = empty ? 'No Features' : (ready ? 'Ready' : 'Not Ready');
         progressBadge.classList.toggle('ready', ready);
-        progressBadge.classList.toggle('pending', !ready);
+        progressBadge.classList.toggle('pending', !ready && !empty);
+        progressBadge.classList.toggle('empty', empty);
+    }
+    if (progressHelp) {
+        progressHelp.textContent = total === 0
+            ? 'No features are available for estimation in this project yet.'
+            : 'All features must be estimated before submission to Sales.';
     }
 }
 
@@ -3037,12 +3454,10 @@ function filterFeatureList() {
 const phaseSelect = document.getElementById('phaseProjectSelect');
 if (phaseSelect) {
     phaseSelect.addEventListener('change', loadProjectSetup);
-    // Auto-select first project if none selected
-    if (!phaseSelect.value && phaseSelect.options.length > 1) {
-        phaseSelect.value = phaseSelect.options[1].value;
-        loadProjectSetup();
-    }
+    phaseSelect.value = '';
+    loadProjectSetup();
 }
+document.getElementById('changeFeatureProjectBtn')?.addEventListener('click', resetFeatureProjectSelection);
 bindPreviewHandlers();
 bindGanttHandlers();
 bindRecommendationHandlers();

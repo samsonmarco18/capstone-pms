@@ -4,6 +4,7 @@ $(function () {
     initNotifications();
     initPageHeaderHelp();
     initTooltips();
+    initModalBackdropRecovery();
     initAppActionHelpers();
     initGenericFormDrafts();
     initFormSubmitConfirmations();
@@ -517,6 +518,23 @@ function initAppActionHelpers() {
     });
 }
 
+function initModalBackdropRecovery() {
+    document.addEventListener('hidden.bs.modal', function () {
+        window.setTimeout(function () {
+            if (document.querySelector('.modal.show')) {
+                return;
+            }
+
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('overflow');
+            document.body.style.removeProperty('padding-right');
+            document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
+                backdrop.remove();
+            });
+        }, 80);
+    });
+}
+
 function showAppLoading(title = 'Working on it', text = 'Please wait while the system finishes this action.') {
     const overlay = document.getElementById('appGlobalLoadingOverlay');
     if (!overlay) {
@@ -570,7 +588,7 @@ function showAppConfirm(options = {}) {
     const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
 
     return new Promise((resolve) => {
-        let settled = false;
+        let confirmed = false;
 
         function cleanup() {
             submitBtn.removeEventListener('click', onConfirm);
@@ -578,17 +596,13 @@ function showAppConfirm(options = {}) {
         }
 
         function onConfirm() {
-            settled = true;
-            cleanup();
+            confirmed = true;
             modal.hide();
-            resolve(true);
         }
 
         function onHidden() {
             cleanup();
-            if (!settled) {
-                resolve(false);
-            }
+            resolve(confirmed);
         }
 
         submitBtn.addEventListener('click', onConfirm);

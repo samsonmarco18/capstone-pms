@@ -456,6 +456,41 @@ CREATE TABLE cost_estimations (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- EXPERT PROJECT ESTIMATIONS TABLE
+-- =====================================================
+CREATE TABLE expert_project_estimations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    project_id INT NOT NULL,
+    expert_id INT NOT NULL,
+    status ENUM('draft','submitted','sul_rejected','sul_approved','sales_rejected','sales_approved') DEFAULT 'draft',
+    project_duration_months INT DEFAULT 1,
+    project_complexity VARCHAR(40) DEFAULT 'Medium',
+    allocation_json LONGTEXT,
+    additional_costs DECIMAL(15, 2) DEFAULT 0,
+    total_developer_cost DECIMAL(15, 2) DEFAULT 0,
+    total_technology_stack_cost DECIMAL(15, 2) DEFAULT 0,
+    overall_estimated_project_cost DECIMAL(15, 2) DEFAULT 0,
+    remaining_budget DECIMAL(15, 2) DEFAULT 0,
+    sul_reviewed_by INT NULL,
+    sul_reviewed_at DATETIME NULL,
+    sul_comment TEXT,
+    sales_reviewed_by INT NULL,
+    sales_reviewed_at DATETIME NULL,
+    sales_comment TEXT,
+    submitted_at DATETIME NULL,
+    approved_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_project_estimation (project_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (expert_id) REFERENCES users(id) ON DELETE RESTRICT,
+    FOREIGN KEY (sul_reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (sales_reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_project_estimation_status (status),
+    INDEX idx_project_estimation_expert (expert_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- SALES REPORTS TABLE
 -- =====================================================
 CREATE TABLE sales_reports (
@@ -496,10 +531,16 @@ CREATE TABLE receipts (
     amount_paid DECIMAL(12, 2) DEFAULT 0,
     due_date DATE,
     status ENUM('draft', 'sent', 'viewed', 'paid', 'overdue') DEFAULT 'draft',
+    payment_proof_path VARCHAR(500),
+    payment_proof_name VARCHAR(255),
+    payment_verified_by INT,
+    payment_verified_at DATETIME,
+    email_sent_at DATETIME,
     generated_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (report_id) REFERENCES sales_reports(id) ON DELETE CASCADE,
+    FOREIGN KEY (payment_verified_by) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (generated_by) REFERENCES users(id) ON DELETE RESTRICT,
     INDEX idx_status (status),
     INDEX idx_due_date (due_date)

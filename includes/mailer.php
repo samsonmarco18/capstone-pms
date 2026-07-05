@@ -285,7 +285,7 @@ function getGmailApiConfig(string $smtpUsername = ''): array
     ];
 }
 
-function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?string $textBody = null): array
+function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?string $textBody = null, array $attachments = []): array
 {
     $config = getMailConfig();
     $configIssues = getMailConfigIssues($config);
@@ -316,6 +316,7 @@ function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?s
     }
 
     $boundary = 'b_' . bin2hex(random_bytes(12));
+    $mixedBoundary = $attachments !== [] ? 'm_' . bin2hex(random_bytes(12)) : '';
     $fromName = encodeMailHeader($config['from_name']);
     $fromEmail = $config['from_email'];
     $subjectLine = encodeMailHeader($subject);
@@ -327,12 +328,17 @@ function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?s
         'To: ' . implode(', ', $validRecipients),
         'Subject: ' . $subjectLine,
         'MIME-Version: 1.0',
-        'Content-Type: multipart/alternative; boundary="' . $boundary . '"',
+        'Content-Type: ' . ($attachments !== [] ? 'multipart/mixed; boundary="' . $mixedBoundary . '"' : 'multipart/alternative; boundary="' . $boundary . '"'),
         'Message-ID: <' . bin2hex(random_bytes(10)) . '@' . $messageIdHost . '>',
         'X-Mailer: ERNI PMS SMTP Mailer',
     ];
 
     $message = implode("\r\n", $headers) . "\r\n\r\n";
+    if ($attachments !== []) {
+        $message .= '--' . $mixedBoundary . "\r\n";
+        $message .= 'Content-Type: multipart/alternative; boundary="' . $boundary . '"' . "\r\n\r\n";
+    }
+
     $message .= '--' . $boundary . "\r\n";
     $message .= "Content-Type: text/plain; charset=UTF-8\r\n";
     $message .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
@@ -342,6 +348,33 @@ function sendSystemEmail(string|array $to, string $subject, string $htmlBody, ?s
     $message .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
     $message .= normalizeSmtpBody($htmlBody) . "\r\n";
     $message .= '--' . $boundary . "--\r\n";
+
+    if ($attachments !== []) {
+        foreach ($attachments as $attachment) {
+            $attachmentContent = (string) ($attachment['content'] ?? '');
+            if ($attachmentContent === '' && !empty($attachment['path']) && is_file((string) $attachment['path'])) {
+                $fileContent = file_get_contents((string) $attachment['path']);
+                $attachmentContent = $fileContent === false ? '' : $fileContent;
+            }
+
+            if ($attachmentContent === '') {
+                continue;
+            }
+
+            $attachmentName = preg_replace('/[^A-Za-z0-9._-]/', '_', (string) ($attachment['name'] ?? 'attachment.txt'));
+            $attachmentMime = trim((string) ($attachment['mime'] ?? 'application/octet-stream'));
+            if ($attachmentMime === '') {
+                $attachmentMime = 'application/octet-stream';
+            }
+
+            $message .= '--' . $mixedBoundary . "\r\n";
+            $message .= 'Content-Type: ' . $attachmentMime . '; name="' . $attachmentName . '"' . "\r\n";
+            $message .= "Content-Transfer-Encoding: base64\r\n";
+            $message .= 'Content-Disposition: attachment; filename="' . $attachmentName . '"' . "\r\n\r\n";
+            $message .= chunk_split(base64_encode($attachmentContent), 76, "\r\n") . "\r\n";
+        }
+        $message .= '--' . $mixedBoundary . "--\r\n";
+    }
 
     if (($config['delivery_method'] ?? 'smtp') === 'gmail_api') {
         return gmailApiSendMessage($config['gmail_api'], $message);

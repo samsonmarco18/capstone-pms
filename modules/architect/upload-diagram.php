@@ -74,18 +74,59 @@ $checklistReadyForSummary = $hasArchitecturePlan && $hasWorkflowDiagram;
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $docType = normalizeArchitectureDocumentType($_POST['document_type'] ?? '');
     $description = trim($_POST['description'] ?? '');
-    
-    if(isset($_FILES['diagram']) && $_FILES['diagram']['error'] == 0) {
-        $target = storageBuildUploadTarget((string) $_FILES['diagram']['name'], 'architecture');
-        $originalFileName = $target['original_name'];
-        
-        if (move_uploaded_file($_FILES['diagram']['tmp_name'], $target['absolute_path'])) {
-            $stmt = $conn->prepare("INSERT INTO architecture_documents (project_id, document_type, file_name, file_path, description, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("issssi", $projectId, $docType, $originalFileName, $target['relative_path'], $description, $user['id']);
-            $stmt->execute();
-            
-            logActivity($user['id'], 'upload_diagram', 'projects', $projectId, null, $_POST);
-            $_SESSION['success'] = "Document uploaded successfully";
+
+    $uploadErrorLabels = [
+        UPLOAD_ERR_INI_SIZE => 'The selected file is larger than the server upload limit.',
+        UPLOAD_ERR_FORM_SIZE => 'The selected file is larger than the form upload limit.',
+        UPLOAD_ERR_PARTIAL => 'The file was only partially uploaded. Please try again.',
+        UPLOAD_ERR_NO_FILE => 'Please choose a file to upload.',
+        UPLOAD_ERR_NO_TMP_DIR => 'The server upload folder is missing.',
+        UPLOAD_ERR_CANT_WRITE => 'The server could not write the uploaded file.',
+        UPLOAD_ERR_EXTENSION => 'A server extension blocked the upload.',
+    ];
+
+    $file = $_FILES['diagram'] ?? null;
+    $uploadError = is_array($file) ? (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
+    if ($uploadError !== UPLOAD_ERR_OK) {
+        $_SESSION['error'] = $uploadErrorLabels[$uploadError] ?? 'Document upload failed. Please try again.';
+    } else {
+        $originalName = (string) ($file['name'] ?? '');
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        $allowedExtensions = ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'];
+        $maxFileSize = 10 * 1024 * 1024;
+
+        if (!in_array($extension, $allowedExtensions, true)) {
+            $_SESSION['error'] = 'Only PDF, PNG, JPG, DOC, and DOCX files are allowed.';
+        } elseif ((int) ($file['size'] ?? 0) > $maxFileSize) {
+            $_SESSION['error'] = 'The selected file must be 10MB or smaller.';
+        } else {
+            try {
+                $target = storageBuildUploadTarget($originalName, 'architecture');
+                $originalFileName = $target['original_name'];
+
+                if (!is_uploaded_file((string) $file['tmp_name']) || !move_uploaded_file((string) $file['tmp_name'], $target['absolute_path'])) {
+                    $_SESSION['error'] = 'The document could not be saved. Please try uploading it again.';
+                } else {
+                    $stmt = $conn->prepare("INSERT INTO architecture_documents (project_id, document_type, file_name, file_path, description, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)");
+                    if ($stmt === false) {
+                        $_SESSION['error'] = 'The document was uploaded, but the database record could not be prepared.';
+                    } else {
+                        $stmt->bind_param("issssi", $projectId, $docType, $originalFileName, $target['relative_path'], $description, $user['id']);
+                        if ($stmt->execute()) {
+                            logActivity($user['id'], 'upload_diagram', 'projects', $projectId, null, [
+                                'document_type' => $docType,
+                                'file_name' => $originalFileName,
+                            ]);
+                            $_SESSION['success'] = 'Document uploaded successfully';
+                        } else {
+                            $_SESSION['error'] = 'The document was uploaded, but it could not be saved to the document list.';
+                        }
+                        $stmt->close();
+                    }
+                }
+            } catch (Throwable $e) {
+                $_SESSION['error'] = 'Document upload failed because the upload folder could not be prepared.';
+            }
         }
     }
     
@@ -107,6 +148,7 @@ include '../../includes/navbar.php';
     --gray-100: #f1f3f5;
     --gray-200: #e9ecef;
     --gray-300: #dee2e6;
+    --gray-500: #adb5bd;
     --gray-600: #6c757d;
     --gray-900: #212529;
     --shadow-sm: 0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
@@ -316,6 +358,10 @@ a.progress-step:hover {
     padding: 1.5rem;
 }
 
+.form-card .card-body {
+    container-type: inline-size;
+}
+
 /* Form Elements */
 .form-label {
     font-size: 0.7rem;
@@ -356,21 +402,111 @@ a.progress-step:hover {
     background: var(--gray-50);
 }
 
-/* Buttons */
-.btn-upload {
-    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
-    color: white;
-    border: none;
-    padding: 0.6rem 1.5rem;
-    border-radius: 40px;
-    font-weight: 500;
-    transition: all 0.2s;
+/* Document form actions */
+.document-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.7fr) minmax(0, 1.15fr);
+    gap: 0.65rem;
+    align-items: stretch;
+    margin-top: 1.5rem;
 }
 
-.btn-upload:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
+.document-actions .btn-upload,
+.document-actions .btn-success-modern,
+.document-actions [data-generic-save-draft] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: 0;
+    min-height: 48px;
+    margin: 0 !important;
+    padding: 0.7rem 0.85rem;
+    border-radius: 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.document-actions i {
+    margin: 0 !important;
+    font-size: 0.9rem;
+}
+
+.document-actions .btn-upload {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
     color: white;
+    border: 1px solid transparent;
+    box-shadow: 0 5px 14px rgba(31, 99, 146, 0.2);
+}
+
+.document-actions [data-generic-save-draft] {
+    background: white;
+    color: var(--theme-primary);
+    border: 1px solid rgba(31, 99, 146, 0.45);
+    box-shadow: none;
+}
+
+.document-actions .btn-success-modern {
+    background: linear-gradient(135deg, #10a977 0%, #07845e 100%);
+    color: white;
+    border: 1px solid transparent;
+    box-shadow: 0 5px 14px rgba(5, 150, 105, 0.2);
+}
+
+.document-actions .btn-upload:hover,
+.document-actions .btn-success-modern:hover,
+.document-actions [data-generic-save-draft]:hover {
+    transform: translateY(-2px);
+}
+
+.document-actions .btn-upload:hover {
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.28);
+    color: white;
+}
+
+.document-actions [data-generic-save-draft]:hover {
+    background: rgba(31, 99, 146, 0.07);
+    border-color: var(--theme-primary);
+    color: var(--theme-dark);
+}
+
+.document-actions .btn-success-modern:hover {
+    box-shadow: 0 8px 18px rgba(5, 150, 105, 0.27);
+    color: white;
+}
+
+.document-actions :is(button, a):focus-visible {
+    outline: 3px solid rgba(31, 99, 146, 0.22);
+    outline-offset: 2px;
+}
+
+.document-actions .btn-success-modern.disabled {
+    background: var(--gray-200);
+    color: var(--gray-500);
+    border-color: var(--gray-300);
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 1;
+    transform: none;
+}
+
+.document-actions [data-generic-draft-status] {
+    display: none;
+    grid-column: 1 / -1;
+    order: 4;
+    margin: 0 !important;
+    color: var(--gray-500);
+    font-size: 0.75rem;
+    text-align: center;
+}
+
+.document-actions [data-generic-draft-status]:not(:empty) {
+    display: block;
 }
 
 .btn-review {
@@ -404,23 +540,6 @@ a.progress-step:hover {
     transform: translateY(-1px);
     color: white;
 }
-
-.btn-success-modern {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: white;
-    border: none;
-    padding: 0.6rem 1.5rem;
-    border-radius: 40px;
-    font-weight: 500;
-    transition: all 0.2s;
-}
-
-.btn-success-modern:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-    color: white;
-}
-
 
 /* Checklist Card */
 .checklist-card {
@@ -469,6 +588,26 @@ a.progress-step:hover {
     .progress-step .step-label { font-size: 0.6rem; }
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
 }
+
+@media (max-width: 575.98px) {
+    .document-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .document-actions [data-generic-draft-status] {
+        grid-column: 1;
+    }
+}
+
+@container (max-width: 520px) {
+    .document-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .document-actions [data-generic-draft-status] {
+        grid-column: 1;
+    }
+}
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
     background: #06111e;
 }
@@ -511,6 +650,17 @@ a.progress-step:hover {
     background: #071321 !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
     color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-actions [data-generic-save-draft] {
+    background: #0a1b2c;
+    border-color: rgba(113, 178, 224, 0.55);
+    color: #8bc7f0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-actions [data-generic-save-draft]:hover {
+    background: rgba(31, 99, 146, 0.2);
+    color: #c4e6ff;
 }
 </style>
 
@@ -588,9 +738,9 @@ a.progress-step:hover {
                             <small class="text-muted d-block mt-1">Accepted formats: PDF, PNG, JPG, DOC, DOCX (Max 10MB)</small>
                         </div>
                         
-                        <div class="d-flex justify-content-between align-items-center mt-4">
-                            <button type="submit" class="btn-upload"><i class="fas fa-upload"></i> Upload Document</button>
-                            <a href="summary.php?id=<?php echo $projectId; ?>" class="btn-success-modern <?php echo $checklistReadyForSummary ? '' : 'disabled'; ?>" <?php echo $checklistReadyForSummary ? '' : 'aria-disabled="true" tabindex="-1"'; ?>><i class="fas fa-check"></i> Proceed to Summary</a>
+                        <div class="document-actions">
+                            <button type="submit" class="btn-upload"><i class="fas fa-upload" aria-hidden="true"></i><span>Upload Document</span></button>
+                            <a href="summary.php?id=<?php echo $projectId; ?>" class="btn-success-modern <?php echo $checklistReadyForSummary ? '' : 'disabled'; ?>" <?php echo $checklistReadyForSummary ? '' : 'aria-disabled="true" tabindex="-1"'; ?>><span>Proceed to Summary</span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>
                         </div>
                     </form>
                 </div>

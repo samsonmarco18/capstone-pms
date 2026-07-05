@@ -202,7 +202,7 @@ if ($isReleaseMovement) {
         $movementLabel . ': ' . ($notes ?: ucfirst($movementVerb) . ' update recorded.')
     );
 
-    workflowMaybeCompleteProject($conn, (int) ($task['project_id'] ?? 0));
+    workflowMaybeCompleteProject($conn, (int) ($task['project_id'] ?? 0), (int) $user['id']);
 
     workflowNotifyRoles(
         $conn,

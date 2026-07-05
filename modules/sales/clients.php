@@ -81,6 +81,21 @@ function parseSalesTimeInput(string $value): ?string
     return $trimmed . ':00';
 }
 
+function parseSalesDateInput(string $value): ?string
+{
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return null;
+    }
+
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $trimmed);
+    if (!$parsed || $parsed->format('Y-m-d') !== $trimmed) {
+        return null;
+    }
+
+    return $trimmed;
+}
+
 function salesClientsFeatureCount(string $requestedFeatures): int
 {
     return count(array_filter(array_map('trim', preg_split('/\R/', $requestedFeatures) ?: [])));
@@ -207,6 +222,77 @@ function salesClientsSaveAttachments(array $files): array
     return $saved;
 }
 
+function salesClientsDownloadableRepositoryForClient(mysqli|PgsqlMysqliCompatConnection $conn, int $clientId, int $salesUserId): ?array
+{
+    if ($clientId <= 0 || $salesUserId <= 0) {
+        return null;
+    }
+
+    $featureCondition = projectProgressFeatureCondition('t');
+    $mergedCondition = projectProgressMergedCondition('t');
+    $stmt = $conn->prepare("
+        SELECT
+            p.id AS project_id,
+            p.status AS project_status,
+            p.created_by AS project_created_by,
+            c.created_by AS client_created_by,
+            pr.id AS repository_id,
+            pr.default_branch_name,
+            COUNT(t.id) AS total_features,
+            SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END) AS merged_features
+        FROM projects p
+        JOIN clients c ON c.id = p.client_id
+        JOIN project_repositories pr ON pr.project_id = p.id AND pr.repository_status = 'active'
+        LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
+        WHERE p.client_id = ?
+          AND p.status != 'cancelled'
+        GROUP BY p.id, p.status, p.created_by, c.created_by, pr.id, pr.default_branch_name, p.updated_at, pr.updated_at
+        ORDER BY p.updated_at DESC, pr.updated_at DESC, pr.id DESC
+        LIMIT 10
+    ");
+
+    if ($stmt === false) {
+        return null;
+    }
+
+    $stmt->bind_param('i', $clientId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    while ($row = $result->fetch_assoc()) {
+        $totalFeatures = (int) ($row['total_features'] ?? 0);
+        $mergedFeatures = (int) ($row['merged_features'] ?? 0);
+        $isOwner = (int) ($row['project_created_by'] ?? 0) === $salesUserId
+            || (int) ($row['client_created_by'] ?? 0) === $salesUserId;
+
+        if ($totalFeatures <= 0 || $mergedFeatures < $totalFeatures || !$isOwner) {
+            continue;
+        }
+
+        $projectId = (int) ($row['project_id'] ?? 0);
+        if ((string) ($row['project_status'] ?? '') !== 'completed' && $projectId > 0) {
+            $completeStmt = $conn->prepare("UPDATE projects SET status = 'completed' WHERE id = ?");
+            if ($completeStmt !== false) {
+                $completeStmt->bind_param('i', $projectId);
+                $completeStmt->execute();
+                $completeStmt->close();
+            }
+            workflowEnsureFinalReceiptForProject($conn, $projectId, $salesUserId);
+        }
+
+        $stmt->close();
+
+        return [
+            'repository_id' => (int) ($row['repository_id'] ?? 0),
+            'default_branch_name' => (string) (($row['default_branch_name'] ?? '') ?: 'main'),
+        ];
+    }
+
+    $stmt->close();
+
+    return null;
+}
+
 // Handle client operations (same logic as before)
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['add_client'])) {
@@ -234,15 +320,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $timelineStart = $_POST['timeline_start'] ?: null;
         $timelineEnd = $_POST['timeline_end'] ?: ($deadline ?: null);
         $timelineStartTimeInput = trim((string) ($_POST['timeline_start_time'] ?? ''));
-        $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ($_POST['deadline_time'] ?? '')));
+        $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ''));
         $timelineStartTime = parseSalesTimeInput($timelineStartTimeInput);
         $timelineEndTime = parseSalesTimeInput($timelineEndTimeInput);
         $featureCount = salesClientsFeatureCount($requestedFeatures);
         $generatedComplexity = salesClientsProjectComplexityValue(
             projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $featureCount)
         );
-        $attachmentsJson = json_encode(salesClientsSaveAttachments($_FILES['attachments'] ?? []), JSON_UNESCAPED_SLASHES);
-
         $requirementsSummary = $requestedFeatures;
         if ($additionalRequirements !== '') {
             $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Additional Requirements:' . "\n" . $additionalRequirements;
@@ -260,9 +344,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } elseif ($timelineEndTimeInput !== '' && $timelineEndTime === null) {
             $_SESSION['error'] = 'Project deadline time must be valid.';
         } else {
+            $deadline = $clientDeadline ?: $timelineEnd;
             $conn->begin_transaction();
 
             try {
+                $attachmentsJson = json_encode(salesClientsSaveAttachments($_FILES['attachments'] ?? []), JSON_UNESCAPED_SLASHES);
                 $stmt = $conn->prepare("INSERT INTO clients (name, contact_person, email, phone, address, deadline, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)");
                 if ($stmt === false) {
                     throw new RuntimeException('Unable to prepare client insert.');
@@ -348,7 +434,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                 if ($projectId) {
                     logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);
-                    $_SESSION['success'] = "Client added, shared project folder created, and project details are available to all roles.";
+                    $_SESSION['success'] = 'Client and complete project intake sent to Architect review successfully.';
                 } else {
                     $_SESSION['success'] = "Client added and shared client folder created. No project created because project name was empty.";
                 }
@@ -366,13 +452,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $phone = $_POST['phone'];
         $address = $_POST['address'];
         $status = $_POST['status'];
-        $deadline = $_POST['deadline'];
         
         $oldResult = salesClientsQuery($conn, "SELECT * FROM clients WHERE id = $id");
         $oldData = $oldResult ? $oldResult->fetch_assoc() : null;
         
-        $stmt = $conn->prepare("UPDATE clients SET name=?, contact_person=?, email=?, phone=?, address=?, status=?, deadline=? WHERE id=?");
-        $stmt->bind_param("sssssssi", $name, $contact_person, $email, $phone, $address, $status, $deadline, $id);
+        $stmt = $conn->prepare("UPDATE clients SET name=?, contact_person=?, email=?, phone=?, address=?, status=? WHERE id=?");
+        $stmt->bind_param("ssssssi", $name, $contact_person, $email, $phone, $address, $status, $id);
         
         if ($stmt->execute()) {
             logActivity($user['id'], 'update_client', 'clients', $id, $oldData, $_POST);
@@ -458,6 +543,58 @@ include '../../includes/navbar.php';
     --gray-900: #212529;
     --shadow-sm: 0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+}
+
+.client-flash {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-bottom: 1rem;
+    padding: 0.9rem 3.25rem 0.9rem 1rem;
+    border: 0 !important;
+    border-left: 0 !important;
+    border-radius: 14px;
+    box-shadow: 0 8px 22px rgba(15, 42, 64, 0.08);
+}
+
+.client-flash--success {
+    background: #ecfdf5;
+    color: #166534;
+}
+
+.client-flash__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #16a34a;
+    color: #ffffff;
+    font-size: 1rem;
+    box-shadow: 0 6px 14px rgba(22, 163, 74, 0.2);
+}
+
+.client-flash__content {
+    display: grid;
+    gap: 0.08rem;
+    min-width: 0;
+}
+
+.client-flash__content strong {
+    color: inherit;
+    font-size: 0.84rem;
+}
+
+.client-flash__content span {
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+.client-flash .btn-close {
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 /* Page Header */
@@ -944,6 +1081,16 @@ include '../../includes/navbar.php';
     color: white;
 }
 
+.btn-icon.download {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.btn-icon.download:hover {
+    background: #059669;
+    color: white;
+}
+
 .btn-icon.delete {
     background: #fee2e2;
     color: #dc2626;
@@ -1198,6 +1345,40 @@ include '../../includes/navbar.php';
     line-height: 1.4;
 }
 
+.modal-modern.add-client-modal .required-mark {
+    color: #dc2626;
+    margin-left: .18rem;
+}
+
+.modal-modern.add-client-modal .optional-label {
+    color: var(--gray-500);
+    font-size: .72rem;
+    font-weight: 500;
+}
+
+.modal-modern.add-client-modal .architect-handoff-note {
+    align-items: flex-start;
+    display: flex;
+    gap: .65rem;
+    margin-bottom: .85rem;
+    padding: .7rem .8rem;
+    border-radius: 10px;
+    background: #eff6ff;
+    color: #1e4f78;
+    font-size: .78rem;
+    line-height: 1.45;
+}
+
+.modal-modern.add-client-modal .architect-handoff-note i {
+    flex: 0 0 auto;
+    margin-top: .15rem;
+    color: var(--theme-primary);
+}
+
+.modal-modern.add-client-modal .architect-handoff-note[hidden] {
+    display: none;
+}
+
 .modal-modern.add-client-modal .info-card {
     display: grid;
     gap: 0.25rem;
@@ -1222,57 +1403,356 @@ include '../../includes/navbar.php';
     font-weight: 700;
 }
 
-.modal-modern.add-client-modal .client-summary-grid {
+.modal-modern.add-client-modal .field-group.review-step {
+    padding: 0.1rem 0.35rem 0.1rem 0.1rem;
+    border: 0;
+    background: transparent;
+    scrollbar-color: rgba(31, 99, 146, 0.48) transparent;
+    scrollbar-width: thin;
+}
+
+.modal-modern.add-client-modal .field-group.review-step::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-modern.add-client-modal .field-group.review-step::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(31, 99, 146, 0.48);
+}
+
+.modal-modern.add-client-modal .review-summary {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.85rem;
 }
 
-.modal-modern.add-client-modal .client-summary-panel {
-    display: grid;
-    gap: 0.7rem;
-    padding: 0.95rem;
-    border: 1px solid var(--gray-200);
-    border-radius: 12px;
-    background: #f8fafc;
+.modal-modern.add-client-modal .review-ready-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.85rem 0.95rem;
+    border: 1px solid rgba(31, 99, 146, 0.2);
+    border-radius: 14px;
+    background: linear-gradient(135deg, #edf7fd 0%, #f8fbfe 100%);
+    box-shadow: 0 6px 18px rgba(31, 99, 146, 0.06);
 }
 
-.modal-modern.add-client-modal .client-summary-panel--wide {
-    grid-column: 1 / -1;
+.modal-modern.add-client-modal .review-ready-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    background: var(--theme-primary);
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.2);
 }
 
-.modal-modern.add-client-modal .client-summary-panel h6 {
-    margin: 0;
-    color: var(--gray-900);
-    font-size: 0.86rem;
-    font-weight: 700;
-}
-
-.modal-modern.add-client-modal .client-summary-list {
-    display: grid;
-    gap: 0.55rem;
-    margin: 0;
-}
-
-.modal-modern.add-client-modal .client-summary-list div {
+.modal-modern.add-client-modal .review-ready-copy {
     display: grid;
     gap: 0.12rem;
+    min-width: 0;
 }
 
-.modal-modern.add-client-modal .client-summary-list dt {
-    color: var(--gray-500);
-    font-size: 0.72rem;
+.modal-modern.add-client-modal .review-ready-copy strong {
+    color: var(--gray-900);
+    font-size: 0.9rem;
+}
+
+.modal-modern.add-client-modal .review-ready-copy span {
+    color: var(--gray-600);
+    font-size: 0.76rem;
+    line-height: 1.4;
+}
+
+.modal-modern.add-client-modal .review-ready-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 0.4rem 0.65rem;
+    border-radius: 999px;
+    background: #d1fae5;
+    color: #047857;
+    font-size: 0.7rem;
     font-weight: 700;
+    white-space: nowrap;
+}
+
+.modal-modern.add-client-modal .review-primary-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 0.85rem;
+}
+
+.modal-modern.add-client-modal .review-card {
+    min-width: 0;
+    padding: 0.95rem;
+    border: 1px solid #dfe7ef;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 8px 22px rgba(15, 42, 64, 0.055);
+}
+
+.modal-modern.add-client-modal .review-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+}
+
+.modal-modern.add-client-modal .review-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: rgba(31, 99, 146, 0.1);
+    color: var(--theme-primary);
+    font-size: 0.78rem;
+}
+
+.modal-modern.add-client-modal .review-card-heading {
+    display: grid;
+    gap: 0.05rem;
+    min-width: 0;
+}
+
+.modal-modern.add-client-modal .review-card-heading h6 {
+    margin: 0;
+    color: var(--gray-900);
+    font-size: 0.84rem;
+    font-weight: 750;
+}
+
+.modal-modern.add-client-modal .review-card-heading span {
+    color: var(--gray-500);
+    font-size: 0.68rem;
+}
+
+.modal-modern.add-client-modal .review-highlight {
+    display: grid;
+    gap: 0.15rem;
+    margin-bottom: 0.75rem;
+    padding: 0.7rem 0.75rem;
+    border-radius: 10px;
+    background: #f4f8fb;
+}
+
+.modal-modern.add-client-modal .review-highlight span,
+.modal-modern.add-client-modal .review-data-label,
+.modal-modern.add-client-modal .review-key-label,
+.modal-modern.add-client-modal .review-block-label,
+.modal-modern.add-client-modal .review-note-label {
+    color: var(--gray-500);
+    font-size: 0.64rem;
+    font-weight: 750;
+    letter-spacing: 0.045em;
     text-transform: uppercase;
 }
 
-.modal-modern.add-client-modal .client-summary-list dd {
-    margin: 0;
+.modal-modern.add-client-modal .review-highlight strong {
     color: var(--gray-900);
-    font-size: 0.9rem;
-    line-height: 1.35;
-    white-space: pre-wrap;
+    font-size: 0.98rem;
+    line-height: 1.3;
     overflow-wrap: anywhere;
+}
+
+.modal-modern.add-client-modal .review-data-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem 0.8rem;
+}
+
+.modal-modern.add-client-modal .review-data-item {
+    display: grid;
+    gap: 0.14rem;
+    min-width: 0;
+}
+
+.modal-modern.add-client-modal .review-data-item--wide {
+    grid-column: 1 / -1;
+}
+
+.modal-modern.add-client-modal .review-summary-value {
+    color: var(--gray-900);
+    font-size: 0.8rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.modal-modern.add-client-modal .review-summary-value.is-empty {
+    color: #94a3b8;
+    font-style: italic;
+}
+
+.modal-modern.add-client-modal .review-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-bottom: 0.75rem;
+}
+
+.modal-modern.add-client-modal .review-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid rgba(31, 99, 146, 0.15);
+    border-radius: 999px;
+    background: #eef6fb;
+    color: var(--theme-primary-dark);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: capitalize;
+}
+
+.modal-modern.add-client-modal .review-chip[data-value="high"],
+.modal-modern.add-client-modal .review-chip[data-value="critical"] {
+    border-color: rgba(220, 38, 38, 0.16);
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.modal-modern.add-client-modal .review-key-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.modal-modern.add-client-modal .review-key-item {
+    display: grid;
+    gap: 0.15rem;
+    min-width: 0;
+    padding: 0.58rem 0.65rem;
+    border: 1px solid #e8eef4;
+    border-radius: 9px;
+    background: #fbfcfd;
+}
+
+.modal-modern.add-client-modal .review-key-item--wide {
+    grid-column: 1 / -1;
+}
+
+.modal-modern.add-client-modal .review-key-value {
+    color: var(--gray-900);
+    font-size: 0.76rem;
+    font-weight: 650;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.modal-modern.add-client-modal .review-requirements-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    gap: 0.65rem;
+}
+
+.modal-modern.add-client-modal .review-block {
+    display: grid;
+    align-content: start;
+    gap: 0.3rem;
+    min-width: 0;
+    padding: 0.7rem;
+    border: 1px solid #e8eef4;
+    border-radius: 10px;
+    background: #fbfcfd;
+}
+
+.modal-modern.add-client-modal .review-block--wide {
+    grid-column: 1 / -1;
+}
+
+.modal-modern.add-client-modal .review-feature-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.modal-modern.add-client-modal .review-feature-list li {
+    position: relative;
+    min-width: 0;
+    padding: 0.42rem 0.5rem 0.42rem 1.45rem;
+    border-radius: 8px;
+    background: #f0f7fb;
+    color: #24445d;
+    font-size: 0.74rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.modal-modern.add-client-modal .review-feature-list li::before {
+    content: '';
+    position: absolute;
+    top: 0.72rem;
+    left: 0.62rem;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--theme-primary);
+}
+
+.modal-modern.add-client-modal .review-feature-list li.is-empty {
+    grid-column: 1 / -1;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+.modal-modern.add-client-modal .review-notes-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.modal-modern.add-client-modal .review-note-item {
+    display: grid;
+    align-content: start;
+    gap: 0.28rem;
+    min-width: 0;
+    min-height: 72px;
+    padding: 0.65rem;
+    border: 1px solid #e8eef4;
+    border-radius: 9px;
+    background: #fbfcfd;
+}
+
+.modal-modern.add-client-modal .review-handoff {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 12px;
+    background: var(--theme-primary-dark);
+    color: #ffffff;
+}
+
+.modal-modern.add-client-modal .review-handoff i {
+    flex: 0 0 auto;
+    font-size: 0.88rem;
+}
+
+.modal-modern.add-client-modal .review-handoff-copy {
+    display: grid;
+    gap: 0.08rem;
+}
+
+.modal-modern.add-client-modal .review-handoff-copy strong {
+    font-size: 0.78rem;
+}
+
+.modal-modern.add-client-modal .review-handoff-copy span {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.68rem;
+    line-height: 1.35;
 }
 
 .modal-modern.add-client-modal .form-label {
@@ -1488,7 +1968,22 @@ include '../../includes/navbar.php';
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .modal-modern.add-client-modal .client-summary-grid {
+    .modal-modern.add-client-modal .review-primary-grid,
+    .modal-modern.add-client-modal .review-requirements-grid,
+    .modal-modern.add-client-modal .review-notes-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-modern.add-client-modal .review-ready-banner {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .modal-modern.add-client-modal .review-ready-badge {
+        margin-left: 46px;
+    }
+
+    .modal-modern.add-client-modal .review-feature-list {
         grid-template-columns: 1fr;
     }
 
@@ -1639,6 +2134,17 @@ include '../../includes/navbar.php';
     background: #06111e;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-flash--success {
+    background: rgba(22, 101, 52, 0.2);
+    color: #bbf7d0;
+    box-shadow: 0 12px 28px rgba(3, 14, 25, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-flash__icon {
+    background: #22c55e;
+    color: #052e16;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
@@ -1739,6 +2245,77 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .draft-status,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input label {
     color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .architect-handoff-note {
+    background: rgba(31, 99, 146, .18);
+    color: #c4e6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-ready-banner {
+    border-color: rgba(86, 171, 224, 0.28);
+    background: linear-gradient(135deg, rgba(31, 99, 146, 0.24), rgba(10, 27, 44, 0.92));
+    box-shadow: 0 10px 24px rgba(3, 14, 25, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-card {
+    border-color: rgba(31, 99, 146, 0.26);
+    background: #0a1b2c;
+    box-shadow: 0 12px 26px rgba(3, 14, 25, 0.2);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-highlight,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-key-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-block,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-note-item {
+    border-color: rgba(31, 99, 146, 0.2);
+    background: #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-ready-copy strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-card-heading h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-highlight strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-summary-value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-key-value {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-ready-copy span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-card-heading span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-highlight span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-data-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-key-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-block-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-note-label {
+    color: #8eabc5;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-feature-list li {
+    background: rgba(31, 99, 146, 0.18);
+    color: #c4e6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-summary-value.is-empty,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-feature-list li.is-empty {
+    color: #7892aa;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-chip {
+    border-color: rgba(86, 171, 224, 0.25);
+    background: rgba(31, 99, 146, 0.2);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-chip[data-value="high"],
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-chip[data-value="critical"] {
+    border-color: rgba(248, 113, 113, 0.25);
+    background: rgba(127, 29, 29, 0.22);
+    color: #fca5a5;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .review-ready-badge {
+    background: rgba(16, 185, 129, 0.16);
+    color: #6ee7b7;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table th,
@@ -1901,8 +2478,12 @@ include '../../includes/navbar.php';
 
 <div class="container-fluid px-4 py-4">
     <?php if (!empty($_SESSION['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <i class="fas fa-check-circle me-2"></i><?php echo htmlspecialchars((string) $_SESSION['success']); ?>
+        <div class="alert alert-success client-flash client-flash--success alert-dismissible fade show" role="status">
+            <span class="client-flash__icon" aria-hidden="true"><i class="fas fa-check"></i></span>
+            <div class="client-flash__content">
+                <strong>Success</strong>
+                <span><?php echo htmlspecialchars((string) $_SESSION['success']); ?></span>
+            </div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         <?php unset($_SESSION['success']); ?>
@@ -2018,7 +2599,7 @@ include '../../includes/navbar.php';
                         <th>Contact Person</th>
                         <th>Status</th>
                         <th>Progress</th>
-                        <th>Deadline</th>
+                        <th>Project Deadline</th>
                         <th>Actions</th>
                     </thead>
                 <tbody>
@@ -2029,6 +2610,9 @@ include '../../includes/navbar.php';
     $daysLeft = $clientDeadlineTimestamp !== false ? ceil(($clientDeadlineTimestamp - time()) / (60 * 60 * 24)) : null;
     $deadlineClass = $daysLeft === null ? 'normal' : ($daysLeft <= 7 ? 'urgent' : ($daysLeft <= 30 ? 'warning' : 'normal'));
     $featureProgress = projectProgressPercent((int) ($client['total_features'] ?? 0), (int) ($client['merged_features'] ?? 0));
+    $downloadableRepository = $featureProgress === 100
+        ? salesClientsDownloadableRepositoryForClient($conn, (int) $client['id'], (int) ($user['id'] ?? 0))
+        : null;
     ?>
     <tr>
         <td>
@@ -2069,6 +2653,15 @@ include '../../includes/navbar.php';
                 <button class="btn-icon edit" onclick="editClient(<?php echo htmlspecialchars(json_encode($client)); ?>)">
                     <i class="fas fa-edit"></i>
                 </button>
+                <?php if ($downloadableRepository && (int) ($downloadableRepository['repository_id'] ?? 0) > 0): ?>
+                    <a
+                        class="btn-icon download"
+                        href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . (int) $downloadableRepository['repository_id']); ?>"
+                        title="Download <?php echo htmlspecialchars((string) ($downloadableRepository['default_branch_name'] ?? 'main')); ?> branch"
+                    >
+                        <i class="fas fa-download"></i>
+                    </a>
+                <?php endif; ?>
                 <button class="btn-icon delete" onclick="openDeleteClientModal(<?php echo (int) $client['id']; ?>, <?php echo htmlspecialchars(json_encode($client['name'])); ?>)">
                     <i class="fas fa-trash"></i>
                 </button>
@@ -2103,7 +2696,7 @@ include '../../includes/navbar.php';
                 </h5>
                 <button type="button" class="btn-close add-client-close" aria-label="Close"></button>
             </div>
-            <form method="POST" id="addClientForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Saving client" data-loading-text="Please wait while the client, project details, folders, and notifications are saved.">
+            <form method="POST" id="addClientForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Sending to Architect" data-loading-text="Please wait while the qualified client intake, project folder, and Architect notification are saved.">
                 <input type="hidden" name="client_draft_id" data-client-draft-id value="">
                 <div class="modal-body">
                     <div class="add-client-stepper" aria-label="Add client progress">
@@ -2112,7 +2705,7 @@ include '../../includes/navbar.php';
                                 <span>1</span>
                                 <strong>Client Profile</strong>
                             </button>
-                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Enter the client's company, contact details, address, and deadline." aria-label="About Client Profile">
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Enter the client's company and contact details." aria-label="About Client Profile">
                                 <i class="fas fa-info" aria-hidden="true"></i>
                             </button>
                         </div>
@@ -2145,33 +2738,34 @@ include '../../includes/navbar.php';
                         </div>
                     </div>
 
+                    <div class="architect-handoff-note">
+                        <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+                        <span>Fields marked <strong>*</strong> are required before the project can be sent to Architect. Additional requirements and other fields marked optional may be left blank.</span>
+                    </div>
+
                     <div class="add-client-layout">
                         <div class="field-group add-client-step" data-client-step="0">
                             <div class="section-title"><i class="fas fa-id-card"></i> Client Profile</div>
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label class="form-label">Company Name</label>
+                                    <label class="form-label">Company Name<span class="required-mark">*</span></label>
                                     <input type="text" name="name" class="form-control" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Contact Person</label>
+                                    <label class="form-label">Contact Person<span class="required-mark">*</span></label>
                                     <input type="text" name="contact_person" class="form-control" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Email</label>
+                                    <label class="form-label">Email<span class="required-mark">*</span></label>
                                     <input type="email" name="email" class="form-control" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Phone</label>
+                                    <label class="form-label">Phone<span class="required-mark">*</span></label>
                                     <input type="text" name="phone" class="form-control" required>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label">Address</label>
+                                    <label class="form-label">Address <span class="optional-label">(Optional)</span></label>
                                     <textarea name="address" class="form-control" rows="2"></textarea>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Client Deadline</label>
-                                    <input type="date" name="deadline" class="form-control">
                                 </div>
                             </div>
                         </div>
@@ -2180,15 +2774,15 @@ include '../../includes/navbar.php';
                             <div class="section-title"><i class="fas fa-clipboard-list"></i> Project Intake</div>
                             <div class="row g-3">
                                 <div class="col-12">
-                                    <label class="form-label">Project Name</label>
+                                    <label class="form-label">Project Name<span class="required-mark">*</span></label>
                                     <input type="text" name="project_name" class="form-control" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Project Description</label>
-                                    <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution"></textarea>
+                                    <label class="form-label">Project Description<span class="required-mark">*</span></label>
+                                    <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution" required></textarea>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Requested System Features</label>
+                                    <label class="form-label">Requested System Features<span class="required-mark">*</span></label>
                                     <div class="requested-feature-builder">
                                         <input type="hidden" name="requested_features" id="requestedFeaturesField">
                                         <div class="requested-feature-list" id="requestedFeatureList">
@@ -2204,18 +2798,19 @@ include '../../includes/navbar.php';
                                                 <i class="fas fa-plus me-1"></i> Add Feature Item
                                             </button>
                                         </div>
+                                        <div class="mini-note">Add at least one feature the Architect can evaluate.</div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Meeting Notes</label>
+                                    <label class="form-label">Meeting Notes <span class="optional-label">(Optional)</span></label>
                                     <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Minutes of the Meeting (MOM)</label>
+                                    <label class="form-label">Minutes of the Meeting (MOM) <span class="optional-label">(Optional)</span></label>
                                     <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label">Additional Requirements</label>
+                                    <label class="form-label">Additional Requirements <span class="optional-label">(Optional)</span></label>
                                     <textarea name="additional_requirements" class="form-control" rows="3" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
                                 </div>
                                 <div class="col-md-6">
@@ -2228,7 +2823,7 @@ include '../../includes/navbar.php';
                                     </select>
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Attachments</label>
+                                    <label class="form-label">Attachments <span class="optional-label">(Optional)</span></label>
                                     <input type="file" name="attachments[]" class="form-control" multiple>
                                 </div>
                             </div>
@@ -2242,8 +2837,8 @@ include '../../includes/navbar.php';
                                     <input type="date" name="timeline_start" class="form-control">
                                 </div>
                                 <div class="col-md-3">
-                                    <label class="form-label">Start Time</label>
-                                    <input type="time" name="timeline_start_time" class="form-control">
+                                    <label class="form-label">Start Time<span class="required-mark">*</span></label>
+                                    <input type="time" name="timeline_start_time" class="form-control" required>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label">Project Deadline</label>
@@ -2254,9 +2849,9 @@ include '../../includes/navbar.php';
                                     <input type="time" name="timeline_end_time" class="form-control">
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">Budget</label>
-                                    <input type="number" name="sales_budget" class="form-control" min="0" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00">
-                                    <div class="mini-note">Used as the decision insight budget baseline when provided.</div>
+                                    <label class="form-label">Budget<span class="required-mark">*</span></label>
+                                    <input type="number" name="sales_budget" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00" required>
+                                    <div class="mini-note">Required as the decision insight budget baseline.</div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Generated Complexity</label>
@@ -2264,7 +2859,7 @@ include '../../includes/navbar.php';
                                     <div class="mini-note">Calculated automatically from timeline and feature count.</div>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label">Sales Notes</label>
+                                    <label class="form-label">Sales Notes <span class="optional-label">(Optional)</span></label>
                                     <textarea name="sales_notes" class="form-control" rows="3" placeholder="Internal notes for Architect review"></textarea>
                                 </div>
                                 <div class="col-md-6">
@@ -2276,96 +2871,144 @@ include '../../includes/navbar.php';
                             </div>
                         </div>
 
-                        <div class="field-group add-client-step" data-client-step="3" hidden>
-                            <div class="section-title"><i class="fas fa-clipboard-check"></i> Review Client Summary</div>
-                            <div class="client-summary-grid" data-client-summary>
-                                <div class="client-summary-panel">
-                                    <h6>Client Profile</h6>
-                                    <dl class="client-summary-list">
-                                        <div>
-                                            <dt>Company</dt>
-                                            <dd data-summary-field="name">Not provided</dd>
-                                        </div>
-                                        <div>
-                                            <dt>Contact Person</dt>
-                                            <dd data-summary-field="contact_person">Not provided</dd>
-                                        </div>
-                                        <div>
-                                            <dt>Email</dt>
-                                            <dd data-summary-field="email">Not provided</dd>
-                                        </div>
-                                        <div>
-                                            <dt>Phone</dt>
-                                            <dd data-summary-field="phone">Not provided</dd>
-                                        </div>
-                                        <div>
-                                            <dt>Client Deadline</dt>
-                                            <dd data-summary-field="deadline">Not set</dd>
-                                        </div>
-                                    </dl>
+                        <div class="field-group add-client-step review-step" data-client-step="3" hidden>
+                            <div class="section-title"><i class="fas fa-clipboard-check"></i> Final Review</div>
+                            <div class="review-summary" data-client-summary>
+                                <div class="review-ready-banner">
+                                    <span class="review-ready-icon"><i class="fas fa-check"></i></span>
+                                    <div class="review-ready-copy">
+                                        <strong>Ready for confirmation</strong>
+                                        <span>Review the intake details below before handing the project to the Architect.</span>
+                                    </div>
+                                    <span class="review-ready-badge"><i class="fas fa-circle-check"></i> Intake complete</span>
                                 </div>
-                                <div class="client-summary-panel">
-                                    <h6>Project Intake</h6>
-                                    <dl class="client-summary-list">
-                                        <div>
-                                            <dt>Project</dt>
-                                            <dd data-summary-field="project_name">Not provided</dd>
+
+                                <div class="review-primary-grid">
+                                    <section class="review-card" aria-labelledby="reviewClientHeading">
+                                        <header class="review-card-header">
+                                            <span class="review-card-icon"><i class="fas fa-building"></i></span>
+                                            <div class="review-card-heading">
+                                                <h6 id="reviewClientHeading">Client Profile</h6>
+                                                <span>Primary account and contact</span>
+                                            </div>
+                                        </header>
+                                        <div class="review-highlight">
+                                            <span>Company</span>
+                                            <strong class="review-summary-value" data-summary-field="name">Not provided</strong>
                                         </div>
-                                        <div>
-                                            <dt>Timeline</dt>
-                                            <dd data-summary-field="timeline">Not set</dd>
+                                        <div class="review-data-grid">
+                                            <div class="review-data-item review-data-item--wide">
+                                                <span class="review-data-label">Contact person</span>
+                                                <span class="review-summary-value" data-summary-field="contact_person">Not provided</span>
+                                            </div>
+                                            <div class="review-data-item">
+                                                <span class="review-data-label">Email</span>
+                                                <span class="review-summary-value" data-summary-field="email">Not provided</span>
+                                            </div>
+                                            <div class="review-data-item">
+                                                <span class="review-data-label">Phone</span>
+                                                <span class="review-summary-value" data-summary-field="phone">Not provided</span>
+                                            </div>
+                                            <div class="review-data-item review-data-item--wide">
+                                                <span class="review-data-label">Address</span>
+                                                <span class="review-summary-value" data-summary-field="address">Not provided</span>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <dt>Budget</dt>
-                                            <dd data-summary-field="sales_budget">Not provided</dd>
+                                    </section>
+
+                                    <section class="review-card" aria-labelledby="reviewProjectHeading">
+                                        <header class="review-card-header">
+                                            <span class="review-card-icon"><i class="fas fa-folder-open"></i></span>
+                                            <div class="review-card-heading">
+                                                <h6 id="reviewProjectHeading">Project Overview</h6>
+                                                <span>Commercial and delivery snapshot</span>
+                                            </div>
+                                        </header>
+                                        <div class="review-highlight">
+                                            <span>Project</span>
+                                            <strong class="review-summary-value" data-summary-field="project_name">Not provided</strong>
                                         </div>
-                                        <div>
-                                            <dt>Priority</dt>
-                                            <dd data-summary-field="priority">Medium</dd>
+                                        <div class="review-chip-row">
+                                            <span class="review-chip" data-summary-chip="priority"><i class="fas fa-flag"></i><span data-summary-field="priority">Medium</span></span>
+                                            <span class="review-chip" data-summary-chip="generated_complexity"><i class="fas fa-layer-group"></i><span data-summary-field="generated_complexity">Low</span> complexity</span>
                                         </div>
-                                        <div>
-                                            <dt>Generated Complexity</dt>
-                                            <dd data-summary-field="generated_complexity">Low</dd>
+                                        <div class="review-key-grid">
+                                            <div class="review-key-item review-key-item--wide">
+                                                <span class="review-key-label">Delivery timeline</span>
+                                                <span class="review-key-value review-summary-value" data-summary-field="timeline">Not set</span>
+                                            </div>
+                                            <div class="review-key-item">
+                                                <span class="review-key-label">Budget</span>
+                                                <span class="review-key-value review-summary-value" data-summary-field="sales_budget">Not provided</span>
+                                            </div>
+                                            <div class="review-key-item">
+                                                <span class="review-key-label">Scope size</span>
+                                                <span class="review-key-value review-summary-value" data-summary-field="requested_feature_count">0 features</span>
+                                            </div>
+                                            <div class="review-key-item review-key-item--wide">
+                                                <span class="review-key-label">Attachments</span>
+                                                <span class="review-key-value review-summary-value" data-summary-field="attachments">No attachments</span>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <dt>Attachments</dt>
-                                            <dd data-summary-field="attachments">No attachments</dd>
-                                        </div>
-                                    </dl>
+                                    </section>
                                 </div>
-                                <div class="client-summary-panel client-summary-panel--wide">
-                                    <h6>Requirements</h6>
-                                    <dl class="client-summary-list">
-                                        <div>
-                                            <dt>Description</dt>
-                                            <dd data-summary-field="project_description">Not provided</dd>
+
+                                <section class="review-card" aria-labelledby="reviewRequirementsHeading">
+                                    <header class="review-card-header">
+                                        <span class="review-card-icon"><i class="fas fa-list-check"></i></span>
+                                        <div class="review-card-heading">
+                                            <h6 id="reviewRequirementsHeading">Requirements &amp; Scope</h6>
+                                            <span>What the Architect will receive for evaluation</span>
                                         </div>
-                                        <div>
-                                            <dt>Requested Features</dt>
-                                            <dd data-summary-field="requested_features">Not provided</dd>
+                                    </header>
+                                    <div class="review-requirements-grid">
+                                        <div class="review-block">
+                                            <span class="review-block-label">Project description</span>
+                                            <span class="review-summary-value" data-summary-field="project_description">Not provided</span>
                                         </div>
-                                        <div>
-                                            <dt>Additional Requirements</dt>
-                                            <dd data-summary-field="additional_requirements">Not provided</dd>
+                                        <div class="review-block">
+                                            <span class="review-block-label">Requested features</span>
+                                            <ul class="review-feature-list" data-summary-feature-list>
+                                                <li class="is-empty">Not provided</li>
+                                            </ul>
                                         </div>
-                                    </dl>
-                                </div>
-                                <div class="client-summary-panel client-summary-panel--wide">
-                                    <h6>Meeting Notes</h6>
-                                    <dl class="client-summary-list">
-                                        <div>
-                                            <dt>Notes</dt>
-                                            <dd data-summary-field="meeting_notes">Not provided</dd>
+                                        <div class="review-block review-block--wide">
+                                            <span class="review-block-label">Additional requirements</span>
+                                            <span class="review-summary-value" data-summary-field="additional_requirements">Not provided</span>
                                         </div>
-                                        <div>
-                                            <dt>MOM</dt>
-                                            <dd data-summary-field="mom">Not provided</dd>
+                                    </div>
+                                </section>
+
+                                <section class="review-card" aria-labelledby="reviewNotesHeading">
+                                    <header class="review-card-header">
+                                        <span class="review-card-icon"><i class="fas fa-note-sticky"></i></span>
+                                        <div class="review-card-heading">
+                                            <h6 id="reviewNotesHeading">Supporting Notes</h6>
+                                            <span>Discovery context and internal handoff notes</span>
                                         </div>
-                                        <div>
-                                            <dt>Sales Notes</dt>
-                                            <dd data-summary-field="sales_notes">Not provided</dd>
+                                    </header>
+                                    <div class="review-notes-grid">
+                                        <div class="review-note-item">
+                                            <span class="review-note-label">Meeting notes</span>
+                                            <span class="review-summary-value" data-summary-field="meeting_notes">Not provided</span>
                                         </div>
-                                    </dl>
+                                        <div class="review-note-item">
+                                            <span class="review-note-label">Minutes of meeting</span>
+                                            <span class="review-summary-value" data-summary-field="mom">Not provided</span>
+                                        </div>
+                                        <div class="review-note-item">
+                                            <span class="review-note-label">Internal sales notes</span>
+                                            <span class="review-summary-value" data-summary-field="sales_notes">Not provided</span>
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <div class="review-handoff">
+                                    <i class="fas fa-paper-plane"></i>
+                                    <div class="review-handoff-copy">
+                                        <strong>What happens after submission?</strong>
+                                        <span>The client record and shared project folder are created, then the Architect is notified to begin project review.</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2377,7 +3020,7 @@ include '../../includes/navbar.php';
                         <button type="button" class="btn btn-outline-primary" data-save-draft disabled>Save Draft</button>
                         <button type="button" class="btn btn-outline-secondary" data-client-prev hidden>Previous</button>
                         <button type="button" class="btn-add-modern" data-client-next>Next</button>
-                        <button type="submit" name="add_client" class="btn-add-modern" data-client-submit hidden>Add Client</button>
+                        <button type="submit" name="add_client" class="btn-add-modern" data-client-submit hidden><i class="fas fa-paper-plane me-1"></i> Add &amp; Send to Architect</button>
                     </div>
                     <div class="unsaved-close-panel" data-unsaved-close-panel>
                         <div class="unsaved-close-panel__text">
@@ -2432,7 +3075,7 @@ include '../../includes/navbar.php';
                             <label class="form-label">Address</label>
                             <textarea name="address" id="edit_address" class="form-control" rows="2"></textarea>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label">Status</label>
                             <select name="status" id="edit_status" class="form-select">
                                 <option value="active">Active</option>
@@ -2440,13 +3083,9 @@ include '../../includes/navbar.php';
                                 <option value="pending">Pending</option>
                             </select>
                         </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-6 mb-3">
                             <label class="form-label">Progress (%)</label>
                             <input type="number" name="progress" id="edit_progress" class="form-control" min="0" max="100">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Project Deadline</label>
-                            <input type="date" name="deadline" id="edit_deadline" class="form-control">
                         </div>
                     </div>
                 </div>
@@ -2562,7 +3201,6 @@ function editClient(client) {
     document.getElementById('edit_address').value = client.address;
     document.getElementById('edit_status').value = client.status;
     document.getElementById('edit_progress').value = client.progress;
-    document.getElementById('edit_deadline').value = client.deadline;
     
     new bootstrap.Modal(document.getElementById('editClientModal')).show();
 }
@@ -2598,7 +3236,7 @@ function viewClient(id) {
                             <div class="progress mb-2">
                                 <div class="progress-bar" style="width: ${client.progress}%"></div>
                             </div>
-                            <p><strong>Deadline:</strong> ${client.deadline ? new Date(client.deadline).toLocaleDateString() : 'Not set'}</p>
+                            <p><strong>Project Deadline:</strong> ${client.deadline ? new Date(client.deadline).toLocaleDateString() : 'Not set'}</p>
                         </div>
                     </div>
                 </div>
@@ -2734,7 +3372,9 @@ if (addClientModalElement && addClientForm) {
     const keepEditingButton = addClientModalElement.querySelector('[data-keep-editing]');
     const discardUnsavedButton = addClientModalElement.querySelector('[data-discard-unsaved]');
     const saveCloseDraftButton = addClientModalElement.querySelector('[data-save-close-draft]');
+    const architectHandoffNote = addClientModalElement.querySelector('.architect-handoff-note');
     const summaryFields = Array.from(addClientModalElement.querySelectorAll('[data-summary-field]'));
+    const summaryFeatureList = addClientModalElement.querySelector('[data-summary-feature-list]');
     const draftIdField = addClientModalElement.querySelector('[data-client-draft-id]');
     const requestedFeaturesField = document.getElementById('requestedFeaturesField');
     const requestedFeatureList = document.getElementById('requestedFeatureList');
@@ -2794,7 +3434,7 @@ if (addClientModalElement && addClientForm) {
     function calculateGeneratedComplexity() {
         const featureCount = getRequestedFeatureValues().length;
         const startValue = addClientForm.elements.timeline_start?.value || '';
-        const endValue = addClientForm.elements.timeline_end?.value || addClientForm.elements.deadline?.value || '';
+        const endValue = addClientForm.elements.timeline_end?.value || '';
         let days = 0;
 
         if (startValue && endValue) {
@@ -3209,15 +3849,15 @@ if (addClientModalElement && addClientForm) {
             return value;
         }
 
-        return amount.toLocaleString([], {
+        return `₱${amount.toLocaleString([], {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
-        });
+        })}`;
     }
 
     function buildTimelineSummary() {
         const start = formatDateTime(getFormValue('timeline_start'), getFormValue('timeline_start_time'));
-        const endDate = getFormValue('timeline_end') || getFormValue('deadline');
+        const endDate = getFormValue('timeline_end');
         const end = formatDateTime(endDate, getFormValue('timeline_end_time'));
 
         if (start && end) {
@@ -3238,6 +3878,7 @@ if (addClientModalElement && addClientForm) {
     function renderAddClientSummary() {
         syncRequestedFeaturesField();
         updateGeneratedComplexity();
+        const requestedFeatures = getRequestedFeatureValues();
         const attachmentInput = addClientForm.querySelector('input[name="attachments[]"]');
         const attachmentNames = Array.from(attachmentInput?.files || [])
             .map((file) => file.name)
@@ -3247,15 +3888,15 @@ if (addClientModalElement && addClientForm) {
             contact_person: getFormValue('contact_person'),
             email: getFormValue('email'),
             phone: getFormValue('phone'),
-            deadline: formatDateInput(getFormValue('deadline')),
+            address: getFormValue('address'),
             project_name: getFormValue('project_name'),
             timeline: buildTimelineSummary(),
             sales_budget: formatBudget(getFormValue('sales_budget')),
             priority: getFormValue('priority') || 'medium',
             generated_complexity: generatedComplexityField ? generatedComplexityField.value : calculateGeneratedComplexity(),
             attachments: attachmentNames.join("\n"),
+            requested_feature_count: `${requestedFeatures.length} feature${requestedFeatures.length === 1 ? '' : 's'}`,
             project_description: getFormValue('project_description'),
-            requested_features: getFormValue('requested_features'),
             additional_requirements: getFormValue('additional_requirements'),
             meeting_notes: getFormValue('meeting_notes'),
             mom: getFormValue('mom'),
@@ -3264,17 +3905,87 @@ if (addClientModalElement && addClientForm) {
 
         summaryFields.forEach((field) => {
             const key = field.dataset.summaryField || '';
-            const fallback = key === 'deadline' || key === 'timeline'
+            const fallback = key === 'timeline'
                 ? 'Not set'
                 : (key === 'attachments' ? 'No attachments' : 'Not provided');
-            field.textContent = summaryData[key] || fallback;
+            const value = summaryData[key] || '';
+            field.textContent = value || fallback;
+            field.classList.toggle('is-empty', value === '');
+
+            const chip = field.closest('[data-summary-chip]');
+            if (chip) {
+                chip.dataset.value = String(value || '').toLowerCase();
+            }
         });
+
+        if (summaryFeatureList) {
+            summaryFeatureList.replaceChildren();
+            if (requestedFeatures.length === 0) {
+                const emptyItem = document.createElement('li');
+                emptyItem.className = 'is-empty';
+                emptyItem.textContent = 'Not provided';
+                summaryFeatureList.appendChild(emptyItem);
+            } else {
+                requestedFeatures.forEach((feature) => {
+                    const item = document.createElement('li');
+                    item.textContent = feature;
+                    summaryFeatureList.appendChild(item);
+                });
+            }
+        }
+    }
+
+    function prepareRequestedFeatureValidation() {
+        const featureInputs = Array.from(requestedFeatureList?.querySelectorAll('[data-requested-feature-input]') || []);
+        featureInputs.forEach((input) => input.setCustomValidity(''));
+
+        if (getRequestedFeatureValues().length > 0) {
+            return true;
+        }
+
+        const firstInput = featureInputs[0];
+        if (firstInput) {
+            firstInput.setCustomValidity('Add at least one requested feature before sending the project to Architect.');
+        }
+        return false;
+    }
+
+    function prepareTimelineValidation() {
+        const startDateField = addClientForm.elements.timeline_start;
+        const startTimeField = addClientForm.elements.timeline_start_time;
+        const endDateField = addClientForm.elements.timeline_end;
+        const endTimeField = addClientForm.elements.timeline_end_time;
+        if (!startDateField || !startTimeField || !endDateField || !endTimeField) {
+            return true;
+        }
+
+        endDateField.setCustomValidity('');
+        endTimeField.setCustomValidity('');
+        if (!startDateField.value || !startTimeField.value || !endDateField.value || !endTimeField.value) {
+            return true;
+        }
+
+        const startAt = new Date(`${startDateField.value}T${startTimeField.value}:00`);
+        const endAt = new Date(`${endDateField.value}T${endTimeField.value}:00`);
+        if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()) || endAt <= startAt) {
+            endTimeField.setCustomValidity('Project deadline must be later than the timeline start date and time.');
+            return false;
+        }
+
+        return true;
     }
 
     function validateClientStep(stepIndex, shouldReport = true) {
         const panel = stepPanels[stepIndex];
         if (!panel) {
             return true;
+        }
+
+        if (stepIndex === 1) {
+            prepareRequestedFeatureValidation();
+        }
+        if (stepIndex === 2) {
+            prepareTimelineValidation();
         }
 
         const fields = Array.from(panel.querySelectorAll('input, select, textarea'));
@@ -3315,6 +4026,9 @@ if (addClientModalElement && addClientForm) {
         if (submitButton) {
             submitButton.hidden = currentStep !== stepPanels.length - 1;
         }
+        if (architectHandoffNote) {
+            architectHandoffNote.hidden = currentStep === stepPanels.length - 1;
+        }
     }
 
     function requestAddClientClose() {
@@ -3342,6 +4056,7 @@ if (addClientModalElement && addClientForm) {
     if (requestedFeatureList) {
         requestedFeatureList.addEventListener('input', (event) => {
             if (event.target.matches('[data-requested-feature-input]')) {
+                event.target.setCustomValidity('');
                 syncRequestedFeaturesField();
             }
         });
@@ -3374,6 +4089,13 @@ if (addClientModalElement && addClientForm) {
             updateDraftStatus(false);
         });
     }
+
+    ['timeline_start', 'timeline_start_time', 'timeline_end', 'timeline_end_time'].forEach((fieldName) => {
+        addClientForm.elements[fieldName]?.addEventListener('input', () => {
+            addClientForm.elements.timeline_end?.setCustomValidity('');
+            addClientForm.elements.timeline_end_time?.setCustomValidity('');
+        });
+    });
 
     if (addRequestedFeatureButton && requestedFeatureList) {
         addRequestedFeatureButton.addEventListener('click', () => {

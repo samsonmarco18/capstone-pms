@@ -46,6 +46,16 @@ function allocationComplexityDescription(string $complexity): string
     };
 }
 
+function allocationAvailableForRole(array $availableDevs, string $role): int
+{
+    $available = 0;
+    foreach (projectWorkflowDepartmentAliases($role) as $roleAlias) {
+        $available += (int) ($availableDevs[$roleAlias] ?? 0);
+    }
+
+    return $available;
+}
+
 $project = $conn->query("SELECT * FROM projects WHERE id = $projectId")->fetch_assoc();
 if (!$project) {
     header('Location: projects.php');
@@ -94,6 +104,20 @@ $includedDepartmentLookup = array_fill_keys($includedDepartments, true);
 
 $selectedComplexity = normalizeAllocationComplexity($project['complexity_level'] ?? 'medium');
 
+$availableDevs = [];
+$devQuery = $conn->query("
+    SELECT department, COUNT(*) as count
+    FROM users
+    WHERE role IN ('developer', 'expert')
+      AND status = 'active'
+      AND department IS NOT NULL
+      AND department != ''
+    GROUP BY department
+");
+while ($dev = $devQuery->fetch_assoc()) {
+    $availableDevs[$dev['department']] = (int) $dev['count'];
+}
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $postedAllocations = is_array($_POST['allocations'] ?? null) ? $_POST['allocations'] : [];
     $selectedDepartments = [];
@@ -125,6 +149,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             $minRequired = in_array((string) $role, $mandatoryDepartments, true) ? (int) ($allocationRoles[$role]['min'] ?? 0) : 0;
             $requiredCount = max($minRequired, (int) ($data['required'] ?? 0));
+            $availableForRole = allocationAvailableForRole($availableDevs, (string) $role);
+            if ($availableForRole > 0 && $requiredCount > $availableForRole) {
+                $_SESSION['error'] = $role . ' required count cannot exceed ' . $availableForRole . ' available active team members.';
+                header('Location: developer-allocation.php?id=' . $projectId);
+                exit();
+            }
             $complexity = $selectedComplexity;
             $stmt = $conn->prepare("INSERT INTO developer_allocations (project_id, role, required_count, complexity_level) VALUES (?, ?, ?, ?)");
             $stmt->bind_param("isis", $projectId, $role, $requiredCount, $complexity);
@@ -754,20 +784,6 @@ a.progress-step:hover {
                                 </thead>
                                 <tbody>
                                     <?php
-                                    $availableDevs = [];
-                                    $devQuery = $conn->query("
-                                        SELECT department, COUNT(*) as count
-                                        FROM users
-                                        WHERE role IN ('developer', 'expert')
-                                          AND status = 'active'
-                                          AND department IS NOT NULL
-                                          AND department != ''
-                                        GROUP BY department
-                                    ");
-                                    while($dev = $devQuery->fetch_assoc()) {
-                                        $availableDevs[$dev['department']] = $dev['count'];
-                                    }
-                                    
                                     foreach($allocationRoles as $role => $limits):
                                         $isMandatory = in_array($role, $mandatoryDepartments, true);
                                         $isIncluded = isset($includedDepartmentLookup[$role]);
@@ -781,10 +797,8 @@ a.progress-step:hover {
                                             $existing = max((int) ($limits['min'] ?? 0), $existing);
                                         }
                                         $existingComplexity = $selectedComplexity;
-                                        $available = 0;
-                                        foreach (projectWorkflowDepartmentAliases($role) as $roleAlias) {
-                                            $available += (int) ($availableDevs[$roleAlias] ?? 0);
-                                        }
+                                        $available = allocationAvailableForRole($availableDevs, $role);
+                                        $inputMax = max($available, (int) ($limits['min'] ?? 0));
                                         $isShortage = $existing > $available;
                                     ?>
                                     <tr>
@@ -813,7 +827,7 @@ a.progress-step:hover {
                                                    value="<?php echo $existing; ?>" 
                                                    min="<?php echo $isMandatory ? (int) ($limits['min'] ?? 0) : 0; ?>"
                                                    <?php echo $isMandatory ? 'required' : ''; ?>
-                                                   max="<?php echo $limits['max']; ?>"
+                                                   max="<?php echo (int) $inputMax; ?>"
                                                    data-min-recommended="<?php echo (int) ($limits['min'] ?? 0); ?>"
                                                    onchange="checkAvailability(this, '<?php echo $role; ?>')">
                                             <input type="hidden" name="allocations[<?php echo $role; ?>][complexity]" value="<?php echo htmlspecialchars($existingComplexity); ?>">

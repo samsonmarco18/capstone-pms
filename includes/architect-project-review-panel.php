@@ -1,6 +1,10 @@
 <?php
 $architectReviewProjectId = (int) ($architectReviewProjectId ?? $projectId ?? $selectedProjectId ?? ($_GET['id'] ?? $_GET['project_id'] ?? 0));
 $architectReviewProject = null;
+$architectReviewPanelExpanded = isset($architectReviewPanelExpanded)
+    ? (bool) $architectReviewPanelExpanded
+    : basename((string) ($_SERVER['PHP_SELF'] ?? '')) === 'project-review.php';
+$architectReviewPanelBodyId = 'architectReviewPanelBody' . max(0, $architectReviewProjectId);
 
 if ($architectReviewProjectId > 0) {
     $architectReviewResult = $conn->query("
@@ -29,84 +33,188 @@ if ($architectReviewProject):
 <style>
 .architect-review-panel {
     background: #ffffff;
-    border: 1px solid var(--gray-200, #e9ecef);
-    border-radius: 16px;
-    box-shadow: var(--shadow-sm, 0 2px 4px rgba(0,0,0,0.04));
+    border: 1px solid #dce5ee;
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(30, 64, 95, 0.07);
     margin-bottom: 1.5rem;
     overflow: hidden;
 }
+
 .architect-review-panel__head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1rem 1.25rem;
-    background: var(--gray-50, #f8f9fa);
-    border-bottom: 1px solid var(--gray-200, #e9ecef);
+    min-height: 72px;
+    padding: 0.9rem 1rem;
+    background: #ffffff;
 }
+
+.architect-review-panel:not(.is-collapsed) .architect-review-panel__head {
+    border-bottom: 1px solid #e5edf4;
+}
+
+.architect-review-panel__intro {
+    align-items: center;
+    display: flex;
+    gap: 0.8rem;
+    min-width: 0;
+}
+
+.architect-review-panel__icon {
+    align-items: center;
+    background: #eaf4fb;
+    border-radius: 10px;
+    color: var(--theme-primary, #1f6392);
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 38px;
+    justify-content: center;
+    width: 38px;
+}
+
 .architect-review-panel__head h5 {
     margin: 0;
     color: var(--gray-900, #212529);
-    font-size: 0.98rem;
+    font-size: 0.95rem;
     font-weight: 700;
 }
+
+.architect-review-panel__head p {
+    color: #708399;
+    font-size: 0.76rem;
+    margin: 0.2rem 0 0;
+}
+
 .architect-review-panel__toggle {
-    border: 0;
-    background: transparent;
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #c8d8e6;
+    border-radius: 9px;
     color: var(--theme-primary, #1f6392);
+    display: inline-flex;
+    flex: 0 0 auto;
     font-size: 0.82rem;
     font-weight: 700;
+    gap: 0.5rem;
+    min-height: 36px;
+    padding: 0.45rem 0.75rem;
+    transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
-.architect-review-panel.is-minimized .architect-review-panel__body {
+
+.architect-review-panel__toggle:hover,
+.architect-review-panel__toggle:focus-visible {
+    background: #eef7fc;
+    border-color: var(--theme-primary, #1f6392);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
+    outline: 0;
+}
+
+.architect-review-panel__toggle i {
+    transition: transform 0.18s ease;
+}
+
+.architect-review-panel:not(.is-collapsed) .architect-review-panel__toggle i {
+    transform: rotate(180deg);
+}
+
+.architect-review-panel.is-collapsed .architect-review-panel__body {
     display: none;
 }
+
 .architect-review-panel__body {
     display: grid;
     gap: 1rem;
-    padding: 1.25rem;
+    padding: 1rem;
+    background: #f7fafc;
 }
+
 .architect-review-panel__grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.75rem;
 }
+
 .architect-review-panel__item,
 .architect-review-panel__section {
-    border: 1px solid var(--gray-200, #e9ecef);
-    border-radius: 12px;
+    border: 1px solid #e1e9f0;
+    border-radius: 10px;
     background: #ffffff;
-    padding: 0.85rem;
+    padding: 0.9rem;
 }
+
 .architect-review-panel__item span,
 .architect-review-panel__section span {
     display: block;
-    color: var(--gray-600, #6c757d);
-    font-size: 0.72rem;
+    color: #718399;
+    font-size: 0.69rem;
     font-weight: 700;
+    letter-spacing: 0.035em;
     text-transform: uppercase;
 }
+
 .architect-review-panel__item strong,
 .architect-review-panel__section div {
-    color: var(--gray-900, #212529);
+    color: #1e344a;
     font-size: 0.9rem;
     overflow-wrap: anywhere;
 }
+
+.architect-review-panel__item strong {
+    display: block;
+    margin-top: 0.3rem;
+}
+
 .architect-review-panel__section div {
     margin-top: 0.35rem;
     white-space: pre-wrap;
 }
+
 .architect-review-panel__features {
     margin: 0.45rem 0 0;
     padding-left: 1.1rem;
 }
+
 .architect-review-panel__features li {
     margin-bottom: 0.25rem;
 }
+
+.architect-review-panel__attachment {
+    align-items: center;
+    background: #eef7fc;
+    border: 1px solid #d3e5f1;
+    border-radius: 8px;
+    color: var(--theme-primary, #1f6392);
+    display: inline-flex;
+    gap: 0.35rem;
+    margin: 0.25rem 0.35rem 0.1rem 0;
+    padding: 0.4rem 0.6rem;
+    text-decoration: none;
+}
+
+.architect-review-panel__attachment:hover {
+    background: #e2f1fa;
+    color: var(--theme-dark, #184f73);
+}
+
 @media (max-width: 992px) {
     .architect-review-panel__grid {
         grid-template-columns: 1fr;
     }
 }
+
+@media (max-width: 576px) {
+    .architect-review-panel__head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .architect-review-panel__toggle {
+        justify-content: center;
+        width: 100%;
+    }
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__section {
@@ -114,22 +222,55 @@ if ($architectReviewProject):
     border-color: rgba(31, 99, 146, 0.24);
     color: #d7e4f2;
 }
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__head {
     background: #0a1b2c;
     border-color: rgba(31, 99, 146, 0.24);
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__body {
+    background: #091624;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__attachment {
+    background: #102a40;
+    border-color: #214764;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__toggle {
+    background: #0a1b2c;
+    border-color: #31536e;
+    color: #8fc9ef;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__head h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__item strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__section div {
     color: #d7e4f2;
 }
 </style>
-<section class="architect-review-panel" data-architect-review-panel>
+<section class="architect-review-panel<?php echo $architectReviewPanelExpanded ? '' : ' is-collapsed'; ?>" data-architect-review-panel>
     <div class="architect-review-panel__head">
-        <h5><i class="fas fa-clipboard-check me-2"></i>Project Review Details</h5>
-        <button type="button" class="architect-review-panel__toggle" data-architect-review-toggle>Minimize</button>
+        <div class="architect-review-panel__intro">
+            <span class="architect-review-panel__icon"><i class="fas fa-clipboard-check"></i></span>
+            <div>
+                <h5>Project Review Details</h5>
+                <p>Reference the approved client requirements and sales context.</p>
+            </div>
+        </div>
+        <button
+            type="button"
+            class="architect-review-panel__toggle"
+            data-architect-review-toggle
+            aria-expanded="<?php echo $architectReviewPanelExpanded ? 'true' : 'false'; ?>"
+            aria-controls="<?php echo htmlspecialchars($architectReviewPanelBodyId); ?>"
+        >
+            <span data-architect-review-toggle-label><?php echo $architectReviewPanelExpanded ? 'Hide details' : 'View details'; ?></span>
+            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+        </button>
     </div>
-    <div class="architect-review-panel__body">
+    <div class="architect-review-panel__body" id="<?php echo htmlspecialchars($architectReviewPanelBodyId); ?>" <?php echo $architectReviewPanelExpanded ? '' : 'hidden'; ?>>
         <div class="architect-review-panel__grid">
             <div class="architect-review-panel__item"><span>Project</span><strong><?php echo htmlspecialchars((string) $architectReviewProject['name']); ?></strong></div>
             <div class="architect-review-panel__item"><span>Client</span><strong><?php echo htmlspecialchars((string) $architectReviewProject['client_name']); ?></strong></div>
@@ -167,7 +308,7 @@ if ($architectReviewProject):
             <div>
                 <?php if ($reviewAttachments): ?>
                     <?php foreach ($reviewAttachments as $attachment): ?>
-                        <a class="d-inline-block me-3" href="<?php echo BASE_URL . htmlspecialchars((string) ($attachment['path'] ?? '')); ?>" target="_blank" rel="noopener">
+                        <a class="architect-review-panel__attachment" href="<?php echo BASE_URL . htmlspecialchars((string) ($attachment['path'] ?? '')); ?>" target="_blank" rel="noopener">
                             <i class="fas fa-paperclip me-1"></i><?php echo htmlspecialchars((string) ($attachment['name'] ?? 'Attachment')); ?>
                         </a>
                     <?php endforeach; ?>
@@ -183,8 +324,14 @@ document.querySelectorAll('[data-architect-review-toggle]').forEach((button) => 
     button.addEventListener('click', () => {
         const panel = button.closest('[data-architect-review-panel]');
         if (!panel) return;
-        panel.classList.toggle('is-minimized');
-        button.textContent = panel.classList.contains('is-minimized') ? 'Expand' : 'Minimize';
+        const bodyId = button.getAttribute('aria-controls');
+        const body = bodyId ? document.getElementById(bodyId) : null;
+        const isCollapsed = panel.classList.toggle('is-collapsed');
+        const label = button.querySelector('[data-architect-review-toggle-label]');
+
+        button.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+        if (body) body.hidden = isCollapsed;
+        if (label) label.textContent = isCollapsed ? 'View details' : 'Hide details';
     });
 });
 </script>

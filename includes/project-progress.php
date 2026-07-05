@@ -8,7 +8,7 @@ function projectProgressFeatureCondition(string $taskAlias = 't'): string
 
 function projectProgressMergedCondition(string $taskAlias = 't'): string
 {
-    return "({$taskAlias}.merged_at IS NOT NULL OR {$taskAlias}.architect_reviewed_at IS NOT NULL OR {$taskAlias}.status = 'merged')";
+    return "({$taskAlias}.merged_at IS NOT NULL OR {$taskAlias}.architect_reviewed_at IS NOT NULL OR {$taskAlias}.status IN ('merged', 'ready_for_release', 'completed'))";
 }
 
 function projectProgressPercent(int $totalFeatures, int $mergedFeatures): int

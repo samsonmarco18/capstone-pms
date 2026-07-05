@@ -31,6 +31,15 @@ if (!$project) {
 
 $featureCountRow = $conn->query("SELECT COUNT(*) AS total FROM tasks WHERE project_id = $projectId AND task_type = 'feature'")->fetch_assoc();
 $featureCount = (int) ($featureCountRow['total'] ?? 0);
+$expertAssignmentCountRow = $conn->query("
+    SELECT COUNT(*) AS total
+    FROM tasks
+    WHERE project_id = $projectId
+      AND task_type = 'feature'
+      AND assigned_to IS NOT NULL
+      AND assigned_to != 0
+")->fetch_assoc();
+$expertAssignmentCount = (int) ($expertAssignmentCountRow['total'] ?? 0);
 
 // Get technology recommendations
 $techRecommendations = $conn->query("
@@ -67,9 +76,19 @@ $summaryReadyForSubmit = $featureCount > 0
     && $allocationCount > 0
     && $hasRequiredDocuments
     && (bool) ($methodologyCompletion['is_complete'] ?? false);
+$isSubmittedToSul = trim((string) ($project['workflow_status'] ?? '')) === 'architect_submitted';
+$isAwaitingSulReview = $isSubmittedToSul
+    && $expertAssignmentCount === 0
+    && trim((string) ($project['status'] ?? '')) === 'in_progress';
 
 // Handle submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if ($isSubmittedToSul) {
+        $_SESSION['success'] = 'This architecture plan has already been submitted to the Service Unit Leader.';
+        header('Location: projects.php?submitted=' . $projectId);
+        exit();
+    }
+
     // Check if confirmation checkbox is checked
     if (empty($_POST['confirmCheck'])) {
         $_SESSION['error'] = 'Please confirm that all information is accurate and complete before submitting.';
@@ -121,11 +140,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    $conn->query("UPDATE projects SET status = 'in_progress', workflow_status = 'architect_submitted' WHERE id = $projectId");
-    
-    $title = "New Architecture Plan Ready for Review";
-    $message = "Project: " . $project['name'] . " is ready for SUL review and assignment";
-    
     $selectedDepartments = [];
     $departmentRaw = trim((string) ($project['included_departments'] ?? ''));
     $decodedDepartments = $departmentRaw !== '' ? json_decode($departmentRaw, true) : [];
@@ -137,14 +151,55 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         header('Location: summary.php?id=' . $projectId);
         exit();
     }
-    projectWorkflowNotifySelectedSuls($conn, $projectId, ['Expert Department'], (string) $project['name']);
+
+    $submitStatement = $conn->prepare("
+        UPDATE projects
+        SET status = 'in_progress', workflow_status = 'architect_submitted'
+        WHERE id = ?
+          AND (workflow_status IS NULL OR workflow_status != 'architect_submitted')
+    ");
+    if ($submitStatement === false) {
+        $_SESSION['error'] = 'The plan could not be submitted right now. Please try again.';
+        header('Location: summary.php?id=' . $projectId);
+        exit();
+    }
+
+    $submitStatement->bind_param('i', $projectId);
+    $submitSucceeded = $submitStatement->execute();
+    $submittedRows = (int) $conn->affected_rows;
+    $submitStatement->close();
+
+    if (!$submitSucceeded) {
+        $_SESSION['error'] = 'The plan could not be submitted right now. Please try again.';
+        header('Location: summary.php?id=' . $projectId);
+        exit();
+    }
+
+    if ($submittedRows === 0) {
+        $_SESSION['success'] = 'This architecture plan has already been submitted to the Service Unit Leader.';
+        header('Location: projects.php?submitted=' . $projectId);
+        exit();
+    }
+
+    projectWorkflowNotifyDepartmentSuls(
+        $conn,
+        'Expert Department',
+        'Project Ready for Expert Estimation: ' . (string) $project['name'],
+        'Architect submitted the completed plan. Assign the project feature tasks to an Expert Developer for estimation.',
+        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
+        $projectId
+    );
     
     logActivity($user['id'], 'submit_architecture', 'projects', $projectId);
-    $_SESSION['success'] = "Architecture plan submitted to SUL successfully";
+    $_SESSION['success'] = 'Architecture plan submitted successfully. The Expert Department SUL has been notified for estimation assignment.';
     
-    header('Location: projects.php');
+    header('Location: projects.php?submitted=' . $projectId);
     exit();
 }
+
+$flashSuccess = trim((string) ($_SESSION['success'] ?? ''));
+$flashError = trim((string) ($_SESSION['error'] ?? ''));
+unset($_SESSION['success'], $_SESSION['error']);
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -428,10 +483,135 @@ a.progress-step:hover {
     border-radius: 16px;
     padding: 1rem;
     margin-bottom: 1rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    color: #213f61;
+    line-height: 1.55;
 }
 
 .alert-info-modern i {
     color: #2563eb;
+    flex: 0 0 auto;
+    margin-top: 0.2rem;
+}
+
+.workflow-feedback {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid;
+    border-radius: 14px;
+    box-shadow: var(--shadow-sm);
+}
+
+.workflow-feedback > i {
+    flex: 0 0 auto;
+    margin-top: 0.15rem;
+    font-size: 1.15rem;
+}
+
+.workflow-feedback p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.workflow-feedback.success {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #076447;
+}
+
+.workflow-feedback.error {
+    background: #fff1f2;
+    border-color: #fecdd3;
+    color: #9f1239;
+}
+
+.submission-state {
+    padding: 1.25rem;
+    border: 1px solid #a7f3d0;
+    border-radius: 16px;
+    background: linear-gradient(145deg, #ecfdf5 0%, #f0fdfa 100%);
+    text-align: center;
+}
+
+.submission-state__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    margin-bottom: 0.75rem;
+    border-radius: 50%;
+    background: #10b981;
+    color: white;
+    box-shadow: 0 7px 18px rgba(16, 185, 129, 0.24);
+}
+
+.submission-state__label {
+    display: block;
+    margin-bottom: 0.3rem;
+    color: #047857;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.submission-state h6 {
+    margin-bottom: 0.45rem;
+    color: #064e3b;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.submission-state p {
+    margin-bottom: 1rem;
+    color: #41685d;
+    font-size: 0.82rem;
+    line-height: 1.55;
+}
+
+.submission-state__action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 40px;
+    padding: 0.55rem 1rem;
+    border: 1px solid rgba(5, 150, 105, 0.3);
+    border-radius: 10px;
+    background: white;
+    color: #047857;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.submission-state__action:hover {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.submission-confirmation {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+    padding: 0.25rem 0;
+}
+
+.submission-confirmation .form-check-input {
+    flex: 0 0 auto;
+    margin: 0.25rem 0 0;
+}
+
+.submission-confirmation .form-check-label {
+    color: #213f61;
+    line-height: 1.5;
 }
 
 /* Button */
@@ -525,6 +705,33 @@ a.progress-step:hover {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td {
     border-color: rgba(31, 99, 146, 0.24) !important;
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-feedback.success,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-state {
+    background: #08251f;
+    border-color: rgba(52, 211, 153, 0.38);
+    color: #a7f3d0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-feedback.error {
+    background: #2b1118;
+    border-color: rgba(251, 113, 133, 0.38);
+    color: #fecdd3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-state h6 {
+    color: #d1fae5;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-state p {
+    color: #9cc8bb;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-state__action {
+    background: #0a1b2c;
+    border-color: rgba(52, 211, 153, 0.38);
+    color: #a7f3d0;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -539,6 +746,19 @@ a.progress-step:hover {
             <p>Project: <?php echo htmlspecialchars($project['name']); ?> | Client: <?php echo htmlspecialchars($project['client_name']); ?></p>
         </div>
     </div>
+
+    <?php if ($flashSuccess !== ''): ?>
+        <div class="workflow-feedback success" role="status">
+            <i class="fas fa-circle-check" aria-hidden="true"></i>
+            <p><?php echo htmlspecialchars($flashSuccess); ?></p>
+        </div>
+    <?php endif; ?>
+    <?php if ($flashError !== ''): ?>
+        <div class="workflow-feedback error" role="alert">
+            <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
+            <p><?php echo htmlspecialchars($flashError); ?></p>
+        </div>
+    <?php endif; ?>
 
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb" class="breadcrumb-modern">
@@ -624,9 +844,9 @@ a.progress-step:hover {
                             <thead><tr><th>Technology</th><th>Category</th><th>Service Type</th><th class="text-end">Monthly Cost</th></tr></thead>
                             <tbody>
                                 <?php $totalCost = 0; while($tech = $techRecommendations->fetch_assoc()): $totalCost += $tech['estimated_cost']; ?>
-                                <tr><td class="fw-semibold"><?php echo htmlspecialchars($tech['tech_name']); ?></td><td><?php echo htmlspecialchars($tech['category']); ?></td><td><?php echo htmlspecialchars($tech['service_type']); ?></td><td class="text-end">$<?php echo number_format($tech['estimated_cost'], 2); ?></td></tr>
+                                <tr><td class="fw-semibold"><?php echo htmlspecialchars($tech['tech_name']); ?></td><td><?php echo htmlspecialchars($tech['category']); ?></td><td><?php echo htmlspecialchars($tech['service_type']); ?></td><td class="text-end">&#8369;<?php echo number_format($tech['estimated_cost'], 2); ?></td></tr>
                                 <?php endwhile; ?>
-                                <tr class="total-row"><td colspan="3"><strong>Total Monthly Cost</strong></td><td class="text-end"><strong>$<?php echo number_format($totalCost, 2); ?></strong></td></tr>
+                                <tr class="total-row"><td colspan="3"><strong>Total Monthly Cost</strong></td><td class="text-end"><strong>&#8369;<?php echo number_format($totalCost, 2); ?></strong></td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -691,23 +911,35 @@ a.progress-step:hover {
                     <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Developers Needed</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php $totalDevs = 0; $allocations->data_seek(0); while($alloc = $allocations->fetch_assoc()) { $totalDevs += $alloc['required_count']; } echo $totalDevs; ?></h3></div>
                     <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Documents Uploaded</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $documentCount; ?></h3></div>
                     <hr>
-                    <?php if (!$summaryReadyForSubmit): ?>
-                    <div class="alert alert-warning small">
-                        Complete Features, Technology, Developer Allocation, Methodology Roadmap, Architecture Plan, and Workflow Diagram before final submission.
-                        <?php if (!(bool) ($methodologyCompletion['is_complete'] ?? false)): ?>
-                            <div class="mt-2">
-                                <a href="../roadmap/methodology.php?project_id=<?php echo $projectId; ?>" class="alert-link">
-                                    Schedule <?php echo (int) ($methodologyCompletion['unscheduled_count'] ?? 0); ?> unscheduled feature task<?php echo (int) ($methodologyCompletion['unscheduled_count'] ?? 0) === 1 ? '' : 's'; ?>.
-                                </a>
-                            </div>
+                    <?php if ($isSubmittedToSul): ?>
+                        <div class="submission-state" role="status">
+                            <span class="submission-state__icon"><i class="fas fa-check" aria-hidden="true"></i></span>
+                            <span class="submission-state__label">Submitted to SUL</span>
+                            <h6><?php echo $isAwaitingSulReview ? 'Awaiting SUL Review' : 'Handoff Complete'; ?></h6>
+                            <p><?php echo $isAwaitingSulReview
+                                ? 'This summary is now read-only. The Service Unit Leader has been notified and can review the plan for the next assignment step.'
+                                : 'This submitted summary is read-only. The Service Unit Leader has already moved the project into the next workflow step.'; ?></p>
+                            <a href="projects.php" class="submission-state__action"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Projects</a>
+                        </div>
+                    <?php else: ?>
+                        <?php if (!$summaryReadyForSubmit): ?>
+                        <div class="alert alert-warning small">
+                            Complete Features, Technology, Developer Allocation, Methodology Roadmap, Architecture Plan, and Workflow Diagram before final submission.
+                            <?php if (!(bool) ($methodologyCompletion['is_complete'] ?? false)): ?>
+                                <div class="mt-2">
+                                    <a href="../roadmap/methodology.php?project_id=<?php echo $projectId; ?>" class="alert-link">
+                                        Schedule <?php echo (int) ($methodologyCompletion['unscheduled_count'] ?? 0); ?> unscheduled feature task<?php echo (int) ($methodologyCompletion['unscheduled_count'] ?? 0) === 1 ? '' : 's'; ?>.
+                                    </a>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                         <?php endif; ?>
-                    </div>
+                        <div class="alert-info-modern"><i class="fas fa-info-circle"></i><span>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</span></div>
+                        <form method="POST" id="summaryForm" data-generic-draft-disabled="true" data-app-loading data-loading-title="Sending to SUL" data-loading-text="Please wait while the architecture plan is submitted and the Service Unit Leader is notified.">
+                            <div class="submission-confirmation"><input class="form-check-input" type="checkbox" id="confirmCheck" name="confirmCheck" value="1" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
+                            <button type="submit" class="btn-submit" id="submitBtn" <?php echo $summaryReadyForSubmit ? 'disabled' : 'disabled title="Complete all required architect steps first"'; ?>><i class="fas fa-paper-plane"></i> Submit to SUL</button>
+                        </form>
                     <?php endif; ?>
-                    <div class="alert-info-modern"><i class="fas fa-info-circle me-2"></i>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</div>
-                    <form method="POST" id="summaryForm">
-                        <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="confirmCheck" name="confirmCheck" value="1" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
-                        <button type="submit" class="btn-submit" id="submitBtn" <?php echo $summaryReadyForSubmit ? 'disabled' : 'disabled title="Complete all required architect steps first"'; ?>><i class="fas fa-paper-plane"></i> Submit to SUL</button>
-                    </form>
                 </div>
             </div>
         </div>

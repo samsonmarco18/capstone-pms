@@ -1,11 +1,16 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/workflow.php';
 require_once '../../includes/project-workflow.php';
+require_once '../../includes/methodology-roadmap.php';
+require_once '../../includes/project-estimation.php';
 requireRole('sales');
 
 $conn = getConnection();
 $user = getCurrentUser();
 projectWorkflowEnsureSchema($conn);
+methodologyRoadmapEnsureSchema($conn);
+projectEstimationEnsureSchema($conn);
 
 // Ensure sales approval columns exist
 $hasSalesApproval = dbColumnExists($conn, 'tasks', 'sales_approved');
@@ -35,6 +40,99 @@ $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 
 // Handle approval actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['approve_project_estimation'])) {
+        $estimationId = (int) ($_POST['estimation_id'] ?? 0);
+        $comment = trim((string) ($_POST['approval_comment'] ?? ''));
+
+        $estimation = $estimationId > 0 ? $conn->query("
+            SELECT e.*, p.name AS project_name
+            FROM expert_project_estimations e
+            JOIN projects p ON p.id = e.project_id
+            WHERE e.id = {$estimationId} AND e.status = 'sul_approved'
+            LIMIT 1
+        ")->fetch_assoc() : null;
+
+        if (!$estimation) {
+            $_SESSION['error'] = "Please select a SUL-approved project estimation.";
+            header('Location: estimation-approval.php');
+            exit();
+        }
+
+        $stmt = $conn->prepare("
+            UPDATE expert_project_estimations
+            SET status = 'sales_approved', sales_reviewed_by = ?, sales_reviewed_at = NOW(), sales_comment = ?, approved_at = NOW()
+            WHERE id = ?
+        ");
+        $stmt->bind_param('isi', $user['id'], $comment, $estimationId);
+        if ($stmt->execute()) {
+            $projectId = (int) $estimation['project_id'];
+            projectEstimationCompletePlanningPhase($conn, $projectId, (int) $user['id']);
+            $conn->query("UPDATE projects SET status = 'in_development' WHERE id = {$projectId} AND status != 'completed'");
+            projectWorkflowSyncRoadmap($conn, $projectId);
+            workflowNotifyRoles(
+                $conn,
+                ['architect', 'sul'],
+                'Project Estimation Approved',
+                'Sales approved the project estimation. Planning is complete and the next project phase is now active.',
+                BASE_URL . 'modules/roadmap/methodology.php?project_id=' . $projectId,
+                $projectId,
+                'approval',
+                'projects'
+            );
+            logActivity((int) $user['id'], 'sales_approve_project_estimation', 'expert_project_estimations', $estimationId, null, $_POST);
+            $_SESSION['success'] = "Project estimation approved. Planning phase completed and the next phase is active.";
+        } else {
+            $_SESSION['error'] = "Failed to approve project estimation.";
+        }
+        $stmt->close();
+        header('Location: estimation-approval.php');
+        exit();
+    }
+
+    if (isset($_POST['reject_project_estimation'])) {
+        $estimationId = (int) ($_POST['estimation_id'] ?? 0);
+        $reason = trim((string) ($_POST['rejection_reason'] ?? ''));
+
+        $estimation = $estimationId > 0 ? $conn->query("
+            SELECT e.*, p.name AS project_name
+            FROM expert_project_estimations e
+            JOIN projects p ON p.id = e.project_id
+            WHERE e.id = {$estimationId} AND e.status = 'sul_approved'
+            LIMIT 1
+        ")->fetch_assoc() : null;
+
+        if (!$estimation || $reason === '') {
+            $_SESSION['error'] = "Please provide a project estimation and rejection reason.";
+            header('Location: estimation-approval.php');
+            exit();
+        }
+
+        $stmt = $conn->prepare("
+            UPDATE expert_project_estimations
+            SET status = 'sales_rejected', sales_reviewed_by = ?, sales_reviewed_at = NOW(), sales_comment = ?
+            WHERE id = ?
+        ");
+        $stmt->bind_param('isi', $user['id'], $reason, $estimationId);
+        if ($stmt->execute()) {
+            createNotification(
+                (int) $estimation['expert_id'],
+                "Sales Requested Project Estimation Revision: " . ($estimation['project_name'] ?? 'Project'),
+                "Sales rejected the final estimation. Reason: " . $reason,
+                'approval',
+                'expert_project_estimations',
+                $estimationId,
+                BASE_URL . 'modules/expert/feature-estimation.php?project_estimation_id=' . (int) $estimation['project_id']
+            );
+            logActivity((int) $user['id'], 'sales_reject_project_estimation', 'expert_project_estimations', $estimationId, null, $_POST);
+            $_SESSION['success'] = "Project estimation rejected and returned to Expert Developer.";
+        } else {
+            $_SESSION['error'] = "Failed to reject project estimation.";
+        }
+        $stmt->close();
+        header('Location: estimation-approval.php');
+        exit();
+    }
+
     if (isset($_POST['approve_estimation'])) {
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $estimateChoice = trim((string) ($_POST['estimate_choice'] ?? ''));
@@ -146,6 +244,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Get tasks pending sales approval
+$pendingProjectEstimations = $conn->query("
+    SELECT e.*, p.name AS project_name, p.timeline_start, p.timeline_end, p.sales_budget, c.name AS client_name, u.full_name AS expert_name
+    FROM expert_project_estimations e
+    JOIN projects p ON p.id = e.project_id
+    JOIN clients c ON c.id = p.client_id
+    JOIN users u ON u.id = e.expert_id
+    WHERE e.status = 'sul_approved'
+    ORDER BY e.sul_reviewed_at ASC, e.id ASC
+");
+
 $pendingTasks = $conn->query("
     SELECT t.*, p.name as project_name, p.id as project_id, p.timeline_start, p.timeline_end" . ($hasProjectPhases ? ", p.project_phases" : "") . ",
            u.full_name as expert_name, fe.min_days, fe.likely_days, fe.max_days, fe.expectation_description
@@ -1020,6 +1128,77 @@ include '../../includes/navbar.php';
         <p>Review expert estimations and approve before SUL assignment.</p>
     </div>
 
+    <?php if ($pendingProjectEstimations->num_rows > 0): ?>
+        <section class="project-approval-group is-open" data-project-group data-project-id="project-costs">
+            <button type="button" class="project-approval-toggle" data-project-toggle aria-expanded="true" aria-controls="projectCostApprovalBody">
+                <div class="project-approval-toggle-main project-approval-head">
+                    <span class="project-approval-kicker"><i class="fas fa-file-invoice-dollar"></i> Final Project Cost Approval</span>
+                    <h5>Project Estimation Packages</h5>
+                    <p>Approve the full project estimate after Expert SUL review. Approval completes Planning and opens the next roadmap phase.</p>
+                </div>
+                <div class="project-approval-toggle-side">
+                    <div class="project-approval-summary">
+                        <span class="project-approval-pill"><i class="fas fa-clipboard-check"></i> <?php echo $pendingProjectEstimations->num_rows; ?> pending package<?php echo $pendingProjectEstimations->num_rows === 1 ? '' : 's'; ?></span>
+                    </div>
+                    <span class="project-approval-chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                </div>
+            </button>
+            <div class="project-approval-body" id="projectCostApprovalBody" data-project-body>
+                <div class="project-feature-stack">
+                    <?php while ($estimate = $pendingProjectEstimations->fetch_assoc()): ?>
+                        <div class="task-card approval-task-card">
+                            <div class="approval-card-main">
+                                <div class="approval-card-content">
+                                    <div class="approval-feature-header">
+                                        <span class="approval-feature-eyebrow"><i class="fas fa-file-invoice-dollar"></i> Project Cost Package</span>
+                                        <h5 class="approval-feature-title"><?php echo htmlspecialchars((string) $estimate['project_name']); ?></h5>
+                                        <div class="task-meta approval-meta-list">
+                                            <span><i class="fas fa-building"></i> Client: <?php echo htmlspecialchars((string) $estimate['client_name']); ?></span>
+                                            <span><i class="fas fa-user-tie"></i> Expert: <?php echo htmlspecialchars((string) $estimate['expert_name']); ?></span>
+                                            <span><i class="fas fa-gauge-high"></i> <?php echo htmlspecialchars((string) $estimate['project_complexity']); ?></span>
+                                            <span><i class="fas fa-calendar"></i> <?php echo (int) $estimate['project_duration_months']; ?> month<?php echo (int) $estimate['project_duration_months'] === 1 ? '' : 's'; ?></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="timeline-panel">
+                                        <div class="row g-3">
+                                            <div class="col-md-4"><strong>Total Developer Cost</strong><div><?php echo projectEstimationPeso((float) $estimate['total_developer_cost']); ?></div></div>
+                                            <div class="col-md-4"><strong>Total Tech Stack Cost</strong><div><?php echo projectEstimationPeso((float) $estimate['total_technology_stack_cost']); ?></div></div>
+                                            <div class="col-md-4"><strong>Overall Estimated Cost</strong><div><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></div></div>
+                                            <div class="col-md-4"><strong>Client Budget</strong><div><?php echo projectEstimationPeso((float) $estimate['sales_budget']); ?></div></div>
+                                            <div class="col-md-4"><strong>Remaining Budget</strong><div><?php echo projectEstimationPeso((float) $estimate['remaining_budget']); ?></div></div>
+                                            <div class="col-md-4"><strong>Additional Costs</strong><div><?php echo projectEstimationPeso((float) $estimate['additional_costs']); ?></div></div>
+                                        </div>
+                                        <?php if (!empty($estimate['sul_comment'])): ?>
+                                            <p class="expectation-note mt-3 mb-0"><strong>SUL comment:</strong> <?php echo htmlspecialchars((string) $estimate['sul_comment']); ?></p>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+
+                                <div class="approval-actions">
+                                    <form method="POST" class="w-100" data-app-loading data-loading-title="Approving project estimation" data-loading-text="Completing Planning and opening the next phase.">
+                                        <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
+                                        <textarea name="approval_comment" class="form-control mb-2" rows="2" placeholder="Optional Sales comment"></textarea>
+                                        <button class="btn-action btn-approve w-100" type="submit" name="approve_project_estimation">
+                                            <i class="fas fa-check me-1"></i> Final Approve
+                                        </button>
+                                    </form>
+                                    <form method="POST" class="w-100 mt-2" data-app-loading data-loading-title="Rejecting project estimation" data-loading-text="Returning the estimation to the expert.">
+                                        <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
+                                        <textarea name="rejection_reason" class="form-control mb-2" rows="2" required placeholder="Rejection reason"></textarea>
+                                        <button class="btn-action btn-reject w-100" type="submit" name="reject_project_estimation">
+                                            <i class="fas fa-times me-1"></i> Reject
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endwhile; ?>
+                </div>
+            </div>
+        </section>
+    <?php endif; ?>
+
     <?php if (count($tasksByProject) > 0): ?>
         <?php foreach ($tasksByProject as $pid => $projectTasks): ?>
             <?php
@@ -1182,7 +1361,7 @@ include '../../includes/navbar.php';
                 </div>
             </section>
         <?php endforeach; ?>
-    <?php else: ?>
+    <?php elseif ($pendingProjectEstimations->num_rows === 0): ?>
         <div class="empty-state">
             <i class="fas fa-check-circle"></i>
             <p class="mt-2 mb-0">No estimations awaiting sales approval.</p>

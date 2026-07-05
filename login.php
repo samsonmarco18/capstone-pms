@@ -131,6 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+$loginLogoPath = __DIR__ . '/assets/img/erniLogo_white.png';
+$loginLogoVersion = file_exists($loginLogoPath) ? (string) filemtime($loginLogoPath) : '1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -694,7 +697,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="login-shell">
         <section class="login-brand">
             <div class="brand-panel">
-                <img class="brand-logo" src="assets/img/erniLogo_white.png" alt="ERNI logo">
+                <img class="brand-logo" src="assets/img/erniLogo_white.png?v=<?php echo rawurlencode($loginLogoVersion); ?>" alt="ERNI logo">
                 <div class="brand-lockup">
                     <div class="brand-name"><strong>ERNI</strong></div>
                     <div class="brand-subtitle">Development<br>Center&nbsp;&nbsp;Philippines, Inc.</div>

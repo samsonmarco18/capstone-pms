@@ -92,7 +92,7 @@ $individualPerformance = $conn->query("
 // Get weekly performance trends
 $weeklyTrends = $conn->query("
     SELECT 
-        DATE_FORMAT(t.created_at, '%Y-%m-%d') as date,
+        DATE(t.created_at) as date,
         COUNT(t.id) as tasks_created,
         SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as tasks_completed,
         ROUND(AVG(CASE WHEN t.status = 'completed' AND t.completed_at IS NOT NULL 
@@ -117,6 +117,42 @@ $priorityPerformance = $conn->query("
     WHERE DATE(created_at) BETWEEN '$dateFrom' AND '$dateTo'
     GROUP BY priority
 ");
+
+$weeklyTrendData = [
+    'dates' => [],
+    'created' => [],
+    'completed' => [],
+];
+if (is_object($weeklyTrends) && method_exists($weeklyTrends, 'fetch_assoc')) {
+    while ($row = $weeklyTrends->fetch_assoc()) {
+        $rawDate = trim((string) ($row['date'] ?? ''));
+        $timestamp = $rawDate !== '' ? strtotime($rawDate) : false;
+        $weeklyTrendData['dates'][] = $timestamp !== false ? date('M d', $timestamp) : $rawDate;
+        $weeklyTrendData['created'][] = max(0, (int) ($row['tasks_created'] ?? 0));
+        $weeklyTrendData['completed'][] = max(0, (int) ($row['tasks_completed'] ?? 0));
+    }
+}
+
+$priorityRows = [];
+$priorityChartData = [
+    'priorities' => [],
+    'rates' => [],
+];
+if (is_object($priorityPerformance) && method_exists($priorityPerformance, 'fetch_assoc')) {
+    while ($row = $priorityPerformance->fetch_assoc()) {
+        $totalTasks = max(0, (int) ($row['total_tasks'] ?? 0));
+        $completedTasks = max(0, (int) ($row['completed'] ?? 0));
+        $priority = strtolower(trim((string) ($row['priority'] ?? 'medium')));
+        $row['priority'] = $priority;
+        $row['total_tasks'] = $totalTasks;
+        $row['completed'] = $completedTasks;
+        $priorityRows[] = $row;
+        $priorityChartData['priorities'][] = ucfirst($priority);
+        $priorityChartData['rates'][] = $totalTasks > 0
+            ? (int) round(($completedTasks / $totalTasks) * 100)
+            : 0;
+    }
+}
 
 // Get project performance
 $projectPerformance = $conn->query("
@@ -431,6 +467,145 @@ $chatScriptLoaded = true;
     padding: 1.5rem;
 }
 
+/* Native report charts */
+.native-chart {
+    width: 100%;
+}
+
+.native-trends-chart {
+    min-height: 320px;
+}
+
+.chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    color: var(--gray-600);
+    font-size: 0.76rem;
+    font-weight: 600;
+}
+
+.chart-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.chart-legend i {
+    display: inline-block;
+    width: 18px;
+    height: 3px;
+    border-radius: 3px;
+}
+
+.native-trends-svg {
+    display: block;
+    width: 100%;
+    height: 270px;
+    overflow: visible;
+}
+
+.native-trends-svg .chart-grid-line {
+    stroke: #e6edf3;
+    stroke-width: 1;
+}
+
+.native-trends-svg .chart-axis-label {
+    fill: #718399;
+    font-size: 11px;
+}
+
+.native-trends-svg .chart-line-created,
+.native-trends-svg .chart-line-completed {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 3;
+}
+
+.native-trends-svg .chart-line-created { stroke: #1f6392; }
+.native-trends-svg .chart-line-completed { stroke: #10b981; }
+.native-trends-svg .chart-point-created { fill: #1f6392; }
+.native-trends-svg .chart-point-completed { fill: #10b981; }
+
+.native-priority-chart {
+    min-height: 210px;
+}
+
+.priority-chart-grid {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 1.25rem;
+    min-height: 210px;
+    padding: 0.5rem 0 0;
+}
+
+.priority-chart-item {
+    display: grid;
+    justify-items: center;
+    gap: 0.4rem;
+    min-width: 58px;
+}
+
+.priority-chart-value {
+    color: var(--gray-900);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.priority-chart-track {
+    display: flex;
+    align-items: flex-end;
+    width: 38px;
+    height: 140px;
+    overflow: hidden;
+    border-radius: 9px 9px 5px 5px;
+    background: #edf1f5;
+}
+
+.priority-chart-fill {
+    width: 100%;
+    min-height: 3px;
+    border-radius: 9px 9px 4px 4px;
+    transition: height 0.35s ease;
+}
+
+.priority-chart-label {
+    max-width: 74px;
+    overflow: hidden;
+    color: var(--gray-600);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chart-empty-state {
+    display: grid;
+    place-items: center;
+    min-height: 270px;
+    color: var(--gray-600);
+    text-align: center;
+}
+
+.chart-empty-state i {
+    display: block;
+    margin-bottom: 0.65rem;
+    color: var(--gray-300);
+    font-size: 2rem;
+}
+
+.chart-empty-state strong {
+    display: block;
+    margin-bottom: 0.2rem;
+    color: var(--gray-900);
+    font-size: 0.9rem;
+}
+
 /* Filter Card */
 .filter-card {
     background: white;
@@ -601,6 +776,26 @@ $chatScriptLoaded = true;
     border: 1px solid rgba(31, 99, 146, 0.24);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .native-trends-svg .chart-grid-line {
+    stroke: #21364b;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .native-trends-svg .chart-axis-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chart-legend,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .priority-chart-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chart-empty-state {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .priority-chart-value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chart-empty-state strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .priority-chart-track {
+    background: #13283b;
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .stats-grid {
@@ -726,7 +921,7 @@ $chatScriptLoaded = true;
                     <h5><i class="fas fa-chart-line me-2"></i>Weekly Performance Trends</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="trendsChart" style="height: 300px; width: 100%;"></canvas>
+                    <div id="trendsChart" class="native-chart native-trends-chart" role="img" aria-label="Weekly tasks created and completed trend chart"></div>
                 </div>
             </div>
         </div>
@@ -737,11 +932,9 @@ $chatScriptLoaded = true;
                     <h5><i class="fas fa-chart-bar me-2"></i>Performance by Priority</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="priorityChart" style="height: 200px; width: 100%;"></canvas>
+                    <div id="priorityChart" class="native-chart native-priority-chart" role="img" aria-label="Task completion rate by priority chart"></div>
                     <div class="mt-3">
-                        <?php 
-                        $priorityPerformance->data_seek(0);
-                        while($priority = $priorityPerformance->fetch_assoc()): 
+                        <?php foreach($priorityRows as $priority):
                             $priorityColor = $priority['priority'] == 'critical' ? 'danger' : ($priority['priority'] == 'high' ? 'warning' : ($priority['priority'] == 'medium' ? 'info' : 'success'));
                         ?>
                         <div class="mb-2">
@@ -754,7 +947,10 @@ $chatScriptLoaded = true;
                             </div>
                             <small class="text-muted">Avg: <?php echo $priority['avg_completion_days'] ?? 'N/A'; ?> days</small>
                         </div>
-                        <?php endwhile; ?>
+                        <?php endforeach; ?>
+                        <?php if ($priorityRows === []): ?>
+                            <div class="text-muted text-center small py-2">No priority performance data for this date range.</div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -877,81 +1073,170 @@ $chatScriptLoaded = true;
     <?php endif; ?>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Trends Chart Data
-const trendsData = <?php 
-    $dates = [];
-    $created = [];
-    $completed = [];
-    while($row = $weeklyTrends->fetch_assoc()) {
-        $dates[] = date('M d', strtotime($row['date']));
-        $created[] = $row['tasks_created'];
-        $completed[] = $row['tasks_completed'];
-    }
-    echo json_encode(['dates' => $dates, 'created' => $created, 'completed' => $completed]);
-?>;
+const trendsData = <?php echo json_encode($weeklyTrendData, JSON_UNESCAPED_SLASHES); ?>;
+const priorityData = <?php echo json_encode($priorityChartData, JSON_UNESCAPED_SLASHES); ?>;
+const svgNamespace = 'http://www.w3.org/2000/svg';
 
-const trendsCanvas = document.getElementById('trendsChart');
-if (window.Chart && trendsCanvas) {
-    const trendsCtx = trendsCanvas.getContext('2d');
-    new Chart(trendsCtx, {
-        type: 'line',
-        data: {
-            labels: trendsData.dates,
-            datasets: [
-                { label: 'Tasks Created', data: trendsData.created, borderColor: '#1f6392', backgroundColor: 'rgba(31, 99, 146, 0.1)', fill: true, tension: 0.4 },
-                { label: 'Tasks Completed', data: trendsData.completed, borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', fill: true, tension: 0.4 }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            scales: { y: { beginAtZero: true, title: { display: true, text: 'Number of Tasks' } } },
-            plugins: { legend: { position: 'top' } }
-        }
-    });
-} else if (trendsCanvas) {
-    trendsCanvas.replaceWith(Object.assign(document.createElement('div'), {
-        className: 'text-muted text-center py-4',
-        textContent: 'Chart preview is unavailable, but the generated report table is ready below.'
-    }));
+function createSvgNode(tagName, attributes = {}, text = '') {
+    const node = document.createElementNS(svgNamespace, tagName);
+    Object.entries(attributes).forEach(([name, value]) => node.setAttribute(name, String(value)));
+    if (text !== '') node.textContent = text;
+    return node;
 }
 
-// Priority Performance Chart
-const priorityData = <?php 
-    $priorities = [];
-    $completionRates = [];
-    $priorityPerformance->data_seek(0);
-    while($row = $priorityPerformance->fetch_assoc()) {
-        $priorities[] = ucfirst($row['priority']);
-        $completionRates[] = $row['total_tasks'] > 0 ? round(($row['completed'] / $row['total_tasks']) * 100) : 0;
-    }
-    echo json_encode(['priorities' => $priorities, 'rates' => $completionRates]);
-?>;
-
-const priorityCanvas = document.getElementById('priorityChart');
-if (window.Chart && priorityCanvas) {
-    const priorityCtx = priorityCanvas.getContext('2d');
-    new Chart(priorityCtx, {
-        type: 'bar',
-        data: {
-            labels: priorityData.priorities,
-            datasets: [{ label: 'Completion Rate (%)', data: priorityData.rates, backgroundColor: ['#dc2626', '#f59e0b', '#2563eb', '#10b981'], borderRadius: 8 }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            scales: { y: { min: 0, max: 100, title: { display: true, text: 'Completion Rate (%)' } } },
-            plugins: { legend: { display: false } }
-        }
-    });
-} else if (priorityCanvas) {
-    priorityCanvas.replaceWith(Object.assign(document.createElement('div'), {
-        className: 'text-muted text-center py-4',
-        textContent: 'Priority chart is unavailable.'
-    }));
+function renderChartEmptyState(container, title, message) {
+    if (!container) return;
+    container.replaceChildren();
+    const emptyState = document.createElement('div');
+    emptyState.className = 'chart-empty-state';
+    const content = document.createElement('div');
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-chart-line';
+    icon.setAttribute('aria-hidden', 'true');
+    const heading = document.createElement('strong');
+    heading.textContent = title;
+    const description = document.createElement('span');
+    description.textContent = message;
+    content.append(icon, heading, description);
+    emptyState.appendChild(content);
+    container.appendChild(emptyState);
 }
+
+function renderTrendsChart(container, data) {
+    const labels = Array.isArray(data?.dates) ? data.dates : [];
+    const created = Array.isArray(data?.created) ? data.created.map(Number) : [];
+    const completed = Array.isArray(data?.completed) ? data.completed.map(Number) : [];
+    if (!container || labels.length === 0) {
+        renderChartEmptyState(container, 'No weekly activity yet', 'Try a wider date range when task activity becomes available.');
+        return;
+    }
+
+    container.replaceChildren();
+    const legend = document.createElement('div');
+    legend.className = 'chart-legend';
+    [
+        ['Tasks Created', '#1f6392'],
+        ['Tasks Completed', '#10b981']
+    ].forEach(([label, color]) => {
+        const item = document.createElement('span');
+        const swatch = document.createElement('i');
+        swatch.style.background = color;
+        item.append(swatch, document.createTextNode(label));
+        legend.appendChild(item);
+    });
+
+    const width = 760;
+    const height = 270;
+    const margin = { top: 15, right: 20, bottom: 42, left: 48 };
+    const chartWidth = width - margin.left - margin.right;
+    const chartHeight = height - margin.top - margin.bottom;
+    const maximum = Math.max(1, ...created, ...completed);
+    const tickMaximum = Math.max(4, Math.ceil(maximum / 4) * 4);
+    const svg = createSvgNode('svg', {
+        class: 'native-trends-svg',
+        viewBox: `0 0 ${width} ${height}`,
+        preserveAspectRatio: 'xMidYMid meet',
+        'aria-hidden': 'true'
+    });
+
+    for (let tick = 0; tick <= 4; tick += 1) {
+        const value = Math.round((tickMaximum / 4) * tick);
+        const y = margin.top + chartHeight - ((value / tickMaximum) * chartHeight);
+        svg.appendChild(createSvgNode('line', {
+            class: 'chart-grid-line',
+            x1: margin.left,
+            x2: width - margin.right,
+            y1: y,
+            y2: y
+        }));
+        svg.appendChild(createSvgNode('text', {
+            class: 'chart-axis-label',
+            x: margin.left - 10,
+            y: y + 4,
+            'text-anchor': 'end'
+        }, value));
+    }
+
+    const pointX = (index) => labels.length === 1
+        ? margin.left + (chartWidth / 2)
+        : margin.left + ((index / (labels.length - 1)) * chartWidth);
+    const pointY = (value) => margin.top + chartHeight - ((Math.max(0, Number(value) || 0) / tickMaximum) * chartHeight);
+    const labelInterval = Math.max(1, Math.ceil(labels.length / 7));
+
+    labels.forEach((label, index) => {
+        if (index % labelInterval !== 0 && index !== labels.length - 1) return;
+        svg.appendChild(createSvgNode('text', {
+            class: 'chart-axis-label',
+            x: pointX(index),
+            y: height - 14,
+            'text-anchor': 'middle'
+        }, label));
+    });
+
+    function addSeries(values, lineClass, pointClass, seriesLabel) {
+        const points = labels.map((_, index) => `${pointX(index)},${pointY(values[index] || 0)}`).join(' ');
+        svg.appendChild(createSvgNode('polyline', { class: lineClass, points }));
+        labels.forEach((label, index) => {
+            const point = createSvgNode('circle', {
+                class: pointClass,
+                cx: pointX(index),
+                cy: pointY(values[index] || 0),
+                r: 4
+            });
+            point.appendChild(createSvgNode('title', {}, `${label}: ${seriesLabel} ${values[index] || 0}`));
+            svg.appendChild(point);
+        });
+    }
+
+    addSeries(created, 'chart-line-created', 'chart-point-created', 'created');
+    addSeries(completed, 'chart-line-completed', 'chart-point-completed', 'completed');
+    container.append(legend, svg);
+}
+
+function renderPriorityChart(container, data) {
+    const labels = Array.isArray(data?.priorities) ? data.priorities : [];
+    const rates = Array.isArray(data?.rates) ? data.rates.map(Number) : [];
+    if (!container || labels.length === 0) {
+        renderChartEmptyState(container, 'No priority data yet', 'Completion rates will appear when tasks exist in this date range.');
+        return;
+    }
+
+    const colorMap = {
+        critical: '#dc2626',
+        high: '#f59e0b',
+        medium: '#2563eb',
+        low: '#10b981'
+    };
+    const grid = document.createElement('div');
+    grid.className = 'priority-chart-grid';
+    labels.forEach((label, index) => {
+        const rate = Math.max(0, Math.min(100, Number(rates[index]) || 0));
+        const color = colorMap[String(label).toLowerCase()] || '#1f6392';
+        const item = document.createElement('div');
+        item.className = 'priority-chart-item';
+        const value = document.createElement('div');
+        value.className = 'priority-chart-value';
+        value.textContent = `${rate}%`;
+        const track = document.createElement('div');
+        track.className = 'priority-chart-track';
+        const fill = document.createElement('div');
+        fill.className = 'priority-chart-fill';
+        fill.style.height = `${rate}%`;
+        fill.style.minHeight = rate > 0 ? '3px' : '0';
+        fill.style.background = color;
+        track.appendChild(fill);
+        const caption = document.createElement('div');
+        caption.className = 'priority-chart-label';
+        caption.textContent = label;
+        item.append(value, track, caption);
+        grid.appendChild(item);
+    });
+    container.replaceChildren(grid);
+}
+
+renderTrendsChart(document.getElementById('trendsChart'), trendsData);
+renderPriorityChart(document.getElementById('priorityChart'), priorityData);
 
 function exportReport(tableId) {
     const table = document.getElementById(tableId);

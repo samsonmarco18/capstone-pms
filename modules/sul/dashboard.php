@@ -11,6 +11,15 @@ projectWorkflowEnsureSchema($conn);
 $sulDepartment = trim((string) ($user['department'] ?? ''));
 $sulDepartmentLabel = projectWorkflowDepartmentLabel($sulDepartment);
 $isExpertDepartmentSul = $sulDepartmentLabel === 'Expert Department';
+$sulUserDepartmentClause = $sulDepartment !== ''
+    ? projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment)
+    : '1 = 0';
+$sulProjectDepartmentClause = $sulDepartment !== ''
+    ? projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment)
+    : '1 = 0';
+$sulTaskDepartmentClause = $sulDepartment !== ''
+    ? projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true)
+    : '1 = 0';
 
 function sulDashboardFetchCount($conn, string $sql): int
 {
@@ -39,8 +48,8 @@ $projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '
 $projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:00')" : "'17:00:00'";
 
 // Get statistics
-$totalExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users WHERE role = 'expert' OR role = 'developer'");
-$availableExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users WHERE (role = 'expert' OR role = 'developer') AND status = 'active'");
+$totalExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users u WHERE u.role IN ('expert', 'developer') AND {$sulUserDepartmentClause}");
+$availableExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users u WHERE u.role IN ('expert', 'developer') AND u.status = 'active' AND {$sulUserDepartmentClause}");
 $totalTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks");
 $overdueTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE deadline < NOW() AND status != 'completed'");
 $unassignedTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE assigned_to IS NULL OR assigned_to = 0");
@@ -60,7 +69,9 @@ $expertAvailability = sulDashboardQuery($conn, "
            SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
+    WHERE u.role IN ('expert', 'developer')
+      AND u.status = 'active'
+      AND {$sulUserDepartmentClause}
     GROUP BY u.id
     ORDER BY active_tasks ASC
 ");
@@ -125,6 +136,8 @@ $recentTasks = sulDashboardQuery($conn, "
     FROM tasks t
     LEFT JOIN projects p ON t.project_id = p.id
     LEFT JOIN users u ON t.assigned_to = u.id
+    WHERE {$sulProjectDepartmentClause}
+      AND {$sulTaskDepartmentClause}
     ORDER BY t.created_at DESC
     LIMIT 10
 ");
@@ -704,10 +717,12 @@ include '../../includes/navbar.php';
     display: flex;
     flex-direction: column;
     gap: 0.7rem;
+    min-width: 0;
     padding: 0.95rem 1rem;
     border: 1px solid var(--gray-200);
     border-radius: 16px;
     background: #fff;
+    width: 100%;
 }
 
 .recent-task-card > div:first-child {
@@ -715,9 +730,9 @@ include '../../includes/navbar.php';
 }
 
 .recent-task-card-head {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: flex-start;
-    justify-content: space-between;
     gap: 0.75rem;
 }
 
@@ -735,16 +750,18 @@ include '../../includes/navbar.php';
     font-size: 0.92rem;
     font-weight: 700;
     line-height: 1.35;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .recent-task-description {
     color: var(--gray-600);
     font-size: 0.8rem;
     line-height: 1.45;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .recent-task-meta {
@@ -753,6 +770,11 @@ include '../../includes/navbar.php';
     gap: 0.35rem 0.75rem;
     color: var(--gray-600);
     font-size: 0.76rem;
+}
+
+.recent-task-meta span {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .recent-task-actions {
@@ -899,6 +921,14 @@ include '../../includes/navbar.php';
         gap: 0.75rem;
     }
 
+    .recent-task-card-head {
+        grid-template-columns: 1fr;
+    }
+
+    .recent-task-actions {
+        justify-content: flex-end;
+    }
+
     .recent-task-list {
         max-height: 380px;
     }
@@ -927,7 +957,7 @@ include '../../includes/navbar.php';
     <div class="stats-grid">
         <div class="stat-card-modern">
             <i class="fas fa-users stat-icon"></i>
-            <div class="stat-label">Total Experts/Devs</div>
+            <div class="stat-label">Department Team</div>
             <div class="stat-number"><?php echo $totalExperts; ?></div>
             <div class="stat-sub"><?php echo $availableExperts; ?> available</div>
         </div>
@@ -1082,7 +1112,7 @@ include '../../includes/navbar.php';
                             </tr>
                         </thead>
                         <tbody>
-                            <?php if($expertAvailability): ?>
+                            <?php if($expertAvailability && $expertAvailability->num_rows > 0): ?>
                             <?php while($expert = $expertAvailability->fetch_assoc()): ?>
                             <?php
                                 $statusClass = $expert['active_tasks'] >= 5 ? 'overloaded' : ($expert['active_tasks'] >= 3 ? 'busy' : ($expert['active_tasks'] > 0 ? 'available' : 'free'));
@@ -1100,6 +1130,12 @@ include '../../includes/navbar.php';
                                 </td>
                             </tr>
                             <?php endwhile; ?>
+                            <?php else: ?>
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    No active experts or developers are assigned to <?php echo htmlspecialchars($sulDepartmentLabel ?: 'your department'); ?>.
+                                </td>
+                            </tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -1124,7 +1160,7 @@ include '../../includes/navbar.php';
                                 <div class="recent-task-card-head-main">
                                     <h6 class="recent-task-title"><?php echo htmlspecialchars($task['title']); ?></h6>
                                     <?php if(!empty($task['description'])): ?>
-                                        <div class="recent-task-description"><?php echo htmlspecialchars(substr((string) $task['description'], 0, 120)); ?></div>
+                                        <div class="recent-task-description"><?php echo nl2br(htmlspecialchars((string) $task['description'])); ?></div>
                                     <?php endif; ?>
                                 </div>
                                 <div class="recent-task-actions">

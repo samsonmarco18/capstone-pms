@@ -58,6 +58,8 @@ function workflowEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
         'architect_reviewed_at' => "{$timestampType} NULL",
         'merged_at' => "{$timestampType} NULL",
         'release_notified_at' => "{$timestampType} NULL",
+        'parent_task_id' => 'INT NULL',
+        'department_scope' => 'VARCHAR(100) NULL',
     ];
 
     foreach ($workflowColumns as $column => $definition) {
@@ -219,7 +221,273 @@ function workflowEnsureDefaultQaChecklist(mysqli|PgsqlMysqliCompatConnection $co
     $stmt->close();
 }
 
-function workflowMaybeCompleteProject(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId): void
+function workflowProjectFinalCostSnapshot(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId): array
+{
+    $snapshot = [
+        'technology_cost' => 0.0,
+        'developer_cost' => 0.0,
+        'resource_cost' => 0.0,
+        'other_fees' => [],
+        'total_cost' => 0.0,
+        'source' => 'fallback',
+    ];
+
+    if ($projectId <= 0) {
+        return $snapshot;
+    }
+
+    if (dbTableExists($conn, 'expert_project_estimations')) {
+        $estimationStmt = $conn->prepare(
+            "SELECT total_technology_stack_cost, total_developer_cost, additional_costs, overall_estimated_project_cost
+             FROM expert_project_estimations
+             WHERE project_id = ?
+             ORDER BY CASE WHEN status = 'sales_approved' THEN 0 ELSE 1 END, approved_at DESC, updated_at DESC, id DESC
+             LIMIT 1"
+        );
+        if ($estimationStmt !== false) {
+            $estimationStmt->bind_param('i', $projectId);
+            $estimationStmt->execute();
+            $estimation = $estimationStmt->get_result()->fetch_assoc();
+            $estimationStmt->close();
+
+            if ($estimation) {
+                $snapshot['technology_cost'] = (float) ($estimation['total_technology_stack_cost'] ?? 0);
+                $snapshot['developer_cost'] = (float) ($estimation['total_developer_cost'] ?? 0);
+                $snapshot['resource_cost'] = (float) ($estimation['additional_costs'] ?? 0);
+                if ($snapshot['resource_cost'] > 0) {
+                    $snapshot['other_fees'][] = [
+                        'name' => 'Approved additional project costs',
+                        'cost' => $snapshot['resource_cost'],
+                    ];
+                }
+                $snapshot['total_cost'] = (float) ($estimation['overall_estimated_project_cost'] ?? 0);
+                if ($snapshot['total_cost'] <= 0) {
+                    $snapshot['total_cost'] = $snapshot['technology_cost'] + $snapshot['developer_cost'] + $snapshot['resource_cost'];
+                }
+                $snapshot['source'] = 'expert_project_estimations';
+
+                return $snapshot;
+            }
+        }
+    }
+
+    $techResult = $conn->query("SELECT COALESCE(SUM(COALESCE(estimated_cost, 0)), 0) AS total FROM tech_recommendations WHERE project_id = {$projectId}");
+    if ($techResult) {
+        $snapshot['technology_cost'] = (float) (($techResult->fetch_assoc()['total'] ?? 0));
+    }
+
+    $allocationResult = $conn->query("SELECT COALESCE(SUM(COALESCE(required_count, 0) * 500 * 30), 0) AS total FROM developer_allocations WHERE project_id = {$projectId}");
+    if ($allocationResult) {
+        $snapshot['developer_cost'] = (float) (($allocationResult->fetch_assoc()['total'] ?? 0));
+    }
+
+    $snapshot['total_cost'] = $snapshot['technology_cost'] + $snapshot['developer_cost'];
+
+    return $snapshot;
+}
+
+function workflowResolveReceiptUserId(mysqli|PgsqlMysqliCompatConnection $conn, array $project, ?int $preferredUserId): int
+{
+    $candidateIds = [];
+    if ($preferredUserId !== null && $preferredUserId > 0) {
+        $candidateIds[] = $preferredUserId;
+    }
+
+    foreach (['client_created_by', 'created_by'] as $column) {
+        $userId = (int) ($project[$column] ?? 0);
+        if ($userId > 0) {
+            $candidateIds[] = $userId;
+        }
+    }
+
+    $candidateIds = array_values(array_unique($candidateIds));
+    foreach ($candidateIds as $userId) {
+        $userResult = $conn->query("SELECT role FROM users WHERE id = {$userId} AND status = 'active' LIMIT 1");
+        $userRow = $userResult ? $userResult->fetch_assoc() : null;
+        if ((string) ($userRow['role'] ?? '') === 'sales') {
+            return $userId;
+        }
+    }
+
+    $salesUser = $conn->query("SELECT id FROM users WHERE role = 'sales' AND status = 'active' ORDER BY id ASC LIMIT 1");
+    if ($salesUser) {
+        return (int) (($salesUser->fetch_assoc()['id'] ?? 0));
+    }
+
+    if ($candidateIds) {
+        return (int) $candidateIds[0];
+    }
+
+    return 0;
+}
+
+function workflowGenerateReceiptNumber(mysqli|PgsqlMysqliCompatConnection $conn, int $reportId): string
+{
+    $base = 'ERNI-' . date('Ymd') . '-' . str_pad((string) $reportId, 5, '0', STR_PAD_LEFT);
+
+    for ($index = 0; $index < 20; $index++) {
+        $receiptNumber = $index === 0 ? $base : $base . '-' . $index;
+        $safeReceiptNumber = $conn->real_escape_string($receiptNumber);
+        $existing = $conn->query("SELECT id FROM receipts WHERE receipt_number = '{$safeReceiptNumber}' LIMIT 1");
+        if (!$existing || $existing->num_rows === 0) {
+            return $receiptNumber;
+        }
+    }
+
+    return $base . '-' . time();
+}
+
+function workflowEnsureFinalReceiptForProject(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId, ?int $generatedByUserId = null): ?array
+{
+    if (
+        $projectId <= 0
+        || !dbTableExists($conn, 'sales_reports')
+        || !dbTableExists($conn, 'receipts')
+        || !dbTableExists($conn, 'projects')
+    ) {
+        return null;
+    }
+
+    $projectStmt = $conn->prepare(
+        "SELECT p.id, p.client_id, p.name, p.status, p.created_by, c.name AS client_name,
+                c.email AS client_email, c.created_by AS client_created_by
+         FROM projects p
+         JOIN clients c ON c.id = p.client_id
+         WHERE p.id = ?
+         LIMIT 1"
+    );
+    if ($projectStmt === false) {
+        return null;
+    }
+    $projectStmt->bind_param('i', $projectId);
+    $projectStmt->execute();
+    $project = $projectStmt->get_result()->fetch_assoc();
+    $projectStmt->close();
+
+    if (!$project || (string) ($project['status'] ?? '') !== 'completed') {
+        return null;
+    }
+
+    $actorId = workflowResolveReceiptUserId($conn, $project, $generatedByUserId);
+    if ($actorId <= 0) {
+        return null;
+    }
+
+    $existingStmt = $conn->prepare(
+        "SELECT sr.id AS report_id, sr.status AS report_status, sr.total_cost,
+                r.id AS receipt_id, r.receipt_number, r.status AS receipt_status
+         FROM sales_reports sr
+         LEFT JOIN receipts r ON r.report_id = sr.id
+         WHERE sr.project_id = ?
+         ORDER BY COALESCE(r.created_at, sr.created_at) DESC, sr.id DESC
+         LIMIT 1"
+    );
+    if ($existingStmt !== false) {
+        $existingStmt->bind_param('i', $projectId);
+        $existingStmt->execute();
+        $existing = $existingStmt->get_result()->fetch_assoc();
+        $existingStmt->close();
+
+        if ($existing && (int) ($existing['receipt_id'] ?? 0) > 0) {
+            $reportId = (int) $existing['report_id'];
+            $receiptId = (int) $existing['receipt_id'];
+
+            return [
+                'report_id' => $reportId,
+                'receipt_id' => $receiptId,
+                'receipt_number' => (string) ($existing['receipt_number'] ?? ''),
+                'status' => (string) ($existing['receipt_status'] ?? 'draft'),
+                'created' => false,
+            ];
+        }
+    }
+
+    $reportId = (int) ($existing['report_id'] ?? 0);
+    $totalCost = (float) ($existing['total_cost'] ?? 0);
+
+    if ($reportId <= 0) {
+        $costs = workflowProjectFinalCostSnapshot($conn, $projectId);
+        $otherFees = json_encode($costs['other_fees'], JSON_UNESCAPED_UNICODE);
+        $notes = 'Automatically prepared when all project tasks were completed. Sales must review before final release.';
+
+        $reportStmt = $conn->prepare(
+            "INSERT INTO sales_reports (
+                project_id, client_id, technology_cost, developer_cost, resource_cost, other_fees,
+                total_cost, status, notes, created_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)"
+        );
+        if ($reportStmt === false) {
+            return null;
+        }
+
+        $technologyCost = (float) $costs['technology_cost'];
+        $developerCost = (float) $costs['developer_cost'];
+        $resourceCost = (float) $costs['resource_cost'];
+        $totalCost = (float) $costs['total_cost'];
+        $clientId = (int) $project['client_id'];
+        $reportStmt->bind_param(
+            'iidddsdsi',
+            $projectId,
+            $clientId,
+            $technologyCost,
+            $developerCost,
+            $resourceCost,
+            $otherFees,
+            $totalCost,
+            $notes,
+            $actorId
+        );
+        if (!$reportStmt->execute()) {
+            $reportStmt->close();
+            return null;
+        }
+        $reportId = (int) $reportStmt->insert_id;
+        $reportStmt->close();
+
+        logActivity($actorId, 'auto_finalize_sales_report', 'sales_reports', $reportId, null, [
+            'project_id' => $projectId,
+            'cost_source' => $costs['source'],
+        ]);
+    } else {
+        $conn->query("UPDATE sales_reports SET status = 'draft' WHERE id = {$reportId} AND status != 'invoiced'");
+    }
+
+    $receiptNumber = workflowGenerateReceiptNumber($conn, $reportId);
+    $dueDate = date('Y-m-d', strtotime('+30 days'));
+    $clientName = (string) ($project['client_name'] ?? '');
+    $clientEmail = (string) ($project['client_email'] ?? '');
+
+    $receiptStmt = $conn->prepare(
+        "INSERT INTO receipts (report_id, receipt_number, client_name, client_email, amount_due, due_date, status, generated_by)
+         VALUES (?, ?, ?, ?, ?, ?, 'draft', ?)"
+    );
+    if ($receiptStmt === false) {
+        return null;
+    }
+    $receiptStmt->bind_param('isssdsi', $reportId, $receiptNumber, $clientName, $clientEmail, $totalCost, $dueDate, $actorId);
+    if (!$receiptStmt->execute()) {
+        $receiptStmt->close();
+        return null;
+    }
+    $receiptId = (int) $receiptStmt->insert_id;
+    $receiptStmt->close();
+
+    logActivity($actorId, 'auto_finalize_receipt', 'receipts', $receiptId, null, [
+        'project_id' => $projectId,
+        'report_id' => $reportId,
+        'receipt_number' => $receiptNumber,
+    ]);
+
+    return [
+        'report_id' => $reportId,
+        'receipt_id' => $receiptId,
+        'receipt_number' => $receiptNumber,
+        'status' => 'draft',
+        'created' => true,
+    ];
+}
+
+function workflowMaybeCompleteProject(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId, ?int $completedByUserId = null): void
 {
     if ($projectId <= 0) {
         return;
@@ -241,6 +509,8 @@ function workflowMaybeCompleteProject(mysqli|PgsqlMysqliCompatConnection $conn, 
             $updateStmt->execute();
             $updateStmt->close();
         }
+
+        workflowEnsureFinalReceiptForProject($conn, $projectId, $completedByUserId);
     }
 }
 ?>
