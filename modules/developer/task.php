@@ -1857,46 +1857,46 @@ function reviewTask(taskId) {
 }
 
 async function updateTaskStatus(taskId, status, options = {}) {
-    const confirmed = typeof window.appConfirm === 'function'
-        ? await window.appConfirm({
-            title: 'Confirm Task Update',
-            subject: status === 'for_review' ? 'Submit design for review?' : (status === 'in_progress' ? 'Start this task?' : 'Update this task status?'),
-            message: status === 'for_review'
-                ? 'Your UI/UX design handoff will be sent to the SUL for approval.'
-                : status === 'in_progress'
-                    ? 'The task will move to In Progress and its UI/UX designs/uploads will open for reference.'
-                    : 'The task status will be saved and activity logged.',
-            icon: 'fas fa-circle-check fa-lg',
-            confirmIcon: 'fas fa-check',
-            confirmText: status === 'for_review' ? 'Submit Design' : (status === 'in_progress' ? 'Start Task' : 'Update')
-        })
-        : window.confirm('Update this task status?');
-    if (!confirmed) {
-        return;
+    if (!options.skipConfirm) {
+        const confirmed = typeof window.appConfirm === 'function'
+            ? await window.appConfirm({
+                title: 'Confirm Task Update',
+                subject: status === 'for_review' ? 'Submit design for review?' : (status === 'in_progress' ? 'Start this task?' : 'Update this task status?'),
+                message: status === 'for_review'
+                    ? 'Your UI/UX design handoff will be sent to the SUL for approval.'
+                    : status === 'in_progress'
+                        ? 'The task will move to In Progress and its UI/UX designs/uploads will open for reference.'
+                        : 'The task status will be saved and activity logged.',
+                icon: 'fas fa-circle-check fa-lg',
+                confirmIcon: 'fas fa-check',
+                confirmText: status === 'for_review' ? 'Submit Design' : (status === 'in_progress' ? 'Start Task' : 'Update')
+            })
+            : window.confirm('Update this task status?');
+        if (!confirmed) {
+            return;
+        }
     }
 
-    $.ajax({
-        url: '../../api/update-task-status.php',
-        method: 'POST',
-        dataType: 'json',
-        data: {
-            task_id: taskId,
-            new_status: status
-        },
-        success: function(response) {
-            moveKanbanTaskToColumn(taskId, response.new_status || status);
-            if (options.openDetails || status === 'in_progress') {
-                viewTask(taskId);
-                return;
+    try {
+        const response = await $.ajax({
+            url: '../../api/update-task-status.php',
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                task_id: taskId,
+                new_status: status
             }
-            if (status === 'for_review') {
-                viewTask(taskId);
-            }
-        },
-        error: function(xhr) {
-            alert(xhr.responseJSON?.error || 'Unable to update task status.');
+        });
+
+        moveKanbanTaskToColumn(taskId, response.new_status || status);
+        if (options.openDetails || status === 'in_progress' || status === 'for_review') {
+            viewTask(taskId);
         }
-    });
+        return response;
+    } catch (xhr) {
+        alert(xhr.responseJSON?.error || 'Unable to update task status.');
+        throw xhr;
+    }
 }
 
 function showGanttModal(project) {
@@ -2438,7 +2438,7 @@ function buildDepartmentPanel(task) {
                             <i class="fas fa-floppy-disk"></i> ${escapeHtml(departmentProfile.artifact_cta || 'Save Handoff')}
                         </button>
                         ${isUiUx ? `
-                            <button class="btn-primary-modern task-detail-action mt-2" onclick="updateTaskStatus(${Number(task.id)}, 'for_review')" data-bs-toggle="tooltip" title="Submit design work to the UI/UX SUL for approval without Git or pull requests.">
+                            <button class="btn-primary-modern task-detail-action mt-2" onclick="submitDesignForReview(${Number(task.id)})" data-bs-toggle="tooltip" title="Auto-saves the design handoff, then submits the task to the UI/UX SUL for approval.">
                                 <i class="fas fa-paper-plane"></i> Submit Design
                             </button>
                         ` : ''}
@@ -2495,7 +2495,7 @@ function renderDepartmentArtifacts(artifacts) {
     }).join('');
 }
 
-function saveDepartmentArtifact(taskId) {
+function buildDepartmentArtifactFormData(taskId) {
     const formData = new FormData();
     formData.append('task_id', String(taskId));
     formData.append('artifact_type', departmentProfile.artifact_type || 'department_handoff');
@@ -2508,7 +2508,15 @@ function saveDepartmentArtifact(taskId) {
         formData.append('artifact_file', fileInput.files[0]);
     }
 
-    $.ajax({
+    return formData;
+}
+
+function saveDepartmentArtifact(taskId, options = {}) {
+    const formData = buildDepartmentArtifactFormData(taskId);
+    const reloadTask = options.reloadTask !== false;
+    const silent = Boolean(options.silent);
+
+    return $.ajax({
         url: '../../api/add-department-artifact.php',
         method: 'POST',
         data: formData,
@@ -2516,13 +2524,44 @@ function saveDepartmentArtifact(taskId) {
         contentType: false,
         dataType: 'json',
         success: function(response) {
-            alert(response.message || 'Department handoff saved.');
-            viewTask(taskId);
+            if (!silent) {
+                alert(response.message || 'Department handoff saved.');
+            }
+            if (reloadTask) {
+                viewTask(taskId);
+            }
         },
         error: function(xhr) {
-            alert(xhr.responseJSON?.error || 'Unable to save department handoff.');
+            if (!silent) {
+                alert(xhr.responseJSON?.error || 'Unable to save department handoff.');
+            }
         }
     });
+}
+
+async function submitDesignForReview(taskId) {
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Confirm Design Submission',
+            subject: 'Save handoff and submit design?',
+            message: 'Your design handoff will be auto-saved first, then the task will move to SUL review.',
+            icon: 'fas fa-circle-check fa-lg',
+            confirmIcon: 'fas fa-paper-plane',
+            confirmText: 'Submit Design'
+        })
+        : window.confirm('Save handoff and submit design?');
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        await saveDepartmentArtifact(taskId, { silent: true, reloadTask: false });
+    } catch (xhr) {
+        alert(xhr.responseJSON?.error || 'Unable to save the design handoff before submitting.');
+        return;
+    }
+
+    await updateTaskStatus(taskId, 'for_review', { skipConfirm: true, openDetails: true });
 }
 
 function loadComments(taskId) {
