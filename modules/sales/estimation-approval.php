@@ -270,6 +270,11 @@ $pendingProjectEstimations = $conn->query("
     ORDER BY e.sul_reviewed_at ASC, e.id ASC
 ");
 
+$projectEstimationsByProject = [];
+while ($estimateRow = $pendingProjectEstimations->fetch_assoc()) {
+    $projectEstimationsByProject[(int) $estimateRow['project_id']] = $estimateRow;
+}
+
 $pendingTasks = $conn->query("
     SELECT t.*, p.name as project_name, p.id as project_id, p.timeline_start, p.timeline_end" . ($hasProjectPhases ? ", p.project_phases" : "") . ",
            u.full_name as expert_name, fe.min_days, fe.likely_days, fe.max_days, fe.expectation_description
@@ -290,6 +295,13 @@ while ($row = $pendingTasks->fetch_assoc()) {
         $tasksByProject[$pid] = [];
     }
     $tasksByProject[$pid][] = $row;
+}
+
+$approvalProjectIds = array_keys($projectEstimationsByProject);
+foreach (array_keys($tasksByProject) as $taskProjectId) {
+    if (!in_array($taskProjectId, $approvalProjectIds, true)) {
+        $approvalProjectIds[] = $taskProjectId;
+    }
 }
 
 $ganttProjects = [];
@@ -714,6 +726,54 @@ include '../../includes/navbar.php';
     padding: 1rem;
     border-top: 1px solid #e5edf5;
     background: #fbfcfe;
+}
+
+.sales-project-cost-review {
+    padding: 1rem;
+    border: 1px solid #dfe8ef;
+    border-radius: 16px;
+    background: #fbfcfe;
+}
+
+.sales-project-cost-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.8rem;
+}
+
+.sales-project-cost-head h6 {
+    margin: 0;
+    color: #1f2937;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.sales-project-cost-head p {
+    margin: 0.18rem 0 0;
+    color: #64748b;
+    font-size: 0.72rem;
+}
+
+.sales-project-cost-total {
+    display: grid;
+    gap: 0.08rem;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.sales-project-cost-total span {
+    color: #64748b;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.sales-project-cost-total strong {
+    color: var(--theme-primary);
+    font-size: 0.96rem;
 }
 
 .sales-cost-breakdown {
@@ -1337,6 +1397,7 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-project-cost-review,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-decision-card {
     background: #071321;
@@ -1352,6 +1413,7 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-project-queue-head h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-project-cost-head h6,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-decision-head strong {
     color: #d7e4f2;
@@ -1359,6 +1421,8 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-meta,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-amount small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-project-cost-head p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-project-cost-total span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-sul-note,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-decision-head span,
@@ -1477,90 +1541,16 @@ include '../../includes/navbar.php';
         </div>
     <?php endif; ?>
 
-    <?php if ($pendingProjectEstimations->num_rows > 0): ?>
-        <section class="sales-project-queue" aria-labelledby="salesProjectQueueTitle">
-            <div class="sales-project-queue-head">
-                <h5 id="salesProjectQueueTitle"><i class="fas fa-file-invoice-dollar" aria-hidden="true"></i>Projects awaiting final approval</h5>
-                <span class="sales-project-queue-count"><?php echo $pendingProjectEstimations->num_rows; ?> project<?php echo $pendingProjectEstimations->num_rows === 1 ? '' : 's'; ?></span>
-            </div>
-            <div class="sales-cost-list">
-                    <?php while ($estimate = $pendingProjectEstimations->fetch_assoc()): ?>
-                        <?php $salesCostPanelId = 'salesCostReview' . (int) $estimate['id']; ?>
-                        <article class="sales-cost-card" data-sales-cost-card>
-                            <button type="button" class="sales-cost-toggle" data-sales-cost-toggle aria-expanded="false" aria-controls="<?php echo $salesCostPanelId; ?>">
-                                <span class="sales-cost-identity">
-                                    <span class="sales-cost-icon" aria-hidden="true"><i class="fas fa-file-invoice-dollar"></i></span>
-                                    <span class="sales-cost-copy">
-                                        <span class="sales-cost-title"><?php echo htmlspecialchars((string) $estimate['project_name']); ?></span>
-                                        <span class="sales-cost-meta">
-                                            <span><i class="fas fa-building" aria-hidden="true"></i><?php echo htmlspecialchars((string) $estimate['client_name']); ?></span>
-                                            <span><i class="fas fa-user-tie" aria-hidden="true"></i><?php echo htmlspecialchars((string) $estimate['expert_name']); ?></span>
-                                            <span><i class="fas fa-gauge-high" aria-hidden="true"></i><?php echo htmlspecialchars((string) $estimate['project_complexity']); ?></span>
-                                            <span><i class="far fa-calendar" aria-hidden="true"></i><?php echo (int) $estimate['project_duration_months']; ?> month<?php echo (int) $estimate['project_duration_months'] === 1 ? '' : 's'; ?></span>
-                                        </span>
-                                    </span>
-                                </span>
-                                <span class="sales-cost-amount">
-                                    <small>Overall estimate</small>
-                                    <strong><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></strong>
-                                </span>
-                                <span class="sales-cost-status"><i class="fas fa-clock" aria-hidden="true"></i>Final review</span>
-                                <span class="sales-cost-chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
-                            </button>
-
-                            <div class="sales-cost-details" id="<?php echo $salesCostPanelId; ?>" hidden>
-                                <div class="sales-cost-breakdown" aria-label="Project cost breakdown">
-                                    <div class="sales-cost-metric"><span>Developer cost</span><strong><?php echo projectEstimationPeso((float) $estimate['total_developer_cost']); ?></strong></div>
-                                    <div class="sales-cost-metric"><span>Technology stack</span><strong><?php echo projectEstimationPeso((float) $estimate['total_technology_stack_cost']); ?></strong></div>
-                                    <div class="sales-cost-metric is-primary"><span>Overall estimate</span><strong><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></strong></div>
-                                    <div class="sales-cost-metric"><span>Client budget</span><strong><?php echo projectEstimationPeso((float) $estimate['sales_budget']); ?></strong></div>
-                                    <div class="sales-cost-metric <?php echo (float) $estimate['remaining_budget'] < 0 ? 'is-negative' : ''; ?>"><span>Remaining budget</span><strong><?php echo projectEstimationPeso((float) $estimate['remaining_budget']); ?></strong></div>
-                                    <div class="sales-cost-metric"><span>Additional costs</span><strong><?php echo projectEstimationPeso((float) $estimate['additional_costs']); ?></strong></div>
-                                </div>
-
-                                <div class="sales-sul-note">
-                                    <i class="fas fa-message" aria-hidden="true"></i>
-                                    <span><strong>SUL review note:</strong> <?php echo !empty($estimate['sul_comment']) ? htmlspecialchars((string) $estimate['sul_comment']) : 'No additional comment was provided.'; ?></span>
-                                </div>
-
-                                <div class="sales-cost-decisions">
-                                    <form method="POST" class="sales-decision-card is-approve" data-generic-draft-disabled="1" data-app-loading data-loading-title="Approving project estimation" data-loading-text="Completing Planning and opening the next phase.">
-                                        <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
-                                        <div class="sales-decision-head">
-                                            <i class="fas fa-circle-check" aria-hidden="true"></i>
-                                            <span><strong>Approve project estimate</strong><span>Finalize the cost, complete Planning, and activate the next roadmap phase.</span></span>
-                                        </div>
-                                        <label for="salesApprovalNote<?php echo (int) $estimate['id']; ?>">Sales note <span>(optional)</span></label>
-                                        <textarea id="salesApprovalNote<?php echo (int) $estimate['id']; ?>" name="approval_comment" class="form-control" rows="2" placeholder="Add a short final approval note"></textarea>
-                                        <button class="btn-action btn-approve" type="submit" name="approve_project_estimation">
-                                            <i class="fas fa-check me-1"></i> Final Approve
-                                        </button>
-                                    </form>
-
-                                    <form method="POST" class="sales-decision-card is-revision" data-generic-draft-disabled="1" data-app-loading data-loading-title="Rejecting project estimation" data-loading-text="Returning the estimation to the expert.">
-                                        <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
-                                        <div class="sales-decision-head">
-                                            <i class="fas fa-rotate-left" aria-hidden="true"></i>
-                                            <span><strong>Request revision</strong><span>Return the package to the Expert with specific changes.</span></span>
-                                        </div>
-                                        <label for="salesRevisionReason<?php echo (int) $estimate['id']; ?>">Revision reason <span>(required)</span></label>
-                                        <textarea id="salesRevisionReason<?php echo (int) $estimate['id']; ?>" name="rejection_reason" class="form-control" rows="2" required placeholder="Explain what needs to be revised"></textarea>
-                                        <button class="btn-action btn-reject" type="submit" name="reject_project_estimation">
-                                            <i class="fas fa-rotate-left me-1"></i> Return for Revision
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                        </article>
-                    <?php endwhile; ?>
-            </div>
-        </section>
-    <?php endif; ?>
-
-    <?php if (count($tasksByProject) > 0): ?>
-        <?php foreach ($tasksByProject as $pid => $projectTasks): ?>
+    <?php if ($approvalProjectIds !== []): ?>
+        <div class="sales-project-queue-head">
+            <h5><i class="fas fa-file-invoice-dollar" aria-hidden="true"></i>Projects awaiting approval</h5>
+            <span class="sales-project-queue-count"><?php echo count($approvalProjectIds); ?> project<?php echo count($approvalProjectIds) === 1 ? '' : 's'; ?></span>
+        </div>
+        <?php foreach ($approvalProjectIds as $pid): ?>
             <?php
-                $projectTitle = (string) ($projectTasks[0]['project_name'] ?? 'Project');
+                $estimate = $projectEstimationsByProject[$pid] ?? null;
+                $projectTasks = $tasksByProject[$pid] ?? [];
+                $projectTitle = (string) ($estimate['project_name'] ?? ($projectTasks[0]['project_name'] ?? 'Project'));
                 $featureCount = count($projectTasks);
             ?>
             <section class="project-approval-group" data-project-group data-project-id="<?php echo (int) $pid; ?>">
@@ -1574,11 +1564,16 @@ include '../../includes/navbar.php';
                     <div class="project-approval-toggle-main project-approval-head">
                         <span class="project-approval-kicker"><i class="fas fa-diagram-project"></i> Project Approval Review</span>
                         <h5><?php echo htmlspecialchars($projectTitle); ?></h5>
-                        <p>Review this project timeline first, then finalize the sales commitment for each pending feature below.</p>
+                        <p>Review all pending cost and feature decisions for this project in one place.</p>
                     </div>
                     <div class="project-approval-toggle-side">
                         <div class="project-approval-summary">
-                            <span class="project-approval-pill"><i class="fas fa-layer-group"></i> <?php echo $featureCount; ?> pending feature<?php echo $featureCount === 1 ? '' : 's'; ?></span>
+                            <?php if ($estimate): ?>
+                                <span class="project-approval-pill"><i class="fas fa-file-invoice-dollar"></i> Final cost review</span>
+                            <?php endif; ?>
+                            <?php if ($featureCount > 0): ?>
+                                <span class="project-approval-pill"><i class="fas fa-layer-group"></i> <?php echo $featureCount; ?> pending feature<?php echo $featureCount === 1 ? '' : 's'; ?></span>
+                            <?php endif; ?>
                         </div>
                         <span class="project-approval-chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                     </div>
@@ -1590,6 +1585,57 @@ include '../../includes/navbar.php';
                     data-project-body
                     hidden
                 >
+                    <?php if ($estimate): ?>
+                        <section class="sales-project-cost-review" aria-labelledby="projectCostReviewTitle_<?php echo (int) $pid; ?>">
+                            <div class="sales-project-cost-head">
+                                <div>
+                                    <h6 id="projectCostReviewTitle_<?php echo (int) $pid; ?>"><i class="fas fa-file-invoice-dollar me-1" aria-hidden="true"></i> Final Project Cost Review</h6>
+                                    <p>Approve the overall project budget or return it for revision.</p>
+                                </div>
+                                <span class="sales-project-cost-total"><span>Overall estimate</span><strong><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></strong></span>
+                            </div>
+
+                            <div class="sales-cost-breakdown" aria-label="Project cost breakdown">
+                                <div class="sales-cost-metric"><span>Developer cost</span><strong><?php echo projectEstimationPeso((float) $estimate['total_developer_cost']); ?></strong></div>
+                                <div class="sales-cost-metric"><span>Technology stack</span><strong><?php echo projectEstimationPeso((float) $estimate['total_technology_stack_cost']); ?></strong></div>
+                                <div class="sales-cost-metric is-primary"><span>Overall estimate</span><strong><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></strong></div>
+                                <div class="sales-cost-metric"><span>Client budget</span><strong><?php echo projectEstimationPeso((float) $estimate['sales_budget']); ?></strong></div>
+                                <div class="sales-cost-metric <?php echo (float) $estimate['remaining_budget'] < 0 ? 'is-negative' : ''; ?>"><span>Remaining budget</span><strong><?php echo projectEstimationPeso((float) $estimate['remaining_budget']); ?></strong></div>
+                                <div class="sales-cost-metric"><span>Additional costs</span><strong><?php echo projectEstimationPeso((float) $estimate['additional_costs']); ?></strong></div>
+                            </div>
+
+                            <div class="sales-sul-note">
+                                <i class="fas fa-message" aria-hidden="true"></i>
+                                <span><strong>SUL review note:</strong> <?php echo !empty($estimate['sul_comment']) ? htmlspecialchars((string) $estimate['sul_comment']) : 'No additional comment was provided.'; ?></span>
+                            </div>
+
+                            <div class="sales-cost-decisions">
+                                <form method="POST" class="sales-decision-card is-approve" data-generic-draft-disabled="1" data-app-loading data-loading-title="Approving project estimation" data-loading-text="Completing Planning and opening the next phase.">
+                                    <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
+                                    <div class="sales-decision-head">
+                                        <i class="fas fa-circle-check" aria-hidden="true"></i>
+                                        <span><strong>Approve project estimate</strong><span>Finalize the cost, complete Planning, and activate the next roadmap phase.</span></span>
+                                    </div>
+                                    <label for="salesApprovalNote<?php echo (int) $estimate['id']; ?>">Sales note <span>(optional)</span></label>
+                                    <textarea id="salesApprovalNote<?php echo (int) $estimate['id']; ?>" name="approval_comment" class="form-control" rows="2" placeholder="Add a short final approval note"></textarea>
+                                    <button class="btn-action btn-approve" type="submit" name="approve_project_estimation"><i class="fas fa-check me-1"></i> Final Approve</button>
+                                </form>
+
+                                <form method="POST" class="sales-decision-card is-revision" data-generic-draft-disabled="1" data-app-loading data-loading-title="Rejecting project estimation" data-loading-text="Returning the estimation to the expert.">
+                                    <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
+                                    <div class="sales-decision-head">
+                                        <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                                        <span><strong>Request revision</strong><span>Return the package to the Expert with specific changes.</span></span>
+                                    </div>
+                                    <label for="salesRevisionReason<?php echo (int) $estimate['id']; ?>">Revision reason <span>(required)</span></label>
+                                    <textarea id="salesRevisionReason<?php echo (int) $estimate['id']; ?>" name="rejection_reason" class="form-control" rows="2" required placeholder="Explain what needs to be revised"></textarea>
+                                    <button class="btn-action btn-reject" type="submit" name="reject_project_estimation"><i class="fas fa-rotate-left me-1"></i> Return for Revision</button>
+                                </form>
+                            </div>
+                        </section>
+                    <?php endif; ?>
+
+                    <?php if ($featureCount > 0): ?>
                     <div class="project-gantt-panel">
                         <div class="project-gantt-head">
                             <div>
@@ -1715,10 +1761,11 @@ include '../../includes/navbar.php';
                             </div>
                         <?php endforeach; ?>
                     </div>
+                    <?php endif; ?>
                 </div>
             </section>
         <?php endforeach; ?>
-    <?php elseif ($pendingProjectEstimations->num_rows === 0): ?>
+    <?php else: ?>
         <div class="empty-state">
             <i class="fas fa-check-circle"></i>
             <p class="mt-2 mb-0">No estimations awaiting sales approval.</p>
@@ -2097,12 +2144,6 @@ function setProjectGroupOpen(group, shouldOpen) {
         }
     } else {
         body.hidden = true;
-        body.querySelectorAll('[data-sales-cost-toggle]').forEach((costToggle) => {
-            const costDetails = document.getElementById(costToggle.getAttribute('aria-controls') || '');
-            costToggle.setAttribute('aria-expanded', 'false');
-            costToggle.closest('[data-sales-cost-card]')?.classList.remove('is-open');
-            if (costDetails) costDetails.hidden = true;
-        });
     }
 }
 
@@ -2125,23 +2166,6 @@ projectApprovalGroups.forEach((group) => {
     } else {
         setProjectGroupOpen(group, false);
     }
-});
-
-const salesCostToggles = document.querySelectorAll('[data-sales-cost-toggle]');
-
-function setSalesCostOpen(toggle, shouldOpen) {
-    const details = document.getElementById(toggle.getAttribute('aria-controls') || '');
-    toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
-    toggle.closest('[data-sales-cost-card]')?.classList.toggle('is-open', shouldOpen);
-    if (details) details.hidden = !shouldOpen;
-}
-
-salesCostToggles.forEach(toggle => {
-    toggle.addEventListener('click', () => {
-        const shouldOpen = toggle.getAttribute('aria-expanded') !== 'true';
-        salesCostToggles.forEach(otherToggle => setSalesCostOpen(otherToggle, false));
-        setSalesCostOpen(toggle, shouldOpen);
-    });
 });
 
 document.querySelectorAll('.gantt-preview .gantt-bar').forEach((bar) => {
