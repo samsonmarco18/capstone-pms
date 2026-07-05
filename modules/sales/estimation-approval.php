@@ -558,6 +558,44 @@ include '../../includes/navbar.php';
     gap: 1.1rem;
 }
 
+.sales-project-queue {
+    margin-bottom: 1.35rem;
+}
+
+.sales-project-queue-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.7rem;
+    padding: 0 0.15rem;
+}
+
+.sales-project-queue-head h5 {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    color: #1f2937;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.sales-project-queue-head h5 i {
+    color: var(--theme-primary);
+}
+
+.sales-project-queue-count {
+    padding: 0.32rem 0.62rem;
+    border: 1px solid #dfe8ef;
+    border-radius: 999px;
+    background: #fff;
+    color: #64748b;
+    font-size: 0.7rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 .sales-cost-list {
     display: grid;
     gap: 0.7rem;
@@ -1297,6 +1335,7 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-project-queue-head h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-decision-head strong {
     color: #d7e4f2;
@@ -1339,6 +1378,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-metric.is-negative strong { color: #fca5a5; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-status { background: rgba(29, 78, 216, 0.18); color: #93c5fd; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-cost-chevron { background: #10263a; color: #9db6cf; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-project-queue-count { background: #071321; border-color: rgba(31, 99, 146, 0.28); color: #9db6cf; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-feedback.is-success { border-color: rgba(34, 197, 94, 0.34); background: rgba(22, 101, 52, 0.2); color: #bbf7d0; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-feedback.is-error { border-color: rgba(248, 113, 113, 0.32); background: rgba(153, 27, 27, 0.2); color: #fecaca; }
 
@@ -1422,22 +1462,12 @@ include '../../includes/navbar.php';
     <?php endif; ?>
 
     <?php if ($pendingProjectEstimations->num_rows > 0): ?>
-        <section class="project-approval-group" data-project-group data-project-id="project-costs">
-            <button type="button" class="project-approval-toggle" data-project-toggle aria-expanded="false" aria-controls="projectCostApprovalBody">
-                <div class="project-approval-toggle-main project-approval-head">
-                    <span class="project-approval-kicker"><i class="fas fa-file-invoice-dollar"></i> Final Project Cost Approval</span>
-                    <h5>Project Estimation Packages</h5>
-                    <p>Approve the full project estimate after Expert SUL review. Approval completes Planning and opens the next roadmap phase.</p>
-                </div>
-                <div class="project-approval-toggle-side">
-                    <div class="project-approval-summary">
-                        <span class="project-approval-pill"><i class="fas fa-clipboard-check"></i> <?php echo $pendingProjectEstimations->num_rows; ?> pending package<?php echo $pendingProjectEstimations->num_rows === 1 ? '' : 's'; ?></span>
-                    </div>
-                    <span class="project-approval-chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
-                </div>
-            </button>
-            <div class="project-approval-body" id="projectCostApprovalBody" data-project-body hidden>
-                <div class="sales-cost-list">
+        <section class="sales-project-queue" aria-labelledby="salesProjectQueueTitle">
+            <div class="sales-project-queue-head">
+                <h5 id="salesProjectQueueTitle"><i class="fas fa-file-invoice-dollar" aria-hidden="true"></i>Projects awaiting final approval</h5>
+                <span class="sales-project-queue-count"><?php echo $pendingProjectEstimations->num_rows; ?> project<?php echo $pendingProjectEstimations->num_rows === 1 ? '' : 's'; ?></span>
+            </div>
+            <div class="sales-cost-list">
                     <?php while ($estimate = $pendingProjectEstimations->fetch_assoc()): ?>
                         <?php $salesCostPanelId = 'salesCostReview' . (int) $estimate['id']; ?>
                         <article class="sales-cost-card" data-sales-cost-card>
@@ -1507,7 +1537,6 @@ include '../../includes/navbar.php';
                             </div>
                         </article>
                     <?php endwhile; ?>
-                </div>
             </div>
         </section>
     <?php endif; ?>
