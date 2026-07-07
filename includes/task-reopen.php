@@ -71,6 +71,58 @@ function taskReopenHasActiveRequest(mysqli|PgsqlMysqliCompatConnection $conn, in
     return $result && $result->num_rows > 0;
 }
 
+function taskReopenDeveloperTaskDepartment(mysqli|PgsqlMysqliCompatConnection $conn, int $taskId, int $developerId): string
+{
+    methodologyRoadmapEnsureSchema($conn);
+
+    if ($taskId <= 0 || $developerId <= 0) {
+        return '';
+    }
+
+    if (dbTableExists($conn, 'methodology_task_departments')) {
+        $departmentStmt = $conn->prepare("
+            SELECT mtd.department
+            FROM methodology_task_departments mtd
+            LEFT JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+            WHERE mtd.assigned_developer_id = ?
+              AND (mtd.workflow_task_id = ? OR mt.task_id = ?)
+            ORDER BY mtd.updated_at DESC, mtd.id DESC
+            LIMIT 1
+        ");
+        if ($departmentStmt) {
+            $departmentStmt->bind_param('iii', $developerId, $taskId, $taskId);
+            $departmentStmt->execute();
+            $departmentRow = $departmentStmt->get_result()->fetch_assoc();
+            $departmentStmt->close();
+            $department = projectWorkflowDepartmentLabel((string) ($departmentRow['department'] ?? ''));
+            if ($department !== '') {
+                return $department;
+            }
+        }
+    }
+
+    $roadmapStmt = $conn->prepare("
+        SELECT department
+        FROM methodology_tasks
+        WHERE task_id = ?
+          AND assigned_developer_id = ?
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+    ");
+    if ($roadmapStmt) {
+        $roadmapStmt->bind_param('ii', $taskId, $developerId);
+        $roadmapStmt->execute();
+        $roadmapRow = $roadmapStmt->get_result()->fetch_assoc();
+        $roadmapStmt->close();
+        $department = projectWorkflowDepartmentLabel((string) ($roadmapRow['department'] ?? ''));
+        if ($department !== '') {
+            return $department;
+        }
+    }
+
+    return projectWorkflowTaskDepartment($conn, $taskId);
+}
+
 function taskReopenCreateRequest(
     mysqli|PgsqlMysqliCompatConnection $conn,
     int $taskId,
@@ -79,6 +131,7 @@ function taskReopenCreateRequest(
     string $reason
 ): array {
     taskReopenEnsureSchema($conn);
+    methodologyRoadmapEnsureSchema($conn);
     $severity = strtolower(trim($severity)) === 'major' ? 'major' : 'minor';
     $reason = trim($reason);
 
@@ -86,24 +139,47 @@ function taskReopenCreateRequest(
         return ['success' => false, 'message' => 'Please select a task and provide a reopen reason.'];
     }
 
+    $departmentAccessSql = dbTableExists($conn, 'methodology_task_departments') ? "
+               OR EXISTS (
+                   SELECT 1
+                   FROM methodology_task_departments mtd_access
+                   LEFT JOIN methodology_tasks mt_access_department ON mt_access_department.id = mtd_access.methodology_task_id
+                   WHERE mtd_access.assigned_developer_id = ?
+                     AND (mtd_access.workflow_task_id = t.id OR mt_access_department.task_id = t.id)
+               )
+    " : '';
     $taskStmt = $conn->prepare("
         SELECT t.id, t.title, t.status, t.project_id, t.assigned_to, t.assigned_by,
                p.name AS project_name, p.sul_id
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
-        WHERE t.id = ? AND t.assigned_to = ?
+        WHERE t.id = ?
+          AND (
+               t.assigned_to = ?
+               OR EXISTS (
+                   SELECT 1
+                   FROM methodology_tasks mt_access
+                   WHERE mt_access.task_id = t.id
+                     AND mt_access.assigned_developer_id = ?
+               )
+               {$departmentAccessSql}
+          )
         LIMIT 1
     ");
     if (!$taskStmt) {
         return ['success' => false, 'message' => 'Unable to validate the task.'];
     }
-    $taskStmt->bind_param('ii', $taskId, $developerId);
+    if ($departmentAccessSql !== '') {
+        $taskStmt->bind_param('iiii', $taskId, $developerId, $developerId, $developerId);
+    } else {
+        $taskStmt->bind_param('iii', $taskId, $developerId, $developerId);
+    }
     $taskStmt->execute();
     $task = $taskStmt->get_result()->fetch_assoc();
     $taskStmt->close();
 
     if (!$task) {
-        return ['success' => false, 'message' => 'You can only request reopen for tasks assigned to you.'];
+        return ['success' => false, 'message' => 'You can only request reopen for tasks or roadmap work assigned to you.'];
     }
 
     $allowedStatuses = ['for_review', 'qa_testing', 'qa_failed', 'qa_passed', 'architect_review', 'merged', 'ready_for_release', 'completed'];
@@ -158,7 +234,7 @@ function taskReopenCreateRequest(
             $taskId
         );
     }
-    $taskDepartment = projectWorkflowTaskDepartment($conn, $taskId);
+    $taskDepartment = taskReopenDeveloperTaskDepartment($conn, $taskId, $developerId);
     if ($taskDepartment !== '') {
         projectWorkflowNotifyDepartmentSuls(
             $conn,

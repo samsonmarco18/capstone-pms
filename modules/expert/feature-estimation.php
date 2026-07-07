@@ -74,9 +74,104 @@ function featureEstimationEmptyArchitectPlan(): array
         'phase_name' => '',
         'planned_start' => '',
         'planned_end' => '',
+        'estimate_duration_days' => 0,
+        'duration_basis_label' => '',
         'involvement_plan' => [],
         'component_plan' => [],
     ];
+}
+
+function featureEstimationDateValue(?string $value): ?DateTimeImmutable
+{
+    $value = trim((string) $value);
+    if ($value === '') {
+        return null;
+    }
+
+    return DateTimeImmutable::createFromFormat('!Y-m-d', substr($value, 0, 10)) ?: null;
+}
+
+function featureEstimationInclusiveDays(?string $start, ?string $end): int
+{
+    $startDate = featureEstimationDateValue($start);
+    $endDate = featureEstimationDateValue($end);
+    if (!$startDate || !$endDate || $endDate < $startDate) {
+        return 0;
+    }
+
+    return (int) $startDate->diff($endDate)->days + 1;
+}
+
+function featureEstimationApplyDurationWindow(array &$plan): void
+{
+    $rows = $plan['_estimation_rows'] ?? [];
+    if (!is_array($rows) || $rows === []) {
+        return;
+    }
+
+    $validRows = array_values(array_filter($rows, static function (array $row): bool {
+        return featureEstimationInclusiveDays($row['start_date'] ?? '', $row['end_date'] ?? '') > 0;
+    }));
+    if ($validRows === []) {
+        return;
+    }
+
+    $executionRows = array_values(array_filter($validRows, static function (array $row): bool {
+        $phaseOrder = (int) ($row['phase_order'] ?? 0);
+        return $phaseOrder === 2 || $phaseOrder === 3;
+    }));
+    $basisRows = $executionRows !== [] ? $executionRows : $validRows;
+
+    usort($basisRows, static function (array $a, array $b): int {
+        return [
+            (int) ($a['phase_order'] ?? 0),
+            (string) ($a['start_date'] ?? ''),
+            (int) ($a['id'] ?? 0),
+        ] <=> [
+            (int) ($b['phase_order'] ?? 0),
+            (string) ($b['start_date'] ?? ''),
+            (int) ($b['id'] ?? 0),
+        ];
+    });
+
+    $firstStart = null;
+    $actualLastEnd = null;
+    $allocatedDays = 0;
+    $maxPeerCount = 1;
+    $phaseNames = [];
+
+    foreach ($basisRows as $row) {
+        $startDate = featureEstimationDateValue($row['start_date'] ?? null);
+        $endDate = featureEstimationDateValue($row['end_date'] ?? null);
+        if (!$startDate || !$endDate || $endDate < $startDate) {
+            continue;
+        }
+
+        $firstStart = $firstStart === null || $startDate < $firstStart ? $startDate : $firstStart;
+        $actualLastEnd = $actualLastEnd === null || $endDate > $actualLastEnd ? $endDate : $actualLastEnd;
+        $rowDays = (int) $startDate->diff($endDate)->days + 1;
+        $peerCount = max(1, (int) ($row['peer_count'] ?? 1));
+        $maxPeerCount = max($maxPeerCount, $peerCount);
+        $allocatedDays += max(1, (int) ceil($rowDays / $peerCount));
+
+        $phaseName = trim((string) ($row['phase_name'] ?? ''));
+        if ($phaseName !== '') {
+            $phaseNames[$phaseName] = true;
+        }
+    }
+
+    if ($firstStart === null || $allocatedDays <= 0) {
+        return;
+    }
+
+    $displayEnd = $actualLastEnd ?: $firstStart->modify('+' . ($allocatedDays - 1) . ' days');
+    $plan['planned_start'] = $plan['planned_start'] !== '' ? $plan['planned_start'] : $firstStart->format('Y-m-d');
+    $plan['planned_end'] = $plan['planned_end'] !== '' ? $plan['planned_end'] : $displayEnd->format('Y-m-d');
+    $plan['estimate_duration_days'] = $allocatedDays;
+    $label = implode(' + ', array_keys($phaseNames)) ?: 'Roadmap task schedule';
+    $plan['duration_basis_label'] = $maxPeerCount > 1
+        ? $label . ' (split across ' . $maxPeerCount . ' bulk features)'
+        : $label . ' task duration';
 }
 
 function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnection $conn, array $taskIds): array
@@ -98,8 +193,29 @@ function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnecti
             mt.department,
             mt.start_date,
             mt.end_date,
+            mt.developer_entity_key,
             mp.name AS phase_name,
-            COALESCE(mp.sequence_no, mp.id) AS phase_order
+            COALESCE(mp.sequence_no, mp.id) AS phase_order,
+            (
+                SELECT COUNT(DISTINCT mt_bulk.task_id)
+                FROM methodology_tasks mt_bulk
+                WHERE mt_bulk.project_id = mt.project_id
+                  AND mt_bulk.phase_id = mt.phase_id
+                  AND COALESCE(mt_bulk.developer_entity_key, '') = COALESCE(mt.developer_entity_key, '')
+                  AND COALESCE(mt_bulk.developer_entity_key, '') <> ''
+                  AND mt_bulk.task_id IS NOT NULL
+                  AND mt_bulk.task_id > 0
+            ) AS phase_entity_task_count,
+            (
+                SELECT COUNT(DISTINCT mt_same_window.task_id)
+                FROM methodology_tasks mt_same_window
+                WHERE mt_same_window.project_id = mt.project_id
+                  AND mt_same_window.phase_id = mt.phase_id
+                  AND mt_same_window.start_date = mt.start_date
+                  AND mt_same_window.end_date = mt.end_date
+                  AND mt_same_window.task_id IS NOT NULL
+                  AND mt_same_window.task_id > 0
+            ) AS phase_schedule_task_count
         FROM methodology_tasks mt
         LEFT JOIN methodology_phases mp ON mp.id = mt.phase_id
         WHERE mt.task_id IN ({$taskIdList})
@@ -121,6 +237,7 @@ function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnecti
             $plans[$taskId] = featureEstimationEmptyArchitectPlan();
             $plans[$taskId]['_department_counts'] = [];
             $plans[$taskId]['_component_names'] = [];
+            $plans[$taskId]['_estimation_rows'] = [];
         }
 
         $methodologyTaskMap[$methodologyTaskId] = $taskId;
@@ -139,6 +256,15 @@ function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnecti
         if ($endDate !== '') {
             $plans[$taskId]['planned_end'] = $endDate;
         }
+
+        $plans[$taskId]['_estimation_rows'][] = [
+            'id' => $methodologyTaskId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'phase_name' => $phaseName,
+            'phase_order' => (int) ($row['phase_order'] ?? 0),
+            'peer_count' => max(1, (int) ($row['phase_entity_task_count'] ?? 1), (int) ($row['phase_schedule_task_count'] ?? 1)),
+        ];
 
         $componentName = trim((string) ($row['component_name'] ?? ''));
         if ($componentName !== '') {
@@ -183,6 +309,8 @@ function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnecti
     }
 
     foreach ($plans as $taskId => $plan) {
+        featureEstimationApplyDurationWindow($plans[$taskId]);
+
         $departmentCounts = $plan['_department_counts'] ?? [];
         $totalCount = array_sum($departmentCounts);
         foreach ($departmentCounts as $department => $requiredCount) {
@@ -197,7 +325,7 @@ function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnecti
             $plans[$taskId]['component_plan'][] = ['name' => $componentName];
         }
 
-        unset($plans[$taskId]['_department_counts'], $plans[$taskId]['_component_names']);
+        unset($plans[$taskId]['_department_counts'], $plans[$taskId]['_component_names'], $plans[$taskId]['_estimation_rows']);
     }
 
     return $plans;
@@ -495,6 +623,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     $projectTimelineEnd = trim((string) ($durationWindow['end'] ?? ''));
     $architectPlannedStart = trim((string) ($architectPlan['planned_start'] ?? ''));
     $architectDeadline = trim((string) ($architectPlan['planned_end'] ?? ''));
+    $postedEstimateDurationDays = max(0, (int) ($_POST['estimate_duration_days'] ?? 0));
     if ($architectDeadline === '') {
         $architectDeadline = $projectTimelineEnd;
     }
@@ -540,9 +669,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     }
 
     $deadlineDuration = max(1, (int) $plannedStartDate->diff($plannedEndDate)->days + 1);
-    $minDays = max(1, (int) ceil($deadlineDuration * 0.70));
-    $likelyDays = max($minDays, (int) ceil($deadlineDuration * 0.85));
-    $maxDays = $deadlineDuration;
+    $estimateDuration = $postedEstimateDurationDays > 0
+        ? min($postedEstimateDurationDays, $deadlineDuration)
+        : $deadlineDuration;
+    $minDays = max(1, (int) ceil($estimateDuration * 0.70));
+    $likelyDays = max($minDays, (int) ceil($estimateDuration * 0.85));
+    $maxDays = $estimateDuration;
     if (!empty($architectPlan['involvement_plan'])) {
         $involvementPlan = $architectPlan['involvement_plan'];
     }
@@ -2292,6 +2424,14 @@ textarea.form-control-custom {
                 $featureWindowStart = trim((string) ($featureDurationWindow['start'] ?? ($task['timeline_start'] ?? '')));
                 $featureWindowEnd = trim((string) ($featureDurationWindow['end'] ?? ($task['timeline_end'] ?? '')));
                 $featureWindowLabel = (string) ($featureDurationWindow['label'] ?? 'Project timeline');
+                $featureEstimateDurationDays = max(0, (int) ($architectPlan['estimate_duration_days'] ?? 0));
+                $featureEstimateBasisLabel = trim((string) ($architectPlan['duration_basis_label'] ?? ''));
+                if ($featureEstimateDurationDays <= 0) {
+                    $featureEstimateDurationDays = featureEstimationInclusiveDays($featureWindowStart, $featureWindowEnd);
+                }
+                if ($featureEstimateBasisLabel === '') {
+                    $featureEstimateBasisLabel = $featureWindowLabel;
+                }
                 $architectDeadlineValue = trim((string) ($architectPlan['planned_end'] ?: $featureWindowEnd));
                 $featurePlannedStartValue = !empty($task['started_at'])
                     ? date('Y-m-d', strtotime((string) $task['started_at']))
@@ -2307,7 +2447,7 @@ textarea.form-control-custom {
                     : 'not set';
             ?>
             <?php $isReadonly = $task['status'] !== 'todo'; ?>
-            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars($featureWindowStart, ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars($featureWindowEnd, ENT_QUOTES, 'UTF-8'); ?>" data-duration-label="<?php echo htmlspecialchars($featureWindowLabel, ENT_QUOTES, 'UTF-8'); ?>" style="display:none;">
+            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars($featureWindowStart, ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars($featureWindowEnd, ENT_QUOTES, 'UTF-8'); ?>" data-duration-label="<?php echo htmlspecialchars($featureWindowLabel, ENT_QUOTES, 'UTF-8'); ?>" data-estimate-duration-days="<?php echo (int) $featureEstimateDurationDays; ?>" style="display:none;">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                     <div>
                         <div class="feature-title"><?php echo htmlspecialchars($task['title']); ?></div>
@@ -2330,6 +2470,7 @@ textarea.form-control-custom {
                     <input type="hidden" name="accepted_recommendation_type" value="">
                     <input type="hidden" name="accepted_recommendation_id" value="">
                     <input type="hidden" name="rejected_recommendations_json" value="[]">
+                    <input type="hidden" name="estimate_duration_days" value="<?php echo (int) $featureEstimateDurationDays; ?>">
 
                     <?php if (!empty($taskRecommendations)): ?>
                     <div class="recommendation-panel mb-4">
@@ -2404,19 +2545,19 @@ textarea.form-control-custom {
                             <label class="form-label">Minimum Days (70%)</label>
                             <input type="number" name="min_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo $estimation['min_days'] ?? ''; ?>" required placeholder="1">
-                            <small class="text-muted d-block mt-1">Auto-generated from the selected duration</small>
+                            <small class="text-muted d-block mt-1">Auto-generated from <?php echo (int) $featureEstimateDurationDays; ?> day(s): <?php echo htmlspecialchars($featureEstimateBasisLabel); ?></small>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Most Likely Days (85%)</label>
                             <input type="number" name="likely_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo $estimation['likely_days'] ?? ''; ?>" required placeholder="1">
-                            <small class="text-muted d-block mt-1">Auto-generated from the selected duration</small>
+                            <small class="text-muted d-block mt-1">Auto-generated from <?php echo (int) $featureEstimateDurationDays; ?> day(s): <?php echo htmlspecialchars($featureEstimateBasisLabel); ?></small>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Maximum Days (100%)</label>
                             <input type="number" name="max_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo $estimation['max_days'] ?? ''; ?>" required placeholder="3">
-                            <small class="text-muted d-block mt-1">Never exceeds the selected deadline</small>
+                            <small class="text-muted d-block mt-1">Uses the task estimate duration, never beyond the selected deadline</small>
                         </div>
                     </div>
 
@@ -2431,7 +2572,7 @@ textarea.form-control-custom {
                             <label class="form-label">Planned End Date</label>
                             <input type="date" name="planned_end" class="form-control-custom estimate-end" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo htmlspecialchars($featurePlannedEndValue, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $architectDeadlineValue !== '' ? 'max="' . htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>
-                            <small class="text-muted d-block mt-1">Can be earlier than the Architect deadline, never later than <?php echo htmlspecialchars($architectDeadlineLabel); ?>. Default basis: <?php echo htmlspecialchars($featureWindowLabel); ?></small>
+                            <small class="text-muted d-block mt-1">Can be earlier than the Architect deadline, never later than <?php echo htmlspecialchars($architectDeadlineLabel); ?>. Estimate basis: <?php echo htmlspecialchars($featureEstimateBasisLabel); ?></small>
                         </div>
                     </div>
 
@@ -2672,9 +2813,14 @@ function syncEstimateFromDeadline(card) {
     const likelyInput = card.querySelector('input[name="likely_days"]');
     const maxInput = card.querySelector('input[name="max_days"]');
     const architectDeadline = card.getAttribute('data-architect-deadline') || card.getAttribute('data-project-end') || '';
+    const basisDuration = Math.max(0, parseInt(card.getAttribute('data-estimate-duration-days') || '0', 10));
+    const durationInput = card.querySelector('input[name="estimate_duration_days"]');
 
     if (endInput && architectDeadline) {
         endInput.max = architectDeadline;
+    }
+    if (durationInput && basisDuration > 0) {
+        durationInput.value = String(basisDuration);
     }
 
     if (isReadonly) {
@@ -2694,7 +2840,10 @@ function syncEstimateFromDeadline(card) {
         }
     }
 
-    const duration = inclusiveDurationDays(startInput?.value || '', endInput?.value || '');
+    const selectedDuration = inclusiveDurationDays(startInput?.value || '', endInput?.value || '');
+    const duration = basisDuration > 0
+        ? Math.min(basisDuration, selectedDuration > 0 ? selectedDuration : basisDuration)
+        : selectedDuration;
     if (duration > 0 && minInput && likelyInput && maxInput) {
         minInput.value = Math.max(1, Math.ceil(duration * 0.70));
         likelyInput.value = Math.max(parseInt(minInput.value || '1', 10), Math.ceil(duration * 0.85));
