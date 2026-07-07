@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/workflow.php';
 require_once __DIR__ . '/decision-insights.php';
+require_once __DIR__ . '/methodology-roadmap.php';
 
 function processHistoryActions(): array
 {
@@ -202,7 +203,7 @@ function processHistoryLoadEvents(mysqli|PgsqlMysqliCompatConnection $conn, arra
         LEFT JOIN project_repositories merge_repo ON merge_repo.id = rm.repository_id
         WHERE al.action IN (" . implode(',', $quotedActions) . ")
           AND {$projectExpr} IN ({$projectIdList})
-        ORDER BY {$projectExpr} ASC, al.created_at ASC, al.id ASC
+        ORDER BY al.created_at DESC, al.id DESC
         LIMIT 2000
     ");
 
@@ -212,8 +213,7 @@ function processHistoryLoadEvents(mysqli|PgsqlMysqliCompatConnection $conn, arra
 
     $catalog = processHistoryActions();
     $events = [];
-    $previousByProject = [];
-    $firstByProject = [];
+    $projectEvents = [];
 
     while ($row = $result->fetch_assoc()) {
         $projectId = (int) ($row['project_id'] ?? 0);
@@ -225,17 +225,12 @@ function processHistoryLoadEvents(mysqli|PgsqlMysqliCompatConnection $conn, arra
         $timestamp = strtotime($createdAt) ?: 0;
         $oldData = processHistoryDecodeJson($row['old_data'] ?? null);
         $newData = processHistoryDecodeJson($row['new_data'] ?? null);
-        $previousTimestamp = $previousByProject[$projectId] ?? null;
-        $firstTimestamp = $firstByProject[$projectId] ?? $timestamp;
-        $previousByProject[$projectId] = $timestamp;
-        $firstByProject[$projectId] = $firstTimestamp;
-
         $action = (string) ($row['action'] ?? '');
         $meta = $catalog[$action] ?? ['label' => ucwords(str_replace('_', ' ', $action)), 'category' => 'Process', 'tone' => 'task'];
         $fromStatus = processHistoryStatusLabel($oldData['status'] ?? null);
         $toStatus = processHistoryStatusLabel($newData['status'] ?? null);
 
-        $events[] = [
+        $projectEvents[$projectId][] = [
             'id' => (int) ($row['id'] ?? 0),
             'project_id' => $projectId,
             'action' => $action,
@@ -250,9 +245,21 @@ function processHistoryLoadEvents(mysqli|PgsqlMysqliCompatConnection $conn, arra
             'description' => trim((string) ($row['description'] ?? '')),
             'created_at' => $createdAt,
             'timestamp' => $timestamp,
-            'gap_seconds' => $previousTimestamp === null ? null : max(0, $timestamp - $previousTimestamp),
-            'since_start_seconds' => max(0, $timestamp - $firstTimestamp),
+            'gap_seconds' => null,
+            'since_start_seconds' => 0,
         ];
+    }
+
+    foreach ($projectEvents as $projectId => $rows) {
+        usort($rows, static fn(array $a, array $b): int => [$a['timestamp'], $a['id']] <=> [$b['timestamp'], $b['id']]);
+        $previousTimestamp = null;
+        $firstTimestamp = isset($rows[0]) ? (int) $rows[0]['timestamp'] : null;
+        foreach ($rows as $row) {
+            $row['gap_seconds'] = $previousTimestamp === null ? null : max(0, (int) $row['timestamp'] - $previousTimestamp);
+            $row['since_start_seconds'] = $firstTimestamp === null ? 0 : max(0, (int) $row['timestamp'] - $firstTimestamp);
+            $previousTimestamp = (int) $row['timestamp'];
+            $events[] = $row;
+        }
     }
 
     return $events;
@@ -276,15 +283,17 @@ function processHistoryLoadTaskDurations(mysqli|PgsqlMysqliCompatConnection $con
 
     $result = $conn->query("
         SELECT
+            developer_tasks.developer_id,
             t.id,
             t.project_id,
             t.title,
             t.status,
+            t.assigned_to,
             t.created_at,
             t.started_at,
             t.deadline,
             t.completed_at,
-            u.full_name AS assigned_to_name,
+            u.full_name AS developer_name,
             (
                 SELECT MIN(al.created_at)
                 FROM audit_logs al
@@ -298,11 +307,79 @@ function processHistoryLoadTaskDurations(mysqli|PgsqlMysqliCompatConnection $con
                 WHERE al.table_name = 'tasks'
                   AND al.record_id = t.id
                   AND al.action IN ({$actionList})
-            ) AS last_movement_at
-        FROM tasks t
-        LEFT JOIN users u ON u.id = t.assigned_to
+            ) AS last_movement_at,
+            (
+                SELECT MIN(al.created_at)
+                FROM audit_logs al
+                WHERE al.table_name = 'tasks'
+                  AND al.record_id = t.id
+                  AND al.user_id = developer_tasks.developer_id
+                  AND al.action IN ({$actionList})
+            ) AS first_developer_movement_at,
+            (
+                SELECT MAX(al.created_at)
+                FROM audit_logs al
+                WHERE al.table_name = 'tasks'
+                  AND al.record_id = t.id
+                  AND al.user_id = developer_tasks.developer_id
+                  AND al.action IN ({$actionList})
+            ) AS last_developer_movement_at,
+            (
+                SELECT MIN(mt.start_date)
+                FROM methodology_tasks mt
+                WHERE mt.task_id = t.id
+                  AND mt.assigned_developer_id = developer_tasks.developer_id
+            ) AS roadmap_start_at,
+            (
+                SELECT MAX(mt.updated_at)
+                FROM methodology_tasks mt
+                WHERE mt.task_id = t.id
+                  AND mt.assigned_developer_id = developer_tasks.developer_id
+                  AND mt.status = 'completed'
+            ) AS roadmap_completed_at,
+            (
+                SELECT MAX(COALESCE(mtd.approved_at, mtd.updated_at))
+                FROM methodology_task_departments mtd
+                LEFT JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+                WHERE mtd.assigned_developer_id = developer_tasks.developer_id
+                  AND (mtd.workflow_task_id = t.id OR mt.task_id = t.id)
+                  AND mtd.status = 'completed'
+            ) AS department_completed_at
+        FROM (
+            SELECT DISTINCT task_id, developer_id
+            FROM (
+                SELECT id AS task_id, assigned_to AS developer_id
+                FROM tasks
+                WHERE project_id IN ({$projectIdList})
+                  AND assigned_to IS NOT NULL
+                  AND assigned_to > 0
+
+                UNION
+
+                SELECT task_id, assigned_developer_id AS developer_id
+                FROM methodology_tasks
+                WHERE project_id IN ({$projectIdList})
+                  AND task_id IS NOT NULL
+                  AND task_id > 0
+                  AND assigned_developer_id IS NOT NULL
+                  AND assigned_developer_id > 0
+
+                UNION
+
+                SELECT COALESCE(mtd.workflow_task_id, mt.task_id) AS task_id, mtd.assigned_developer_id AS developer_id
+                FROM methodology_task_departments mtd
+                LEFT JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+                WHERE mtd.project_id IN ({$projectIdList})
+                  AND COALESCE(mtd.workflow_task_id, mt.task_id) IS NOT NULL
+                  AND COALESCE(mtd.workflow_task_id, mt.task_id) > 0
+                  AND mtd.assigned_developer_id IS NOT NULL
+                  AND mtd.assigned_developer_id > 0
+            ) assigned_developers
+        ) developer_tasks
+        JOIN tasks t ON t.id = developer_tasks.task_id
+        LEFT JOIN users u ON u.id = developer_tasks.developer_id
         WHERE t.project_id IN ({$projectIdList})
-        ORDER BY t.project_id ASC, COALESCE(t.completed_at, t.deadline, t.updated_at, t.created_at) ASC, t.id ASC
+        ORDER BY COALESCE(t.completed_at, t.updated_at, t.created_at) DESC, t.id DESC, developer_tasks.developer_id ASC
     ");
 
     if (!$result) {
@@ -318,36 +395,60 @@ function processHistoryLoadTaskDurations(mysqli|PgsqlMysqliCompatConnection $con
         $deadlineAt = processHistoryTimestamp($task['deadline'] ?? null);
         $firstMovementAt = processHistoryTimestamp($task['first_movement_at'] ?? null);
         $lastMovementAt = processHistoryTimestamp($task['last_movement_at'] ?? null);
-        $workflowStartAt = $firstMovementAt ?? $startedAt ?? $createdAt;
-        $workflowEndAt = $completedAt ?? ($status === 'completed' ? $lastMovementAt : null);
-        $workStartAt = $startedAt ?? $firstMovementAt ?? $createdAt;
-        $workEndAt = $completedAt ?? ($status === 'completed' ? $lastMovementAt : null);
-        $isCompleted = $status === 'completed' && $workflowEndAt !== null;
-        $currentOrEndAt = $workflowEndAt ?? $now;
-        $deadlineEndAt = $completedAt ?? ($status === 'completed' ? $lastMovementAt : $now);
+        $firstDeveloperMovementAt = processHistoryTimestamp($task['first_developer_movement_at'] ?? null);
+        $lastDeveloperMovementAt = processHistoryTimestamp($task['last_developer_movement_at'] ?? null);
+        $roadmapStartAt = processHistoryTimestamp($task['roadmap_start_at'] ?? null);
+        $roadmapCompletedAt = processHistoryTimestamp($task['roadmap_completed_at'] ?? null);
+        $departmentCompletedAt = processHistoryTimestamp($task['department_completed_at'] ?? null);
+        $developerId = (int) ($task['developer_id'] ?? 0);
+        $directTaskDeveloper = $developerId > 0 && $developerId === (int) ($task['assigned_to'] ?? 0);
+        $completionCandidates = array_filter([
+            $directTaskDeveloper && $status === 'completed' ? $completedAt : null,
+            $roadmapCompletedAt,
+            $departmentCompletedAt,
+            $status === 'completed' ? $lastDeveloperMovementAt : null,
+            $status === 'completed' ? $lastMovementAt : null,
+        ], static fn($value): bool => $value !== null);
+        $developerEndAt = $completionCandidates ? max($completionCandidates) : null;
+        $planningStartAt = $firstMovementAt ?? $createdAt ?? $roadmapStartAt;
+        $developerStartAt = $firstDeveloperMovementAt ?? ($directTaskDeveloper ? $startedAt : null) ?? $roadmapStartAt ?? $planningStartAt;
+        $isCompleted = $developerEndAt !== null;
+        $currentOrEndAt = $developerEndAt ?? $now;
+        $deadlineEndAt = $developerEndAt ?? $now;
         $lateSeconds = ($deadlineAt !== null && $deadlineEndAt !== null && $deadlineEndAt > $deadlineAt)
             ? $deadlineEndAt - $deadlineAt
             : 0;
+        $latestTimestamp = max(array_filter([
+            $developerEndAt,
+            $lastDeveloperMovementAt,
+            $lastMovementAt,
+            $startedAt,
+            $createdAt,
+        ], static fn($value): bool => $value !== null) ?: [0]);
 
         $rows[] = [
             'id' => (int) ($task['id'] ?? 0),
+            'developer_id' => $developerId,
             'project_id' => (int) ($task['project_id'] ?? 0),
             'title' => (string) ($task['title'] ?? 'Task'),
             'status' => $status,
             'status_label' => workflowStatusLabel($status),
-            'assigned_to' => trim((string) ($task['assigned_to_name'] ?? '')) ?: 'Unassigned',
+            'assigned_to' => trim((string) ($task['developer_name'] ?? '')) ?: 'Developer #' . $developerId,
             'created_at' => $task['created_at'] ?? '',
             'started_at' => $task['started_at'] ?? '',
             'deadline' => $task['deadline'] ?? '',
-            'completed_at' => $task['completed_at'] ?? '',
+            'completed_at' => $developerEndAt !== null ? date('Y-m-d H:i:s', $developerEndAt) : '',
             'first_movement_at' => $task['first_movement_at'] ?? '',
             'last_movement_at' => $task['last_movement_at'] ?? '',
-            'workflow_start_at' => $workflowStartAt,
-            'workflow_end_at' => $workflowEndAt,
-            'workflow_seconds' => $workflowStartAt !== null ? max(0, $currentOrEndAt - $workflowStartAt) : null,
-            'work_seconds' => $workStartAt !== null ? max(0, ($workEndAt ?? $now) - $workStartAt) : null,
+            'developer_started_at' => $developerStartAt !== null ? date('Y-m-d H:i:s', $developerStartAt) : '',
+            'planning_start_at' => $planningStartAt !== null ? date('Y-m-d H:i:s', $planningStartAt) : '',
+            'workflow_start_at' => $planningStartAt,
+            'workflow_end_at' => $developerEndAt,
+            'workflow_seconds' => $planningStartAt !== null ? max(0, $currentOrEndAt - $planningStartAt) : null,
+            'work_seconds' => $developerStartAt !== null ? max(0, $currentOrEndAt - $developerStartAt) : null,
             'late_seconds' => $lateSeconds,
             'is_completed' => $isCompleted,
+            'latest_timestamp' => $latestTimestamp,
         ];
     }
 
@@ -360,6 +461,9 @@ function processHistorySortTasks(array $tasks, array $projectNames, string $sort
         if ($sort === 'longest_task_duration') {
             return [(int) ($b['workflow_seconds'] ?? -1), $b['id']] <=> [(int) ($a['workflow_seconds'] ?? -1), $a['id']];
         }
+        if ($sort === 'recent' || $sort === 'longest_gap') {
+            return [(int) ($b['latest_timestamp'] ?? 0), $b['id'], $b['developer_id']] <=> [(int) ($a['latest_timestamp'] ?? 0), $a['id'], $a['developer_id']];
+        }
 
         $projectCompare = strcasecmp($projectNames[$a['project_id']] ?? '', $projectNames[$b['project_id']] ?? '');
         if ($sort === 'project_desc') {
@@ -369,7 +473,7 @@ function processHistorySortTasks(array $tasks, array $projectNames, string $sort
             return $projectCompare;
         }
 
-        return [(int) ($a['workflow_start_at'] ?? 0), $a['id']] <=> [(int) ($b['workflow_start_at'] ?? 0), $b['id']];
+        return [(int) ($b['latest_timestamp'] ?? 0), $b['id'], $b['developer_id']] <=> [(int) ($a['latest_timestamp'] ?? 0), $a['id'], $a['developer_id']];
     });
 
     return $tasks;
