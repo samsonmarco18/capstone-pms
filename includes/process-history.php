@@ -74,6 +74,17 @@ function processHistoryFormatDuration(?int $seconds): string
     return implode(' ', array_slice($parts, 0, 2)) ?: '0m';
 }
 
+function processHistoryTimestamp(?string $value): ?int
+{
+    $value = trim((string) $value);
+    if ($value === '') {
+        return null;
+    }
+
+    $timestamp = strtotime($value);
+    return $timestamp === false ? null : $timestamp;
+}
+
 function processHistoryDecodeJson(?string $value): array
 {
     $decoded = json_decode((string) $value, true);
@@ -245,6 +256,146 @@ function processHistoryLoadEvents(mysqli|PgsqlMysqliCompatConnection $conn, arra
     }
 
     return $events;
+}
+
+function processHistoryLoadTaskDurations(mysqli|PgsqlMysqliCompatConnection $conn, array $projectIds, int $selectedProjectId = 0): array
+{
+    $projectIds = array_values(array_unique(array_filter(array_map('intval', $projectIds))));
+    if ($projectIds === []) {
+        return [];
+    }
+    if ($selectedProjectId > 0 && in_array($selectedProjectId, $projectIds, true)) {
+        $projectIds = [$selectedProjectId];
+    }
+
+    $actions = array_keys(processHistoryActions());
+    $quotedActions = array_map(static fn(string $action): string => "'" . $conn->real_escape_string($action) . "'", $actions);
+    $actionList = implode(',', $quotedActions);
+    $projectIdList = implode(',', $projectIds);
+    $now = time();
+
+    $result = $conn->query("
+        SELECT
+            t.id,
+            t.project_id,
+            t.title,
+            t.status,
+            t.created_at,
+            t.started_at,
+            t.deadline,
+            t.completed_at,
+            u.full_name AS assigned_to_name,
+            (
+                SELECT MIN(al.created_at)
+                FROM audit_logs al
+                WHERE al.table_name = 'tasks'
+                  AND al.record_id = t.id
+                  AND al.action IN ({$actionList})
+            ) AS first_movement_at,
+            (
+                SELECT MAX(al.created_at)
+                FROM audit_logs al
+                WHERE al.table_name = 'tasks'
+                  AND al.record_id = t.id
+                  AND al.action IN ({$actionList})
+            ) AS last_movement_at
+        FROM tasks t
+        LEFT JOIN users u ON u.id = t.assigned_to
+        WHERE t.project_id IN ({$projectIdList})
+        ORDER BY t.project_id ASC, COALESCE(t.completed_at, t.deadline, t.updated_at, t.created_at) ASC, t.id ASC
+    ");
+
+    if (!$result) {
+        return [];
+    }
+
+    $rows = [];
+    while ($task = $result->fetch_assoc()) {
+        $status = strtolower((string) ($task['status'] ?? 'todo'));
+        $createdAt = processHistoryTimestamp($task['created_at'] ?? null);
+        $startedAt = processHistoryTimestamp($task['started_at'] ?? null);
+        $completedAt = processHistoryTimestamp($task['completed_at'] ?? null);
+        $deadlineAt = processHistoryTimestamp($task['deadline'] ?? null);
+        $firstMovementAt = processHistoryTimestamp($task['first_movement_at'] ?? null);
+        $lastMovementAt = processHistoryTimestamp($task['last_movement_at'] ?? null);
+        $workflowStartAt = $firstMovementAt ?? $startedAt ?? $createdAt;
+        $workflowEndAt = $completedAt ?? ($status === 'completed' ? $lastMovementAt : null);
+        $workStartAt = $startedAt ?? $firstMovementAt ?? $createdAt;
+        $workEndAt = $completedAt ?? ($status === 'completed' ? $lastMovementAt : null);
+        $isCompleted = $status === 'completed' && $workflowEndAt !== null;
+        $currentOrEndAt = $workflowEndAt ?? $now;
+        $deadlineEndAt = $completedAt ?? ($status === 'completed' ? $lastMovementAt : $now);
+        $lateSeconds = ($deadlineAt !== null && $deadlineEndAt !== null && $deadlineEndAt > $deadlineAt)
+            ? $deadlineEndAt - $deadlineAt
+            : 0;
+
+        $rows[] = [
+            'id' => (int) ($task['id'] ?? 0),
+            'project_id' => (int) ($task['project_id'] ?? 0),
+            'title' => (string) ($task['title'] ?? 'Task'),
+            'status' => $status,
+            'status_label' => workflowStatusLabel($status),
+            'assigned_to' => trim((string) ($task['assigned_to_name'] ?? '')) ?: 'Unassigned',
+            'created_at' => $task['created_at'] ?? '',
+            'started_at' => $task['started_at'] ?? '',
+            'deadline' => $task['deadline'] ?? '',
+            'completed_at' => $task['completed_at'] ?? '',
+            'first_movement_at' => $task['first_movement_at'] ?? '',
+            'last_movement_at' => $task['last_movement_at'] ?? '',
+            'workflow_start_at' => $workflowStartAt,
+            'workflow_end_at' => $workflowEndAt,
+            'workflow_seconds' => $workflowStartAt !== null ? max(0, $currentOrEndAt - $workflowStartAt) : null,
+            'work_seconds' => $workStartAt !== null ? max(0, ($workEndAt ?? $now) - $workStartAt) : null,
+            'late_seconds' => $lateSeconds,
+            'is_completed' => $isCompleted,
+        ];
+    }
+
+    return $rows;
+}
+
+function processHistorySortTasks(array $tasks, array $projectNames, string $sort): array
+{
+    usort($tasks, static function (array $a, array $b) use ($projectNames, $sort): int {
+        if ($sort === 'longest_task_duration') {
+            return [(int) ($b['workflow_seconds'] ?? -1), $b['id']] <=> [(int) ($a['workflow_seconds'] ?? -1), $a['id']];
+        }
+
+        $projectCompare = strcasecmp($projectNames[$a['project_id']] ?? '', $projectNames[$b['project_id']] ?? '');
+        if ($sort === 'project_desc') {
+            $projectCompare *= -1;
+        }
+        if ($projectCompare !== 0) {
+            return $projectCompare;
+        }
+
+        return [(int) ($a['workflow_start_at'] ?? 0), $a['id']] <=> [(int) ($b['workflow_start_at'] ?? 0), $b['id']];
+    });
+
+    return $tasks;
+}
+
+function processHistoryTaskSummary(array $tasks): array
+{
+    $completed = [];
+    $slowest = null;
+    foreach ($tasks as $task) {
+        if (!empty($task['is_completed']) && $task['workflow_seconds'] !== null) {
+            $completed[] = (int) $task['workflow_seconds'];
+        }
+        if ($task['workflow_seconds'] !== null && ($slowest === null || (int) $task['workflow_seconds'] > (int) $slowest['workflow_seconds'])) {
+            $slowest = $task;
+        }
+    }
+
+    $average = $completed ? (int) round(array_sum($completed) / count($completed)) : null;
+
+    return [
+        'task_count' => count($tasks),
+        'completed_count' => count($completed),
+        'average_completed_seconds' => $average,
+        'slowest_task' => $slowest,
+    ];
 }
 
 function processHistorySortEvents(array $events, array $projectNames, string $sort): array
