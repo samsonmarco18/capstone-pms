@@ -105,6 +105,7 @@ $taskBaseQuery = "
                FROM task_reopen_requests rr_approved
                WHERE rr_approved.task_id = t.id
                  AND rr_approved.status = 'architect_approved'
+                 AND rr_approved.requested_by = {$user['id']}
            ) AS last_reopened_at
     FROM tasks t
     LEFT JOIN projects p ON p.id = t.project_id
@@ -122,18 +123,48 @@ $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 
 // Get tasks assigned to this developer
 $todoTasks = developerTaskQuery($conn, $taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status = 'todo' ORDER BY t.deadline ASC", 'todo');
-$inProgressTasks = developerTaskQuery($conn, $taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status IN ('in_progress', 'sul_revision', 'qa_failed') ORDER BY last_reopened_at DESC, t.updated_at DESC, t.deadline ASC", 'in_progress');
+$inProgressTasks = developerTaskQuery($conn, $taskBaseQuery . "
+    WHERE {$developerTaskAccessSql}
+      AND (
+          t.status IN ('in_progress', 'qa_failed')
+          OR (
+              t.status = 'sul_revision'
+              AND (
+                  NOT EXISTS (
+                      SELECT 1
+                      FROM task_reopen_requests rr_any_approved
+                      WHERE rr_any_approved.task_id = t.id
+                        AND rr_any_approved.status = 'architect_approved'
+                  )
+                  OR EXISTS (
+                      SELECT 1
+                      FROM task_reopen_requests rr_mine_approved
+                      WHERE rr_mine_approved.task_id = t.id
+                        AND rr_mine_approved.status = 'architect_approved'
+                        AND rr_mine_approved.requested_by = {$user['id']}
+                  )
+              )
+          )
+      )
+    ORDER BY last_reopened_at DESC, t.updated_at DESC, t.deadline ASC
+", 'in_progress');
 $reviewTasks = developerTaskQuery($conn, $taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release') ORDER BY t.deadline ASC", 'review');
 $completedTasks = developerTaskQuery($conn, $taskBaseQuery . "
-    WHERE t.status = 'completed'
-      AND (
-          t.assigned_to = {$user['id']}
+    WHERE (
+          (t.assigned_to = {$user['id']} AND t.status = 'completed')
           OR EXISTS (
               SELECT 1
               FROM methodology_tasks mt_done
               WHERE mt_done.task_id = t.id
                 AND mt_done.assigned_developer_id = {$user['id']}
                 AND mt_done.status = 'completed'
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM task_reopen_requests rr_mine_done
+                    WHERE rr_mine_done.task_id = t.id
+                      AND rr_mine_done.status = 'architect_approved'
+                      AND rr_mine_done.requested_by = {$user['id']}
+                )
           )
           OR EXISTS (
               SELECT 1
@@ -142,6 +173,13 @@ $completedTasks = developerTaskQuery($conn, $taskBaseQuery . "
               WHERE mtd_done.assigned_developer_id = {$user['id']}
                 AND (mtd_done.workflow_task_id = t.id OR mt_done_department.task_id = t.id)
                 AND mtd_done.status = 'completed'
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM task_reopen_requests rr_mine_department_done
+                    WHERE rr_mine_department_done.task_id = t.id
+                      AND rr_mine_department_done.status = 'architect_approved'
+                      AND rr_mine_department_done.requested_by = {$user['id']}
+                )
           )
       )
     ORDER BY COALESCE(t.completed_at, t.updated_at) DESC

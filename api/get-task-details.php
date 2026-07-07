@@ -27,6 +27,10 @@ if ($taskId <= 0) {
     exit;
 }
 
+$developerReopenFilter = (($user['role'] ?? '') === 'developer')
+    ? ' AND rr_approved.requested_by = ' . (int) ($user['id'] ?? 0)
+    : '';
+
 // Get task details
 $stmt = $conn->prepare("
     SELECT t.*, 
@@ -57,6 +61,7 @@ $stmt = $conn->prepare("
                FROM task_reopen_requests rr_approved
                WHERE rr_approved.task_id = t.id
                  AND rr_approved.status = 'architect_approved'
+                 {$developerReopenFilter}
            ) AS last_reopened_at,
            fe.min_days, fe.likely_days, fe.max_days, fe.expectation_description as estimation_notes
     FROM tasks t
