@@ -4,6 +4,7 @@ require_once '../../includes/workflow.php';
 require_once '../../includes/department-artifacts.php';
 require_once '../../includes/methodology-roadmap.php';
 require_once '../../includes/project-workflow.php';
+require_once '../../includes/task-reopen.php';
 requireRole('developer');
 
 $conn = getConnection();
@@ -12,6 +13,7 @@ workflowEnsureSchema($conn);
 departmentArtifactEnsureSchema($conn);
 methodologyRoadmapEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
+taskReopenEnsureSchema($conn);
 
 $userDepartment = trim((string) ($user['department'] ?? ''));
 $userDepartmentCanonical = projectWorkflowDepartmentLabel($userDepartment);
@@ -32,6 +34,13 @@ $taskBaseQuery = "
                  AND mt_done.assigned_developer_id = {$user['id']}
                  AND mt_done.status = 'completed'
            ) AS developer_completed_at
+           ,
+           (
+               SELECT COUNT(*)
+               FROM task_reopen_requests rr
+               WHERE rr.task_id = t.id
+                 AND rr.status IN ('pending_sul', 'pending_architect')
+           ) AS active_reopen_request_count
     FROM tasks t
     LEFT JOIN projects p ON p.id = t.project_id
     LEFT JOIN task_git_updates latest_git ON latest_git.id = (
@@ -1606,9 +1615,18 @@ include '../../includes/navbar.php';
                         <?php endif; ?>
                         <div class="d-flex justify-content-between align-items-center">
                             <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
-                            <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Review the task details and handoff history.">
-                                <i class="fas fa-eye"></i> View
-                            </button>
+                            <div class="d-flex gap-1 flex-wrap justify-content-end">
+                                <?php if ((int) ($task['active_reopen_request_count'] ?? 0) > 0): ?>
+                                    <span class="badge bg-info text-dark" data-bs-toggle="tooltip" title="This task already has a reopen request waiting for SUL or Architect decision.">Pending Reopen</span>
+                                <?php else: ?>
+                                    <button class="btn-action me-1" onclick="openReopenRequestModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))" data-bs-toggle="tooltip" title="Ask SUL to review a reopen request for this task.">
+                                        <i class="fas fa-rotate-left"></i> Reopen
+                                    </button>
+                                <?php endif; ?>
+                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Review the task details and handoff history.">
+                                    <i class="fas fa-eye"></i> View
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <?php endwhile; ?>
@@ -1633,11 +1651,28 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="kanban-body">
                     <?php while($task = $completedTasks->fetch_assoc()): ?>
+                    <?php $canRequestReopen = in_array((string) ($task['status'] ?? ''), ['for_review', 'qa_testing', 'qa_failed', 'qa_passed', 'architect_review', 'merged', 'ready_for_release', 'completed'], true); ?>
                     <div class="completed-card">
-                        <div class="d-flex justify-content-between">
-                            <small><s><?php echo htmlspecialchars($task['title']); ?></s></small>
-                            <?php $doneAt = $task['completed_at'] ?: ($task['developer_completed_at'] ?? null); ?>
-                            <small class="text-muted"><?php echo !empty($doneAt) ? date('M d', strtotime((string) $doneAt)) : 'No date'; ?></small>
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div>
+                                <small><s><?php echo htmlspecialchars($task['title']); ?></s></small>
+                                <div class="mt-2">
+                                    <?php if ((int) ($task['active_reopen_request_count'] ?? 0) > 0): ?>
+                                        <span class="badge bg-info text-dark">Pending Reopen</span>
+                                    <?php elseif ($canRequestReopen): ?>
+                                        <button class="btn-action" onclick="openReopenRequestModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))" data-bs-toggle="tooltip" title="Ask SUL to review a reopen request for this completed task.">
+                                            <i class="fas fa-rotate-left"></i> Request Reopen
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <?php $doneAt = $task['completed_at'] ?: ($task['developer_completed_at'] ?? null); ?>
+                                <small class="text-muted"><?php echo !empty($doneAt) ? date('M d', strtotime((string) $doneAt)) : 'No date'; ?></small>
+                                <button class="btn-action-view mt-2" onclick="viewTask(<?php echo (int) $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details.">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <?php endwhile; ?>
@@ -1685,6 +1720,42 @@ include '../../includes/navbar.php';
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reopen Request Modal -->
+<div class="modal fade modal-modern" id="reopenRequestModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-rotate-left me-2"></i>Request Task Reopen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="reopenRequestForm">
+                <div class="modal-body">
+                    <input type="hidden" id="reopenTaskId" name="task_id">
+                    <p class="mb-3"><strong>Task:</strong> <span id="reopenTaskTitle"></span></p>
+                    <div class="mb-3">
+                        <label class="form-label">Severity</label>
+                        <select class="form-select" id="reopenSeverity" name="severity" required>
+                            <option value="minor">Minor - change affects only this task</option>
+                            <option value="major">Major - change may affect later work or phases</option>
+                        </select>
+                        <small class="text-muted">Major requests go to Architect so downstream phases can be reopened when needed.</small>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Reason</label>
+                        <textarea class="form-control" id="reopenReason" name="reason" rows="4" placeholder="Explain what went wrong and what needs to change." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn-primary-modern">
+                        <i class="fas fa-paper-plane"></i> Send to SUL
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -2146,6 +2217,7 @@ function viewTask(taskId) {
             const designReferenceStrip = buildDesignReferenceStrip(task);
             const departmentPanel = buildDepartmentPanel(task);
             const roadmapBanner = buildRoadmapReadyBanner(task);
+            const reopenPanel = buildReopenRequestPanel(task);
             const isUiUxDepartment = currentDepartmentCanonical === 'UI/UX';
             const gitToolsPanel = isUiUxDepartment ? '' : `
                         <div class="task-side-panel">
@@ -2261,6 +2333,7 @@ function viewTask(taskId) {
                         </div>
                     </div>
                     <div class="col-lg-4">
+                        ${reopenPanel}
                         ${gitToolsPanel}
                         <div class="task-side-panel">
                             <div class="mb-3">
@@ -2291,6 +2364,79 @@ function viewTask(taskId) {
         }
     });
 }
+
+function buildReopenRequestPanel(task) {
+    const eligibleStatuses = ['for_review', 'qa_testing', 'qa_failed', 'qa_passed', 'architect_review', 'merged', 'ready_for_release', 'completed'];
+    const status = String(task.status || '');
+    if (!eligibleStatuses.includes(status)) {
+        return '';
+    }
+
+    if (Number(task.active_reopen_request_count || 0) > 0) {
+        return `
+            <div class="task-side-panel">
+                <div class="task-side-heading">
+                    <label class="form-label mb-0 fw-semibold">Reopen Request</label>
+                    <small class="text-muted">Waiting for review</small>
+                </div>
+                <p class="small text-muted mb-0">A reopen request for this task is already pending with SUL or Architect.</p>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="task-side-panel">
+            <div class="task-side-heading">
+                <label class="form-label mb-0 fw-semibold">Something went wrong?</label>
+                <small class="text-muted">Ask SUL to reopen</small>
+            </div>
+            <p class="small text-muted">Use Minor for task-only fixes. Use Major when the change can affect later tasks or phases.</p>
+            <button class="btn-warning task-detail-action" onclick="openReopenRequestModal(${Number(task.id)}, ${jsStringLiteral(task.title || 'Task')})">
+                <i class="fas fa-rotate-left"></i> Request Reopen
+            </button>
+        </div>
+    `;
+}
+
+function openReopenRequestModal(taskId, taskTitle) {
+    $('#reopenTaskId').val(taskId);
+    $('#reopenTaskTitle').text(taskTitle || 'Selected task');
+    $('#reopenSeverity').val('minor');
+    $('#reopenReason').val('');
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('reopenRequestModal')).show();
+}
+
+$('#reopenRequestForm').on('submit', function(event) {
+    event.preventDefault();
+
+    const submitButton = this.querySelector('button[type="submit"]');
+    const originalText = submitButton ? submitButton.innerHTML : '';
+    if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending';
+    }
+
+    $.ajax({
+        url: '../../api/request-task-reopen.php',
+        method: 'POST',
+        dataType: 'json',
+        data: $(this).serialize(),
+        success: function(response) {
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('reopenRequestModal')).hide();
+            alert(response.message || 'Reopen request sent to SUL.');
+            window.location.reload();
+        },
+        error: function(xhr) {
+            alert(xhr.responseJSON?.message || 'Unable to send reopen request.');
+        },
+        complete: function() {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalText;
+            }
+        }
+    });
+});
 
 function buildDesignReferenceStrip(task) {
     if (currentDepartmentCanonical === 'UI/UX') {
@@ -2688,6 +2834,10 @@ function escapeHtml(text) {
 
 function escapeAttribute(text) {
     return escapeHtml(text).replace(/"/g, '&quot;');
+}
+
+function jsStringLiteral(value) {
+    return JSON.stringify(String(value ?? '')).replace(/</g, '\\u003c');
 }
 
 function shortCommit(hash) {

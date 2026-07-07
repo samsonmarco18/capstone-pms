@@ -2,12 +2,33 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/project-workflow.php';
+require_once '../../includes/task-reopen.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
 workflowEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
+taskReopenEnsureSchema($conn);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['architect_approve_reopen']) || isset($_POST['architect_reject_reopen']))) {
+    $requestId = (int) ($_POST['reopen_request_id'] ?? 0);
+    $comment = trim((string) ($_POST['architect_comment'] ?? ''));
+    $decision = isset($_POST['architect_approve_reopen']) ? 'approve' : 'reject';
+
+    if ($requestId <= 0 || ($decision === 'reject' && $comment === '')) {
+        $_SESSION['error'] = $decision === 'reject'
+            ? 'Please provide a reason when rejecting a reopen request.'
+            : 'Please select a valid reopen request.';
+        header('Location: final-approval.php#reopen-requests');
+        exit();
+    }
+
+    $result = taskReopenArchitectDecision($conn, $requestId, (int) ($user['id'] ?? 0), $decision, $comment);
+    $_SESSION[$result['success'] ? 'success' : 'error'] = $result['message'];
+    header('Location: final-approval.php#reopen-requests');
+    exit();
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_task'])) {
     $taskId = (int) ($_POST['task_id'] ?? 0);
@@ -79,6 +100,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_task'])) {
     header('Location: final-approval.php');
     exit();
 }
+
+$reopenRequests = taskReopenLoadArchitectRequests($conn);
+$reopenRequestCount = count($reopenRequests);
 
 $readyTasks = $conn->query("
     SELECT t.*, p.name AS project_name, u.full_name AS developer_name,
@@ -157,11 +181,71 @@ include '../../includes/navbar.php';
             <h2 class="mb-1"><i class="fas fa-code-merge me-2 text-primary"></i>Final Approval & Merge</h2>
             <p class="text-muted mb-0">Architect can only merge features that passed QA testing.</p>
         </div>
-        <span class="badge bg-success fs-6"><?php echo $readyTasks ? (int) $readyTasks->num_rows : 0; ?> QA Passed</span>
+        <div class="d-flex gap-2 flex-wrap">
+            <span class="badge bg-warning text-dark fs-6"><?php echo $reopenRequestCount; ?> Reopen Requests</span>
+            <span class="badge bg-success fs-6"><?php echo $readyTasks ? (int) $readyTasks->num_rows : 0; ?> QA Passed</span>
+        </div>
     </div>
 
     <?php if(isset($_SESSION['success'])): ?><div class="alert alert-success"><?php echo $_SESSION['success']; unset($_SESSION['success']); ?></div><?php endif; ?>
     <?php if(isset($_SESSION['error'])): ?><div class="alert alert-danger"><?php echo $_SESSION['error']; unset($_SESSION['error']); ?></div><?php endif; ?>
+
+    <div class="card border-0 shadow-sm mb-4" id="reopen-requests">
+        <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <span><i class="fas fa-rotate-left me-2 text-warning"></i>Task Reopen Requests</span>
+            <span class="badge bg-warning text-dark"><?php echo $reopenRequestCount; ?> pending</span>
+        </div>
+        <div class="card-body">
+            <?php if($reopenRequestCount > 0): ?>
+                <?php foreach($reopenRequests as $request): ?>
+                    <?php $severity = strtolower((string) ($request['severity'] ?? 'minor')) === 'major' ? 'major' : 'minor'; ?>
+                    <form method="POST" class="border-bottom pb-3 mb-3">
+                        <input type="hidden" name="reopen_request_id" value="<?php echo (int) $request['id']; ?>">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge <?php echo $severity === 'major' ? 'bg-danger' : 'bg-info text-dark'; ?>">
+                                        <?php echo htmlspecialchars(taskReopenSeverityLabel($severity)); ?>
+                                    </span>
+                                    <h5 class="mb-0"><?php echo htmlspecialchars((string) $request['task_title']); ?></h5>
+                                </div>
+                                <div class="text-muted small mb-3">
+                                    <?php echo htmlspecialchars((string) $request['project_name']); ?> &middot;
+                                    Developer: <?php echo htmlspecialchars((string) ($request['requester_name'] ?? 'Developer')); ?> &middot;
+                                    SUL: <?php echo htmlspecialchars((string) ($request['sul_name'] ?? 'SUL')); ?>
+                                </div>
+                                <div class="alert alert-light border mb-3">
+                                    <div class="fw-semibold mb-1">Developer reason</div>
+                                    <div><?php echo nl2br(htmlspecialchars((string) ($request['reason'] ?? ''))); ?></div>
+                                </div>
+                                <?php if (!empty($request['sul_comment'])): ?>
+                                    <div class="small mb-3"><strong>SUL note:</strong> <?php echo nl2br(htmlspecialchars((string) $request['sul_comment'])); ?></div>
+                                <?php endif; ?>
+                                <div class="small text-muted mb-3">
+                                    <?php if($severity === 'major'): ?>
+                                        Approval will reopen this task and reset later roadmap phases/tasks so affected downstream work can be redone.
+                                    <?php else: ?>
+                                        Approval will reopen only this task and send it back to developer revision.
+                                    <?php endif; ?>
+                                </div>
+                                <textarea name="architect_comment" class="form-control" rows="2" placeholder="Architect decision note"></textarea>
+                            </div>
+                            <div class="d-flex gap-2 flex-wrap">
+                                <button type="submit" name="architect_approve_reopen" class="btn btn-warning">
+                                    <i class="fas fa-rotate-left me-1"></i> Approve Reopen
+                                </button>
+                                <button type="submit" name="architect_reject_reopen" class="btn btn-outline-danger">
+                                    <i class="fas fa-ban me-1"></i> Reject
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <p class="text-muted mb-0">No SUL-accepted reopen requests are waiting for Architect decision.</p>
+            <?php endif; ?>
+        </div>
+    </div>
 
     <div class="row g-4">
         <div class="col-lg-8">

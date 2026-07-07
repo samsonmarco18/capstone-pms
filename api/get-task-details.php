@@ -5,6 +5,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/department-artifacts.php';
 require_once __DIR__ . '/../includes/methodology-roadmap.php';
 require_once __DIR__ . '/../includes/project-workflow.php';
+require_once __DIR__ . '/../includes/task-reopen.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -16,6 +17,7 @@ $user = getCurrentUser();
 $conn = getConnection();
 departmentArtifactEnsureSchema($conn);
 methodologyRoadmapEnsureSchema($conn);
+taskReopenEnsureSchema($conn);
 
 $taskId = intval($_GET['id'] ?? 0);
 
@@ -44,6 +46,12 @@ $stmt = $conn->prepare("
                  AND mt_current.task_id = t.id
                  AND COALESCE(mt_current.developer_entity_key, '') <> ''
            ) AS bulk_entity_task_count,
+           (
+               SELECT COUNT(*)
+               FROM task_reopen_requests rr
+               WHERE rr.task_id = t.id
+                 AND rr.status IN ('pending_sul', 'pending_architect')
+           ) AS active_reopen_request_count,
            fe.min_days, fe.likely_days, fe.max_days, fe.expectation_description as estimation_notes
     FROM tasks t
     LEFT JOIN projects p ON t.project_id = p.id

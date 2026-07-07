@@ -4,6 +4,7 @@ require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
 require_once '../../includes/project-workflow.php';
 require_once '../../includes/project-estimation.php';
+require_once '../../includes/task-reopen.php';
 requireRole('sul');
 
 $conn = getConnection();
@@ -13,6 +14,7 @@ workflowEnsureSchema($conn);
 methodologyRoadmapEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
 projectEstimationEnsureSchema($conn);
+taskReopenEnsureSchema($conn);
 
 $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : (isset($_POST['project_id']) ? intval($_POST['project_id']) : 0);
 $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
@@ -656,7 +658,13 @@ if ($canManageDeveloperWorkflow) {
                 WHERE t.project_id = p.id
                   AND t.status = 'for_review'
                   {$sulUserDepartmentFilter}
-            ) AS review_count
+            ) AS review_count,
+            (
+                SELECT COUNT(DISTINCT rr.id)
+                FROM task_reopen_requests rr
+                WHERE rr.project_id = p.id
+                  AND rr.status = 'pending_sul'
+            ) AS reopen_count
         FROM projects p
         WHERE p.status != 'completed'
           AND {$sulProjectFilter}
@@ -674,13 +682,41 @@ $developerProjectOptionTaskCount = 0;
 foreach ($developerProjectOptions as $developerProjectOption) {
     $developerProjectOptionTaskCount += (int) ($developerProjectOption['ready_count'] ?? 0)
         + (int) ($developerProjectOption['in_progress_count'] ?? 0)
-        + (int) ($developerProjectOption['review_count'] ?? 0);
+        + (int) ($developerProjectOption['review_count'] ?? 0)
+        + (int) ($developerProjectOption['reopen_count'] ?? 0);
 }
-$selectedDeveloperTaskCount = $readyForDevTasks->num_rows + $inProgressTasks->num_rows + $codeReviewTasks->num_rows;
+$reopenRequests = $canManageDeveloperWorkflow ? taskReopenLoadSulRequests($conn, $sulDepartment, ($projectId && $project) ? $projectId : 0) : [];
+$developerReopenRequestCount = count($reopenRequests);
+$selectedDeveloperTaskCount = $readyForDevTasks->num_rows + $inProgressTasks->num_rows + $codeReviewTasks->num_rows + $developerReopenRequestCount;
 $developerAllocationBadgeCount = ($projectId && $project) ? $selectedDeveloperTaskCount : $developerProjectOptionTaskCount;
 
 // Handle task operations
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['sul_approve_reopen']) || isset($_POST['sul_reject_reopen'])) {
+        if (!$canManageDeveloperWorkflow) {
+            $_SESSION['error'] = "Only department SULs outside Expert Department can review developer reopen requests.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        $requestId = (int) ($_POST['reopen_request_id'] ?? 0);
+        $comment = trim((string) ($_POST['sul_comment'] ?? ''));
+        $decision = isset($_POST['sul_approve_reopen']) ? 'approve' : 'reject';
+
+        if ($requestId <= 0 || ($decision === 'reject' && $comment === '')) {
+            $_SESSION['error'] = $decision === 'reject'
+                ? "Please provide a reason when rejecting a reopen request."
+                : "Please select a valid reopen request.";
+            header("Location: task-allocation.php?project_id=" . (int) $projectId . "#developer-reopen-panel");
+            exit();
+        }
+
+        $result = taskReopenSulDecision($conn, $requestId, $userId, $decision, $comment, $sulDepartment);
+        $_SESSION[$result['success'] ? 'success' : 'error'] = $result['message'];
+        header("Location: task-allocation.php?project_id=" . (int) $projectId . "#developer-reopen-panel");
+        exit();
+    }
+
     // Assign task to expert
     if (isset($_POST['assign_to_expert'])) {
         if (!$canManageExpertWorkflow) {
@@ -3196,10 +3232,11 @@ include '../../includes/navbar.php';
                                     $optionReady = (int) ($developerProjectOption['ready_count'] ?? 0);
                                     $optionProgress = (int) ($developerProjectOption['in_progress_count'] ?? 0);
                                     $optionReview = (int) ($developerProjectOption['review_count'] ?? 0);
+                                    $optionReopen = (int) ($developerProjectOption['reopen_count'] ?? 0);
                                 ?>
                                 <option value="<?php echo (int) $developerProjectOption['id']; ?>" <?php echo (int) $developerProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
                                     <?php echo htmlspecialchars((string) $developerProjectOption['name']); ?>
-                                    (<?php echo $optionReady; ?> ready, <?php echo $optionProgress; ?> active, <?php echo $optionReview; ?> review)
+                                    (<?php echo $optionReady; ?> ready, <?php echo $optionProgress; ?> active, <?php echo $optionReview; ?> review, <?php echo $optionReopen; ?> reopen)
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -3226,6 +3263,11 @@ include '../../includes/navbar.php';
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="developer-review-tab" data-bs-toggle="tab" data-bs-target="#developer-review-panel" type="button" role="tab" aria-controls="developer-review-panel" aria-selected="false">
                         <i class="fas fa-code-pull-request"></i> SUL Code Review <span class="badge-count"><?php echo $codeReviewTasks->num_rows; ?></span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="developer-reopen-tab" data-bs-toggle="tab" data-bs-target="#developer-reopen-panel" type="button" role="tab" aria-controls="developer-reopen-panel" aria-selected="false">
+                        <i class="fas fa-rotate-left"></i> Reopen Requests <span class="badge-count"><?php echo $developerReopenRequestCount; ?></span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -3414,6 +3456,70 @@ include '../../includes/navbar.php';
                         <p>No Pull Requests waiting for SUL review</p>
                     </div>
                 <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- Section 7: Developer Reopen Requests -->
+            <div class="tab-pane fade section-card allocation-column" id="developer-reopen-panel" role="tabpanel" aria-labelledby="developer-reopen-tab">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-rotate-left"></i>
+                        Developer Reopen Requests
+                        <span class="badge-count"><?php echo $developerReopenRequestCount; ?> requests</span>
+                    </h5>
+                </div>
+                <div class="p-3 allocation-column-body">
+                    <?php if($developerReopenRequestCount > 0): ?>
+                        <?php foreach($reopenRequests as $request): ?>
+                        <div class="task-card">
+                            <form method="POST" data-app-loading data-loading-title="Reviewing reopen request" data-loading-text="Please wait while the reopen request is updated.">
+                                <input type="hidden" name="reopen_request_id" value="<?php echo (int) $request['id']; ?>">
+                                <input type="hidden" name="project_id" value="<?php echo (int) ($request['project_id'] ?? $projectId); ?>">
+                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            <span class="task-priority priority-<?php echo strtolower((string) ($request['severity'] ?? 'minor')) === 'major' ? 'critical' : 'medium'; ?>">
+                                                <?php echo htmlspecialchars(taskReopenSeverityLabel((string) ($request['severity'] ?? 'minor'))); ?>
+                                            </span>
+                                            <span class="task-title"><?php echo htmlspecialchars((string) $request['task_title']); ?></span>
+                                        </div>
+                                        <div class="task-meta">
+                                            <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars((string) $request['project_name']); ?></span>
+                                            <span><i class="fas fa-user"></i> Developer: <?php echo htmlspecialchars((string) ($request['developer_name'] ?? $request['requester_name'] ?? 'Developer')); ?></span>
+                                            <span><i class="fas fa-clock"></i> Requested: <?php echo sulTaskAllocationFormatDeadline($request['created_at'] ?? null); ?></span>
+                                            <span><i class="fas fa-list-check"></i> Current status: <?php echo htmlspecialchars(str_replace('_', ' ', (string) ($request['task_status'] ?? 'unknown'))); ?></span>
+                                        </div>
+                                        <div class="alert alert-light border mt-3 mb-3">
+                                            <div class="fw-semibold mb-1">Developer reason</div>
+                                            <div><?php echo nl2br(htmlspecialchars((string) ($request['reason'] ?? ''))); ?></div>
+                                        </div>
+                                        <div class="small text-muted mb-3">
+                                            <?php if (strtolower((string) ($request['severity'] ?? 'minor')) === 'major'): ?>
+                                                Major means the change may affect other work. Accepting sends it to Architect so later phases can be reopened if needed.
+                                            <?php else: ?>
+                                                Minor means the change should only reopen this task for revision.
+                                            <?php endif; ?>
+                                        </div>
+                                        <textarea name="sul_comment" class="form-control-custom" rows="2" placeholder="SUL note for Architect or rejection reason"></textarea>
+                                    </div>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button type="submit" name="sul_approve_reopen" class="btn-success-modern">
+                                            <i class="fas fa-check"></i> Accept and Send to Architect
+                                        </button>
+                                        <button type="submit" name="sul_reject_reopen" class="btn-warning-modern">
+                                            <i class="fas fa-ban"></i> Reject
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="fas fa-check-circle"></i>
+                            <p>No developer reopen requests are waiting for SUL review</p>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -3985,6 +4091,21 @@ function initSulGanttChart() {
         renderSulThreePointGantt(container, sulGanttProject.tasks);
     }
 }
+
+function activateSulHashTab() {
+    const hash = window.location.hash;
+    if (!hash || typeof bootstrap === 'undefined' || !bootstrap.Tab) {
+        return;
+    }
+
+    const trigger = document.querySelector(`[data-bs-target="${hash}"]`);
+    if (trigger) {
+        bootstrap.Tab.getOrCreateInstance(trigger).show();
+        document.querySelector(hash)?.scrollIntoView({ block: 'start' });
+    }
+}
+
+activateSulHashTab();
 
 if (document.getElementById('expert-gantt-panel')?.classList.contains('active')) {
     initSulGanttChart();
