@@ -367,7 +367,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
         exit();
     }
 
-    $durationMonths = projectEstimationMonths($project['timeline_start'] ?? null, $project['timeline_end'] ?? null);
+    $durationMonths = projectEstimationDurationMonths($conn, $project);
     $techMonthlyCost = array_sum(array_map(static fn(array $row): float => (float) ($row['estimated_cost'] ?? 0), $technologies));
     $complexity = projectEstimationComplexity(
         $durationMonths,
@@ -421,6 +421,10 @@ $expertProjectsResult = $conn->query("
 
 $expertProjects = [];
 while ($row = $expertProjectsResult->fetch_assoc()) {
+    $durationWindow = projectEstimationDurationWindow($conn, $row);
+    $row['estimation_window_start'] = $durationWindow['start'] ?? ($row['timeline_start'] ?? '');
+    $row['estimation_window_end'] = $durationWindow['end'] ?? ($row['timeline_end'] ?? '');
+    $row['estimation_window_label'] = $durationWindow['label'] ?? 'Project timeline';
     $expertProjects[] = $row;
 }
 
@@ -482,8 +486,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
 
     $architectPlan = featureEstimationLoadArchitectPlanning($conn, [$taskId])[$taskId] ?? featureEstimationEmptyArchitectPlan();
     $phaseName = trim((string) ($architectPlan['phase_name'] ?? '')) !== '' ? (string) $architectPlan['phase_name'] : null;
-    $projectTimelineStart = trim((string) ($taskInfo['timeline_start'] ?? ''));
-    $projectTimelineEnd = trim((string) ($taskInfo['timeline_end'] ?? ''));
+    $durationWindow = projectEstimationDurationWindow($conn, [
+        'id' => $projectId,
+        'timeline_start' => $taskInfo['timeline_start'] ?? '',
+        'timeline_end' => $taskInfo['timeline_end'] ?? '',
+    ]);
+    $projectTimelineStart = trim((string) ($durationWindow['start'] ?? ''));
+    $projectTimelineEnd = trim((string) ($durationWindow['end'] ?? ''));
     $architectPlannedStart = trim((string) ($architectPlan['planned_start'] ?? ''));
     $architectDeadline = trim((string) ($architectPlan['planned_end'] ?? ''));
     if ($architectDeadline === '') {
@@ -491,6 +500,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     }
     if ($plannedStart === null) {
         $plannedStart = $architectPlannedStart !== '' ? $architectPlannedStart : ($projectTimelineStart !== '' ? $projectTimelineStart : null);
+    }
+    if ($plannedEnd === null && $architectDeadline !== '') {
+        $plannedEnd = $architectDeadline;
     }
 
     if ($plannedStart === null || $plannedEnd === null) {
@@ -2214,8 +2226,9 @@ textarea.form-control-custom {
                         <option value="">-- Select a project --</option>
                         <?php foreach ($expertProjects as $proj): ?>
                             <option value="<?php echo $proj['id']; ?>" 
-                                    data-start="<?php echo $proj['timeline_start']; ?>"
-                                    data-end="<?php echo $proj['timeline_end']; ?>">
+                                    data-start="<?php echo htmlspecialchars((string) ($proj['estimation_window_start'] ?? $proj['timeline_start']), ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-end="<?php echo htmlspecialchars((string) ($proj['estimation_window_end'] ?? $proj['timeline_end']), ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-duration-label="<?php echo htmlspecialchars((string) ($proj['estimation_window_label'] ?? 'Project timeline'), ENT_QUOTES, 'UTF-8'); ?>">
                                 <?php echo htmlspecialchars($proj['name']); ?>
                             </option>
                         <?php endforeach; ?>
@@ -2271,13 +2284,21 @@ textarea.form-control-custom {
                     !empty($architectPlan['component_plan']) ? $architectPlan['component_plan'] : decodeRecommendationJson($estimation['component_plan_json'] ?? '[]'),
                     JSON_UNESCAPED_UNICODE
                 );
-                $architectDeadlineValue = trim((string) ($architectPlan['planned_end'] ?: ($task['timeline_end'] ?? '')));
+                $featureDurationWindow = projectEstimationDurationWindow($conn, [
+                    'id' => (int) $task['project_id'],
+                    'timeline_start' => $task['timeline_start'] ?? '',
+                    'timeline_end' => $task['timeline_end'] ?? '',
+                ]);
+                $featureWindowStart = trim((string) ($featureDurationWindow['start'] ?? ($task['timeline_start'] ?? '')));
+                $featureWindowEnd = trim((string) ($featureDurationWindow['end'] ?? ($task['timeline_end'] ?? '')));
+                $featureWindowLabel = (string) ($featureDurationWindow['label'] ?? 'Project timeline');
+                $architectDeadlineValue = trim((string) ($architectPlan['planned_end'] ?: $featureWindowEnd));
                 $featurePlannedStartValue = !empty($task['started_at'])
                     ? date('Y-m-d', strtotime((string) $task['started_at']))
-                    : (trim((string) ($architectPlan['planned_start'] ?? '')) ?: trim((string) ($task['timeline_start'] ?? '')));
+                    : (trim((string) ($architectPlan['planned_start'] ?? '')) ?: $featureWindowStart);
                 $featurePlannedEndValue = !empty($task['deadline'])
                     ? date('Y-m-d', strtotime((string) $task['deadline']))
-                    : trim((string) ($architectPlan['planned_end'] ?? ''));
+                    : (trim((string) ($architectPlan['planned_end'] ?? '')) ?: $featureWindowEnd);
                 if ($featurePlannedEndValue !== '' && $architectDeadlineValue !== '' && strtotime($featurePlannedEndValue) > strtotime($architectDeadlineValue)) {
                     $featurePlannedEndValue = $architectDeadlineValue;
                 }
@@ -2286,7 +2307,7 @@ textarea.form-control-custom {
                     : 'not set';
             ?>
             <?php $isReadonly = $task['status'] !== 'todo'; ?>
-            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars((string) ($task['timeline_start'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars((string) ($task['timeline_end'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" style="display:none;">
+            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars($featureWindowStart, ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars($featureWindowEnd, ENT_QUOTES, 'UTF-8'); ?>" data-duration-label="<?php echo htmlspecialchars($featureWindowLabel, ENT_QUOTES, 'UTF-8'); ?>" style="display:none;">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                     <div>
                         <div class="feature-title"><?php echo htmlspecialchars($task['title']); ?></div>
@@ -2410,7 +2431,7 @@ textarea.form-control-custom {
                             <label class="form-label">Planned End Date</label>
                             <input type="date" name="planned_end" class="form-control-custom estimate-end" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
                                    value="<?php echo htmlspecialchars($featurePlannedEndValue, ENT_QUOTES, 'UTF-8'); ?>" <?php echo $architectDeadlineValue !== '' ? 'max="' . htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>>
-                            <small class="text-muted d-block mt-1">Can be earlier than the Architect deadline, never later than <?php echo htmlspecialchars($architectDeadlineLabel); ?></small>
+                            <small class="text-muted d-block mt-1">Can be earlier than the Architect deadline, never later than <?php echo htmlspecialchars($architectDeadlineLabel); ?>. Default basis: <?php echo htmlspecialchars($featureWindowLabel); ?></small>
                         </div>
                     </div>
 

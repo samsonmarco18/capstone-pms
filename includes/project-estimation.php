@@ -79,6 +79,75 @@ function projectEstimationMonths(?string $start, ?string $end): int
     return max(1, (int) ceil($days / 30));
 }
 
+function projectEstimationDurationWindow(mysqli|PgsqlMysqliCompatConnection $conn, array $project): array
+{
+    $projectId = (int) ($project['id'] ?? 0);
+    $fallbackStart = trim((string) ($project['timeline_start'] ?? ''));
+    $fallbackEnd = trim((string) ($project['timeline_end'] ?? ''));
+    $window = [
+        'start' => $fallbackStart,
+        'end' => $fallbackEnd,
+        'label' => 'Project timeline',
+        'phase_names' => [],
+        'uses_phase_window' => false,
+    ];
+
+    if ($projectId <= 0 || !dbTableExists($conn, 'methodology_phases')) {
+        return $window;
+    }
+
+    $phaseResult = $conn->query("
+        SELECT name, start_date, end_date
+        FROM methodology_phases
+        WHERE project_id = {$projectId}
+        ORDER BY COALESCE(NULLIF(sequence_no, 0), id) ASC, start_date ASC, id ASC
+    ");
+    if (!$phaseResult) {
+        return $window;
+    }
+
+    $phases = [];
+    while ($phase = $phaseResult->fetch_assoc()) {
+        $phases[] = $phase;
+    }
+
+    $executionPhases = array_slice($phases, 1, 2);
+    if (count($executionPhases) < 2) {
+        return $window;
+    }
+
+    $starts = [];
+    $ends = [];
+    $phaseNames = [];
+    foreach ($executionPhases as $phase) {
+        $start = trim((string) ($phase['start_date'] ?? ''));
+        $end = trim((string) ($phase['end_date'] ?? ''));
+        if ($start === '' || $end === '') {
+            return $window;
+        }
+        $starts[] = $start;
+        $ends[] = $end;
+        $phaseNames[] = trim((string) ($phase['name'] ?? 'Phase'));
+    }
+
+    sort($starts);
+    sort($ends);
+
+    return [
+        'start' => $starts[0],
+        'end' => end($ends) ?: $ends[0],
+        'label' => implode(' + ', array_filter($phaseNames)) ?: 'Phases 2 and 3',
+        'phase_names' => $phaseNames,
+        'uses_phase_window' => true,
+    ];
+}
+
+function projectEstimationDurationMonths(mysqli|PgsqlMysqliCompatConnection $conn, array $project): int
+{
+    $window = projectEstimationDurationWindow($conn, $project);
+    return projectEstimationMonths($window['start'] ?? null, $window['end'] ?? null);
+}
+
 function projectEstimationDepartmentLabel(string $department): string
 {
     $value = trim($department);
@@ -347,7 +416,13 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     $technologies = $context['technologies'] ?? [];
     $allocations = $context['allocations'] ?? [];
     $estimation = $context['estimation'] ?? null;
-    $durationMonths = $project ? projectEstimationMonths($project['timeline_start'] ?? null, $project['timeline_end'] ?? null) : 1;
+    $durationWindow = $project ? projectEstimationDurationWindow($conn, $project) : [
+        'start' => '',
+        'end' => '',
+        'label' => 'Project timeline',
+        'uses_phase_window' => false,
+    ];
+    $durationMonths = $project ? projectEstimationMonths($durationWindow['start'] ?? null, $durationWindow['end'] ?? null) : 1;
     $estimationStatus = strtolower((string) ($estimation['status'] ?? 'draft'));
     $estimationLockedForReview = in_array($estimationStatus, ['submitted', 'sul_approved', 'sales_approved'], true);
     $techMonthlyTotal = array_sum(array_map(static fn(array $row): float => (float) ($row['estimated_cost'] ?? 0), $technologies));
@@ -612,6 +687,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                 <div class="overview-cell"><span>Project Name</span><strong><?php echo htmlspecialchars((string) $project['name']); ?></strong></div>
                                 <div class="overview-cell"><span>Client Name</span><strong><?php echo htmlspecialchars((string) $project['client_name']); ?></strong></div>
                                 <div class="overview-cell"><span>Project Timeline</span><strong><?php echo htmlspecialchars((string) ($project['timeline_start'] ?? 'TBD')); ?> to <?php echo htmlspecialchars((string) ($project['timeline_end'] ?? 'TBD')); ?></strong></div>
+                                <div class="overview-cell"><span>Estimate Duration Basis</span><strong><?php echo htmlspecialchars((string) ($durationWindow['label'] ?? 'Project timeline')); ?>: <?php echo htmlspecialchars((string) (($durationWindow['start'] ?? '') ?: 'TBD')); ?> to <?php echo htmlspecialchars((string) (($durationWindow['end'] ?? '') ?: 'TBD')); ?></strong></div>
                                 <div class="overview-cell"><span>Client Budget</span><strong><?php echo projectEstimationPeso((float) ($project['sales_budget'] ?? 0)); ?></strong></div>
                                 <div class="overview-cell"><span>Project Complexity</span><strong><?php echo htmlspecialchars($complexity); ?></strong></div>
                                 <div class="overview-cell"><span>Technology Stack</span><strong><?php echo count($technologies) > 0 ? htmlspecialchars(implode(', ', array_map(static fn(array $row): string => (string) $row['technology_name'], $technologies))) : 'No stack selected'; ?></strong></div>
@@ -621,12 +697,12 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="technologyCostDetails">
-                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-layer-group"></i></span><span>Technology Stack Cost<small>Software cost across the project duration</small></span></h5>
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-layer-group"></i></span><span>Technology Stack Cost<small>Software cost across phases 2 and 3 when available</small></span></h5>
                             <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                         </button>
                         <div class="estimation-panel-body estimation-scroll" id="technologyCostDetails" hidden>
                             <table class="estimate-table">
-                                <thead><tr><th>Technology/Software</th><th>Monthly Cost</th><th>Project Duration</th><th>Total Cost per Technology</th></tr></thead>
+                                <thead><tr><th>Technology/Software</th><th>Monthly Cost</th><th>Estimate Duration</th><th>Total Cost per Technology</th></tr></thead>
                                 <tbody>
                                 <?php if (count($technologies) === 0): ?>
                                     <tr><td colspan="4" class="text-muted">No technology stack was selected by the Architect.</td></tr>
