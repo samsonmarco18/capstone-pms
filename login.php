@@ -134,6 +134,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $loginLogoPath = __DIR__ . '/assets/img/erniLogo_white.png';
 $loginLogoVersion = file_exists($loginLogoPath) ? (string) filemtime($loginLogoPath) : '1';
+$faviconPath = __DIR__ . '/assets/img/logoInside.png';
+$faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) : '1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -141,6 +143,9 @@ $loginLogoVersion = file_exists($loginLogoPath) ? (string) filemtime($loginLogoP
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In | ERNI PMS</title>
+    <link rel="icon" type="image/png" href="assets/img/logoInside.png?v=<?php echo $faviconVersion; ?>">
+    <link rel="shortcut icon" type="image/png" href="assets/img/logoInside.png?v=<?php echo $faviconVersion; ?>">
+    <link rel="apple-touch-icon" href="assets/img/logoInside.png?v=<?php echo $faviconVersion; ?>">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">

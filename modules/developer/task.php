@@ -18,6 +18,47 @@ taskReopenEnsureSchema($conn);
 $userDepartment = trim((string) ($user['department'] ?? ''));
 $userDepartmentCanonical = projectWorkflowDepartmentLabel($userDepartment);
 $departmentProfile = departmentArtifactProfile($userDepartment);
+
+if (!class_exists('DeveloperTaskQueryResult')) {
+    class DeveloperTaskQueryResult
+    {
+        public int $num_rows = 0;
+        private array $rows;
+        private int $index = 0;
+
+        public function __construct(array $rows)
+        {
+            $this->rows = $rows;
+            $this->num_rows = count($rows);
+        }
+
+        public function fetch_assoc(): ?array
+        {
+            if ($this->index >= $this->num_rows) {
+                return null;
+            }
+
+            return $this->rows[$this->index++];
+        }
+    }
+}
+
+function developerTaskQuery(mysqli|PgsqlMysqliCompatConnection $conn, string $sql, string $label): DeveloperTaskQueryResult
+{
+    $rows = [];
+    $result = $conn->query($sql);
+    if (!$result) {
+        error_log('Developer task board query failed [' . $label . ']: ' . ($conn->error ?? 'unknown database error'));
+        return new DeveloperTaskQueryResult([]);
+    }
+
+    while ($row = $result->fetch_assoc()) {
+        $rows[] = $row;
+    }
+
+    return new DeveloperTaskQueryResult($rows);
+}
+
 $developerTaskAccessSql = "
     (
         t.assigned_to = {$user['id']}
@@ -80,10 +121,10 @@ $taskBaseQuery = "
 $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 
 // Get tasks assigned to this developer
-$todoTasks = $conn->query($taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status = 'todo' ORDER BY t.deadline ASC");
-$inProgressTasks = $conn->query($taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status IN ('in_progress', 'sul_revision', 'qa_failed') ORDER BY COALESCE(last_reopened_at, t.updated_at) DESC, t.deadline ASC");
-$reviewTasks = $conn->query($taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release') ORDER BY t.deadline ASC");
-$completedTasks = $conn->query($taskBaseQuery . "
+$todoTasks = developerTaskQuery($conn, $taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status = 'todo' ORDER BY t.deadline ASC", 'todo');
+$inProgressTasks = developerTaskQuery($conn, $taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status IN ('in_progress', 'sul_revision', 'qa_failed') ORDER BY last_reopened_at DESC, t.updated_at DESC, t.deadline ASC", 'in_progress');
+$reviewTasks = developerTaskQuery($conn, $taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release') ORDER BY t.deadline ASC", 'review');
+$completedTasks = developerTaskQuery($conn, $taskBaseQuery . "
     WHERE t.status = 'completed'
       AND (
           t.assigned_to = {$user['id']}
@@ -105,7 +146,7 @@ $completedTasks = $conn->query($taskBaseQuery . "
       )
     ORDER BY COALESCE(t.completed_at, t.updated_at) DESC
     LIMIT 10
-");
+", 'completed');
 
 $departmentProjects = [];
 $departmentProjectsResult = $conn->query("

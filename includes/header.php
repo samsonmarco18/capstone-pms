@@ -1,9 +1,16 @@
+<?php
+$appFaviconPath = __DIR__ . '/../assets/img/logoInside.png';
+$appFaviconVersion = file_exists($appFaviconPath) ? (string) filemtime($appFaviconPath) : '1';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERNI PMS</title>
+    <link rel="icon" type="image/png" href="<?php echo BASE_URL; ?>assets/img/logoInside.png?v=<?php echo $appFaviconVersion; ?>">
+    <link rel="shortcut icon" type="image/png" href="<?php echo BASE_URL; ?>assets/img/logoInside.png?v=<?php echo $appFaviconVersion; ?>">
+    <link rel="apple-touch-icon" href="<?php echo BASE_URL; ?>assets/img/logoInside.png?v=<?php echo $appFaviconVersion; ?>">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.3.0/dist/frappe-gantt.css">
