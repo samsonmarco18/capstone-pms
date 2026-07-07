@@ -18,6 +18,24 @@ taskReopenEnsureSchema($conn);
 $userDepartment = trim((string) ($user['department'] ?? ''));
 $userDepartmentCanonical = projectWorkflowDepartmentLabel($userDepartment);
 $departmentProfile = departmentArtifactProfile($userDepartment);
+$developerTaskAccessSql = "
+    (
+        t.assigned_to = {$user['id']}
+        OR EXISTS (
+            SELECT 1
+            FROM methodology_tasks mt_access
+            WHERE mt_access.task_id = t.id
+              AND mt_access.assigned_developer_id = {$user['id']}
+        )
+        OR EXISTS (
+            SELECT 1
+            FROM methodology_task_departments mtd_access
+            LEFT JOIN methodology_tasks mt_access_department ON mt_access_department.id = mtd_access.methodology_task_id
+            WHERE mtd_access.assigned_developer_id = {$user['id']}
+              AND (mtd_access.workflow_task_id = t.id OR mt_access_department.task_id = t.id)
+        )
+    )
+";
 
 $taskBaseQuery = "
     SELECT t.*,
@@ -40,7 +58,13 @@ $taskBaseQuery = "
                FROM task_reopen_requests rr
                WHERE rr.task_id = t.id
                  AND rr.status IN ('pending_sul', 'pending_architect')
-           ) AS active_reopen_request_count
+           ) AS active_reopen_request_count,
+           (
+               SELECT MAX(rr_approved.architect_reviewed_at)
+               FROM task_reopen_requests rr_approved
+               WHERE rr_approved.task_id = t.id
+                 AND rr_approved.status = 'architect_approved'
+           ) AS last_reopened_at
     FROM tasks t
     LEFT JOIN projects p ON p.id = t.project_id
     LEFT JOIN task_git_updates latest_git ON latest_git.id = (
@@ -56,18 +80,29 @@ $taskBaseQuery = "
 $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 
 // Get tasks assigned to this developer
-$todoTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status = 'todo' ORDER BY t.deadline ASC");
-$inProgressTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status IN ('in_progress', 'sul_revision', 'qa_failed') ORDER BY t.deadline ASC");
-$reviewTasks = $conn->query($taskBaseQuery . " WHERE t.assigned_to = {$user['id']} AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release') ORDER BY t.deadline ASC");
+$todoTasks = $conn->query($taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status = 'todo' ORDER BY t.deadline ASC");
+$inProgressTasks = $conn->query($taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status IN ('in_progress', 'sul_revision', 'qa_failed') ORDER BY COALESCE(last_reopened_at, t.updated_at) DESC, t.deadline ASC");
+$reviewTasks = $conn->query($taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release') ORDER BY t.deadline ASC");
 $completedTasks = $conn->query($taskBaseQuery . "
-    WHERE (t.assigned_to = {$user['id']} AND t.status = 'completed')
-       OR EXISTS (
-           SELECT 1
-           FROM methodology_tasks mt_done
-           WHERE mt_done.task_id = t.id
-             AND mt_done.assigned_developer_id = {$user['id']}
-             AND mt_done.status = 'completed'
-       )
+    WHERE t.status = 'completed'
+      AND (
+          t.assigned_to = {$user['id']}
+          OR EXISTS (
+              SELECT 1
+              FROM methodology_tasks mt_done
+              WHERE mt_done.task_id = t.id
+                AND mt_done.assigned_developer_id = {$user['id']}
+                AND mt_done.status = 'completed'
+          )
+          OR EXISTS (
+              SELECT 1
+              FROM methodology_task_departments mtd_done
+              LEFT JOIN methodology_tasks mt_done_department ON mt_done_department.id = mtd_done.methodology_task_id
+              WHERE mtd_done.assigned_developer_id = {$user['id']}
+                AND (mtd_done.workflow_task_id = t.id OR mt_done_department.task_id = t.id)
+                AND mtd_done.status = 'completed'
+          )
+      )
     ORDER BY COALESCE(t.completed_at, t.updated_at) DESC
     LIMIT 10
 ");
@@ -574,6 +609,26 @@ include '../../includes/navbar.php';
 
 .kanban-card:active {
     cursor: grabbing;
+}
+
+.kanban-card.reopened-card {
+    border-color: #f59e0b;
+    background: #fff7ed;
+    box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+.reopen-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    width: fit-content;
+    padding: 0.2rem 0.45rem;
+    border-radius: 999px;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-bottom: 0.45rem;
 }
 
 .task-priority-dot {
@@ -1257,6 +1312,16 @@ include '../../includes/navbar.php';
     border-color: rgba(31, 99, 146, 0.28) !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card.reopened-card {
+    background: #1f1608 !important;
+    border-color: #f59e0b !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .reopen-indicator {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-workbench__title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-project-card h6,
@@ -1550,8 +1615,14 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="kanban-body" id="progress-column">
                     <?php while($task = $inProgressTasks->fetch_assoc()): ?>
-                    <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
+                    <?php $isReopenedTask = !empty($task['last_reopened_at']) && (string) ($task['status'] ?? '') === 'sul_revision'; ?>
+                    <div class="kanban-card <?php echo $isReopenedTask ? 'reopened-card' : ''; ?>" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
+                        <?php if ($isReopenedTask): ?>
+                            <span class="reopen-indicator" data-bs-toggle="tooltip" title="Architect approved a reopen request for this task.">
+                                <i class="fas fa-rotate-left"></i> Reopened
+                            </span>
+                        <?php endif; ?>
                         <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
                         <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
                         <?php if (!empty($task['git_branch_name'])): ?>
@@ -2219,6 +2290,10 @@ function viewTask(taskId) {
             const roadmapBanner = buildRoadmapReadyBanner(task);
             const reopenPanel = buildReopenRequestPanel(task);
             const isUiUxDepartment = currentDepartmentCanonical === 'UI/UX';
+            const isReopenedTask = Boolean(task.last_reopened_at) && String(task.status || '') === 'sul_revision';
+            const reopenedBadge = isReopenedTask
+                ? '<span class="reopen-indicator mb-0"><i class="fas fa-rotate-left"></i> Reopened</span>'
+                : '';
             const gitToolsPanel = isUiUxDepartment ? '' : `
                         <div class="task-side-panel">
                             <div class="task-side-heading">
@@ -2263,7 +2338,10 @@ function viewTask(taskId) {
                                     <h5 class="task-detail-title">${escapeHtml(task.title)}</h5>
                                     <p class="task-detail-desc">${task.description ? escapeHtml(task.description) : 'No description provided.'}</p>
                                 </div>
-                                <span class="badge-priority-${task.priority}">${escapeHtml(task.priority || 'medium')}</span>
+                                <div class="d-flex flex-column align-items-end gap-2">
+                                    ${reopenedBadge}
+                                    <span class="badge-priority-${task.priority}">${escapeHtml(task.priority || 'medium')}</span>
+                                </div>
                             </div>
                         </div>
 

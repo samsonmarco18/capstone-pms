@@ -52,6 +52,12 @@ $stmt = $conn->prepare("
                WHERE rr.task_id = t.id
                  AND rr.status IN ('pending_sul', 'pending_architect')
            ) AS active_reopen_request_count,
+           (
+               SELECT MAX(rr_approved.architect_reviewed_at)
+               FROM task_reopen_requests rr_approved
+               WHERE rr_approved.task_id = t.id
+                 AND rr_approved.status = 'architect_approved'
+           ) AS last_reopened_at,
            fe.min_days, fe.likely_days, fe.max_days, fe.expectation_description as estimation_notes
     FROM tasks t
     LEFT JOIN projects p ON t.project_id = p.id

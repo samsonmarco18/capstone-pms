@@ -123,6 +123,75 @@ function taskReopenDeveloperTaskDepartment(mysqli|PgsqlMysqliCompatConnection $c
     return projectWorkflowTaskDepartment($conn, $taskId);
 }
 
+function taskReopenMarkRequesterWorkOpen(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    int $projectId,
+    int $taskId,
+    int $developerId,
+    int $updatedBy
+): void {
+    if ($projectId <= 0 || $taskId <= 0 || $developerId <= 0) {
+        return;
+    }
+
+    $methodologyTaskIds = [];
+    if (dbTableExists($conn, 'methodology_task_departments')) {
+        $departmentRows = $conn->query("
+            SELECT mtd.id, mtd.methodology_task_id
+            FROM methodology_task_departments mtd
+            LEFT JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+            WHERE mtd.project_id = {$projectId}
+              AND mtd.assigned_developer_id = {$developerId}
+              AND (mtd.workflow_task_id = {$taskId} OR mt.task_id = {$taskId})
+        ");
+        $departmentRowIds = [];
+        if ($departmentRows) {
+            while ($row = $departmentRows->fetch_assoc()) {
+                $departmentRowIds[] = (int) ($row['id'] ?? 0);
+                $methodologyTaskIds[] = (int) ($row['methodology_task_id'] ?? 0);
+            }
+        }
+
+        $departmentRowIds = array_values(array_filter(array_unique($departmentRowIds)));
+        if ($departmentRowIds) {
+            $conn->query("
+                UPDATE methodology_task_departments
+                SET status = 'for_revision',
+                    submitted_at = NULL,
+                    approved_by = NULL,
+                    approved_at = NULL,
+                    updated_by = {$updatedBy},
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id IN (" . implode(',', $departmentRowIds) . ")
+            ");
+        }
+    }
+
+    $roadmapRows = $conn->query("
+        SELECT id
+        FROM methodology_tasks
+        WHERE project_id = {$projectId}
+          AND task_id = {$taskId}
+          AND assigned_developer_id = {$developerId}
+    ");
+    if ($roadmapRows) {
+        while ($row = $roadmapRows->fetch_assoc()) {
+            $methodologyTaskIds[] = (int) ($row['id'] ?? 0);
+        }
+    }
+
+    $methodologyTaskIds = array_values(array_filter(array_unique($methodologyTaskIds)));
+    if ($methodologyTaskIds) {
+        $conn->query("
+            UPDATE methodology_tasks
+            SET status = 'blocked',
+                updated_by = {$updatedBy},
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id IN (" . implode(',', $methodologyTaskIds) . ")
+        ");
+    }
+}
+
 function taskReopenCreateRequest(
     mysqli|PgsqlMysqliCompatConnection $conn,
     int $taskId,
@@ -517,6 +586,14 @@ function taskReopenApplyArchitectApproval(
             }
         }
     }
+
+    taskReopenMarkRequesterWorkOpen(
+        $conn,
+        $projectId,
+        $taskId,
+        (int) ($request['requested_by'] ?? 0),
+        $architectId
+    );
 
     $conn->query("UPDATE projects SET status = 'in_progress' WHERE id = {$projectId} AND status = 'completed'");
     projectWorkflowSyncRoadmap($conn, $projectId);
