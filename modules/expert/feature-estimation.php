@@ -121,6 +121,7 @@ function featureEstimationApplyDurationWindow(array &$plan): void
         return $phaseOrder === 2 || $phaseOrder === 3;
     }));
     $basisRows = $executionRows !== [] ? $executionRows : $validRows;
+    $usesExecutionWindow = $executionRows !== [];
 
     usort($basisRows, static function (array $a, array $b): int {
         return [
@@ -165,8 +166,10 @@ function featureEstimationApplyDurationWindow(array &$plan): void
     }
 
     $displayEnd = $actualLastEnd ?: $firstStart->modify('+' . ($allocatedDays - 1) . ' days');
-    $plan['planned_start'] = $plan['planned_start'] !== '' ? $plan['planned_start'] : $firstStart->format('Y-m-d');
-    $plan['planned_end'] = $plan['planned_end'] !== '' ? $plan['planned_end'] : $displayEnd->format('Y-m-d');
+    $windowStart = $firstStart->format('Y-m-d');
+    $windowEnd = $displayEnd->format('Y-m-d');
+    $plan['planned_start'] = $usesExecutionWindow || $plan['planned_start'] === '' ? $windowStart : $plan['planned_start'];
+    $plan['planned_end'] = $usesExecutionWindow || $plan['planned_end'] === '' ? $windowEnd : $plan['planned_end'];
     $plan['estimate_duration_days'] = $allocatedDays;
     $label = implode(' + ', array_keys($phaseNames)) ?: 'Roadmap task schedule';
     $plan['duration_basis_label'] = $maxPeerCount > 1
@@ -627,10 +630,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     if ($architectDeadline === '') {
         $architectDeadline = $projectTimelineEnd;
     }
-    if ($plannedStart === null) {
-        $plannedStart = $architectPlannedStart !== '' ? $architectPlannedStart : ($projectTimelineStart !== '' ? $projectTimelineStart : null);
+    if ($architectPlannedStart !== '') {
+        $plannedStart = $architectPlannedStart;
+    } elseif ($plannedStart === null) {
+        $plannedStart = $projectTimelineStart !== '' ? $projectTimelineStart : null;
     }
-    if ($plannedEnd === null && $architectDeadline !== '') {
+    if ($architectDeadline !== '') {
         $plannedEnd = $architectDeadline;
     }
 
@@ -2432,13 +2437,15 @@ textarea.form-control-custom {
                 if ($featureEstimateBasisLabel === '') {
                     $featureEstimateBasisLabel = $featureWindowLabel;
                 }
-                $architectDeadlineValue = trim((string) ($architectPlan['planned_end'] ?: $featureWindowEnd));
-                $featurePlannedStartValue = !empty($task['started_at'])
-                    ? date('Y-m-d', strtotime((string) $task['started_at']))
-                    : (trim((string) ($architectPlan['planned_start'] ?? '')) ?: $featureWindowStart);
-                $featurePlannedEndValue = !empty($task['deadline'])
-                    ? date('Y-m-d', strtotime((string) $task['deadline']))
-                    : (trim((string) ($architectPlan['planned_end'] ?? '')) ?: $featureWindowEnd);
+                $architectPlanStartValue = trim((string) ($architectPlan['planned_start'] ?? ''));
+                $architectPlanEndValue = trim((string) ($architectPlan['planned_end'] ?? ''));
+                $architectDeadlineValue = $architectPlanEndValue !== '' ? $architectPlanEndValue : $featureWindowEnd;
+                $featurePlannedStartValue = $architectPlanStartValue !== ''
+                    ? $architectPlanStartValue
+                    : (!empty($task['started_at']) ? date('Y-m-d', strtotime((string) $task['started_at'])) : $featureWindowStart);
+                $featurePlannedEndValue = $architectPlanEndValue !== ''
+                    ? $architectPlanEndValue
+                    : (!empty($task['deadline']) ? date('Y-m-d', strtotime((string) $task['deadline'])) : $featureWindowEnd);
                 if ($featurePlannedEndValue !== '' && $architectDeadlineValue !== '' && strtotime($featurePlannedEndValue) > strtotime($architectDeadlineValue)) {
                     $featurePlannedEndValue = $architectDeadlineValue;
                 }
