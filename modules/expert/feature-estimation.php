@@ -1776,12 +1776,10 @@ include '../../includes/navbar.php';
 }
 
 .feature-row.incomplete {
-    border-left: 4px solid #f59e0b;
     background: #fff7ed;
 }
 
 .feature-row.complete {
-    border-left: 4px solid #10b981;
     background: #f0fdf4;
 }
 
@@ -1847,21 +1845,57 @@ textarea.form-control-custom {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
     color: white;
     border: none;
-    padding: 0.7rem;
+    padding: 0.7rem 1rem;
     border-radius: 9px;
-    font-weight: 500;
+    font-weight: 700;
     transition: all 0.2s;
-    width: 100%;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    min-height: 44px;
 }
 
 .btn-submit:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
     color: white;
+}
+
+.estimate-action-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.estimate-action-row .btn-submit {
+    min-width: min(280px, 100%);
+}
+
+.btn-draft-estimate {
+    background: #fff;
+    border: 1px solid rgba(31, 99, 146, 0.35);
+    color: var(--theme-primary);
+    padding: 0.7rem 1rem;
+    border-radius: 9px;
+    font-weight: 700;
+    min-height: 44px;
+    min-width: 150px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.btn-draft-estimate:hover {
+    background: rgba(31, 99, 146, 0.08);
+    border-color: var(--theme-primary);
+    color: var(--theme-primary);
+    transform: translateY(-1px);
 }
 
 /* Alert Info */
@@ -2268,7 +2302,8 @@ textarea.form-control-custom {
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pm-inline-btn,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-add-phase {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-add-phase,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-draft-estimate {
     background: rgba(31, 99, 146, 0.12);
     border-color: rgba(31, 99, 146, 0.3);
     color: #7cc0ee;
@@ -2302,6 +2337,15 @@ textarea.form-control-custom {
     
     .card-body-custom {
         padding: 1.25rem;
+    }
+
+    .estimate-action-row {
+        justify-content: stretch;
+    }
+
+    .estimate-action-row .btn-submit,
+    .estimate-action-row .btn-draft-estimate {
+        width: 100%;
     }
 }
 </style>
@@ -2611,11 +2655,16 @@ textarea.form-control-custom {
                         <small class="text-muted d-block mt-1 manual-recommendation-help">Useful when you adjust or reject a suggested estimate and want your version available next time.</small>
                     </div>
                     <?php endif; ?>
-                    
+                     
                     <?php if (!$isReadonly): ?>
-                        <button type="submit" class="btn-submit">
-                            <i class="fas fa-save"></i> Save Estimation
-                        </button>
+                        <div class="estimate-action-row">
+                            <button type="submit" class="btn-draft-estimate">
+                                <i class="fas fa-floppy-disk"></i> Save Draft
+                            </button>
+                            <button type="submit" class="btn-submit">
+                                <i class="fas fa-save"></i> Save Estimation
+                            </button>
+                        </div>
                     <?php else: ?>
                         <div class="text-muted small">This feature has been submitted to Sales.</div>
                     <?php endif; ?>
