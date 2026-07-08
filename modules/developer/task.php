@@ -692,8 +692,8 @@ include '../../includes/navbar.php';
 }
 
 .kanban-card.reopened-card {
-    border-color: rgba(31, 99, 146, 0.22);
-    background: linear-gradient(180deg, rgba(31, 99, 146, 0.045), #ffffff 38%);
+    border-color: #f59e0b;
+    background: #fff7ed;
     box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
 }
 
@@ -704,8 +704,8 @@ include '../../includes/navbar.php';
     width: fit-content;
     padding: 0.22rem 0.5rem;
     border-radius: 999px;
-    background: rgba(31, 99, 146, 0.1);
-    color: var(--theme-primary);
+    background: #fef3c7;
+    color: #92400e;
     font-size: 0.65rem;
     font-weight: 700;
     margin-bottom: 0.6rem;
@@ -1466,13 +1466,13 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card.reopened-card {
-    background: linear-gradient(180deg, rgba(31, 99, 146, 0.18), #071321 40%) !important;
-    border-color: rgba(138, 210, 255, 0.2) !important;
+    background: #1f1608 !important;
+    border-color: #f59e0b !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .reopen-indicator {
-    background: rgba(138, 210, 255, 0.12);
-    color: #bfe6ff;
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header h5,

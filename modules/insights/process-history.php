@@ -50,10 +50,11 @@ include '../../includes/navbar.php';
     justify-content: space-between;
     gap: 1rem;
     margin-bottom: 1rem;
-    padding: 1.25rem;
-    border-radius: 14px;
-    background: linear-gradient(135deg, #1f6392 0%, #174d72 100%);
+    padding: 1.2rem 1.35rem;
+    border-radius: 8px;
+    background: #1f6392;
     color: #fff;
+    box-shadow: 0 12px 28px rgba(31, 99, 146, 0.16);
 }
 .process-hero h2 { margin: 0; font-size: 1.35rem; font-weight: 750; }
 .process-hero p { margin: 0.35rem 0 0; max-width: 780px; color: rgba(255, 255, 255, 0.86); font-size: 0.9rem; }
@@ -61,12 +62,23 @@ include '../../includes/navbar.php';
 .process-tab-shell {
     background: #fff;
     border: 1px solid #dfe8f1;
-    border-radius: 12px;
-    box-shadow: 0 8px 22px rgba(15, 42, 64, 0.04);
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(15, 42, 64, 0.04);
 }
-.process-filter-card { padding: 1rem; margin-bottom: 1rem; }
+.process-filter-card { padding: 1.05rem; margin-bottom: 1rem; }
 .process-filter-card .row { min-width: 0; }
-.process-filter-card .form-select { min-width: 0; text-overflow: ellipsis; }
+.process-filter-card .form-select {
+    min-width: 0;
+    min-height: 46px;
+    border-color: #d8e4ee;
+    border-radius: 8px;
+    color: #172033;
+    text-overflow: ellipsis;
+}
+.process-filter-card .form-select:focus {
+    border-color: #1f6392;
+    box-shadow: 0 0 0 0.16rem rgba(31, 99, 146, 0.14);
+}
 .process-filter-card label { color: #64748b; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
 .process-tabs {
     display: flex;
@@ -76,9 +88,12 @@ include '../../includes/navbar.php';
 }
 .process-tabs .nav-link {
     border: 1px solid #dfe8f1;
-    border-radius: 10px;
+    border-radius: 8px;
+    background: #fff;
     color: #475569;
     font-weight: 800;
+    min-height: 44px;
+    padding: 0.6rem 1rem;
     white-space: nowrap;
 }
 .process-tabs .nav-link.active {
@@ -91,7 +106,7 @@ include '../../includes/navbar.php';
     display: flex;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1rem 1.1rem;
+    padding: 1.05rem 1.2rem;
     border-bottom: 1px solid #e5edf5;
     background: #f8fbfd;
 }
@@ -102,14 +117,14 @@ include '../../includes/navbar.php';
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 0.75rem;
-    padding: 1rem 1.1rem;
+    padding: 1rem 1.2rem;
     border-bottom: 1px solid #eef3f7;
 }
 .process-metric {
     min-width: 0;
     padding: 0.85rem;
     border: 1px solid #e5edf5;
-    border-radius: 10px;
+    border-radius: 8px;
     background: #fbfdff;
 }
 .process-metric span { display: block; color: #64748b; font-size: 0.68rem; font-weight: 850; text-transform: uppercase; }
@@ -121,7 +136,7 @@ include '../../includes/navbar.php';
     max-height: min(680px, 64vh);
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 1rem 1.1rem;
+    padding: 1rem 1.2rem;
     scrollbar-gutter: stable;
 }
 .process-event {
@@ -129,10 +144,17 @@ include '../../includes/navbar.php';
     grid-template-columns: minmax(110px, 0.75fr) minmax(0, 2fr) minmax(105px, 0.75fr);
     gap: 1rem;
     min-width: 0;
-    padding: 1rem;
+    padding: 1rem 1.05rem;
     border: 1px solid #e5edf5;
-    border-radius: 10px;
+    border-radius: 8px;
     background: #fff;
+    box-shadow: 0 8px 18px rgba(15, 42, 64, 0.035);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.process-event:hover {
+    border-color: rgba(31, 99, 146, 0.28);
+    box-shadow: 0 12px 24px rgba(15, 42, 64, 0.06);
+    transform: translateY(-1px);
 }
 .process-event-time { min-width: 0; color: #64748b; font-size: 0.78rem; overflow-wrap: anywhere; }
 .process-event-time strong { display: block; color: #172033; font-size: 0.86rem; }
@@ -172,7 +194,7 @@ include '../../includes/navbar.php';
     max-width: 100%;
     padding: 0.28rem 0.5rem;
     border: 1px solid #edf2f7;
-    border-radius: 8px;
+    border-radius: 6px;
     background: #f8fbfd;
     overflow-wrap: anywhere;
     word-break: break-word;
@@ -181,8 +203,8 @@ include '../../includes/navbar.php';
 .process-note {
     margin-top: 0.55rem;
     padding: 0.55rem 0.65rem;
-    border-left: 3px solid #cfe0ee;
-    border-radius: 8px;
+    border: 1px solid #e5edf5;
+    border-radius: 6px;
     background: #f8fbfd;
     color: #64748b;
     font-size: 0.8rem;
@@ -200,8 +222,9 @@ include '../../includes/navbar.php';
     min-width: 0;
     padding: 1rem;
     border: 1px solid #e5edf5;
-    border-radius: 10px;
+    border-radius: 8px;
     background: #fff;
+    box-shadow: 0 8px 18px rgba(15, 42, 64, 0.035);
 }
 .developer-duration-top {
     display: flex;
@@ -224,7 +247,7 @@ include '../../includes/navbar.php';
     min-width: 0;
     padding: 0.72rem;
     border: 1px solid #edf2f7;
-    border-radius: 9px;
+    border-radius: 8px;
     background: #f8fbfd;
 }
 .task-duration-value strong { display: block; color: #172033; font-size: 0.92rem; overflow-wrap: anywhere; }
