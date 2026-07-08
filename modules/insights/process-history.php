@@ -280,43 +280,86 @@ include '../../includes/navbar.php';
 .process-duration.is-slow strong { color: #b45309; }
 .process-empty { padding: 2rem; text-align: center; color: #64748b; }
 .process-empty i { display: block; margin-bottom: 0.7rem; color: #1f6392; font-size: 1.8rem; }
-.developer-duration-list { display: grid; }
-.developer-duration-card {
-    min-width: 0;
-    padding: 1rem;
-    border: 1px solid #e5edf5;
-    border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 8px 18px rgba(15, 42, 64, 0.035);
-}
-.developer-duration-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 1rem;
-    margin-bottom: 0.75rem;
-}
-.task-duration-name { min-width: 0; }
-.task-duration-name strong { display: block; color: #172033; font-size: 0.95rem; overflow-wrap: anywhere; }
-.task-duration-name span,
-.task-duration-muted { color: #64748b; font-size: 0.76rem; overflow-wrap: anywhere; }
-.developer-duration-grid {
+.developer-duration-header {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(155px, 100%), 1fr));
-    gap: 0.65rem;
+    grid-template-columns: minmax(230px, 1.35fr) minmax(150px, 0.85fr) minmax(150px, 0.85fr) minmax(150px, 0.85fr) minmax(150px, 0.8fr) minmax(140px, 0.75fr);
+    gap: 1rem;
+    padding: 0.7rem 1.2rem;
+    border-bottom: 1px solid #e5edf5;
+    background: #f8fbfd;
+    color: #61758a;
+    font-size: 0.7rem;
+    font-weight: 850;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
 }
-.task-duration-value {
+.developer-duration-list {
+    display: grid;
+    gap: 0;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+.developer-duration-card {
+    display: grid;
+    grid-template-columns: minmax(230px, 1.35fr) minmax(150px, 0.85fr) minmax(150px, 0.85fr) minmax(150px, 0.85fr) minmax(150px, 0.8fr) minmax(140px, 0.75fr);
+    align-items: center;
+    gap: 1rem;
     min-width: 0;
-    padding: 0.72rem;
-    border: 1px solid #edf2f7;
-    border-radius: 8px;
+    padding: 0.95rem 0;
+    border: 0;
+    border-bottom: 1px solid #e5edf5;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    transition: background 0.2s ease;
+}
+.developer-duration-card:hover {
     background: #f8fbfd;
 }
+.developer-duration-card:last-child { border-bottom: 0; }
+.task-duration-name { min-width: 0; }
+.task-duration-name strong { display: block; color: #172033; font-size: 0.95rem; overflow-wrap: anywhere; }
+.task-duration-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+    color: #64748b;
+    font-size: 0.76rem;
+}
+.task-duration-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.task-duration-name .process-pill {
+    margin-top: 0.45rem;
+}
+.task-duration-muted { color: #64748b; font-size: 0.76rem; overflow-wrap: anywhere; }
+.task-duration-value {
+    min-width: 0;
+    color: #172033;
+    overflow-wrap: anywhere;
+}
 .task-duration-value strong { display: block; color: #172033; font-size: 0.92rem; overflow-wrap: anywhere; }
-.task-duration-value small { color: #64748b; overflow-wrap: anywhere; }
-.task-duration-late { color: #b91c1c; font-weight: 800; }
-.task-duration-ontrack { color: #166534; font-weight: 800; }
+.task-duration-value small {
+    display: none;
+    color: #64748b;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    overflow-wrap: anywhere;
+}
+.task-duration-value span {
+    display: block;
+    margin-top: 0.15rem;
+    color: #64748b;
+    font-size: 0.76rem;
+}
+.task-duration-value .task-duration-late { color: #b91c1c !important; font-weight: 800; }
+.task-duration-value .task-duration-ontrack { color: #166534 !important; font-weight: 800; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-filter-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-shell,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero,
@@ -353,7 +396,20 @@ include '../../includes/navbar.php';
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-head { background: #0d1b2a; border-color: #20364a; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric-strip { background: #081727; border-color: #20364a; }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-value { background: #102235; border-color: #20364a; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-duration-header {
+    background: #081727;
+    border-color: #20364a;
+    color: #90aeca;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-duration-card:hover {
+    background: #102235;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-value span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-value small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-muted {
+    color: #90aeca;
+}
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero h2,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-head h5,
@@ -363,14 +419,17 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-event-title strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-duration strong { color: #e7f0f8; }
 @media (max-width: 1200px) {
-    .process-list-header { display: none; }
+    .process-list-header,
+    .developer-duration-header { display: none; }
     .process-event { grid-template-columns: minmax(0, 1fr); gap: 0.7rem; }
+    .developer-duration-card { grid-template-columns: minmax(0, 1fr); gap: 0.7rem; }
     .process-duration { text-align: left; }
     .process-meta { flex-direction: row; flex-wrap: wrap; }
+    .task-duration-value small { display: block; margin-bottom: 0.15rem; }
 }
 @media (max-width: 900px) {
     .process-event { grid-template-columns: 1fr; }
-    .developer-duration-top { flex-direction: column; }
+    .developer-duration-card { grid-template-columns: 1fr; }
     .process-duration { text-align: left; }
 }
 </style>
@@ -544,6 +603,14 @@ include '../../includes/navbar.php';
                         <div>Choose another project or assign developers to workflow tasks first.</div>
                     </div>
                 <?php else: ?>
+                    <div class="developer-duration-header" aria-hidden="true">
+                        <span>Assignment</span>
+                        <span>Planning start</span>
+                        <span>Developer start</span>
+                        <span><?php echo $taskSummary['completed_count'] > 0 ? 'Completed / current' : 'Current'; ?></span>
+                        <span>Durations</span>
+                        <span>Deadline</span>
+                    </div>
                     <div class="process-scroll-list developer-duration-list">
                         <?php foreach ($taskDurations as $task): ?>
                             <?php
@@ -557,49 +624,44 @@ include '../../includes/navbar.php';
                                 $isCompleted = !empty($task['is_completed']);
                             ?>
                             <article class="developer-duration-card">
-                                <div class="developer-duration-top">
-                                    <div class="task-duration-name">
-                                        <strong><?php echo htmlspecialchars((string) $task['title']); ?></strong>
-                                        <span><i class="fas fa-user me-1"></i><?php echo htmlspecialchars((string) $task['assigned_to']); ?></span>
-                                        <span class="ms-2"><i class="fas fa-diagram-project me-1"></i><?php echo htmlspecialchars($projectName); ?></span>
+                                <div class="task-duration-name">
+                                    <strong><?php echo htmlspecialchars((string) $task['title']); ?></strong>
+                                    <div class="task-duration-meta">
+                                        <span><i class="fas fa-user"></i><?php echo htmlspecialchars((string) $task['assigned_to']); ?></span>
+                                        <span><i class="fas fa-diagram-project"></i><?php echo htmlspecialchars($projectName); ?></span>
                                     </div>
                                     <span class="process-pill <?php echo $isCompleted ? 'approval' : 'task'; ?>"><?php echo htmlspecialchars((string) $task['status_label']); ?></span>
                                 </div>
-                                <div class="developer-duration-grid">
-                                    <div class="task-duration-value">
-                                        <small>Planning start</small>
-                                        <strong><?php echo $planningStartTs ? htmlspecialchars(date('M d, Y h:i A', $planningStartTs)) : 'No movement yet'; ?></strong>
-                                    </div>
-                                    <div class="task-duration-value">
-                                        <small>Developer start</small>
-                                        <strong><?php echo $developerStartTs ? htmlspecialchars(date('M d, Y h:i A', $developerStartTs)) : 'Not started'; ?></strong>
-                                    </div>
-                                    <div class="task-duration-value">
-                                        <small><?php echo $isCompleted ? 'Completed' : 'Current'; ?></small>
-                                        <strong><?php echo $completedTs ? htmlspecialchars(date('M d, Y h:i A', $completedTs)) : htmlspecialchars(date('M d, Y h:i A', $displayEndTs)); ?></strong>
-                                    </div>
-                                    <div class="task-duration-value">
-                                        <small>Total including planning</small>
-                                        <strong><?php echo htmlspecialchars(processHistoryFormatDuration($task['workflow_seconds'])); ?></strong>
-                                    </div>
-                                    <div class="task-duration-value">
-                                        <small>Developer work duration</small>
-                                        <strong><?php echo htmlspecialchars(processHistoryFormatDuration($task['work_seconds'])); ?></strong>
-                                    </div>
-                                    <div class="task-duration-value">
-                                        <small>Deadline result</small>
-                                        <strong>
-                                            <?php if (!$deadlineTs): ?>
-                                                <span class="task-duration-muted">No deadline</span>
-                                            <?php elseif ($lateSeconds > 0): ?>
-                                                <span class="task-duration-late"><?php echo htmlspecialchars(processHistoryFormatDuration($lateSeconds)); ?> late</span>
-                                            <?php elseif ($isCompleted): ?>
-                                                <span class="task-duration-ontrack">On time</span>
-                                            <?php else: ?>
-                                                <span class="task-duration-muted">Due <?php echo htmlspecialchars(date('M d, Y', $deadlineTs)); ?></span>
-                                            <?php endif; ?>
-                                        </strong>
-                                    </div>
+                                <div class="task-duration-value">
+                                    <small>Planning start</small>
+                                    <strong><?php echo $planningStartTs ? htmlspecialchars(date('M d, Y h:i A', $planningStartTs)) : 'No movement yet'; ?></strong>
+                                </div>
+                                <div class="task-duration-value">
+                                    <small>Developer start</small>
+                                    <strong><?php echo $developerStartTs ? htmlspecialchars(date('M d, Y h:i A', $developerStartTs)) : 'Not started'; ?></strong>
+                                </div>
+                                <div class="task-duration-value">
+                                    <small><?php echo $isCompleted ? 'Completed' : 'Current'; ?></small>
+                                    <strong><?php echo $completedTs ? htmlspecialchars(date('M d, Y h:i A', $completedTs)) : htmlspecialchars(date('M d, Y h:i A', $displayEndTs)); ?></strong>
+                                </div>
+                                <div class="task-duration-value">
+                                    <small>Durations</small>
+                                    <strong><?php echo htmlspecialchars(processHistoryFormatDuration($task['workflow_seconds'])); ?></strong>
+                                    <span>Work: <?php echo htmlspecialchars(processHistoryFormatDuration($task['work_seconds'])); ?></span>
+                                </div>
+                                <div class="task-duration-value">
+                                    <small>Deadline</small>
+                                    <strong>
+                                        <?php if (!$deadlineTs): ?>
+                                            <span class="task-duration-muted">No deadline</span>
+                                        <?php elseif ($lateSeconds > 0): ?>
+                                            <span class="task-duration-late"><?php echo htmlspecialchars(processHistoryFormatDuration($lateSeconds)); ?> late</span>
+                                        <?php elseif ($isCompleted): ?>
+                                            <span class="task-duration-ontrack">On time</span>
+                                        <?php else: ?>
+                                            <span class="task-duration-muted">Due <?php echo htmlspecialchars(date('M d, Y', $deadlineTs)); ?></span>
+                                        <?php endif; ?>
+                                    </strong>
                                 </div>
                             </article>
                         <?php endforeach; ?>
