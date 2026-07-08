@@ -46,50 +46,46 @@ include '../../includes/navbar.php';
 <style>
 .process-hero {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 1rem;
+    position: relative;
     margin-bottom: 1rem;
-    padding: 1.15rem 1.25rem;
+    padding: 1.2rem 5rem 1.35rem 1.35rem;
     border-radius: 8px;
-    background: #fff;
-    border: 1px solid #dfe8f1;
-    color: #172033;
-    box-shadow: 0 8px 20px rgba(15, 42, 64, 0.04);
-}
-.process-hero > div {
-    min-width: 0;
+    background: #1f6392;
+    color: #fff;
+    box-shadow: 0 12px 28px rgba(31, 99, 146, 0.16);
 }
 .process-hero h2 {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
     margin: 0;
-    color: #172033;
-    font-size: 1.28rem;
+    color: #fff;
+    font-size: 1.35rem;
     font-weight: 800;
 }
 .process-hero h2 i {
-    width: 40px;
-    height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    background: rgba(31, 99, 146, 0.12);
-    color: #1f6392;
-    font-size: 1rem;
+    color: #fff;
 }
 .process-hero p {
-    margin: 0.35rem 0 0 3.25rem;
+    margin: 0.35rem 0 0;
     max-width: 780px;
-    color: #5f7388;
+    color: rgba(255, 255, 255, 0.86);
     font-size: 0.9rem;
 }
 .process-hero.page-help-host .page-header-help-btn {
-    position: static;
-    flex: 0 0 auto;
-    margin-left: auto;
+    position: absolute !important;
+    top: 16px;
+    right: 16px;
+    margin: 0 !important;
+    border-color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.94);
+    color: #15567f;
+    box-shadow: 0 8px 20px rgba(5, 32, 55, 0.22);
+}
+.process-hero.page-help-host .page-header-help-btn:hover,
+.process-hero.page-help-host .page-header-help-btn:focus-visible {
+    background: #fff;
+    color: #0f496e;
 }
 .process-filter-card,
 .process-tab-shell {
@@ -175,9 +171,22 @@ include '../../includes/navbar.php';
 .process-metric span { display: block; color: #64748b; font-size: 0.68rem; font-weight: 850; text-transform: uppercase; }
 .process-metric strong { display: block; margin-top: 0.2rem; color: #172033; font-size: 1.12rem; overflow-wrap: anywhere; }
 .process-metric small { display: block; margin-top: 0.2rem; color: #64748b; overflow-wrap: anywhere; }
+.process-list-header {
+    display: grid;
+    grid-template-columns: minmax(128px, 0.58fr) minmax(0, 1.75fr) minmax(220px, 0.9fr) minmax(132px, 0.58fr);
+    gap: 1rem;
+    padding: 0.7rem 1.2rem;
+    border-bottom: 1px solid #e5edf5;
+    background: #f8fbfd;
+    color: #61758a;
+    font-size: 0.7rem;
+    font-weight: 850;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
 .process-scroll-list {
     display: grid;
-    gap: 0.65rem;
+    gap: 0;
     max-height: min(680px, 64vh);
     overflow-y: auto;
     overflow-x: hidden;
@@ -186,28 +195,23 @@ include '../../includes/navbar.php';
 }
 .process-event {
     display: grid;
-    grid-template-columns: minmax(118px, 0.55fr) minmax(0, 2.15fr) minmax(124px, 0.62fr);
+    grid-template-columns: minmax(128px, 0.58fr) minmax(0, 1.75fr) minmax(220px, 0.9fr) minmax(132px, 0.58fr);
     gap: 1rem;
     align-items: center;
     min-width: 0;
-    padding: 0.9rem 1rem;
-    border: 1px solid #e5edf5;
-    border-radius: 8px;
-    background: linear-gradient(180deg, #fff, #fbfdff);
+    padding: 0.95rem 0;
+    border: 0;
+    border-bottom: 1px solid #e5edf5;
+    border-radius: 0;
+    background: transparent;
     box-shadow: none;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    transition: background 0.2s ease;
 }
 .process-event:hover {
-    border-color: rgba(31, 99, 146, 0.28);
-    box-shadow: 0 10px 22px rgba(15, 42, 64, 0.055);
-    transform: translateY(-1px);
+    background: #f8fbfd;
 }
 .process-event-time {
     min-width: 0;
-    padding: 0.6rem 0.65rem;
-    border: 1px solid #edf2f7;
-    border-radius: 8px;
-    background: #fff;
     color: #64748b;
     font-size: 0.78rem;
     overflow-wrap: anywhere;
@@ -240,37 +244,35 @@ include '../../includes/navbar.php';
 .process-pill.revision { background: #fee2e2; color: #b91c1c; }
 .process-pill.version { background: #e2e8f0; color: #334155; }
 .process-pill.release { background: #cffafe; color: #0e7490; }
-.process-meta { display: flex; flex-wrap: wrap; gap: 0.45rem; color: #64748b; font-size: 0.78rem; }
+.process-meta { display: flex; flex-direction: column; gap: 0.38rem; color: #64748b; font-size: 0.78rem; }
 .process-meta span {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
     min-width: 0;
     max-width: 100%;
-    padding: 0.28rem 0.5rem;
-    border: 1px solid #edf2f7;
-    border-radius: 6px;
-    background: #f8fbfd;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     overflow-wrap: anywhere;
     word-break: break-word;
 }
 .process-status-flow { margin-top: 0.45rem; color: #475569; font-size: 0.82rem; overflow-wrap: anywhere; }
 .process-note {
     margin-top: 0.55rem;
-    padding: 0.55rem 0.65rem;
-    border: 1px solid #e5edf5;
-    border-radius: 6px;
-    background: #f8fbfd;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: #64748b;
     font-size: 0.8rem;
     overflow-wrap: anywhere;
 }
-.process-duration { min-width: 0; text-align: right; overflow-wrap: anywhere; }
 .process-duration {
-    padding: 0.65rem;
-    border: 1px solid #edf2f7;
-    border-radius: 8px;
-    background: #fff;
+    min-width: 0;
+    text-align: right;
+    overflow-wrap: anywhere;
 }
 .process-duration strong { display: block; color: #172033; font-size: 1rem; }
 .process-duration span { color: #64748b; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; overflow-wrap: anywhere; }
@@ -328,13 +330,14 @@ include '../../includes/navbar.php';
     background: #0d1b2a;
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero h2 {
-    color: #e7f0f8;
+    color: #fff;
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero h2 i {
-    background: rgba(138, 210, 255, 0.12);
-    color: #bfe6ff;
+    color: #fff;
 }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero p {
+    color: rgba(255, 255, 255, 0.86);
+}
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-filter-card .form-select {
     color: #90aeca;
 }
@@ -350,8 +353,6 @@ include '../../includes/navbar.php';
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-head { background: #0d1b2a; border-color: #20364a; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric-strip { background: #081727; border-color: #20364a; }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-meta span,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-note,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-value { background: #102235; border-color: #20364a; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero h2,
@@ -362,8 +363,10 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-event-title strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-duration strong { color: #e7f0f8; }
 @media (max-width: 1200px) {
-    .process-event { grid-template-columns: minmax(0, 1fr); }
+    .process-list-header { display: none; }
+    .process-event { grid-template-columns: minmax(0, 1fr); gap: 0.7rem; }
     .process-duration { text-align: left; }
+    .process-meta { flex-direction: row; flex-wrap: wrap; }
 }
 @media (max-width: 900px) {
     .process-event { grid-template-columns: 1fr; }
@@ -373,7 +376,7 @@ include '../../includes/navbar.php';
 </style>
 
 <div class="container-fluid px-4 py-4">
-        <section class="process-hero">
+        <section class="process-hero" data-page-header>
             <div>
                 <h2><i class="fas fa-clock-rotate-left me-2"></i>Process History</h2>
                 <p>Track project movements from planning to release, including task start-to-finish duration, approvals, revisions, QA decisions, and completion timing.</p>
@@ -458,6 +461,12 @@ include '../../includes/navbar.php';
                         <div>Try another project or complete a workflow action first.</div>
                     </div>
                 <?php else: ?>
+                    <div class="process-list-header" aria-hidden="true">
+                        <span>Date &amp; time</span>
+                        <span>Movement</span>
+                        <span>Context</span>
+                        <span>Since previous</span>
+                    </div>
                     <div class="process-scroll-list">
                         <?php foreach ($events as $event): ?>
                         <?php
@@ -476,11 +485,6 @@ include '../../includes/navbar.php';
                                     <span class="process-pill <?php echo htmlspecialchars((string) $event['tone']); ?>"><?php echo htmlspecialchars((string) $event['category']); ?></span>
                                     <strong><?php echo htmlspecialchars((string) $event['label']); ?></strong>
                                 </div>
-                                <div class="process-meta">
-                                    <span><i class="fas fa-diagram-project me-1"></i><?php echo htmlspecialchars($projectName); ?></span>
-                                    <span><i class="fas fa-user me-1"></i><?php echo htmlspecialchars((string) $event['actor']); ?><?php echo !empty($event['role']) ? ' (' . htmlspecialchars(ucfirst((string) $event['role'])) . ')' : ''; ?></span>
-                                    <span><i class="fas fa-tag me-1"></i><?php echo htmlspecialchars((string) $event['item']); ?></span>
-                                </div>
                                 <?php if ($event['from_status'] !== '' || $event['to_status'] !== ''): ?>
                                     <div class="process-status-flow">
                                         <i class="fas fa-arrow-right-arrow-left me-1"></i>
@@ -492,6 +496,11 @@ include '../../includes/navbar.php';
                                 <?php if ($event['description'] !== ''): ?>
                                     <div class="process-note"><?php echo htmlspecialchars((string) $event['description']); ?></div>
                                 <?php endif; ?>
+                            </div>
+                            <div class="process-meta">
+                                <span><i class="fas fa-diagram-project me-1"></i><?php echo htmlspecialchars($projectName); ?></span>
+                                <span><i class="fas fa-user me-1"></i><?php echo htmlspecialchars((string) $event['actor']); ?><?php echo !empty($event['role']) ? ' (' . htmlspecialchars(ucfirst((string) $event['role'])) . ')' : ''; ?></span>
+                                <span><i class="fas fa-tag me-1"></i><?php echo htmlspecialchars((string) $event['item']); ?></span>
                             </div>
                             <div class="process-duration <?php echo $isSlow ? 'is-slow' : ''; ?>">
                                 <span>Since previous</span>
