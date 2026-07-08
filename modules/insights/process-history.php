@@ -46,18 +46,51 @@ include '../../includes/navbar.php';
 <style>
 .process-hero {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 1rem;
     margin-bottom: 1rem;
-    padding: 1.2rem 1.35rem;
+    padding: 1.15rem 1.25rem;
     border-radius: 8px;
-    background: #1f6392;
-    color: #fff;
-    box-shadow: 0 12px 28px rgba(31, 99, 146, 0.16);
+    background: #fff;
+    border: 1px solid #dfe8f1;
+    color: #172033;
+    box-shadow: 0 8px 20px rgba(15, 42, 64, 0.04);
 }
-.process-hero h2 { margin: 0; font-size: 1.35rem; font-weight: 750; }
-.process-hero p { margin: 0.35rem 0 0; max-width: 780px; color: rgba(255, 255, 255, 0.86); font-size: 0.9rem; }
+.process-hero > div {
+    min-width: 0;
+}
+.process-hero h2 {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0;
+    color: #172033;
+    font-size: 1.28rem;
+    font-weight: 800;
+}
+.process-hero h2 i {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: rgba(31, 99, 146, 0.12);
+    color: #1f6392;
+    font-size: 1rem;
+}
+.process-hero p {
+    margin: 0.35rem 0 0 3.25rem;
+    max-width: 780px;
+    color: #5f7388;
+    font-size: 0.9rem;
+}
+.process-hero.page-help-host .page-header-help-btn {
+    position: static;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
 .process-filter-card,
 .process-tab-shell {
     background: #fff;
@@ -82,14 +115,21 @@ include '../../includes/navbar.php';
 .process-filter-card label { color: #64748b; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
 .process-tabs {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.35rem;
     margin-bottom: 1rem;
-    overflow-x: auto;
-}
-.process-tabs .nav-link {
+    padding: 0.3rem;
+    width: fit-content;
+    max-width: 100%;
     border: 1px solid #dfe8f1;
     border-radius: 8px;
     background: #fff;
+    overflow-x: auto;
+    box-shadow: 0 8px 20px rgba(15, 42, 64, 0.035);
+}
+.process-tabs .nav-link {
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
     color: #475569;
     font-weight: 800;
     min-height: 44px;
@@ -98,8 +138,11 @@ include '../../includes/navbar.php';
 }
 .process-tabs .nav-link.active {
     background: #1f6392;
-    border-color: #1f6392;
     color: #fff;
+}
+.process-tabs .badge {
+    min-width: 32px;
+    border-radius: 6px;
 }
 .process-tab-shell { overflow: hidden; }
 .process-tab-head {
@@ -108,7 +151,7 @@ include '../../includes/navbar.php';
     gap: 1rem;
     padding: 1.05rem 1.2rem;
     border-bottom: 1px solid #e5edf5;
-    background: #f8fbfd;
+    background: #fff;
 }
 .process-tab-head > div { min-width: 0; }
 .process-tab-head h5 { margin: 0; color: #172033; font-size: 1rem; font-weight: 750; }
@@ -116,23 +159,25 @@ include '../../includes/navbar.php';
 .process-metric-strip {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 0.75rem;
+    gap: 0.8rem;
     padding: 1rem 1.2rem;
     border-bottom: 1px solid #eef3f7;
+    background: #f8fbfd;
 }
 .process-metric {
     min-width: 0;
-    padding: 0.85rem;
+    padding: 0.9rem;
     border: 1px solid #e5edf5;
     border-radius: 8px;
-    background: #fbfdff;
+    background: #fff;
+    box-shadow: 0 6px 16px rgba(15, 42, 64, 0.03);
 }
 .process-metric span { display: block; color: #64748b; font-size: 0.68rem; font-weight: 850; text-transform: uppercase; }
 .process-metric strong { display: block; margin-top: 0.2rem; color: #172033; font-size: 1.12rem; overflow-wrap: anywhere; }
 .process-metric small { display: block; margin-top: 0.2rem; color: #64748b; overflow-wrap: anywhere; }
 .process-scroll-list {
     display: grid;
-    gap: 0.85rem;
+    gap: 0.65rem;
     max-height: min(680px, 64vh);
     overflow-y: auto;
     overflow-x: hidden;
@@ -141,25 +186,35 @@ include '../../includes/navbar.php';
 }
 .process-event {
     display: grid;
-    grid-template-columns: minmax(110px, 0.75fr) minmax(0, 2fr) minmax(105px, 0.75fr);
+    grid-template-columns: minmax(118px, 0.55fr) minmax(0, 2.15fr) minmax(124px, 0.62fr);
     gap: 1rem;
+    align-items: center;
     min-width: 0;
-    padding: 1rem 1.05rem;
+    padding: 0.9rem 1rem;
     border: 1px solid #e5edf5;
     border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 8px 18px rgba(15, 42, 64, 0.035);
+    background: linear-gradient(180deg, #fff, #fbfdff);
+    box-shadow: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 .process-event:hover {
     border-color: rgba(31, 99, 146, 0.28);
-    box-shadow: 0 12px 24px rgba(15, 42, 64, 0.06);
+    box-shadow: 0 10px 22px rgba(15, 42, 64, 0.055);
     transform: translateY(-1px);
 }
-.process-event-time { min-width: 0; color: #64748b; font-size: 0.78rem; overflow-wrap: anywhere; }
+.process-event-time {
+    min-width: 0;
+    padding: 0.6rem 0.65rem;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #fff;
+    color: #64748b;
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+}
 .process-event-time strong { display: block; color: #172033; font-size: 0.86rem; }
 .process-event-main { min-width: 0; }
-.process-event-title { display: flex; align-items: center; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 0.4rem; }
+.process-event-title { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
 .process-event-title strong { min-width: 0; color: #172033; font-size: 0.95rem; overflow-wrap: anywhere; }
 .process-pill {
     display: inline-flex;
@@ -211,7 +266,13 @@ include '../../includes/navbar.php';
     overflow-wrap: anywhere;
 }
 .process-duration { min-width: 0; text-align: right; overflow-wrap: anywhere; }
-.process-duration strong { display: block; color: #172033; font-size: 0.95rem; }
+.process-duration {
+    padding: 0.65rem;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    background: #fff;
+}
+.process-duration strong { display: block; color: #172033; font-size: 1rem; }
 .process-duration span { color: #64748b; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; overflow-wrap: anywhere; }
 .process-duration small { display: block; overflow-wrap: anywhere; }
 .process-duration.is-slow strong { color: #b45309; }
@@ -256,15 +317,44 @@ include '../../includes/navbar.php';
 .task-duration-ontrack { color: #166534; font-weight: 800; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-filter-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-shell,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tabs,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-event,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-event-time,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-duration,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-duration-card { background: #0d1b2a; border-color: #20364a; }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-head { background: #102235; border-color: #20364a; }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric-strip { border-color: #20364a; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-event {
+    background: #0d1b2a;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero h2 {
+    color: #e7f0f8;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero h2 i {
+    background: rgba(138, 210, 255, 0.12);
+    color: #bfe6ff;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-filter-card .form-select {
+    color: #90aeca;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-filter-card .form-select {
+    background: #102235;
+    border-color: #20364a;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tabs .nav-link {
+    color: #b9cee2;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tabs .nav-link.active {
+    color: #fff;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-head { background: #0d1b2a; border-color: #20364a; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric-strip { background: #081727; border-color: #20364a; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-meta span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-note,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-value { background: #102235; border-color: #20364a; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero h2,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-head h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-name strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-value strong,
