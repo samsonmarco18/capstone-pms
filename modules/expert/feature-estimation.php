@@ -1875,7 +1875,7 @@ textarea.form-control-custom {
     min-width: min(280px, 100%);
 }
 
-.btn-draft-estimate {
+.estimate-action-row [data-generic-save-draft] {
     background: #fff;
     border: 1px solid rgba(31, 99, 146, 0.35);
     color: var(--theme-primary);
@@ -1888,14 +1888,27 @@ textarea.form-control-custom {
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    margin-left: 0 !important;
+    order: 1;
     transition: all 0.2s;
 }
 
-.btn-draft-estimate:hover {
+.estimate-action-row [data-generic-save-draft]:hover {
     background: rgba(31, 99, 146, 0.08);
     border-color: var(--theme-primary);
     color: var(--theme-primary);
     transform: translateY(-1px);
+}
+
+.estimate-action-row .btn-submit {
+    order: 2;
+}
+
+.estimate-action-row [data-generic-draft-status] {
+    order: 3;
+    width: 100%;
+    margin-left: 0 !important;
+    text-align: right;
 }
 
 /* Alert Info */
@@ -2303,7 +2316,7 @@ textarea.form-control-custom {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pm-inline-btn,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-add-phase,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-draft-estimate {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-action-row [data-generic-save-draft] {
     background: rgba(31, 99, 146, 0.12);
     border-color: rgba(31, 99, 146, 0.3);
     color: #7cc0ee;
@@ -2344,8 +2357,12 @@ textarea.form-control-custom {
     }
 
     .estimate-action-row .btn-submit,
-    .estimate-action-row .btn-draft-estimate {
+    .estimate-action-row [data-generic-save-draft] {
         width: 100%;
+    }
+
+    .estimate-action-row [data-generic-draft-status] {
+        text-align: left;
     }
 }
 </style>
@@ -2658,9 +2675,6 @@ textarea.form-control-custom {
                      
                     <?php if (!$isReadonly): ?>
                         <div class="estimate-action-row">
-                            <button type="submit" class="btn-draft-estimate">
-                                <i class="fas fa-floppy-disk"></i> Save Draft
-                            </button>
                             <button type="submit" class="btn-submit">
                                 <i class="fas fa-save"></i> Save Estimation
                             </button>
