@@ -808,6 +808,80 @@ include '../../includes/navbar.php';
     color: white;
 }
 
+.btn-action-reopen {
+    background: rgba(31, 99, 146, 0.08);
+    border-color: rgba(31, 99, 146, 0.2);
+    color: var(--theme-primary);
+    font-weight: 700;
+}
+
+.btn-action-reopen:hover {
+    background: var(--theme-primary);
+    border-color: var(--theme-primary);
+    color: #fff;
+}
+
+.btn-primary-modern,
+.btn-outline-modern,
+.btn-reopen-modern {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    padding: 0.58rem 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.btn-primary-modern {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: #fff;
+}
+
+.btn-primary-modern:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.24);
+    color: #fff;
+}
+
+.btn-primary-modern:disabled {
+    cursor: wait;
+    opacity: 0.72;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-outline-modern {
+    background: #fff;
+    border-color: var(--gray-300);
+    color: var(--gray-700);
+}
+
+.btn-outline-modern:hover {
+    background: var(--gray-50);
+    border-color: var(--theme-primary);
+    color: var(--theme-primary);
+}
+
+.btn-reopen-modern {
+    width: 100%;
+    background: #fff;
+    border-color: rgba(31, 99, 146, 0.22);
+    color: var(--theme-primary);
+}
+
+.btn-reopen-modern:hover {
+    background: var(--theme-primary);
+    border-color: var(--theme-primary);
+    color: #fff;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.18);
+}
+
 /* Empty State */
 .empty-state-mini {
     text-align: center;
@@ -1058,7 +1132,7 @@ include '../../includes/navbar.php';
 }
 
 .department-modal-panel {
-    border-left: 3px solid var(--theme-primary);
+    border-left-color: var(--gray-200);
 }
 
 .department-modal-heading {
@@ -1077,6 +1151,122 @@ include '../../includes/navbar.php';
     color: var(--gray-600);
     font-size: 0.82rem;
     margin-bottom: 0.85rem;
+}
+
+#reopenRequestModal .modal-dialog {
+    max-width: min(560px, calc(100vw - 2rem));
+}
+
+#reopenRequestModal .modal-content {
+    border: 0;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+}
+
+#reopenRequestModal .modal-header {
+    align-items: center;
+    border-bottom: 0;
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    padding: 1rem 1.25rem;
+}
+
+#reopenRequestModal .modal-title,
+#reopenRequestModal .modal-title i {
+    color: #fff;
+    font-weight: 750;
+}
+
+#reopenRequestModal .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+    opacity: 0.9;
+}
+
+#reopenRequestModal .modal-body {
+    background: #fff;
+    padding: 1.25rem;
+}
+
+#reopenRequestModal .modal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    border-top: 1px solid var(--gray-200);
+    background: #f8fafc;
+    padding: 1rem 1.25rem;
+}
+
+#reopenRequestModal .modal-footer > * {
+    margin: 0;
+}
+
+#reopenRequestModal .form-label {
+    color: var(--theme-dark);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+#reopenRequestModal .form-control,
+#reopenRequestModal .form-select {
+    border-color: var(--gray-300);
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+#reopenRequestModal .form-control:focus,
+#reopenRequestModal .form-select:focus {
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 0.18rem rgba(31, 99, 146, 0.16);
+}
+
+#reopenReason {
+    min-height: 120px;
+}
+
+.reopen-task-summary {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    background: #f8fbfd;
+    padding: 0.75rem 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.reopen-task-summary i {
+    color: var(--theme-primary);
+    margin-top: 0.15rem;
+}
+
+.reopen-task-summary span {
+    display: block;
+    color: var(--gray-500);
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.reopen-task-summary strong {
+    display: block;
+    color: var(--gray-900);
+    font-size: 0.92rem;
+    overflow-wrap: anywhere;
+}
+
+.reopen-modal-help {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    margin-top: 0.45rem;
+    color: #607893;
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
+.reopen-modal-help i {
+    color: var(--theme-primary);
+    margin-top: 0.15rem;
 }
 
 .department-requirements {
@@ -1436,7 +1626,8 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .design-reference-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reopenRequestModal .modal-content {
     background: #071321 !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
     box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
@@ -1451,6 +1642,9 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-badge,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-modal .modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reopenRequestModal .modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reopenRequestModal .modal-footer,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .reopen-task-summary,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-hero,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-row,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-col,
@@ -1463,6 +1657,21 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-action {
     background: rgba(31, 99, 146, 0.14) !important;
     border-color: rgba(31, 99, 146, 0.28) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-outline-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-reopen-modern {
+    background: rgba(31, 99, 146, 0.12);
+    border-color: rgba(31, 99, 146, 0.3);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-outline-modern:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-reopen-modern:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-action-reopen:hover {
+    background: var(--theme-primary) !important;
+    border-color: var(--theme-primary) !important;
+    color: #fff !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card.reopened-card {
@@ -1487,6 +1696,8 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-detail-panel h6,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel h6,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reopenRequestModal .form-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .reopen-task-summary strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .design-reference-card__title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-fact-value,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-latest-value,
@@ -1511,6 +1722,8 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-chip,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requirement-list li,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-modal-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .reopen-modal-help,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .reopen-task-summary span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-requirements li,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-item__meta,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .artifact-note,
@@ -1541,13 +1754,16 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel .form-control,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel .form-select {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel .form-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reopenRequestModal .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reopenRequestModal .form-select {
     background: #071321;
     border-color: rgba(31, 99, 146, 0.28);
     color: #d7e4f2;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel .form-control::placeholder {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-side-panel .form-control::placeholder,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #reopenRequestModal .form-control::placeholder {
     color: #7f9bb6;
 }
 
@@ -1853,7 +2069,7 @@ include '../../includes/navbar.php';
                                 <?php if ((int) ($task['active_reopen_request_count'] ?? 0) > 0): ?>
                                     <span class="badge bg-info text-dark" data-bs-toggle="tooltip" title="This task already has a reopen request waiting for SUL or Architect decision.">Pending Reopen</span>
                                 <?php else: ?>
-                                    <button class="btn-action" onclick="openReopenRequestModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))" data-bs-toggle="tooltip" title="Ask SUL to review a reopen request for this task.">
+                                    <button class="btn-action btn-action-reopen" onclick="openReopenRequestModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))" data-bs-toggle="tooltip" title="Ask SUL to review a reopen request for this task.">
                                         <i class="fas fa-rotate-left"></i> Reopen
                                     </button>
                                 <?php endif; ?>
@@ -1894,7 +2110,7 @@ include '../../includes/navbar.php';
                             <?php if ((int) ($task['active_reopen_request_count'] ?? 0) > 0): ?>
                                 <span class="badge bg-info text-dark">Pending Reopen</span>
                             <?php elseif ($canRequestReopen): ?>
-                                <button class="btn-action" onclick="openReopenRequestModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))" data-bs-toggle="tooltip" title="Ask SUL to review a reopen request for this completed task.">
+                                <button class="btn-action btn-action-reopen" onclick="openReopenRequestModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))" data-bs-toggle="tooltip" title="Ask SUL to review a reopen request for this completed task.">
                                     <i class="fas fa-rotate-left"></i> Request Reopen
                                 </button>
                             <?php endif; ?>
@@ -1953,7 +2169,7 @@ include '../../includes/navbar.php';
 </div>
 
 <!-- Reopen Request Modal -->
-<div class="modal fade modal-modern" id="reopenRequestModal" tabindex="-1">
+<div class="modal fade modal-modern reopen-request-modal" id="reopenRequestModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -1963,14 +2179,23 @@ include '../../includes/navbar.php';
             <form id="reopenRequestForm">
                 <div class="modal-body">
                     <input type="hidden" id="reopenTaskId" name="task_id">
-                    <p class="mb-3"><strong>Task:</strong> <span id="reopenTaskTitle"></span></p>
+                    <div class="reopen-task-summary">
+                        <i class="fas fa-clipboard-check"></i>
+                        <div>
+                            <span>Task</span>
+                            <strong id="reopenTaskTitle"></strong>
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">Severity</label>
                         <select class="form-select" id="reopenSeverity" name="severity" required>
                             <option value="minor">Minor - change affects only this task</option>
                             <option value="major">Major - change may affect later work or phases</option>
                         </select>
-                        <small class="text-muted">Major requests go to Architect so downstream phases can be reopened when needed.</small>
+                        <div class="reopen-modal-help">
+                            <i class="fas fa-circle-info"></i>
+                            <span>Major requests go to Architect so downstream phases can be reopened when needed.</span>
+                        </div>
                     </div>
                     <div class="mb-0">
                         <label class="form-label">Reason</label>
@@ -1978,7 +2203,9 @@ include '../../includes/navbar.php';
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">
+                        <i class="fas fa-xmark"></i> Cancel
+                    </button>
                     <button type="submit" class="btn-primary-modern">
                         <i class="fas fa-paper-plane"></i> Send to SUL
                     </button>
@@ -2645,7 +2872,7 @@ function buildReopenRequestPanel(task) {
                 <small class="text-muted">Ask SUL to reopen</small>
             </div>
             <p class="small text-muted">Use Minor for task-only fixes. Use Major when the change can affect later tasks or phases.</p>
-            <button class="btn-warning task-detail-action" onclick="openReopenRequestModal(${Number(task.id)}, ${jsStringLiteral(task.title || 'Task')})">
+            <button class="btn-reopen-modern task-detail-action" onclick="openReopenRequestModal(${Number(task.id)}, ${jsStringLiteral(task.title || 'Task')})">
                 <i class="fas fa-rotate-left"></i> Request Reopen
             </button>
         </div>
