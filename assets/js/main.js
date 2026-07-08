@@ -124,7 +124,7 @@ function initFormSubmitConfirmations() {
                     confirmIcon: 'fas fa-check',
                     confirmText: 'Submit'
                 })
-                : window.confirm('Submit this form?');
+                : false;
 
             if (confirmed) {
                 form.dataset.confirmedSubmit = '1';
@@ -505,6 +505,8 @@ function initAppActionHelpers() {
     window.appShowLoading = showAppLoading;
     window.appHideLoading = hideAppLoading;
     window.appConfirm = showAppConfirm;
+    window.appPrompt = showAppPrompt;
+    window.appToast = showToast;
 
     $(document).on('submit', 'form[data-app-loading]', function (event) {
         if (event.isDefaultPrevented()) {
@@ -564,7 +566,7 @@ function showAppConfirm(options = {}) {
     const modalElement = document.getElementById('appConfirmModal');
     const submitBtn = document.getElementById('appConfirmSubmitBtn');
     if (!modalElement || !submitBtn || !window.bootstrap) {
-        return Promise.resolve(window.confirm(options.message || options.subject || 'Continue?'));
+        return Promise.resolve(false);
     }
 
     const titleEl = document.getElementById('appConfirmTitle');
@@ -606,6 +608,113 @@ function showAppConfirm(options = {}) {
         }
 
         submitBtn.addEventListener('click', onConfirm);
+        modalElement.addEventListener('hidden.bs.modal', onHidden);
+        modal.show();
+    });
+}
+
+function showAppPrompt(options = {}) {
+    if (!window.bootstrap) {
+        return Promise.resolve(null);
+    }
+
+    let modalElement = document.getElementById('appPromptModal');
+    if (!modalElement) {
+        modalElement = document.createElement('div');
+        modalElement.className = 'modal fade app-confirm-modal';
+        modalElement.id = 'appPromptModal';
+        modalElement.tabIndex = -1;
+        modalElement.setAttribute('data-bs-backdrop', 'static');
+        modalElement.setAttribute('data-bs-keyboard', 'false');
+        modalElement.setAttribute('aria-hidden', 'true');
+        modalElement.innerHTML = `
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="appPromptTitle">
+                            <i class="fas fa-pen me-2"></i> Enter Value
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <label class="form-label fw-semibold" id="appPromptLabel" for="appPromptInput">Value</label>
+                        <input type="text" class="form-control" id="appPromptInput">
+                        <div class="small text-muted mt-2" id="appPromptMessage"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="app-confirm-cancel" data-bs-dismiss="modal" id="appPromptCancelBtn">Cancel</button>
+                        <button type="button" class="app-confirm-submit" id="appPromptSubmitBtn">
+                            <i class="fas fa-check me-1"></i> Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalElement);
+    }
+
+    const titleEl = document.getElementById('appPromptTitle');
+    const labelEl = document.getElementById('appPromptLabel');
+    const messageEl = document.getElementById('appPromptMessage');
+    const inputEl = document.getElementById('appPromptInput');
+    const submitBtn = document.getElementById('appPromptSubmitBtn');
+    const cancelBtn = document.getElementById('appPromptCancelBtn');
+
+    if (!inputEl || !submitBtn) {
+        return Promise.resolve(null);
+    }
+
+    if (titleEl) {
+        titleEl.innerHTML = `<i class="${escapeHtml(options.titleIcon || 'fas fa-pen')} me-2"></i>${escapeHtml(options.title || 'Enter Value')}`;
+    }
+    if (labelEl) labelEl.textContent = options.label || options.subject || 'Value';
+    if (messageEl) messageEl.textContent = options.message || '';
+    if (submitBtn) {
+        submitBtn.innerHTML = `<i class="${escapeHtml(options.confirmIcon || 'fas fa-check')} me-1"></i>${escapeHtml(options.confirmText || 'Continue')}`;
+    }
+    if (cancelBtn) cancelBtn.textContent = options.cancelText || 'Cancel';
+
+    inputEl.value = options.value || '';
+    inputEl.placeholder = options.placeholder || '';
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+
+    return new Promise((resolve) => {
+        let submitted = false;
+
+        function cleanup() {
+            submitBtn.removeEventListener('click', onSubmit);
+            inputEl.removeEventListener('keydown', onKeydown);
+            modalElement.removeEventListener('shown.bs.modal', onShown);
+            modalElement.removeEventListener('hidden.bs.modal', onHidden);
+        }
+
+        function onSubmit() {
+            submitted = true;
+            modal.hide();
+        }
+
+        function onKeydown(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                onSubmit();
+            }
+        }
+
+        function onShown() {
+            inputEl.focus();
+            inputEl.select();
+        }
+
+        function onHidden() {
+            const value = submitted ? inputEl.value : null;
+            cleanup();
+            resolve(value);
+        }
+
+        submitBtn.addEventListener('click', onSubmit);
+        inputEl.addEventListener('keydown', onKeydown);
+        modalElement.addEventListener('shown.bs.modal', onShown);
         modalElement.addEventListener('hidden.bs.modal', onHidden);
         modal.show();
     });

@@ -365,7 +365,7 @@ include 'includes/navbar.php';
                 <?php endif; ?>
             </h5>
             <?php if (!empty($notifications)): ?>
-                <button class="btn-mark-read" onclick="markAllAsRead()">
+                <button type="button" class="btn-mark-read" onclick="markAllAsRead(this)">
                     <i class="fas fa-check-double"></i> Mark all as read
                 </button>
             <?php endif; ?>
@@ -415,6 +415,36 @@ include 'includes/navbar.php';
 </div>
 
 <script>
+function showNotificationToast(title, message, type) {
+    if (typeof window.showToast === 'function') {
+        window.showToast(title, message, type);
+        return;
+    }
+
+    if (type === 'error') {
+        console.error(`${title}: ${message}`);
+    }
+}
+
+function setButtonBusy(button, isBusy, busyText) {
+    if (!button) {
+        return;
+    }
+
+    if (isBusy) {
+        button.dataset.originalHtml = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${busyText}`;
+        return;
+    }
+
+    button.disabled = false;
+    if (button.dataset.originalHtml) {
+        button.innerHTML = button.dataset.originalHtml;
+        delete button.dataset.originalHtml;
+    }
+}
+
 function markAsReadAndGo(notificationId, targetUrl, event) {
     if (event) {
         event.preventDefault();
@@ -423,8 +453,9 @@ function markAsReadAndGo(notificationId, targetUrl, event) {
     $.ajax({
         url: '<?php echo BASE_URL; ?>api/notifications/mark-read.php',
         method: 'POST',
+        dataType: 'json',
         data: { id: notificationId },
-        success: function() {
+        complete: function() {
             window.location.href = targetUrl;
         }
     });
@@ -432,30 +463,65 @@ function markAsReadAndGo(notificationId, targetUrl, event) {
     return false;
 }
 
-function markAllAsRead() {
-    if (confirm('Mark all notifications as read?')) {
-        $.ajax({
-            url: '<?php echo BASE_URL; ?>api/notifications/mark-all-read.php',
-            method: 'POST',
-            success: function() {
-                location.reload();
-            }
-        });
+async function markAllAsRead(button) {
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Confirm Notifications',
+            subject: 'Mark all notifications as read?',
+            message: 'Unread workflow notifications will be cleared from your badge.',
+            icon: 'fas fa-check-double fa-lg',
+            confirmIcon: 'fas fa-check-double',
+            confirmText: 'Mark as read'
+        })
+        : false;
+
+    if (!confirmed) {
+        return;
     }
+
+    setButtonBusy(button, true, 'Marking...');
+
+    $.ajax({
+        url: '<?php echo BASE_URL; ?>api/notifications/mark-all-read.php',
+        method: 'POST',
+        dataType: 'json',
+        success: function() {
+            location.reload();
+        },
+        error: function() {
+            setButtonBusy(button, false);
+            showNotificationToast('Update failed', 'Notifications could not be marked as read. Please try again.', 'error');
+        }
+    });
 }
 
-function deleteNotification(notificationId, event) {
+async function deleteNotification(notificationId, event) {
     event.stopPropagation();
-    if (confirm('Delete this notification?')) {
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.innerHTML = `
-            <input type="hidden" name="delete_notification" value="1">
-            <input type="hidden" name="notification_id" value="${notificationId}">
-        `;
-        document.body.appendChild(form);
-        form.submit();
+
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Delete Notification',
+            subject: 'Delete this notification?',
+            message: 'This notification will be removed from your list.',
+            icon: 'fas fa-trash-alt fa-lg',
+            confirmIcon: 'fas fa-trash-alt',
+            confirmText: 'Delete',
+            variant: 'danger'
+        })
+        : false;
+
+    if (!confirmed) {
+        return;
     }
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.innerHTML = `
+        <input type="hidden" name="delete_notification" value="1">
+        <input type="hidden" name="notification_id" value="${notificationId}">
+    `;
+    document.body.appendChild(form);
+    form.submit();
 }
 </script>
 

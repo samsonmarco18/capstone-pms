@@ -2829,7 +2829,7 @@ methodologyTemplateForm?.addEventListener('submit', async (event) => {
             cancelText: 'Keep Existing',
             variant: 'danger'
         })
-        : window.confirm('Replace all existing methodology phases?');
+        : false;
 
     if (confirmed) {
         methodologyTemplateForm.dataset.replaceConfirmed = '1';
@@ -2881,7 +2881,7 @@ async function requestDeleteRoadmapTask(source) {
             cancelText: 'Keep Task',
             variant: 'danger'
         })
-        : window.confirm(`Delete “${taskTitle}”?`);
+        : false;
 
     if (!confirmed) return;
     setValue('deleteTaskId', taskId);

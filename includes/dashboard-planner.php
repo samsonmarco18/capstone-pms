@@ -425,7 +425,7 @@ if (!function_exists('dashboardPlannerRender')) {
                                             <span><i class="far fa-clock"></i> <?php echo htmlspecialchars(date('h:i A', strtotime((string) ($plan['start_time'] ?? '09:00')))); ?></span>
                                         </div>
                                     </div>
-                                    <form method="POST" onsubmit="return confirm('Remove this plan?');">
+                                    <form method="POST" class="js-dashboard-delete-plan-form" data-confirm-skip="1">
                                         <input type="hidden" name="plan_id" value="<?php echo (int) ($plan['id'] ?? 0); ?>">
                                         <input type="hidden" name="calendar_month" value="<?php echo htmlspecialchars($calendarMonth); ?>">
                                         <button type="submit" name="dashboard_delete_plan" class="dashboard-plan-delete" aria-label="Delete plan">
@@ -444,6 +444,47 @@ if (!function_exists('dashboardPlannerRender')) {
                 </div>
             </div>
         </div>
+        <script>
+        (function () {
+            if (window.dashboardPlannerConfirmBound) {
+                return;
+            }
+            window.dashboardPlannerConfirmBound = true;
+
+            document.addEventListener('submit', async function (event) {
+                const form = event.target.closest('.js-dashboard-delete-plan-form');
+                if (!form) {
+                    return;
+                }
+
+                if (form.dataset.confirmedSubmit === '1') {
+                    form.dataset.confirmedSubmit = '0';
+                    return;
+                }
+
+                event.preventDefault();
+
+                const confirmed = typeof window.appConfirm === 'function'
+                    ? await window.appConfirm({
+                        title: 'Remove Plan',
+                        subject: 'Remove this plan?',
+                        message: 'This calendar plan will be removed from your dashboard.',
+                        icon: 'fas fa-calendar-xmark fa-lg',
+                        confirmIcon: 'fas fa-trash-alt',
+                        confirmText: 'Remove',
+                        variant: 'danger'
+                    })
+                    : false;
+
+                if (!confirmed) {
+                    return;
+                }
+
+                form.dataset.confirmedSubmit = '1';
+                form.requestSubmit();
+            });
+        })();
+        </script>
         <?php
     }
 }

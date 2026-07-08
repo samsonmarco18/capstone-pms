@@ -1048,7 +1048,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 <div class="setup-note mb-3">
                                     This removes the repository from ERNI PMS and deletes its managed storage and working folder. Existing downloaded copies on your machine are not deleted.
                                 </div>
-                                <form method="POST" onsubmit="return confirm('Delete repository <?php echo htmlspecialchars(addslashes((string) $selectedRepository['name'])); ?>? This cannot be undone.');">
+                                <form method="POST" class="js-delete-repository-form" data-confirm-skip="1" data-repository-name="<?php echo htmlspecialchars((string) $selectedRepository['name']); ?>">
                                     <input type="hidden" name="action" value="delete_repository">
                                     <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
                                     <input type="hidden" name="repository_id" value="<?php echo $selectedRepositoryId; ?>">
@@ -1144,8 +1144,44 @@ function fallbackCopy(url, showFeedback) {
         }
     }
 
-    window.prompt('Copy this clone URL:', url);
+    if (field) {
+        showFeedback('Copy the selected clone URL manually.');
+        return;
+    }
+
+    showFeedback(url);
 }
+
+document.querySelectorAll('.js-delete-repository-form').forEach((form) => {
+    form.addEventListener('submit', async (event) => {
+        if (form.dataset.confirmedSubmit === '1') {
+            form.dataset.confirmedSubmit = '0';
+            return;
+        }
+
+        event.preventDefault();
+
+        const repositoryName = form.dataset.repositoryName || 'this repository';
+        const confirmed = typeof window.appConfirm === 'function'
+            ? await window.appConfirm({
+                title: 'Delete Repository',
+                subject: `Delete repository ${repositoryName}?`,
+                message: 'This cannot be undone and will remove its managed storage and working folder.',
+                icon: 'fas fa-code-branch fa-lg',
+                confirmIcon: 'fas fa-trash-alt',
+                confirmText: 'Delete Repository',
+                variant: 'danger'
+            })
+            : false;
+
+        if (!confirmed) {
+            return;
+        }
+
+        form.dataset.confirmedSubmit = '1';
+        form.requestSubmit();
+    });
+});
 </script>
 
 <?php include '../../includes/footer.php'; ?>

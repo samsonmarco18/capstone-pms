@@ -1448,19 +1448,50 @@ function updateBulkSelection() {
     }
 }
 
-function bulkDelete() {
-    if (confirm(`Delete ${selectedFiles.length} file(s)? This cannot be undone.`)) {
-        $.ajax({
-            url: `<?php echo BASE_URL; ?>api/folders/bulk-delete-files.php`,
-            method: 'POST',
-            data: { file_ids: selectedFiles },
-            success: function() {
-                bootstrap.Modal.getInstance(document.getElementById('bulkActionsModal')).hide();
-                loadFolderContents(currentFolderId);
-                alert(`${selectedFiles.length} files deleted`);
-            }
-        });
+function showFolderNotice(title, message, type = 'success') {
+    if (typeof window.appToast === 'function') {
+        window.appToast(title, message, type);
+        return;
     }
+
+    if (typeof window.showToast === 'function') {
+        window.showToast(title, message, type);
+        return;
+    }
+
+    console[type === 'error' ? 'error' : 'log'](`${title}: ${message}`);
+}
+
+async function bulkDelete() {
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Delete Files',
+            subject: `Delete ${selectedFiles.length} file(s)?`,
+            message: 'This cannot be undone.',
+            icon: 'fas fa-trash-alt fa-lg',
+            confirmIcon: 'fas fa-trash-alt',
+            confirmText: 'Delete Files',
+            variant: 'danger'
+        })
+        : false;
+
+    if (!confirmed) {
+        return;
+    }
+
+    $.ajax({
+        url: `<?php echo BASE_URL; ?>api/folders/bulk-delete-files.php`,
+        method: 'POST',
+        data: { file_ids: selectedFiles },
+        success: function() {
+            bootstrap.Modal.getInstance(document.getElementById('bulkActionsModal'))?.hide();
+            loadFolderContents(currentFolderId);
+            showFolderNotice('Folders', `${selectedFiles.length} files deleted`);
+        },
+        error: function() {
+            showFolderNotice('Folders', 'Unable to delete selected files.', 'error');
+        }
+    });
 }
 
 function bulkDownload() {
@@ -1471,39 +1502,66 @@ function bulkDownload() {
 }
 
 function bulkMove() {
-    alert('Bulk move functionality coming soon');
+    showFolderNotice('Folders', 'Bulk move functionality coming soon', 'info');
 }
 
-function deleteFile(fileId) {
-    if (confirm('Delete this file?')) {
-        $.ajax({
-            url: `<?php echo BASE_URL; ?>api/folders/delete-file.php?id=${fileId}`,
-            method: 'POST',
-            success: () => loadFolderContents(currentFolderId)
-        });
-    }
-}
+async function deleteFile(fileId) {
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Delete File',
+            subject: 'Delete this file?',
+            message: 'This file will be removed from the selected folder.',
+            icon: 'fas fa-file-circle-xmark fa-lg',
+            confirmIcon: 'fas fa-trash-alt',
+            confirmText: 'Delete File',
+            variant: 'danger'
+        })
+        : false;
 
-function createFolderInCurrent() {
-    if (currentFolderId <= 0) {
-        alert('Please open a client or shared project folder before creating a folder.');
+    if (!confirmed) {
         return;
     }
 
-    const name = prompt('Folder name:');
-    if (name) {
-        $.ajax({
-            url: `<?php echo BASE_URL; ?>api/folders/create.php`,
-            method: 'POST',
-            data: { name: name, parent_id: currentFolderId },
-            success: () => currentFolderId > 0 ? loadFolderContents(currentFolderId) : loadRootFolders()
-        });
+    $.ajax({
+        url: `<?php echo BASE_URL; ?>api/folders/delete-file.php?id=${fileId}`,
+        method: 'POST',
+        success: () => loadFolderContents(currentFolderId),
+        error: () => showFolderNotice('Folders', 'Unable to delete this file.', 'error')
+    });
+}
+
+async function createFolderInCurrent() {
+    if (currentFolderId <= 0) {
+        showFolderNotice('Folders', 'Please open a client or shared project folder before creating a folder.', 'error');
+        return;
     }
+
+    const name = typeof window.appPrompt === 'function'
+        ? await window.appPrompt({
+            title: 'Create Folder',
+            label: 'Folder name',
+            placeholder: 'Enter folder name',
+            confirmIcon: 'fas fa-folder-plus',
+            confirmText: 'Create'
+        })
+        : null;
+
+    if (!name || !name.trim()) {
+        return;
+    }
+
+    $.ajax({
+        url: `<?php echo BASE_URL; ?>api/folders/create.php`,
+        method: 'POST',
+        data: { name: name.trim(), parent_id: currentFolderId },
+        success: () => currentFolderId > 0 ? loadFolderContents(currentFolderId) : loadRootFolders(),
+        error: () => showFolderNotice('Folders', 'Unable to create this folder.', 'error')
+    });
 }
 
 function uploadToCurrentFolder() {
     if (currentFolderId <= 0) {
-        alert('Please open a folder before uploading files.');
+        showFolderNotice('Folders', 'Please open a folder before uploading files.', 'error');
         return;
     }
     
@@ -1528,7 +1586,7 @@ function uploadToCurrentFolder() {
 }
 
 function exportCurrentFolder() {
-    alert('ZIP export feature coming soon');
+    showFolderNotice('Folders', 'ZIP export feature coming soon', 'info');
 }
 
 function refreshFolder() {

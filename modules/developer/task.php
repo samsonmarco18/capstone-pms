@@ -642,16 +642,16 @@ include '../../includes/navbar.php';
 /* Kanban Columns */
 .kanban-column {
     background: var(--gray-50);
-    border-radius: 20px;
+    border-radius: 8px;
     min-height: 500px;
     border: 1px solid var(--gray-200);
+    overflow: hidden;
 }
 
 .kanban-header {
     padding: 1rem 1.25rem;
     background: white;
     border-bottom: 1px solid var(--gray-200);
-    border-radius: 20px 20px 0 0;
 }
 
 .kanban-header h5 {
@@ -664,20 +664,21 @@ include '../../includes/navbar.php';
 }
 
 .kanban-body {
-    padding: 1rem;
+    padding: 1.1rem;
     min-height: 450px;
 }
 
 /* Kanban Cards */
 .kanban-card {
     background: white;
-    border-radius: 12px;
-    padding: 0.75rem;
-    margin-bottom: 0.75rem;
+    border-radius: 8px;
+    padding: 0.95rem;
+    margin-bottom: 0.9rem;
     cursor: grab;
     transition: all 0.2s;
     border: 1px solid var(--gray-200);
     position: relative;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
 }
 
 .kanban-card:hover {
@@ -691,9 +692,9 @@ include '../../includes/navbar.php';
 }
 
 .kanban-card.reopened-card {
-    border-color: #f59e0b;
-    background: #fff7ed;
-    box-shadow: inset 3px 0 0 #f59e0b;
+    border-color: rgba(31, 99, 146, 0.22);
+    background: linear-gradient(180deg, rgba(31, 99, 146, 0.045), #ffffff 38%);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
 }
 
 .reopen-indicator {
@@ -701,19 +702,57 @@ include '../../includes/navbar.php';
     align-items: center;
     gap: 0.25rem;
     width: fit-content;
-    padding: 0.2rem 0.45rem;
+    padding: 0.22rem 0.5rem;
     border-radius: 999px;
-    background: #fef3c7;
-    color: #92400e;
+    background: rgba(31, 99, 146, 0.1);
+    color: var(--theme-primary);
     font-size: 0.65rem;
     font-weight: 700;
-    margin-bottom: 0.45rem;
+    margin-bottom: 0.6rem;
+}
+
+.kanban-card-title {
+    color: var(--gray-900);
+    font-size: 0.95rem;
+    line-height: 1.35;
+    margin: 0 1rem 0.4rem 0;
+    overflow-wrap: anywhere;
+}
+
+.kanban-card-description {
+    color: #58708a;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    margin-bottom: 0.8rem;
+}
+
+.kanban-card-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.7rem;
+}
+
+.kanban-card-due {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: #5f7690;
+    font-size: 0.76rem;
+    line-height: 1.35;
+}
+
+.kanban-card-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
 }
 
 .task-priority-dot {
     position: absolute;
-    top: 0.75rem;
-    right: 0.75rem;
+    top: 1rem;
+    right: 1rem;
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -727,11 +766,16 @@ include '../../includes/navbar.php';
 .btn-action {
     background: white;
     border: 1px solid var(--gray-200);
-    padding: 0.2rem 0.5rem;
+    padding: 0.34rem 0.58rem;
     border-radius: 6px;
-    font-size: 0.65rem;
+    font-size: 0.72rem;
+    line-height: 1;
     transition: all 0.2s;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    min-height: 28px;
 }
 
 .btn-action:hover {
@@ -744,11 +788,18 @@ include '../../includes/navbar.php';
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
     color: white;
     border: none;
-    padding: 0.2rem 0.5rem;
+    padding: 0.34rem 0.58rem;
     border-radius: 6px;
-    font-size: 0.65rem;
+    font-size: 0.72rem;
+    line-height: 1;
     transition: all 0.2s;
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.28rem;
+    min-width: 32px;
+    min-height: 28px;
 }
 
 .btn-action-view:hover {
@@ -777,14 +828,37 @@ include '../../includes/navbar.php';
 
 /* Completed Card */
 .completed-card {
-    background: var(--gray-50);
-    border-radius: 10px;
-    padding: 0.5rem 0.75rem;
-    margin-bottom: 0.5rem;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 0.85rem;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
 }
 
-.completed-card small {
-    font-size: 0.7rem;
+.completed-card-title {
+    display: block;
+    color: var(--gray-800);
+    font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.completed-card-date {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: #6b7f95;
+    font-size: 0.72rem;
+}
+
+.completed-card-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.65rem;
 }
 
 .git-snippet {
@@ -1392,13 +1466,13 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card.reopened-card {
-    background: #1f1608 !important;
-    border-color: #f59e0b !important;
+    background: linear-gradient(180deg, rgba(31, 99, 146, 0.18), #071321 40%) !important;
+    border-color: rgba(138, 210, 255, 0.2) !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .reopen-indicator {
-    background: rgba(245, 158, 11, 0.2);
-    color: #fbbf24;
+    background: rgba(138, 210, 255, 0.12);
+    color: #bfe6ff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header h5,
@@ -1419,6 +1493,16 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-project-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-task-col {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card-description,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .kanban-card-due,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card-date {
+    color: #90aeca !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .completed-card-title {
     color: #d7e4f2 !important;
 }
 
@@ -1649,8 +1733,8 @@ include '../../includes/navbar.php';
                     <?php while($task = $todoTasks->fetch_assoc()): ?>
                     <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
-                        <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
+                        <h6 class="kanban-card-title fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
+                        <p class="kanban-card-description"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
                         <?php if (!empty($task['git_branch_name'])): ?>
                         <div class="git-snippet">
                             <i class="fas fa-code-branch"></i>
@@ -1660,10 +1744,10 @@ include '../../includes/navbar.php';
                             <?php endif; ?>
                         </div>
                         <?php endif; ?>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
-                            <div>
-                                <button class="btn-action me-1" onclick="startTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Start this task without changing the controlled review workflow.">
+                        <div class="kanban-card-footer">
+                            <span class="kanban-card-due"><i class="far fa-calendar-alt"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></span>
+                            <div class="kanban-card-actions">
+                                <button class="btn-action" onclick="startTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Start this task without changing the controlled review workflow.">
                                     <i class="fas fa-play"></i> Start
                                 </button>
                                 <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
@@ -1702,8 +1786,8 @@ include '../../includes/navbar.php';
                                 <i class="fas fa-rotate-left"></i> Reopened
                             </span>
                         <?php endif; ?>
-                        <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
+                        <h6 class="kanban-card-title fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
+                        <p class="kanban-card-description"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
                         <?php if (!empty($task['git_branch_name'])): ?>
                         <div class="git-snippet">
                             <i class="fas fa-code-branch"></i>
@@ -1713,13 +1797,13 @@ include '../../includes/navbar.php';
                             <?php endif; ?>
                         </div>
                         <?php endif; ?>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
-                            <div>
-                                <button class="btn-action me-1" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details and submit the PR through the Git update form.">
+                        <div class="kanban-card-footer">
+                            <span class="kanban-card-due"><i class="far fa-calendar-alt"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></span>
+                            <div class="kanban-card-actions">
+                                <button class="btn-action" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details and submit the PR through the Git update form.">
                                     <i class="fas fa-code-pull-request"></i> Submit PR
                                 </button>
-                                <button class="btn-action me-1" onclick="reviewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Move this task back to To Do if work has not started cleanly.">
+                                <button class="btn-action" onclick="reviewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Move this task back to To Do if work has not started cleanly.">
                                     <i class="fas fa-undo"></i> Back
                                 </button>
                                 <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
@@ -1752,8 +1836,8 @@ include '../../includes/navbar.php';
                     <?php while($task = $reviewTasks->fetch_assoc()): ?>
                     <div class="kanban-card" data-task-id="<?php echo $task['id']; ?>" draggable="true">
                         <div class="task-priority-dot priority-<?php echo $task['priority']; ?>"></div>
-                        <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
-                        <p class="small text-muted mb-2"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
+                        <h6 class="kanban-card-title fw-semibold"><?php echo htmlspecialchars($task['title']); ?></h6>
+                        <p class="kanban-card-description"><?php echo htmlspecialchars(substr((string) ($task['description'] ?? ''), 0, 80)); ?></p>
                         <?php if (!empty($task['git_branch_name'])): ?>
                         <div class="git-snippet">
                             <i class="fas fa-code-branch"></i>
@@ -1763,13 +1847,13 @@ include '../../includes/navbar.php';
                             <?php endif; ?>
                         </div>
                         <?php endif; ?>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <small class="text-muted"><i class="far fa-calendar-alt me-1"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></small>
-                            <div class="d-flex gap-1 flex-wrap justify-content-end">
+                        <div class="kanban-card-footer">
+                            <span class="kanban-card-due"><i class="far fa-calendar-alt"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></span>
+                            <div class="kanban-card-actions">
                                 <?php if ((int) ($task['active_reopen_request_count'] ?? 0) > 0): ?>
                                     <span class="badge bg-info text-dark" data-bs-toggle="tooltip" title="This task already has a reopen request waiting for SUL or Architect decision.">Pending Reopen</span>
                                 <?php else: ?>
-                                    <button class="btn-action me-1" onclick="openReopenRequestModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))" data-bs-toggle="tooltip" title="Ask SUL to review a reopen request for this task.">
+                                    <button class="btn-action" onclick="openReopenRequestModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))" data-bs-toggle="tooltip" title="Ask SUL to review a reopen request for this task.">
                                         <i class="fas fa-rotate-left"></i> Reopen
                                     </button>
                                 <?php endif; ?>
@@ -1803,26 +1887,20 @@ include '../../includes/navbar.php';
                     <?php while($task = $completedTasks->fetch_assoc()): ?>
                     <?php $canRequestReopen = in_array((string) ($task['status'] ?? ''), ['for_review', 'qa_testing', 'qa_failed', 'qa_passed', 'architect_review', 'merged', 'ready_for_release', 'completed'], true); ?>
                     <div class="completed-card">
-                        <div class="d-flex justify-content-between align-items-start gap-2">
-                            <div>
-                                <small><s><?php echo htmlspecialchars($task['title']); ?></s></small>
-                                <div class="mt-2">
-                                    <?php if ((int) ($task['active_reopen_request_count'] ?? 0) > 0): ?>
-                                        <span class="badge bg-info text-dark">Pending Reopen</span>
-                                    <?php elseif ($canRequestReopen): ?>
-                                        <button class="btn-action" onclick="openReopenRequestModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))" data-bs-toggle="tooltip" title="Ask SUL to review a reopen request for this completed task.">
-                                            <i class="fas fa-rotate-left"></i> Request Reopen
-                                        </button>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                            <div class="text-end">
-                                <?php $doneAt = $task['completed_at'] ?: ($task['developer_completed_at'] ?? null); ?>
-                                <small class="text-muted"><?php echo !empty($doneAt) ? date('M d', strtotime((string) $doneAt)) : 'No date'; ?></small>
-                                <button class="btn-action-view mt-2" onclick="viewTask(<?php echo (int) $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details.">
-                                    <i class="fas fa-eye"></i>
+                        <?php $doneAt = $task['completed_at'] ?: ($task['developer_completed_at'] ?? null); ?>
+                        <span class="completed-card-title"><?php echo htmlspecialchars($task['title']); ?></span>
+                        <span class="completed-card-date"><i class="far fa-calendar-check"></i><?php echo !empty($doneAt) ? date('M d', strtotime((string) $doneAt)) : 'No date'; ?></span>
+                        <div class="completed-card-actions">
+                            <?php if ((int) ($task['active_reopen_request_count'] ?? 0) > 0): ?>
+                                <span class="badge bg-info text-dark">Pending Reopen</span>
+                            <?php elseif ($canRequestReopen): ?>
+                                <button class="btn-action" onclick="openReopenRequestModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))" data-bs-toggle="tooltip" title="Ask SUL to review a reopen request for this completed task.">
+                                    <i class="fas fa-rotate-left"></i> Request Reopen
                                 </button>
-                            </div>
+                            <?php endif; ?>
+                            <button class="btn-action-view" onclick="viewTask(<?php echo (int) $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details.">
+                                <i class="fas fa-eye"></i>
+                            </button>
                         </div>
                     </div>
                     <?php endwhile; ?>
@@ -1975,36 +2053,40 @@ function ensureKanbanColumnEmptyState(columnBody) {
 }
 
 function transformKanbanCardForReviewColumn(card, taskId) {
-    const footer = card.querySelector('.d-flex.justify-content-between.align-items-center');
+    const footer = card.querySelector('.kanban-card-footer, .d-flex.justify-content-between.align-items-center');
     if (!footer) {
         return;
     }
 
-    const dueLabel = footer.querySelector('small');
+    const dueLabel = footer.querySelector('.kanban-card-due, small');
     const dueHtml = dueLabel ? dueLabel.outerHTML : '';
+    footer.className = 'kanban-card-footer';
     footer.innerHTML = `
         ${dueHtml}
-        <button class="btn-action-view" onclick="viewTask(${taskId})">
-            <i class="fas fa-eye"></i> View
-        </button>
+        <div class="kanban-card-actions">
+            <button class="btn-action-view" onclick="viewTask(${taskId})">
+                <i class="fas fa-eye"></i> View
+            </button>
+        </div>
     `;
 }
 
 function transformKanbanCardForProgressColumn(card, taskId) {
-    const footer = card.querySelector('.d-flex.justify-content-between.align-items-center');
+    const footer = card.querySelector('.kanban-card-footer, .d-flex.justify-content-between.align-items-center');
     if (!footer) {
         return;
     }
 
-    const dueLabel = footer.querySelector('small');
+    const dueLabel = footer.querySelector('.kanban-card-due, small');
     const dueHtml = dueLabel ? dueLabel.outerHTML : '';
+    footer.className = 'kanban-card-footer';
     footer.innerHTML = `
         ${dueHtml}
-        <div>
-            <button class="btn-action me-1" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details and submit the PR through the Git update form.">
+        <div class="kanban-card-actions">
+            <button class="btn-action" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details and submit the PR through the Git update form.">
                 <i class="fas fa-code-pull-request"></i> Submit PR
             </button>
-            <button class="btn-action me-1" onclick="reviewTask(${taskId})" data-bs-toggle="tooltip" title="Move this task back to To Do if work has not started cleanly.">
+            <button class="btn-action" onclick="reviewTask(${taskId})" data-bs-toggle="tooltip" title="Move this task back to To Do if work has not started cleanly.">
                 <i class="fas fa-undo"></i> Back
             </button>
             <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
@@ -2015,17 +2097,18 @@ function transformKanbanCardForProgressColumn(card, taskId) {
 }
 
 function transformKanbanCardForTodoColumn(card, taskId) {
-    const footer = card.querySelector('.d-flex.justify-content-between.align-items-center');
+    const footer = card.querySelector('.kanban-card-footer, .d-flex.justify-content-between.align-items-center');
     if (!footer) {
         return;
     }
 
-    const dueLabel = footer.querySelector('small');
+    const dueLabel = footer.querySelector('.kanban-card-due, small');
     const dueHtml = dueLabel ? dueLabel.outerHTML : '';
+    footer.className = 'kanban-card-footer';
     footer.innerHTML = `
         ${dueHtml}
-        <div>
-            <button class="btn-action me-1" onclick="startTask(${taskId})" data-bs-toggle="tooltip" title="Start this task and open the UI/UX design references.">
+        <div class="kanban-card-actions">
+            <button class="btn-action" onclick="startTask(${taskId})" data-bs-toggle="tooltip" title="Start this task and open the UI/UX design references.">
                 <i class="fas fa-play"></i> Start
             </button>
             <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
@@ -2077,6 +2160,20 @@ function reviewTask(taskId) {
     updateTaskStatus(taskId, 'todo');
 }
 
+function showTaskNotice(title, message, type = 'success') {
+    if (typeof window.appToast === 'function') {
+        window.appToast(title, message, type);
+        return;
+    }
+
+    if (typeof window.showToast === 'function') {
+        window.showToast(title, message, type);
+        return;
+    }
+
+    console[type === 'error' ? 'error' : 'log'](`${title}: ${message}`);
+}
+
 async function updateTaskStatus(taskId, status, options = {}) {
     if (!options.skipConfirm) {
         const confirmed = typeof window.appConfirm === 'function'
@@ -2092,7 +2189,7 @@ async function updateTaskStatus(taskId, status, options = {}) {
                 confirmIcon: 'fas fa-check',
                 confirmText: status === 'for_review' ? 'Submit Design' : (status === 'in_progress' ? 'Start Task' : 'Update')
             })
-            : window.confirm('Update this task status?');
+            : false;
         if (!confirmed) {
             return;
         }
@@ -2115,7 +2212,7 @@ async function updateTaskStatus(taskId, status, options = {}) {
         }
         return response;
     } catch (xhr) {
-        alert(xhr.responseJSON?.error || 'Unable to update task status.');
+        showTaskNotice('Task Update', xhr.responseJSON?.error || 'Unable to update task status.', 'error');
         throw xhr;
     }
 }
@@ -2580,11 +2677,11 @@ $('#reopenRequestForm').on('submit', function(event) {
         data: $(this).serialize(),
         success: function(response) {
             bootstrap.Modal.getOrCreateInstance(document.getElementById('reopenRequestModal')).hide();
-            alert(response.message || 'Reopen request sent to SUL.');
+            showTaskNotice('Reopen Request', response.message || 'Reopen request sent to SUL.');
             window.location.reload();
         },
         error: function(xhr) {
-            alert(xhr.responseJSON?.message || 'Unable to send reopen request.');
+            showTaskNotice('Reopen Request', xhr.responseJSON?.message || 'Unable to send reopen request.', 'error');
         },
         complete: function() {
             if (submitButton) {
@@ -2828,7 +2925,7 @@ function saveDepartmentArtifact(taskId, options = {}) {
         dataType: 'json',
         success: function(response) {
             if (!silent) {
-                alert(response.message || 'Department handoff saved.');
+                showTaskNotice('Department Handoff', response.message || 'Department handoff saved.');
             }
             if (reloadTask) {
                 viewTask(taskId);
@@ -2836,7 +2933,7 @@ function saveDepartmentArtifact(taskId, options = {}) {
         },
         error: function(xhr) {
             if (!silent) {
-                alert(xhr.responseJSON?.error || 'Unable to save department handoff.');
+                showTaskNotice('Department Handoff', xhr.responseJSON?.error || 'Unable to save department handoff.', 'error');
             }
         }
     });
@@ -2852,7 +2949,7 @@ async function submitDesignForReview(taskId) {
             confirmIcon: 'fas fa-paper-plane',
             confirmText: 'Submit Design'
         })
-        : window.confirm('Save handoff and submit design?');
+        : false;
     if (!confirmed) {
         return;
     }
@@ -2860,7 +2957,7 @@ async function submitDesignForReview(taskId) {
     try {
         await saveDepartmentArtifact(taskId, { silent: true, reloadTask: false });
     } catch (xhr) {
-        alert(xhr.responseJSON?.error || 'Unable to save the design handoff before submitting.');
+        showTaskNotice('Design Handoff', xhr.responseJSON?.error || 'Unable to save the design handoff before submitting.', 'error');
         return;
     }
 
@@ -2938,7 +3035,7 @@ function addComment(taskId) {
         success: function() {
             $('#taskComment').val('');
             loadComments(taskId);
-            alert('Comment added successfully');
+            showTaskNotice('Comments', 'Comment added successfully');
         }
     });
 }
@@ -2947,7 +3044,7 @@ function addGitUpdate(taskId) {
     const branchName = $('#gitBranchName').val().trim();
 
     if(!branchName) {
-        alert('Branch name is required for Git updates.');
+        showTaskNotice('Git Update', 'Branch name is required for Git updates.', 'error');
         return;
     }
 
@@ -2974,11 +3071,11 @@ function addGitUpdate(taskId) {
 
             if (data.pull_request_submitted || data.task_status === 'for_review') {
                 moveKanbanTaskToReview(taskId);
-                alert(data.message || 'Pull Request submitted. Task moved to Workflow Review.');
+                showTaskNotice('Git Update', data.message || 'Pull Request submitted. Task moved to Workflow Review.');
             }
         },
         error: function(xhr) {
-            alert(xhr.responseJSON?.error || 'Failed to save Git update');
+            showTaskNotice('Git Update', xhr.responseJSON?.error || 'Failed to save Git update', 'error');
         }
     });
 }
@@ -3071,11 +3168,11 @@ function handleDrop(e) {
     if(columnTitle === 'To Do') newStatus = 'todo';
     else if(columnTitle === 'In Progress') newStatus = 'in_progress';
     else if(columnTitle === 'Workflow Review') {
-        alert('Submit a Pull Request from the task Git update form to move this task For Review.');
+        showTaskNotice('Workflow Review', 'Submit a Pull Request from the task Git update form to move this task For Review.', 'error');
         return;
     }
     else if(columnTitle === 'Completed') {
-        alert('Tasks are completed only after SUL review, QA testing, and Architect merge.');
+        showTaskNotice('Completed Tasks', 'Tasks are completed only after SUL review, QA testing, and Architect merge.', 'error');
         return;
     }
     

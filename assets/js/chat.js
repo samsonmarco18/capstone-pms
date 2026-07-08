@@ -636,12 +636,24 @@ function addSelectedGroupMembers() {
     });
 }
 
-function leaveCurrentGroup() {
+async function leaveCurrentGroup() {
     if (!currentChatGroup) {
         return;
     }
 
-    if (!window.confirm('Leave this group? You will no longer see it in your group chats.')) {
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Leave Group',
+            subject: 'Leave this group?',
+            message: 'You will no longer see it in your group chats.',
+            icon: 'fas fa-users-slash fa-lg',
+            confirmIcon: 'fas fa-arrow-right-from-bracket',
+            confirmText: 'Leave Group',
+            variant: 'danger'
+        })
+        : false;
+
+    if (!confirmed) {
         return;
     }
 
