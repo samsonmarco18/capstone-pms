@@ -259,29 +259,35 @@ function roadmapMonitoringTaskIndicator(?string $workflowStatus, string $roadmap
     $workflowStatus = strtolower(trim((string) $workflowStatus));
     $roadmapStatus = strtolower(trim($roadmapStatus));
 
-    if (
-        in_array($workflowStatus, ['completed', 'merged', 'ready_for_release'], true)
-        || $roadmapStatus === 'completed'
-    ) {
-        return ['key' => 'done', 'label' => 'Done'];
-    }
+    if ($workflowStatus !== '') {
+        if (in_array($workflowStatus, ['completed', 'merged', 'ready_for_release'], true)) {
+            return ['key' => 'done', 'label' => 'Done'];
+        }
 
-    if ($roadmapStatus === 'planned') {
+        if (in_array($workflowStatus, ['blocked', 'overdue', 'sul_revision', 'qa_failed'], true)) {
+            return ['key' => 'pending', 'label' => 'Blocked / Revision'];
+        }
+
+        if (in_array($workflowStatus, ['review', 'in_review', 'for_review', 'qa_testing', 'qa_passed', 'architect_review'], true)) {
+            return ['key' => 'pending', 'label' => 'Pending Review'];
+        }
+
+        if ($workflowStatus === 'in_progress') {
+            return ['key' => 'in-progress', 'label' => 'In Progress'];
+        }
+
         return ['key' => 'not-started', 'label' => 'Not Yet Started'];
     }
 
-    if (in_array($workflowStatus, ['review', 'for_review', 'qa_testing', 'qa_passed', 'architect_review'], true)) {
-        return ['key' => 'pending', 'label' => 'Pending Review'];
+    if ($roadmapStatus === 'completed') {
+        return ['key' => 'done', 'label' => 'Done'];
     }
 
-    if (
-        in_array($workflowStatus, ['blocked', 'overdue', 'sul_revision', 'qa_failed'], true)
-        || in_array($roadmapStatus, ['blocked', 'on_hold'], true)
-    ) {
+    if (in_array($roadmapStatus, ['blocked', 'on_hold'], true)) {
         return ['key' => 'pending', 'label' => 'Blocked / Revision'];
     }
 
-    if ($workflowStatus === 'in_progress' || $roadmapStatus === 'in_progress') {
+    if ($roadmapStatus === 'in_progress') {
         return ['key' => 'in-progress', 'label' => 'In Progress'];
     }
 
@@ -316,36 +322,19 @@ function roadmapMonitoringInitials(?string $name): string
     return $uppercase($first . $last);
 }
 
-function roadmapMonitoringAssigneeHtml(array $task): string
-{
-    $name = trim((string) ($task['assigned_developer_name'] ?? ''));
-    if ($name === '') {
-        return '<div class="task-owner-profile is-unassigned">'
-            . '<span class="task-owner-avatar"><i class="fas fa-user-slash" aria-hidden="true"></i></span>'
-            . '<span class="task-owner-copy"><strong>Unassigned</strong><small>Needs a team member</small></span>'
-            . '</div>';
-    }
-
-    $profileUrl = roadmapMonitoringProfileUrl((string) ($task['assigned_developer_profile_pic'] ?? ''));
-    $designation = trim((string) ($task['assigned_developer_designation'] ?? ''));
-    $role = ucwords(str_replace('_', ' ', (string) ($task['assigned_developer_role'] ?? 'Developer')));
-    $subtitle = $designation !== '' ? $designation : $role;
-    $avatar = '<span class="task-owner-avatar"><span>' . htmlspecialchars(roadmapMonitoringInitials($name)) . '</span>';
-    if ($profileUrl !== '') {
-        $avatar .= '<img src="' . htmlspecialchars($profileUrl) . '" alt="" loading="lazy">';
-    }
-    $avatar .= '</span>';
-
-    return '<div class="task-owner-profile">'
-        . $avatar
-        . '<span class="task-owner-copy"><strong>' . htmlspecialchars($name) . '</strong><small>' . htmlspecialchars($subtitle) . '</small></span>'
-        . '</div>';
-}
-
-function roadmapMonitoringPhaseIndicator(array $phase): array
+function roadmapMonitoringPhaseIndicator(array $phase, bool $departmentOnly = false): array
 {
     $tasks = is_array($phase['tasks'] ?? null) ? $phase['tasks'] : [];
+    if ($departmentOnly) {
+        $tasks = array_values(array_filter(
+            $tasks,
+            static fn(array $task): bool => !empty($task['is_sul_department_task'])
+        ));
+    }
     if ($tasks === []) {
+        if ($departmentOnly) {
+            return ['key' => 'not-started', 'label' => 'No Department Tasks', 'icon' => 'fas fa-minus'];
+        }
         return roadmapPhaseIndicator((string) ($phase['status'] ?? 'planned'));
     }
 
@@ -1672,12 +1661,15 @@ include '../../includes/navbar.php';
     display: grid;
     grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
     gap: 1rem;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .phase-list {
     display: flex;
     flex-direction: column;
     gap: .75rem;
+    min-width: 0;
 }
 
 .phase-card-roadmap {
@@ -1829,13 +1821,22 @@ include '../../includes/navbar.php';
 }
 
 .roadmap-gantt {
-    overflow: hidden;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
 }
 
 .gantt-head,
 .gantt-row {
     display: grid;
     grid-template-columns: minmax(180px, 260px) minmax(520px, 1fr);
+}
+
+.gantt-head,
+.gantt-row {
+    min-width: 860px;
 }
 
 .gantt-head {
@@ -1922,14 +1923,6 @@ include '../../includes/navbar.php';
     margin-top: .2rem;
 }
 
-.task-owner-profile {
-    align-items: center;
-    display: flex;
-    gap: .45rem;
-    margin-top: .4rem;
-    min-width: 0;
-}
-
 .task-owner-avatar {
     align-items: center;
     background: #dbeafe;
@@ -1955,39 +1948,41 @@ include '../../includes/navbar.php';
     width: 100%;
 }
 
-.task-owner-copy {
-    display: block;
-    min-width: 0;
-}
-
-.task-owner-copy strong,
-.task-owner-copy small {
-    display: block;
-    line-height: 1.15;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.task-owner-copy strong {
-    color: var(--roadmap-ink);
-    font-size: .72rem;
-}
-
-.task-owner-copy small {
-    color: var(--roadmap-muted);
-    font-size: .64rem;
-    margin-top: .15rem;
-}
-
-.task-owner-profile.is-unassigned .task-owner-avatar {
+.gantt-task-owner-marker.is-unassigned .task-owner-avatar,
+.table-task-owner-marker.is-unassigned .task-owner-avatar {
     background: #f1f5f9;
     color: #64748b;
 }
 
+.roadmap-task-row.has-owner-profile {
+    min-height: 76px;
+}
+
 .roadmap-task-row.has-owner-profile .gantt-bar-task {
-    top: 50%;
-    transform: translateY(-50%);
+    top: 12px;
+}
+
+.gantt-task-owner-marker {
+    cursor: help;
+    display: inline-flex;
+    left: 0;
+    position: absolute;
+    top: 42px;
+    transform: translateX(.4rem);
+    z-index: 2;
+}
+
+.gantt-task-owner-marker .task-owner-avatar {
+    box-shadow: 0 2px 7px rgba(15, 23, 42, .16);
+    flex-basis: 24px;
+    height: 24px;
+    width: 24px;
+}
+
+.table-task-owner-marker {
+    cursor: help;
+    display: inline-flex;
+    margin-top: .4rem;
 }
 
 .gantt-track {
@@ -2326,8 +2321,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-task-picker .form-check-label,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-status-legend-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-panel-heading h3,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-name,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-owner-copy strong {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-name {
     color: #f8fafc;
 }
 
@@ -2788,9 +2782,13 @@ include '../../includes/navbar.php';
                 <?php foreach ($phases as $phase): ?>
                     <?php
                         $phaseIndicator = $isSulMonitoring
-                            ? roadmapMonitoringPhaseIndicator($phase)
+                            ? roadmapMonitoringPhaseIndicator($phase, true)
                             : roadmapPhaseIndicator((string) ($phase['status'] ?? 'planned'));
                         $phaseHasHeadcount = (int) ($phase['developer_count'] ?? 0) > 0;
+                        $phaseDepartmentTaskCount = count(array_filter(
+                            (array) ($phase['tasks'] ?? []),
+                            static fn(array $task): bool => !empty($task['is_sul_department_task'])
+                        ));
                     ?>
                     <div
                         class="roadmap-card phase-card-roadmap phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?> <?php echo $canEditArchitecture ? ($phaseHasHeadcount ? '' : 'is-headcount-pending') : 'is-readonly'; ?>"
@@ -2812,7 +2810,11 @@ include '../../includes/navbar.php';
                                 <strong>Headcount:</strong>
                                 <?php echo (int) $phase['developer_count']; ?> <?php echo (int) $phase['developer_count'] === 1 ? 'developer' : 'developers'; ?>
                             </span>
-                            <span><i class="fas fa-list-check"></i> <?php echo count($phase['tasks'] ?? []); ?> tasks</span>
+                            <span>
+                                <i class="fas fa-list-check"></i>
+                                <?php echo $isSulMonitoring ? $phaseDepartmentTaskCount : count($phase['tasks'] ?? []); ?>
+                                <?php echo $isSulMonitoring ? 'department tasks' : 'tasks'; ?>
+                            </span>
                             <?php if ($canEditArchitecture && !$phaseHasHeadcount): ?>
                                 <span class="phase-headcount-required-label">
                                     <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
@@ -2882,7 +2884,7 @@ include '../../includes/navbar.php';
                 <?php foreach ($phases as $phase): ?>
                     <?php
                         $phaseIndicator = $isSulMonitoring
-                            ? roadmapMonitoringPhaseIndicator($phase)
+                            ? roadmapMonitoringPhaseIndicator($phase, true)
                             : roadmapPhaseIndicator((string) ($phase['status'] ?? 'planned'));
                         $phaseHasHeadcount = (int) ($phase['developer_count'] ?? 0) > 0;
                         $phaseOffset = max(0, (int) $timelineStart->diff(roadmapParseDate($phase['start_date']))->format('%r%a'));
@@ -2937,9 +2939,6 @@ include '../../includes/navbar.php';
                             <div class="gantt-label-cell">
                                 <span class="gantt-label-title ps-3"><?php echo htmlspecialchars((string) $task['title']); ?></span>
                                 <span class="gantt-label-sub ps-3"><?php echo htmlspecialchars((string) $task['department_summary']); ?></span>
-                                <?php if ($isSulMonitoring): ?>
-                                    <div class="ps-3"><?php echo roadmapMonitoringAssigneeHtml($task); ?></div>
-                                <?php endif; ?>
                             </div>
                             <div class="gantt-track">
                                 <div
@@ -2951,6 +2950,39 @@ include '../../includes/navbar.php';
                                 >
                                     <?php echo htmlspecialchars((string) $task['title']); ?>
                                 </div>
+                                <?php if ($isSulMonitoring): ?>
+                                    <?php
+                                        $taskOwnerName = trim((string) ($task['assigned_developer_name'] ?? ''));
+                                        $taskOwnerRole = trim((string) ($task['assigned_developer_designation'] ?? ''));
+                                        if ($taskOwnerRole === '') {
+                                            $taskOwnerRole = ucwords(str_replace('_', ' ', (string) ($task['assigned_developer_role'] ?? 'Developer')));
+                                        }
+                                        $taskOwnerTooltip = $taskOwnerName !== ''
+                                            ? $taskOwnerName . ' · ' . $taskOwnerRole
+                                            : 'Unassigned · Needs a team member';
+                                    ?>
+                                    <span
+                                        class="gantt-task-owner-marker <?php echo $taskOwnerName === '' ? 'is-unassigned' : ''; ?>"
+                                        style="left: <?php echo $taskLeft; ?>%;"
+                                        tabindex="0"
+                                        data-bs-toggle="tooltip"
+                                        data-bs-placement="top"
+                                        data-bs-container="body"
+                                        title="<?php echo htmlspecialchars($taskOwnerTooltip); ?>"
+                                        aria-label="<?php echo htmlspecialchars($taskOwnerTooltip); ?>"
+                                    >
+                                        <span class="task-owner-avatar">
+                                            <?php if ($taskOwnerName !== ''): ?>
+                                                <span><?php echo htmlspecialchars((string) ($task['assigned_developer_initials'] ?? '?')); ?></span>
+                                                <?php if (!empty($task['assigned_developer_profile_url'])): ?>
+                                                    <img src="<?php echo htmlspecialchars((string) $task['assigned_developer_profile_url']); ?>" alt="" loading="lazy">
+                                                <?php endif; ?>
+                                            <?php else: ?>
+                                                <i class="fas fa-user-slash" aria-hidden="true"></i>
+                                            <?php endif; ?>
+                                        </span>
+                                    </span>
+                                <?php endif; ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -3006,7 +3038,36 @@ include '../../includes/navbar.php';
                                         <div class="small text-muted"><?php echo htmlspecialchars((string) $task['component_name']); ?></div>
                                     <?php endif; ?>
                                     <?php if ($isSulMonitoring): ?>
-                                        <?php echo roadmapMonitoringAssigneeHtml($task); ?>
+                                        <?php
+                                            $tableOwnerName = trim((string) ($task['assigned_developer_name'] ?? ''));
+                                            $tableOwnerRole = trim((string) ($task['assigned_developer_designation'] ?? ''));
+                                            if ($tableOwnerRole === '') {
+                                                $tableOwnerRole = ucwords(str_replace('_', ' ', (string) ($task['assigned_developer_role'] ?? 'Developer')));
+                                            }
+                                            $tableOwnerTooltip = $tableOwnerName !== ''
+                                                ? $tableOwnerName . ' · ' . $tableOwnerRole
+                                                : 'Unassigned · Needs a team member';
+                                        ?>
+                                        <span
+                                            class="table-task-owner-marker <?php echo $tableOwnerName === '' ? 'is-unassigned' : ''; ?>"
+                                            tabindex="0"
+                                            data-bs-toggle="tooltip"
+                                            data-bs-placement="top"
+                                            data-bs-container="body"
+                                            title="<?php echo htmlspecialchars($tableOwnerTooltip); ?>"
+                                            aria-label="<?php echo htmlspecialchars($tableOwnerTooltip); ?>"
+                                        >
+                                            <span class="task-owner-avatar">
+                                                <?php if ($tableOwnerName !== ''): ?>
+                                                    <span><?php echo htmlspecialchars((string) ($task['assigned_developer_initials'] ?? '?')); ?></span>
+                                                    <?php if (!empty($task['assigned_developer_profile_url'])): ?>
+                                                        <img src="<?php echo htmlspecialchars((string) $task['assigned_developer_profile_url']); ?>" alt="" loading="lazy">
+                                                    <?php endif; ?>
+                                                <?php else: ?>
+                                                    <i class="fas fa-user-slash" aria-hidden="true"></i>
+                                                <?php endif; ?>
+                                            </span>
+                                        </span>
                                     <?php endif; ?>
                                 </td>
                                 <td>
