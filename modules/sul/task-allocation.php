@@ -1976,133 +1976,98 @@ include '../../includes/navbar.php';
     margin-bottom: 1.5rem;
 }
 
-.project-context-icon {
-    align-items: center;
-    background: transparent;
-    border-radius: 0;
-    color: var(--theme-primary);
-    display: inline-flex;
-    flex: 0 0 28px;
-    font-size: 1.2rem;
-    height: 28px;
-    justify-content: center;
-    width: 28px;
-}
-
-.project-context-copy {
-    min-width: 0;
-}
-
-.project-context-eyebrow {
-    color: var(--gray-500);
-    display: block;
-    font-size: 0.66rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.project-context-title {
-    color: var(--gray-800);
-    display: block;
-    font-size: 1rem;
-    font-weight: 800;
-    line-height: 1.25;
-    margin: 0;
-}
-
-.project-context-subtitle {
-    color: #64748b;
-    display: block;
-    font-size: 0.78rem;
-    margin-top: 0.15rem;
-}
-
 .project-context-card {
-    border-radius: 16px;
+    border-bottom: 0;
+    border-radius: 16px 16px 0 0;
     box-shadow: none;
-    margin-bottom: 1rem;
+    margin-bottom: 0;
     overflow: visible;
-    padding: 0.95rem 1rem;
+    padding: 0.75rem 1rem 0;
 }
 
 .project-context-layout {
     align-items: center;
     display: grid;
     gap: 1rem;
-    grid-template-columns: minmax(0, 1fr) minmax(340px, 0.8fr);
+    grid-template-columns: auto minmax(280px, 640px);
+    justify-content: space-between;
 }
 
 .project-context-main {
     align-items: center;
     display: flex;
-    gap: 0.75rem;
     min-width: 0;
 }
 
-.project-context-title {
-    font-size: 1.05rem;
+.project-context-actions {
+    align-items: center;
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: minmax(220px, 1fr) auto;
+    justify-self: end;
+    width: min(100%, 640px);
 }
 
-.project-context-metrics {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    margin-top: 0.45rem;
-}
-
-.project-context-pill {
+.project-context-count-pill {
     align-items: center;
     background: transparent;
     border: 0;
     border-radius: 0;
-    color: #475569;
+    color: var(--theme-primary);
     display: inline-flex;
-    font-size: 0.7rem;
-    font-weight: 800;
-    gap: 0.35rem;
+    font-size: 0.78rem;
+    font-weight: 400;
+    gap: 0.42rem;
+    min-height: 0;
     padding: 0;
+    white-space: nowrap;
 }
 
-.project-context-pill strong {
+.project-context-count-pill i {
     color: var(--theme-primary);
-    font-size: 0.82rem;
+    font-size: 0.85rem;
 }
 
-.project-context-actions {
-    align-items: end;
-    display: grid;
-    gap: 0.55rem;
-    grid-template-columns: minmax(0, 1fr) auto;
+.project-context-workflow-name {
+    color: var(--theme-primary);
+    font-weight: 500;
 }
 
-.project-context-label {
+.project-context-count-separator {
+    color: var(--gray-400);
+    font-weight: 400;
+}
+
+.project-context-count-value {
+    color: var(--gray-600);
+    font-weight: 400;
+}
+
+.project-context-roadmap-disabled {
+    align-items: center;
     color: var(--gray-500);
-    display: block;
-    font-size: 0.68rem;
-    font-weight: 800;
-    grid-column: 1 / -1;
-    letter-spacing: 0.06em;
-    margin: 0;
-    text-transform: uppercase;
+    cursor: not-allowed;
+    display: inline-flex;
+    gap: 0.45rem;
+    opacity: 0.72;
+    white-space: nowrap;
 }
 
-.project-context-workflow {
-    color: var(--theme-primary);
-    font-weight: 900;
+.project-context-roadmap-disabled:hover {
+    background: transparent;
+    border-color: var(--gray-300);
+    color: var(--gray-500);
 }
 
 .project-context-actions .form-select-custom {
     min-height: 42px;
+    font-weight: 400;
 }
 
-.project-context-empty-action {
-    align-items: center;
-    color: #94a3b8;
-    display: inline-flex;
-    font-size: 0.72rem;
-    font-weight: 700;
-    min-height: 42px;
+.project-context-card .workflow-tabs {
+    margin: 0.45rem 0 0;
+    padding-bottom: 0.08rem;
+    position: static;
 }
 
 .expert-utility-grid {
@@ -2124,7 +2089,28 @@ include '../../includes/navbar.php';
 .workflow-layout {
     display: block;
     min-width: 0;
-    margin-top: 1rem;
+    margin-top: 0;
+}
+
+.project-context-card + .workflow-layout .allocation-board .section-card {
+    border-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    box-shadow: none;
+}
+
+.project-context-card .workflow-tabs .nav-link {
+    min-height: 36px;
+    padding-bottom: 0.35rem;
+    padding-top: 0.35rem;
+}
+
+.project-context-card .workflow-tabs .nav-link.active::after {
+    bottom: -0.1rem;
+}
+
+.project-context-card + .workflow-layout .allocation-board .section-card > .section-header {
+    display: none;
 }
 
 .workflow-tabs {
@@ -2987,6 +2973,11 @@ include '../../includes/navbar.php';
     font-size: 0.75rem;
     cursor: pointer;
     transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    white-space: nowrap;
 }
 
 .btn-outline-modern:hover {
@@ -3474,22 +3465,9 @@ include '../../includes/navbar.php';
     color: #9db6cf !important;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-title {
-    color: #d7e4f2;
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-icon {
-    background: transparent;
-    color: #7cc0ee;
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-pill {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-count-pill {
     background: transparent;
     border-color: transparent;
-    color: #9db6cf;
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-pill strong {
     color: #7cc0ee;
 }
 
@@ -3734,6 +3712,11 @@ include '../../includes/navbar.php';
         grid-template-columns: 1fr;
     }
 
+    .project-context-actions {
+        justify-self: stretch;
+        width: 100%;
+    }
+
     .workflow-layout {
         grid-template-columns: 1fr;
     }
@@ -3883,27 +3866,16 @@ include '../../includes/navbar.php';
             <div class="section-card project-context-card">
                 <div class="project-context-layout">
                     <div class="project-context-main">
-                        <span class="project-context-icon" aria-hidden="true"><i class="fas fa-folder-open"></i></span>
-                        <div class="project-context-copy">
-                            <span class="project-context-eyebrow">
-                                <span class="project-context-workflow">Expert Workflow</span>
-                                | <?php echo (int) $expertAllocationBadgeCount; ?> <?php echo (int) $expertAllocationBadgeCount === 1 ? 'item' : 'items'; ?>
+                        <span class="project-context-count-pill">
+                            <i class="fas fa-tasks" aria-hidden="true"></i>
+                            <span class="project-context-workflow-name">Expert Workflow</span>
+                            <span class="project-context-count-separator">|</span>
+                            <span class="project-context-count-value">
+                                <?php echo (int) $expertAllocationBadgeCount; ?> <?php echo (int) $expertAllocationBadgeCount === 1 ? 'item' : 'items'; ?>
                             </span>
-                            <h5 class="project-context-title">
-                                <?php echo ($projectId && $project) ? htmlspecialchars((string) $project['name']) : 'Select a project'; ?>
-                            </h5>
-                            <span class="project-context-subtitle"><?php echo htmlspecialchars($sulDepartmentLabel); ?> allocation queue</span>
-                            <?php if ($projectId && $project): ?>
-                                <div class="project-context-metrics" aria-label="Selected project queue summary">
-                                    <span class="project-context-pill"><strong><?php echo $unassignedAssignmentCount; ?></strong> unassigned</span>
-                                    <span class="project-context-pill"><strong><?php echo $pendingEstimationAssignmentCount; ?></strong> pending</span>
-                                    <span class="project-context-pill"><strong><?php echo $expertReviewCount; ?></strong> review</span>
-                                </div>
-                            <?php endif; ?>
-                        </div>
+                        </span>
                     </div>
                     <form method="GET" class="project-context-actions">
-                        <label for="expertProjectSelect" class="project-context-label">Department Project</label>
                         <select id="expertProjectSelect" name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for expert allocation" required>
                             <option value="">Select project</option>
                             <?php foreach ($expertProjectOptions as $expertProjectOption): ?>
@@ -3923,12 +3895,12 @@ include '../../includes/navbar.php';
                                 <i class="fas fa-route"></i> Open Roadmap
                             </a>
                         <?php else: ?>
-                            <span class="project-context-empty-action">Roadmap unlocks after selection</span>
+                            <span class="btn-outline-modern project-context-roadmap-disabled" aria-disabled="true">
+                                <i class="fas fa-route" aria-hidden="true"></i> Roadmap
+                            </span>
                         <?php endif; ?>
                     </form>
                 </div>
-            </div>
-            <div class="workflow-layout">
             <ul class="nav workflow-tabs" id="expertWorkflowTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="expert-unassigned-tab" data-bs-toggle="tab" data-bs-target="#expert-unassigned-panel" type="button" role="tab" aria-controls="expert-unassigned-panel" aria-selected="true">
@@ -3951,6 +3923,8 @@ include '../../includes/navbar.php';
                     </button>
                 </li>
             </ul>
+            </div>
+            <div class="workflow-layout">
             <div class="tab-content allocation-board" id="expertWorkflowContent">
 
             <!-- Section 1: Unassigned Tasks - Need Expert Assignment -->
@@ -4460,28 +4434,16 @@ include '../../includes/navbar.php';
             <div class="section-card project-context-card">
                 <div class="project-context-layout">
                     <div class="project-context-main">
-                        <span class="project-context-icon" aria-hidden="true"><i class="fas fa-folder-open"></i></span>
-                        <div class="project-context-copy">
-                            <span class="project-context-eyebrow">
-                                <span class="project-context-workflow">Developer Workflow</span>
-                                | <?php echo (int) $developerAllocationBadgeCount; ?> <?php echo (int) $developerAllocationBadgeCount === 1 ? 'item' : 'items'; ?>
+                        <span class="project-context-count-pill">
+                            <i class="fas fa-tasks" aria-hidden="true"></i>
+                            <span class="project-context-workflow-name">Developer Workflow</span>
+                            <span class="project-context-count-separator">|</span>
+                            <span class="project-context-count-value">
+                                <?php echo (int) $developerAllocationBadgeCount; ?> <?php echo (int) $developerAllocationBadgeCount === 1 ? 'item' : 'items'; ?>
                             </span>
-                            <h5 class="project-context-title">
-                                <?php echo ($projectId && $project) ? htmlspecialchars((string) $project['name']) : 'Select a project'; ?>
-                            </h5>
-                            <span class="project-context-subtitle"><?php echo htmlspecialchars($sulDepartmentLabel); ?> delivery queue</span>
-                            <?php if ($projectId && $project): ?>
-                                <div class="project-context-metrics" aria-label="Selected project queue summary">
-                                    <span class="project-context-pill"><strong><?php echo $readyDeveloperAssignmentCount; ?></strong> ready</span>
-                                    <span class="project-context-pill"><strong><?php echo $inProgressTasks->num_rows; ?></strong> active</span>
-                                    <span class="project-context-pill"><strong><?php echo $codeReviewTasks->num_rows; ?></strong> review</span>
-                                    <span class="project-context-pill"><strong><?php echo $developerReopenRequestCount; ?></strong> reopen</span>
-                                </div>
-                            <?php endif; ?>
-                        </div>
+                        </span>
                     </div>
                     <form method="GET" class="project-context-actions">
-                        <label for="developerProjectSelect" class="project-context-label">Department Project</label>
                         <select id="developerProjectSelect" name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for developer allocation" required>
                             <option value="">Select project</option>
                             <?php foreach ($developerProjectOptions as $developerProjectOption): ?>
@@ -4502,12 +4464,12 @@ include '../../includes/navbar.php';
                                 <i class="fas fa-route"></i> Open Roadmap
                             </a>
                         <?php else: ?>
-                            <span class="project-context-empty-action">Roadmap unlocks after selection</span>
+                            <span class="btn-outline-modern project-context-roadmap-disabled" aria-disabled="true">
+                                <i class="fas fa-route" aria-hidden="true"></i> Roadmap
+                            </span>
                         <?php endif; ?>
                     </form>
                 </div>
-            </div>
-            <div class="workflow-layout">
             <ul class="nav workflow-tabs" id="developerWorkflowTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="developer-ready-tab" data-bs-toggle="tab" data-bs-target="#developer-ready-panel" type="button" role="tab" aria-controls="developer-ready-panel" aria-selected="true">
@@ -4535,6 +4497,8 @@ include '../../includes/navbar.php';
                     </button>
                 </li>
             </ul>
+            </div>
+            <div class="workflow-layout">
             <div class="tab-content allocation-board" id="developerWorkflowContent">
              
             <!-- Section 4: Ready for Developer Assignment -->
