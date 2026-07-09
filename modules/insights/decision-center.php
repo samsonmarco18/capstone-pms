@@ -1642,12 +1642,9 @@ body,
         </p>
         <div class="project-meta">
             <?php if ($currentView === 'statistics'): ?>
-                <div class="project-chip"><strong>Role:</strong> <?php echo htmlspecialchars(getRoleDisplayName($userRole)); ?></div>
-                <div class="project-chip"><strong>Focus:</strong> <?php echo htmlspecialchars($roleProfile['focus']); ?></div>
                 <div class="project-chip"><strong>Client:</strong> <?php echo htmlspecialchars($projectClient); ?></div>
                 <div class="project-chip"><strong>Status:</strong> <?php echo htmlspecialchars($projectStatus); ?></div>
                 <div class="project-chip"><strong>Complexity:</strong> <?php echo htmlspecialchars($projectComplexity); ?></div>
-                <div class="project-chip"><strong>Decision Question:</strong> <?php echo htmlspecialchars($roleProfile['decision_question']); ?></div>
             <?php else: ?>
                 <div class="project-chip"><strong>Projects:</strong> <?php echo count($projects); ?></div>
                 <div class="project-chip"><strong>Role:</strong> <?php echo htmlspecialchars(getRoleDisplayName($userRole)); ?></div>
@@ -1689,6 +1686,93 @@ body,
             </div>
         </div>
     </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-xl-7">
+            <div class="section-card">
+                <div class="card-header">
+                    <h5><i class="fas fa-lightbulb"></i> Important Project Signals</h5>
+                </div>
+                <div class="card-body">
+                    <div class="insight-list">
+                        <?php foreach ($topInsights as $insight): ?>
+                            <div class="insight-item">
+                                <div class="d-flex justify-content-between gap-2 align-items-start">
+                                    <h6><?php echo htmlspecialchars($insight['title']); ?></h6>
+                                    <span class="badge-tone <?php echo htmlspecialchars($insight['band']['tone']); ?>"><?php echo htmlspecialchars($insight['band']['label']); ?></span>
+                                </div>
+                                <p><?php echo htmlspecialchars($insight['detail']); ?></p>
+                                <small><?php echo htmlspecialchars($insight['action']); ?></small>
+                                <div class="insight-actions">
+                                    <a class="insight-link" href="<?php echo htmlspecialchars((string) ($insight['url'] ?? $statisticsBaseUrl)); ?>">
+                                        <i class="fas fa-arrow-right"></i>
+                                        <?php echo htmlspecialchars((string) ($insight['label'] ?? 'Open Related Page')); ?>
+                                    </a>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-5">
+            <div class="section-card">
+                <div class="card-header">
+                    <h5><i class="fas fa-gauge-high"></i> Current Health</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mini-stat-grid mb-4">
+                        <div class="mini-stat">
+                            <div class="label">Forecast Delay</div>
+                            <div class="value"><?php echo number_format($insights['metrics']['forecast_delay_days'], 1); ?> days</div>
+                            <span class="badge-tone <?php echo $insights['metrics']['forecast_delay_days'] > 0 ? 'warning' : 'success'; ?>"><?php echo $insights['metrics']['forecast_delay_days'] > 0 ? 'Needs Attention' : 'On Track'; ?></span>
+                        </div>
+                        <div class="mini-stat">
+                            <div class="label">Resource Efficiency</div>
+                            <div class="value"><?php echo number_format($insights['metrics']['resource_efficiency'], 1); ?>%</div>
+                            <span class="badge-tone <?php echo htmlspecialchars($insights['bands']['resource_efficiency']['tone']); ?>"><?php echo htmlspecialchars($insights['bands']['resource_efficiency']['label']); ?></span>
+                        </div>
+                        <div class="mini-stat">
+                            <div class="label">Open Tasks</div>
+                            <div class="value"><?php echo (int) $insights['metrics']['open_tasks']; ?></div>
+                            <span class="subtext"><?php echo (int) $insights['metrics']['blocked_tasks']; ?> blocked, <?php echo (int) $insights['metrics']['overdue_tasks']; ?> overdue</span>
+                        </div>
+                        <div class="mini-stat">
+                            <div class="label">Decision Confidence</div>
+                            <div class="value"><?php echo number_format($insights['metrics']['decision_confidence'], 1); ?>%</div>
+                            <span class="badge-tone <?php echo htmlspecialchars($insights['bands']['decision_confidence']['tone']); ?>"><?php echo htmlspecialchars($insights['bands']['decision_confidence']['label']); ?></span>
+                        </div>
+                    </div>
+
+                    <table class="compare-table">
+                        <tbody>
+                            <tr>
+                                <td>Completed Tasks</td>
+                                <td><?php echo (int) $insights['metrics']['completed_tasks']; ?> / <?php echo (int) $insights['metrics']['total_tasks']; ?></td>
+                            </tr>
+                            <tr>
+                                <td>Assigned Members</td>
+                                <td><?php echo (int) $insights['metrics']['assigned_members']; ?> / <?php echo (int) $insights['metrics']['required_members']; ?></td>
+                            </tr>
+                            <tr>
+                                <td>Recent Git Updates</td>
+                                <td><?php echo (int) $insights['metrics']['recent_git_updates']; ?></td>
+                            </tr>
+                            <?php if ($canViewBudget): ?>
+                                <tr>
+                                    <td>Budget Health</td>
+                                    <td><?php echo number_format($insights['metrics']['budget_health'], 1); ?>%</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <?php if (false): ?>
 
     <div class="row g-4 mb-4">
         <div class="col-xl-7">
@@ -2199,6 +2283,7 @@ body,
             </div>
         </div>
     </div>
+    <?php endif; ?>
     <?php else: ?>
     <div class="overview-controls">
         <div class="overview-control-card">
@@ -2291,7 +2376,7 @@ body,
                                 </span>
                             </div>
                         </div>
-                        <div class="overview-summary">Click to review the full project insight summary.</div>
+                        <div class="overview-summary">Important delivery signals for this project.</div>
                     </div>
                     <span class="overview-project-toggle" aria-hidden="true">
                         <i class="fas fa-chevron-down"></i>
@@ -2300,58 +2385,30 @@ body,
 
                 <div class="overview-project-body">
                     <?php if ($overviewInsight !== null): ?>
-                        <div class="overview-insight-layout">
-                            <div class="overview-panel before">
-                                <div class="overview-panel-title">
-                                    <i class="fas fa-drafting-compass"></i>
-                                    Before Project Insight
-                                </div>
-                                <div class="overview-metric-grid">
-                                    <div class="overview-mini-card">
-                                        <span>Delay Chance</span>
-                                        <strong><?php echo (int) $overviewInsight['before']['delay_probability']; ?>%</strong>
-                                    </div>
-                                    <div class="overview-mini-card">
-                                        <span>Success Chance</span>
-                                        <strong><?php echo (int) $overviewInsight['before']['success_probability']; ?>%</strong>
-                                    </div>
-                                </div>
-                                <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['before']['summary']); ?></p>
-                                <?php if (!empty($overviewInsight['before']['tips'])): ?>
-                                    <ul class="overview-list">
-                                        <?php foreach (array_slice($overviewInsight['before']['tips'], 0, 2) as $tip): ?>
-                                            <li><?php echo htmlspecialchars($tip); ?></li>
-                                        <?php endforeach; ?>
-                                    </ul>
-                                <?php endif; ?>
+                        <div class="overview-metric-grid mb-3">
+                            <div class="overview-mini-card">
+                                <span>Delay Chance</span>
+                                <strong><?php echo (int) $overviewInsight['before']['delay_probability']; ?>%</strong>
                             </div>
-
-                            <div class="overview-panel after">
-                                <div class="overview-panel-title">
-                                    <i class="fas fa-clipboard-list"></i>
-                                    After Project Review
-                                </div>
-                                <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['after']['summary']); ?></p>
-                                <?php if (!empty($overviewInsight['after']['reasons'])): ?>
-                                    <div class="overview-tags">
-                                        <?php foreach (array_slice($overviewInsight['after']['reasons'], 0, 2) as $reason): ?>
-                                            <span class="overview-tag"><?php echo htmlspecialchars($reason); ?></span>
-                                        <?php endforeach; ?>
-                                    </div>
-                                <?php endif; ?>
-                                <div class="overview-note"><?php echo htmlspecialchars($overviewInsight['after']['note']); ?></div>
+                            <div class="overview-mini-card">
+                                <span>Success Chance</span>
+                                <strong><?php echo (int) $overviewInsight['before']['success_probability']; ?>%</strong>
                             </div>
                         </div>
+                        <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['after']['summary'] ?: $overviewInsight['before']['summary']); ?></p>
+                        <?php if (!empty($overviewInsight['after']['reasons'])): ?>
+                            <div class="overview-tags">
+                                <?php foreach (array_slice($overviewInsight['after']['reasons'], 0, 2) as $reason): ?>
+                                    <span class="overview-tag"><?php echo htmlspecialchars($reason); ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                     <?php else: ?>
                         <p class="overview-summary">Insight details are not available yet for this project.</p>
                     <?php endif; ?>
 
                     <div class="overview-footer">
                         <a class="toolbar-button primary" href="<?php echo htmlspecialchars($projectStatsUrl); ?>">
-                            <i class="fas fa-chart-bar"></i>
-                            View Overall Statistics
-                        </a>
-                        <a class="toolbar-button" href="<?php echo htmlspecialchars($projectStatsUrl); ?>">
                             <i class="fas fa-arrows-rotate"></i>
                             Live Insights
                         </a>
@@ -2365,6 +2422,7 @@ body,
     <?php echo count($projects) === 0 ? '<div class="empty-state mt-4"><i class="fas fa-inbox fa-2x mb-3"></i><div>No accessible projects were found for this role.</div></div>' : ''; ?>
 </div>
 
+<?php if (false): ?>
 <div class="modal fade" id="projectActionModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="border-radius: 24px; border: 1px solid #e9ecef;">
@@ -2412,6 +2470,7 @@ body,
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <script>
 const radarData = <?php echo json_encode($radarChart, JSON_UNESCAPED_UNICODE); ?>;
