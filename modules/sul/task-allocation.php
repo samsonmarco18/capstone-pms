@@ -148,6 +148,21 @@ function sulTaskAllocationBulkEntityCountSelect(string $taskAlias = 't'): string
     ) AS bulk_entity_task_count";
 }
 
+function sulTaskAllocationBulkEntityKeySelect(string $taskAlias = 't'): string
+{
+    $taskAlias = preg_replace('/[^A-Za-z0-9_]/', '', $taskAlias) ?: 't';
+
+    return "(
+        SELECT mt_current.developer_entity_key
+        FROM methodology_tasks mt_current
+        WHERE mt_current.project_id = {$taskAlias}.project_id
+          AND mt_current.task_id = {$taskAlias}.id
+          AND COALESCE(mt_current.developer_entity_key, '') <> ''
+        ORDER BY mt_current.id ASC
+        LIMIT 1
+    ) AS bulk_entity_key";
+}
+
 function sulTaskAllocationBulkEntityBadge(array $task): string
 {
     $bulkCount = (int) ($task['bulk_entity_task_count'] ?? 0);
@@ -395,11 +410,13 @@ $selectedExpertProjectFilter = $projectId > 0 ? " AND t.project_id = {$projectId
 $selectedExpertEstimationProjectFilter = $projectId > 0 ? " AND e.project_id = {$projectId}" : " AND 1 = 0";
 $selectedProjectAllocationFilter = $projectId > 0 ? " AND p.id = {$projectId}" : " AND 1 = 0";
 $bulkEntityCountSelect = sulTaskAllocationBulkEntityCountSelect('t');
+$bulkEntityKeySelect = sulTaskAllocationBulkEntityKeySelect('t');
 
 // Get all unassigned tasks (need expert assignment)
 $unassignedTasks = $conn->query("
     SELECT t.*, p.name as project_name, p.client_id,
            {$bulkEntityCountSelect},
+           {$bulkEntityKeySelect},
            (SELECT COUNT(*) FROM feature_estimations fe WHERE fe.task_id = t.id AND fe.status = 'completed') as has_estimation
     FROM tasks t
     JOIN projects p ON t.project_id = p.id
@@ -415,6 +432,46 @@ $unassignedTasks = $conn->query("
         END,
         t.deadline ASC
 ");
+
+$unassignedAssignmentGroups = [];
+if ($unassignedTasks) {
+    $priorityRanks = ['critical' => 1, 'high' => 2, 'medium' => 3, 'low' => 4];
+    while ($unassignedTask = $unassignedTasks->fetch_assoc()) {
+        $entityKey = trim((string) ($unassignedTask['bulk_entity_key'] ?? ''));
+        $isBulkEntity = $entityKey !== '' && (int) ($unassignedTask['bulk_entity_task_count'] ?? 0) > 1;
+        $groupKey = $isBulkEntity
+            ? 'bulk:' . (int) $unassignedTask['project_id'] . ':' . $entityKey
+            : 'task:' . (int) $unassignedTask['id'];
+
+        if (!isset($unassignedAssignmentGroups[$groupKey])) {
+            $unassignedAssignmentGroups[$groupKey] = [
+                'representative' => $unassignedTask,
+                'features' => [],
+                'is_bulk' => $isBulkEntity,
+                'priority' => (string) ($unassignedTask['priority'] ?? 'medium'),
+                'deadline' => $unassignedTask['deadline'] ?? null,
+            ];
+        }
+
+        $unassignedAssignmentGroups[$groupKey]['features'][] = $unassignedTask;
+
+        $currentPriority = (string) ($unassignedAssignmentGroups[$groupKey]['priority'] ?? 'medium');
+        $candidatePriority = (string) ($unassignedTask['priority'] ?? 'medium');
+        if (($priorityRanks[$candidatePriority] ?? 99) < ($priorityRanks[$currentPriority] ?? 99)) {
+            $unassignedAssignmentGroups[$groupKey]['priority'] = $candidatePriority;
+        }
+
+        $candidateDeadline = !empty($unassignedTask['deadline']) ? strtotime((string) $unassignedTask['deadline']) : false;
+        $groupDeadline = !empty($unassignedAssignmentGroups[$groupKey]['deadline'])
+            ? strtotime((string) $unassignedAssignmentGroups[$groupKey]['deadline'])
+            : false;
+        if ($candidateDeadline !== false && ($groupDeadline === false || $candidateDeadline < $groupDeadline)) {
+            $unassignedAssignmentGroups[$groupKey]['deadline'] = $unassignedTask['deadline'];
+        }
+    }
+    $unassignedTasks->data_seek(0);
+}
+$unassignedAssignmentCount = count($unassignedAssignmentGroups);
 
 // Get tasks pending expert estimation (assigned to expert but not yet estimated)
 $pendingEstimationTasks = $conn->query("
@@ -646,7 +703,7 @@ foreach ($expertProjectOptions as $expertProjectOption) {
         + (int) ($expertProjectOption['project_review_count'] ?? 0);
 }
 $expertReviewCount = $reviewTasks->num_rows + $projectEstimationReviews->num_rows;
-$selectedExpertTaskCount = $unassignedTasks->num_rows + $pendingEstimationTasks->num_rows + $expertReviewCount;
+$selectedExpertTaskCount = $unassignedAssignmentCount + $pendingEstimationTasks->num_rows + $expertReviewCount;
 $expertAllocationBadgeCount = ($projectId && $project) ? $selectedExpertTaskCount : $expertProjectOptionTaskCount;
 
 // Get available developers
@@ -804,24 +861,85 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         }
 
-        $stmt = $conn->prepare("UPDATE tasks SET assigned_to = ?, status = 'todo' WHERE id = ?");
-        $stmt->bind_param("ii", $expertId, $taskId);
+        $assignmentProjectId = (int) ($validTaskRow['project_id'] ?? $projectId);
+        $assignmentTasks = [];
+        $selectedTaskDetails = $conn->query("SELECT id, title FROM tasks WHERE id = {$taskId}")->fetch_assoc();
+        if ($selectedTaskDetails) {
+            $assignmentTasks[$taskId] = $selectedTaskDetails;
+        }
+
+        $bulkEntityRow = $conn->query("
+            SELECT developer_entity_key
+            FROM methodology_tasks
+            WHERE project_id = {$assignmentProjectId}
+              AND task_id = {$taskId}
+              AND COALESCE(developer_entity_key, '') <> ''
+            ORDER BY id ASC
+            LIMIT 1
+        ")->fetch_assoc();
+        $bulkEntityKey = trim((string) ($bulkEntityRow['developer_entity_key'] ?? ''));
+
+        if ($bulkEntityKey !== '') {
+            $safeBulkEntityKey = $conn->real_escape_string($bulkEntityKey);
+            $bulkAssignmentRows = $conn->query("
+                SELECT DISTINCT t.id, t.title
+                FROM methodology_tasks mt
+                JOIN tasks t ON t.id = mt.task_id
+                JOIN projects p ON p.id = t.project_id
+                WHERE mt.project_id = {$assignmentProjectId}
+                  AND mt.developer_entity_key = '{$safeBulkEntityKey}'
+                  AND t.status = 'todo'
+                  AND (t.assigned_to IS NULL OR t.assigned_to = 0)
+                  AND {$sulProjectFilter}
+                ORDER BY t.id ASC
+            ");
+
+            if ($bulkAssignmentRows) {
+                while ($bulkAssignmentTask = $bulkAssignmentRows->fetch_assoc()) {
+                    $bulkAssignmentTaskId = (int) ($bulkAssignmentTask['id'] ?? 0);
+                    if ($bulkAssignmentTaskId > 0) {
+                        $assignmentTasks[$bulkAssignmentTaskId] = $bulkAssignmentTask;
+                    }
+                }
+            }
+        }
+
+        if ($assignmentTasks === []) {
+            $_SESSION['error'] = "No unassigned features remain in this assignment group.";
+            header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
+            exit();
+        }
+
+        $assignmentTaskIds = array_map('intval', array_keys($assignmentTasks));
+        $assignmentTaskIdList = implode(',', $assignmentTaskIds);
+        $stmt = $conn->prepare("
+            UPDATE tasks
+            SET assigned_to = ?, status = 'todo'
+            WHERE id IN ({$assignmentTaskIdList})
+              AND status = 'todo'
+              AND (assigned_to IS NULL OR assigned_to = 0)
+        ");
+        $stmt->bind_param("i", $expertId);
         
         if ($stmt->execute()) {
-            $assignmentProjectId = (int) ($validTaskRow['project_id'] ?? $projectId);
-            $taskDetails = $conn->query("SELECT title FROM tasks WHERE id = $taskId")->fetch_assoc();
+            $assignmentCount = count($assignmentTasks);
+            foreach ($assignmentTasks as $assignmentTask) {
+                createNotification(
+                    (int) $expertId,
+                    "New Task Assignment: " . (string) ($assignmentTask['title'] ?? 'Feature'),
+                    $assignmentCount > 1
+                        ? "This feature was assigned with {$assignmentCount} grouped features for estimation."
+                        : "You have been assigned a new task for estimation.",
+                    'task',
+                    'tasks',
+                    (int) ($assignmentTask['id'] ?? 0),
+                    BASE_URL . 'modules/expert/feature-estimation.php'
+                );
+            }
             
-            createNotification(
-                (int) $expertId,
-                "New Task Assignment: " . $taskDetails['title'],
-                "You have been assigned a new task for estimation.",
-                'task',
-                'tasks',
-                (int) $taskId,
-                BASE_URL . 'modules/expert/feature-estimation.php'
-            );
-            
-            $_SESSION['success'] = "Task assigned to Expert successfully";
+            $_SESSION['success'] = $assignmentCount > 1
+                ? "{$assignmentCount} grouped features assigned to the Expert successfully."
+                : "Task assigned to the Expert successfully.";
             header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
             exit();
         } else {
@@ -2047,7 +2165,7 @@ include '../../includes/navbar.php';
     border-collapse: separate;
     border-spacing: 0;
     margin: 0;
-    min-width: 980px;
+    min-width: 850px;
     width: 100%;
 }
 
@@ -2080,6 +2198,10 @@ include '../../includes/navbar.php';
     transition: background-color .18s ease;
 }
 
+.task-allocation-table tbody tr.is-bulk-assignment {
+    cursor: default;
+}
+
 .task-allocation-table tbody tr:hover,
 .task-allocation-table tbody tr:focus-visible {
     background: #f8fbff;
@@ -2109,6 +2231,84 @@ include '../../includes/navbar.php';
     white-space: nowrap;
 }
 
+.bulk-assignment-details {
+    max-width: 290px;
+}
+
+.bulk-assignment-details summary {
+    align-items: center;
+    cursor: pointer;
+    display: inline-flex;
+    gap: .4rem;
+    list-style: none;
+    outline: none;
+}
+
+.bulk-assignment-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.bulk-assignment-details summary:focus-visible {
+    border-radius: 20px;
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, .18);
+}
+
+.bulk-assignment-chevron {
+    color: var(--gray-500);
+    font-size: .62rem;
+    transition: transform .18s ease;
+}
+
+.bulk-assignment-details[open] .bulk-assignment-chevron {
+    transform: rotate(180deg);
+}
+
+.bulk-assignment-feature-list {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 11px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .1);
+    display: grid;
+    gap: .3rem;
+    margin-top: .5rem;
+    padding: .55rem;
+}
+
+.bulk-assignment-feature-note {
+    color: var(--gray-500);
+    font-size: .64rem;
+    padding: .1rem .25rem .25rem;
+}
+
+.bulk-assignment-feature {
+    align-items: center;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    color: var(--gray-700);
+    display: flex;
+    font-size: .7rem;
+    font-weight: 700;
+    gap: .65rem;
+    justify-content: space-between;
+    padding: .45rem .55rem;
+    text-align: left;
+    width: 100%;
+}
+
+.bulk-assignment-feature span {
+    align-items: center;
+    display: inline-flex;
+    gap: .4rem;
+    min-width: 0;
+}
+
+.bulk-assignment-feature:hover {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+}
+
 .allocation-deadline {
     color: var(--gray-800);
     display: block;
@@ -2133,8 +2333,13 @@ include '../../includes/navbar.php';
     align-items: center;
     display: flex;
     gap: .4rem;
-    justify-content: flex-end;
+    justify-content: center;
     white-space: nowrap;
+}
+
+.allocation-actions-heading {
+    min-width: 245px;
+    text-align: center;
 }
 
 /* Review queue */
@@ -3167,6 +3372,29 @@ include '../../includes/navbar.php';
     color: #fb923c;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-assignment-feature-list {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.28);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-assignment-feature-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-assignment-chevron {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-assignment-feature {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-assignment-feature:hover {
+    background: rgba(37, 99, 235, .16);
+    border-color: rgba(96, 165, 250, .32);
+    color: #93c5fd;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-decision {
@@ -3421,7 +3649,7 @@ include '../../includes/navbar.php';
             <ul class="nav workflow-tabs" id="expertWorkflowTabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="expert-unassigned-tab" data-bs-toggle="tab" data-bs-target="#expert-unassigned-panel" type="button" role="tab" aria-controls="expert-unassigned-panel" aria-selected="true">
-                        <i class="fas fa-user-plus"></i> Unassigned <span class="badge-count"><?php echo $unassignedTasks->num_rows; ?></span>
+                        <i class="fas fa-user-plus"></i> Unassigned <span class="badge-count"><?php echo $unassignedAssignmentCount; ?></span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -3452,8 +3680,8 @@ include '../../includes/navbar.php';
                 <div class="section-header">
                     <h5>
                         <i class="fas fa-user-plus"></i>
-                        Unassigned Tasks
-                        <span class="badge-count"><?php echo $unassignedTasks->num_rows; ?> tasks</span>
+                        Unassigned Assignments
+                        <span class="badge-count"><?php echo $unassignedAssignmentCount; ?> <?php echo $unassignedAssignmentCount === 1 ? 'assignment' : 'assignments'; ?></span>
                     </h5>
                     
                 </div>
@@ -3463,53 +3691,83 @@ include '../../includes/navbar.php';
                             <i class="fas fa-folder-open"></i>
                             <p>Select a project for expert assignment</p>
                         </div>
-                    <?php elseif($unassignedTasks->num_rows > 0): ?>
+                    <?php elseif($unassignedAssignmentCount > 0): ?>
                         <div class="task-allocation-table-wrap">
-                            <table class="task-allocation-table" aria-label="Unassigned expert tasks">
+                            <table class="task-allocation-table" aria-label="Unassigned expert assignments">
                                 <thead>
                                     <tr>
                                         <th scope="col">Priority</th>
-                                        <th scope="col">Task</th>
+                                        <th scope="col">Task / Feature Group</th>
                                         <th scope="col">Assignment Scope</th>
-                                        <th scope="col">Project</th>
                                         <th scope="col">Deadline</th>
-                                        <th scope="col" class="text-end">Actions</th>
+                                        <th scope="col" class="allocation-actions-heading">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                <?php while($task = $unassignedTasks->fetch_assoc()):
-                                    $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
-                                    $bulkEntityCount = (int) ($task['bulk_entity_task_count'] ?? 0);
-                                    $deadline = sulTaskAllocationFormatDeadline($task['deadline'] ?? null);
+                                <?php foreach ($unassignedAssignmentGroups as $assignmentGroup):
+                                    $task = $assignmentGroup['representative'];
+                                    $features = $assignmentGroup['features'];
+                                    $featureCount = count($features);
+                                    $isBulkAssignment = (bool) ($assignmentGroup['is_bulk'] ?? false) && $featureCount > 1;
+                                    $assignmentPriority = (string) ($assignmentGroup['priority'] ?? $task['priority'] ?? 'medium');
+                                    $assignmentDeadline = $assignmentGroup['deadline'] ?? null;
+                                    $daysLeft = sulTaskAllocationDaysLeft($assignmentDeadline);
+                                    $deadline = sulTaskAllocationFormatDeadline($assignmentDeadline);
+                                    $featureTitles = array_map(
+                                        static fn(array $feature): string => (string) ($feature['title'] ?? 'Feature'),
+                                        $features
+                                    );
+                                    $assignmentTitle = $isBulkAssignment
+                                        ? 'Bulk assignment: ' . implode(', ', $featureTitles)
+                                        : (string) ($task['title'] ?? 'Feature');
                                 ?>
                                     <tr
-                                        tabindex="0"
-                                        onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)"
-                                        onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); viewTaskDetails(<?php echo (int) $task['id']; ?>); }"
+                                        class="<?php echo $isBulkAssignment ? 'is-bulk-assignment' : ''; ?>"
+                                        <?php if (!$isBulkAssignment): ?>
+                                            tabindex="0"
+                                            onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)"
+                                            onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); viewTaskDetails(<?php echo (int) $task['id']; ?>); }"
+                                        <?php endif; ?>
                                     >
                                         <td>
-                                            <span class="task-priority priority-<?php echo htmlspecialchars((string) $task['priority']); ?>">
-                                                <?php echo htmlspecialchars(ucfirst((string) $task['priority'])); ?>
+                                            <span class="task-priority priority-<?php echo htmlspecialchars($assignmentPriority); ?>">
+                                                <?php echo htmlspecialchars(ucfirst($assignmentPriority)); ?>
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="allocation-task-name"><?php echo htmlspecialchars((string) $task['title']); ?></span>
-                                            <span class="allocation-task-secondary">Awaiting expert assignment</span>
-                                        </td>
-                                        <td>
-                                            <?php if ($bulkEntityCount > 1): ?>
-                                                <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
+                                            <?php if ($isBulkAssignment): ?>
+                                                <span class="allocation-task-name"><?php echo $featureCount; ?> grouped features</span>
+                                                <span class="allocation-task-secondary">One expert will receive every feature in this group</span>
                                             <?php else: ?>
-                                                <span class="allocation-scope-single">
-                                                    <i class="fas fa-layer-group" aria-hidden="true"></i> Single feature
-                                                </span>
+                                                <span class="allocation-task-name"><?php echo htmlspecialchars((string) $task['title']); ?></span>
+                                                <span class="allocation-task-secondary">Awaiting expert assignment</span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <span class="allocation-task-name">
-                                                <i class="fas fa-folder me-1 text-muted" aria-hidden="true"></i>
-                                                <?php echo htmlspecialchars((string) $task['project_name']); ?>
-                                            </span>
+                                            <?php if ($isBulkAssignment): ?>
+                                                <details class="bulk-assignment-details" onclick="event.stopPropagation();">
+                                                    <summary>
+                                                        <span class="bulk-entity-badge">
+                                                            <i class="fas fa-layer-group" aria-hidden="true"></i>
+                                                            Bulk assignment: <?php echo $featureCount; ?> features
+                                                        </span>
+                                                        <i class="fas fa-chevron-down bulk-assignment-chevron" aria-hidden="true"></i>
+                                                    </summary>
+                                                    <div class="bulk-assignment-feature-list">
+                                                        <span class="bulk-assignment-feature-note">These features will be assigned together:</span>
+                                                        <?php foreach ($features as $feature): ?>
+                                                            <button type="button" class="bulk-assignment-feature" onclick="viewTaskDetails(<?php echo (int) $feature['id']; ?>)">
+                                                                <span><i class="far fa-file-lines" aria-hidden="true"></i><?php echo htmlspecialchars((string) $feature['title']); ?></span>
+                                                                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                                                            </button>
+                                                        <?php endforeach; ?>
+                                                    </div>
+                                                </details>
+                                            <?php else: ?>
+                                                <span class="allocation-scope-single">
+                                                    <i class="far fa-file-lines" aria-hidden="true"></i> Single feature
+                                                </span>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
                                             <?php if ($daysLeft !== null): ?>
@@ -3532,21 +3790,23 @@ include '../../includes/navbar.php';
                                         </td>
                                         <td>
                                             <div class="allocation-table-actions" onclick="event.stopPropagation();">
-                                                <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
-                                                    <i class="fas fa-circle-info"></i> View Info
-                                                </button>
+                                                <?php if (!$isBulkAssignment): ?>
+                                                    <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
+                                                        <i class="fas fa-circle-info"></i> View Info
+                                                    </button>
+                                                <?php endif; ?>
                                                 <button
                                                     class="btn-primary-modern js-assign-expert"
                                                     type="button"
                                                     data-task-id="<?php echo (int) $task['id']; ?>"
-                                                    data-task-title="<?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                    data-task-title="<?php echo htmlspecialchars($assignmentTitle, ENT_QUOTES, 'UTF-8'); ?>"
                                                 >
-                                                    <i class="fas fa-user-plus"></i> Assign to Expert
+                                                    <i class="fas fa-user-plus"></i> <?php echo $isBulkAssignment ? 'Assign Group' : 'Assign to Expert'; ?>
                                                 </button>
                                             </div>
                                         </td>
                                     </tr>
-                                <?php endwhile; ?>
+                                <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
