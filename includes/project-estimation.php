@@ -235,23 +235,48 @@ function projectEstimationFetchContext(mysqli|PgsqlMysqliCompatConnection $conn,
     }
 
     $allocationRows = [];
-    if (dbTableExists($conn, 'methodology_phases')) {
+    if (dbTableExists($conn, 'methodology_tasks') && dbTableExists($conn, 'methodology_task_departments')) {
+        $involvementDaysExpression = DB_DRIVER === 'pgsql'
+            ? "SUM(GREATEST(1, (mt.end_date::date - mt.start_date::date) + 1))"
+            : "SUM(GREATEST(1, DATEDIFF(mt.end_date, mt.start_date) + 1))";
         $roadmapHeadcountResult = $conn->query("
-            SELECT MAX(COALESCE(developer_count, 0)) AS required_count
-            FROM methodology_phases
-            WHERE project_id = {$projectId}
+            SELECT
+                mtd.department,
+                SUM(COALESCE(mtd.required_count, 0)) AS required_count,
+                {$involvementDaysExpression} AS involvement_days
+            FROM methodology_task_departments mtd
+            JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+            WHERE mtd.project_id = {$projectId}
+            GROUP BY mtd.department
+            ORDER BY mtd.department ASC
         ");
-        $roadmapHeadcount = $roadmapHeadcountResult
-            ? max(0, (int) ($roadmapHeadcountResult->fetch_assoc()['required_count'] ?? 0))
-            : 0;
+        $rawRows = [];
+        $totalInvolvementDays = 0;
+        if ($roadmapHeadcountResult) {
+            while ($row = $roadmapHeadcountResult->fetch_assoc()) {
+                $department = projectEstimationDepartmentLabel((string) ($row['department'] ?? ''));
+                $requiredCount = max(0, (int) ($row['required_count'] ?? 0));
+                $involvementDays = max(0, (int) ($row['involvement_days'] ?? 0));
+                if ($department === '' || $requiredCount <= 0) {
+                    continue;
+                }
+                $rawRows[] = [
+                    'department' => $department,
+                    'required_count' => $requiredCount,
+                    'involvement_days' => $involvementDays,
+                ];
+                $totalInvolvementDays += $involvementDays;
+            }
+        }
 
-        if ($roadmapHeadcount > 0) {
-            $label = 'Roadmap Architect Headcount';
-            $allocationRows[$label] = [
-                'department' => $label,
-                'required_count' => $roadmapHeadcount,
+        foreach ($rawRows as $row) {
+            $department = (string) $row['department'];
+            $allocationRows[$department] = [
+                'department' => $department,
+                'required_count' => (int) $row['required_count'],
                 'complexity_level' => 'medium',
-                'source' => 'roadmap_phase_headcount',
+                'source' => 'roadmap_department_headcount',
+                'contribution_percent' => $totalInvolvementDays > 0 ? (int) round(((int) $row['involvement_days'] / $totalInvolvementDays) * 100) : 100,
             ];
         }
     }
@@ -275,8 +300,10 @@ function projectEstimationNormalizeRows(array $postedAllocations, array $allocat
 {
     $normalized = [];
     $allocationLookup = [];
+    $contributionLookup = [];
     foreach ($allocationRows as $allocation) {
         $allocationLookup[(string) $allocation['department']] = max(0, (int) $allocation['required_count']);
+        $contributionLookup[(string) $allocation['department']] = max(0.0, min(100.0, (float) ($allocation['contribution_percent'] ?? 100)));
     }
 
     foreach ($postedAllocations as $department => $positions) {
@@ -291,7 +318,7 @@ function projectEstimationNormalizeRows(array $postedAllocations, array $allocat
             $developerType = (string) ($entry['developer_type'] ?? 'Professional Dev');
             $developerType = projectEstimationDeveloperLevel($developerType);
 
-            $contribution = max(0.0, min(100.0, (float) ($entry['contribution'] ?? 100)));
+            $contribution = $contributionLookup[$departmentLabel] ?? 100.0;
             $monthlySalary = PROJECT_ESTIMATION_SALARIES[$developerType];
             $salaryContribution = $monthlySalary * ($contribution / 100);
 
@@ -727,7 +754,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         <div class="estimation-panel-body" id="developerAllocationDetails" hidden>
                             <?php if (count($allocations) === 0): ?>
                                 <div class="text-muted">No Roadmap Architect headcount has been entered yet.</div>
-                            <?php else: foreach ($allocations as $allocation): $department = (string) $allocation['department']; $required = max(0, (int) $allocation['required_count']); ?>
+                            <?php else: foreach ($allocations as $allocation): $department = (string) $allocation['department']; $required = max(0, (int) $allocation['required_count']); $derivedContribution = max(0, min(100, (int) ($allocation['contribution_percent'] ?? 100))); ?>
                                 <div class="department-estimate">
                                     <div class="department-estimate-title">
                                         <span><?php echo htmlspecialchars($department); ?></span>
@@ -739,7 +766,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                             <tbody>
                                             <?php if ($required <= 0): ?>
                                                 <tr><td colspan="3" class="text-muted">This roadmap entry has no required headcount.</td></tr>
-                                            <?php else: for ($i = 1; $i <= $required; $i++): $saved = $savedRows[$department][$i] ?? []; $savedType = projectEstimationDeveloperLevel((string) ($saved['developer_type'] ?? 'Professional Dev')); $savedContribution = max(0.0, min(100.0, (float) ($saved['contribution_percent'] ?? 100))); ?>
+                                            <?php else: for ($i = 1; $i <= $required; $i++): $saved = $savedRows[$department][$i] ?? []; $savedType = projectEstimationDeveloperLevel((string) ($saved['developer_type'] ?? 'Professional Dev')); $savedContribution = $derivedContribution; ?>
                                                 <tr class="allocation-input-row" data-department="<?php echo htmlspecialchars($department); ?>">
                                                     <td>
                                                         <select class="form-control-custom developer-type-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][developer_type]" <?php echo $estimationLockedForReview ? 'disabled' : ''; ?>>
@@ -749,7 +776,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                                         </select>
                                                     </td>
                                                     <td class="monthly-salary-cell"></td>
-                                                    <td><input type="number" class="form-control-custom contribution-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][contribution]" min="0" max="100" step="1" value="<?php echo htmlspecialchars((string) $savedContribution); ?>" aria-label="<?php echo htmlspecialchars($department); ?> contribution percent" <?php echo $estimationLockedForReview ? 'disabled' : ''; ?>></td>
+                                                    <td>
+                                                        <input type="number" class="form-control-custom contribution-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][contribution]" min="0" max="100" step="1" value="<?php echo htmlspecialchars((string) $savedContribution); ?>" aria-label="<?php echo htmlspecialchars($department); ?> contribution percent" readonly>
+                                                        <small class="text-muted d-block mt-1">Derived from roadmap involvement duration</small>
+                                                    </td>
                                                 </tr>
                                             <?php endfor; endif; ?>
                                             </tbody>

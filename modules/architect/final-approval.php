@@ -10,6 +10,7 @@ $user = getCurrentUser();
 workflowEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
 taskReopenEnsureSchema($conn);
+$selectedProjectId = max(0, (int) ($_GET['project_id'] ?? $_POST['project_id'] ?? 0));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (isset($_POST['architect_approve_reopen']) || isset($_POST['architect_reject_reopen']))) {
     $requestId = (int) ($_POST['reopen_request_id'] ?? 0);
@@ -48,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_task'])) {
 
     if (!$task) {
         $_SESSION['error'] = 'Only QA-passed tasks can be merged by Architect.';
-        header('Location: final-approval.php');
+        header('Location: final-approval.php' . ($selectedProjectId > 0 ? '?project_id=' . $selectedProjectId : ''));
         exit();
     }
 
@@ -97,12 +98,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_task'])) {
     );
 
     $_SESSION['success'] = 'Feature merged to main and Sales notified.';
-    header('Location: final-approval.php');
+    header('Location: final-approval.php' . ($selectedProjectId > 0 ? '?project_id=' . $selectedProjectId : ''));
     exit();
 }
 
 $reopenRequests = taskReopenLoadArchitectRequests($conn);
 $reopenRequestCount = count($reopenRequests);
+$projectFilterSql = $selectedProjectId > 0 ? ' AND t.project_id = ' . $selectedProjectId : '';
+$approvalProjects = $conn->query("
+    SELECT DISTINCT p.id, p.name, c.name AS client_name
+    FROM projects p
+    JOIN clients c ON c.id = p.client_id
+    JOIN tasks t ON t.project_id = p.id
+    WHERE t.status = 'qa_passed'
+    ORDER BY p.name ASC
+");
 
 $readyTasks = $conn->query("
     SELECT t.*, p.name AS project_name, u.full_name AS developer_name,
@@ -117,7 +127,7 @@ $readyTasks = $conn->query("
         ORDER BY tgu.created_at DESC, tgu.id DESC
         LIMIT 1
     )
-    WHERE t.status = 'qa_passed'
+    WHERE t.status = 'qa_passed'{$projectFilterSql}
     ORDER BY t.qa_reviewed_at ASC, t.updated_at ASC
 ");
 
@@ -190,6 +200,23 @@ include '../../includes/navbar.php';
     <?php if(isset($_SESSION['success'])): ?><div class="alert alert-success"><?php echo $_SESSION['success']; unset($_SESSION['success']); ?></div><?php endif; ?>
     <?php if(isset($_SESSION['error'])): ?><div class="alert alert-danger"><?php echo $_SESSION['error']; unset($_SESSION['error']); ?></div><?php endif; ?>
 
+    <form method="GET" class="card border-0 shadow-sm mb-4">
+        <div class="card-body d-flex flex-wrap align-items-end gap-3">
+            <div class="flex-grow-1">
+                <label class="form-label">Project</label>
+                <select class="form-select" name="project_id" onchange="this.form.submit()">
+                    <option value="0">Select a project to view merge-ready features</option>
+                    <?php if ($approvalProjects): while ($approvalProject = $approvalProjects->fetch_assoc()): ?>
+                        <option value="<?php echo (int) $approvalProject['id']; ?>" <?php echo (int) $approvalProject['id'] === $selectedProjectId ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars((string) $approvalProject['name'] . ' - ' . (string) $approvalProject['client_name']); ?>
+                        </option>
+                    <?php endwhile; endif; ?>
+                </select>
+            </div>
+            <button class="btn btn-primary" type="submit"><i class="fas fa-folder-open me-1"></i> Open Project</button>
+        </div>
+    </form>
+
     <div class="card border-0 shadow-sm mb-4" id="reopen-requests">
         <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
             <span><i class="fas fa-rotate-left me-2 text-warning"></i>Task Reopen Requests</span>
@@ -249,11 +276,19 @@ include '../../includes/navbar.php';
 
     <div class="row g-4">
         <div class="col-lg-8">
-            <?php if($readyTasks && $readyTasks->num_rows > 0): ?>
+            <?php if($selectedProjectId <= 0): ?>
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body text-center py-5 text-muted">
+                        <i class="fas fa-folder-open fa-3x mb-3"></i>
+                        <p class="mb-0">Select a project first to view features ready to merge.</p>
+                    </div>
+                </div>
+            <?php elseif($readyTasks && $readyTasks->num_rows > 0): ?>
                 <?php while($task = $readyTasks->fetch_assoc()): ?>
                     <div class="card border-0 shadow-sm mb-3">
                         <div class="card-body">
                             <form method="POST">
+                                <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
                                 <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
                                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
                                     <div class="flex-grow-1">

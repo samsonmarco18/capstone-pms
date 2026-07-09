@@ -239,6 +239,7 @@ function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnecti
         if (!isset($plans[$taskId])) {
             $plans[$taskId] = featureEstimationEmptyArchitectPlan();
             $plans[$taskId]['_department_counts'] = [];
+            $plans[$taskId]['_department_days'] = [];
             $plans[$taskId]['_component_names'] = [];
             $plans[$taskId]['_estimation_rows'] = [];
         }
@@ -268,6 +269,7 @@ function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnecti
             'phase_order' => (int) ($row['phase_order'] ?? 0),
             'peer_count' => max(1, (int) ($row['phase_entity_task_count'] ?? 1), (int) ($row['phase_schedule_task_count'] ?? 1)),
         ];
+        $plans[$taskId]['_methodology_row_days'][$methodologyTaskId] = max(1, (int) ceil(featureEstimationInclusiveDays($startDate, $endDate) / max(1, (int) ($row['phase_entity_task_count'] ?? 1), (int) ($row['phase_schedule_task_count'] ?? 1))));
 
         $componentName = trim((string) ($row['component_name'] ?? ''));
         if ($componentName !== '') {
@@ -298,6 +300,7 @@ function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnecti
                     continue;
                 }
                 $plans[$taskId]['_department_counts'][$department] = ($plans[$taskId]['_department_counts'][$department] ?? 0) + $requiredCount;
+                $plans[$taskId]['_department_days'][$department] = ($plans[$taskId]['_department_days'][$department] ?? 0) + (int) ($plans[$taskId]['_methodology_row_days'][$methodologyTaskId] ?? 1);
             }
         }
     }
@@ -308,6 +311,7 @@ function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnecti
         }
         foreach ($fallbackDepartments[$methodologyTaskId] ?? [] as $department => $requiredCount) {
             $plans[$taskId]['_department_counts'][$department] = ($plans[$taskId]['_department_counts'][$department] ?? 0) + $requiredCount;
+            $plans[$taskId]['_department_days'][$department] = ($plans[$taskId]['_department_days'][$department] ?? 0) + (int) ($plans[$taskId]['_methodology_row_days'][$methodologyTaskId] ?? 1);
         }
     }
 
@@ -315,11 +319,12 @@ function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnecti
         featureEstimationApplyDurationWindow($plans[$taskId]);
 
         $departmentCounts = $plan['_department_counts'] ?? [];
-        $totalCount = array_sum($departmentCounts);
+        $departmentDays = $plan['_department_days'] ?? [];
+        $totalDays = array_sum($departmentDays);
         foreach ($departmentCounts as $department => $requiredCount) {
             $plans[$taskId]['involvement_plan'][] = [
                 'role' => $department,
-                'percentage' => $totalCount > 0 ? (int) round(($requiredCount / $totalCount) * 100) : 0,
+                'percentage' => $totalDays > 0 ? (int) round(((float) ($departmentDays[$department] ?? 0) / $totalDays) * 100) : 0,
                 'required_count' => (int) $requiredCount,
             ];
         }
@@ -328,7 +333,7 @@ function featureEstimationLoadArchitectPlanning(mysqli|PgsqlMysqliCompatConnecti
             $plans[$taskId]['component_plan'][] = ['name' => $componentName];
         }
 
-        unset($plans[$taskId]['_department_counts'], $plans[$taskId]['_component_names'], $plans[$taskId]['_estimation_rows']);
+        unset($plans[$taskId]['_department_counts'], $plans[$taskId]['_department_days'], $plans[$taskId]['_methodology_row_days'], $plans[$taskId]['_component_names'], $plans[$taskId]['_estimation_rows']);
     }
 
     return $plans;
@@ -800,7 +805,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     
     if($stmt->execute()) {
         // Save draft estimations without sending to Sales yet
-        $taskStmt = $conn->prepare("UPDATE tasks SET started_at = ?, deadline = ?, estimated_days_min = ?, estimated_days_likely = ?, estimated_days_max = ? WHERE id = ?");
+        $salesColumns = $hasSalesApproval ? ", sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL" : "";
+        $taskStmt = $conn->prepare("UPDATE tasks SET status = 'in_review', started_at = ?, deadline = ?, estimated_days_min = ?, estimated_days_likely = ?, estimated_days_max = ?{$salesColumns} WHERE id = ?");
         $taskStmt->bind_param("ssiiii", $plannedStart, $plannedEnd, $minDays, $likelyDays, $maxDays, $taskId);
         $taskStmt->execute();
         
@@ -906,6 +912,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
             }
         }
 
+        workflowNotifyRoles(
+            $conn,
+            ['sul'],
+            'Feature Estimation Ready for SUL Approval',
+            'An Expert Developer submitted a feature estimation for SUL approval.',
+            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
+            (int) $projectId,
+            'approval',
+            'projects'
+        );
+
         $totalStmt = $conn->prepare("
             SELECT COUNT(*) as total
             FROM tasks
@@ -955,12 +972,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
         }
 
         logActivity($user['id'], 'submit_estimation', 'tasks', $taskId, null, $_POST);
-        $_SESSION['success'] = "Estimation saved successfully";
+        $_SESSION['feature_estimation_submitted'] = 'Estimation sent to the Expert SUL for approval.';
     } else {
         $_SESSION['error'] = "Failed to save estimation: " . $conn->error;
     }
     
-    header('Location: feature-estimation.php');
+    header('Location: feature-estimation.php?project_estimation_id=' . $projectId . '&workspace=features&feature_submitted=1');
     exit();
 }
 
@@ -2457,7 +2474,7 @@ textarea.form-control-custom {
 
         <!-- Feature List -->
         <div class="feature-list">
-            <div class="feature-row" id="featureProgressRow">
+            <div class="feature-row incomplete" id="featureProgressRow">
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <div class="feature-title">Feature Estimation Progress</div>
                     <div class="d-flex align-items-center gap-2">
@@ -2708,6 +2725,8 @@ let currentProjectId = null;
 const existingDepartments = <?php echo json_encode($availableDepartments, JSON_UNESCAPED_UNICODE); ?>;
 const architectPlanningByTask = <?php echo json_encode($architectPlanningByTask, JSON_UNESCAPED_UNICODE); ?>;
 const expertWorkspaceStorageKey = 'expert-estimation-active-workspace';
+const selectedFeatureProjectId = <?php echo json_encode((string) max(0, (int) ($_GET['project_estimation_id'] ?? 0))); ?>;
+const featureSubmittedMessage = <?php echo json_encode((string) ($_SESSION['feature_estimation_submitted'] ?? '')); unset($_SESSION['feature_estimation_submitted']); ?>;
 
 function updateFeatureProjectView(hasProject) {
     const sections = document.getElementById('projectSections');
@@ -2753,11 +2772,11 @@ document.querySelectorAll('[data-expert-workspace]').forEach((tab) => {
     });
 });
 
-let initialExpertWorkspace = 'cost';
+let initialExpertWorkspace = <?php echo json_encode((string) ($_GET['workspace'] ?? '') === 'features' ? 'features' : 'cost'); ?>;
 try {
-    initialExpertWorkspace = window.localStorage.getItem(expertWorkspaceStorageKey) || 'cost';
+    initialExpertWorkspace = initialExpertWorkspace || window.localStorage.getItem(expertWorkspaceStorageKey) || 'cost';
 } catch (error) {
-    initialExpertWorkspace = 'cost';
+    initialExpertWorkspace = initialExpertWorkspace || 'cost';
 }
 setExpertWorkspace(initialExpertWorkspace, false);
 
@@ -3667,7 +3686,7 @@ function filterFeatureList() {
 const phaseSelect = document.getElementById('phaseProjectSelect');
 if (phaseSelect) {
     phaseSelect.addEventListener('change', loadProjectSetup);
-    phaseSelect.value = '';
+    phaseSelect.value = selectedFeatureProjectId !== '0' ? selectedFeatureProjectId : '';
     loadProjectSetup();
 }
 bindPreviewHandlers();
@@ -3676,6 +3695,24 @@ bindRecommendationHandlers();
 filterFeatureList();
 setTimeout(renderExpertGantt, 50);
 setTimeout(renderProjectManagementTable, 50);
+if (featureSubmittedMessage) {
+    setTimeout(() => {
+        if (typeof window.appConfirm === 'function') {
+            window.appConfirm({
+                title: 'Estimation Submitted',
+                titleIcon: 'fas fa-circle-check',
+                subject: featureSubmittedMessage,
+                message: 'The estimate is now with the Expert SUL for approval.',
+                icon: 'fas fa-paper-plane',
+                confirmText: 'OK',
+                cancelText: 'Close',
+                variant: 'success'
+            });
+        } else {
+            alert(featureSubmittedMessage);
+        }
+    }, 150);
+}
 </script>
 
 <?php include '../../includes/footer.php'; ?>
