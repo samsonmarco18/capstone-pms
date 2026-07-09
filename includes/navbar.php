@@ -11,7 +11,8 @@ if ($user) {
     try {
         $conn = getConnection();
         $stmt = $conn->prepare(
-            "SELECT *
+            "SELECT notifications.*,
+                    TIMESTAMPDIFF(MINUTE, created_at, CURRENT_TIMESTAMP) AS age_minutes
              FROM notifications
              WHERE user_id = ?
                AND (notification_type IS NULL OR notification_type NOT IN ('message', 'group'))
@@ -26,6 +27,10 @@ if ($user) {
                 $result = $stmt->get_result();
                 if ($result !== false) {
                     while ($row = $result->fetch_assoc()) {
+                        $ageMinutes = max(0, (int) floor((float) ($row['age_minutes'] ?? 0)));
+                        $row['time_ago'] = formatMinutesAgo($ageMinutes);
+                        $row['formatted_created_at'] = date('M d, Y h:i A', time() - ($ageMinutes * 60));
+                        unset($row['age_minutes']);
                         $notifications[] = $row;
                     }
                 } else {
@@ -88,8 +93,8 @@ $appUserContext = [
                                            onclick="markNotificationRead(<?php echo (int) $notification['id']; ?>)">
                                             <div class="notification-item-title fw-semibold small"><?php echo htmlspecialchars($notification['title']); ?></div>
                                             <div class="notification-item-message text-muted small"><?php echo htmlspecialchars($notification['message']); ?></div>
-                                            <div class="notification-item-time text-muted small mt-1" title="<?php echo htmlspecialchars(date('M d, Y h:i A', strtotime($notification['created_at']))); ?>">
-                                                <i class="far fa-clock me-1"></i><?php echo htmlspecialchars(formatTimeAgo($notification['created_at'])); ?>
+                                            <div class="notification-item-time text-muted small mt-1" title="<?php echo htmlspecialchars((string) ($notification['formatted_created_at'] ?? '')); ?>">
+                                                <i class="far fa-clock me-1"></i><?php echo htmlspecialchars((string) ($notification['time_ago'] ?? 'just now')); ?>
                                             </div>
                                         </a>
                                     </li>

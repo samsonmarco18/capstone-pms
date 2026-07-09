@@ -815,15 +815,6 @@ body,
     position: relative;
 }
 
-.overview-project-card.needs-attention::before {
-    background: #f59e0b;
-    content: "";
-    inset: 0 auto 0 0;
-    position: absolute;
-    width: 5px;
-    z-index: 1;
-}
-
 .overview-project-head {
     display: flex;
     justify-content: space-between;

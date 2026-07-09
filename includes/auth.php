@@ -99,6 +99,31 @@ function formatTimeAgo(?string $datetime): string
     return 'just now';
 }
 
+function formatMinutesAgo(int|float|string|null $minutes): string
+{
+    $minutes = max(0, (int) floor((float) $minutes));
+    if ($minutes < 1) {
+        return 'just now';
+    }
+
+    $units = [
+        525600 => 'y',
+        43200 => 'mo',
+        10080 => 'w',
+        1440 => 'd',
+        60 => 'h',
+        1 => 'm',
+    ];
+
+    foreach ($units as $unitMinutes => $suffix) {
+        if ($minutes >= $unitMinutes) {
+            return (int) floor($minutes / $unitMinutes) . $suffix . ' ago';
+        }
+    }
+
+    return 'just now';
+}
+
 function getSecuritySettings(): array
 {
     static $cache = null;

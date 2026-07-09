@@ -14,7 +14,8 @@ $user = getCurrentUser();
 $conn = getConnection();
 
 $stmt = $conn->prepare(
-    "SELECT *
+    "SELECT notifications.*,
+            TIMESTAMPDIFF(MINUTE, created_at, CURRENT_TIMESTAMP) AS age_minutes
      FROM notifications
      WHERE user_id = ?
        AND (notification_type IS NULL OR notification_type NOT IN ('message', 'group'))
@@ -27,12 +28,10 @@ $result = $stmt->get_result();
 
 $notifications = [];
 while ($row = $result->fetch_assoc()) {
-    $createdAt = (string) ($row['created_at'] ?? '');
-    $createdTimestamp = strtotime($createdAt);
-    $row['time_ago'] = formatTimeAgo($createdAt);
-    $row['formatted_created_at'] = $createdTimestamp !== false
-        ? date('M d, Y h:i A', $createdTimestamp)
-        : $createdAt;
+    $ageMinutes = max(0, (int) floor((float) ($row['age_minutes'] ?? 0)));
+    $row['time_ago'] = formatMinutesAgo($ageMinutes);
+    $row['formatted_created_at'] = date('M d, Y h:i A', time() - ($ageMinutes * 60));
+    unset($row['age_minutes']);
     $notifications[] = $row;
 }
 
