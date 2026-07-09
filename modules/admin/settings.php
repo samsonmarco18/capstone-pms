@@ -886,7 +886,7 @@ input:checked + .switch-slider:before {
                 <h5>General Settings</h5>
             </div>
             <div class="card-body-modern">
-                <form method="POST">
+                <form method="POST" data-generic-draft-disabled="true">
                     <div class="settings-form-grid">
                     <div class="form-group">
                         <label class="form-label">Site Name</label>
@@ -926,7 +926,7 @@ input:checked + .switch-slider:before {
                 <h5>Security Settings</h5>
             </div>
             <div class="card-body-modern">
-                <form method="POST">
+                <form method="POST" data-generic-draft-disabled="true">
                     <div class="settings-form-grid">
                     <div class="form-group">
                         <label class="form-label">Session Timeout (minutes)</label>
@@ -961,7 +961,7 @@ input:checked + .switch-slider:before {
                 <h5>Gmail Mailer</h5>
             </div>
             <div class="card-body-modern">
-                <form method="POST">
+                <form method="POST" data-generic-draft-disabled="true">
                     <div class="switch-wrapper">
                         <div class="switch-info">
                             <label>Enable Email Sending</label>
@@ -1052,7 +1052,7 @@ input:checked + .switch-slider:before {
 
                 <hr style="margin: 1.5rem 0;">
 
-                <form method="POST">
+                <form method="POST" data-generic-draft-disabled="true">
                     <div class="settings-form-grid">
                     <div class="form-group">
                         <label class="form-label">Send Test Email To</label>
@@ -1078,7 +1078,7 @@ input:checked + .switch-slider:before {
                 <h5>Notification Settings</h5>
             </div>
             <div class="card-body-modern">
-                <form method="POST">
+                <form method="POST" data-generic-draft-disabled="true">
                     <div class="switch-wrapper">
                         <div class="switch-info">
                             <label>Task Reminders</label>
@@ -1119,11 +1119,11 @@ input:checked + .switch-slider:before {
                 <h5>System Maintenance</h5>
             </div>
             <div class="card-body-modern">
-                <form method="POST">
+                <form method="POST" id="backupDatabaseForm" data-generic-draft-disabled="true" data-confirm-skip="true">
                     <div class="form-group">
                         <label class="form-label">Database Backup</label>
                         <p class="form-text" style="margin-bottom: 1rem;">Create a full backup of the database. This may take a few moments.</p>
-                        <button type="submit" name="backup_database" class="btn-warning-modern w-100" onclick="return confirm('Create database backup? This may take a moment.')">
+                        <button type="submit" name="backup_database" class="btn-warning-modern w-100">
                             <i class="fas fa-database"></i> Create Backup
                         </button>
                     </div>
@@ -1162,7 +1162,7 @@ input:checked + .switch-slider:before {
                     <div class="alert-content">
                         <strong>Clear System Cache</strong>
                         <p>Clear all temporary files and cached data</p>
-                        <button class="btn-danger-modern mt-2" style="padding: 0.4rem 1rem; font-size: 0.8rem;" onclick="clearCache()">
+                        <button type="button" class="btn-danger-modern mt-2" style="padding: 0.4rem 1rem; font-size: 0.8rem;" onclick="clearCache()">
                             Clear All Cache
                         </button>
                     </div>
@@ -1175,21 +1175,67 @@ input:checked + .switch-slider:before {
 </div>
 
 <script>
-function clearCache() {
-    if(confirm('Clear all system cache? This will clear temporary files and cached data.')) {
+document.addEventListener('DOMContentLoaded', function () {
+    const backupForm = document.getElementById('backupDatabaseForm');
+    if (!backupForm) {
+        return;
+    }
+
+    backupForm.addEventListener('submit', async function (event) {
+        if (backupForm.dataset.confirmedSubmit === '1') {
+            delete backupForm.dataset.confirmedSubmit;
+            return;
+        }
+
+        event.preventDefault();
+        const submitter = event.submitter || backupForm.querySelector('button[name="backup_database"]');
+        const confirmed = typeof window.appConfirm === 'function'
+            ? await window.appConfirm({
+                title: 'Create Database Backup',
+                titleIcon: 'fas fa-database',
+                subject: 'Download a fresh database backup?',
+                message: 'The backup will include the current database data and may take a moment to prepare.',
+                icon: 'fas fa-file-zipper fa-lg',
+                confirmIcon: 'fas fa-download',
+                confirmText: 'Create Backup'
+            })
+            : false;
+
+        if (confirmed) {
+            backupForm.dataset.confirmedSubmit = '1';
+            backupForm.requestSubmit(submitter);
+        }
+    });
+});
+
+async function clearCache() {
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Clear System Cache',
+            titleIcon: 'fas fa-broom',
+            subject: 'Clear all cached and temporary data?',
+            message: 'The application will rebuild any required cache files automatically.',
+            icon: 'fas fa-trash-can fa-lg',
+            confirmIcon: 'fas fa-broom',
+            confirmText: 'Clear Cache',
+            variant: 'danger'
+        })
+        : false;
+
+    if (confirmed) {
         $.ajax({
             url: '../../api/clear-cache.php',
             method: 'POST',
             success: function(response) {
-                const result = JSON.parse(response);
+                const result = typeof response === 'string' ? JSON.parse(response) : response;
                 if(result.success) {
-                    alert('✓ Cache cleared successfully');
+                    window.appToast?.('Cache cleared', 'System cache and temporary data were cleared successfully.');
                 } else {
-                    alert('✗ Error: ' + result.error);
+                    window.appToast?.('Unable to clear cache', result.error || 'The cache could not be cleared.', 'error');
                 }
             },
             error: function() {
-                alert('✗ Error clearing cache');
+                window.appToast?.('Unable to clear cache', 'The server could not complete the cache request.', 'error');
             }
         });
     }
