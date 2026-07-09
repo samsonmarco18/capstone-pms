@@ -1976,44 +1976,23 @@ include '../../includes/navbar.php';
     margin-bottom: 1.5rem;
 }
 
-.workflow-owner-summary {
-    align-items: center;
-    background: #fff;
-    border: 1px solid var(--gray-200);
-    border-radius: 18px;
-    box-shadow: var(--shadow-sm);
-    display: flex;
-    gap: 0.9rem;
-    justify-content: space-between;
-    padding: 0.95rem 1.1rem;
-}
-
-.workflow-owner-identity {
-    align-items: center;
-    display: flex;
-    gap: 0.85rem;
-    min-width: 0;
-}
-
-.workflow-owner-icon,
 .project-context-icon {
     align-items: center;
-    background: linear-gradient(135deg, rgba(31, 99, 146, 0.14), rgba(14, 165, 233, 0.1));
-    border-radius: 14px;
+    background: transparent;
+    border-radius: 0;
     color: var(--theme-primary);
     display: inline-flex;
-    flex: 0 0 44px;
-    height: 44px;
+    flex: 0 0 28px;
+    font-size: 1.2rem;
+    height: 28px;
     justify-content: center;
-    width: 44px;
+    width: 28px;
 }
 
-.workflow-owner-copy,
 .project-context-copy {
     min-width: 0;
 }
 
-.workflow-owner-eyebrow,
 .project-context-eyebrow {
     color: var(--gray-500);
     display: block;
@@ -2023,7 +2002,6 @@ include '../../includes/navbar.php';
     text-transform: uppercase;
 }
 
-.workflow-owner-copy strong,
 .project-context-title {
     color: var(--gray-800);
     display: block;
@@ -2033,7 +2011,6 @@ include '../../includes/navbar.php';
     margin: 0;
 }
 
-.workflow-owner-copy small,
 .project-context-subtitle {
     color: #64748b;
     display: block;
@@ -2041,24 +2018,12 @@ include '../../includes/navbar.php';
     margin-top: 0.15rem;
 }
 
-.workflow-owner-count {
-    align-items: center;
-    background: #fef3c7;
-    border: 1px solid #fde68a;
-    border-radius: 999px;
-    color: #92400e;
-    display: inline-flex;
-    flex: 0 0 auto;
-    font-size: 0.76rem;
-    font-weight: 800;
-    gap: 0.35rem;
-    padding: 0.45rem 0.75rem;
-    white-space: nowrap;
-}
-
 .project-context-card {
+    border-radius: 16px;
+    box-shadow: none;
+    margin-bottom: 1rem;
     overflow: visible;
-    padding: 1rem;
+    padding: 0.95rem 1rem;
 }
 
 .project-context-layout {
@@ -2069,9 +2034,9 @@ include '../../includes/navbar.php';
 }
 
 .project-context-main {
-    align-items: flex-start;
+    align-items: center;
     display: flex;
-    gap: 0.9rem;
+    gap: 0.75rem;
     min-width: 0;
 }
 
@@ -2082,21 +2047,21 @@ include '../../includes/navbar.php';
 .project-context-metrics {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.45rem;
-    margin-top: 0.65rem;
+    gap: 0.75rem;
+    margin-top: 0.45rem;
 }
 
 .project-context-pill {
     align-items: center;
-    background: #f8fafc;
-    border: 1px solid var(--gray-200);
-    border-radius: 999px;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
     color: #475569;
     display: inline-flex;
     font-size: 0.7rem;
     font-weight: 800;
     gap: 0.35rem;
-    padding: 0.38rem 0.62rem;
+    padding: 0;
 }
 
 .project-context-pill strong {
@@ -2120,6 +2085,11 @@ include '../../includes/navbar.php';
     letter-spacing: 0.06em;
     margin: 0;
     text-transform: uppercase;
+}
+
+.project-context-workflow {
+    color: var(--theme-primary);
+    font-weight: 900;
 }
 
 .project-context-actions .form-select-custom {
@@ -2158,20 +2128,21 @@ include '../../includes/navbar.php';
 }
 
 .workflow-tabs {
-    border: 1px solid var(--gray-200);
-    border-radius: 16px;
-    background: var(--gray-50);
+    border: 0;
+    border-bottom: 1px solid var(--gray-200);
+    border-radius: 0;
+    background: transparent;
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
-    gap: 0.3rem;
+    gap: 1rem;
     margin: 0 0 1rem;
     max-width: 100%;
     overflow-x: auto;
-    padding: 0.45rem;
+    padding: 0 0 0.35rem;
     scrollbar-color: rgba(31, 99, 146, 0.28) transparent;
     scrollbar-width: thin;
-    box-shadow: var(--shadow-sm);
+    box-shadow: none;
     position: sticky;
     top: 88px;
     z-index: 20;
@@ -2192,20 +2163,20 @@ include '../../includes/navbar.php';
 
 .workflow-tabs .nav-item {
     display: flex;
-    flex: 1 0 172px;
+    flex: 0 0 auto;
     min-width: 0;
 }
 
 .workflow-tabs .nav-link {
     width: 100%;
     border: 0;
-    border-radius: 11px;
+    border-radius: 0;
     color: var(--gray-600);
     background: transparent;
     font-size: 0.82rem;
     font-weight: 600;
-    min-height: 48px;
-    padding: 0.7rem 0.8rem;
+    min-height: 42px;
+    padding: 0.55rem 0.25rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2217,24 +2188,24 @@ include '../../includes/navbar.php';
 
 .workflow-tabs .nav-link:hover {
     color: var(--theme-primary);
-    background: rgba(255, 255, 255, 0.72);
+    background: transparent;
 }
 
 .workflow-tabs .nav-link.active {
     color: var(--theme-primary);
-    background: #ffffff;
-    box-shadow: 0 3px 10px rgba(31, 99, 146, 0.1), inset 0 0 0 1px rgba(31, 99, 146, 0.12);
+    background: transparent;
+    box-shadow: none;
 }
 
 .workflow-tabs .nav-link.active::after {
     background: var(--theme-primary);
     border-radius: 999px;
-    bottom: 0.28rem;
+    bottom: -0.37rem;
     content: "";
     height: 3px;
-    left: 22%;
+    left: 0;
     position: absolute;
-    right: 22%;
+    right: 0;
 }
 
 .workflow-tabs .nav-link i {
@@ -3464,7 +3435,6 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-card,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-owner-summary,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
     background: #071321 !important;
@@ -3477,9 +3447,6 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-header,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs .nav-link:hover,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs .nav-link.active,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-column-body,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer,
@@ -3507,20 +3474,18 @@ include '../../includes/navbar.php';
     color: #9db6cf !important;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-owner-copy strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-title {
     color: #d7e4f2;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-owner-icon,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-icon {
-    background: rgba(31, 99, 146, 0.16);
+    background: transparent;
     color: #7cc0ee;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-pill {
-    background: rgba(31, 99, 146, 0.12);
-    border-color: rgba(31, 99, 146, 0.24);
+    background: transparent;
+    border-color: transparent;
     color: #9db6cf;
 }
 
@@ -3613,7 +3578,7 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs .nav-link.active {
-    box-shadow: inset 0 0 0 1px rgba(31, 99, 146, 0.12);
+    box-shadow: none;
     color: #7cc0ee;
 }
 
@@ -3788,15 +3753,6 @@ include '../../includes/navbar.php';
         padding: 1.5rem;
     }
 
-    .workflow-owner-summary {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .workflow-owner-count {
-        align-self: flex-start;
-    }
-
     .project-context-card {
         padding: 0.85rem;
     }
@@ -3919,46 +3875,24 @@ include '../../includes/navbar.php';
         </div>
     <?php endif; ?>
 
-    <?php if ($canManageExpertWorkflow || $canManageDeveloperWorkflow): ?>
-        <?php
-            $activeWorkflowLabel = $canManageExpertWorkflow ? 'Expert' : 'Developer';
-            $activeWorkflowIcon = $canManageExpertWorkflow ? 'fa-user-tie' : 'fa-code';
-            $activeWorkflowCount = $canManageExpertWorkflow ? $expertAllocationBadgeCount : $developerAllocationBadgeCount;
-            $activeWorkflowDescription = $canManageExpertWorkflow
-                ? 'Expert Department allocation queue'
-                : $sulDepartmentLabel . ' developer delivery queue';
-        ?>
-        <div class="workflow-owner-summary mb-4" aria-label="Active workflow">
-            <div class="workflow-owner-identity">
-                <span class="workflow-owner-icon" aria-hidden="true"><i class="fas <?php echo $activeWorkflowIcon; ?>"></i></span>
-                <span class="workflow-owner-copy">
-                    <span class="workflow-owner-eyebrow">Active workflow</span>
-                    <strong><?php echo htmlspecialchars($activeWorkflowLabel); ?> Workflow</strong>
-                    <small><?php echo htmlspecialchars($activeWorkflowDescription); ?></small>
-                </span>
-            </div>
-            <span class="workflow-owner-count">
-                <i class="fas fa-list-check" aria-hidden="true"></i>
-                <?php echo (int) $activeWorkflowCount; ?> <?php echo (int) $activeWorkflowCount === 1 ? 'item' : 'items'; ?>
-            </span>
-        </div>
-    <?php endif; ?>
-
     <div id="allocationContent">
         
         <!-- Expert Tab Panel -->
         <?php if ($canManageExpertWorkflow): ?>
         <div id="expert-panel">
-            <div class="section-card project-context-card mb-4">
+            <div class="section-card project-context-card">
                 <div class="project-context-layout">
                     <div class="project-context-main">
                         <span class="project-context-icon" aria-hidden="true"><i class="fas fa-folder-open"></i></span>
                         <div class="project-context-copy">
-                            <span class="project-context-eyebrow">Project Allocation</span>
+                            <span class="project-context-eyebrow">
+                                <span class="project-context-workflow">Expert Workflow</span>
+                                | <?php echo (int) $expertAllocationBadgeCount; ?> <?php echo (int) $expertAllocationBadgeCount === 1 ? 'item' : 'items'; ?>
+                            </span>
                             <h5 class="project-context-title">
                                 <?php echo ($projectId && $project) ? htmlspecialchars((string) $project['name']) : 'Select a project'; ?>
                             </h5>
-                            <span class="project-context-subtitle"><?php echo htmlspecialchars($sulDepartmentLabel); ?> - Expert estimation workflow</span>
+                            <span class="project-context-subtitle"><?php echo htmlspecialchars($sulDepartmentLabel); ?> allocation queue</span>
                             <?php if ($projectId && $project): ?>
                                 <div class="project-context-metrics" aria-label="Selected project queue summary">
                                     <span class="project-context-pill"><strong><?php echo $unassignedAssignmentCount; ?></strong> unassigned</span>
@@ -4523,16 +4457,19 @@ include '../../includes/navbar.php';
             <!-- Developer Tab Panel -->
         <?php if ($canManageDeveloperWorkflow): ?>
             <div id="developer-panel">
-            <div class="section-card project-context-card mb-4">
+            <div class="section-card project-context-card">
                 <div class="project-context-layout">
                     <div class="project-context-main">
                         <span class="project-context-icon" aria-hidden="true"><i class="fas fa-folder-open"></i></span>
                         <div class="project-context-copy">
-                            <span class="project-context-eyebrow">Project Allocation</span>
+                            <span class="project-context-eyebrow">
+                                <span class="project-context-workflow">Developer Workflow</span>
+                                | <?php echo (int) $developerAllocationBadgeCount; ?> <?php echo (int) $developerAllocationBadgeCount === 1 ? 'item' : 'items'; ?>
+                            </span>
                             <h5 class="project-context-title">
                                 <?php echo ($projectId && $project) ? htmlspecialchars((string) $project['name']) : 'Select a project'; ?>
                             </h5>
-                            <span class="project-context-subtitle"><?php echo htmlspecialchars($sulDepartmentLabel); ?> - Developer delivery workflow</span>
+                            <span class="project-context-subtitle"><?php echo htmlspecialchars($sulDepartmentLabel); ?> delivery queue</span>
                             <?php if ($projectId && $project): ?>
                                 <div class="project-context-metrics" aria-label="Selected project queue summary">
                                     <span class="project-context-pill"><strong><?php echo $readyDeveloperAssignmentCount; ?></strong> ready</span>
