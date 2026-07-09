@@ -36,7 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_notification']
 }
 
 $stmt = $conn->prepare(
-    "SELECT *
+    "SELECT notifications.*,
+            TIMESTAMPDIFF(MINUTE, created_at, CURRENT_TIMESTAMP) AS age_minutes
      FROM notifications
      WHERE user_id = ?
        AND (notification_type IS NULL OR notification_type NOT IN ('message', 'group'))
@@ -48,6 +49,10 @@ $notifications = [];
 $result = $stmt->get_result();
 if (is_object($result) && method_exists($result, 'fetch_assoc')) {
     while ($row = $result->fetch_assoc()) {
+        $ageMinutes = max(0, (int) floor((float) ($row['age_minutes'] ?? 0)));
+        $row['time_ago'] = formatMinutesAgo($ageMinutes);
+        $row['formatted_created_at'] = date('M d, Y h:i A', time() - ($ageMinutes * 60));
+        unset($row['age_minutes']);
         $notifications[] = $row;
     }
 }
@@ -393,9 +398,9 @@ include 'includes/navbar.php';
                             <div class="notification-message">
                                 <?php echo htmlspecialchars($notification['message']); ?>
                             </div>
-                            <div class="notification-time" title="<?php echo htmlspecialchars(date('M d, Y h:i A', strtotime($notification['created_at']))); ?>">
+                            <div class="notification-time" title="<?php echo htmlspecialchars((string) ($notification['formatted_created_at'] ?? '')); ?>">
                                 <i class="far fa-clock"></i>
-                                <?php echo htmlspecialchars(formatTimeAgo($notification['created_at'])); ?>
+                                <?php echo htmlspecialchars((string) ($notification['time_ago'] ?? 'just now')); ?>
                             </div>
                         </a>
                         <button class="btn-delete-notification" onclick="deleteNotification(<?php echo $notification['id']; ?>, event)">

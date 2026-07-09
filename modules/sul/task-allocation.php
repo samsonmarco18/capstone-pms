@@ -1766,61 +1766,101 @@ include '../../includes/navbar.php';
 }
 
 .workflow-layout {
-    display: grid;
-    grid-template-columns: 292px minmax(0, 1fr);
-    gap: 1.5rem;
-    align-items: start;
+    display: block;
+    min-width: 0;
     margin-top: 1rem;
 }
 
 .workflow-tabs {
     border: 1px solid var(--gray-200);
-    border-radius: 20px;
-    background: #ffffff;
-    gap: 0.5rem;
-    margin: 0;
-    padding: 0.75rem;
-    flex-direction: column;
+    border-radius: 16px;
+    background: var(--gray-50);
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0.3rem;
+    margin: 0 0 1rem;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 0.45rem;
+    scrollbar-color: rgba(31, 99, 146, 0.28) transparent;
+    scrollbar-width: thin;
     box-shadow: var(--shadow-sm);
     position: sticky;
     top: 88px;
+    z-index: 20;
+}
+
+.workflow-tabs::-webkit-scrollbar {
+    height: 5px;
+}
+
+.workflow-tabs::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.workflow-tabs::-webkit-scrollbar-thumb {
+    background: rgba(31, 99, 146, 0.28);
+    border-radius: 999px;
+}
+
+.workflow-tabs .nav-item {
+    display: flex;
+    flex: 1 0 172px;
+    min-width: 0;
 }
 
 .workflow-tabs .nav-link {
     width: 100%;
     border: 0;
-    border-radius: 14px;
+    border-radius: 11px;
     color: var(--gray-600);
     background: transparent;
-    font-size: 0.9rem;
+    font-size: 0.82rem;
     font-weight: 600;
-    padding: 0.85rem 1rem;
+    min-height: 48px;
+    padding: 0.7rem 0.8rem;
     display: inline-flex;
     align-items: center;
-    justify-content: flex-start;
-    gap: 0.75rem;
-    text-align: left;
+    justify-content: center;
+    gap: 0.5rem;
+    position: relative;
+    text-align: center;
+    white-space: nowrap;
 }
 
 .workflow-tabs .nav-link:hover {
     color: var(--theme-primary);
-    background: var(--gray-50);
+    background: rgba(255, 255, 255, 0.72);
 }
 
 .workflow-tabs .nav-link.active {
     color: var(--theme-primary);
-    background: linear-gradient(135deg, #e9f7ff 0%, #f3fbff 100%);
-    box-shadow: inset 0 0 0 1px rgba(31, 99, 146, 0.12);
+    background: #ffffff;
+    box-shadow: 0 3px 10px rgba(31, 99, 146, 0.1), inset 0 0 0 1px rgba(31, 99, 146, 0.12);
+}
+
+.workflow-tabs .nav-link.active::after {
+    background: var(--theme-primary);
+    border-radius: 999px;
+    bottom: 0.28rem;
+    content: "";
+    height: 3px;
+    left: 22%;
+    position: absolute;
+    right: 22%;
 }
 
 .workflow-tabs .nav-link i {
-    width: 18px;
+    flex: 0 0 auto;
+    width: 16px;
     color: var(--theme-primary);
     text-align: center;
 }
 
 .workflow-tabs .badge-count {
-    margin-left: auto;
+    flex: 0 0 auto;
+    margin-left: 0.1rem;
 }
 
 .allocation-column {
