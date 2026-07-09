@@ -710,6 +710,8 @@ a.progress-step:hover {
 </style>
 
 <div class="container-fluid px-4 py-4">
+    <?php di_render_project_attention_banner($conn, $user, $projectId); ?>
+
     <!-- Page Header -->
     <div class="page-header-modern">
         <div>

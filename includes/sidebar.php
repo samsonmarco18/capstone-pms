@@ -76,7 +76,7 @@ $menuItems = [
         ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb', 'attention' => true],
         ['label' => 'Process History', 'url' => '/modules/insights/process-history.php', 'icon' => 'clock-rotate-left'],
         [
-            'label' => 'Feature Estimation',
+            'label' => 'Project Estimation',
             'url' => '/modules/expert/feature-estimation.php',
             'icon' => 'calculator',
             'matches' => [
@@ -99,15 +99,28 @@ $currentMenu = $menuItems[$role] ?? [];
 $sidebarLogoPath = __DIR__ . '/../assets/img/logoInside.png';
 $sidebarLogoVersion = file_exists($sidebarLogoPath) ? (string) filemtime($sidebarLogoPath) : '1';
 $projectInsightsAttentionCount = 0;
+$projectInsightsAttentionTitle = '';
 try {
-    if (isset($attentionProjectsById) && is_array($attentionProjectsById)) {
+    if (isset($attentionProjectSummaries) && is_array($attentionProjectSummaries)) {
+        $projectInsightsAttentionCount = count($attentionProjectSummaries);
+        $projectInsightsAttentionTitle = implode(', ', array_map(
+            static fn(array $project): string => (string) ($project['name'] ?? 'Project'),
+            array_slice(array_values($attentionProjectSummaries), 0, 4)
+        ));
+    } elseif (isset($attentionProjectsById) && is_array($attentionProjectsById)) {
         $projectInsightsAttentionCount = count($attentionProjectsById);
     } else {
         $sidebarConn = getConnection();
-        $projectInsightsAttentionCount = count(di_load_attention_projects($sidebarConn, $user));
+        $sidebarAttentionProjects = di_load_attention_project_summaries($sidebarConn, $user);
+        $projectInsightsAttentionCount = count($sidebarAttentionProjects);
+        $projectInsightsAttentionTitle = implode(', ', array_map(
+            static fn(array $project): string => (string) ($project['name'] ?? 'Project'),
+            array_slice(array_values($sidebarAttentionProjects), 0, 4)
+        ));
     }
 } catch (Throwable $exception) {
     $projectInsightsAttentionCount = 0;
+    $projectInsightsAttentionTitle = '';
 }
 
 function isSidebarItemActive(array $item, string $currentPage, string $currentPath): bool
@@ -151,7 +164,7 @@ function isSidebarItemActive(array $item, string $currentPage, string $currentPa
                 <i class="fas fa-<?php echo htmlspecialchars($item['icon']); ?> menu-icon"></i>
                 <span class="menu-label sidebar-label"><?php echo htmlspecialchars($item['label']); ?></span>
                 <?php if (!empty($item['attention']) && $projectInsightsAttentionCount > 0): ?>
-                    <span class="sidebar-attention-badge" title="<?php echo (int) $projectInsightsAttentionCount; ?> project<?php echo $projectInsightsAttentionCount === 1 ? '' : 's'; ?> need attention">!</span>
+                    <span class="sidebar-attention-badge" title="<?php echo (int) $projectInsightsAttentionCount; ?> project<?php echo $projectInsightsAttentionCount === 1 ? '' : 's'; ?> need attention<?php echo $projectInsightsAttentionTitle !== '' ? ': ' . htmlspecialchars($projectInsightsAttentionTitle) : ''; ?>">!</span>
                 <?php endif; ?>
             </a>
         <?php endforeach; ?>

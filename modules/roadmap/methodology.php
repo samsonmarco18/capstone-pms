@@ -2451,6 +2451,8 @@ include '../../includes/navbar.php';
 </style>
 
 <div class="container-fluid roadmap-shell">
+    <?php di_render_project_attention_banner($conn, $user, $selectedProjectId); ?>
+
     <div class="roadmap-header">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
             <div>

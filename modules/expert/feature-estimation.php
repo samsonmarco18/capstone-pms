@@ -2385,6 +2385,8 @@ textarea.form-control-custom {
 </style>
 
 <div class="container-fluid px-4 py-4 expert-estimation-page">
+    <?php di_render_project_attention_banner($conn, $user, max(0, (int) ($_GET['project_estimation_id'] ?? 0))); ?>
+
     <!-- Page Header -->
     <div class="page-header-modern">
         <div class="page-header-content">

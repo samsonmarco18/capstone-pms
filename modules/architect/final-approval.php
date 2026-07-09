@@ -186,6 +186,8 @@ include '../../includes/navbar.php';
 </style>
 
 <div class="container-fluid py-4">
+    <?php di_render_project_attention_banner($conn, $user, $selectedProjectId); ?>
+
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <div>
             <h2 class="mb-1"><i class="fas fa-code-merge me-2 text-primary"></i>Final Approval & Merge</h2>

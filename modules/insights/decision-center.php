@@ -8,7 +8,8 @@ requireRole(['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'])
 $conn = getConnection();
 $user = getCurrentUser();
 $projects = di_load_accessible_projects($conn, $user);
-$attentionProjectsById = di_load_attention_projects($conn, $user);
+$attentionProjectSummaries = di_load_attention_project_summaries($conn, $user);
+$attentionProjectsById = array_map(static fn(array $project): int => (int) ($project['issue_count'] ?? 1), $attentionProjectSummaries);
 $attentionProjectCount = count($attentionProjectsById);
 $userRole = (string) ($user['role'] ?? 'guest');
 $canViewBudget = $userRole !== 'sul';
@@ -2362,6 +2363,21 @@ body,
         <?php endif; ?>
         Click a project to expand its full insight.
     </div>
+
+    <?php if ($attentionProjectCount > 0): ?>
+        <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 mb-4">
+            <strong><i class="fas fa-circle-exclamation me-1"></i>Needs attention:</strong>
+            <?php foreach ($attentionProjectSummaries as $attentionProject): ?>
+                <a
+                    class="badge rounded-pill bg-warning text-dark text-decoration-none"
+                    href="<?php echo BASE_URL; ?>modules/insights/decision-center.php?project_id=<?php echo (int) $attentionProject['id']; ?>&view=statistics"
+                    title="<?php echo (int) $attentionProject['issue_count']; ?> issue<?php echo (int) $attentionProject['issue_count'] === 1 ? '' : 's'; ?>"
+                >
+                    ! <?php echo htmlspecialchars((string) $attentionProject['name']); ?> (<?php echo (int) $attentionProject['issue_count']; ?>)
+                </a>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 
     <div class="overview-card-grid">
         <?php foreach ($projects as $project): ?>
