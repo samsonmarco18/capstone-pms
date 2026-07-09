@@ -161,13 +161,24 @@ function di_load_accessible_projects(mysqli|PgsqlMysqliCompatConnection $conn, a
     return di_fetch_all(di_execute(di_prepare($conn, $sql), $rule['types'], $rule['params']));
 }
 
-function di_load_attention_projects(mysqli|PgsqlMysqliCompatConnection $conn, array $user): array
+function di_load_attention_project_summaries(mysqli|PgsqlMysqliCompatConnection $conn, array $user): array
 {
     $rule = di_access_rule($user);
     $sql = "
         SELECT
             p.id,
-            COUNT(DISTINCT t.id) AS issue_count
+            p.name,
+            COUNT(DISTINCT t.id) AS issue_count,
+            SUM(CASE WHEN t.status = 'blocked' THEN 1 ELSE 0 END) AS blocked_count,
+            SUM(CASE WHEN t.status IN ('qa_failed', 'sul_revision') THEN 1 ELSE 0 END) AS revision_count,
+            SUM(CASE WHEN (
+                t.status = 'overdue'
+                OR (
+                    t.deadline IS NOT NULL
+                    AND t.deadline < CURRENT_DATE
+                    AND t.status NOT IN ('completed', 'done')
+                )
+            ) THEN 1 ELSE 0 END) AS overdue_count
         FROM projects p
         INNER JOIN tasks t ON t.project_id = p.id
         WHERE p.status NOT IN ('completed', 'cancelled')
@@ -180,10 +191,34 @@ function di_load_attention_projects(mysqli|PgsqlMysqliCompatConnection $conn, ar
                   AND t.status NOT IN ('completed', 'done')
               )
           )
-        GROUP BY p.id
+        GROUP BY p.id, p.name
+        ORDER BY issue_count DESC, p.name ASC
     ";
 
     $rows = di_fetch_all(di_execute(di_prepare($conn, $sql), $rule['types'], $rule['params']));
+    $summaries = [];
+    foreach ($rows as $row) {
+        $projectId = (int) ($row['id'] ?? 0);
+        if ($projectId <= 0) {
+            continue;
+        }
+
+        $summaries[$projectId] = [
+            'id' => $projectId,
+            'name' => (string) ($row['name'] ?? 'Project'),
+            'issue_count' => max(1, (int) ($row['issue_count'] ?? 1)),
+            'blocked_count' => max(0, (int) ($row['blocked_count'] ?? 0)),
+            'revision_count' => max(0, (int) ($row['revision_count'] ?? 0)),
+            'overdue_count' => max(0, (int) ($row['overdue_count'] ?? 0)),
+        ];
+    }
+
+    return $summaries;
+}
+
+function di_load_attention_projects(mysqli|PgsqlMysqliCompatConnection $conn, array $user): array
+{
+    $rows = di_load_attention_project_summaries($conn, $user);
     $projects = [];
     foreach ($rows as $row) {
         $projectId = (int) ($row['id'] ?? 0);
@@ -193,6 +228,59 @@ function di_load_attention_projects(mysqli|PgsqlMysqliCompatConnection $conn, ar
     }
 
     return $projects;
+}
+
+function di_render_project_attention_banner(mysqli|PgsqlMysqliCompatConnection $conn, array $user, int $projectId, array $options = []): void
+{
+    if ($projectId <= 0) {
+        return;
+    }
+
+    $summaries = di_load_attention_project_summaries($conn, $user);
+    $summary = $summaries[$projectId] ?? null;
+    if ($summary === null) {
+        return;
+    }
+
+    static $stylesPrinted = false;
+    if (!$stylesPrinted) {
+        echo '<style>
+        .project-insight-alert{align-items:center;background:#fff7ed;border:1px solid #fed7aa;border-left:5px solid #f97316;border-radius:12px;box-shadow:0 10px 24px rgba(15,23,42,.08);color:#7c2d12;display:flex;gap:.9rem;margin-bottom:1rem;padding:1rem 1.1rem}
+        .project-insight-alert__icon{align-items:center;background:#f97316;border-radius:999px;color:#fff;display:inline-flex;flex:0 0 auto;font-weight:800;height:34px;justify-content:center;width:34px}
+        .project-insight-alert__body{min-width:0}
+        .project-insight-alert__body strong{display:block;font-size:.98rem;margin-bottom:.15rem}
+        .project-insight-alert__body span{display:block;font-size:.86rem;line-height:1.35}
+        .project-insight-alert__action{background:#f97316;border-radius:999px;color:#fff;font-size:.84rem;font-weight:700;margin-left:auto;padding:.55rem .9rem;text-decoration:none;white-space:nowrap}
+        .project-insight-alert__action:hover{background:#ea580c;color:#fff}
+        @media(max-width:768px){.project-insight-alert{align-items:flex-start;flex-direction:column}.project-insight-alert__action{margin-left:0}}
+        :is(html[data-theme="dark"],body[data-theme="dark"],body.dark-mode) .project-insight-alert{background:rgba(249,115,22,.12);border-color:rgba(251,146,60,.35);color:#fed7aa}
+        </style>';
+        $stylesPrinted = true;
+    }
+
+    $issueCount = (int) $summary['issue_count'];
+    $details = [];
+    if ((int) $summary['blocked_count'] > 0) {
+        $details[] = (int) $summary['blocked_count'] . ' blocked';
+    }
+    if ((int) $summary['overdue_count'] > 0) {
+        $details[] = (int) $summary['overdue_count'] . ' overdue';
+    }
+    if ((int) $summary['revision_count'] > 0) {
+        $details[] = (int) $summary['revision_count'] . ' failed or revision';
+    }
+    $detailText = $details === [] ? $issueCount . ' item needs attention' : implode(', ', $details);
+    $title = trim((string) ($options['title'] ?? 'Project Insights needs attention'));
+    $url = BASE_URL . 'modules/insights/decision-center.php?project_id=' . $projectId . '&view=statistics';
+
+    echo '<div class="project-insight-alert">';
+    echo '<span class="project-insight-alert__icon">!</span>';
+    echo '<div class="project-insight-alert__body">';
+    echo '<strong>' . htmlspecialchars($title) . ': ' . htmlspecialchars((string) $summary['name']) . '</strong>';
+    echo '<span>' . htmlspecialchars($detailText) . '. Open Project Insights to see the recommended next action.</span>';
+    echo '</div>';
+    echo '<a class="project-insight-alert__action" href="' . htmlspecialchars($url) . '"><i class="fas fa-lightbulb"></i> View Insights</a>';
+    echo '</div>';
 }
 
 function di_empty_decision_insights(): array
