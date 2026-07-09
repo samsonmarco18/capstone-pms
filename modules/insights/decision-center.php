@@ -12,6 +12,8 @@ $attentionProjectsById = di_load_attention_projects($conn, $user);
 $attentionProjectCount = count($attentionProjectsById);
 $userRole = (string) ($user['role'] ?? 'guest');
 $canViewBudget = $userRole !== 'sul';
+$budgetInsightRoles = ['admin', 'sales', 'architect', 'expert'];
+$showBudgetInsights = $canViewBudget && in_array($userRole, $budgetInsightRoles, true);
 $scenarioCatalog = di_scenario_catalog();
 if (!$canViewBudget) {
     unset($scenarioCatalog['budget_cut']);
@@ -378,8 +380,8 @@ $roleProfiles = [
         'signal_title' => 'Expert Feasibility Signals',
         'kpi_title' => 'Expert Estimation Watchlist',
         'kpi_note' => 'These KPIs help experts judge whether scope, planning quality, and downstream impact still match the current delivery path.',
-        'metric_keys' => ['planning_readiness', 'testing_risk', 'impact_chain_score'],
-        'kpi_labels' => ['Planning Readiness', 'Schedule Stability', 'Resource Efficiency', 'Completion Rate'],
+        'metric_keys' => ['planning_readiness', 'budget_health', 'impact_chain_score'],
+        'kpi_labels' => ['Planning Readiness', 'Budget Health', 'Schedule Stability', 'Resource Efficiency'],
         'insight_priority' => ['Planning Readiness', 'Deadline Slippage Outlook', 'Delivery Risk Pressure', 'Resource Balance', 'Budget Burn Exposure'],
         'priority_items' => ['Feature and scope ambiguity', 'Complexity-driven delivery impact', 'Estimate confidence against timeline'],
         'next_actions' => ['Refine estimates and assumptions', 'Flag unclear requirements early', 'Recommend safer team or scope structure'],
@@ -1759,7 +1761,7 @@ body,
                                 <td>Recent Git Updates</td>
                                 <td><?php echo (int) $insights['metrics']['recent_git_updates']; ?></td>
                             </tr>
-                            <?php if ($canViewBudget): ?>
+                            <?php if ($canViewBudget && !$showBudgetInsights): ?>
                                 <tr>
                                     <td>Budget Health</td>
                                     <td><?php echo number_format($insights['metrics']['budget_health'], 1); ?>%</td>
@@ -1769,6 +1771,57 @@ body,
                     </table>
                 </div>
             </div>
+
+            <?php if ($showBudgetInsights): ?>
+                <div class="section-card mt-4">
+                    <div class="card-header">
+                        <h5><i class="fas fa-coins"></i> Budget Insights</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mini-stat-grid mb-4">
+                            <div class="mini-stat">
+                                <div class="label">Budget Health</div>
+                                <div class="value"><?php echo number_format($insights['metrics']['budget_health'], 1); ?>%</div>
+                                <span class="badge-tone <?php echo htmlspecialchars($insights['bands']['budget_health']['tone']); ?>"><?php echo htmlspecialchars($insights['bands']['budget_health']['label']); ?></span>
+                            </div>
+                            <div class="mini-stat">
+                                <div class="label">Monthly Burn</div>
+                                <div class="value"><?php echo number_format($insights['metrics']['monthly_burn'], 2); ?></div>
+                                <span class="subtext"><?php echo htmlspecialchars((string) ($insights['metrics']['budget_baseline_source'] ?? 'Estimated budget usage')); ?></span>
+                            </div>
+                            <div class="mini-stat">
+                                <div class="label">Budget Consumed</div>
+                                <div class="value"><?php echo number_format($insights['metrics']['budget_consumed_ratio'], 1); ?>%</div>
+                                <span class="subtext">Modeled against planned budget</span>
+                            </div>
+                            <div class="mini-stat">
+                                <div class="label">Overspend Forecast</div>
+                                <div class="value"><?php echo number_format($insights['metrics']['overspend_forecast'], 2); ?></div>
+                                <span class="badge-tone <?php echo $insights['metrics']['overspend_forecast'] > 0 ? 'warning' : 'success'; ?>">
+                                    <?php echo $insights['metrics']['overspend_forecast'] > 0 ? 'Watch Spend' : 'Within Budget'; ?>
+                                </span>
+                            </div>
+                        </div>
+
+                        <table class="compare-table">
+                            <tbody>
+                                <tr>
+                                    <td>Total Budget</td>
+                                    <td><?php echo number_format($insights['metrics']['budget_total'], 2); ?></td>
+                                </tr>
+                                <tr>
+                                    <td>Budget Remaining</td>
+                                    <td><?php echo number_format(max(0, $insights['metrics']['budget_total'] * (1 - ($insights['metrics']['budget_consumed_ratio'] / 100))), 2); ?></td>
+                                </tr>
+                                <tr>
+                                    <td>Cost Pressure</td>
+                                    <td><?php echo $insights['metrics']['overspend_forecast'] > 0 ? 'Needs review' : 'Controlled'; ?></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 
