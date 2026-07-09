@@ -1976,6 +1976,165 @@ include '../../includes/navbar.php';
     margin-bottom: 1.5rem;
 }
 
+.workflow-owner-summary {
+    align-items: center;
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 18px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    gap: 0.9rem;
+    justify-content: space-between;
+    padding: 0.95rem 1.1rem;
+}
+
+.workflow-owner-identity {
+    align-items: center;
+    display: flex;
+    gap: 0.85rem;
+    min-width: 0;
+}
+
+.workflow-owner-icon,
+.project-context-icon {
+    align-items: center;
+    background: linear-gradient(135deg, rgba(31, 99, 146, 0.14), rgba(14, 165, 233, 0.1));
+    border-radius: 14px;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 44px;
+    height: 44px;
+    justify-content: center;
+    width: 44px;
+}
+
+.workflow-owner-copy,
+.project-context-copy {
+    min-width: 0;
+}
+
+.workflow-owner-eyebrow,
+.project-context-eyebrow {
+    color: var(--gray-500);
+    display: block;
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.workflow-owner-copy strong,
+.project-context-title {
+    color: var(--gray-800);
+    display: block;
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.25;
+    margin: 0;
+}
+
+.workflow-owner-copy small,
+.project-context-subtitle {
+    color: #64748b;
+    display: block;
+    font-size: 0.78rem;
+    margin-top: 0.15rem;
+}
+
+.workflow-owner-count {
+    align-items: center;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 999px;
+    color: #92400e;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 0.76rem;
+    font-weight: 800;
+    gap: 0.35rem;
+    padding: 0.45rem 0.75rem;
+    white-space: nowrap;
+}
+
+.project-context-card {
+    overflow: visible;
+    padding: 1rem;
+}
+
+.project-context-layout {
+    align-items: center;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 0.8fr);
+}
+
+.project-context-main {
+    align-items: flex-start;
+    display: flex;
+    gap: 0.9rem;
+    min-width: 0;
+}
+
+.project-context-title {
+    font-size: 1.05rem;
+}
+
+.project-context-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    margin-top: 0.65rem;
+}
+
+.project-context-pill {
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid var(--gray-200);
+    border-radius: 999px;
+    color: #475569;
+    display: inline-flex;
+    font-size: 0.7rem;
+    font-weight: 800;
+    gap: 0.35rem;
+    padding: 0.38rem 0.62rem;
+}
+
+.project-context-pill strong {
+    color: var(--theme-primary);
+    font-size: 0.82rem;
+}
+
+.project-context-actions {
+    align-items: end;
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.project-context-label {
+    color: var(--gray-500);
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 800;
+    grid-column: 1 / -1;
+    letter-spacing: 0.06em;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.project-context-actions .form-select-custom {
+    min-height: 42px;
+}
+
+.project-context-empty-action {
+    align-items: center;
+    color: #94a3b8;
+    display: inline-flex;
+    font-size: 0.72rem;
+    font-weight: 700;
+    min-height: 42px;
+}
+
 .expert-utility-grid {
     display: grid;
     grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.4fr);
@@ -3298,46 +3457,6 @@ include '../../includes/navbar.php';
     font-size: 0.85rem;
 }
 
-/* Tab Navigation */
-#allocationTabs {
-    border-bottom: 2px solid var(--gray-200);
-}
-
-#allocationTabs .nav-link {
-    border: none;
-    padding: 0.75rem 1.5rem;
-    color: var(--gray-600);
-    font-weight: 500;
-    position: relative;
-    transition: all 0.2s;
-}
-
-#allocationTabs .nav-link:hover {
-    color: var(--theme-primary);
-    background: transparent;
-}
-
-#allocationTabs .nav-link.active {
-    color: var(--theme-primary);
-    background: transparent;
-    border: none;
-}
-
-#allocationTabs .nav-link.active::after {
-    content: '';
-    position: absolute;
-    bottom: -2px;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: var(--theme-primary);
-    border-radius: 3px 3px 0 0;
-}
-
-#allocationTabs .nav-link i {
-    margin-right: 0.25rem;
-}
-
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
     background: #06111e;
@@ -3345,6 +3464,7 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-owner-summary,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
     background: #071321 !important;
@@ -3385,6 +3505,27 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
     color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-owner-copy strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-title {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-owner-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-icon {
+    background: rgba(31, 99, 146, 0.16);
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-pill {
+    background: rgba(31, 99, 146, 0.12);
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-context-pill strong {
+    color: #7cc0ee;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .assign-expert-intro {
@@ -3478,18 +3619,6 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom::placeholder {
     color: #7f9bb6;
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #allocationTabs {
-    border-color: rgba(31, 99, 146, 0.24);
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #allocationTabs .nav-link {
-    color: #9db6cf;
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #allocationTabs .nav-link.active {
-    color: #7cc0ee;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-outline-modern {
@@ -3636,6 +3765,10 @@ include '../../includes/navbar.php';
 }
 
 @media (max-width: 992px) {
+    .project-context-layout {
+        grid-template-columns: 1fr;
+    }
+
     .workflow-layout {
         grid-template-columns: 1fr;
     }
@@ -3653,6 +3786,33 @@ include '../../includes/navbar.php';
 @media (max-width: 768px) {
     .page-header-modern {
         padding: 1.5rem;
+    }
+
+    .workflow-owner-summary {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .workflow-owner-count {
+        align-self: flex-start;
+    }
+
+    .project-context-card {
+        padding: 0.85rem;
+    }
+
+    .project-context-main {
+        gap: 0.7rem;
+    }
+
+    .project-context-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .project-context-actions .btn-primary-modern,
+    .project-context-actions .btn-outline-modern {
+        justify-content: center;
+        width: 100%;
     }
 
     .assign-expert-modal .modal-body {
@@ -3724,11 +3884,6 @@ include '../../includes/navbar.php';
     .project-review-decisions {
         grid-template-columns: 1fr;
     }
-    
-    #allocationTabs .nav-link {
-        padding: 0.5rem 1rem;
-        font-size: 0.9rem;
-    }
 }
 </style>
 
@@ -3764,47 +3919,58 @@ include '../../includes/navbar.php';
         </div>
     <?php endif; ?>
 
-    <!-- Tab Navigation -->
-    <ul class="nav nav-tabs mb-4" id="allocationTabs" role="tablist">
-        <?php if ($canManageExpertWorkflow): ?>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="expert-tab" data-bs-toggle="tab" data-bs-target="#expert-panel" type="button" role="tab">
-                <i class="fas fa-user-tie me-2"></i>Expert
-                <span class="badge bg-warning ms-2"><?php echo $expertAllocationBadgeCount; ?></span>
-            </button>
-        </li>
-        <?php endif; ?>
-        <?php if ($canManageDeveloperWorkflow): ?>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="developer-tab" data-bs-toggle="tab" data-bs-target="#developer-panel" type="button" role="tab">
-                <i class="fas fa-code me-2"></i>Developer
-                <span class="badge bg-primary ms-2"><?php echo $developerAllocationBadgeCount; ?></span>
-            </button>
-        </li>
-        <?php endif; ?>
-    </ul>
+    <?php if ($canManageExpertWorkflow || $canManageDeveloperWorkflow): ?>
+        <?php
+            $activeWorkflowLabel = $canManageExpertWorkflow ? 'Expert' : 'Developer';
+            $activeWorkflowIcon = $canManageExpertWorkflow ? 'fa-user-tie' : 'fa-code';
+            $activeWorkflowCount = $canManageExpertWorkflow ? $expertAllocationBadgeCount : $developerAllocationBadgeCount;
+            $activeWorkflowDescription = $canManageExpertWorkflow
+                ? 'Expert Department allocation queue'
+                : $sulDepartmentLabel . ' developer delivery queue';
+        ?>
+        <div class="workflow-owner-summary mb-4" aria-label="Active workflow">
+            <div class="workflow-owner-identity">
+                <span class="workflow-owner-icon" aria-hidden="true"><i class="fas <?php echo $activeWorkflowIcon; ?>"></i></span>
+                <span class="workflow-owner-copy">
+                    <span class="workflow-owner-eyebrow">Active workflow</span>
+                    <strong><?php echo htmlspecialchars($activeWorkflowLabel); ?> Workflow</strong>
+                    <small><?php echo htmlspecialchars($activeWorkflowDescription); ?></small>
+                </span>
+            </div>
+            <span class="workflow-owner-count">
+                <i class="fas fa-list-check" aria-hidden="true"></i>
+                <?php echo (int) $activeWorkflowCount; ?> <?php echo (int) $activeWorkflowCount === 1 ? 'item' : 'items'; ?>
+            </span>
+        </div>
+    <?php endif; ?>
 
-    <!-- Tab Content -->
-    <div class="tab-content" id="allocationTabsContent">
+    <div id="allocationContent">
         
         <!-- Expert Tab Panel -->
         <?php if ($canManageExpertWorkflow): ?>
-        <div class="tab-pane fade show active" id="expert-panel" role="tabpanel">
-            <div class="section-card mb-4">
-                <div class="section-header">
-                    <div>
-                        <h5>
-                            <i class="fas fa-folder-open"></i>
-                            Project Allocation
-                        </h5>
-                        <?php if ($projectId && $project): ?>
-                            <small class="text-muted"><?php echo htmlspecialchars((string) $project['name']); ?></small>
-                        <?php else: ?>
-                            <small class="text-muted"><?php echo htmlspecialchars($sulDepartmentLabel); ?></small>
-                        <?php endif; ?>
+        <div id="expert-panel">
+            <div class="section-card project-context-card mb-4">
+                <div class="project-context-layout">
+                    <div class="project-context-main">
+                        <span class="project-context-icon" aria-hidden="true"><i class="fas fa-folder-open"></i></span>
+                        <div class="project-context-copy">
+                            <span class="project-context-eyebrow">Project Allocation</span>
+                            <h5 class="project-context-title">
+                                <?php echo ($projectId && $project) ? htmlspecialchars((string) $project['name']) : 'Select a project'; ?>
+                            </h5>
+                            <span class="project-context-subtitle"><?php echo htmlspecialchars($sulDepartmentLabel); ?> - Expert estimation workflow</span>
+                            <?php if ($projectId && $project): ?>
+                                <div class="project-context-metrics" aria-label="Selected project queue summary">
+                                    <span class="project-context-pill"><strong><?php echo $unassignedAssignmentCount; ?></strong> unassigned</span>
+                                    <span class="project-context-pill"><strong><?php echo $pendingEstimationAssignmentCount; ?></strong> pending</span>
+                                    <span class="project-context-pill"><strong><?php echo $expertReviewCount; ?></strong> review</span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                     </div>
-                    <form method="GET" class="d-flex align-items-center gap-2 flex-wrap">
-                        <select name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for expert allocation" required>
+                    <form method="GET" class="project-context-actions">
+                        <label for="expertProjectSelect" class="project-context-label">Department Project</label>
+                        <select id="expertProjectSelect" name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for expert allocation" required>
                             <option value="">Select project</option>
                             <?php foreach ($expertProjectOptions as $expertProjectOption): ?>
                                 <?php
@@ -3822,6 +3988,8 @@ include '../../includes/navbar.php';
                             <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $projectId; ?>" class="btn-primary-modern text-decoration-none">
                                 <i class="fas fa-route"></i> Open Roadmap
                             </a>
+                        <?php else: ?>
+                            <span class="project-context-empty-action">Roadmap unlocks after selection</span>
                         <?php endif; ?>
                     </form>
                 </div>
@@ -4262,7 +4430,7 @@ include '../../includes/navbar.php';
                                             </td>
                                             <td>
                                                 <span class="estimation-badge"><i class="fas fa-chart-line"></i> PERT: <?php echo $pertEstimate; ?> days</span>
-                                                <span class="allocation-deadline-note">Min <?php echo (int) $task['min_days']; ?> · Likely <?php echo (int) $task['likely_days']; ?> · Max <?php echo (int) $task['max_days']; ?></span>
+                                                <span class="allocation-deadline-note">Min <?php echo (int) $task['min_days']; ?> | Likely <?php echo (int) $task['likely_days']; ?> | Max <?php echo (int) $task['max_days']; ?></span>
                                             </td>
                                             <td>
                                                 <?php if ($daysLeft !== null): ?>
@@ -4354,22 +4522,30 @@ include '../../includes/navbar.php';
             
             <!-- Developer Tab Panel -->
         <?php if ($canManageDeveloperWorkflow): ?>
-            <div class="tab-pane fade show active" id="developer-panel" role="tabpanel">
-            <div class="section-card mb-4">
-                <div class="section-header">
-                    <div>
-                        <h5>
-                            <i class="fas fa-folder-open"></i>
-                            Project Allocation
-                        </h5>
-                        <?php if ($projectId && $project): ?>
-                            <small class="text-muted"><?php echo htmlspecialchars((string) $project['name']); ?></small>
-                        <?php else: ?>
-                            <small class="text-muted"><?php echo htmlspecialchars($sulDepartmentLabel); ?></small>
-                        <?php endif; ?>
+            <div id="developer-panel">
+            <div class="section-card project-context-card mb-4">
+                <div class="project-context-layout">
+                    <div class="project-context-main">
+                        <span class="project-context-icon" aria-hidden="true"><i class="fas fa-folder-open"></i></span>
+                        <div class="project-context-copy">
+                            <span class="project-context-eyebrow">Project Allocation</span>
+                            <h5 class="project-context-title">
+                                <?php echo ($projectId && $project) ? htmlspecialchars((string) $project['name']) : 'Select a project'; ?>
+                            </h5>
+                            <span class="project-context-subtitle"><?php echo htmlspecialchars($sulDepartmentLabel); ?> - Developer delivery workflow</span>
+                            <?php if ($projectId && $project): ?>
+                                <div class="project-context-metrics" aria-label="Selected project queue summary">
+                                    <span class="project-context-pill"><strong><?php echo $readyDeveloperAssignmentCount; ?></strong> ready</span>
+                                    <span class="project-context-pill"><strong><?php echo $inProgressTasks->num_rows; ?></strong> active</span>
+                                    <span class="project-context-pill"><strong><?php echo $codeReviewTasks->num_rows; ?></strong> review</span>
+                                    <span class="project-context-pill"><strong><?php echo $developerReopenRequestCount; ?></strong> reopen</span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                     </div>
-                    <form method="GET" class="d-flex align-items-center gap-2 flex-wrap">
-                        <select name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for developer allocation" required>
+                    <form method="GET" class="project-context-actions">
+                        <label for="developerProjectSelect" class="project-context-label">Department Project</label>
+                        <select id="developerProjectSelect" name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for developer allocation" required>
                             <option value="">Select project</option>
                             <?php foreach ($developerProjectOptions as $developerProjectOption): ?>
                                 <?php
@@ -4388,6 +4564,8 @@ include '../../includes/navbar.php';
                             <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $projectId; ?>" class="btn-outline-modern text-decoration-none">
                                 <i class="fas fa-route"></i> Open Roadmap
                             </a>
+                        <?php else: ?>
+                            <span class="project-context-empty-action">Roadmap unlocks after selection</span>
                         <?php endif; ?>
                     </form>
                 </div>
