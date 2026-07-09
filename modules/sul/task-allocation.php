@@ -67,6 +67,48 @@ function sulTaskAllocationDaysLeft(?string $deadline): ?int
     return (int) ceil(($timestamp - time()) / 86400);
 }
 
+function sulTaskAllocationProfileUrl(?string $profilePic): string
+{
+    $profilePic = trim((string) $profilePic);
+    if ($profilePic === '') {
+        return '';
+    }
+
+    if (preg_match('#^https?://#i', $profilePic)) {
+        return $profilePic;
+    }
+
+    return BASE_URL . ltrim(str_replace('\\', '/', $profilePic), '/');
+}
+
+function sulTaskAllocationInitials(?string $name): string
+{
+    $parts = preg_split('/\s+/', trim((string) $name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if ($parts === []) {
+        return '?';
+    }
+
+    $substring = function_exists('mb_substr') ? 'mb_substr' : 'substr';
+    $uppercase = function_exists('mb_strtoupper') ? 'mb_strtoupper' : 'strtoupper';
+    $first = $substring((string) $parts[0], 0, 1);
+    $last = count($parts) > 1 ? $substring((string) $parts[count($parts) - 1], 0, 1) : '';
+
+    return $uppercase($first . $last);
+}
+
+function sulTaskAllocationWorkload(int $activeTasks): array
+{
+    if ($activeTasks <= 2) {
+        return ['key' => 'light', 'label' => 'Light load'];
+    }
+
+    if ($activeTasks <= 5) {
+        return ['key' => 'moderate', 'label' => 'Moderate'];
+    }
+
+    return ['key' => 'high', 'label' => 'High load'];
+}
+
 function sulTaskAllocationExcerpt(?string $text, int $limit = 120): string
 {
     $clean = trim(preg_replace('/\s+/', ' ', strip_tags((string) $text)));
@@ -520,14 +562,14 @@ $completedTasks = $conn->query("
 
 // Get available experts
 $experts = $conn->query("
-    SELECT u.id, u.full_name, 
+    SELECT u.id, u.full_name, u.profile_pic, u.designation,
            COUNT(t.id) as assigned_tasks
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
     WHERE u.role = 'expert' AND u.status = 'active'
       {$sulUserDepartmentFilter}
-    GROUP BY u.id
-    ORDER BY assigned_tasks ASC
+    GROUP BY u.id, u.full_name, u.profile_pic, u.designation
+    ORDER BY assigned_tasks ASC, u.full_name ASC
 ");
 
 // Projects with unassigned feature tasks
@@ -1993,6 +2035,108 @@ include '../../includes/navbar.php';
     flex-wrap: wrap;
 }
 
+.task-allocation-table-wrap {
+    border: 1px solid var(--gray-200);
+    border-radius: 14px;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.task-allocation-table {
+    background: #fff;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 0;
+    min-width: 980px;
+    width: 100%;
+}
+
+.task-allocation-table thead th {
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-600);
+    font-size: .7rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    padding: .8rem .9rem;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.task-allocation-table tbody td {
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    font-size: .78rem;
+    padding: .85rem .9rem;
+    vertical-align: middle;
+}
+
+.task-allocation-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.task-allocation-table tbody tr {
+    cursor: pointer;
+    transition: background-color .18s ease;
+}
+
+.task-allocation-table tbody tr:hover,
+.task-allocation-table tbody tr:focus-visible {
+    background: #f8fbff;
+    outline: none;
+}
+
+.allocation-task-name {
+    color: var(--gray-900);
+    display: block;
+    font-size: .84rem;
+    font-weight: 700;
+}
+
+.allocation-task-secondary {
+    color: var(--gray-500);
+    display: block;
+    font-size: .7rem;
+    margin-top: .2rem;
+}
+
+.allocation-scope-single {
+    align-items: center;
+    color: var(--gray-600);
+    display: inline-flex;
+    font-size: .72rem;
+    gap: .35rem;
+    white-space: nowrap;
+}
+
+.allocation-deadline {
+    color: var(--gray-800);
+    display: block;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.allocation-deadline-note {
+    color: var(--gray-500);
+    display: block;
+    font-size: .68rem;
+    margin-top: .2rem;
+    white-space: nowrap;
+}
+
+.allocation-deadline-note.is-urgent {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+.allocation-table-actions {
+    align-items: center;
+    display: flex;
+    gap: .4rem;
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+
 /* Review queue */
 .review-queue-hint {
     color: var(--gray-600);
@@ -2357,6 +2501,13 @@ include '../../includes/navbar.php';
     color: white;
 }
 
+.btn-primary-modern:disabled {
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: .5;
+    transform: none;
+}
+
 .btn-success-modern {
     background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     color: white;
@@ -2461,6 +2612,311 @@ include '../../includes/navbar.php';
 .modal-modern .modal-footer {
     padding: 1rem 1.5rem 1.5rem;
     border-top: 1px solid var(--gray-200);
+}
+
+.assign-expert-modal .modal-dialog {
+    max-width: 820px;
+}
+
+.assign-expert-intro {
+    align-items: center;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 14px;
+    display: flex;
+    gap: .8rem;
+    margin-bottom: 1.15rem;
+    padding: .85rem 1rem;
+}
+
+.assign-expert-intro-icon {
+    align-items: center;
+    background: #dbeafe;
+    border-radius: 11px;
+    color: #1d4ed8;
+    display: inline-flex;
+    flex: 0 0 38px;
+    height: 38px;
+    justify-content: center;
+}
+
+.assign-expert-intro-copy {
+    min-width: 0;
+}
+
+.assign-expert-intro-label,
+.assign-expert-intro-title {
+    display: block;
+}
+
+.assign-expert-intro-label {
+    color: #64748b;
+    font-size: .67rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.assign-expert-intro-title {
+    color: #0f172a;
+    font-size: .95rem;
+    font-weight: 800;
+    margin-top: .12rem;
+    overflow-wrap: anywhere;
+}
+
+.expert-selection-heading {
+    align-items: flex-end;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-bottom: .65rem;
+}
+
+.expert-selection-heading h6,
+.expert-selection-heading p {
+    margin: 0;
+}
+
+.expert-selection-heading h6 {
+    color: #0f172a;
+    font-size: .86rem;
+    font-weight: 800;
+}
+
+.expert-selection-heading p {
+    color: #64748b;
+    font-size: .7rem;
+    margin-top: .15rem;
+}
+
+.expert-workload-legend {
+    align-items: center;
+    color: #64748b;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: .65rem;
+    gap: .6rem;
+    justify-content: flex-end;
+}
+
+.expert-workload-legend span {
+    align-items: center;
+    display: inline-flex;
+    gap: .28rem;
+    white-space: nowrap;
+}
+
+.expert-workload-legend i {
+    border-radius: 50%;
+    height: 7px;
+    width: 7px;
+}
+
+.expert-workload-legend .is-light i {
+    background: #16a34a;
+}
+
+.expert-workload-legend .is-moderate i {
+    background: #d97706;
+}
+
+.expert-workload-legend .is-high i {
+    background: #dc2626;
+}
+
+.expert-selection-table-wrap {
+    border: 1px solid #dbe3ed;
+    border-radius: 14px;
+    max-height: 390px;
+    overflow: auto;
+}
+
+.expert-selection-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 0;
+    min-width: 670px;
+    width: 100%;
+}
+
+.expert-selection-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.expert-selection-table th {
+    background: #f8fafc;
+    border-bottom: 1px solid #dbe3ed;
+    color: #64748b;
+    font-size: .65rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    padding: .68rem .8rem;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.expert-selection-table td {
+    border-bottom: 1px solid #e6ebf1;
+    color: #475569;
+    font-size: .76rem;
+    padding: .72rem .8rem;
+    vertical-align: middle;
+}
+
+.expert-selection-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.expert-choice-row {
+    cursor: pointer;
+    outline: none;
+    transition: background-color .16s ease, box-shadow .16s ease;
+}
+
+.expert-choice-row:hover,
+.expert-choice-row:focus-visible {
+    background: #f8fbff;
+}
+
+.expert-choice-row.is-selected {
+    background: #eff6ff;
+    box-shadow: inset 4px 0 0 #1f6392;
+}
+
+.expert-identity {
+    align-items: center;
+    display: flex;
+    gap: .7rem;
+    min-width: 210px;
+}
+
+.expert-avatar {
+    align-items: center;
+    background: #dbeafe;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, .14);
+    color: #1d4ed8;
+    display: inline-flex;
+    flex: 0 0 42px;
+    font-size: .7rem;
+    font-weight: 900;
+    height: 42px;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    width: 42px;
+}
+
+.expert-avatar img {
+    height: 100%;
+    inset: 0;
+    object-fit: cover;
+    position: absolute;
+    width: 100%;
+}
+
+.expert-name,
+.expert-role {
+    display: block;
+}
+
+.expert-name {
+    color: #0f172a;
+    font-size: .8rem;
+    font-weight: 800;
+}
+
+.expert-role {
+    color: #64748b;
+    font-size: .67rem;
+    margin-top: .12rem;
+}
+
+.expert-recommended {
+    background: #dcfce7;
+    border-radius: 20px;
+    color: #166534;
+    display: inline-flex;
+    font-size: .58rem;
+    font-weight: 800;
+    margin-top: .28rem;
+    padding: .16rem .42rem;
+    text-transform: uppercase;
+}
+
+.expert-active-count,
+.expert-workload {
+    align-items: center;
+    border-radius: 20px;
+    display: inline-flex;
+    font-size: .67rem;
+    font-weight: 800;
+    gap: .32rem;
+    padding: .28rem .55rem;
+    white-space: nowrap;
+}
+
+.expert-active-count.is-light,
+.expert-workload.is-light {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.expert-active-count.is-moderate,
+.expert-workload.is-moderate {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.expert-active-count.is-high,
+.expert-workload.is-high {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.expert-select-indicator {
+    align-items: center;
+    border: 2px solid #cbd5e1;
+    border-radius: 50%;
+    color: transparent;
+    display: inline-flex;
+    height: 24px;
+    justify-content: center;
+    transition: all .16s ease;
+    width: 24px;
+}
+
+.expert-choice-row.is-selected .expert-select-indicator {
+    background: #1f6392;
+    border-color: #1f6392;
+    color: #fff;
+}
+
+.expert-assignment-note {
+    align-items: center;
+    color: #64748b;
+    display: flex;
+    font-size: .68rem;
+    gap: .45rem;
+    margin-top: .75rem;
+}
+
+.expert-assignment-note i {
+    color: #1f6392;
+}
+
+.expert-selection-summary {
+    color: #64748b;
+    font-size: .7rem;
+    margin-right: auto;
+}
+
+.expert-selection-summary strong {
+    color: #0f172a;
 }
 
 .form-select-custom {
@@ -2568,6 +3024,62 @@ include '../../includes/navbar.php';
     color: #9db6cf !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .assign-expert-intro {
+    background: rgba(31, 99, 146, 0.16);
+    border-color: rgba(96, 165, 250, 0.3);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .assign-expert-intro-icon {
+    background: rgba(37, 99, 235, 0.24);
+    color: #93c5fd;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .assign-expert-intro-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-selection-heading p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-workload-legend,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-role,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-assignment-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-selection-summary {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .assign-expert-intro-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-selection-heading h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-selection-summary strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-selection-table-wrap {
+    border-color: rgba(31, 99, 146, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-selection-table th {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-selection-table td {
+    border-color: rgba(31, 99, 146, 0.22);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-choice-row:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-choice-row:focus-visible {
+    background: rgba(31, 99, 146, 0.1);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-choice-row.is-selected {
+    background: rgba(37, 99, 235, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-avatar {
+    background: rgba(37, 99, 235, 0.24);
+    border-color: #071321;
+    color: #93c5fd;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select-custom,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-custom {
     background: #071321;
@@ -2608,6 +3120,41 @@ include '../../includes/navbar.php';
     background: rgba(31, 99, 146, 0.12);
     border-color: rgba(31, 99, 146, 0.3);
     color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-allocation-table-wrap {
+    border-color: rgba(31, 99, 146, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-allocation-table,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-allocation-table thead th {
+    background: #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-allocation-table thead th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-allocation-table tbody td {
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-allocation-table tbody tr:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-allocation-table tbody tr:focus-visible {
+    background: rgba(31, 99, 146, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-task-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-deadline {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-task-secondary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-scope-single,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-deadline-note {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-deadline-note.is-urgent {
+    color: #fca5a5;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-entity-badge {
@@ -2707,6 +3254,28 @@ include '../../includes/navbar.php';
 @media (max-width: 768px) {
     .page-header-modern {
         padding: 1.5rem;
+    }
+
+    .assign-expert-modal .modal-body {
+        padding: 1rem;
+    }
+
+    .expert-selection-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: .55rem;
+    }
+
+    .expert-workload-legend {
+        justify-content: flex-start;
+    }
+
+    .expert-selection-table-wrap {
+        max-height: 330px;
+    }
+
+    .expert-selection-summary {
+        flex-basis: 100%;
     }
     
     .section-header {
@@ -2897,41 +3466,92 @@ include '../../includes/navbar.php';
                             <p>Select a project for expert assignment</p>
                         </div>
                     <?php elseif($unassignedTasks->num_rows > 0): ?>
-                        <?php while($task = $unassignedTasks->fetch_assoc()): 
-                            $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
-                        ?>
-                        <div class="task-card is-clickable" role="button" tabindex="0" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); viewTaskDetails(<?php echo (int) $task['id']; ?>); }">
-                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                                <div>
-                                    <div class="d-flex align-items-center gap-2 mb-1">
-                                        <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
-                                        <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
-                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
-                                    </div>
-                                    <div class="task-meta">
-                                        <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                                        <span><i class="far fa-calendar-alt"></i> Due: <?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['deadline'] ?? null)); ?></span>
-                                        <span class="text-<?php echo ($daysLeft !== null && $daysLeft <= 2) ? 'danger' : 'muted'; ?>">
-                                            <?php echo $daysLeft !== null ? $daysLeft . ' days left' : 'No deadline set'; ?>
-                                        </span>
-                                    </div>
-                                </div>
-                                <div class="task-card-actions" onclick="event.stopPropagation();">
-                                    <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
-                                        <i class="fas fa-circle-info"></i> View Info
-                                    </button>
-                                    <button
-                                        class="btn-primary-modern js-assign-expert"
-                                        type="button"
-                                        data-task-id="<?php echo (int) $task['id']; ?>"
-                                        data-task-title="<?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>"
+                        <div class="task-allocation-table-wrap">
+                            <table class="task-allocation-table" aria-label="Unassigned expert tasks">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Priority</th>
+                                        <th scope="col">Task</th>
+                                        <th scope="col">Assignment Scope</th>
+                                        <th scope="col">Project</th>
+                                        <th scope="col">Deadline</th>
+                                        <th scope="col" class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                <?php while($task = $unassignedTasks->fetch_assoc()):
+                                    $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
+                                    $bulkEntityCount = (int) ($task['bulk_entity_task_count'] ?? 0);
+                                    $deadline = sulTaskAllocationFormatDeadline($task['deadline'] ?? null);
+                                ?>
+                                    <tr
+                                        tabindex="0"
+                                        onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)"
+                                        onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); viewTaskDetails(<?php echo (int) $task['id']; ?>); }"
                                     >
-                                        <i class="fas fa-user-plus"></i> Assign to Expert
-                                    </button>
-                                </div>
-                            </div>
+                                        <td>
+                                            <span class="task-priority priority-<?php echo htmlspecialchars((string) $task['priority']); ?>">
+                                                <?php echo htmlspecialchars(ucfirst((string) $task['priority'])); ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="allocation-task-name"><?php echo htmlspecialchars((string) $task['title']); ?></span>
+                                            <span class="allocation-task-secondary">Awaiting expert assignment</span>
+                                        </td>
+                                        <td>
+                                            <?php if ($bulkEntityCount > 1): ?>
+                                                <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
+                                            <?php else: ?>
+                                                <span class="allocation-scope-single">
+                                                    <i class="fas fa-layer-group" aria-hidden="true"></i> Single feature
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <span class="allocation-task-name">
+                                                <i class="fas fa-folder me-1 text-muted" aria-hidden="true"></i>
+                                                <?php echo htmlspecialchars((string) $task['project_name']); ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <?php if ($daysLeft !== null): ?>
+                                                <span class="allocation-deadline"><?php echo htmlspecialchars($deadline); ?></span>
+                                                <span class="allocation-deadline-note<?php echo $daysLeft <= 2 ? ' is-urgent' : ''; ?>">
+                                                    <?php
+                                                        if ($daysLeft < 0) {
+                                                            echo abs($daysLeft) . ' day' . (abs($daysLeft) === 1 ? '' : 's') . ' overdue';
+                                                        } elseif ($daysLeft === 0) {
+                                                            echo 'Due today';
+                                                        } else {
+                                                            echo $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's') . ' left';
+                                                        }
+                                                    ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="allocation-deadline">No deadline</span>
+                                                <span class="allocation-deadline-note">Schedule not set</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <div class="allocation-table-actions" onclick="event.stopPropagation();">
+                                                <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
+                                                    <i class="fas fa-circle-info"></i> View Info
+                                                </button>
+                                                <button
+                                                    class="btn-primary-modern js-assign-expert"
+                                                    type="button"
+                                                    data-task-id="<?php echo (int) $task['id']; ?>"
+                                                    data-task-title="<?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>"
+                                                >
+                                                    <i class="fas fa-user-plus"></i> Assign to Expert
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                                </tbody>
+                            </table>
                         </div>
-                        <?php endwhile; ?>
                     <?php else: ?>
                         <div class="empty-state">
                             <i class="fas fa-check-circle"></i>
@@ -3628,38 +4248,138 @@ include '../../includes/navbar.php';
 
 <!-- Assign to Expert Modal -->
 <?php if ($canManageExpertWorkflow): ?>
-<div class="modal fade modal-modern" id="assignExpertModal" tabindex="-1">
+<div class="modal fade modal-modern assign-expert-modal" id="assignExpertModal" tabindex="-1" aria-labelledby="assignExpertModalTitle">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-user-plus me-2"></i>Assign to Expert</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title" id="assignExpertModalTitle"><i class="fas fa-user-plus me-2"></i>Assign to Expert</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" data-app-loading data-loading-title="Assigning expert" data-loading-text="Please wait while the expert assignment is saved.">
+            <form method="POST" id="assignExpertForm" data-app-loading data-loading-title="Assigning expert" data-loading-text="Please wait while the expert assignment is saved.">
                 <div class="modal-body">
                     <input type="hidden" name="assign_to_expert" value="1">
                     <input type="hidden" name="project_id" value="<?php echo (int) $projectId; ?>">
                     <input type="hidden" name="task_id" id="expertTaskId">
-                    <p><strong>Task:</strong> <span id="expertTaskTitle"></span></p>
-                    <div class="mb-3">
-                        <label class="form-label">Select Expert</label>
-                        <select name="expert_id" class="form-select-custom" required>
-                            <option value="">Choose an expert...</option>
-                            <?php $experts->data_seek(0); while($expert = $experts->fetch_assoc()): ?>
-                            <option value="<?php echo $expert['id']; ?>">
-                                <?php echo htmlspecialchars($expert['full_name']); ?> 
-                                (<?php echo $expert['assigned_tasks']; ?> active tasks)
-                            </option>
-                            <?php endwhile; ?>
-                        </select>
+
+                    <div class="assign-expert-intro">
+                        <span class="assign-expert-intro-icon" aria-hidden="true"><i class="fas fa-list-check"></i></span>
+                        <span class="assign-expert-intro-copy">
+                            <span class="assign-expert-intro-label">Task to assign</span>
+                            <span class="assign-expert-intro-title" id="expertTaskTitle"></span>
+                        </span>
                     </div>
-                    <div class="alert alert-info bg-light border-0">
-                        <small><i class="fas fa-info-circle"></i> The expert will provide a three-point estimation (min/likely/max days) for this task.</small>
+
+                    <div class="expert-selection-heading">
+                        <div>
+                            <h6>Choose the right expert</h6>
+                            <p>Compare current workload before assigning this task.</p>
+                        </div>
+                        <div class="expert-workload-legend" aria-label="Workload color guide">
+                            <span class="is-light"><i aria-hidden="true"></i>0–2 light</span>
+                            <span class="is-moderate"><i aria-hidden="true"></i>3–5 moderate</span>
+                            <span class="is-high"><i aria-hidden="true"></i>6+ high</span>
+                        </div>
                     </div>
+
+                    <?php if ($experts->num_rows > 0): ?>
+                        <div class="expert-selection-table-wrap">
+                            <table class="expert-selection-table" aria-label="Available experts and their current workloads">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Expert</th>
+                                        <th scope="col">Role</th>
+                                        <th scope="col">Active Tasks</th>
+                                        <th scope="col">Capacity</th>
+                                        <th scope="col" class="text-center">Select</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                <?php
+                                    $experts->data_seek(0);
+                                    $expertPosition = 0;
+                                    while ($expert = $experts->fetch_assoc()):
+                                        $activeTaskCount = (int) ($expert['assigned_tasks'] ?? 0);
+                                        $workload = sulTaskAllocationWorkload($activeTaskCount);
+                                        $expertName = (string) ($expert['full_name'] ?? 'Expert');
+                                        $expertRole = trim((string) ($expert['designation'] ?? ''));
+                                        $expertRole = $expertRole !== '' ? $expertRole : 'Expert';
+                                        $profileUrl = sulTaskAllocationProfileUrl($expert['profile_pic'] ?? null);
+                                        $isRecommended = $expertPosition === 0;
+                                ?>
+                                    <tr
+                                        class="expert-choice-row"
+                                        tabindex="0"
+                                        role="radio"
+                                        aria-checked="false"
+                                        data-expert-choice
+                                        data-expert-name="<?php echo htmlspecialchars($expertName, ENT_QUOTES, 'UTF-8'); ?>"
+                                    >
+                                        <td>
+                                            <span class="expert-identity">
+                                                <span class="expert-avatar">
+                                                    <span><?php echo htmlspecialchars(sulTaskAllocationInitials($expertName)); ?></span>
+                                                    <?php if ($profileUrl !== ''): ?>
+                                                        <img src="<?php echo htmlspecialchars($profileUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="" loading="lazy">
+                                                    <?php endif; ?>
+                                                </span>
+                                                <span>
+                                                    <span class="expert-name"><?php echo htmlspecialchars($expertName); ?></span>
+                                                    <?php if ($isRecommended): ?>
+                                                        <span class="expert-recommended"><i class="fas fa-star me-1" aria-hidden="true"></i>Lightest workload</span>
+                                                    <?php endif; ?>
+                                                </span>
+                                            </span>
+                                        </td>
+                                        <td><span class="expert-role"><?php echo htmlspecialchars($expertRole); ?></span></td>
+                                        <td>
+                                            <span class="expert-active-count is-<?php echo htmlspecialchars($workload['key']); ?>">
+                                                <i class="fas fa-list-check" aria-hidden="true"></i>
+                                                <?php echo $activeTaskCount; ?> active
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="expert-workload is-<?php echo htmlspecialchars($workload['key']); ?>">
+                                                <?php echo htmlspecialchars($workload['label']); ?>
+                                            </span>
+                                        </td>
+                                        <td class="text-center">
+                                            <input
+                                                class="visually-hidden expert-choice-input"
+                                                type="radio"
+                                                name="expert_id"
+                                                value="<?php echo (int) $expert['id']; ?>"
+                                                required
+                                                tabindex="-1"
+                                            >
+                                            <span class="expert-select-indicator" aria-hidden="true"><i class="fas fa-check"></i></span>
+                                        </td>
+                                    </tr>
+                                <?php
+                                        $expertPosition++;
+                                    endwhile;
+                                ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="expert-assignment-note">
+                            <i class="fas fa-circle-info" aria-hidden="true"></i>
+                            The selected expert will prepare the minimum, likely, and maximum day estimates.
+                        </div>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="fas fa-user-slash"></i>
+                            <p>No active experts are available in this department.</p>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 <div class="modal-footer">
+                    <span class="expert-selection-summary" id="expertSelectionSummary">
+                        <?php echo $experts->num_rows > 0 ? 'No expert selected' : 'No experts available'; ?>
+                    </span>
                     <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn-primary-modern">Assign to Expert</button>
+                    <button type="submit" class="btn-primary-modern" id="confirmExpertAssignment" disabled>
+                        <i class="fas fa-user-check" aria-hidden="true"></i> Assign to Expert
+                    </button>
                 </div>
             </form>
         </div>
@@ -3784,9 +4504,61 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
+const expertChoiceRows = Array.from(document.querySelectorAll('[data-expert-choice]'));
+const confirmExpertAssignment = document.getElementById('confirmExpertAssignment');
+const expertSelectionSummary = document.getElementById('expertSelectionSummary');
+
+function clearExpertChoice() {
+    expertChoiceRows.forEach(row => {
+        row.classList.remove('is-selected');
+        row.setAttribute('aria-checked', 'false');
+        const input = row.querySelector('.expert-choice-input');
+        if (input) input.checked = false;
+    });
+
+    if (confirmExpertAssignment) confirmExpertAssignment.disabled = true;
+    if (expertSelectionSummary && expertChoiceRows.length > 0) {
+        expertSelectionSummary.textContent = 'No expert selected';
+    }
+}
+
+function selectExpertChoice(row) {
+    const input = row?.querySelector('.expert-choice-input');
+    if (!input) return;
+
+    expertChoiceRows.forEach(otherRow => {
+        const isSelected = otherRow === row;
+        otherRow.classList.toggle('is-selected', isSelected);
+        otherRow.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+        const otherInput = otherRow.querySelector('.expert-choice-input');
+        if (otherInput) otherInput.checked = isSelected;
+    });
+
+    if (confirmExpertAssignment) confirmExpertAssignment.disabled = false;
+    if (expertSelectionSummary) {
+        expertSelectionSummary.replaceChildren(
+            document.createTextNode('Selected: '),
+            Object.assign(document.createElement('strong'), {
+                textContent: row.dataset.expertName || 'Expert'
+            })
+        );
+    }
+}
+
+expertChoiceRows.forEach(row => {
+    row.addEventListener('click', () => selectExpertChoice(row));
+    row.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            selectExpertChoice(row);
+        }
+    });
+});
+
 function openAssignExpertModal(taskId, taskTitle) {
     document.getElementById('expertTaskId').value = taskId;
     document.getElementById('expertTaskTitle').textContent = taskTitle;
+    clearExpertChoice();
     new bootstrap.Modal(document.getElementById('assignExpertModal')).show();
 }
 
