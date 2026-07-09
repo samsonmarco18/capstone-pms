@@ -183,42 +183,64 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
     return implode("\n", $lines) . "\n";
 }
 
+function backupZipDosTimestamp(int $timestamp): array
+{
+    $parts = getdate($timestamp);
+    $year = max(1980, (int) $parts['year']);
+
+    return [
+        (($parts['hours'] & 0x1F) << 11) | (($parts['minutes'] & 0x3F) << 5) | ((int) ($parts['seconds'] / 2) & 0x1F),
+        (($year - 1980) << 9) | (($parts['mon'] & 0x0F) << 5) | ($parts['mday'] & 0x1F),
+    ];
+}
+
+function backupBuildZipArchive(array $entries): string
+{
+    $localData = '';
+    $centralDirectory = '';
+    [$dosTime, $dosDate] = backupZipDosTimestamp(time());
+
+    foreach ($entries as $entryName => $contents) {
+        $entryName = str_replace('\\', '/', (string) $entryName);
+        $contents = (string) $contents;
+        $offset = strlen($localData);
+        $size = strlen($contents);
+        $crc = (int) sprintf('%u', crc32($contents));
+
+        $localData .= pack('VvvvvvVVVvv', 0x04034b50, 20, 0, 0, $dosTime, $dosDate, $crc, $size, $size, strlen($entryName), 0)
+            . $entryName
+            . $contents;
+
+        $centralDirectory .= pack('VvvvvvvVVVvvvvvVV', 0x02014b50, 20, 20, 0, 0, $dosTime, $dosDate, $crc, $size, $size, strlen($entryName), 0, 0, 0, 0, 0, $offset)
+            . $entryName;
+    }
+
+    return $localData
+        . $centralDirectory
+        . pack('VvvvvVVv', 0x06054b50, 0, 0, count($entries), count($entries), strlen($centralDirectory), strlen($localData), 0);
+}
+
 function backupSendDualFormatDownload(mysqli|PgsqlMysqliCompatConnection $conn, array $user): void
 {
-    if (!class_exists('ZipArchive')) {
-        $_SESSION['error'] = 'Backup failed because the PHP zip extension is not enabled.';
-        $_SESSION['settings_active_tab'] = 'maintenance';
-        header('Location: settings.php');
-        exit();
-    }
-
     $timestamp = date('Y-m-d_H-i-s');
     $baseName = 'erni_pms_backup_' . $timestamp;
-    $zipPath = tempnam(sys_get_temp_dir(), 'erni_pms_backup_');
-    if ($zipPath === false) {
-        throw new RuntimeException('Unable to create a temporary backup file.');
-    }
-
-    $zip = new ZipArchive();
-    if ($zip->open($zipPath, ZipArchive::OVERWRITE) !== true) {
-        throw new RuntimeException('Unable to open the backup archive.');
-    }
-
-    $zip->addFromString($baseName . '_mysql_data.sql', backupBuildDataDump($conn, 'mysql'));
-    $zip->addFromString($baseName . '_postgresql_data.sql', backupBuildDataDump($conn, 'pgsql'));
+    $entries = [
+        $baseName . '_mysql_data.sql' => backupBuildDataDump($conn, 'mysql'),
+        $baseName . '_postgresql_data.sql' => backupBuildDataDump($conn, 'pgsql'),
+    ];
 
     $mysqlSchema = realpath(__DIR__ . '/../../database.sql');
     if ($mysqlSchema !== false && is_file($mysqlSchema)) {
-        $zip->addFile($mysqlSchema, 'schema_mysql_database.sql');
+        $entries['schema_mysql_database.sql'] = (string) file_get_contents($mysqlSchema);
     }
 
     $postgresSchema = realpath(__DIR__ . '/../../database.postgres.sql');
     if ($postgresSchema !== false && is_file($postgresSchema)) {
-        $zip->addFile($postgresSchema, 'schema_postgresql_database.sql');
+        $entries['schema_postgresql_database.sql'] = (string) file_get_contents($postgresSchema);
     }
 
-    $zip->addFromString('README.txt', "This archive contains live ERNI PMS database data in both MySQL and PostgreSQL INSERT formats.\nSchema files are included when available from the project root.\nGenerated at {$timestamp} from source driver " . DB_DRIVER . ".\n");
-    $zip->close();
+    $entries['README.txt'] = "This archive contains live ERNI PMS database data in both MySQL and PostgreSQL INSERT formats.\nSchema files are included when available from the project root.\nGenerated at {$timestamp} from source driver " . DB_DRIVER . ".\n";
+    $archive = backupBuildZipArchive($entries);
 
     logActivity((int) $user['id'], 'database_backup_download', 'system', 0, null, [
         'formats' => ['mysql', 'postgresql'],
@@ -231,10 +253,9 @@ function backupSendDualFormatDownload(mysqli|PgsqlMysqliCompatConnection $conn, 
 
     header('Content-Type: application/zip');
     header('Content-Disposition: attachment; filename="' . $baseName . '.zip"');
-    header('Content-Length: ' . filesize($zipPath));
+    header('Content-Length: ' . strlen($archive));
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-    readfile($zipPath);
-    @unlink($zipPath);
+    echo $archive;
     exit();
 }
 
