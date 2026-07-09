@@ -96,8 +96,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    if ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || !$hasRequiredDocuments || !(bool) ($methodologyCompletion['is_complete'] ?? false)) {
-        $_SESSION['error'] = 'Please complete every architect step, schedule every feature in the methodology roadmap, and upload the Architecture Plan plus Workflow Diagram before submitting to SUL.';
+    if (!$hasRequiredDocuments) {
+        $_SESSION['error'] = 'Upload the required Architecture Plan and Workflow Diagram before submitting to SUL.';
+        header('Location: upload-diagram.php?id=' . $projectId);
+        exit();
+    }
+
+    if ($featureCount <= 0 || $techRecommendationCount <= 0 || $allocationCount <= 0 || !(bool) ($methodologyCompletion['is_complete'] ?? false)) {
+        $_SESSION['error'] = 'Please complete every architect step and schedule every feature in the methodology roadmap before submitting to SUL.';
         header('Location: summary.php?id=' . $projectId);
         exit();
     }

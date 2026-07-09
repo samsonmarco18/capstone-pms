@@ -1585,13 +1585,13 @@ body,
 
 <div class="container-fluid px-4 py-4">
     <div class="insights-hero">
-        <span class="badge-tone info mb-3">Decision-Driven Insights Center</span>
+        <span class="badge-tone info mb-3">Project Insights</span>
         <h1><?php echo htmlspecialchars($currentView === 'statistics' ? $projectTitle : 'Project Insights Overview'); ?></h1>
         <p>
             <?php if ($currentView === 'statistics'): ?>
                 <?php echo htmlspecialchars(getRoleDisplayName($userRole)); ?> lens: <?php echo htmlspecialchars($roleProfile['hero_summary']); ?>
             <?php else: ?>
-                Browse project overview cards first, then open the full statistics only when you need the deeper analysis for one project.
+                Project activity is monitored continuously. Open a project to review the latest generated insights and response signals.
             <?php endif; ?>
         </p>
         <div class="project-meta">
@@ -1612,32 +1612,9 @@ body,
 
     <?php if ($currentView === 'statistics'): ?>
     <div class="insight-toolbar">
-        <div class="dropdown toolbar-dropdown">
-            <button class="toolbar-button dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                <i class="fas fa-bolt"></i>
-                Actions
-            </button>
-            <div class="dropdown-menu toolbar-menu">
-                <a class="dropdown-item" href="<?php echo htmlspecialchars($overviewUrl); ?>">
-                    Current Overview
-                </a>
-                <?php foreach ($actionCatalog as $actionKey => $actionItem): ?>
-                    <button
-                        type="button"
-                        class="dropdown-item open-action-modal"
-                        data-project-id="<?php echo (int) $selectedProjectId; ?>"
-                        data-project-name="<?php echo htmlspecialchars($projectTitle); ?>"
-                        data-scenario="<?php echo htmlspecialchars($actionKey); ?>"
-                        data-label="<?php echo htmlspecialchars($actionItem['label']); ?>"
-                        data-default-value="<?php echo htmlspecialchars((string) $actionItem['default_value']); ?>"
-                        data-min="<?php echo htmlspecialchars((string) $actionItem['min']); ?>"
-                        data-max="<?php echo htmlspecialchars((string) $actionItem['max']); ?>"
-                        data-unit="<?php echo htmlspecialchars($actionItem['unit_label']); ?>"
-                    >
-                        <?php echo htmlspecialchars($actionItem['label']); ?>
-                    </button>
-                <?php endforeach; ?>
-            </div>
+        <div class="toolbar-button" aria-live="polite">
+            <i class="fas fa-arrows-rotate"></i>
+            Auto-refreshing from project activity
         </div>
 
         <?php if ($currentView === 'statistics'): ?>
@@ -2310,21 +2287,10 @@ body,
                             <i class="fas fa-chart-bar"></i>
                             View Overall Statistics
                         </a>
-                        <button
-                            type="button"
-                            class="toolbar-button open-action-modal"
-                            data-project-id="<?php echo $projectId; ?>"
-                            data-project-name="<?php echo htmlspecialchars($project['name']); ?>"
-                            data-scenario=""
-                            data-label=""
-                            data-default-value=""
-                            data-min=""
-                            data-max=""
-                            data-unit=""
-                        >
-                            <i class="fas fa-bolt"></i>
-                            Actions
-                        </button>
+                        <a class="toolbar-button" href="<?php echo htmlspecialchars($projectStatsUrl); ?>">
+                            <i class="fas fa-arrows-rotate"></i>
+                            Live Insights
+                        </a>
                     </div>
                 </div>
             </details>

@@ -116,6 +116,22 @@ body {
     white-space: nowrap;
 }
 
+#sidebar-wrapper .sidebar-attention-badge {
+    align-items: center;
+    background: #f97316;
+    border-radius: 999px;
+    color: #fff;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 0.7rem;
+    font-weight: 800;
+    height: 1.15rem;
+    justify-content: center;
+    line-height: 1;
+    margin-left: auto;
+    width: 1.15rem;
+}
+
 #sidebar-wrapper .sidebar-heading {
     padding: 1.25rem;
     font-size: 1.1rem;

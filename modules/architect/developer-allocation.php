@@ -850,7 +850,7 @@ a.progress-step:hover {
                         
                         <div class="mt-4 text-end">
                             <button type="submit" class="btn-primary-modern">
-                                <i class="fas fa-arrow-right"></i> Proceed to Upload Diagrams
+                                <i class="fas fa-arrow-right"></i> Proceed to Roadmap
                             </button>
                         </div>
                     </form>

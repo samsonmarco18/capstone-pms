@@ -761,6 +761,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $postedDepartmentCounts = [];
             }
 
+            $selectedFeatureCount = $bulkPlaceFeatures ? max(1, count($bulkWorkflowTaskIds)) : 1;
             foreach (array_unique($selectedDepartmentValues) as $selectedDepartment) {
                 $department = projectWorkflowDepartmentLabel((string) $selectedDepartment);
                 if (!array_key_exists($department, $postedDepartmentAllocations)) {
@@ -769,10 +770,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit();
                 }
 
-                $availableCount = max(0, (int) $postedDepartmentAllocations[$department]);
+                $usedByOtherTasks = 0;
+                $usageStmt = $conn->prepare("
+                    SELECT COALESCE(SUM(mtd.required_count), 0) AS used_count
+                    FROM methodology_task_departments mtd
+                    WHERE mtd.project_id = ?
+                      AND mtd.department = ?
+                      AND mtd.methodology_task_id <> ?
+                ");
+                if ($usageStmt) {
+                    $usageStmt->bind_param('isi', $postedProjectId, $department, $taskId);
+                    $usageStmt->execute();
+                    $usedByOtherTasks = max(0, (int) ($usageStmt->get_result()->fetch_assoc()['used_count'] ?? 0));
+                    $usageStmt->close();
+                }
+                $availableCount = max(0, (int) $postedDepartmentAllocations[$department] - $usedByOtherTasks);
                 $requiredCount = max(0, (int) ($postedDepartmentCounts[$department] ?? 0));
-                if ($availableCount <= 0 || $requiredCount < 1 || $requiredCount > $availableCount) {
-                    $_SESSION['error'] = $department . ' task headcount must be between 1 and its Developer Allocation limit of ' . $availableCount . '.';
+                $totalRequiredForSave = $requiredCount * $selectedFeatureCount;
+                if ($availableCount <= 0 || $requiredCount < 1 || $totalRequiredForSave > $availableCount) {
+                    $_SESSION['error'] = $department . ' task headcount must be between 1 and its remaining Developer Allocation limit of ' . $availableCount . '.';
                     header('Location: methodology.php?project_id=' . $postedProjectId);
                     exit();
                 }
@@ -1232,6 +1248,21 @@ $timelineTotalDays = max(1, ((int) $timelineStart->diff($timelineEnd)->format('%
 $phaseCount = count($phases);
 $taskCount = count($allTasks);
 $expertPeopleTotal = array_sum(array_map(static fn(array $task): int => (int) ($task['expert_people_count'] ?? 0), $allTasks));
+$finalPhaseId = $phases !== [] ? (int) array_key_last($phases) : 0;
+$departmentUsedCounts = [];
+foreach ($allTasks as $task) {
+    foreach (($task['department_requirements'] ?? []) as $requirement) {
+        $department = projectWorkflowDepartmentLabel((string) ($requirement['department'] ?? ''));
+        if ($department === '') {
+            continue;
+        }
+        $departmentUsedCounts[$department] = ($departmentUsedCounts[$department] ?? 0) + max(0, (int) ($requirement['required_count'] ?? 0));
+    }
+}
+$projectDepartmentRemainingAllocations = [];
+foreach ($projectDepartmentAllocations as $department => $capacity) {
+    $projectDepartmentRemainingAllocations[$department] = max(0, (int) $capacity - (int) ($departmentUsedCounts[$department] ?? 0));
+}
 $phaseDateRanges = [];
 $phaseHeadcountUsage = [];
 foreach ($phases as $phaseId => $phase) {
@@ -2785,16 +2816,12 @@ include '../../includes/navbar.php';
                             ? roadmapMonitoringPhaseIndicator($phase, true)
                             : roadmapPhaseIndicator((string) ($phase['status'] ?? 'planned'));
                         $phaseHasHeadcount = (int) ($phase['developer_count'] ?? 0) > 0;
-                        $phaseDepartmentTaskCount = count(array_filter(
-                            (array) ($phase['tasks'] ?? []),
-                            static fn(array $task): bool => !empty($task['is_sul_department_task'])
-                        ));
                     ?>
                     <div
                         class="roadmap-card phase-card-roadmap phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?> <?php echo $canEditArchitecture ? ($phaseHasHeadcount ? '' : 'is-headcount-pending') : 'is-readonly'; ?>"
                         data-phase='<?php echo htmlspecialchars(json_encode($phase, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>'
-                        <?php echo ($canEditArchitecture && !$phaseHasHeadcount) ? 'title="Set a positive headcount in Edit Phase to enable task assignment"' : ''; ?>
-                        onclick="<?php echo ($canEditArchitecture && $phaseHasHeadcount) ? 'openTaskModalForPhase(this)' : ''; ?>"
+                        <?php echo ($canEditArchitecture && !$phaseHasHeadcount && !$isFinalPhase) ? 'title="Set a positive headcount in Edit Phase to enable task assignment"' : ''; ?>
+                        onclick="<?php echo ($canEditArchitecture && $phaseHasHeadcount && !$isFinalPhase) ? 'openTaskModalForPhase(this)' : ''; ?>"
                     >
                         <div class="d-flex align-items-start justify-content-between gap-2">
                             <h5><?php echo htmlspecialchars((string) $phase['name']); ?></h5>
@@ -2810,11 +2837,7 @@ include '../../includes/navbar.php';
                                 <strong>Headcount:</strong>
                                 <?php echo (int) $phase['developer_count']; ?> <?php echo (int) $phase['developer_count'] === 1 ? 'developer' : 'developers'; ?>
                             </span>
-                            <span>
-                                <i class="fas fa-list-check"></i>
-                                <?php echo $isSulMonitoring ? $phaseDepartmentTaskCount : count($phase['tasks'] ?? []); ?>
-                                <?php echo $isSulMonitoring ? 'department tasks' : 'tasks'; ?>
-                            </span>
+                            <span><i class="fas fa-list-check"></i> <?php echo count($phase['tasks'] ?? []); ?> tasks</span>
                             <?php if ($canEditArchitecture && !$phaseHasHeadcount): ?>
                                 <span class="phase-headcount-required-label">
                                     <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
@@ -2823,7 +2846,7 @@ include '../../includes/navbar.php';
                             <?php endif; ?>
                         </div>
                         <div class="mt-3 d-flex flex-wrap gap-2">
-                            <?php if ($canEditArchitecture): ?>
+                            <?php if ($canEditArchitecture && !$isFinalPhase): ?>
                                 <button class="btn btn-outline-primary btn-sm" type="button" title="Edit phase details and headcount" aria-label="Edit <?php echo htmlspecialchars((string) $phase['name']); ?> phase" onclick="event.stopPropagation(); openPhaseModal(this.closest('.phase-card-roadmap'));">
                                     <i class="fas fa-pen me-1" aria-hidden="true"></i> Edit Phase
                                 </button>
@@ -2841,21 +2864,6 @@ include '../../includes/navbar.php';
                                     <?php endif; ?>
                                 >
                                     <i class="fas fa-plus me-1" aria-hidden="true"></i> Add Task
-                                </button>
-                                <button
-                                    class="btn btn-outline-primary btn-sm"
-                                    type="button"
-                                    <?php if ($phaseHasHeadcount): ?>
-                                        onclick="event.stopPropagation(); openBulkTaskModalForPhase(this.closest('.phase-card-roadmap'));"
-                                        title="Bulk place roadmap tasks"
-                                    <?php else: ?>
-                                        disabled
-                                        aria-disabled="true"
-                                        aria-label="Bulk disabled. Set a positive phase headcount in Edit Phase first."
-                                        title="Set a positive headcount in Edit Phase to enable Bulk"
-                                    <?php endif; ?>
-                                >
-                                    <i class="fas fa-layer-group me-1"></i> Bulk
                                 </button>
                             <?php endif; ?>
                         </div>
@@ -2901,7 +2909,7 @@ include '../../includes/navbar.php';
                                     Headcount required before adding tasks
                                 </span>
                             <?php else: ?>
-                                <span class="gantt-label-sub">Planned headcount: <?php echo (int) $phase['developer_count']; ?> <?php echo (int) $phase['developer_count'] === 1 ? 'developer' : 'developers'; ?></span>
+                                <span class="gantt-label-sub"><?php echo (int) ($phase['id'] ?? 0) === $finalPhaseId ? 'Automatically tracked from Architect merge to main' : 'Planned headcount: ' . (int) $phase['developer_count'] . ((int) $phase['developer_count'] === 1 ? ' developer' : ' developers'); ?></span>
                             <?php endif; ?>
                         </div>
                         <div class="gantt-track">
@@ -2912,7 +2920,7 @@ include '../../includes/navbar.php';
                                 aria-label="<?php echo htmlspecialchars((string) $phase['name'] . ': ' . ($canEditArchitecture && !$phaseHasHeadcount ? 'Task assignment disabled until phase headcount is set' : $phaseIndicator['label'])); ?>"
                                 <?php echo ($canEditArchitecture && !$phaseHasHeadcount) ? 'aria-disabled="true"' : ''; ?>
                                 data-phase='<?php echo htmlspecialchars(json_encode($phase, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>'
-                                onclick="<?php echo ($canEditArchitecture && $phaseHasHeadcount) ? 'openTaskModalFromBar(this)' : ''; ?>"
+                                onclick="<?php echo ($canEditArchitecture && $phaseHasHeadcount && (int) ($phase['id'] ?? 0) !== $finalPhaseId) ? 'openTaskModalFromBar(this)' : ''; ?>"
                             >
                                 <?php echo htmlspecialchars((string) $phase['name']); ?>
                             </div>
@@ -3009,6 +3017,16 @@ include '../../includes/navbar.php';
                         <?php if ($isSulMonitoring && count($allTasks) > 0): ?>
                             <tr id="monitoringFilterEmpty" hidden>
                                 <td colspan="5" class="text-center text-muted py-4">No roadmap tasks match the selected monitoring filters.</td>
+                            </tr>
+                        <?php endif; ?>
+                        <?php if ($finalPhaseId > 0 && isset($phases[$finalPhaseId])): ?>
+                            <?php $finalPhase = $phases[$finalPhaseId]; ?>
+                            <tr class="roadmap-task-row">
+                                <td><?php echo htmlspecialchars((string) ($finalPhase['name'] ?? 'Final Phase')); ?></td>
+                                <td><strong>Merge to Main Tracking</strong><div class="small text-muted">Automatically updated when Architect merges QA-passed features.</div></td>
+                                <td><span class="text-muted">No manual staffing</span></td>
+                                <td><?php echo htmlspecialchars((string) ($finalPhase['start_date'] ?? '')); ?> to <?php echo htmlspecialchars((string) ($finalPhase['end_date'] ?? '')); ?></td>
+                                <td><span class="status-pill status-<?php echo htmlspecialchars((string) ($finalPhase['status'] ?? 'planned')); ?>"><?php echo htmlspecialchars(projectWorkflowPhaseStatusLabel((string) ($finalPhase['status'] ?? 'planned'))); ?></span></td>
                             </tr>
                         <?php endif; ?>
                         <?php foreach ($allTasks as $task): ?>
@@ -3124,11 +3142,11 @@ include '../../includes/navbar.php';
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">Start Date</label>
-                        <input type="date" class="form-control" name="phase_start" id="phaseStart" readonly required>
+                        <input type="date" class="form-control" name="phase_start" id="phaseStart" required>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">End Date</label>
-                        <input type="date" class="form-control" name="phase_end" id="phaseEnd" readonly required>
+                        <input type="date" class="form-control" name="phase_end" id="phaseEnd" required>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Planned Headcount</label>
@@ -3230,12 +3248,7 @@ include '../../includes/navbar.php';
                                     Allow this feature again in the same phase for another department
                                 </label>
                             </div>
-                            <div class="form-check mt-2">
-                                <input class="form-check-input" type="checkbox" name="bulk_place_features" value="1" id="bulkPlaceFeatures">
-                                <label class="form-check-label" for="bulkPlaceFeatures">
-                                    Bulk place multiple features with the same departments and timeline
-                                </label>
-                            </div>
+                            <input type="hidden" name="bulk_place_features" value="0" id="bulkPlaceFeatures">
                             <div class="mt-2 d-none" id="bulkFeaturePickerWrap">
                                 <div class="d-flex align-items-center justify-content-between gap-2">
                                     <span class="form-label small mb-1" id="bulkFeaturePickerLabel">Features to place</span>
@@ -3274,6 +3287,7 @@ include '../../includes/navbar.php';
                         <?php if ($projectDepartmentAllocations !== []): ?>
                             <div class="department-requirement-grid" id="taskDepartmentRequirements">
                                 <?php foreach ($projectDepartmentAllocations as $department => $capacity): ?>
+                                    <?php $remainingCapacity = (int) ($projectDepartmentRemainingAllocations[$department] ?? 0); ?>
                                     <?php $fieldId = 'taskDepartment' . substr(sha1($department), 0, 10); ?>
                                     <div class="department-requirement-item">
                                         <div class="form-check">
@@ -3285,12 +3299,13 @@ include '../../includes/navbar.php';
                                                 id="<?php echo htmlspecialchars($fieldId); ?>"
                                                 data-department="<?php echo htmlspecialchars($department); ?>"
                                                 data-capacity="<?php echo (int) $capacity; ?>"
-                                                <?php echo (!$canEditArchitecture || $capacity <= 0) ? 'disabled' : ''; ?>
+                                                data-remaining="<?php echo (int) $remainingCapacity; ?>"
+                                                <?php echo (!$canEditArchitecture || $remainingCapacity <= 0) ? 'disabled' : ''; ?>
                                             >
                                             <label class="form-check-label" for="<?php echo htmlspecialchars($fieldId); ?>">
                                                 <?php echo htmlspecialchars($department); ?>
                                                 <span class="department-limit">
-                                                    <?php echo $capacity > 0 ? 'Up to ' . (int) $capacity . ' people' : 'No allocated headcount'; ?>
+                                                    <?php echo $remainingCapacity > 0 ? 'Up to ' . (int) $remainingCapacity . ' people' : 'No remaining headcount'; ?>
                                                 </span>
                                             </label>
                                         </div>
@@ -3299,7 +3314,7 @@ include '../../includes/navbar.php';
                                             class="form-control department-requirement-count"
                                             name="task_department_counts[<?php echo htmlspecialchars($department); ?>]"
                                             min="1"
-                                            max="<?php echo (int) $capacity; ?>"
+                                            max="<?php echo (int) $remainingCapacity; ?>"
                                             value="1"
                                             aria-label="<?php echo htmlspecialchars($department); ?> headcount"
                                             disabled
@@ -3314,11 +3329,11 @@ include '../../includes/navbar.php';
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Start Date</label>
-                        <input type="date" class="form-control" name="task_start" id="taskStart" readonly <?php echo !$canEditArchitecture ? 'readonly' : 'required'; ?>>
+                        <input type="date" class="form-control" name="task_start" id="taskStart" <?php echo !$canEditArchitecture ? 'readonly' : 'required'; ?>>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">End Date</label>
-                        <input type="date" class="form-control" name="task_end" id="taskEnd" readonly <?php echo !$canEditArchitecture ? 'readonly' : 'required'; ?>>
+                        <input type="date" class="form-control" name="task_end" id="taskEnd" <?php echo !$canEditArchitecture ? 'readonly' : 'required'; ?>>
                     </div>
                     <div class="col-md-12">
                         <div class="alert alert-light border mb-0 small">
@@ -3539,15 +3554,17 @@ function syncPhaseHeadcountLimit(currentPhaseId = '') {
     }
 }
 
-function syncTaskDateLimits() {
+function syncTaskDateLimits(forceDefaults = false) {
     const phaseId = String(document.getElementById('taskPhaseId')?.value || '');
     const range = phaseDateRanges[phaseId] || {};
     const startInput = document.getElementById('taskStart');
     const endInput = document.getElementById('taskEnd');
     if (!startInput || !endInput) return;
 
-    if (canEditArchitecture) {
+    if (canEditArchitecture && (forceDefaults || !startInput.value)) {
         startInput.value = range.start || '';
+    }
+    if (canEditArchitecture && (forceDefaults || !endInput.value)) {
         endInput.value = range.end || '';
     }
     startInput.min = range.start || '';
@@ -3616,12 +3633,12 @@ function validateTaskEditor() {
     }
 
     for (const toggle of selectedDepartments) {
-        const capacity = Number(toggle.dataset.capacity || 0);
+        const capacity = Number(toggle.dataset.available || toggle.dataset.remaining || toggle.dataset.capacity || 0);
         const countInput = toggle.closest('.department-requirement-item')?.querySelector('.department-requirement-count');
         const count = Number(countInput?.value || 0);
         if (count < 1 || count > capacity) {
             return {
-                message: `${toggle.dataset.department || 'Department'} task headcount must be between 1 and its Developer Allocation limit of ${capacity}.`,
+                message: `${toggle.dataset.department || 'Department'} task headcount must be between 1 and its remaining Developer Allocation limit of ${capacity}.`,
                 fields: countInput?.id ? [countInput.id] : ['taskDepartmentRequirements']
             };
         }
@@ -3754,10 +3771,14 @@ function updateTaskDepartmentControl(toggle) {
     const countInput = toggle.closest('.department-requirement-item')?.querySelector('.department-requirement-count');
     if (!countInput) return;
 
-    const capacity = Number(toggle.dataset.capacity || 0);
+    const capacity = Number(toggle.dataset.available || toggle.dataset.remaining || toggle.dataset.capacity || 0);
+    countInput.max = String(capacity);
     countInput.disabled = !canEditArchitecture || !toggle.checked || capacity <= 0;
     if (toggle.checked && Number(countInput.value || 0) < 1) {
         countInput.value = 1;
+    }
+    if (toggle.checked && Number(countInput.value || 0) > capacity) {
+        countInput.value = capacity;
     }
 }
 
@@ -3773,6 +3794,14 @@ function setTaskDepartmentRequirements(requirements = []) {
         const department = String(toggle.dataset.department || '');
         const requiredCount = requirementMap.get(department);
         const countInput = toggle.closest('.department-requirement-item')?.querySelector('.department-requirement-count');
+        const remaining = Number(toggle.dataset.remaining || 0);
+        const availableForThisTask = remaining + (requirementMap.has(department) ? Number(requiredCount || 0) : 0);
+        toggle.dataset.available = String(availableForThisTask);
+        toggle.disabled = !canEditArchitecture || availableForThisTask <= 0;
+        const limit = toggle.closest('.department-requirement-item')?.querySelector('.department-limit');
+        if (limit) {
+            limit.textContent = availableForThisTask > 0 ? `Up to ${availableForThisTask} ${availableForThisTask === 1 ? 'person' : 'people'}` : 'No remaining headcount';
+        }
         toggle.checked = requirementMap.has(department);
         if (countInput) countInput.value = requiredCount || 1;
         updateTaskDepartmentControl(toggle);
@@ -3793,7 +3822,7 @@ taskForm?.addEventListener('submit', (event) => {
     stopInvalidEditorSubmit(event, 'task', validateTaskEditor());
 });
 
-document.getElementById('taskPhaseId')?.addEventListener('change', syncTaskDateLimits);
+document.getElementById('taskPhaseId')?.addEventListener('change', () => syncTaskDateLimits(true));
 bulkPlaceFeaturesInput?.addEventListener('change', syncBulkFeatureControls);
 bulkSelectAllFeatures?.addEventListener('click', () => {
     bulkWorkflowTaskInputs.forEach((input) => {
@@ -3874,7 +3903,7 @@ function openTaskModal(task) {
     setValue('taskStart', task.start_date || '');
     setValue('taskEnd', task.end_date || '');
     setValue('taskDescription', task.description || '');
-    syncTaskDateLimits();
+    syncTaskDateLimits(false);
     syncBulkFeatureControls();
 
     const isSavedTask = Number(task.id || 0) > 0;
