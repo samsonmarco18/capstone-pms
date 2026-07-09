@@ -1443,24 +1443,41 @@ function assignTask(userId, userName) {
     });
 }
 
-function selectTaskForUser(taskId, userId, taskTitle) {
-    if(confirm(`Assign "${taskTitle}" to this team member?`)) {
-        $.ajax({
-            url: '../../api/assign-task.php',
-            method: 'POST',
-            dataType: 'json',
-            data: { task_id: taskId, user_id: userId, send_email: true },
-            success: function(response) {
-                const result = response;
-                if(result.success) {
-                    alert('✓ Task assigned successfully');
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    alert('✗ Error: ' + result.error);
-                }
-            }
-        });
+async function selectTaskForUser(taskId, userId, taskTitle) {
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Assign Task',
+            titleIcon: 'fas fa-user-check',
+            subject: `Assign "${taskTitle}" to this team member?`,
+            message: 'The team member will receive this task and an email notification.',
+            icon: 'fas fa-list-check fa-lg',
+            confirmIcon: 'fas fa-check',
+            confirmText: 'Assign Task'
+        })
+        : false;
+
+    if (!confirmed) {
+        return;
     }
+
+    $.ajax({
+        url: '../../api/assign-task.php',
+        method: 'POST',
+        dataType: 'json',
+        data: { task_id: taskId, user_id: userId, send_email: true },
+        success: function(response) {
+            const result = response;
+            if(result.success) {
+                window.appToast?.('Task assigned', 'The task was assigned successfully.');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                window.appToast?.('Assignment failed', result.error || 'The task could not be assigned.', 'error');
+            }
+        },
+        error: function() {
+            window.appToast?.('Assignment failed', 'The server could not complete the assignment.', 'error');
+        }
+    });
 }
 
 function assignTaskTo(taskId) {
@@ -1483,7 +1500,7 @@ function confirmAssign() {
     const sendEmail = $('#sendEmail').is(':checked');
     
     if(!userId) {
-        alert('Please select a team member');
+        window.appToast?.('Team member required', 'Select a team member before assigning the task.', 'warning');
         return;
     }
     
@@ -1495,12 +1512,15 @@ function confirmAssign() {
         success: function(response) {
             const result = response;
             if(result.success) {
-                alert('✓ Task assigned successfully');
                 $('#assignTaskModal').modal('hide');
+                window.appToast?.('Task assigned', 'The task was assigned successfully.');
                 setTimeout(() => location.reload(), 1500);
             } else {
-                alert('✗ Error: ' + result.error);
+                window.appToast?.('Assignment failed', result.error || 'The task could not be assigned.', 'error');
             }
+        },
+        error: function() {
+            window.appToast?.('Assignment failed', 'The server could not complete the assignment.', 'error');
         }
     });
 }

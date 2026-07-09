@@ -1855,7 +1855,7 @@ body.dark-mode .release-download-btn {
                                                     <?php endif; ?>
                                                 </div>
                                             </div>
-                                            <form method="POST" onsubmit="return confirm('Remove this plan?');">
+                                            <form method="POST" class="delete-plan-form" data-plan-title="<?php echo htmlspecialchars((string) ($plan['title'] ?? 'Plan'), ENT_QUOTES, 'UTF-8'); ?>" data-generic-draft-disabled="true" data-confirm-skip="true">
                                                 <input type="hidden" name="plan_id" value="<?php echo (int) ($plan['id'] ?? 0); ?>">
                                                 <input type="hidden" name="calendar_month" value="<?php echo htmlspecialchars($calendarMonth); ?>">
                                                 <button type="submit" name="delete_plan" class="plan-delete" aria-label="Delete plan">
@@ -1881,6 +1881,36 @@ body.dark-mode .release-download-btn {
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+document.querySelectorAll('.delete-plan-form').forEach(function (form) {
+    form.addEventListener('submit', async function (event) {
+        if (form.dataset.confirmedSubmit === '1') {
+            delete form.dataset.confirmedSubmit;
+            return;
+        }
+
+        event.preventDefault();
+        const submitter = event.submitter || form.querySelector('button[name="delete_plan"]');
+        const planTitle = form.dataset.planTitle || 'this plan';
+        const confirmed = typeof window.appConfirm === 'function'
+            ? await window.appConfirm({
+                title: 'Remove Plan',
+                titleIcon: 'fas fa-calendar-xmark',
+                subject: `Remove "${planTitle}"?`,
+                message: 'This plan will be removed from the upcoming schedule.',
+                icon: 'fas fa-trash-can fa-lg',
+                confirmIcon: 'fas fa-trash',
+                confirmText: 'Remove Plan',
+                variant: 'danger'
+            })
+            : false;
+
+        if (confirmed) {
+            form.dataset.confirmedSubmit = '1';
+            form.requestSubmit(submitter);
+        }
+    });
+});
+
 // Project Trends Chart
 const trendsData = <?php 
     $months = [];

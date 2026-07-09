@@ -1348,7 +1348,7 @@ input:checked + .switch-slider:before {
                     <div class="form-group">
                         <label class="form-label">Database Backup</label>
                         <p class="form-text" style="margin-bottom: 1rem;">Create a full backup of the database. This may take a few moments.</p>
-                        <button type="submit" name="backup_database" class="btn-warning-modern w-100" onclick="return confirm('Create database backup? This may take a moment.')">
+                        <button type="submit" name="backup_database" class="btn-warning-modern w-100">
                             <i class="fas fa-database"></i> Create Backup
                         </button>
                     </div>

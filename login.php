@@ -811,6 +811,18 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
         </div>
     </div>
 
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1100;">
+        <div id="loginToast" class="toast align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="4000">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <strong id="loginToastTitle">Notice</strong><br>
+                    <span id="loginToastMessage"></span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
     <div class="login-loading-overlay" id="loginLoadingOverlay" aria-hidden="true">
         <div class="login-loading-content" role="status" aria-live="polite" aria-label="Signing in">
             <div class="spinner-border login-loading-spinner" role="presentation"></div>
@@ -824,6 +836,19 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
         const loginForm = document.getElementById('loginForm');
         const loginBtn = document.getElementById('loginBtn');
         const loginLoadingOverlay = document.getElementById('loginLoadingOverlay');
+
+        function showLoginToast(title, message, type = 'success') {
+            const toastElement = document.getElementById('loginToast');
+            const titleElement = document.getElementById('loginToastTitle');
+            const messageElement = document.getElementById('loginToastMessage');
+            const mappedType = type === 'error' ? 'danger' : type;
+
+            toastElement.classList.remove('bg-primary', 'bg-success', 'bg-danger', 'bg-warning', 'bg-info');
+            toastElement.classList.add(`bg-${mappedType}`);
+            titleElement.textContent = title;
+            messageElement.textContent = message;
+            bootstrap.Toast.getOrCreateInstance(toastElement).show();
+        }
 
         function showLoginLoading() {
             if (!loginLoadingOverlay) {
@@ -870,7 +895,8 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
             const email = document.getElementById('resetEmail').value;
             const button = document.getElementById('resetRequestBtn');
             if (!email) {
-                alert('Please enter your email address');
+                showLoginToast('Email required', 'Enter your email address to request a password reset.', 'warning');
+                document.getElementById('resetEmail').focus();
                 return;
             }
 
@@ -887,11 +913,15 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
                 });
 
                 const result = await response.json();
-                alert(result.message || 'If the account exists, your password reset request has been sent to the administrator.');
+                showLoginToast(
+                    result.success ? 'Request sent' : 'Request failed',
+                    result.message || 'If the account exists, your password reset request has been sent to the administrator.',
+                    result.success ? 'success' : 'error'
+                );
                 document.getElementById('resetEmail').value = '';
                 bootstrap.Modal.getInstance(document.getElementById('forgotPasswordModal')).hide();
             } catch (error) {
-                alert('Unable to send the request right now. Please try again in a moment.');
+                showLoginToast('Request failed', 'Unable to send the request right now. Please try again in a moment.', 'error');
             } finally {
                 button.disabled = false;
                 button.innerHTML = 'Send Request';

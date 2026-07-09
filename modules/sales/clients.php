@@ -3213,7 +3213,7 @@ function viewClient(id) {
         success: function(response) {
             const client = typeof response === 'string' ? JSON.parse(response) : response;
             if (client.error) {
-                alert(client.error);
+                window.appToast?.('Unable to load client', client.error, 'error');
                 return;
             }
             let html = `
@@ -3285,7 +3285,7 @@ function viewClient(id) {
             try {
                 message = JSON.parse(xhr.responseText).error || message;
             } catch (error) {}
-            alert(message);
+            window.appToast?.('Unable to load client', message, 'error');
         }
     });
 }

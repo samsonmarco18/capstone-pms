@@ -965,13 +965,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // Only prevent submission if checkbox is not checked
         if (!summaryReady) {
             e.preventDefault();
-            alert('Complete all required architect steps, including the methodology roadmap, before submitting.');
+            window.appToast?.('Summary not ready', 'Complete all required architect steps, including the methodology roadmap, before submitting.', 'warning');
             return false;
         }
 
         if (!confirmCheck.checked) {
             e.preventDefault();
-            alert('Please check the confirmation box before submitting.');
+            window.appToast?.('Confirmation required', 'Check the confirmation box before submitting.', 'warning');
             return false;
         }
     }

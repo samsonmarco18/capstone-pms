@@ -2086,7 +2086,7 @@ async function approveEstimation(taskId) {
     const estimateChoice = choiceInput?.value || '';
     const daysValue = parseInt(choiceInput?.dataset?.days || '0', 10);
     if (!estimateChoice || !daysValue || daysValue <= 0) {
-        alert('Please choose Minimum, Most Likely, or Maximum before approving.');
+        window.appToast?.('Select an estimate', 'Choose Minimum, Most Likely, or Maximum before approving.', 'warning');
         return;
     }
     const confirmed = await appConfirm({

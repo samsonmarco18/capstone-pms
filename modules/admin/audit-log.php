@@ -897,33 +897,47 @@ function formatJsonData(value) {
     }
 }
 
-function restoreItem(logId, tableName, recordId) {
-    if(confirm('Are you sure you want to restore this deleted item? This will recover all associated data.')) {
-        $.ajax({
-            url: '../../api/restore-item.php',
-            method: 'POST',
-            data: { 
-                log_id: logId,
-                table_name: tableName,
-                record_id: recordId
-            },
-            success: function(response) {
-                const result = typeof response === 'string' ? JSON.parse(response) : response;
-                if(result.success) {
-                    alert('✓ Item restored successfully');
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    alert('✗ Error: ' + result.error);
-                }
-            }
-        }).fail(function(xhr) {
-            let message = 'Restore failed';
-            try {
-                message = JSON.parse(xhr.responseText).error || message;
-            } catch (error) {}
-            alert('Error: ' + message);
-        });
+async function restoreItem(logId, tableName, recordId) {
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Restore Deleted Item',
+            titleIcon: 'fas fa-clock-rotate-left',
+            subject: 'Restore this deleted item?',
+            message: 'The item and its associated data will be recovered.',
+            icon: 'fas fa-trash-arrow-up fa-lg',
+            confirmIcon: 'fas fa-rotate-left',
+            confirmText: 'Restore Item'
+        })
+        : false;
+
+    if (!confirmed) {
+        return;
     }
+
+    $.ajax({
+        url: '../../api/restore-item.php',
+        method: 'POST',
+        data: {
+            log_id: logId,
+            table_name: tableName,
+            record_id: recordId
+        },
+        success: function(response) {
+            const result = typeof response === 'string' ? JSON.parse(response) : response;
+            if(result.success) {
+                window.appToast?.('Item restored', 'The deleted item was restored successfully.');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                window.appToast?.('Restore failed', result.error || 'The item could not be restored.', 'error');
+            }
+        }
+    }).fail(function(xhr) {
+        let message = 'Restore failed';
+        try {
+            message = JSON.parse(xhr.responseText).error || message;
+        } catch (error) {}
+        window.appToast?.('Restore failed', message, 'error');
+    });
 }
 
 function exportLogs() {

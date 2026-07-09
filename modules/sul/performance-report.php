@@ -1241,7 +1241,7 @@ renderPriorityChart(document.getElementById('priorityChart'), priorityData);
 function exportReport(tableId) {
     const table = document.getElementById(tableId);
     if (!table) {
-        alert('No report table is available to export.');
+        window.appToast?.('Export unavailable', 'No report table is available to export.', 'warning');
         return;
     }
     const html = `
@@ -1269,7 +1269,7 @@ function exportReport(tableId) {
 function printReport(tableId) {
     const table = document.getElementById(tableId);
     if (!table) {
-        alert('No report table is available to print.');
+        window.appToast?.('Print unavailable', 'No report table is available to print.', 'warning');
         return;
     }
     const printContent = table.outerHTML;
