@@ -35,6 +35,230 @@ function saveSettingValue($conn, string $key, string $value, string $description
     $stmt->close();
 }
 
+function backupSqlIdentifier(string $identifier, string $driver): string
+{
+    $identifier = preg_replace('/[^a-zA-Z0-9_]/', '', $identifier) ?? '';
+    return $driver === 'pgsql'
+        ? '"' . str_replace('"', '""', $identifier) . '"'
+        : '`' . str_replace('`', '``', $identifier) . '`';
+}
+
+function backupSqlValue(mixed $value, string $type, string $driver): string
+{
+    if ($value === null) {
+        return 'NULL';
+    }
+
+    $normalizedType = strtolower($type);
+    if (in_array($normalizedType, [
+        'int', 'integer', 'bigint', 'smallint', 'tinyint', 'mediumint',
+        'decimal', 'numeric', 'float', 'double', 'real',
+    ], true) && is_numeric($value)) {
+        return (string) $value;
+    }
+
+    if (in_array($normalizedType, ['boolean', 'bool'], true)) {
+        $truthy = in_array(strtolower((string) $value), ['1', 't', 'true', 'yes'], true);
+        return $driver === 'pgsql' ? ($truthy ? 'TRUE' : 'FALSE') : ($truthy ? '1' : '0');
+    }
+
+    $stringValue = (string) $value;
+    if ($driver === 'pgsql') {
+        return "'" . str_replace("'", "''", $stringValue) . "'";
+    }
+
+    return "'" . strtr($stringValue, [
+        "\\" => "\\\\",
+        "'" => "\\'",
+        "\0" => "\\0",
+        "\n" => "\\n",
+        "\r" => "\\r",
+        "\x1a" => "\\Z",
+    ]) . "'";
+}
+
+function backupFetchRows(mysqli|PgsqlMysqliCompatConnection $conn, string $sql): array
+{
+    $result = $conn->query($sql);
+    if ($result instanceof mysqli_result || $result instanceof PgsqlMysqliCompatResult) {
+        return $result->fetch_all(MYSQLI_ASSOC);
+    }
+
+    return [];
+}
+
+function backupGetTables(mysqli|PgsqlMysqliCompatConnection $conn): array
+{
+    $sql = DB_DRIVER === 'pgsql'
+        ? "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE' ORDER BY table_name"
+        : "SELECT TABLE_NAME AS table_name FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME";
+
+    return array_values(array_filter(array_map(
+        static fn(array $row): string => (string) ($row['table_name'] ?? ''),
+        backupFetchRows($conn, $sql)
+    )));
+}
+
+function backupGetColumns(mysqli|PgsqlMysqliCompatConnection $conn, string $table): array
+{
+    $escapedTable = $conn->real_escape_string($table);
+    $sql = DB_DRIVER === 'pgsql'
+        ? "SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = '{$escapedTable}' ORDER BY ordinal_position"
+        : "SELECT COLUMN_NAME AS column_name, DATA_TYPE AS data_type FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{$escapedTable}' ORDER BY ORDINAL_POSITION";
+
+    return backupFetchRows($conn, $sql);
+}
+
+function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $targetDriver): string
+{
+    $timestamp = date('Y-m-d H:i:s P');
+    $tables = backupGetTables($conn);
+    $lines = [
+        '-- ERNI PMS database data backup',
+        '-- Source driver: ' . DB_DRIVER,
+        '-- Target format: ' . ($targetDriver === 'pgsql' ? 'PostgreSQL' : 'MySQL'),
+        '-- Generated at: ' . $timestamp,
+        '',
+    ];
+
+    if ($targetDriver === 'pgsql') {
+        $lines[] = 'BEGIN;';
+        $lines[] = 'SET standard_conforming_strings = on;';
+    } else {
+        $lines[] = 'SET FOREIGN_KEY_CHECKS=0;';
+        $lines[] = 'START TRANSACTION;';
+    }
+    $lines[] = '';
+
+    foreach ($tables as $table) {
+        if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+            continue;
+        }
+
+        $columns = backupGetColumns($conn, $table);
+        if ($columns === []) {
+            continue;
+        }
+
+        $columnNames = array_map(static fn(array $column): string => (string) $column['column_name'], $columns);
+        $columnTypes = [];
+        foreach ($columns as $column) {
+            $columnTypes[(string) $column['column_name']] = (string) $column['data_type'];
+        }
+
+        $sourceTable = backupSqlIdentifier($table, DB_DRIVER);
+        $rows = backupFetchRows($conn, 'SELECT * FROM ' . $sourceTable);
+
+        $lines[] = '-- Table: ' . $table;
+        if ($rows === []) {
+            $lines[] = '-- No rows';
+            $lines[] = '';
+            continue;
+        }
+
+        $targetTable = backupSqlIdentifier($table, $targetDriver);
+        $targetColumns = implode(', ', array_map(
+            static fn(string $column): string => backupSqlIdentifier($column, $targetDriver),
+            $columnNames
+        ));
+
+        foreach ($rows as $row) {
+            $values = [];
+            foreach ($columnNames as $columnName) {
+                $values[] = backupSqlValue($row[$columnName] ?? null, $columnTypes[$columnName] ?? '', $targetDriver);
+            }
+
+            $lines[] = 'INSERT INTO ' . $targetTable . ' (' . $targetColumns . ') VALUES (' . implode(', ', $values) . ');';
+        }
+        $lines[] = '';
+    }
+
+    if ($targetDriver === 'pgsql') {
+        $lines[] = 'COMMIT;';
+    } else {
+        $lines[] = 'COMMIT;';
+        $lines[] = 'SET FOREIGN_KEY_CHECKS=1;';
+    }
+
+    return implode("\n", $lines) . "\n";
+}
+
+function backupZipDosTimestamp(int $timestamp): array
+{
+    $parts = getdate($timestamp);
+    $year = max(1980, (int) $parts['year']);
+
+    return [
+        (($parts['hours'] & 0x1F) << 11) | (($parts['minutes'] & 0x3F) << 5) | ((int) ($parts['seconds'] / 2) & 0x1F),
+        (($year - 1980) << 9) | (($parts['mon'] & 0x0F) << 5) | ($parts['mday'] & 0x1F),
+    ];
+}
+
+function backupBuildZipArchive(array $entries): string
+{
+    $localData = '';
+    $centralDirectory = '';
+    [$dosTime, $dosDate] = backupZipDosTimestamp(time());
+
+    foreach ($entries as $entryName => $contents) {
+        $entryName = str_replace('\\', '/', (string) $entryName);
+        $contents = (string) $contents;
+        $offset = strlen($localData);
+        $size = strlen($contents);
+        $crc = (int) sprintf('%u', crc32($contents));
+
+        $localData .= pack('VvvvvvVVVvv', 0x04034b50, 20, 0, 0, $dosTime, $dosDate, $crc, $size, $size, strlen($entryName), 0)
+            . $entryName
+            . $contents;
+
+        $centralDirectory .= pack('VvvvvvvVVVvvvvvVV', 0x02014b50, 20, 20, 0, 0, $dosTime, $dosDate, $crc, $size, $size, strlen($entryName), 0, 0, 0, 0, 0, $offset)
+            . $entryName;
+    }
+
+    return $localData
+        . $centralDirectory
+        . pack('VvvvvVVv', 0x06054b50, 0, 0, count($entries), count($entries), strlen($centralDirectory), strlen($localData), 0);
+}
+
+function backupSendDualFormatDownload(mysqli|PgsqlMysqliCompatConnection $conn, array $user): void
+{
+    $timestamp = date('Y-m-d_H-i-s');
+    $baseName = 'erni_pms_backup_' . $timestamp;
+    $entries = [
+        $baseName . '_mysql_data.sql' => backupBuildDataDump($conn, 'mysql'),
+        $baseName . '_postgresql_data.sql' => backupBuildDataDump($conn, 'pgsql'),
+    ];
+
+    $mysqlSchema = realpath(__DIR__ . '/../../database.sql');
+    if ($mysqlSchema !== false && is_file($mysqlSchema)) {
+        $entries['schema_mysql_database.sql'] = (string) file_get_contents($mysqlSchema);
+    }
+
+    $postgresSchema = realpath(__DIR__ . '/../../database.postgres.sql');
+    if ($postgresSchema !== false && is_file($postgresSchema)) {
+        $entries['schema_postgresql_database.sql'] = (string) file_get_contents($postgresSchema);
+    }
+
+    $entries['README.txt'] = "This archive contains live ERNI PMS database data in both MySQL and PostgreSQL INSERT formats.\nSchema files are included when available from the project root.\nGenerated at {$timestamp} from source driver " . DB_DRIVER . ".\n";
+    $archive = backupBuildZipArchive($entries);
+
+    logActivity((int) $user['id'], 'database_backup_download', 'system', 0, null, [
+        'formats' => ['mysql', 'postgresql'],
+        'source_driver' => DB_DRIVER,
+    ]);
+
+    if (function_exists('session_write_close')) {
+        session_write_close();
+    }
+
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="' . $baseName . '.zip"');
+    header('Content-Length: ' . strlen($archive));
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    echo $archive;
+    exit();
+}
+
 // Handle settings updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (isset($_POST['update_general'])) {
@@ -195,18 +419,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     
     if (isset($_POST['backup_database'])) {
-        $backupFile = '../../backups/backup_' . date('Y-m-d_H-i-s') . '.sql';
-        
-        $command = "mysqldump --user=" . DB_USER . " --password=" . DB_PASS . " " . DB_NAME . " > " . $backupFile;
-        system($command, $output);
-        
-        if(file_exists($backupFile)) {
-            $_SESSION['success'] = "Database backup created successfully";
-            logActivity($user['id'], 'database_backup', 'system', 0);
-        } else {
-            $_SESSION['error'] = "Backup failed. Please check permissions.";
+        try {
+            backupSendDualFormatDownload($conn, $user);
+        } catch (Throwable $e) {
+            error_log('Database backup failed: ' . $e->getMessage());
+            $_SESSION['error'] = 'Backup failed. Please check the server logs and try again.';
+            $_SESSION['settings_active_tab'] = 'maintenance';
         }
-        $_SESSION['settings_active_tab'] = 'maintenance';
     }
     
     header('Location: settings.php');
@@ -230,6 +449,12 @@ $settingsFlashError = (string) ($_SESSION['error'] ?? '');
 unset($_SESSION['settings_active_tab'], $_SESSION['success'], $_SESSION['error']);
 if (!in_array($settingsActiveTab, ['general', 'mail', 'notifications', 'security', 'maintenance'], true)) {
     $settingsActiveTab = 'general';
+}
+$databaseVersion = 'Unavailable';
+$databaseVersionResult = $conn->query(DB_DRIVER === 'pgsql' ? 'SELECT version() AS version' : 'SELECT VERSION() AS version');
+if ($databaseVersionResult instanceof mysqli_result || $databaseVersionResult instanceof PgsqlMysqliCompatResult) {
+    $databaseVersionRow = $databaseVersionResult->fetch_assoc();
+    $databaseVersion = (string) ($databaseVersionRow['version'] ?? $databaseVersion);
 }
 
 include '../../includes/header.php';
@@ -1123,7 +1348,7 @@ input:checked + .switch-slider:before {
                     <div class="form-group">
                         <label class="form-label">Database Backup</label>
                         <p class="form-text" style="margin-bottom: 1rem;">Create a full backup of the database. This may take a few moments.</p>
-                        <button type="submit" name="backup_database" class="btn-warning-modern w-100">
+                        <button type="submit" name="backup_database" class="btn-warning-modern w-100" onclick="return confirm('Create database backup? This may take a moment.')">
                             <i class="fas fa-database"></i> Create Backup
                         </button>
                     </div>
@@ -1139,8 +1364,8 @@ input:checked + .switch-slider:before {
                             <span class="info-value"><?php echo phpversion(); ?></span>
                         </div>
                         <div class="info-item">
-                            <span class="info-label">MySQL Version</span>
-                            <span class="info-value"><?php echo $conn->server_info; ?></span>
+                            <span class="info-label">Database Version</span>
+                            <span class="info-value"><?php echo htmlspecialchars($databaseVersion); ?></span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">Server OS</span>
