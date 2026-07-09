@@ -60,6 +60,11 @@ html[data-theme="dark"] {
     --dashboard-shadow: 0 14px 32px rgba(0, 0, 0, 0.32);
 }
 
+html:not([data-theme="dark"]) body,
+html:not([data-theme="dark"]) #page-content-wrapper {
+    background: #ffffff;
+}
+
 .card {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }

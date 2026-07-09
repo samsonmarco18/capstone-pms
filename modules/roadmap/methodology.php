@@ -288,6 +288,60 @@ function roadmapMonitoringTaskIndicator(?string $workflowStatus, string $roadmap
     return ['key' => 'not-started', 'label' => 'Not Yet Started'];
 }
 
+function roadmapMonitoringProfileUrl(?string $profilePic): string
+{
+    $profilePic = trim((string) $profilePic);
+    if ($profilePic === '') {
+        return '';
+    }
+
+    if (preg_match('#^https?://#i', $profilePic)) {
+        return $profilePic;
+    }
+
+    return BASE_URL . ltrim(str_replace('\\', '/', $profilePic), '/');
+}
+
+function roadmapMonitoringInitials(?string $name): string
+{
+    $parts = preg_split('/\s+/', trim((string) $name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if ($parts === []) {
+        return '?';
+    }
+
+    $substring = function_exists('mb_substr') ? 'mb_substr' : 'substr';
+    $uppercase = function_exists('mb_strtoupper') ? 'mb_strtoupper' : 'strtoupper';
+    $first = $substring((string) $parts[0], 0, 1);
+    $last = count($parts) > 1 ? $substring((string) $parts[count($parts) - 1], 0, 1) : '';
+    return $uppercase($first . $last);
+}
+
+function roadmapMonitoringAssigneeHtml(array $task): string
+{
+    $name = trim((string) ($task['assigned_developer_name'] ?? ''));
+    if ($name === '') {
+        return '<div class="task-owner-profile is-unassigned">'
+            . '<span class="task-owner-avatar"><i class="fas fa-user-slash" aria-hidden="true"></i></span>'
+            . '<span class="task-owner-copy"><strong>Unassigned</strong><small>Needs a team member</small></span>'
+            . '</div>';
+    }
+
+    $profileUrl = roadmapMonitoringProfileUrl((string) ($task['assigned_developer_profile_pic'] ?? ''));
+    $designation = trim((string) ($task['assigned_developer_designation'] ?? ''));
+    $role = ucwords(str_replace('_', ' ', (string) ($task['assigned_developer_role'] ?? 'Developer')));
+    $subtitle = $designation !== '' ? $designation : $role;
+    $avatar = '<span class="task-owner-avatar"><span>' . htmlspecialchars(roadmapMonitoringInitials($name)) . '</span>';
+    if ($profileUrl !== '') {
+        $avatar .= '<img src="' . htmlspecialchars($profileUrl) . '" alt="" loading="lazy">';
+    }
+    $avatar .= '</span>';
+
+    return '<div class="task-owner-profile">'
+        . $avatar
+        . '<span class="task-owner-copy"><strong>' . htmlspecialchars($name) . '</strong><small>' . htmlspecialchars($subtitle) . '</small></span>'
+        . '</div>';
+}
+
 function roadmapMonitoringPhaseIndicator(array $phase): array
 {
     $tasks = is_array($phase['tasks'] ?? null) ? $phase['tasks'] : [];
@@ -972,6 +1026,13 @@ $monitoringTaskCounts = [
     'pending' => 0,
     'done' => 0,
 ];
+$monitoringSummary = [
+    'assigned_tasks' => 0,
+    'unassigned_tasks' => 0,
+    'at_risk_tasks' => 0,
+    'active_members' => 0,
+];
+$monitoringMembers = [];
 
 if ($selectedProject) {
     projectWorkflowSyncRoadmap($conn, $selectedProjectId);
@@ -1011,10 +1072,15 @@ if ($selectedProject) {
 
     $taskRows = $conn->query("
         SELECT mt.*, expert.full_name AS expert_name, wt.title AS workflow_task_title,
+               wt.assigned_to AS workflow_assigned_to, wt.started_at AS workflow_started_at,
+               wt.completed_at AS workflow_completed_at,
                wt.status AS workflow_status, wt.deadline AS workflow_deadline,
                wt.estimated_days_min, wt.estimated_days_likely, wt.estimated_days_max,
                COALESCE(wt.updated_at, mt.updated_at) AS activity_updated_at,
-               assignee.full_name AS assigned_developer_name
+               assignee.full_name AS assigned_developer_name,
+               assignee.profile_pic AS assigned_developer_profile_pic,
+               assignee.designation AS assigned_developer_designation,
+               assignee.role AS assigned_developer_role
         FROM methodology_tasks mt
         LEFT JOIN tasks wt ON wt.id = mt.task_id
         LEFT JOIN users expert ON expert.id = mt.expert_updated_by
@@ -1057,8 +1123,54 @@ if ($selectedProject) {
         );
         $row['monitoring_status_key'] = $monitoringIndicator['key'];
         $row['monitoring_status_label'] = $monitoringIndicator['label'];
+        $workflowStatus = strtolower(trim((string) ($row['workflow_status'] ?? '')));
+        $riskDeadline = roadmapParseDate((string) ($row['workflow_deadline'] ?? ''))
+            ?? roadmapParseDate((string) ($row['end_date'] ?? ''));
+        $row['monitoring_at_risk'] = in_array($workflowStatus, ['blocked', 'overdue', 'sul_revision', 'qa_failed'], true)
+            || (
+                $riskDeadline instanceof DateTimeImmutable
+                && $riskDeadline < new DateTimeImmutable('today')
+                && $monitoringIndicator['key'] !== 'done'
+            );
+        $row['monitoring_unassigned'] = (int) ($row['workflow_assigned_to'] ?? 0) <= 0;
+        $row['assigned_developer_initials'] = roadmapMonitoringInitials((string) ($row['assigned_developer_name'] ?? ''));
+        $row['assigned_developer_profile_url'] = roadmapMonitoringProfileUrl((string) ($row['assigned_developer_profile_pic'] ?? ''));
         if ($row['is_sul_department_task']) {
             $monitoringTaskCounts[$monitoringIndicator['key']]++;
+            $assigneeId = (int) ($row['workflow_assigned_to'] ?? 0);
+            if ($assigneeId > 0) {
+                $monitoringSummary['assigned_tasks']++;
+                if (!isset($monitoringMembers[$assigneeId])) {
+                    $monitoringMembers[$assigneeId] = [
+                        'id' => $assigneeId,
+                        'name' => (string) ($row['assigned_developer_name'] ?? 'Team Member'),
+                        'profile_pic' => (string) ($row['assigned_developer_profile_pic'] ?? ''),
+                        'profile_url' => (string) ($row['assigned_developer_profile_url'] ?? ''),
+                        'initials' => (string) ($row['assigned_developer_initials'] ?? '?'),
+                        'designation' => (string) ($row['assigned_developer_designation'] ?? ''),
+                        'role' => (string) ($row['assigned_developer_role'] ?? 'developer'),
+                        'tasks' => 0,
+                        'in_progress' => 0,
+                        'done' => 0,
+                        'at_risk' => 0,
+                    ];
+                }
+                $monitoringMembers[$assigneeId]['tasks']++;
+                if ($monitoringIndicator['key'] === 'in-progress') {
+                    $monitoringMembers[$assigneeId]['in_progress']++;
+                }
+                if ($monitoringIndicator['key'] === 'done') {
+                    $monitoringMembers[$assigneeId]['done']++;
+                }
+                if ($row['monitoring_at_risk']) {
+                    $monitoringMembers[$assigneeId]['at_risk']++;
+                }
+            } else {
+                $monitoringSummary['unassigned_tasks']++;
+            }
+            if ($row['monitoring_at_risk']) {
+                $monitoringSummary['at_risk_tasks']++;
+            }
         }
         $phaseId = (int) $row['phase_id'];
         $allTasks[] = $row;
@@ -1070,6 +1182,14 @@ if ($selectedProject) {
             $phases[$phaseId]['tasks'][] = $row;
         }
     }
+}
+
+if ($monitoringMembers !== []) {
+    uasort($monitoringMembers, static fn(array $left, array $right): int => strcasecmp($left['name'], $right['name']));
+    $monitoringSummary['active_members'] = count(array_filter(
+        $monitoringMembers,
+        static fn(array $member): bool => (int) ($member['in_progress'] ?? 0) > 0
+    ));
 }
 
 $workflowTasks = [];
@@ -1403,6 +1523,151 @@ include '../../includes/navbar.php';
     line-height: 1.2;
 }
 
+.roadmap-stat-note {
+    color: var(--roadmap-muted);
+    display: block;
+    font-size: .7rem;
+    margin-top: .2rem;
+}
+
+.monitoring-team-panel,
+.monitoring-filter-panel {
+    margin-bottom: 1rem;
+    padding: 1rem;
+}
+
+.monitoring-panel-heading {
+    align-items: center;
+    display: flex;
+    gap: .75rem;
+    justify-content: space-between;
+    margin-bottom: .85rem;
+}
+
+.monitoring-panel-heading h3 {
+    color: var(--roadmap-ink);
+    font-size: .95rem;
+    font-weight: 800;
+    margin: 0;
+}
+
+.monitoring-panel-heading p {
+    color: var(--roadmap-muted);
+    font-size: .75rem;
+    margin: .15rem 0 0;
+}
+
+.team-workload-grid {
+    display: grid;
+    gap: .65rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.team-workload-member {
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid var(--roadmap-line);
+    border-radius: 10px;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    gap: .7rem;
+    min-width: 0;
+    padding: .7rem;
+    text-align: left;
+    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.team-workload-member:focus-visible {
+    outline: 3px solid rgba(31, 99, 146, .2);
+    outline-offset: 2px;
+}
+
+.team-workload-member:hover,
+.team-workload-member.is-selected {
+    border-color: rgba(31, 99, 146, .45);
+    box-shadow: 0 5px 16px rgba(31, 99, 146, .1);
+    transform: translateY(-1px);
+}
+
+.team-workload-copy {
+    min-width: 0;
+}
+
+.team-workload-name {
+    color: var(--roadmap-ink);
+    display: block;
+    font-size: .82rem;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.team-workload-role {
+    color: var(--roadmap-muted);
+    display: block;
+    font-size: .7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.team-workload-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3rem;
+    margin-left: auto;
+}
+
+.team-workload-metric {
+    background: #e9f3fa;
+    border-radius: 999px;
+    color: #1f6392;
+    font-size: .65rem;
+    font-weight: 800;
+    padding: .25rem .4rem;
+    white-space: nowrap;
+}
+
+.team-workload-metric.is-risk {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.monitoring-filter-grid {
+    align-items: end;
+    display: grid;
+    gap: .75rem;
+    grid-template-columns: repeat(3, minmax(150px, 1fr)) minmax(230px, auto) auto;
+}
+
+.monitoring-filter-grid .form-label {
+    font-size: .7rem;
+    font-weight: 800;
+    margin-bottom: .3rem;
+    text-transform: uppercase;
+}
+
+.monitoring-quick-filters {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .8rem;
+    min-height: 38px;
+}
+
+.monitoring-quick-filters .form-check {
+    margin: 0;
+}
+
+.monitoring-result-count {
+    color: var(--roadmap-muted);
+    font-size: .75rem;
+    font-weight: 700;
+}
+
 .roadmap-layout {
     display: grid;
     grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
@@ -1655,6 +1920,74 @@ include '../../includes/navbar.php';
     display: block;
     font-size: .75rem;
     margin-top: .2rem;
+}
+
+.task-owner-profile {
+    align-items: center;
+    display: flex;
+    gap: .45rem;
+    margin-top: .4rem;
+    min-width: 0;
+}
+
+.task-owner-avatar {
+    align-items: center;
+    background: #dbeafe;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    color: #1d4ed8;
+    display: inline-flex;
+    flex: 0 0 28px;
+    font-size: .62rem;
+    font-weight: 800;
+    height: 28px;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    width: 28px;
+}
+
+.task-owner-avatar img {
+    height: 100%;
+    inset: 0;
+    object-fit: cover;
+    position: absolute;
+    width: 100%;
+}
+
+.task-owner-copy {
+    display: block;
+    min-width: 0;
+}
+
+.task-owner-copy strong,
+.task-owner-copy small {
+    display: block;
+    line-height: 1.15;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-owner-copy strong {
+    color: var(--roadmap-ink);
+    font-size: .72rem;
+}
+
+.task-owner-copy small {
+    color: var(--roadmap-muted);
+    font-size: .64rem;
+    margin-top: .15rem;
+}
+
+.task-owner-profile.is-unassigned .task-owner-avatar {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+.roadmap-task-row.has-owner-profile .gantt-bar-task {
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 .gantt-track {
@@ -1943,6 +2276,25 @@ include '../../includes/navbar.php';
     border-color: #263244;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-member {
+    background: #0f172a;
+    border-color: #263244;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-metric {
+    background: rgba(59, 130, 246, .16);
+    color: #93c5fd;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-metric.is-risk {
+    background: rgba(239, 68, 68, .16);
+    color: #fca5a5;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-owner-avatar {
+    border-color: #111827;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-feature-option .form-check-label {
     color: #f8fafc;
 }
@@ -1972,7 +2324,10 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-card-roadmap h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-label-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-task-picker .form-check-label,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-status-legend-title {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-status-legend-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-panel-heading h3,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-owner-copy strong {
     color: #f8fafc;
 }
 
@@ -2029,6 +2384,10 @@ include '../../includes/navbar.php';
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .monitoring-filter-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .gantt-head,
     .gantt-row {
         grid-template-columns: 180px minmax(520px, 1fr);
@@ -2057,6 +2416,10 @@ include '../../includes/navbar.php';
     }
 
     .monitoring-task-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .monitoring-filter-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -2262,11 +2625,32 @@ include '../../includes/navbar.php';
     <?php else: ?>
         <div class="roadmap-stats">
             <?php if ($isSulMonitoring): ?>
-                <div class="roadmap-card roadmap-stat monitor-state-not-started"><span>Not Yet Started</span><strong><?php echo (int) $monitoringTaskCounts['not-started']; ?></strong></div>
-                <div class="roadmap-card roadmap-stat monitor-state-in-progress"><span>In Progress</span><strong><?php echo (int) $monitoringTaskCounts['in-progress']; ?></strong></div>
-                <div class="roadmap-card roadmap-stat monitor-state-pending"><span>Pending / Blocked</span><strong><?php echo (int) $monitoringTaskCounts['pending']; ?></strong></div>
-                <div class="roadmap-card roadmap-stat monitor-state-done"><span>Done</span><strong><?php echo (int) $monitoringTaskCounts['done']; ?></strong></div>
-                <div class="roadmap-card roadmap-stat"><span>Department Tasks</span><strong><?php echo (int) array_sum($monitoringTaskCounts); ?></strong></div>
+                <?php $departmentTaskTotal = (int) array_sum($monitoringTaskCounts); ?>
+                <div class="roadmap-card roadmap-stat">
+                    <span>Team Members</span>
+                    <strong><?php echo count($monitoringMembers); ?></strong>
+                    <small class="roadmap-stat-note"><?php echo (int) $monitoringSummary['active_members']; ?> currently active</small>
+                </div>
+                <div class="roadmap-card roadmap-stat">
+                    <span>Staffing Coverage</span>
+                    <strong><?php echo (int) $monitoringSummary['assigned_tasks']; ?>/<?php echo $departmentTaskTotal; ?></strong>
+                    <small class="roadmap-stat-note">department tasks assigned</small>
+                </div>
+                <div class="roadmap-card roadmap-stat monitor-state-in-progress">
+                    <span>Active Tasks</span>
+                    <strong><?php echo (int) $monitoringTaskCounts['in-progress']; ?></strong>
+                    <small class="roadmap-stat-note">work currently in progress</small>
+                </div>
+                <div class="roadmap-card roadmap-stat monitor-state-not-started">
+                    <span>Unassigned</span>
+                    <strong><?php echo (int) $monitoringSummary['unassigned_tasks']; ?></strong>
+                    <small class="roadmap-stat-note">tasks needing an owner</small>
+                </div>
+                <div class="roadmap-card roadmap-stat monitor-state-pending">
+                    <span>At Risk</span>
+                    <strong><?php echo (int) $monitoringSummary['at_risk_tasks']; ?></strong>
+                    <small class="roadmap-stat-note">blocked, revision, or overdue</small>
+                </div>
             <?php else: ?>
                 <div class="roadmap-card roadmap-stat"><span>Phases</span><strong><?php echo (int) $phaseCount; ?></strong></div>
                 <div class="roadmap-card roadmap-stat"><span>Template</span><strong style="font-size: 1rem;"><?php echo htmlspecialchars(methodologyRoadmapTemplateLabel((string) ($selectedProject['methodology_template'] ?? ''))); ?></strong></div>
@@ -2274,6 +2658,111 @@ include '../../includes/navbar.php';
                 <div class="roadmap-card roadmap-stat"><span>Developer Capacity</span><strong><?php echo (int) $projectDeveloperCapacity; ?></strong></div>
             <?php endif; ?>
         </div>
+
+        <?php if ($isSulMonitoring): ?>
+            <section class="roadmap-card monitoring-team-panel" aria-labelledby="teamWorkloadHeading">
+                <div class="monitoring-panel-heading">
+                    <div>
+                        <h3 id="teamWorkloadHeading"><i class="fas fa-people-group me-1"></i> Team Workload</h3>
+                        <p>Select a member to show only their assigned roadmap tasks.</p>
+                    </div>
+                    <span class="monitoring-result-count"><?php echo count($monitoringMembers); ?> members</span>
+                </div>
+                <?php if ($monitoringMembers === []): ?>
+                    <div class="small text-muted">No team members are assigned to this department's roadmap tasks yet.</div>
+                <?php else: ?>
+                    <div class="team-workload-grid">
+                        <?php foreach ($monitoringMembers as $member): ?>
+                            <?php
+                                $memberName = (string) ($member['name'] ?? 'Team Member');
+                                $memberSubtitle = trim((string) ($member['designation'] ?? ''));
+                                if ($memberSubtitle === '') {
+                                    $memberSubtitle = ucwords(str_replace('_', ' ', (string) ($member['role'] ?? 'developer')));
+                                }
+                            ?>
+                            <button
+                                type="button"
+                                class="team-workload-member"
+                                data-monitor-member-select="<?php echo (int) $member['id']; ?>"
+                                aria-pressed="false"
+                            >
+                                <span class="task-owner-avatar">
+                                    <span><?php echo htmlspecialchars((string) ($member['initials'] ?? '?')); ?></span>
+                                    <?php if (!empty($member['profile_url'])): ?>
+                                        <img src="<?php echo htmlspecialchars((string) $member['profile_url']); ?>" alt="" loading="lazy">
+                                    <?php endif; ?>
+                                </span>
+                                <span class="team-workload-copy">
+                                    <span class="team-workload-name"><?php echo htmlspecialchars($memberName); ?></span>
+                                    <span class="team-workload-role"><?php echo htmlspecialchars($memberSubtitle); ?></span>
+                                </span>
+                                <span class="team-workload-metrics" aria-label="Workload counts">
+                                    <span class="team-workload-metric"><?php echo (int) $member['tasks']; ?> total</span>
+                                    <span class="team-workload-metric"><?php echo (int) $member['in_progress']; ?> active</span>
+                                    <span class="team-workload-metric"><?php echo (int) $member['done']; ?> done</span>
+                                    <?php if ((int) $member['at_risk'] > 0): ?>
+                                        <span class="team-workload-metric is-risk"><?php echo (int) $member['at_risk']; ?> risk</span>
+                                    <?php endif; ?>
+                                </span>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </section>
+
+            <section class="roadmap-card monitoring-filter-panel" aria-labelledby="monitoringFiltersHeading">
+                <div class="monitoring-panel-heading">
+                    <div>
+                        <h3 id="monitoringFiltersHeading"><i class="fas fa-filter me-1"></i> Monitoring Filters</h3>
+                        <p>Narrow the roadmap by owner, status, phase, or attention needed.</p>
+                    </div>
+                    <span class="monitoring-result-count" id="monitoringResultCount"><?php echo $departmentTaskTotal; ?> tasks shown</span>
+                </div>
+                <div class="monitoring-filter-grid">
+                    <div>
+                        <label class="form-label" for="monitorMemberFilter">Member</label>
+                        <select class="form-select form-select-sm" id="monitorMemberFilter">
+                            <option value="">All members</option>
+                            <?php foreach ($monitoringMembers as $member): ?>
+                                <option value="<?php echo (int) $member['id']; ?>"><?php echo htmlspecialchars((string) $member['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="monitorStatusFilter">Status</label>
+                        <select class="form-select form-select-sm" id="monitorStatusFilter">
+                            <option value="">All statuses</option>
+                            <option value="not-started">Not Yet Started</option>
+                            <option value="in-progress">In Progress</option>
+                            <option value="pending">Pending / Blocked</option>
+                            <option value="done">Done</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="monitorPhaseFilter">Phase</label>
+                        <select class="form-select form-select-sm" id="monitorPhaseFilter">
+                            <option value="">All phases</option>
+                            <?php foreach ($phases as $phase): ?>
+                                <option value="<?php echo (int) $phase['id']; ?>"><?php echo htmlspecialchars((string) $phase['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="monitoring-quick-filters">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="monitorUnassignedOnly">
+                            <label class="form-check-label small" for="monitorUnassignedOnly">Unassigned only</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="monitorAtRiskOnly">
+                            <label class="form-check-label small" for="monitorAtRiskOnly">At-risk only</label>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="resetMonitoringFilters">
+                        <i class="fas fa-rotate-left me-1"></i> Reset
+                    </button>
+                </div>
+            </section>
+        <?php endif; ?>
 
         <div class="roadmap-card phase-status-legend" aria-label="Phase status color legend">
             <span class="phase-status-legend-title">Phase Status</span>
@@ -2435,13 +2924,22 @@ include '../../includes/navbar.php';
                             $taskWidth = max(2.5, ($taskDays / $timelineTotalDays) * 100);
                         ?>
                         <div
-                            class="gantt-row roadmap-task-row <?php echo !empty($task['is_sul_department_task']) ? 'is-sul-department' : 'is-other-department'; ?>"
+                            class="gantt-row roadmap-task-row <?php echo $isSulMonitoring ? 'has-owner-profile ' : ''; ?><?php echo !empty($task['is_sul_department_task']) ? 'is-sul-department' : 'is-other-department'; ?>"
                             data-monitor-task="1"
+                            data-monitor-task-id="<?php echo (int) $task['id']; ?>"
                             data-sul-department="<?php echo !empty($task['is_sul_department_task']) ? '1' : '0'; ?>"
+                            data-monitor-member-id="<?php echo (int) ($task['workflow_assigned_to'] ?? 0); ?>"
+                            data-monitor-status="<?php echo htmlspecialchars((string) $task['monitoring_status_key']); ?>"
+                            data-monitor-phase-id="<?php echo (int) $task['phase_id']; ?>"
+                            data-monitor-unassigned="<?php echo !empty($task['monitoring_unassigned']) ? '1' : '0'; ?>"
+                            data-monitor-at-risk="<?php echo !empty($task['monitoring_at_risk']) ? '1' : '0'; ?>"
                         >
                             <div class="gantt-label-cell">
                                 <span class="gantt-label-title ps-3"><?php echo htmlspecialchars((string) $task['title']); ?></span>
                                 <span class="gantt-label-sub ps-3"><?php echo htmlspecialchars((string) $task['department_summary']); ?></span>
+                                <?php if ($isSulMonitoring): ?>
+                                    <div class="ps-3"><?php echo roadmapMonitoringAssigneeHtml($task); ?></div>
+                                <?php endif; ?>
                             </div>
                             <div class="gantt-track">
                                 <div
@@ -2476,13 +2974,24 @@ include '../../includes/navbar.php';
                         <?php if (count($allTasks) === 0): ?>
                             <tr><td colspan="5" class="text-center text-muted py-4">No roadmap tasks yet.</td></tr>
                         <?php endif; ?>
+                        <?php if ($isSulMonitoring && count($allTasks) > 0): ?>
+                            <tr id="monitoringFilterEmpty" hidden>
+                                <td colspan="5" class="text-center text-muted py-4">No roadmap tasks match the selected monitoring filters.</td>
+                            </tr>
+                        <?php endif; ?>
                         <?php foreach ($allTasks as $task): ?>
                             <tr
                                 class="roadmap-task-row <?php echo !empty($task['is_sul_department_task']) ? 'is-sul-department' : 'is-other-department'; ?>"
                                 role="button"
                                 tabindex="0"
                                 data-monitor-task="1"
+                                data-monitor-task-id="<?php echo (int) $task['id']; ?>"
                                 data-sul-department="<?php echo !empty($task['is_sul_department_task']) ? '1' : '0'; ?>"
+                                data-monitor-member-id="<?php echo (int) ($task['workflow_assigned_to'] ?? 0); ?>"
+                                data-monitor-status="<?php echo htmlspecialchars((string) $task['monitoring_status_key']); ?>"
+                                data-monitor-phase-id="<?php echo (int) $task['phase_id']; ?>"
+                                data-monitor-unassigned="<?php echo !empty($task['monitoring_unassigned']) ? '1' : '0'; ?>"
+                                data-monitor-at-risk="<?php echo !empty($task['monitoring_at_risk']) ? '1' : '0'; ?>"
                                 data-task='<?php echo htmlspecialchars(json_encode($task, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>'
                                 onclick="openTaskModalFromTask(this)"
                                 onkeydown="if((event.key === 'Enter' || event.key === ' ') && !event.target.closest('button, a, input, select, textarea')){ event.preventDefault(); openTaskModalFromTask(this); }"
@@ -2495,6 +3004,9 @@ include '../../includes/navbar.php';
                                     <?php endif; ?>
                                     <?php if (!empty($task['component_name'])): ?>
                                         <div class="small text-muted"><?php echo htmlspecialchars((string) $task['component_name']); ?></div>
+                                    <?php endif; ?>
+                                    <?php if ($isSulMonitoring): ?>
+                                        <?php echo roadmapMonitoringAssigneeHtml($task); ?>
                                     <?php endif; ?>
                                 </td>
                                 <td>
@@ -3081,13 +3593,54 @@ function formatMonitoringDate(value) {
     return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString();
 }
 
-function applyRoadmapFilter(mode) {
+const monitoringFilterState = {
+    scope: 'department'
+};
+
+function applyMonitoringFilters() {
     if (!isSulMonitoring) return;
-    const departmentOnly = mode === 'department';
+
+    const memberValue = document.getElementById('monitorMemberFilter')?.value || '';
+    const statusValue = document.getElementById('monitorStatusFilter')?.value || '';
+    const phaseValue = document.getElementById('monitorPhaseFilter')?.value || '';
+    const unassignedOnly = Boolean(document.getElementById('monitorUnassignedOnly')?.checked);
+    const atRiskOnly = Boolean(document.getElementById('monitorAtRiskOnly')?.checked);
+    const visibleTaskIds = new Set();
 
     document.querySelectorAll('[data-monitor-task="1"]').forEach((row) => {
-        row.hidden = departmentOnly && row.dataset.sulDepartment !== '1';
+        const inScope = monitoringFilterState.scope !== 'department' || row.dataset.sulDepartment === '1';
+        const memberMatches = memberValue === '' || row.dataset.monitorMemberId === memberValue;
+        const statusMatches = statusValue === '' || row.dataset.monitorStatus === statusValue;
+        const phaseMatches = phaseValue === '' || row.dataset.monitorPhaseId === phaseValue;
+        const unassignedMatches = !unassignedOnly || row.dataset.monitorUnassigned === '1';
+        const atRiskMatches = !atRiskOnly || row.dataset.monitorAtRisk === '1';
+        const visible = inScope && memberMatches && statusMatches && phaseMatches && unassignedMatches && atRiskMatches;
+
+        row.hidden = !visible;
+        if (visible && row.dataset.monitorTaskId) {
+            visibleTaskIds.add(row.dataset.monitorTaskId);
+        }
     });
+
+    document.querySelectorAll('[data-monitor-member-select]').forEach((button) => {
+        const selected = memberValue !== '' && button.dataset.monitorMemberSelect === memberValue;
+        button.classList.toggle('is-selected', selected);
+        button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+    });
+
+    const resultCount = document.getElementById('monitoringResultCount');
+    if (resultCount) {
+        resultCount.textContent = `${visibleTaskIds.size} ${visibleTaskIds.size === 1 ? 'task' : 'tasks'} shown`;
+    }
+    const emptyRow = document.getElementById('monitoringFilterEmpty');
+    if (emptyRow) {
+        emptyRow.hidden = visibleTaskIds.size !== 0;
+    }
+}
+
+function applyRoadmapFilter(mode) {
+    if (!isSulMonitoring) return;
+    monitoringFilterState.scope = mode === 'all' ? 'all' : 'department';
 
     document.querySelectorAll('[data-roadmap-filter]').forEach((button) => {
         const active = button.dataset.roadmapFilter === mode;
@@ -3096,10 +3649,39 @@ function applyRoadmapFilter(mode) {
         button.classList.toggle('btn-outline-primary', !active);
         button.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+
+    applyMonitoringFilters();
 }
 
 document.querySelectorAll('[data-roadmap-filter]').forEach((button) => {
     button.addEventListener('click', () => applyRoadmapFilter(button.dataset.roadmapFilter || 'all'));
+});
+
+['monitorMemberFilter', 'monitorStatusFilter', 'monitorPhaseFilter', 'monitorUnassignedOnly', 'monitorAtRiskOnly'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('change', applyMonitoringFilters);
+});
+
+document.querySelectorAll('[data-monitor-member-select]').forEach((button) => {
+    button.addEventListener('click', () => {
+        const memberFilter = document.getElementById('monitorMemberFilter');
+        if (!memberFilter) return;
+        const memberId = button.dataset.monitorMemberSelect || '';
+        memberFilter.value = memberFilter.value === memberId ? '' : memberId;
+        applyMonitoringFilters();
+        document.querySelector('.roadmap-layout')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+});
+
+document.getElementById('resetMonitoringFilters')?.addEventListener('click', () => {
+    ['monitorMemberFilter', 'monitorStatusFilter', 'monitorPhaseFilter'].forEach((id) => {
+        const field = document.getElementById(id);
+        if (field) field.value = '';
+    });
+    ['monitorUnassignedOnly', 'monitorAtRiskOnly'].forEach((id) => {
+        const field = document.getElementById(id);
+        if (field) field.checked = false;
+    });
+    applyMonitoringFilters();
 });
 
 if (isSulMonitoring) {
