@@ -161,6 +161,40 @@ function di_load_accessible_projects(mysqli|PgsqlMysqliCompatConnection $conn, a
     return di_fetch_all(di_execute(di_prepare($conn, $sql), $rule['types'], $rule['params']));
 }
 
+function di_load_attention_projects(mysqli|PgsqlMysqliCompatConnection $conn, array $user): array
+{
+    $rule = di_access_rule($user);
+    $sql = "
+        SELECT
+            p.id,
+            COUNT(DISTINCT t.id) AS issue_count
+        FROM projects p
+        INNER JOIN tasks t ON t.project_id = p.id
+        WHERE p.status NOT IN ('completed', 'cancelled')
+          AND {$rule['where']}
+          AND (
+              t.status IN ('blocked', 'overdue', 'qa_failed', 'sul_revision')
+              OR (
+                  t.deadline IS NOT NULL
+                  AND t.deadline < CURRENT_DATE
+                  AND t.status NOT IN ('completed', 'done')
+              )
+          )
+        GROUP BY p.id
+    ";
+
+    $rows = di_fetch_all(di_execute(di_prepare($conn, $sql), $rule['types'], $rule['params']));
+    $projects = [];
+    foreach ($rows as $row) {
+        $projectId = (int) ($row['id'] ?? 0);
+        if ($projectId > 0) {
+            $projects[$projectId] = max(1, (int) ($row['issue_count'] ?? 1));
+        }
+    }
+
+    return $projects;
+}
+
 function di_empty_decision_insights(): array
 {
     $zeroBand = di_band_for_score(0.0);

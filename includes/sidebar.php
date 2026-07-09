@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/decision-insights.php';
 
 $currentPage = basename($_SERVER['PHP_SELF']);
 $currentPath = '/' . trim(str_replace('\\', '/', (string) ($_SERVER['PHP_SELF'] ?? '')), '/');
@@ -99,21 +100,12 @@ $sidebarLogoPath = __DIR__ . '/../assets/img/logoInside.png';
 $sidebarLogoVersion = file_exists($sidebarLogoPath) ? (string) filemtime($sidebarLogoPath) : '1';
 $projectInsightsAttentionCount = 0;
 try {
-    $sidebarConn = getConnection();
-    $userId = (int) ($user['id'] ?? 0);
-    $attentionWhere = "p.status != 'completed' AND (t.status IN ('blocked','overdue','qa_failed','sul_revision') OR (t.deadline IS NOT NULL AND t.deadline < CURRENT_DATE AND t.status NOT IN ('completed','done')))";
-    if ($role === 'architect') {
-        $attentionWhere .= " AND (p.architect_id = {$userId} OR p.architect_id IS NULL)";
-    } elseif (in_array($role, ['expert', 'developer'], true)) {
-        $attentionWhere .= " AND t.assigned_to = {$userId}";
+    if (isset($attentionProjectsById) && is_array($attentionProjectsById)) {
+        $projectInsightsAttentionCount = count($attentionProjectsById);
+    } else {
+        $sidebarConn = getConnection();
+        $projectInsightsAttentionCount = count(di_load_attention_projects($sidebarConn, $user));
     }
-    $attentionResult = $sidebarConn->query("
-        SELECT COUNT(DISTINCT p.id) AS total
-        FROM projects p
-        JOIN tasks t ON t.project_id = p.id
-        WHERE {$attentionWhere}
-    ");
-    $projectInsightsAttentionCount = $attentionResult ? (int) ($attentionResult->fetch_assoc()['total'] ?? 0) : 0;
 } catch (Throwable $exception) {
     $projectInsightsAttentionCount = 0;
 }

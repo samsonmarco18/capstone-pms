@@ -8,6 +8,8 @@ requireRole(['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'])
 $conn = getConnection();
 $user = getCurrentUser();
 $projects = di_load_accessible_projects($conn, $user);
+$attentionProjectsById = di_load_attention_projects($conn, $user);
+$attentionProjectCount = count($attentionProjectsById);
 $userRole = (string) ($user['role'] ?? 'guest');
 $canViewBudget = $userRole !== 'sul';
 $scenarioCatalog = di_scenario_catalog();
@@ -805,6 +807,21 @@ body,
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
 }
 
+.overview-project-card.needs-attention {
+    border-color: #f59e0b;
+    box-shadow: 0 8px 22px rgba(245, 158, 11, 0.16);
+    position: relative;
+}
+
+.overview-project-card.needs-attention::before {
+    background: #f59e0b;
+    content: "";
+    inset: 0 auto 0 0;
+    position: absolute;
+    width: 5px;
+    z-index: 1;
+}
+
 .overview-project-head {
     display: flex;
     justify-content: space-between;
@@ -824,6 +841,29 @@ body,
     font-size: 0.76rem;
     color: var(--gray-600);
     line-height: 1.5;
+}
+
+.overview-project-badges {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: .5rem;
+    justify-content: flex-end;
+}
+
+.project-attention-badge {
+    align-items: center;
+    background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
+    border: 1px solid #fb923c;
+    border-radius: 999px;
+    color: #c2410c;
+    display: inline-flex;
+    font-size: .72rem;
+    font-weight: 800;
+    gap: .4rem;
+    padding: .5rem .8rem;
+    white-space: nowrap;
 }
 
 .delay-risk-badge {
@@ -1507,6 +1547,11 @@ body,
     box-shadow: 0 16px 36px rgba(3, 14, 25, 0.22);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.needs-attention {
+    border-color: #f59e0b;
+    box-shadow: 0 16px 36px rgba(245, 158, 11, .12);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-note {
     color: var(--insight-muted);
 }
@@ -1568,8 +1613,9 @@ body,
         flex-direction: column;
     }
 
-    .overview-project-head .delay-risk-badge {
+    .overview-project-head .overview-project-badges {
         align-self: flex-start;
+        justify-content: flex-start;
     }
 
     .overview-controls {
@@ -2181,7 +2227,11 @@ body,
     </div>
 
     <div class="overview-results-note" id="overviewResultsNote">
-        Showing <?php echo count($projects); ?> project card(s). Click a project to expand its full insight.
+        Showing <?php echo count($projects); ?> project card(s).
+        <?php if ($attentionProjectCount > 0): ?>
+            <?php echo $attentionProjectCount; ?> need<?php echo $attentionProjectCount === 1 ? 's' : ''; ?> attention.
+        <?php endif; ?>
+        Click a project to expand its full insight.
     </div>
 
     <div class="overview-card-grid">
@@ -2193,6 +2243,8 @@ body,
             $riskLevel = $overviewInsight['before']['risk_level'] ?? 'Low';
             $riskClass = $riskLevel === 'High' ? 'delay-risk-high' : ($riskLevel === 'Medium' ? 'delay-risk-medium' : 'delay-risk-low');
             $riskOrder = $riskLevel === 'High' ? 3 : ($riskLevel === 'Medium' ? 2 : 1);
+            $attentionIssueCount = (int) ($attentionProjectsById[$projectId] ?? 0);
+            $needsAttention = $attentionIssueCount > 0;
             $createdAtTs = !empty($project['created_at']) ? (strtotime((string) $project['created_at']) ?: 0) : 0;
             $searchBlob = strtolower(trim(
                 $project['name']
@@ -2205,10 +2257,11 @@ body,
             ));
             ?>
             <details
-                class="overview-project-card js-overview-card <?php echo $riskLevel === 'High' ? 'risk-high' : ($riskLevel === 'Medium' ? 'risk-medium' : 'risk-low'); ?>"
+                class="overview-project-card js-overview-card <?php echo $riskLevel === 'High' ? 'risk-high' : ($riskLevel === 'Medium' ? 'risk-medium' : 'risk-low'); ?> <?php echo $needsAttention ? 'needs-attention' : ''; ?>"
                 data-name="<?php echo htmlspecialchars(strtolower((string) $project['name'])); ?>"
                 data-date="<?php echo (int) $createdAtTs; ?>"
                 data-risk="<?php echo (int) $riskOrder; ?>"
+                data-attention="<?php echo $needsAttention ? '1' : '0'; ?>"
                 data-search="<?php echo htmlspecialchars($searchBlob); ?>"
             >
                 <summary>
@@ -2222,10 +2275,21 @@ body,
                                     Timeline: <?php echo htmlspecialchars(delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))); ?>
                                 </div>
                             </div>
-                            <span class="delay-risk-badge <?php echo $riskClass; ?>">
-                                <i class="fas fa-signal"></i>
-                                <?php echo htmlspecialchars($riskLevel); ?> Delay Risk
-                            </span>
+                            <div class="overview-project-badges">
+                                <?php if ($needsAttention): ?>
+                                    <span
+                                        class="project-attention-badge"
+                                        title="<?php echo $attentionIssueCount; ?> blocked, overdue, failed, or revision task<?php echo $attentionIssueCount === 1 ? '' : 's'; ?>"
+                                    >
+                                        <i class="fas fa-circle-exclamation"></i>
+                                        Needs Attention (<?php echo $attentionIssueCount; ?>)
+                                    </span>
+                                <?php endif; ?>
+                                <span class="delay-risk-badge <?php echo $riskClass; ?>">
+                                    <i class="fas fa-signal"></i>
+                                    <?php echo htmlspecialchars($riskLevel); ?> Delay Risk
+                                </span>
+                            </div>
                         </div>
                         <div class="overview-summary">Click to review the full project insight summary.</div>
                     </div>
@@ -2461,7 +2525,11 @@ function applyOverviewFilters() {
     visibleCards.forEach((card) => overviewGridEl.appendChild(card));
 
     if (overviewResultsNoteEl) {
-        overviewResultsNoteEl.textContent = `Showing ${visibleCards.length} project card(s).`;
+        const attentionCount = visibleCards.filter((card) => card.getAttribute('data-attention') === '1').length;
+        const attentionText = attentionCount > 0
+            ? ` ${attentionCount} ${attentionCount === 1 ? 'needs' : 'need'} attention.`
+            : '';
+        overviewResultsNoteEl.textContent = `Showing ${visibleCards.length} project card(s).${attentionText}`;
     }
 }
 
