@@ -233,6 +233,137 @@ function sulTaskAllocationProjectOptionLabel(string $projectName, array $metrics
     return $projectName . ' - ' . ($parts !== [] ? implode(' | ', $parts) : 'No active items');
 }
 
+function sulTaskAllocationFindProjectOption(array $options, int $projectId): ?array
+{
+    if ($projectId <= 0) {
+        return null;
+    }
+
+    foreach ($options as $option) {
+        if ((int) ($option['id'] ?? 0) === $projectId) {
+            return $option;
+        }
+    }
+
+    return null;
+}
+
+function sulTaskAllocationProjectQueueChips(array $metrics): string
+{
+    $html = '';
+    foreach ($metrics as $metric) {
+        $count = (int) ($metric['count'] ?? 0);
+        if ($count <= 0) {
+            continue;
+        }
+
+        $tone = preg_replace('/[^a-z0-9_-]/i', '', (string) ($metric['tone'] ?? 'info')) ?: 'info';
+        $label = (string) ($metric['label'] ?? 'item');
+        $html .= '<span class="project-queue-chip is-' . htmlspecialchars($tone, ENT_QUOTES, 'UTF-8') . '">'
+            . '<i aria-hidden="true"></i>'
+            . htmlspecialchars($count . ' ' . $label, ENT_QUOTES, 'UTF-8')
+            . '</span>';
+    }
+
+    if ($html === '') {
+        $html = '<span class="project-queue-chip is-muted"><i aria-hidden="true"></i>No active items</span>';
+    }
+
+    return $html;
+}
+
+function sulTaskAllocationRenderProjectPicker(
+    string $id,
+    string $ariaLabel,
+    array $options,
+    int $selectedProjectId,
+    array $metricDefinitions
+): string {
+    $countKeys = [];
+    foreach ($metricDefinitions as $metric) {
+        if (isset($metric['keys']) && is_array($metric['keys'])) {
+            foreach ($metric['keys'] as $metricKey) {
+                $countKeys[] = (string) $metricKey;
+            }
+            continue;
+        }
+
+        $countKeys[] = (string) ($metric['key'] ?? '');
+    }
+    $countKeys = array_values(array_filter($countKeys));
+    $groups = sulTaskAllocationProjectOptionGroups($options, $countKeys);
+    $selectedOption = sulTaskAllocationFindProjectOption($options, $selectedProjectId);
+
+    $metricRows = static function (array $option) use ($metricDefinitions): array {
+        $rows = [];
+        foreach ($metricDefinitions as $definition) {
+            $count = 0;
+            if (isset($definition['keys']) && is_array($definition['keys'])) {
+                foreach ($definition['keys'] as $metricKey) {
+                    $count += (int) ($option[(string) $metricKey] ?? 0);
+                }
+            } else {
+                $count = (int) ($option[(string) ($definition['key'] ?? '')] ?? 0);
+            }
+
+            $rows[] = [
+                'count' => $count,
+                'label' => (string) ($definition['label'] ?? 'item'),
+                'tone' => (string) ($definition['tone'] ?? 'info'),
+            ];
+        }
+
+        return $rows;
+    };
+
+    $selectedName = $selectedOption ? (string) ($selectedOption['name'] ?? 'Selected project') : 'Select project';
+    $selectedChips = $selectedOption ? sulTaskAllocationProjectQueueChips($metricRows($selectedOption)) : '';
+
+    ob_start();
+    ?>
+    <details class="project-picker" id="<?php echo htmlspecialchars($id); ?>" data-project-picker>
+        <summary aria-label="<?php echo htmlspecialchars($ariaLabel); ?>">
+            <span class="project-picker-selected">
+                <span class="project-picker-selected-name"><?php echo htmlspecialchars($selectedName); ?></span>
+                <?php if ($selectedChips !== ''): ?>
+                    <span class="project-picker-chips" aria-hidden="true"><?php echo $selectedChips; ?></span>
+                <?php endif; ?>
+            </span>
+            <i class="fas fa-chevron-down project-picker-chevron" aria-hidden="true"></i>
+        </summary>
+        <div class="project-picker-menu" role="listbox" aria-label="<?php echo htmlspecialchars($ariaLabel); ?>">
+            <?php foreach ($groups as $groupLabel => $groupOptions): ?>
+                <?php if ($groupOptions === []) continue; ?>
+                <div class="project-picker-group">
+                    <div class="project-picker-group-label">
+                        <span><?php echo htmlspecialchars($groupLabel); ?></span>
+                        <span><?php echo count($groupOptions); ?></span>
+                    </div>
+                    <?php foreach ($groupOptions as $option): ?>
+                        <?php
+                            $optionId = (int) ($option['id'] ?? 0);
+                            $isSelected = $optionId === $selectedProjectId;
+                        ?>
+                        <button
+                            type="submit"
+                            name="project_id"
+                            value="<?php echo $optionId; ?>"
+                            class="project-picker-option <?php echo $isSelected ? 'is-selected' : ''; ?>"
+                            role="option"
+                            aria-selected="<?php echo $isSelected ? 'true' : 'false'; ?>"
+                        >
+                            <span class="project-picker-option-name"><?php echo htmlspecialchars((string) ($option['name'] ?? 'Untitled project')); ?></span>
+                            <span class="project-picker-chips"><?php echo sulTaskAllocationProjectQueueChips($metricRows($option)); ?></span>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </details>
+    <?php
+    return trim((string) ob_get_clean());
+}
+
 function sulTaskAllocationRoadmapEntityRows(
     mysqli|PgsqlMysqliCompatConnection $conn,
     int $projectId,
@@ -2147,6 +2278,170 @@ include '../../includes/navbar.php';
     font-weight: 400;
 }
 
+.project-picker {
+    min-width: 0;
+    position: relative;
+}
+
+.project-picker[open] {
+    z-index: 80;
+}
+
+.project-picker summary {
+    align-items: center;
+    background: #fff;
+    border: 1px solid var(--gray-300);
+    border-radius: 12px;
+    cursor: pointer;
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    list-style: none;
+    min-height: 42px;
+    padding: 0.45rem 0.7rem 0.45rem 0.85rem;
+    transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.project-picker summary::-webkit-details-marker {
+    display: none;
+}
+
+.project-picker[open] summary,
+.project-picker summary:focus-visible {
+    border-color: rgba(31, 99, 146, 0.45);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
+    outline: none;
+}
+
+.project-picker-selected {
+    align-items: center;
+    display: flex;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.project-picker-selected-name {
+    color: var(--gray-900);
+    font-size: 0.82rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.project-picker-selected .project-queue-chip {
+    flex: 0 0 auto;
+}
+
+.project-picker-chevron {
+    color: var(--gray-500);
+    transition: transform .18s ease;
+}
+
+.project-picker[open] .project-picker-chevron {
+    transform: rotate(180deg);
+}
+
+.project-picker-menu {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
+    left: auto;
+    margin-top: 0.45rem;
+    max-height: 360px;
+    overflow-y: auto;
+    padding: 0.45rem;
+    position: absolute;
+    right: 0;
+    width: min(720px, calc(100vw - 3rem));
+}
+
+.project-picker-group + .project-picker-group {
+    border-top: 1px solid var(--gray-100);
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+}
+
+.project-picker-group-label {
+    align-items: center;
+    color: var(--gray-500);
+    display: flex;
+    font-size: 0.66rem;
+    font-weight: 800;
+    justify-content: space-between;
+    letter-spacing: 0.08em;
+    padding: 0.45rem 0.55rem 0.25rem;
+    text-transform: uppercase;
+}
+
+.project-picker-option {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 12px;
+    color: var(--gray-800);
+    cursor: pointer;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: minmax(180px, 1fr) auto;
+    padding: 0.62rem 0.65rem;
+    text-align: left;
+    width: 100%;
+}
+
+.project-picker-option:hover,
+.project-picker-option:focus-visible,
+.project-picker-option.is-selected {
+    background: #f4f9ff;
+    outline: none;
+}
+
+.project-picker-option-name {
+    font-size: 0.82rem;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.project-picker-chips {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    justify-content: flex-end;
+}
+
+.project-queue-chip {
+    align-items: center;
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.68rem;
+    font-weight: 700;
+    gap: 0.32rem;
+    line-height: 1;
+    padding: 0.36rem 0.56rem;
+    white-space: nowrap;
+}
+
+.project-queue-chip i {
+    border-radius: 999px;
+    display: inline-block;
+    height: 0.42rem;
+    width: 0.42rem;
+}
+
+.project-queue-chip.is-danger { background: #fee2e2; color: #b91c1c; }
+.project-queue-chip.is-danger i { background: #dc2626; }
+.project-queue-chip.is-warning { background: #fef3c7; color: #92400e; }
+.project-queue-chip.is-warning i { background: #f59e0b; }
+.project-queue-chip.is-success { background: #dcfce7; color: #166534; }
+.project-queue-chip.is-success i { background: #16a34a; }
+.project-queue-chip.is-info { background: #dbeafe; color: #1d4ed8; }
+.project-queue-chip.is-info i { background: #3b82f6; }
+.project-queue-chip.is-muted { background: var(--gray-100); color: var(--gray-500); }
+.project-queue-chip.is-muted i { background: var(--gray-300); }
+
 .project-context-card .workflow-tabs {
     margin: 0.45rem 0 0;
     padding-bottom: 0.08rem;
@@ -3674,6 +3969,27 @@ include '../../includes/navbar.php';
     color: #d7e4f2;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-menu {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-selected-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-option-name {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-group + .project-picker-group {
+    border-color: rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-option:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-option:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-option.is-selected {
+    background: rgba(31, 99, 146, 0.18);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workflow-tabs {
     border-color: rgba(31, 99, 146, 0.24);
 }
@@ -4003,32 +4319,19 @@ include '../../includes/navbar.php';
                         </span>
                     </div>
                     <form method="GET" class="project-context-actions">
-                        <select id="expertProjectSelect" name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for expert allocation" required>
-                            <option value="">Select project</option>
-                            <?php foreach (sulTaskAllocationProjectOptionGroups($expertProjectOptions, ['unassigned_count', 'pending_count', 'review_count', 'project_review_count']) as $groupLabel => $groupOptions): ?>
-                                <?php if ($groupOptions === []) continue; ?>
-                                <optgroup label="<?php echo htmlspecialchars($groupLabel); ?>">
-                                    <?php foreach ($groupOptions as $expertProjectOption): ?>
-                                        <?php
-                                            $optionUnassigned = (int) ($expertProjectOption['unassigned_count'] ?? 0);
-                                            $optionPending = (int) ($expertProjectOption['pending_count'] ?? 0);
-                                            $optionReview = (int) ($expertProjectOption['review_count'] ?? 0) + (int) ($expertProjectOption['project_review_count'] ?? 0);
-                                            $optionLabel = sulTaskAllocationProjectOptionLabel(
-                                                (string) $expertProjectOption['name'],
-                                                [
-                                                    ['count' => $optionUnassigned, 'label' => 'unassigned'],
-                                                    ['count' => $optionPending, 'label' => 'pending'],
-                                                    ['count' => $optionReview, 'label' => 'review'],
-                                                ]
-                                            );
-                                        ?>
-                                        <option value="<?php echo (int) $expertProjectOption['id']; ?>" <?php echo (int) $expertProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
-                                            <?php echo htmlspecialchars($optionLabel); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </optgroup>
-                            <?php endforeach; ?>
-                        </select>
+                        <?php
+                            echo sulTaskAllocationRenderProjectPicker(
+                                'expertProjectPicker',
+                                'Select project for expert allocation',
+                                $expertProjectOptions,
+                                (int) $projectId,
+                                [
+                                    ['key' => 'unassigned_count', 'label' => 'unassigned', 'tone' => 'success'],
+                                    ['key' => 'pending_count', 'label' => 'pending', 'tone' => 'danger'],
+                                    ['keys' => ['review_count', 'project_review_count'], 'label' => 'review', 'tone' => 'warning'],
+                                ]
+                            );
+                        ?>
                         <?php if ($projectId && $project): ?>
                             <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $projectId; ?>" class="btn-primary-modern text-decoration-none">
                                 <i class="fas fa-route"></i> Open Roadmap
@@ -4583,34 +4886,20 @@ include '../../includes/navbar.php';
                         </span>
                     </div>
                     <form method="GET" class="project-context-actions">
-                        <select id="developerProjectSelect" name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for <?php echo htmlspecialchars($deliveryAssigneeLower); ?> allocation" required>
-                            <option value="">Select project</option>
-                            <?php foreach (sulTaskAllocationProjectOptionGroups($developerProjectOptions, ['ready_count', 'in_progress_count', 'review_count', 'reopen_count']) as $groupLabel => $groupOptions): ?>
-                                <?php if ($groupOptions === []) continue; ?>
-                                <optgroup label="<?php echo htmlspecialchars($groupLabel); ?>">
-                                    <?php foreach ($groupOptions as $developerProjectOption): ?>
-                                        <?php
-                                            $optionReady = (int) ($developerProjectOption['ready_count'] ?? 0);
-                                            $optionProgress = (int) ($developerProjectOption['in_progress_count'] ?? 0);
-                                            $optionReview = (int) ($developerProjectOption['review_count'] ?? 0);
-                                            $optionReopen = (int) ($developerProjectOption['reopen_count'] ?? 0);
-                                            $optionLabel = sulTaskAllocationProjectOptionLabel(
-                                                (string) $developerProjectOption['name'],
-                                                [
-                                                    ['count' => $optionReady, 'label' => 'ready'],
-                                                    ['count' => $optionProgress, 'label' => 'active'],
-                                                    ['count' => $optionReview, 'label' => 'review'],
-                                                    ['count' => $optionReopen, 'label' => 'reopen'],
-                                                ]
-                                            );
-                                        ?>
-                                        <option value="<?php echo (int) $developerProjectOption['id']; ?>" <?php echo (int) $developerProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
-                                            <?php echo htmlspecialchars($optionLabel); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </optgroup>
-                            <?php endforeach; ?>
-                        </select>
+                        <?php
+                            echo sulTaskAllocationRenderProjectPicker(
+                                'developerProjectPicker',
+                                'Select project for ' . $deliveryAssigneeLower . ' allocation',
+                                $developerProjectOptions,
+                                (int) $projectId,
+                                [
+                                    ['key' => 'ready_count', 'label' => 'ready', 'tone' => 'info'],
+                                    ['key' => 'in_progress_count', 'label' => 'active', 'tone' => 'success'],
+                                    ['key' => 'review_count', 'label' => 'review', 'tone' => 'warning'],
+                                    ['key' => 'reopen_count', 'label' => 'reopen', 'tone' => 'danger'],
+                                ]
+                            );
+                        ?>
                         <?php if ($projectId && $project): ?>
                             <a href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $projectId; ?>" class="btn-outline-modern text-decoration-none">
                                 <i class="fas fa-route"></i> Open Roadmap
@@ -5538,7 +5827,18 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
+const projectPickers = Array.from(document.querySelectorAll('[data-project-picker]'));
 const bulkAssignmentDetails = Array.from(document.querySelectorAll('.bulk-assignment-details'));
+
+projectPickers.forEach(picker => {
+    picker.addEventListener('toggle', () => {
+        if (!picker.open) return;
+
+        projectPickers.forEach(otherPicker => {
+            if (otherPicker !== picker) otherPicker.open = false;
+        });
+    });
+});
 
 function positionBulkAssignmentMenu(details) {
     if (!details?.open) return;
@@ -5585,6 +5885,10 @@ window.addEventListener('resize', repositionOpenBulkAssignmentMenus);
 window.addEventListener('scroll', repositionOpenBulkAssignmentMenus, true);
 
 document.addEventListener('click', event => {
+    projectPickers.forEach(picker => {
+        if (picker.open && !picker.contains(event.target)) picker.open = false;
+    });
+
     bulkAssignmentDetails.forEach(details => {
         if (details.open && !details.contains(event.target)) details.open = false;
     });
@@ -5592,6 +5896,12 @@ document.addEventListener('click', event => {
 
 document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
+
+    projectPickers.forEach(picker => {
+        if (!picker.open) return;
+        picker.open = false;
+        picker.querySelector('summary')?.focus();
+    });
 
     bulkAssignmentDetails.forEach(details => {
         if (!details.open) return;
