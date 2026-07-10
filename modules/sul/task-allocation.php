@@ -265,6 +265,20 @@ $sulMissingDepartment = $sulDepartment === '';
 $isExpertDepartmentSul = $sulDepartmentLabel === 'Expert Department';
 $canManageExpertWorkflow = !$sulMissingDepartment && $isExpertDepartmentSul;
 $canManageDeveloperWorkflow = !$sulMissingDepartment && !$isExpertDepartmentSul;
+$isUiUxDepartmentSul = $sulDepartmentLabel === 'UI/UX';
+$deliveryWorkflowLabel = $isUiUxDepartmentSul ? 'UI/UX Workflow' : 'Developer Workflow';
+$deliveryAssigneeLabel = $isUiUxDepartmentSul ? 'UI/UX' : 'Developer';
+$deliveryAssigneeFallback = $isUiUxDepartmentSul ? 'UI/UX Designer' : 'Developer';
+$deliveryAssigneeLower = $isUiUxDepartmentSul ? 'UI/UX designer' : 'developer';
+$deliveryAssigneePluralLower = $isUiUxDepartmentSul ? 'UI/UX designers' : 'developers';
+$deliveryAssignmentAction = $isUiUxDepartmentSul ? 'Assign UI/UX' : 'Assign Developer';
+$deliveryAssignmentModalTitle = $isUiUxDepartmentSul ? 'Assign to UI/UX' : 'Assign to Developer';
+$deliveryAssignmentLoadingTitle = $isUiUxDepartmentSul ? 'Assigning UI/UX' : 'Assigning developer';
+$deliveryAssignmentLoadingText = $isUiUxDepartmentSul
+    ? 'Please wait while the UI/UX assignment is saved.'
+    : 'Please wait while the developer assignment is saved.';
+$deliveryNoSelectionText = $isUiUxDepartmentSul ? 'No UI/UX designer selected' : 'No developer selected';
+$deliveryNoAvailableText = $isUiUxDepartmentSul ? 'No UI/UX designers available' : 'No developers available';
 $sulUserDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : ' AND 1 = 0';
 $sulProjectFilter = sulTaskAllocationProjectFilter($conn, 'p', $sulDepartment);
 $sulTaskDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
@@ -1086,10 +1100,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
-    // Assign task to developer (after estimation approved)
+    // Assign task to department implementer (after estimation approved)
     if (isset($_POST['assign_to_developer'])) {
         if (!$canManageDeveloperWorkflow) {
-            $_SESSION['error'] = "Developer assignment is available only for department SULs outside Expert Department.";
+            $_SESSION['error'] = "{$deliveryAssigneeLabel} assignment is available only for department SULs outside Expert Department.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -1099,7 +1113,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $deadline = trim((string) ($_POST['deadline'] ?? ''));
 
         if ($taskId <= 0 || $developerId <= 0 || $deadline === '') {
-            $_SESSION['error'] = "Please select a valid task, developer, and deadline.";
+            $_SESSION['error'] = "Please select a valid task, {$deliveryAssigneeLower}, and deadline.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -1152,7 +1166,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $taskCheck->close();
 
         if (!$validDeveloper || !$validTask) {
-            $_SESSION['error'] = "Developer assignment cannot proceed. Check approval status and selected developer.";
+            $_SESSION['error'] = "{$deliveryAssigneeLabel} assignment cannot proceed. Check approval status and selected {$deliveryAssigneeLower}.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -1183,7 +1197,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $roadmapStart = DateTime::createFromFormat('Y-m-d', (string) ($roadmapEntityRow['start_date'] ?? ''));
                 $roadmapEnd = DateTime::createFromFormat('Y-m-d', (string) ($roadmapEntityRow['end_date'] ?? ''));
                 if (($roadmapStart && $deadlineDate < $roadmapStart) || ($roadmapEnd && $deadlineDate > $roadmapEnd)) {
-                    $_SESSION['error'] = "The developer deadline must stay inside the methodology task window: "
+                    $_SESSION['error'] = "The {$deliveryAssigneeLower} deadline must stay inside the methodology task window: "
                         . date('M d, Y', strtotime((string) $roadmapEntityRow['start_date']))
                         . " to "
                         . date('M d, Y', strtotime((string) $roadmapEntityRow['end_date']))
@@ -1226,7 +1240,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             ");
             $readyTaskIds = [];
             if (!$readyRows) {
-                $_SESSION['error'] = "Unable to verify every task in this roadmap developer entity.";
+                $_SESSION['error'] = "Unable to verify every task in this roadmap assignment group.";
                 header("Location: task-allocation.php");
                 exit();
             }
@@ -1234,7 +1248,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $readyTaskIds[(int) $readyRow['id']] = true;
             }
             if (count($readyTaskIds) !== count($assignmentTaskIds)) {
-                $_SESSION['error'] = "Every task in this roadmap developer entity must be approved and ready before assignment.";
+                $_SESSION['error'] = "Every task in this roadmap assignment group must be approved and ready before assignment.";
                 header("Location: task-allocation.php");
                 exit();
             }
@@ -1755,13 +1769,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $conn,
                     $department,
                     $taskTitle . ' Ready for ' . $department . ' Assignment',
-                    $projectName . ': the feature estimation is approved and ready for developer assignment.',
+                    $projectName . ': the feature estimation is approved and ready for department assignment.',
                     BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectForAllocation,
                     $projectForAllocation
                 );
             }
 
-            $_SESSION['success'] = "Estimation approved! Task is now ready for Developer assignment.";
+            $_SESSION['success'] = "Estimation approved! Task is now ready for department assignment.";
             header("Location: task-allocation.php?project_id=" . $projectForAllocation);
             exit();
         } else {
@@ -4436,7 +4450,7 @@ include '../../includes/navbar.php';
                     <div class="project-context-main">
                         <span class="project-context-count-pill">
                             <i class="fas fa-tasks" aria-hidden="true"></i>
-                            <span class="project-context-workflow-name">Developer Workflow</span>
+                            <span class="project-context-workflow-name"><?php echo htmlspecialchars($deliveryWorkflowLabel); ?></span>
                             <span class="project-context-count-separator">|</span>
                             <span class="project-context-count-value">
                                 <?php echo (int) $developerAllocationBadgeCount; ?> <?php echo (int) $developerAllocationBadgeCount === 1 ? 'item' : 'items'; ?>
@@ -4444,7 +4458,7 @@ include '../../includes/navbar.php';
                         </span>
                     </div>
                     <form method="GET" class="project-context-actions">
-                        <select id="developerProjectSelect" name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for developer allocation" required>
+                        <select id="developerProjectSelect" name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for <?php echo htmlspecialchars($deliveryAssigneeLower); ?> allocation" required>
                             <option value="">Select project</option>
                             <?php foreach ($developerProjectOptions as $developerProjectOption): ?>
                                 <?php
@@ -4506,7 +4520,7 @@ include '../../includes/navbar.php';
                 <div class="section-header">
                     <h5>
                         <i class="fas fa-code"></i>
-                        Ready for Developer Assignment
+                        Ready for <?php echo htmlspecialchars($deliveryAssigneeLabel); ?> Assignment
                         <span class="badge-count"><?php echo $readyDeveloperAssignmentCount; ?> <?php echo $readyDeveloperAssignmentCount === 1 ? 'assignment' : 'assignments'; ?></span>
                     </h5>
                 </div>
@@ -4514,11 +4528,11 @@ include '../../includes/navbar.php';
                     <?php if(!$projectId || !$project): ?>
                         <div class="empty-state">
                             <i class="fas fa-folder-open"></i>
-                            <p>Select a project for developer assignment</p>
+                            <p>Select a project for <?php echo htmlspecialchars($deliveryAssigneeLower); ?> assignment</p>
                         </div>
                     <?php elseif($readyDeveloperAssignmentCount > 0): ?>
                         <div class="task-allocation-table-wrap">
-                            <table class="task-allocation-table developer-assignment-table" aria-label="Developer assignments ready for allocation">
+                            <table class="task-allocation-table developer-assignment-table" aria-label="<?php echo htmlspecialchars($deliveryAssigneeLabel); ?> assignments ready for allocation">
                                 <thead>
                                     <tr>
                                         <th scope="col">Priority</th>
@@ -4594,7 +4608,7 @@ include '../../includes/navbar.php';
                                                 <?php echo $isBulkAssignment ? $featureCount . ' grouped features' : htmlspecialchars((string) $task['title']); ?>
                                             </span>
                                             <span class="allocation-task-secondary">
-                                                <?php echo $isBulkAssignment ? 'Assigned together to one developer' : 'Ready for developer allocation'; ?>
+                                                <?php echo $isBulkAssignment ? 'Assigned together to one ' . htmlspecialchars($deliveryAssigneeLower) : 'Ready for ' . htmlspecialchars($deliveryAssigneeLower) . ' allocation'; ?>
                                             </span>
                                         </td>
                                         <td>
@@ -4661,7 +4675,7 @@ include '../../includes/navbar.php';
                                                     type="button"
                                                     onclick="openAssignDeveloperModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode($assignmentTitle); ?>'), '<?php echo htmlspecialchars($assignmentDeadlineValue, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapStart, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapEnd, ENT_QUOTES); ?>')"
                                                 >
-                                                    <i class="fas fa-user-plus"></i> Assign Developer
+                                                    <i class="fas fa-user-plus"></i> <?php echo htmlspecialchars($deliveryAssignmentAction); ?>
                                                 </button>
                                             </div>
                                         </td>
@@ -4673,7 +4687,7 @@ include '../../includes/navbar.php';
                 <?php else: ?>
                     <div class="empty-state">
                         <i class="fas fa-check-circle"></i>
-                        <p>No tasks ready for developer assignment</p>
+                        <p>No tasks ready for <?php echo htmlspecialchars($deliveryAssigneeLower); ?> assignment</p>
                     </div>
                 <?php endif; ?>
                 </div>
@@ -4708,7 +4722,7 @@ include '../../includes/navbar.php';
                                 </div>
                                 <div class="task-meta">
                                     <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                                    <span><i class="fas fa-user"></i> Developer: <?php echo htmlspecialchars($task['developer_name']); ?></span>
+                                    <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($deliveryAssigneeLabel); ?>: <?php echo htmlspecialchars($task['developer_name']); ?></span>
                                     <span><i class="far fa-calendar-alt"></i> Due: <?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['deadline'] ?? null)); ?></span>
                                     <span class="text-<?php echo ($daysLeft !== null && $daysLeft <= 2) ? 'danger' : 'muted'; ?>">
                                         <?php echo $daysLeft !== null ? $daysLeft . ' days left' : 'No deadline set'; ?>
@@ -4761,7 +4775,7 @@ include '../../includes/navbar.php';
                                     </div>
                                     <div class="task-meta">
                                         <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars((string) $task['project_name']); ?></span>
-                                        <span><i class="fas fa-user"></i> Developer: <?php echo htmlspecialchars((string) $task['developer_name']); ?></span>
+                                        <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($deliveryAssigneeLabel); ?>: <?php echo htmlspecialchars((string) $task['developer_name']); ?></span>
                                         <?php if (!empty($task['branch_name'])): ?><span><i class="fas fa-code-branch"></i> <?php echo htmlspecialchars((string) $task['branch_name']); ?></span><?php endif; ?>
                                         <?php if (!empty($task['commit_hash'])): ?><span><i class="fas fa-hashtag"></i> <?php echo htmlspecialchars(substr((string) $task['commit_hash'], 0, 7)); ?></span><?php endif; ?>
                                     </div>
@@ -4825,7 +4839,7 @@ include '../../includes/navbar.php';
                                         </div>
                                         <div class="task-meta">
                                             <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars((string) $request['project_name']); ?></span>
-                                            <span><i class="fas fa-user"></i> Developer: <?php echo htmlspecialchars((string) ($request['developer_name'] ?? $request['requester_name'] ?? 'Developer')); ?></span>
+                                            <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($deliveryAssigneeLabel); ?>: <?php echo htmlspecialchars((string) ($request['developer_name'] ?? $request['requester_name'] ?? $deliveryAssigneeFallback)); ?></span>
                                             <span><i class="fas fa-clock"></i> Requested: <?php echo sulTaskAllocationFormatDeadline($request['created_at'] ?? null); ?></span>
                                             <span><i class="fas fa-list-check"></i> Current status: <?php echo htmlspecialchars(str_replace('_', ' ', (string) ($request['task_status'] ?? 'unknown'))); ?></span>
                                         </div>
@@ -4857,7 +4871,7 @@ include '../../includes/navbar.php';
                     <?php else: ?>
                         <div class="empty-state">
                             <i class="fas fa-check-circle"></i>
-                            <p>No developer reopen requests are waiting for SUL review</p>
+                            <p>No <?php echo htmlspecialchars($deliveryAssigneeLower); ?> reopen requests are waiting for SUL review</p>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -5065,16 +5079,16 @@ include '../../includes/navbar.php';
 </div>
 <?php endif; ?>
 
-<!-- Assign to Developer Modal -->
+<!-- Assign to Department Member Modal -->
 <?php if ($canManageDeveloperWorkflow): ?>
 <div class="modal fade modal-modern assign-expert-modal" id="assignDeveloperModal" tabindex="-1" aria-labelledby="assignDeveloperModalTitle">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="assignDeveloperModalTitle"><i class="fas fa-user-plus me-2"></i>Assign to Developer</h5>
+                <h5 class="modal-title" id="assignDeveloperModalTitle"><i class="fas fa-user-plus me-2"></i><?php echo htmlspecialchars($deliveryAssignmentModalTitle); ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" id="assignDeveloperForm" data-app-loading data-loading-title="Assigning developer" data-loading-text="Please wait while the developer assignment is saved.">
+            <form method="POST" id="assignDeveloperForm" data-app-loading data-loading-title="<?php echo htmlspecialchars($deliveryAssignmentLoadingTitle); ?>" data-loading-text="<?php echo htmlspecialchars($deliveryAssignmentLoadingText); ?>">
                 <div class="modal-body">
                     <input type="hidden" name="project_id" value="<?php echo (int) $projectId; ?>">
                     <input type="hidden" name="task_id" id="devTaskId">
@@ -5098,7 +5112,7 @@ include '../../includes/navbar.php';
 
                     <div class="expert-selection-heading">
                         <div>
-                            <h6>Choose the right developer</h6>
+                            <h6>Choose the right <?php echo htmlspecialchars($deliveryAssigneeLower); ?></h6>
                             <p>Compare profiles and active workload before assigning.</p>
                         </div>
                         <div class="expert-workload-legend" aria-label="Workload color guide">
@@ -5110,10 +5124,10 @@ include '../../includes/navbar.php';
 
                     <?php if ($developers->num_rows > 0): ?>
                         <div class="expert-selection-table-wrap">
-                            <table class="expert-selection-table" aria-label="Available developers and their current workloads">
+                            <table class="expert-selection-table" aria-label="Available <?php echo htmlspecialchars($deliveryAssigneePluralLower); ?> and their current workloads">
                                 <thead>
                                     <tr>
-                                        <th scope="col">Developer</th>
+                                        <th scope="col"><?php echo htmlspecialchars($deliveryAssigneeLabel); ?></th>
                                         <th scope="col">Role</th>
                                         <th scope="col">Active Tasks</th>
                                         <th scope="col">Capacity</th>
@@ -5127,9 +5141,9 @@ include '../../includes/navbar.php';
                                     while ($developer = $developers->fetch_assoc()):
                                         $activeTaskCount = (int) ($developer['assigned_tasks'] ?? 0);
                                         $workload = sulTaskAllocationWorkload($activeTaskCount);
-                                        $developerName = (string) ($developer['full_name'] ?? 'Developer');
+                                        $developerName = (string) ($developer['full_name'] ?? $deliveryAssigneeFallback);
                                         $developerRole = trim((string) ($developer['designation'] ?? ''));
-                                        $developerRole = $developerRole !== '' ? $developerRole : 'Developer';
+                                        $developerRole = $developerRole !== '' ? $developerRole : $deliveryAssigneeFallback;
                                         $profileUrl = sulTaskAllocationProfileUrl($developer['profile_pic'] ?? null);
                                         $isRecommended = $developerPosition === 0;
                                 ?>
@@ -5190,22 +5204,22 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="expert-assignment-note">
                             <i class="fas fa-circle-info" aria-hidden="true"></i>
-                            Bulk feature groups are assigned to the selected developer together.
+                            Bulk feature groups are assigned to the selected <?php echo htmlspecialchars($deliveryAssigneeLower); ?> together.
                         </div>
                     <?php else: ?>
                         <div class="empty-state">
                             <i class="fas fa-user-slash"></i>
-                            <p>No active developers are available in this department.</p>
+                            <p>No active <?php echo htmlspecialchars($deliveryAssigneePluralLower); ?> are available in this department.</p>
                         </div>
                     <?php endif; ?>
                 </div>
                 <div class="modal-footer">
                     <span class="expert-selection-summary" id="developerSelectionSummary">
-                        <?php echo $developers->num_rows > 0 ? 'No developer selected' : 'No developers available'; ?>
+                        <?php echo htmlspecialchars($developers->num_rows > 0 ? $deliveryNoSelectionText : $deliveryNoAvailableText); ?>
                     </span>
                     <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" name="assign_to_developer" class="btn-primary-modern" id="confirmDeveloperAssignment" disabled>
-                        <i class="fas fa-user-check" aria-hidden="true"></i> Assign to Developer
+                        <i class="fas fa-user-check" aria-hidden="true"></i> <?php echo htmlspecialchars($deliveryAssignmentModalTitle); ?>
                     </button>
                 </div>
             </form>
@@ -5452,6 +5466,10 @@ if (reviewResult) {
 const developerChoiceRows = Array.from(document.querySelectorAll('[data-developer-choice]'));
 const confirmDeveloperAssignment = document.getElementById('confirmDeveloperAssignment');
 const developerSelectionSummary = document.getElementById('developerSelectionSummary');
+const deliveryNoSelectionText = <?php echo json_encode($deliveryNoSelectionText); ?>;
+const deliveryAssigneeFallback = <?php echo json_encode($deliveryAssigneeFallback); ?>;
+const deliveryAssignmentReadyMessage = <?php echo json_encode('The task will become ready for ' . $deliveryAssigneeLower . ' assignment.'); ?>;
+const deliveryAssignmentLoadingMessage = <?php echo json_encode('Please wait while the task is prepared for ' . $deliveryAssigneeLower . ' assignment.'); ?>;
 
 function clearDeveloperChoice() {
     developerChoiceRows.forEach(row => {
@@ -5463,7 +5481,7 @@ function clearDeveloperChoice() {
 
     if (confirmDeveloperAssignment) confirmDeveloperAssignment.disabled = true;
     if (developerSelectionSummary && developerChoiceRows.length > 0) {
-        developerSelectionSummary.textContent = 'No developer selected';
+        developerSelectionSummary.textContent = deliveryNoSelectionText;
     }
 }
 
@@ -5484,7 +5502,7 @@ function selectDeveloperChoice(row) {
         developerSelectionSummary.replaceChildren(
             document.createTextNode('Selected: '),
             Object.assign(document.createElement('strong'), {
-                textContent: row.dataset.developerName || 'Developer'
+                textContent: row.dataset.developerName || deliveryAssigneeFallback
             })
         );
     }
@@ -5515,7 +5533,7 @@ async function approveEstimation(taskId) {
     const confirmed = await appConfirm({
         title: 'Approve Estimation',
         subject: 'Approve this estimation?',
-        message: 'The task will become ready for developer assignment.',
+        message: deliveryAssignmentReadyMessage,
         icon: 'fas fa-circle-check fa-lg',
         confirmIcon: 'fas fa-check',
         confirmText: 'Approve'
@@ -5523,7 +5541,7 @@ async function approveEstimation(taskId) {
     if (!confirmed) return;
 
     if (window.appShowLoading) {
-        window.appShowLoading('Approving estimation', 'Please wait while the task is prepared for developer assignment.');
+        window.appShowLoading('Approving estimation', deliveryAssignmentLoadingMessage);
     }
 
     const form = document.createElement('form');
