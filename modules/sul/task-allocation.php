@@ -265,20 +265,35 @@ $sulMissingDepartment = $sulDepartment === '';
 $isExpertDepartmentSul = $sulDepartmentLabel === 'Expert Department';
 $canManageExpertWorkflow = !$sulMissingDepartment && $isExpertDepartmentSul;
 $canManageDeveloperWorkflow = !$sulMissingDepartment && !$isExpertDepartmentSul;
-$isUiUxDepartmentSul = $sulDepartmentLabel === 'UI/UX';
-$deliveryWorkflowLabel = $isUiUxDepartmentSul ? 'UI/UX Workflow' : 'Developer Workflow';
-$deliveryAssigneeLabel = $isUiUxDepartmentSul ? 'UI/UX' : 'Developer';
-$deliveryAssigneeFallback = $isUiUxDepartmentSul ? 'UI/UX Designer' : 'Developer';
-$deliveryAssigneeLower = $isUiUxDepartmentSul ? 'UI/UX designer' : 'developer';
-$deliveryAssigneePluralLower = $isUiUxDepartmentSul ? 'UI/UX designers' : 'developers';
-$deliveryAssignmentAction = $isUiUxDepartmentSul ? 'Assign UI/UX' : 'Assign Developer';
-$deliveryAssignmentModalTitle = $isUiUxDepartmentSul ? 'Assign to UI/UX' : 'Assign to Developer';
-$deliveryAssignmentLoadingTitle = $isUiUxDepartmentSul ? 'Assigning UI/UX' : 'Assigning developer';
-$deliveryAssignmentLoadingText = $isUiUxDepartmentSul
-    ? 'Please wait while the UI/UX assignment is saved.'
-    : 'Please wait while the developer assignment is saved.';
-$deliveryNoSelectionText = $isUiUxDepartmentSul ? 'No UI/UX designer selected' : 'No developer selected';
-$deliveryNoAvailableText = $isUiUxDepartmentSul ? 'No UI/UX designers available' : 'No developers available';
+$departmentAssigneeLabels = [
+    'UI/UX' => ['label' => 'UI/UX', 'fallback' => 'UI/UX Designer', 'lower' => 'UI/UX designer', 'plural' => 'UI/UX designers'],
+    'Frontend' => ['label' => 'Frontend', 'fallback' => 'Frontend Developer', 'lower' => 'frontend developer', 'plural' => 'frontend developers'],
+    'Backend' => ['label' => 'Backend', 'fallback' => 'Backend Developer', 'lower' => 'backend developer', 'plural' => 'backend developers'],
+    'Mobile' => ['label' => 'Mobile', 'fallback' => 'Mobile Developer', 'lower' => 'mobile developer', 'plural' => 'mobile developers'],
+    'Database' => ['label' => 'Database', 'fallback' => 'Database Administrator', 'lower' => 'database specialist', 'plural' => 'database specialists'],
+    'DevOps' => ['label' => 'DevOps', 'fallback' => 'DevOps Engineer', 'lower' => 'DevOps engineer', 'plural' => 'DevOps engineers'],
+    'AI' => ['label' => 'AI', 'fallback' => 'AI Engineer', 'lower' => 'AI engineer', 'plural' => 'AI engineers'],
+    'Security' => ['label' => 'Security', 'fallback' => 'Security Engineer', 'lower' => 'security engineer', 'plural' => 'security engineers'],
+    'QA' => ['label' => 'QA', 'fallback' => 'QA Engineer', 'lower' => 'QA engineer', 'plural' => 'QA engineers'],
+    'Other Departments' => ['label' => 'Department Member', 'fallback' => 'Department Member', 'lower' => 'department member', 'plural' => 'department members'],
+];
+$deliveryAssigneeCopy = $departmentAssigneeLabels[$sulDepartmentLabel] ?? [
+    'label' => $sulDepartmentLabel !== '' ? $sulDepartmentLabel : 'Developer',
+    'fallback' => $sulDepartmentLabel !== '' ? $sulDepartmentLabel . ' Member' : 'Developer',
+    'lower' => $sulDepartmentLabel !== '' ? strtolower($sulDepartmentLabel) . ' member' : 'developer',
+    'plural' => $sulDepartmentLabel !== '' ? strtolower($sulDepartmentLabel) . ' members' : 'developers',
+];
+$deliveryAssigneeLabel = $deliveryAssigneeCopy['label'];
+$deliveryAssigneeFallback = $deliveryAssigneeCopy['fallback'];
+$deliveryAssigneeLower = $deliveryAssigneeCopy['lower'];
+$deliveryAssigneePluralLower = $deliveryAssigneeCopy['plural'];
+$deliveryWorkflowLabel = $deliveryAssigneeLabel . ' Workflow';
+$deliveryAssignmentAction = 'Assign ' . $deliveryAssigneeLabel;
+$deliveryAssignmentModalTitle = 'Assign to ' . $deliveryAssigneeLabel;
+$deliveryAssignmentLoadingTitle = 'Assigning ' . $deliveryAssigneeLabel;
+$deliveryAssignmentLoadingText = 'Please wait while the ' . $deliveryAssigneeLower . ' assignment is saved.';
+$deliveryNoSelectionText = 'No ' . $deliveryAssigneeLower . ' selected';
+$deliveryNoAvailableText = 'No ' . $deliveryAssigneePluralLower . ' available';
 $sulUserDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : ' AND 1 = 0';
 $sulProjectFilter = sulTaskAllocationProjectFilter($conn, 'p', $sulDepartment);
 $sulTaskDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
@@ -2370,6 +2385,19 @@ include '../../includes/navbar.php';
     min-width: 1050px;
 }
 
+.developer-workflow-table {
+    min-width: 980px;
+}
+
+.developer-review-table,
+.developer-reopen-table {
+    min-width: 1120px;
+}
+
+.task-allocation-table tbody tr.is-static-row {
+    cursor: default;
+}
+
 .task-allocation-table thead th {
     background: var(--gray-50);
     border-bottom: 1px solid var(--gray-200);
@@ -2421,6 +2449,37 @@ include '../../includes/navbar.php';
     display: block;
     font-size: .7rem;
     margin-top: .2rem;
+}
+
+.workflow-table-note {
+    color: var(--gray-600);
+    display: block;
+    line-height: 1.45;
+    max-width: 360px;
+}
+
+.workflow-table-note.is-muted {
+    color: var(--gray-500);
+    font-size: .72rem;
+    margin-top: .25rem;
+}
+
+.workflow-decision-form {
+    display: grid;
+    gap: .55rem;
+    min-width: 260px;
+}
+
+.workflow-decision-form .form-control-custom {
+    font-size: .74rem;
+    min-height: 58px;
+}
+
+.workflow-action-row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
 }
 
 .allocation-scope-single {
@@ -4709,34 +4768,61 @@ include '../../includes/navbar.php';
                             <p>Select a project for active work</p>
                         </div>
                     <?php elseif($inProgressTasks->num_rows > 0): ?>
-                    <?php while($task = $inProgressTasks->fetch_assoc()): 
-                        $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
-                    ?>
-                    <div class="task-card">
-                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-                            <div>
-                                <div class="d-flex align-items-center gap-2 mb-1">
-                                    <span class="task-priority priority-<?php echo $task['priority']; ?>"><?php echo ucfirst($task['priority']); ?></span>
-                                    <span class="task-title"><?php echo htmlspecialchars($task['title']); ?></span>
-                                    <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
-                                </div>
-                                <div class="task-meta">
-                                    <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                                    <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($deliveryAssigneeLabel); ?>: <?php echo htmlspecialchars($task['developer_name']); ?></span>
-                                    <span><i class="far fa-calendar-alt"></i> Due: <?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['deadline'] ?? null)); ?></span>
-                                    <span class="text-<?php echo ($daysLeft !== null && $daysLeft <= 2) ? 'danger' : 'muted'; ?>">
-                                        <?php echo $daysLeft !== null ? $daysLeft . ' days left' : 'No deadline set'; ?>
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="d-flex gap-2 flex-wrap">
-                                <button class="btn-outline-modern" onclick="viewTaskDetails(<?php echo $task['id']; ?>)">
-                                    <i class="fas fa-eye"></i> View
-                                </button>
-                            </div>
+                        <div class="task-allocation-table-wrap">
+                            <table class="task-allocation-table developer-workflow-table" aria-label="Tasks currently in progress">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Priority</th>
+                                        <th scope="col">Task</th>
+                                        <th scope="col"><?php echo htmlspecialchars($deliveryAssigneeLabel); ?></th>
+                                        <th scope="col">Deadline</th>
+                                        <th scope="col" class="allocation-actions-heading">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                <?php while($task = $inProgressTasks->fetch_assoc()):
+                                    $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
+                                    $priority = (string) ($task['priority'] ?? 'medium');
+                                ?>
+                                    <tr tabindex="0" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); viewTaskDetails(<?php echo (int) $task['id']; ?>); }">
+                                        <td>
+                                            <span class="task-priority priority-<?php echo htmlspecialchars($priority); ?>"><?php echo htmlspecialchars(ucfirst($priority)); ?></span>
+                                        </td>
+                                        <td>
+                                            <span class="allocation-task-name"><?php echo htmlspecialchars((string) $task['title']); ?></span>
+                                            <span class="allocation-task-secondary">
+                                                <i class="fas fa-folder" aria-hidden="true"></i>
+                                                <?php echo htmlspecialchars((string) $task['project_name']); ?>
+                                            </span>
+                                            <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
+                                        </td>
+                                        <td>
+                                            <span class="allocation-deadline"><?php echo htmlspecialchars((string) $task['developer_name']); ?></span>
+                                            <span class="allocation-deadline-note">Assigned <?php echo htmlspecialchars($deliveryAssigneeLower); ?></span>
+                                        </td>
+                                        <td>
+                                            <?php if ($daysLeft !== null): ?>
+                                                <span class="allocation-deadline"><?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['deadline'] ?? null)); ?></span>
+                                                <span class="allocation-deadline-note<?php echo $daysLeft <= 2 ? ' is-urgent' : ''; ?>">
+                                                    <?php echo $daysLeft < 0 ? abs($daysLeft) . ' day' . (abs($daysLeft) === 1 ? '' : 's') . ' overdue' : ($daysLeft === 0 ? 'Due today' : $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's') . ' left'); ?>
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="allocation-deadline">No deadline</span>
+                                                <span class="allocation-deadline-note">Schedule not set</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <div class="allocation-table-actions" onclick="event.stopPropagation();">
+                                                <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
+                                                    <i class="fas fa-eye"></i> View
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                                </tbody>
+                            </table>
                         </div>
-                    </div>
-                    <?php endwhile; ?>
                 <?php else: ?>
                     <div class="empty-state">
                         <i class="fas fa-play-circle"></i>
@@ -4762,48 +4848,77 @@ include '../../includes/navbar.php';
                         <p>Select a project for code review</p>
                     </div>
                 <?php elseif($codeReviewTasks->num_rows > 0): ?>
-                    <?php while($task = $codeReviewTasks->fetch_assoc()): ?>
-                    <div class="task-card">
-                        <form method="POST" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
-                            <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
-                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-                                <div class="flex-grow-1">
-                                    <div class="d-flex align-items-center gap-2 mb-1">
-                                        <span class="task-priority priority-<?php echo htmlspecialchars((string) $task['priority']); ?>"><?php echo ucfirst((string) $task['priority']); ?></span>
-                                        <span class="task-title"><?php echo htmlspecialchars((string) $task['title']); ?></span>
+                    <div class="task-allocation-table-wrap">
+                        <table class="task-allocation-table developer-review-table" aria-label="Pull requests waiting for SUL review">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Priority</th>
+                                    <th scope="col">Task</th>
+                                    <th scope="col"><?php echo htmlspecialchars($deliveryAssigneeLabel); ?></th>
+                                    <th scope="col">Repository</th>
+                                    <th scope="col" class="allocation-actions-heading">Review Decision</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            <?php while($task = $codeReviewTasks->fetch_assoc()):
+                                $priority = (string) ($task['priority'] ?? 'medium');
+                            ?>
+                                <tr class="is-static-row">
+                                    <td>
+                                        <span class="task-priority priority-<?php echo htmlspecialchars($priority); ?>"><?php echo htmlspecialchars(ucfirst($priority)); ?></span>
+                                    </td>
+                                    <td>
+                                        <span class="allocation-task-name"><?php echo htmlspecialchars((string) $task['title']); ?></span>
+                                        <span class="allocation-task-secondary">
+                                            <i class="fas fa-folder" aria-hidden="true"></i>
+                                            <?php echo htmlspecialchars((string) $task['project_name']); ?>
+                                        </span>
                                         <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
-                                    </div>
-                                    <div class="task-meta">
-                                        <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars((string) $task['project_name']); ?></span>
-                                        <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($deliveryAssigneeLabel); ?>: <?php echo htmlspecialchars((string) $task['developer_name']); ?></span>
-                                        <?php if (!empty($task['branch_name'])): ?><span><i class="fas fa-code-branch"></i> <?php echo htmlspecialchars((string) $task['branch_name']); ?></span><?php endif; ?>
-                                        <?php if (!empty($task['commit_hash'])): ?><span><i class="fas fa-hashtag"></i> <?php echo htmlspecialchars(substr((string) $task['commit_hash'], 0, 7)); ?></span><?php endif; ?>
-                                    </div>
-                                    <div class="d-flex gap-2 flex-wrap mt-2">
-                                        <?php if (!empty($task['pull_request_url'])): ?>
-                                            <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['pull_request_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-code-pull-request"></i> Pull Request</a>
+                                    </td>
+                                    <td>
+                                        <span class="allocation-deadline"><?php echo htmlspecialchars((string) $task['developer_name']); ?></span>
+                                        <span class="allocation-deadline-note">Submitted work</span>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($task['branch_name'])): ?>
+                                            <span class="allocation-deadline"><i class="fas fa-code-branch" aria-hidden="true"></i> <?php echo htmlspecialchars((string) $task['branch_name']); ?></span>
+                                        <?php else: ?>
+                                            <span class="allocation-deadline">Branch not linked</span>
                                         <?php endif; ?>
-                                        <?php if (!empty($task['repository_url'])): ?>
-                                            <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['repository_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-link"></i> Repository</a>
+                                        <?php if (!empty($task['commit_hash'])): ?>
+                                            <span class="allocation-deadline-note"><i class="fas fa-hashtag" aria-hidden="true"></i> <?php echo htmlspecialchars(substr((string) $task['commit_hash'], 0, 7)); ?></span>
                                         <?php endif; ?>
-                                        <button type="button" class="btn-outline-modern" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
-                                            <i class="fas fa-eye"></i> View
-                                        </button>
-                                    </div>
-                                    <textarea name="review_comment" class="form-control-custom mt-3" rows="2" placeholder="Approval note or revision comments"></textarea>
-                                </div>
-                                <div class="d-flex gap-2 flex-wrap">
-                                    <button type="submit" name="sul_approve_pr" class="btn-success-modern">
-                                        <i class="fas fa-check"></i> Approve
-                                    </button>
-                                    <button type="submit" name="sul_request_revision" class="btn-warning-modern">
-                                        <i class="fas fa-undo"></i> Request Revision
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
+                                        <div class="workflow-action-row mt-2">
+                                            <?php if (!empty($task['pull_request_url'])): ?>
+                                                <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['pull_request_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-code-pull-request"></i> PR</a>
+                                            <?php endif; ?>
+                                            <?php if (!empty($task['repository_url'])): ?>
+                                                <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['repository_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-link"></i> Repo</a>
+                                            <?php endif; ?>
+                                            <button type="button" class="btn-outline-modern" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
+                                                <i class="fas fa-eye"></i> View
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <form class="workflow-decision-form" method="POST" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
+                                            <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
+                                            <textarea name="review_comment" class="form-control-custom" rows="2" placeholder="Approval note or revision comments"></textarea>
+                                            <div class="workflow-action-row">
+                                                <button type="submit" name="sul_approve_pr" class="btn-success-modern">
+                                                    <i class="fas fa-check"></i> Approve
+                                                </button>
+                                                <button type="submit" name="sul_request_revision" class="btn-warning-modern">
+                                                    <i class="fas fa-undo"></i> Request Revision
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                            </tbody>
+                        </table>
                     </div>
-                    <?php endwhile; ?>
                 <?php else: ?>
                     <div class="empty-state">
                         <i class="fas fa-code-branch"></i>
@@ -4824,50 +4939,72 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="p-3 allocation-column-body">
                     <?php if($developerReopenRequestCount > 0): ?>
-                        <?php foreach($reopenRequests as $request): ?>
-                        <div class="task-card">
-                            <form method="POST" data-app-loading data-loading-title="Reviewing reopen request" data-loading-text="Please wait while the reopen request is updated.">
-                                <input type="hidden" name="reopen_request_id" value="<?php echo (int) $request['id']; ?>">
-                                <input type="hidden" name="project_id" value="<?php echo (int) ($request['project_id'] ?? $projectId); ?>">
-                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-                                    <div class="flex-grow-1">
-                                        <div class="d-flex align-items-center gap-2 mb-1">
-                                            <span class="task-priority priority-<?php echo strtolower((string) ($request['severity'] ?? 'minor')) === 'major' ? 'critical' : 'medium'; ?>">
-                                                <?php echo htmlspecialchars(taskReopenSeverityLabel((string) ($request['severity'] ?? 'minor'))); ?>
+                        <div class="task-allocation-table-wrap">
+                            <table class="task-allocation-table developer-reopen-table" aria-label="Reopen requests waiting for SUL review">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Severity</th>
+                                        <th scope="col">Task</th>
+                                        <th scope="col">Requested By</th>
+                                        <th scope="col">Request Reason</th>
+                                        <th scope="col" class="allocation-actions-heading">Decision</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach($reopenRequests as $request):
+                                    $severity = (string) ($request['severity'] ?? 'minor');
+                                    $severityTone = strtolower($severity) === 'major' ? 'critical' : 'medium';
+                                ?>
+                                    <tr class="is-static-row">
+                                        <td>
+                                            <span class="task-priority priority-<?php echo htmlspecialchars($severityTone); ?>">
+                                                <?php echo htmlspecialchars(taskReopenSeverityLabel($severity)); ?>
                                             </span>
-                                            <span class="task-title"><?php echo htmlspecialchars((string) $request['task_title']); ?></span>
-                                        </div>
-                                        <div class="task-meta">
-                                            <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars((string) $request['project_name']); ?></span>
-                                            <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($deliveryAssigneeLabel); ?>: <?php echo htmlspecialchars((string) ($request['developer_name'] ?? $request['requester_name'] ?? $deliveryAssigneeFallback)); ?></span>
-                                            <span><i class="fas fa-clock"></i> Requested: <?php echo sulTaskAllocationFormatDeadline($request['created_at'] ?? null); ?></span>
-                                            <span><i class="fas fa-list-check"></i> Current status: <?php echo htmlspecialchars(str_replace('_', ' ', (string) ($request['task_status'] ?? 'unknown'))); ?></span>
-                                        </div>
-                                        <div class="alert alert-light border mt-3 mb-3">
-                                            <div class="fw-semibold mb-1">Developer reason</div>
-                                            <div><?php echo nl2br(htmlspecialchars((string) ($request['reason'] ?? ''))); ?></div>
-                                        </div>
-                                        <div class="small text-muted mb-3">
-                                            <?php if (strtolower((string) ($request['severity'] ?? 'minor')) === 'major'): ?>
-                                                Major means the change may affect other work. Accepting sends it to Architect so later phases can be reopened if needed.
-                                            <?php else: ?>
-                                                Minor means the change should only reopen this task for revision.
-                                            <?php endif; ?>
-                                        </div>
-                                        <textarea name="sul_comment" class="form-control-custom" rows="2" placeholder="SUL note for Architect or rejection reason"></textarea>
-                                    </div>
-                                    <div class="d-flex gap-2 flex-wrap">
-                                        <button type="submit" name="sul_approve_reopen" class="btn-success-modern">
-                                            <i class="fas fa-check"></i> Accept and Send to Architect
-                                        </button>
-                                        <button type="submit" name="sul_reject_reopen" class="btn-warning-modern">
-                                            <i class="fas fa-ban"></i> Reject
-                                        </button>
-                                    </div>
-                                </div>
-                            </form>
+                                        </td>
+                                        <td>
+                                            <span class="allocation-task-name"><?php echo htmlspecialchars((string) $request['task_title']); ?></span>
+                                            <span class="allocation-task-secondary">
+                                                <i class="fas fa-folder" aria-hidden="true"></i>
+                                                <?php echo htmlspecialchars((string) $request['project_name']); ?>
+                                            </span>
+                                            <span class="allocation-task-secondary">
+                                                Current status: <?php echo htmlspecialchars(str_replace('_', ' ', (string) ($request['task_status'] ?? 'unknown'))); ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="allocation-deadline"><?php echo htmlspecialchars((string) ($request['developer_name'] ?? $request['requester_name'] ?? $deliveryAssigneeFallback)); ?></span>
+                                            <span class="allocation-deadline-note">Requested <?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($request['created_at'] ?? null)); ?></span>
+                                        </td>
+                                        <td>
+                                            <span class="workflow-table-note"><?php echo nl2br(htmlspecialchars((string) ($request['reason'] ?? ''))); ?></span>
+                                            <span class="workflow-table-note is-muted">
+                                                <?php if (strtolower($severity) === 'major'): ?>
+                                                    May affect other work; accepting sends it to Architect.
+                                                <?php else: ?>
+                                                    Reopens only this task for revision.
+                                                <?php endif; ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <form class="workflow-decision-form" method="POST" data-app-loading data-loading-title="Reviewing reopen request" data-loading-text="Please wait while the reopen request is updated.">
+                                                <input type="hidden" name="reopen_request_id" value="<?php echo (int) $request['id']; ?>">
+                                                <input type="hidden" name="project_id" value="<?php echo (int) ($request['project_id'] ?? $projectId); ?>">
+                                                <textarea name="sul_comment" class="form-control-custom" rows="2" placeholder="SUL note for Architect or rejection reason"></textarea>
+                                                <div class="workflow-action-row">
+                                                    <button type="submit" name="sul_approve_reopen" class="btn-success-modern">
+                                                        <i class="fas fa-check"></i> Accept
+                                                    </button>
+                                                    <button type="submit" name="sul_reject_reopen" class="btn-warning-modern">
+                                                        <i class="fas fa-ban"></i> Reject
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
-                        <?php endforeach; ?>
                     <?php else: ?>
                         <div class="empty-state">
                             <i class="fas fa-check-circle"></i>
@@ -4893,33 +5030,51 @@ include '../../includes/navbar.php';
                         <p>Select a project for completed tasks</p>
                     </div>
                 <?php elseif($completedTasks->num_rows > 0): ?>
-                    <?php while($task = $completedTasks->fetch_assoc()): ?>
-                    <div class="task-card bg-light">
-                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                            <div>
-                                <div class="d-flex align-items-center gap-2">
-                                    <s class="task-title"><?php echo htmlspecialchars($task['title']); ?></s>
-                                    <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
-                                </div>
-                                <div class="task-meta">
-                                    <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($task['project_name']); ?></span>
-                                    <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($task['assigned_to_name']); ?></span>
-                                    <span><i class="fas fa-check-circle text-success"></i> Completed: <?php echo sulTaskAllocationFormatDeadline($task['completed_at'] ?? null); ?></span>
-                                </div>
-                            </div>
-                            <div class="d-flex gap-2 flex-wrap">
-                                <button class="btn-outline-modern" onclick="viewTaskDetails(<?php echo $task['id']; ?>)">
-                                    <i class="fas fa-eye"></i> View
-                                </button>
-                                <?php if (empty($task['architect_reviewed_at'])): ?>
-                                    <button class="btn-warning-modern" onclick="openReviseCompletedModal(<?php echo $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))">
-                                        <i class="fas fa-undo"></i> Revise
-                                    </button>
-                                <?php endif; ?>
-                            </div>
-                        </div>
+                    <div class="task-allocation-table-wrap">
+                        <table class="task-allocation-table developer-workflow-table" aria-label="Recently completed tasks">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Task</th>
+                                    <th scope="col">Project</th>
+                                    <th scope="col"><?php echo htmlspecialchars($deliveryAssigneeLabel); ?></th>
+                                    <th scope="col">Completed</th>
+                                    <th scope="col" class="allocation-actions-heading">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            <?php while($task = $completedTasks->fetch_assoc()): ?>
+                                <tr tabindex="0" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)" onkeydown="if(event.key === 'Enter' || event.key === ' '){ event.preventDefault(); viewTaskDetails(<?php echo (int) $task['id']; ?>); }">
+                                    <td>
+                                        <span class="allocation-task-name"><?php echo htmlspecialchars((string) $task['title']); ?></span>
+                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
+                                    </td>
+                                    <td>
+                                        <span class="allocation-deadline"><?php echo htmlspecialchars((string) $task['project_name']); ?></span>
+                                    </td>
+                                    <td>
+                                        <span class="allocation-deadline"><?php echo htmlspecialchars((string) ($task['assigned_to_name'] ?? $deliveryAssigneeFallback)); ?></span>
+                                    </td>
+                                    <td>
+                                        <span class="estimation-badge"><i class="fas fa-check-circle"></i> Done</span>
+                                        <span class="allocation-deadline-note"><?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['completed_at'] ?? null)); ?></span>
+                                    </td>
+                                    <td>
+                                        <div class="allocation-table-actions" onclick="event.stopPropagation();">
+                                            <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
+                                                <i class="fas fa-eye"></i> View
+                                            </button>
+                                            <?php if (empty($task['architect_reviewed_at'])): ?>
+                                                <button class="btn-warning-modern" type="button" onclick="openReviseCompletedModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))">
+                                                    <i class="fas fa-undo"></i> Revise
+                                                </button>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                            </tbody>
+                        </table>
                     </div>
-                    <?php endwhile; ?>
                 <?php else: ?>
                     <div class="empty-state">
                         <i class="fas fa-trophy"></i>
