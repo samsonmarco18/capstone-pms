@@ -2219,6 +2219,7 @@ include '../../includes/navbar.php';
     gap: 0.55rem;
     grid-template-columns: minmax(220px, 1fr) auto;
     justify-self: end;
+    min-width: 0;
     width: min(100%, 640px);
 }
 
@@ -2281,6 +2282,7 @@ include '../../includes/navbar.php';
 .project-picker {
     min-width: 0;
     position: relative;
+    width: 100%;
 }
 
 .project-picker[open] {
@@ -2298,6 +2300,7 @@ include '../../includes/navbar.php';
     grid-template-columns: minmax(0, 1fr) auto;
     list-style: none;
     min-height: 42px;
+    min-width: 0;
     padding: 0.45rem 0.7rem 0.45rem 0.85rem;
     transition: border-color .18s ease, box-shadow .18s ease;
 }
@@ -2318,6 +2321,7 @@ include '../../includes/navbar.php';
     display: flex;
     gap: 0.55rem;
     min-width: 0;
+    overflow: hidden;
 }
 
 .project-picker-selected-name {
@@ -2330,6 +2334,16 @@ include '../../includes/navbar.php';
 
 .project-picker-selected .project-queue-chip {
     flex: 0 0 auto;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.project-picker-selected .project-picker-chips {
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .project-picker-chevron {
@@ -2353,7 +2367,7 @@ include '../../includes/navbar.php';
     padding: 0.45rem;
     position: absolute;
     right: 0;
-    width: min(720px, calc(100vw - 3rem));
+    width: 100%;
 }
 
 .project-picker-group + .project-picker-group {
