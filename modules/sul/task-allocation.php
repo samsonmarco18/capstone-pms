@@ -179,6 +179,60 @@ function sulTaskAllocationBulkEntityBadge(array $task): string
         . '</span>';
 }
 
+function sulTaskAllocationProjectOptionGroups(array $options, array $countKeys): array
+{
+    $active = [];
+    $inactive = [];
+
+    foreach ($options as $option) {
+        $total = 0;
+        foreach ($countKeys as $countKey) {
+            $total += (int) ($option[$countKey] ?? 0);
+        }
+
+        $option['_queue_total'] = $total;
+        if ($total > 0) {
+            $active[] = $option;
+        } else {
+            $inactive[] = $option;
+        }
+    }
+
+    $sortByQueue = static function (array $a, array $b): int {
+        $totalCompare = ((int) ($b['_queue_total'] ?? 0)) <=> ((int) ($a['_queue_total'] ?? 0));
+        if ($totalCompare !== 0) {
+            return $totalCompare;
+        }
+
+        return strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+    };
+
+    $sortByName = static fn(array $a, array $b): int => strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+
+    usort($active, $sortByQueue);
+    usort($inactive, $sortByName);
+
+    return [
+        'Active projects' => $active,
+        'No active items' => $inactive,
+    ];
+}
+
+function sulTaskAllocationProjectOptionLabel(string $projectName, array $metrics): string
+{
+    $parts = [];
+    foreach ($metrics as $metric) {
+        $count = (int) ($metric['count'] ?? 0);
+        if ($count <= 0) {
+            continue;
+        }
+
+        $parts[] = $count . ' ' . (string) ($metric['label'] ?? 'item');
+    }
+
+    return $projectName . ' - ' . ($parts !== [] ? implode(' | ', $parts) : 'No active items');
+}
+
 function sulTaskAllocationRoadmapEntityRows(
     mysqli|PgsqlMysqliCompatConnection $conn,
     int $projectId,
@@ -3951,16 +4005,28 @@ include '../../includes/navbar.php';
                     <form method="GET" class="project-context-actions">
                         <select id="expertProjectSelect" name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for expert allocation" required>
                             <option value="">Select project</option>
-                            <?php foreach ($expertProjectOptions as $expertProjectOption): ?>
-                                <?php
-                                    $optionUnassigned = (int) ($expertProjectOption['unassigned_count'] ?? 0);
-                                    $optionPending = (int) ($expertProjectOption['pending_count'] ?? 0);
-                                    $optionReview = (int) ($expertProjectOption['review_count'] ?? 0) + (int) ($expertProjectOption['project_review_count'] ?? 0);
-                                ?>
-                                <option value="<?php echo (int) $expertProjectOption['id']; ?>" <?php echo (int) $expertProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars((string) $expertProjectOption['name']); ?>
-                                    (<?php echo $optionUnassigned; ?> unassigned features, <?php echo $optionPending; ?> pending, <?php echo $optionReview; ?> review)
-                                </option>
+                            <?php foreach (sulTaskAllocationProjectOptionGroups($expertProjectOptions, ['unassigned_count', 'pending_count', 'review_count', 'project_review_count']) as $groupLabel => $groupOptions): ?>
+                                <?php if ($groupOptions === []) continue; ?>
+                                <optgroup label="<?php echo htmlspecialchars($groupLabel); ?>">
+                                    <?php foreach ($groupOptions as $expertProjectOption): ?>
+                                        <?php
+                                            $optionUnassigned = (int) ($expertProjectOption['unassigned_count'] ?? 0);
+                                            $optionPending = (int) ($expertProjectOption['pending_count'] ?? 0);
+                                            $optionReview = (int) ($expertProjectOption['review_count'] ?? 0) + (int) ($expertProjectOption['project_review_count'] ?? 0);
+                                            $optionLabel = sulTaskAllocationProjectOptionLabel(
+                                                (string) $expertProjectOption['name'],
+                                                [
+                                                    ['count' => $optionUnassigned, 'label' => 'unassigned'],
+                                                    ['count' => $optionPending, 'label' => 'pending'],
+                                                    ['count' => $optionReview, 'label' => 'review'],
+                                                ]
+                                            );
+                                        ?>
+                                        <option value="<?php echo (int) $expertProjectOption['id']; ?>" <?php echo (int) $expertProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($optionLabel); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </optgroup>
                             <?php endforeach; ?>
                         </select>
                         <?php if ($projectId && $project): ?>
@@ -4519,17 +4585,30 @@ include '../../includes/navbar.php';
                     <form method="GET" class="project-context-actions">
                         <select id="developerProjectSelect" name="project_id" class="form-select-custom" onchange="this.form.submit()" aria-label="Select project for <?php echo htmlspecialchars($deliveryAssigneeLower); ?> allocation" required>
                             <option value="">Select project</option>
-                            <?php foreach ($developerProjectOptions as $developerProjectOption): ?>
-                                <?php
-                                    $optionReady = (int) ($developerProjectOption['ready_count'] ?? 0);
-                                    $optionProgress = (int) ($developerProjectOption['in_progress_count'] ?? 0);
-                                    $optionReview = (int) ($developerProjectOption['review_count'] ?? 0);
-                                    $optionReopen = (int) ($developerProjectOption['reopen_count'] ?? 0);
-                                ?>
-                                <option value="<?php echo (int) $developerProjectOption['id']; ?>" <?php echo (int) $developerProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars((string) $developerProjectOption['name']); ?>
-                                    (<?php echo $optionReady; ?> ready features, <?php echo $optionProgress; ?> active, <?php echo $optionReview; ?> review, <?php echo $optionReopen; ?> reopen)
-                                </option>
+                            <?php foreach (sulTaskAllocationProjectOptionGroups($developerProjectOptions, ['ready_count', 'in_progress_count', 'review_count', 'reopen_count']) as $groupLabel => $groupOptions): ?>
+                                <?php if ($groupOptions === []) continue; ?>
+                                <optgroup label="<?php echo htmlspecialchars($groupLabel); ?>">
+                                    <?php foreach ($groupOptions as $developerProjectOption): ?>
+                                        <?php
+                                            $optionReady = (int) ($developerProjectOption['ready_count'] ?? 0);
+                                            $optionProgress = (int) ($developerProjectOption['in_progress_count'] ?? 0);
+                                            $optionReview = (int) ($developerProjectOption['review_count'] ?? 0);
+                                            $optionReopen = (int) ($developerProjectOption['reopen_count'] ?? 0);
+                                            $optionLabel = sulTaskAllocationProjectOptionLabel(
+                                                (string) $developerProjectOption['name'],
+                                                [
+                                                    ['count' => $optionReady, 'label' => 'ready'],
+                                                    ['count' => $optionProgress, 'label' => 'active'],
+                                                    ['count' => $optionReview, 'label' => 'review'],
+                                                    ['count' => $optionReopen, 'label' => 'reopen'],
+                                                ]
+                                            );
+                                        ?>
+                                        <option value="<?php echo (int) $developerProjectOption['id']; ?>" <?php echo (int) $developerProjectOption['id'] === (int) $projectId ? 'selected' : ''; ?>>
+                                            <?php echo htmlspecialchars($optionLabel); ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </optgroup>
                             <?php endforeach; ?>
                         </select>
                         <?php if ($projectId && $project): ?>
