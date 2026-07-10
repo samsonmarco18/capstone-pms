@@ -584,6 +584,32 @@ body,
     color: var(--insight-primary);
 }
 
+.section-heading-tooltip {
+    align-items: center;
+    appearance: none;
+    background: rgba(31, 99, 146, 0.08);
+    border: 0;
+    border-radius: 999px;
+    color: var(--insight-primary);
+    cursor: help;
+    display: inline-flex;
+    height: 1.35rem;
+    justify-content: center;
+    padding: 0;
+    width: 1.35rem;
+}
+
+.section-card .card-header h5 .section-heading-tooltip i {
+    color: inherit;
+    font-size: 0.72rem;
+}
+
+.section-heading-tooltip:hover,
+.section-heading-tooltip:focus-visible {
+    background: rgba(31, 99, 146, 0.14);
+    outline: none;
+}
+
 .section-card .card-body {
     padding: 1.4rem;
 }
@@ -734,6 +760,12 @@ body,
     margin-bottom: 1rem;
     font-size: 0.82rem;
     color: var(--gray-600);
+}
+
+.attention-alert {
+    border: 1px solid #f4d35e !important;
+    border-left: 1px solid #f4d35e !important;
+    border-radius: 14px;
 }
 
 .overview-project-card {
@@ -1470,6 +1502,22 @@ body,
     color: var(--insight-text);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-heading-tooltip {
+    background: rgba(147, 197, 253, 0.12);
+    color: #93c5fd;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-heading-tooltip:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-heading-tooltip:focus-visible {
+    background: rgba(147, 197, 253, 0.2);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .attention-alert {
+    background: rgba(245, 158, 11, 0.16);
+    border-color: rgba(245, 158, 11, 0.42) !important;
+    color: #fde68a;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .toolbar-button,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-search-input,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-sort-select,
@@ -1685,7 +1733,20 @@ body,
         <div class="col-xl-7">
             <div class="section-card">
                 <div class="card-header">
-                    <h5><i class="fas fa-lightbulb"></i> Important Project Signals</h5>
+                    <h5>
+                        <i class="fas fa-lightbulb"></i>
+                        Important Project Signals
+                        <button
+                            type="button"
+                            class="section-heading-tooltip"
+                            data-bs-toggle="tooltip"
+                            data-bs-placement="top"
+                            title="Highlights the strongest delivery warning signs, such as stalled flow, allocation imbalance, and task delay outlook."
+                            aria-label="About Important Project Signals"
+                        >
+                            <i class="fas fa-circle-info" aria-hidden="true"></i>
+                        </button>
+                    </h5>
                 </div>
                 <div class="card-body">
                     <div class="insight-list">
@@ -1713,7 +1774,20 @@ body,
         <div class="col-xl-5">
             <div class="section-card">
                 <div class="card-header">
-                    <h5><i class="fas fa-gauge-high"></i> Current Health</h5>
+                    <h5>
+                        <i class="fas fa-gauge-high"></i>
+                        Current Health
+                        <button
+                            type="button"
+                            class="section-heading-tooltip"
+                            data-bs-toggle="tooltip"
+                            data-bs-placement="top"
+                            title="Summarizes the live project condition using delay forecast, resource efficiency, open task load, and decision confidence."
+                            aria-label="About Current Health"
+                        >
+                            <i class="fas fa-circle-info" aria-hidden="true"></i>
+                        </button>
+                    </h5>
                 </div>
                 <div class="card-body">
                     <div class="mini-stat-grid mb-4">
@@ -2365,7 +2439,7 @@ body,
     </div>
 
     <?php if ($attentionProjectCount > 0): ?>
-        <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 mb-4">
+        <div class="alert alert-warning attention-alert d-flex flex-wrap align-items-center gap-2 mb-4">
             <strong><i class="fas fa-circle-exclamation me-1"></i>Needs attention:</strong>
             <?php foreach ($attentionProjectSummaries as $attentionProject): ?>
                 <a
@@ -2551,6 +2625,12 @@ const actionProjectIdEl = document.getElementById('actionProjectId');
 const actionValueNoteEl = document.getElementById('actionValueNote');
 const actionProjectLabelEl = document.getElementById('projectActionModalProject');
 const actionModal = actionModalEl && window.bootstrap ? new bootstrap.Modal(actionModalEl) : null;
+
+if (window.bootstrap && bootstrap.Tooltip) {
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
+        bootstrap.Tooltip.getOrCreateInstance(element, { trigger: 'hover focus' });
+    });
+}
 
 function syncActionValueMeta() {
     if (!actionScenarioEl || !actionValueEl || !actionValueNoteEl) {
