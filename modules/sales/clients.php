@@ -1659,9 +1659,126 @@ include '../../includes/navbar.php';
     padding: 1.5rem;
 }
 
+#addClientModal.modal-modern.add-client-modal {
+    --add-client-modal-top-offset: var(--add-client-page-top, 86px);
+    top: var(--add-client-modal-top-offset);
+    left: var(--shell-sidebar-width);
+    width: calc(100vw - var(--shell-sidebar-width));
+    height: calc(100vh - var(--add-client-modal-top-offset));
+    height: calc(100dvh - var(--add-client-modal-top-offset));
+    right: auto;
+    bottom: auto;
+    padding: 0 !important;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.10) 0%, rgba(255, 255, 255, 0) 42%),
+        linear-gradient(180deg, #f7fbfe 0%, #edf5fa 100%);
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+#page-content-wrapper.sidebar-collapsed #addClientModal.modal-modern.add-client-modal {
+    left: var(--shell-sidebar-collapsed-width);
+    width: calc(100vw - var(--shell-sidebar-collapsed-width));
+}
+
+body:has(#addClientModal.show) .modal-backdrop {
+    --add-client-modal-top-offset: var(--add-client-page-top, 86px);
+    top: var(--add-client-modal-top-offset);
+    left: var(--shell-sidebar-width);
+    width: calc(100vw - var(--shell-sidebar-width));
+    height: calc(100vh - var(--add-client-modal-top-offset));
+    height: calc(100dvh - var(--add-client-modal-top-offset));
+    bottom: auto;
+}
+
+body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-backdrop {
+    left: var(--shell-sidebar-collapsed-width);
+    width: calc(100vw - var(--shell-sidebar-collapsed-width));
+}
+
+#addClientModal.modal-modern.add-client-modal .modal-dialog {
+    width: 100%;
+    max-width: none;
+    min-height: 100%;
+    height: auto;
+    margin: 0;
+    display: flex;
+    align-items: stretch;
+}
+
+#addClientModal.modal-modern.add-client-modal .modal-content {
+    width: 100%;
+    min-height: 100%;
+    height: auto;
+    max-height: none;
+    border-radius: 0;
+    border: 0;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.10) 0%, rgba(255, 255, 255, 0) 42%),
+        linear-gradient(180deg, #f7fbfe 0%, #edf5fa 100%);
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+}
+
+#addClientModal.modal-modern.add-client-modal .modal-header {
+    padding: 1rem 1.75rem;
+    background: linear-gradient(135deg, #0d6786 0%, #0a5570 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 10px 28px rgba(9, 80, 110, 0.16);
+}
+
+#addClientModal.modal-modern.add-client-modal .modal-header .modal-title,
+#addClientModal.modal-modern.add-client-modal .modal-header .modal-title i {
+    color: #ffffff !important;
+}
+
+#addClientModal.modal-modern.add-client-modal .modal-header .btn-close {
+    filter: brightness(0) invert(1);
+    opacity: 0.82;
+}
+
+#addClientModal.modal-modern.add-client-modal .modal-header .btn-close:hover {
+    opacity: 1;
+}
+
+#addClientModal.modal-modern.add-client-modal form {
+    display: block;
+    height: auto;
+    overflow: visible;
+}
+
+#addClientModal.modal-modern.add-client-modal .modal-body {
+    position: relative;
+    display: grid;
+    grid-template-rows: auto auto auto;
+    gap: 1rem;
+    flex: 0 0 auto;
+    min-height: 0;
+    max-height: none;
+    padding: 1.25rem 1.75rem;
+    overflow: visible;
+}
+
 .modal-modern.add-client-modal .add-client-layout {
     display: grid;
     gap: 1rem;
+}
+
+#addClientModal.modal-modern.add-client-modal .add-client-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-height: 0;
+    grid-template-columns: none;
+    align-items: stretch;
+    background: #ffffff;
+    border-radius: 0;
+    overflow: visible;
+}
+
+#addClientModal.modal-modern.add-client-modal .add-client-step:not([hidden]) {
+    flex: 0 0 auto;
 }
 
 .modal-modern.add-client-modal .add-client-stepper {
@@ -1804,8 +1921,738 @@ include '../../includes/navbar.php';
     overflow-y: auto;
 }
 
+#addClientModal.modal-modern.add-client-modal .field-group {
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+    padding: 1.35rem;
+    border-radius: 18px;
+    border-color: rgba(31, 99, 146, 0.16);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 18px 38px rgba(15, 76, 129, 0.09);
+}
+
 .modal-modern.add-client-modal .field-group:last-child {
     margin-bottom: 0;
+}
+
+.modal-modern.add-client-modal .project-intake-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.modal-modern.add-client-modal .project-description-field {
+    grid-column: 1 / -1;
+}
+
+.modal-modern.add-client-modal .project-intake-support-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.modal-modern.add-client-modal .project-intake-support-grid > div,
+.modal-modern.add-client-modal .project-intake-detail-grid > .project-intake-column {
+    min-width: 0;
+    padding: 1rem 1.05rem;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 18px;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.055), rgba(255, 255, 255, 0.88)),
+        rgba(248, 252, 255, 0.92);
+    box-shadow: 0 14px 30px rgba(15, 76, 129, 0.07);
+}
+
+.modal-modern.add-client-modal .project-intake-detail-grid {
+    align-items: start;
+    margin-top: 1rem;
+}
+
+.modal-modern.add-client-modal .project-intake-detail-grid > .project-intake-column {
+    min-height: 0;
+    height: auto;
+}
+
+.modal-modern.add-client-modal .project-intake-column {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+}
+
+.modal-modern.add-client-modal .project-intake-inline {
+    display: grid;
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+    gap: 1rem;
+    align-items: end;
+    margin-top: auto;
+    padding-top: 0.15rem;
+}
+
+.modal-modern.add-client-modal .project-intake-step .requested-feature-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+}
+
+.modal-modern.add-client-modal .timeline-budget-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.modal-modern.add-client-modal .timeline-budget-card {
+    min-width: 0;
+    padding: 1rem 1.05rem;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 18px;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.055), rgba(255, 255, 255, 0.88)),
+        rgba(248, 252, 255, 0.92);
+    box-shadow: 0 14px 30px rgba(15, 76, 129, 0.07);
+}
+
+.modal-modern.add-client-modal .timeline-budget-card--wide {
+    grid-column: 1 / -1;
+}
+
+.modal-modern.add-client-modal .timeline-budget-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-bottom: 0.85rem;
+    color: #174769;
+    font-size: 0.82rem;
+    font-weight: 800;
+}
+
+.modal-modern.add-client-modal .timeline-budget-card-title i {
+    color: #0d6786;
+}
+
+.modal-modern.add-client-modal .timeline-date-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.modal-modern.add-client-modal .timeline-budget-step textarea[name="sales_notes"] {
+    min-height: 220px;
+    overflow-y: hidden;
+    resize: vertical;
+    line-height: 1.45;
+}
+
+.modal-modern.add-client-modal .timeline-budget-step .info-card {
+    height: 100%;
+}
+
+.modal-modern.add-client-modal .template-type-picker {
+    position: relative;
+}
+
+.modal-modern.add-client-modal .template-field-shell {
+    position: relative;
+}
+
+.modal-modern.add-client-modal .template-type-picker .form-control {
+    padding-right: 2.5rem;
+}
+
+.modal-modern.add-client-modal .template-field-shell .template-type-picker .form-control {
+    padding-right: 5.4rem;
+}
+
+.modal-modern.add-client-modal .template-type-picker::after {
+    content: "\f078";
+    position: absolute;
+    top: 50%;
+    right: 0.95rem;
+    transform: translateY(-50%);
+    color: #0d6786;
+    font-family: "Font Awesome 5 Free";
+    font-size: 0.72rem;
+    font-weight: 900;
+    pointer-events: none;
+}
+
+.modal-modern.add-client-modal .template-recommendation-trigger {
+    --template-pulse-rgb: 13, 103, 134;
+    position: absolute;
+    top: 50%;
+    right: 2.32rem;
+    z-index: 5;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(13, 103, 134, 0.24);
+    border-radius: 50%;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.18), rgba(255, 255, 255, 0.96)),
+        #ffffff;
+    color: #0d6786;
+    box-shadow: 0 8px 18px rgba(13, 103, 134, 0.18);
+    transform: translateY(-50%);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.modal-modern.add-client-modal .template-recommendation-trigger::before {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: inherit;
+    border: 2px solid rgba(var(--template-pulse-rgb), 0.34);
+    box-shadow: 0 0 0 0 rgba(var(--template-pulse-rgb), 0.22);
+    animation: recommendationHeartbeat 1.45s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.modal-modern.add-client-modal .template-recommendation-trigger[hidden] {
+    display: none;
+}
+
+.modal-modern.add-client-modal .template-recommendation-trigger:hover,
+.modal-modern.add-client-modal .template-recommendation-trigger:focus-visible {
+    background: #0d6786;
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(13, 103, 134, 0.28);
+    outline: none;
+    transform: translateY(-50%) scale(1.04);
+}
+
+.modal-modern.add-client-modal .template-recommendation-trigger.is-applied {
+    --template-pulse-rgb: 16, 134, 94;
+    border-color: rgba(16, 134, 94, 0.28);
+    color: #10865e;
+    box-shadow: 0 8px 18px rgba(16, 134, 94, 0.16);
+}
+
+.modal-modern.add-client-modal .template-recommendation-trigger.is-applied::before {
+    animation: none;
+    border-color: rgba(16, 134, 94, 0.34);
+    box-shadow: 0 0 0 0 rgba(16, 134, 94, 0.18);
+    opacity: 0.7;
+}
+
+.modal-modern.add-client-modal .template-recommendation-trigger i {
+    position: relative;
+    z-index: 1;
+    font-size: 0.8rem;
+}
+
+@keyframes recommendationHeartbeat {
+    0%,
+    100% {
+        opacity: 0.82;
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(var(--template-pulse-rgb), 0.18);
+    }
+
+    18% {
+        opacity: 1;
+        transform: scale(1.16);
+        box-shadow: 0 0 0 5px rgba(var(--template-pulse-rgb), 0.06);
+    }
+
+    32% {
+        transform: scale(1);
+    }
+
+    48% {
+        opacity: 0.95;
+        transform: scale(1.1);
+        box-shadow: 0 0 0 8px rgba(var(--template-pulse-rgb), 0);
+    }
+
+    64% {
+        transform: scale(1);
+    }
+}
+
+.modal-modern.add-client-modal .priority-field-shell {
+    position: relative;
+}
+
+.modal-modern.add-client-modal .priority-select-wrap {
+    position: relative;
+}
+
+.modal-modern.add-client-modal .priority-select-wrap .form-select {
+    padding-right: 4.8rem;
+}
+
+.modal-modern.add-client-modal .priority-insight-trigger {
+    position: absolute;
+    top: 50%;
+    right: 2.15rem;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(13, 103, 134, 0.2);
+    border-radius: 50%;
+    background: #eef9fc;
+    color: #0d6786;
+    box-shadow: 0 8px 18px rgba(13, 103, 134, 0.12);
+    transform: translateY(-50%);
+    transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.modal-modern.add-client-modal .priority-insight-trigger:hover,
+.modal-modern.add-client-modal .priority-insight-trigger:focus-visible,
+.modal-modern.add-client-modal .priority-insight-trigger.is-open {
+    background: #0d6786;
+    color: #ffffff;
+    outline: none;
+    transform: translateY(-50%) scale(1.04);
+}
+
+.modal-modern.add-client-modal .priority-insight-popover {
+    position: absolute;
+    top: calc(100% + 0.48rem);
+    left: 0;
+    z-index: 65;
+    display: grid;
+    width: min(360px, 92vw);
+    gap: 0.5rem;
+    padding: 0.82rem 0.9rem;
+    border: 1px solid rgba(31, 99, 146, 0.16);
+    border-radius: 14px;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.10), rgba(255, 255, 255, 0.92)),
+        #f8fcff;
+    box-shadow: 0 18px 38px rgba(15, 76, 129, 0.18);
+}
+
+.modal-modern.add-client-modal .priority-insight-popover[hidden] {
+    display: none;
+}
+
+.modal-modern.add-client-modal .priority-insight-popover strong {
+    color: #173f61;
+    font-size: 0.85rem;
+}
+
+.modal-modern.add-client-modal .priority-insight-popover span {
+    color: #41637e;
+    font-size: 0.76rem;
+    line-height: 1.45;
+}
+
+.modal-modern.add-client-modal .priority-insight-popover .priority-impact-amount {
+    display: inline-flex;
+    width: fit-content;
+    padding: 0.32rem 0.5rem;
+    border: 1px solid rgba(13, 103, 134, 0.14);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.72);
+    color: #0d6786;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.modal-modern.add-client-modal .project-intake-detail-grid textarea[name="additional_requirements"] {
+    min-height: 118px;
+    overflow-y: hidden;
+    resize: vertical;
+    line-height: 1.45;
+}
+
+.modal-modern.add-client-modal .attachment-upload-field {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: stretch;
+    min-height: 52px;
+    border: 1px dashed rgba(31, 99, 146, 0.2);
+    border-radius: 12px;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.055), rgba(255, 255, 255, 0.94)),
+        #ffffff;
+    overflow: hidden;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.modal-modern.add-client-modal .attachment-upload-field:focus-within,
+.modal-modern.add-client-modal .attachment-upload-field:hover {
+    border-color: rgba(13, 103, 134, 0.42);
+    box-shadow: 0 10px 22px rgba(13, 103, 134, 0.12);
+}
+
+.modal-modern.add-client-modal .attachment-upload-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 50px;
+    margin: 0;
+    padding: 0 0.95rem;
+    border-right: 1px solid rgba(31, 99, 146, 0.12);
+    background: rgba(226, 244, 250, 0.92);
+    color: #0d6786;
+    font-size: 0.86rem;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.18s ease, color 0.18s ease;
+}
+
+.modal-modern.add-client-modal .attachment-upload-button:hover {
+    background: #0d6786;
+    color: #ffffff;
+}
+
+.modal-modern.add-client-modal .attachment-upload-summary {
+    align-self: center;
+    min-width: 0;
+    padding: 0 0.95rem;
+    color: #17324d;
+    font-size: 0.88rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .modal-modern.add-client-modal .template-recommendation-trigger::before {
+        animation: none;
+    }
+}
+
+.modal-modern.add-client-modal .template-suggestions-menu {
+    position: absolute;
+    top: calc(100% + 0.45rem);
+    left: 0;
+    right: 0;
+    z-index: 70;
+    max-height: 260px;
+    overflow-y: auto;
+    padding: 0.4rem;
+    border: 1px solid rgba(31, 99, 146, 0.18);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 18px 38px rgba(15, 76, 129, 0.16);
+}
+
+.modal-modern.add-client-modal .template-suggestions-menu[hidden] {
+    display: none;
+}
+
+.modal-modern.add-client-modal .template-suggestion-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.72rem 0.78rem;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: #17324d;
+    font-size: 0.86rem;
+    font-weight: 600;
+    text-align: left;
+}
+
+.modal-modern.add-client-modal .template-suggestion-option:hover,
+.modal-modern.add-client-modal .template-suggestion-option:focus-visible {
+    background: #edf7fd;
+    color: #0d6786;
+    outline: none;
+}
+
+.modal-modern.add-client-modal .template-suggestion-option i {
+    color: #0d6786;
+    font-size: 0.78rem;
+    opacity: 0.78;
+}
+
+.modal-modern.add-client-modal .template-suggestion-empty {
+    padding: 0.72rem 0.78rem;
+    color: var(--gray-500);
+    font-size: 0.8rem;
+}
+
+.modal-modern.add-client-modal .dss-panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.85rem;
+}
+
+.modal-modern.add-client-modal .dss-panel-title {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.modal-modern.add-client-modal .dss-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: fit-content;
+    color: #0d6786;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.modal-modern.add-client-modal .dss-panel-title strong {
+    color: #143b5b;
+    font-size: 0.94rem;
+    line-height: 1.25;
+}
+
+.modal-modern.add-client-modal .dss-panel-title span {
+    color: #55728c;
+    font-size: 0.76rem;
+    line-height: 1.35;
+}
+
+.modal-modern.add-client-modal .dss-score-pill {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.43rem 0.62rem;
+    border: 1px solid rgba(13, 103, 134, 0.16);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.78);
+    color: #0d6786;
+    font-size: 0.72rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.modal-modern.add-client-modal .dss-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.modal-modern.add-client-modal .dss-metric {
+    display: grid;
+    gap: 0.15rem;
+    min-width: 0;
+    padding: 0.62rem 0.68rem;
+    border: 1px solid rgba(31, 99, 146, 0.12);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.modal-modern.add-client-modal .dss-metric span {
+    color: #6b7f90;
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+}
+
+.modal-modern.add-client-modal .dss-metric strong {
+    overflow: hidden;
+    color: #164d78;
+    font-size: 0.84rem;
+    font-weight: 800;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.modal-modern.add-client-modal .dss-section {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.modal-modern.add-client-modal .dss-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #315a78;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.modal-modern.add-client-modal .dss-section-title i {
+    color: #0d6786;
+}
+
+.modal-modern.add-client-modal .dss-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.38rem;
+}
+
+.modal-modern.add-client-modal .dss-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 0.38rem 0.52rem;
+    border: 1px solid rgba(31, 99, 146, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.76);
+    color: #274d6b;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.modal-modern.add-client-modal .dss-chip.is-more {
+    color: #0d6786;
+    background: rgba(13, 103, 134, 0.09);
+}
+
+.modal-modern.add-client-modal .dss-muted {
+    color: #667d90;
+    font-size: 0.76rem;
+    line-height: 1.4;
+}
+
+.modal-modern.add-client-modal .dss-template-review-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 1.25rem;
+    background: rgba(8, 37, 57, 0.34);
+    backdrop-filter: blur(5px);
+}
+
+.modal-modern.add-client-modal .dss-template-review-overlay[hidden] {
+    display: none;
+}
+
+.modal-modern.add-client-modal .dss-template-review-overlay.is-applying {
+    cursor: progress;
+}
+
+.modal-modern.add-client-modal .dss-template-review-dialog {
+    width: min(860px, 100%);
+    max-height: min(78vh, 720px);
+    overflow: hidden;
+    border: 1px solid rgba(182, 218, 239, 0.8);
+    border-radius: 20px;
+    background: #ffffff;
+    box-shadow: 0 28px 70px rgba(5, 38, 60, 0.28);
+}
+
+.modal-modern.add-client-modal .dss-review-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.1rem;
+    background: linear-gradient(135deg, #0d6786 0%, #0a5570 100%);
+    color: #ffffff;
+}
+
+.modal-modern.add-client-modal .dss-review-title {
+    display: grid;
+    gap: 0.22rem;
+    min-width: 0;
+}
+
+.modal-modern.add-client-modal .dss-review-title span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.modal-modern.add-client-modal .dss-review-title strong {
+    color: #ffffff;
+    font-size: 1.05rem;
+    line-height: 1.25;
+}
+
+.modal-modern.add-client-modal .dss-review-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+}
+
+.modal-modern.add-client-modal .dss-review-close:disabled,
+.modal-modern.add-client-modal .dss-template-review-overlay.is-applying [data-cancel-template-apply] {
+    cursor: progress;
+    opacity: 0.62;
+}
+
+.modal-modern.add-client-modal .dss-review-body {
+    display: grid;
+    gap: 0.9rem;
+    max-height: calc(min(78vh, 720px) - 142px);
+    overflow-y: auto;
+    padding: 1rem 1.1rem;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.08), rgba(255, 255, 255, 0.92)),
+        #f8fcff;
+}
+
+.modal-modern.add-client-modal .dss-review-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.78);
+}
+
+.modal-modern.add-client-modal .dss-review-summary span {
+    color: #486983;
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
+.modal-modern.add-client-modal .dss-review-summary strong {
+    color: #143b5b;
+}
+
+.modal-modern.add-client-modal .dss-review-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.9rem 1.1rem;
+    border-top: 1px solid rgba(31, 99, 146, 0.12);
+    background: #ffffff;
+}
+
+.modal-modern.add-client-modal .dss-review-footer span {
+    color: #55728c;
+    font-size: 0.74rem;
+    line-height: 1.35;
+}
+
+.modal-modern.add-client-modal .dss-review-actions {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 0.55rem;
+}
+
+.modal-modern.add-client-modal .dss-review-actions .btn {
+    border-radius: 12px;
+    font-weight: 800;
 }
 
     .modal-modern.add-client-modal .mini-note {
@@ -1819,13 +2666,48 @@ include '../../includes/navbar.php';
         display: grid;
         gap: 0.28rem;
         margin-top: 0.65rem;
-        padding: 0.75rem 0.85rem;
-        border: 1px solid #dbeafe;
-        border-radius: 10px;
-        background: #eff6ff;
+        padding: 0.82rem 0.9rem 0.82rem 2.65rem;
+        border: 1px solid rgba(31, 99, 146, 0.18);
+        border-radius: 14px;
+        background:
+            linear-gradient(135deg, rgba(13, 103, 134, 0.10), rgba(255, 255, 255, 0.82)),
+            #f4f9fc;
         color: #1e4f78;
         font-size: 0.78rem;
         line-height: 1.45;
+        position: relative;
+        box-shadow: 0 10px 20px rgba(15, 76, 129, 0.06);
+    }
+
+    .modal-modern.add-client-modal .calculation-note::before {
+        content: "\f0eb";
+        position: absolute;
+        left: 0.85rem;
+        top: 0.9rem;
+        width: 28px;
+        height: 28px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #0d6786 0%, #0a5570 100%);
+        color: #ffffff;
+        font-family: "Font Awesome 5 Free";
+        font-size: 0.78rem;
+        font-weight: 900;
+        box-shadow: 0 8px 18px rgba(13, 103, 134, 0.16);
+    }
+
+    .modal-modern.add-client-modal .calculation-note[data-template-recommendation]::before {
+        content: "\f542";
+    }
+
+    .modal-modern.add-client-modal [data-complexity-reason]::before {
+        content: "\f5fd";
+    }
+
+    .modal-modern.add-client-modal [data-priority-price-preview]::before {
+        content: "\f201";
     }
 
     .modal-modern.add-client-modal .calculation-note strong {
@@ -1863,6 +2745,16 @@ include '../../includes/navbar.php';
     color: #1e4f78;
     font-size: .78rem;
     line-height: 1.45;
+}
+
+#addClientModal.modal-modern.add-client-modal .architect-handoff-note {
+    margin-bottom: 0;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 16px;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.10), rgba(255, 255, 255, 0.86)),
+        #f6fbfe;
+    box-shadow: 0 10px 24px rgba(15, 76, 129, 0.06);
 }
 
 .modal-modern.add-client-modal .architect-handoff-note i {
@@ -1903,29 +2795,19 @@ include '../../includes/navbar.php';
     padding: 0.1rem 0.35rem 0.1rem 0.1rem;
     border: 0;
     background: transparent;
-    scrollbar-color: rgba(31, 99, 146, 0.48) transparent;
-    scrollbar-width: thin;
-}
-
-.modal-modern.add-client-modal .field-group.review-step::-webkit-scrollbar {
-    width: 6px;
-}
-
-.modal-modern.add-client-modal .field-group.review-step::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: rgba(31, 99, 146, 0.48);
+    overflow: visible;
 }
 
 .modal-modern.add-client-modal .review-summary {
     display: grid;
-    gap: 0.85rem;
+    gap: 0.7rem;
 }
 
 .modal-modern.add-client-modal .review-ready-banner {
     display: flex;
     align-items: center;
-    gap: 0.8rem;
-    padding: 0.85rem 0.95rem;
+    gap: 0.7rem;
+    padding: 0.72rem 0.85rem;
     border: 1px solid rgba(31, 99, 146, 0.2);
     border-radius: 14px;
     background: linear-gradient(135deg, #edf7fd 0%, #f8fbfe 100%);
@@ -1937,8 +2819,8 @@ include '../../includes/navbar.php';
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    width: 38px;
-    height: 38px;
+    width: 34px;
+    height: 34px;
     border-radius: 11px;
     background: var(--theme-primary);
     color: #ffffff;
@@ -1980,14 +2862,14 @@ include '../../includes/navbar.php';
 .modal-modern.add-client-modal .review-primary-grid {
     display: grid;
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-    gap: 0.85rem;
+    gap: 0.75rem;
 }
 
 .modal-modern.add-client-modal .review-card {
     min-width: 0;
-    padding: 0.95rem;
+    padding: 0.78rem;
     border: 1px solid #dfe7ef;
-    border-radius: 14px;
+    border-radius: 12px;
     background: #ffffff;
     box-shadow: 0 8px 22px rgba(15, 42, 64, 0.055);
 }
@@ -1995,8 +2877,8 @@ include '../../includes/navbar.php';
 .modal-modern.add-client-modal .review-card-header {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
-    margin-bottom: 0.75rem;
+    gap: 0.55rem;
+    margin-bottom: 0.55rem;
 }
 
 .modal-modern.add-client-modal .review-card-icon {
@@ -2004,9 +2886,9 @@ include '../../includes/navbar.php';
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
     background: rgba(31, 99, 146, 0.1);
     color: var(--theme-primary);
     font-size: 0.78rem;
@@ -2033,9 +2915,9 @@ include '../../includes/navbar.php';
 .modal-modern.add-client-modal .review-highlight {
     display: grid;
     gap: 0.15rem;
-    margin-bottom: 0.75rem;
-    padding: 0.7rem 0.75rem;
-    border-radius: 10px;
+    margin-bottom: 0.55rem;
+    padding: 0.55rem 0.65rem;
+    border-radius: 9px;
     background: #f4f8fb;
 }
 
@@ -2053,7 +2935,7 @@ include '../../includes/navbar.php';
 
 .modal-modern.add-client-modal .review-highlight strong {
     color: var(--gray-900);
-    font-size: 0.98rem;
+    font-size: 0.92rem;
     line-height: 1.3;
     overflow-wrap: anywhere;
 }
@@ -2061,7 +2943,7 @@ include '../../includes/navbar.php';
 .modal-modern.add-client-modal .review-data-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.65rem 0.8rem;
+    gap: 0.46rem 0.65rem;
 }
 
 .modal-modern.add-client-modal .review-data-item {
@@ -2074,10 +2956,18 @@ include '../../includes/navbar.php';
     grid-column: 1 / -1;
 }
 
+.modal-modern.add-client-modal .review-card--client-profile .review-data-item--wide {
+    grid-column: auto;
+}
+
+.modal-modern.add-client-modal .review-card--client-profile .review-data-item:last-child {
+    grid-column: 1 / -1;
+}
+
 .modal-modern.add-client-modal .review-summary-value {
     color: var(--gray-900);
-    font-size: 0.8rem;
-    line-height: 1.4;
+    font-size: 0.78rem;
+    line-height: 1.32;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
 }
@@ -2090,8 +2980,8 @@ include '../../includes/navbar.php';
 .modal-modern.add-client-modal .review-chip-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.45rem;
-    margin-bottom: 0.75rem;
+    gap: 0.38rem;
+    margin-bottom: 0.58rem;
 }
 
 .modal-modern.add-client-modal .review-chip {
@@ -2118,14 +3008,14 @@ include '../../includes/navbar.php';
 .modal-modern.add-client-modal .review-key-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.55rem;
+    gap: 0.48rem;
 }
 
 .modal-modern.add-client-modal .review-key-item {
     display: grid;
     gap: 0.15rem;
     min-width: 0;
-    padding: 0.58rem 0.65rem;
+    padding: 0.5rem 0.58rem;
     border: 1px solid #e8eef4;
     border-radius: 9px;
     background: #fbfcfd;
@@ -2273,26 +3163,51 @@ include '../../includes/navbar.php';
 
 .modal-modern.add-client-modal .requested-feature-builder {
     display: grid;
-    gap: 0.75rem;
+    gap: 0.8rem;
 }
 
 .modal-modern.add-client-modal .requested-feature-list {
     display: grid;
-    gap: 0.65rem;
+    gap: 0.58rem;
 }
 
 .modal-modern.add-client-modal .requested-feature-item {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 42px;
-    gap: 0.5rem;
+    grid-template-columns: minmax(0, 1fr) 40px;
+    gap: 0.55rem;
     align-items: center;
+    padding: 0.18rem;
+    border: 1px solid rgba(31, 99, 146, 0.10);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.74);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.modal-modern.add-client-modal .requested-feature-item:focus-within {
+    border-color: rgba(13, 103, 134, 0.28);
+    box-shadow: 0 8px 20px rgba(15, 76, 129, 0.08);
+    transform: translateY(-1px);
+}
+
+.modal-modern.add-client-modal .requested-feature-item .form-control {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
 }
 
 .modal-modern.add-client-modal .requested-feature-item .btn {
-    width: 42px;
-    height: 42px;
+    width: 40px;
+    height: 40px;
     padding: 0;
-    border-radius: 10px;
+    border-radius: 12px;
+    background: #fff1f2;
+    color: #e11d48;
+}
+
+.modal-modern.add-client-modal .requested-feature-item .btn:hover,
+.modal-modern.add-client-modal .requested-feature-item .btn:focus-visible {
+    background: #e11d48;
+    color: #ffffff;
 }
 
 .modal-modern.add-client-modal .requested-feature-actions {
@@ -2304,13 +3219,31 @@ include '../../includes/navbar.php';
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.75rem;
 }
 
 .modal-modern.add-client-modal .draft-status {
-    color: var(--gray-500);
-    font-size: 0.8rem;
-    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #1f638f;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    padding: 0.48rem 0.7rem;
+    border: 1px solid rgba(31, 99, 146, 0.16);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.84);
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.07);
+}
+
+.modal-modern.add-client-modal .draft-status::before {
+    content: "\f0c7";
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    color: #0d6786;
+    font-size: 0.78rem;
 }
 
 .modal-modern.add-client-modal [data-save-draft]:disabled {
@@ -2464,10 +3397,56 @@ include '../../includes/navbar.php';
 .modal-modern.add-client-modal .add-client-actions {
     display: inline-flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.6rem;
+}
+
+#addClientModal.modal-modern.add-client-modal .add-client-actions {
+    padding-right: 5.25rem;
+}
+
+@media (max-width: 991.98px) {
+    #addClientModal.modal-modern.add-client-modal,
+    #page-content-wrapper.sidebar-collapsed #addClientModal.modal-modern.add-client-modal,
+    body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-backdrop,
+    body:has(#addClientModal.show) .modal-backdrop {
+        --add-client-modal-top-offset: var(--add-client-page-top, 68px);
+        left: 0;
+        width: 100vw;
+    }
+
+    #addClientModal.modal-modern.add-client-modal .modal-body {
+        overflow: visible;
+    }
+
+    #addClientModal.modal-modern.add-client-modal .add-client-layout {
+        grid-template-columns: 1fr;
+        overflow: visible;
+    }
+
+    #addClientModal.modal-modern.add-client-modal .field-group {
+        overflow: visible;
+    }
+
+    .modal-modern.add-client-modal .project-intake-grid,
+    .modal-modern.add-client-modal .project-intake-support-grid,
+    .modal-modern.add-client-modal .project-intake-inline,
+    .modal-modern.add-client-modal .timeline-budget-grid,
+    .modal-modern.add-client-modal .timeline-date-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-modern.add-client-modal .project-intake-step .requested-feature-list {
+        max-height: none;
+    }
 }
 
 @media (max-width: 768px) {
+    #addClientModal.modal-modern.add-client-modal .modal-header,
+    #addClientModal.modal-modern.add-client-modal .modal-body {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
     .modal-modern.add-client-modal .add-client-stepper {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -2496,9 +3475,60 @@ include '../../includes/navbar.php';
         align-items: stretch;
     }
 
+    #addClientModal.modal-modern.add-client-modal .modal-footer {
+        margin: 0;
+        padding: 0.65rem;
+    }
+
+    .modal-modern.add-client-modal .draft-status {
+        justify-content: center;
+    }
+
+    .modal-modern.add-client-modal .dss-panel-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .modal-modern.add-client-modal .dss-score-pill {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .modal-modern.add-client-modal .dss-template-review-overlay {
+        padding: 0.8rem;
+    }
+
+    .modal-modern.add-client-modal .dss-template-review-dialog {
+        max-height: calc(100dvh - 2rem);
+    }
+
+    .modal-modern.add-client-modal .dss-review-body {
+        max-height: calc(100dvh - 12rem);
+    }
+
+    .modal-modern.add-client-modal .dss-review-summary,
+    .modal-modern.add-client-modal .dss-review-footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .modal-modern.add-client-modal .dss-review-actions {
+        display: grid;
+        width: 100%;
+        grid-template-columns: 1fr 1fr;
+    }
+
     .modal-modern.add-client-modal .add-client-actions {
         display: grid;
         grid-template-columns: 1fr 1fr;
+    }
+
+    #addClientModal.modal-modern.add-client-modal .add-client-actions {
+        padding-right: 0;
+    }
+
+    #addClientModal.modal-modern.add-client-modal .add-client-footer [data-client-submit] {
+        grid-column: 1 / -1;
     }
 
     .modal-modern.add-client-modal .unsaved-close-panel {
@@ -2526,6 +3556,30 @@ include '../../includes/navbar.php';
 .modal-modern .modal-footer {
     padding: 1rem 2rem 2rem;
     border-top: 1px solid var(--gray-200);
+}
+
+#addClientModal.modal-modern.add-client-modal .modal-footer {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 0.7rem 1.35rem 0.45rem;
+    background: #ffffff;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+}
+
+#addClientModal.modal-modern.add-client-modal .add-client-footer .btn,
+#addClientModal.modal-modern.add-client-modal .add-client-footer .btn-add-modern {
+    min-height: 2.45rem;
+    padding: 0.52rem 1rem;
+    border-radius: 14px;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+#addClientModal.modal-modern.add-client-modal .add-client-footer .btn-add-modern {
+    box-shadow: 0 10px 22px rgba(31, 99, 146, 0.18);
 }
 
 .modal-modern .form-label {
@@ -2675,6 +3729,227 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header {
     background: #071321;
     border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .modal-content {
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.16), rgba(7, 19, 33, 0) 42%),
+        #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .modal-header {
+    background: linear-gradient(135deg, #0b3654 0%, #0f5f94 100%);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .modal-footer {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .draft-status {
+    color: #dff2ff !important;
+    background: rgba(11, 54, 84, 0.72);
+    border-color: rgba(138, 210, 255, 0.2);
+    box-shadow: 0 8px 18px rgba(3, 14, 25, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .draft-status::before {
+    color: #8ad2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .field-group {
+    background: #0a1b2c;
+    border-color: rgba(138, 210, 255, 0.14);
+    box-shadow: 0 18px 38px rgba(3, 14, 25, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .add-client-layout {
+    background: #0a1b2c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .project-intake-support-grid > div,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .project-intake-detail-grid > .project-intake-column,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .timeline-budget-card {
+    background: rgba(7, 19, 33, 0.58);
+    border-color: rgba(138, 210, 255, 0.14);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .timeline-budget-card-title {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .timeline-budget-card-title i {
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .requested-feature-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .attachment-upload-field {
+    background: rgba(10, 27, 44, 0.64);
+    border-color: rgba(138, 210, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .requested-feature-item .form-control {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .attachment-upload-button {
+    background: rgba(13, 103, 134, 0.24);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .attachment-upload-button {
+    border-color: rgba(138, 210, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .attachment-upload-summary {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .template-type-picker::after {
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .template-suggestions-menu {
+    background: #071321;
+    border-color: rgba(138, 210, 255, 0.18);
+    box-shadow: 0 18px 38px rgba(3, 14, 25, 0.34);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .template-suggestion-option {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .template-suggestion-option:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .template-suggestion-option:focus-visible {
+    background: rgba(31, 99, 146, 0.22);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .template-suggestion-empty {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .template-recommendation-trigger {
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.28), rgba(10, 27, 44, 0.92)),
+        #091827;
+    border-color: rgba(138, 210, 255, 0.24);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger {
+    background: rgba(13, 103, 134, 0.26);
+    border-color: rgba(138, 210, 255, 0.2);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger.is-open {
+    background: #0d6786;
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-popover {
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.20), rgba(7, 19, 33, 0.9)),
+        #091827;
+    border-color: rgba(138, 210, 255, 0.18);
+    box-shadow: 0 18px 38px rgba(3, 14, 25, 0.34);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-popover strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-popover span {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-popover .priority-impact-amount {
+    background: rgba(10, 27, 44, 0.74);
+    border-color: rgba(138, 210, 255, 0.14);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-kicker,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-section-title i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-score-pill {
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-panel-title strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-metric strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-panel-title span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-muted {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-score-pill,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-metric,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-chip {
+    background: rgba(10, 27, 44, 0.74);
+    border-color: rgba(138, 210, 255, 0.14);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-metric span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-section-title {
+    color: #aac4dc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-chip {
+    color: #cde5f8;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-chip.is-more {
+    color: #8fd3ff;
+    background: rgba(31, 99, 146, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-template-review-overlay {
+    background: rgba(3, 14, 25, 0.58);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-template-review-dialog {
+    background: #091827;
+    border-color: rgba(138, 210, 255, 0.18);
+    box-shadow: 0 28px 70px rgba(0, 0, 0, 0.48);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-review-body {
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.18), rgba(7, 19, 33, 0.9)),
+        #091827;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-review-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-review-footer {
+    background: rgba(10, 27, 44, 0.86);
+    border-color: rgba(138, 210, 255, 0.14);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-review-summary span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-review-footer span {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-review-summary strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .calculation-note {
+    background: rgba(31, 99, 146, 0.16);
+    border-color: rgba(138, 210, 255, 0.18);
+    color: #c4e6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .calculation-note strong {
+    color: #d7e4f2;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section,
@@ -3335,107 +4610,129 @@ include '../../includes/navbar.php';
                             </div>
                         </div>
 
-                        <div class="field-group add-client-step" data-client-step="1" hidden>
+                        <div class="field-group add-client-step project-intake-step" data-client-step="1" hidden>
                             <div class="section-title"><i class="fas fa-clipboard-list"></i> Project Intake</div>
-                            <div class="row g-3">
-                                <div class="col-md-6">
+                            <div class="project-intake-grid">
+                                <div>
                                     <label class="form-label">Project Name<span class="required-mark">*</span></label>
                                     <input type="text" name="project_name" class="form-control" required>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="template-field-shell">
                                     <label class="form-label">Project Type<span class="required-mark">*</span></label>
-                                    <input type="text" name="project_type" class="form-control" list="projectTemplateTypes" placeholder="e.g. E-commerce Website" required autocomplete="off">
-                                    <datalist id="projectTemplateTypes">
-                                        <?php foreach ($projectTemplates as $template): ?>
-                                            <option value="<?php echo htmlspecialchars((string) $template['project_type']); ?>"></option>
-                                        <?php endforeach; ?>
-                                    </datalist>
-                                    <div class="calculation-note" data-template-recommendation hidden>
-                                        <strong>No project template selected</strong>
-                                        <span>Enter a project type to search existing templates. New types can still be planned manually.</span>
+                                    <div class="template-type-picker" data-template-picker>
+                                        <input type="text" name="project_type" class="form-control" placeholder="e.g. E-commerce Website" required autocomplete="off" data-template-picker-input>
+                                        <button type="button" class="template-recommendation-trigger" data-template-recommendation data-review-project-template hidden aria-label="Review project template recommendation">
+                                            <i class="fas fa-magic" aria-hidden="true"></i>
+                                        </button>
+                                        <div class="template-suggestions-menu" data-template-picker-menu hidden></div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="project-description-field">
                                     <label class="form-label">Project Description<span class="required-mark">*</span></label>
                                     <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution" required></textarea>
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Requested System Features<span class="required-mark">*</span></label>
-                                    <div class="requested-feature-builder">
-                                        <input type="hidden" name="requested_features" id="requestedFeaturesField">
-                                        <div class="requested-feature-list" id="requestedFeatureList">
-                                            <div class="requested-feature-item">
-                                                <input type="text" class="form-control" data-requested-feature-input placeholder="Feature item">
-                                                <button type="button" class="btn btn-outline-danger" data-remove-requested-feature aria-label="Remove feature">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div class="requested-feature-actions">
-                                            <button type="button" class="btn btn-outline-primary btn-sm" id="addRequestedFeature">
-                                                <i class="fas fa-plus me-1"></i> Add Feature Item
-                                            </button>
-                                        </div>
-                                        <div class="mini-note">Add at least one feature the Architect can evaluate.</div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
+                            </div>
+                            <div class="project-intake-support-grid">
+                                <div>
                                     <label class="form-label">Meeting Notes <span class="optional-label">(Optional)</span></label>
                                     <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
                                 </div>
-                                <div class="col-md-6">
+                                <div>
                                     <label class="form-label">Minutes of the Meeting (MOM) <span class="optional-label">(Optional)</span></label>
                                     <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
                                 </div>
-                                <div class="col-12">
-                                    <label class="form-label">Additional Requirements <span class="optional-label">(Optional)</span></label>
-                                    <textarea name="additional_requirements" class="form-control" rows="3" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Priority</label>
-                                    <select name="priority" class="form-select">
-                                        <option value="low">Low</option>
-                                        <option value="medium" selected>Medium</option>
-                                        <option value="high">High</option>
-                                        <option value="critical">Critical</option>
-                                    </select>
-                                    <div class="calculation-note" data-priority-markup-preview>
-                                        <strong>Medium priority adds +10%</strong>
-                                        <span>Requires more planning, testing, and attention than the standard development process.</span>
+                            </div>
+                            <div class="project-intake-grid project-intake-detail-grid">
+                                <div class="project-intake-column">
+                                    <div>
+                                        <label class="form-label">Requested System Features<span class="required-mark">*</span></label>
+                                        <div class="requested-feature-builder">
+                                            <input type="hidden" name="requested_features" id="requestedFeaturesField">
+                                            <div class="requested-feature-list" id="requestedFeatureList">
+                                                <div class="requested-feature-item">
+                                                    <input type="text" class="form-control" data-requested-feature-input placeholder="Feature item">
+                                                    <button type="button" class="btn btn-outline-danger" data-remove-requested-feature aria-label="Remove feature">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="requested-feature-actions">
+                                                <button type="button" class="btn btn-outline-primary btn-sm" id="addRequestedFeature">
+                                                    <i class="fas fa-plus me-1"></i> Add Feature Item
+                                                </button>
+                                            </div>
+                                            <div class="mini-note">Add at least one feature the Architect can evaluate.</div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Attachments <span class="optional-label">(Optional)</span></label>
-                                    <input type="file" name="attachments[]" class="form-control" multiple>
+                                <div class="project-intake-column">
+                                    <div>
+                                        <label class="form-label">Additional Requirements <span class="optional-label">(Optional)</span></label>
+                                        <textarea name="additional_requirements" class="form-control" rows="3" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
+                                    </div>
+                                    <div class="project-intake-inline">
+                                        <div class="priority-field-shell">
+                                            <label class="form-label">Priority</label>
+                                            <div class="priority-select-wrap">
+                                                <select name="priority" class="form-select">
+                                                    <option value="low">Low</option>
+                                                    <option value="medium" selected>Medium</option>
+                                                    <option value="high">High</option>
+                                                    <option value="critical">Critical</option>
+                                                </select>
+                                                <button type="button" class="priority-insight-trigger" data-priority-insight-trigger aria-label="View priority impact" aria-expanded="false">
+                                                    <i class="fas fa-chart-line" aria-hidden="true"></i>
+                                                </button>
+                                                <div class="priority-insight-popover" data-priority-insight-popover hidden></div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Attachments <span class="optional-label">(Optional)</span></label>
+                                            <div class="attachment-upload-field">
+                                                <label for="addClientAttachments" class="attachment-upload-button">
+                                                    <i class="fas fa-paperclip" aria-hidden="true"></i>
+                                                    <span>Choose Files</span>
+                                                </label>
+                                                <span class="attachment-upload-summary" data-attachment-summary>No file chosen</span>
+                                                <input id="addClientAttachments" type="file" name="attachments[]" class="visually-hidden" multiple data-attachment-input>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-
-                        <div class="field-group add-client-step" data-client-step="2" hidden>
+                        <div class="field-group add-client-step timeline-budget-step" data-client-step="2" hidden>
                             <div class="section-title"><i class="fas fa-calendar-check"></i> Timeline & Budget</div>
-                            <div class="row g-3">
-                                <div class="col-md-3">
-                                    <label class="form-label">Timeline Start</label>
-                                    <input type="date" name="timeline_start" class="form-control">
+                            <div class="timeline-budget-grid">
+                                <div class="timeline-budget-card timeline-budget-card--wide">
+                                    <div class="timeline-budget-card-title"><i class="fas fa-clock"></i> Delivery Window</div>
+                                    <div class="timeline-date-grid">
+                                        <div>
+                                            <label class="form-label">Timeline Start</label>
+                                            <input type="date" name="timeline_start" class="form-control">
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Start Time<span class="required-mark">*</span></label>
+                                            <input type="time" name="timeline_start_time" class="form-control" required>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Project Deadline</label>
+                                            <input type="date" name="timeline_end" class="form-control">
+                                        </div>
+                                        <div>
+                                            <label class="form-label">Deadline Time</label>
+                                            <input type="time" name="timeline_end_time" class="form-control">
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Start Time<span class="required-mark">*</span></label>
-                                    <input type="time" name="timeline_start_time" class="form-control" required>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Project Deadline</label>
-                                    <input type="date" name="timeline_end" class="form-control">
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Deadline Time</label>
-                                    <input type="time" name="timeline_end_time" class="form-control">
-                                </div>
-                                <div class="col-md-6">
+                                <div class="timeline-budget-card">
+                                    <div class="timeline-budget-card-title"><i class="fas fa-coins"></i> Budget Baseline</div>
                                     <label class="form-label">Budget<span class="required-mark">*</span></label>
                                     <input type="number" name="sales_budget" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00" required>
                                     <div class="mini-note" data-budget-helper>Required as the decision insight budget baseline.</div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="timeline-budget-card">
+                                    <div class="timeline-budget-card-title"><i class="fas fa-layer-group"></i> Complexity Signal</div>
                                     <label class="form-label">Generated Complexity</label>
                                     <input type="text" class="form-control" data-generated-complexity readonly value="Low">
                                     <div class="calculation-note" data-complexity-reason>
@@ -3443,17 +4740,19 @@ include '../../includes/navbar.php';
                                         <span>Calculated automatically from budget, timeline, and priority.</span>
                                     </div>
                                 </div>
-                                <div class="col-12">
+                                <div class="timeline-budget-card timeline-budget-card--wide">
+                                    <div class="timeline-budget-card-title"><i class="fas fa-chart-line"></i> Priority Pricing</div>
                                     <div class="calculation-note" data-priority-price-preview>
                                         <strong>Priority price preview</strong>
                                         <span>Enter a budget to preview the added priority price during client intake. Final pricing is recalculated later from the Expert project cost estimate.</span>
                                     </div>
                                 </div>
-                                <div class="col-12">
+                                <div class="timeline-budget-card timeline-budget-card--wide">
+                                    <div class="timeline-budget-card-title"><i class="fas fa-note-sticky"></i> Architect Handoff Notes</div>
                                     <label class="form-label">Sales Notes <span class="optional-label">(Optional)</span></label>
                                     <textarea name="sales_notes" class="form-control" rows="3" placeholder="Internal notes for Architect review"></textarea>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="timeline-budget-card timeline-budget-card--wide">
                                     <div class="info-card">
                                         <span>Outcome</span>
                                         <strong>Creates the client and sends the project to Architect review</strong>
@@ -3471,11 +4770,11 @@ include '../../includes/navbar.php';
                                         <strong>Ready for confirmation</strong>
                                         <span>Review the intake details below before handing the project to the Architect.</span>
                                     </div>
-                                    <span class="review-ready-badge"><i class="fas fa-circle-check"></i> Intake complete</span>
+                                    <span class="review-ready-badge"><i class="fas fa-check-circle"></i> Intake complete</span>
                                 </div>
 
                                 <div class="review-primary-grid">
-                                    <section class="review-card" aria-labelledby="reviewClientHeading">
+                                    <section class="review-card review-card--client-profile" aria-labelledby="reviewClientHeading">
                                         <header class="review-card-header">
                                             <span class="review-card-icon"><i class="fas fa-building"></i></span>
                                             <div class="review-card-heading">
@@ -3558,7 +4857,7 @@ include '../../includes/navbar.php';
 
                                 <section class="review-card" aria-labelledby="reviewRequirementsHeading">
                                     <header class="review-card-header">
-                                        <span class="review-card-icon"><i class="fas fa-list-check"></i></span>
+                                        <span class="review-card-icon"><i class="fas fa-tasks"></i></span>
                                         <div class="review-card-heading">
                                             <h6 id="reviewRequirementsHeading">Requirements &amp; Scope</h6>
                                             <span>What the Architect will receive for evaluation</span>
@@ -3615,29 +4914,31 @@ include '../../includes/navbar.php';
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-                <div class="modal-footer add-client-footer">
-                    <span class="draft-status" data-draft-status>Draft not started</span>
-                    <div class="add-client-actions">
-                        <button type="button" class="btn btn-outline-primary" data-save-draft disabled>Save Draft</button>
-                        <button type="button" class="btn btn-outline-secondary" data-client-prev hidden>Previous</button>
-                        <button type="button" class="btn-add-modern" data-client-next>Next</button>
-                        <button type="submit" name="add_client" class="btn-add-modern" data-client-submit hidden><i class="fas fa-paper-plane me-1"></i> Add &amp; Send to Architect</button>
-                    </div>
-                    <div class="unsaved-close-panel" data-unsaved-close-panel>
-                        <div class="unsaved-close-panel__text">
-                            <strong>Save this client intake before closing?</strong>
-                            <span>You have entered details that are not saved yet.</span>
+
+                    <div class="modal-footer add-client-footer">
+                        <span class="draft-status" data-draft-status>Draft not started</span>
+                        <div class="add-client-actions">
+                            <button type="button" class="btn btn-outline-primary" data-save-draft disabled>Save Draft</button>
+                            <button type="button" class="btn btn-outline-secondary" data-client-prev hidden>Previous</button>
+                            <button type="button" class="btn-add-modern" data-client-next>Next</button>
+                            <button type="submit" name="add_client" class="btn-add-modern" data-client-submit hidden><i class="fas fa-paper-plane me-1"></i> Add &amp; Send to Architect</button>
                         </div>
-                        <div class="unsaved-close-panel__actions">
-                            <button type="button" class="btn btn-light" data-keep-editing>Keep Editing</button>
-                            <button type="button" class="btn btn-outline-danger" data-discard-unsaved>Discard</button>
-                            <button type="button" class="btn-add-modern" data-save-close-draft>
-                                <i class="fas fa-save me-1"></i> Save Draft
-                            </button>
+                        <div class="unsaved-close-panel" data-unsaved-close-panel>
+                            <div class="unsaved-close-panel__text">
+                                <strong>Save this client intake before closing?</strong>
+                                <span>You have entered details that are not saved yet.</span>
+                            </div>
+                            <div class="unsaved-close-panel__actions">
+                                <button type="button" class="btn btn-light" data-keep-editing>Keep Editing</button>
+                                <button type="button" class="btn btn-outline-danger" data-discard-unsaved>Discard</button>
+                                <button type="button" class="btn-add-modern" data-save-close-draft>
+                                    <i class="fas fa-save me-1"></i> Save Draft
+                                </button>
+                            </div>
+                        </div>
                         </div>
                     </div>
+                    <div class="dss-template-review-overlay" data-template-review-overlay hidden aria-hidden="true"></div>
                 </div>
             </form>
         </div>
@@ -3703,7 +5004,10 @@ include '../../includes/navbar.php';
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Project Type<span class="required-mark">*</span></label>
-                                    <input type="text" name="project_type" class="form-control" list="projectTemplateTypes" placeholder="e.g. E-commerce Website" required autocomplete="off">
+                                    <div class="template-type-picker" data-template-picker>
+                                        <input type="text" name="project_type" class="form-control" placeholder="e.g. E-commerce Website" required autocomplete="off" data-template-picker-input>
+                                        <div class="template-suggestions-menu" data-template-picker-menu hidden></div>
+                                    </div>
                                     <div class="calculation-note" data-add-project-template-recommendation hidden>
                                         <strong>Project template search</strong>
                                         <span>Choose a project type to apply saved template details.</span>
@@ -3825,7 +5129,7 @@ include '../../includes/navbar.php';
                                         <strong>Ready for confirmation</strong>
                                         <span>Review the project intake details before handing it to the Architect.</span>
                                     </div>
-                                    <span class="review-ready-badge"><i class="fas fa-circle-check"></i> Intake complete</span>
+                                    <span class="review-ready-badge"><i class="fas fa-check-circle"></i> Intake complete</span>
                                 </div>
 
                                 <div class="review-primary-grid add-project-review-grid">
@@ -3879,7 +5183,7 @@ include '../../includes/navbar.php';
 
                                     <section class="review-card" aria-labelledby="addProjectReviewRequirementsHeading">
                                         <header class="review-card-header">
-                                            <span class="review-card-icon"><i class="fas fa-list-check"></i></span>
+                                            <span class="review-card-icon"><i class="fas fa-tasks"></i></span>
                                             <div class="review-card-heading">
                                                 <h6 id="addProjectReviewRequirementsHeading">Requirements &amp; Notes</h6>
                                                 <span>What the Architect will receive</span>
@@ -4138,6 +5442,91 @@ function escapeClientHtml(value) {
     return div.innerHTML;
 }
 
+const projectTemplateTypeNames = Array.from(new Set(
+    (Array.isArray(projectTemplates) ? projectTemplates : [])
+        .map((template) => String(template.project_type || '').trim())
+        .filter(Boolean)
+)).sort((a, b) => a.localeCompare(b));
+
+function closeTemplatePickers(exceptMenu = null) {
+    document.querySelectorAll('[data-template-picker-menu]').forEach((menu) => {
+        if (menu !== exceptMenu) {
+            menu.hidden = true;
+        }
+    });
+}
+
+function initProjectTemplatePicker(picker) {
+    const input = picker.querySelector('[data-template-picker-input]');
+    const menu = picker.querySelector('[data-template-picker-menu]');
+    if (!input || !menu) {
+        return;
+    }
+
+    let selectingTemplate = false;
+    const renderMenu = () => {
+        if (selectingTemplate) {
+            return;
+        }
+
+        const query = normalizeSalesTemplateType(input.value);
+        const matches = projectTemplateTypeNames
+            .filter((name) => {
+                if (!query) {
+                    return true;
+                }
+                return normalizeSalesTemplateType(name).includes(query);
+            })
+            .slice(0, 8);
+
+        menu.innerHTML = matches.length
+            ? matches.map((name) => `
+                <button type="button" class="template-suggestion-option" data-template-suggestion="${escapeClientHtml(name)}">
+                    <span>${escapeClientHtml(name)}</span>
+                    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                </button>
+            `).join('')
+            : '<div class="template-suggestion-empty">No saved template matches this type.</div>';
+        menu.hidden = false;
+        closeTemplatePickers(menu);
+    };
+
+    input.addEventListener('focus', renderMenu);
+    input.addEventListener('input', renderMenu);
+    input.addEventListener('click', renderMenu);
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            menu.hidden = true;
+        }
+    });
+
+    menu.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+    });
+
+    menu.addEventListener('click', (event) => {
+        const option = event.target.closest('[data-template-suggestion]');
+        if (!option) {
+            return;
+        }
+
+        input.value = option.dataset.templateSuggestion || '';
+        menu.hidden = true;
+        selectingTemplate = true;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        selectingTemplate = false;
+        input.focus();
+    });
+}
+
+document.querySelectorAll('[data-template-picker]').forEach(initProjectTemplatePicker);
+document.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-template-picker]')) {
+        closeTemplatePickers();
+    }
+});
+
 function formatProjectPeso(value) {
     return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value || 0));
 }
@@ -4333,7 +5722,7 @@ function updateAddProjectTemplateRecommendation() {
 
     const budgetRange = `${formatProjectPeso(template.budget_min || 0)} - ${formatProjectPeso(template.budget_max || 0)}`;
     const appliedStatus = appliedAddProjectTemplateType === templateType
-        ? '<span class="template-apply-status"><i class="fas fa-circle-check"></i>Template suggestions applied.</span>'
+        ? '<span class="template-apply-status"><i class="fas fa-check-circle"></i>Template suggestions applied.</span>'
         : '';
     panel.hidden = false;
     panel.innerHTML = `
@@ -5074,6 +6463,7 @@ if (addClientModalElement && addClientForm) {
     const discardUnsavedButton = addClientModalElement.querySelector('[data-discard-unsaved]');
     const saveCloseDraftButton = addClientModalElement.querySelector('[data-save-close-draft]');
     const architectHandoffNote = addClientModalElement.querySelector('.architect-handoff-note');
+    const templateReviewOverlay = addClientModalElement.querySelector('[data-template-review-overlay]');
     const summaryFields = Array.from(addClientModalElement.querySelectorAll('[data-summary-field]'));
     const summaryFeatureList = addClientModalElement.querySelector('[data-summary-feature-list]');
     const draftIdField = addClientModalElement.querySelector('[data-client-draft-id]');
@@ -5091,12 +6481,77 @@ if (addClientModalElement && addClientForm) {
     let autoBudgetBase = null;
     let autoBudgetFromTemplate = false;
 
+    function syncAddClientPageBounds() {
+        const navbar = document.querySelector('#page-content-wrapper > .app-navbar');
+        const fallbackTop = window.matchMedia('(max-width: 991.98px)').matches ? 68 : 86;
+        const pageTop = navbar ? Math.round(navbar.getBoundingClientRect().bottom) : fallbackTop;
+        document.documentElement.style.setProperty('--add-client-page-top', `${Math.max(0, pageTop)}px`);
+    }
+
     function normalizeTemplateType(value) {
         return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
     }
 
     function formatPeso(value) {
         return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value || 0));
+    }
+
+    function resizeTextareaField(name, minHeight = 118) {
+        const field = addClientForm.elements[name];
+        if (!field) {
+            return;
+        }
+
+        const computedStyle = window.getComputedStyle(field);
+        const fontSize = parseFloat(computedStyle.fontSize) || 16;
+        const lineHeight = parseFloat(computedStyle.lineHeight) || (fontSize * 1.45);
+        const paddingTop = parseFloat(computedStyle.paddingTop) || 0;
+        const paddingBottom = parseFloat(computedStyle.paddingBottom) || 0;
+        const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+        const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+        const availableWidth = Math.max(240, (field.clientWidth || field.getBoundingClientRect().width || 720) - paddingLeft - paddingRight);
+        const averageCharWidth = Math.max(7, fontSize * 0.54);
+        const charsPerLine = Math.max(28, Math.floor(availableWidth / averageCharWidth));
+        const estimatedLines = String(field.value || '')
+            .split('\n')
+            .reduce((lineCount, line) => lineCount + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+        const estimatedHeight = Math.ceil((estimatedLines * lineHeight) + paddingTop + paddingBottom + 8);
+
+        field.style.height = 'auto';
+        field.style.height = `${Math.max(minHeight, field.scrollHeight + 2, estimatedHeight)}px`;
+    }
+
+    function resizeAdditionalRequirementsField() {
+        resizeTextareaField('additional_requirements', 118);
+    }
+
+    function resizeSalesNotesField() {
+        resizeTextareaField('sales_notes', 220);
+    }
+
+    function queueResizeSalesNotesField() {
+        window.requestAnimationFrame(() => {
+            resizeSalesNotesField();
+            window.requestAnimationFrame(resizeSalesNotesField);
+        });
+    }
+
+    function updateAttachmentSummary() {
+        const input = addClientForm.querySelector('[data-attachment-input]');
+        const summary = addClientForm.querySelector('[data-attachment-summary]');
+        if (!input || !summary) {
+            return;
+        }
+
+        const files = Array.from(input.files || []).filter((file) => file?.name);
+        if (files.length === 0) {
+            summary.textContent = 'No file chosen';
+            summary.removeAttribute('title');
+            return;
+        }
+
+        summary.textContent = files.length === 1 ? files[0].name : `${files.length} files selected`;
+        summary.title = files.map((file) => file.name).join(', ');
     }
 
     function findProjectTemplate(value = getFormValue('project_type')) {
@@ -5246,6 +6701,7 @@ if (addClientModalElement && addClientForm) {
                 template.third_party_services ? 'Third-party services/APIs: ' + template.third_party_services : '',
                 template.payment_terms ? 'Suggested payment terms: ' + template.payment_terms : ''
             ].filter(Boolean).join("\n");
+            resizeAdditionalRequirementsField();
         }
         if (addClientForm.elements.sales_notes && (force || !getFormValue('sales_notes'))) {
             addClientForm.elements.sales_notes.value = [
@@ -5256,6 +6712,7 @@ if (addClientModalElement && addClientForm) {
                 template.team_composition ? 'Suggested team: ' + template.team_composition : '',
                 template.maintenance_support ? 'Maintenance/support: ' + template.maintenance_support : ''
             ].filter(Boolean).join("\n");
+            queueResizeSalesNotesField();
         }
         if (showSuccess) {
             const priorityMarkup = getPriorityMarkup();
@@ -5274,47 +6731,225 @@ if (addClientModalElement && addClientForm) {
         updateDraftStatus(false);
     }
 
-    function updateTemplateRecommendation() {
-        const panel = addClientForm.querySelector('[data-template-recommendation]');
-        if (!panel) {
+    function splitDecisionInsightItems(value) {
+        const rawItems = Array.isArray(value)
+            ? value
+            : String(value || '').split(/[\n,;]+/);
+        return rawItems
+            .map((item) => String(item || '').trim())
+            .filter((item) => item !== '');
+    }
+
+    function renderDecisionInsightChips(value, fallback, limit = 5) {
+        const items = splitDecisionInsightItems(value);
+        if (items.length === 0) {
+            return `<span class="dss-muted">${escapeHtml(fallback)}</span>`;
+        }
+
+        const visibleItems = items.slice(0, limit);
+        const hiddenCount = Math.max(0, items.length - visibleItems.length);
+        return `
+            <div class="dss-chip-row">
+                ${visibleItems.map((item) => `<span class="dss-chip">${escapeHtml(item)}</span>`).join('')}
+                ${hiddenCount > 0 ? `<span class="dss-chip is-more">+${hiddenCount} more</span>` : ''}
+            </div>
+        `;
+    }
+
+    function renderDecisionMetric(label, value) {
+        return `
+            <div class="dss-metric">
+                <span>${escapeHtml(label)}</span>
+                <strong title="${escapeHtml(value)}">${escapeHtml(value)}</strong>
+            </div>
+        `;
+    }
+
+    function getProjectTemplatePreviewData(template) {
+        const budgetMin = Number(template.budget_min || 0);
+        const budgetMax = Number(template.budget_max || 0);
+        const featureSource = Array.isArray(template.feature_items) && template.feature_items.length > 0
+            ? template.feature_items
+            : template.core_features;
+        const architectureSource = [
+            template.tech_stack ? `Stack: ${template.tech_stack}` : '',
+            template.team_composition ? `Team: ${template.team_composition}` : ''
+        ].filter(Boolean).join('; ');
+
+        return {
+            budgetRange: budgetMin > 0 || budgetMax > 0
+                ? `${formatPeso(budgetMin)} - ${formatPeso(budgetMax)}`
+                : 'Budget TBD',
+            featureSource,
+            architectureSource,
+            paymentTerms: template.payment_terms || 'Payment terms can be finalized by Sales.'
+        };
+    }
+
+    function renderProjectTemplateReview(template) {
+        const preview = getProjectTemplatePreviewData(template);
+
+        return `
+            <div class="dss-template-review-dialog" role="dialog" aria-modal="true" aria-labelledby="projectTemplateReviewTitle">
+                <div class="dss-review-header">
+                    <div class="dss-review-title">
+                        <span><i class="fas fa-magic"></i> Decision Support Preview</span>
+                        <strong id="projectTemplateReviewTitle">${escapeHtml(template.project_type)}</strong>
+                    </div>
+                    <button type="button" class="dss-review-close" data-close-template-review aria-label="Close template review">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="dss-review-body">
+                    <div class="dss-review-summary">
+                        <span><strong>Preview only.</strong> This saved baseline will not change the form until you apply it.</span>
+                        <span><i class="fas fa-shield-alt me-1"></i> Safe to review</span>
+                    </div>
+                    <div class="dss-metric-grid">
+                        ${renderDecisionMetric('Timeline', template.duration_label || 'Timeline TBD')}
+                        ${renderDecisionMetric('Budget Range', preview.budgetRange)}
+                        ${renderDecisionMetric('Method', template.methodology || 'Methodology TBD')}
+                        ${renderDecisionMetric('Complexity', `${template.complexity_level || 'Medium'} level`)}
+                    </div>
+                    <div class="dss-section">
+                        <div class="dss-section-title"><i class="fas fa-tasks"></i> Suggested Features</div>
+                        ${renderDecisionInsightChips(preview.featureSource, 'No feature list saved yet.', 8)}
+                    </div>
+                    <div class="dss-section">
+                        <div class="dss-section-title"><i class="fas fa-project-diagram"></i> Architect Preview</div>
+                        ${renderDecisionInsightChips(preview.architectureSource, 'No stack or team preview saved yet.', 4)}
+                    </div>
+                    <div class="dss-section">
+                        <div class="dss-section-title"><i class="fas fa-file-signature"></i> Recommended Terms</div>
+                        <span class="dss-muted">${escapeHtml(preview.paymentTerms)}</span>
+                    </div>
+                </div>
+                <div class="dss-review-footer">
+                    <span>This will fill the description, features, requirements, notes, budget baseline, and timeline. You can still edit everything afterward.</span>
+                    <div class="dss-review-actions">
+                        <button type="button" class="btn btn-light btn-sm" data-cancel-template-apply>Keep Current</button>
+                        <button type="button" class="btn btn-primary btn-sm" data-confirm-template-apply>Apply Template</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    let templateReviewReturnFocus = null;
+
+    function openProjectTemplateReview(template, trigger = null) {
+        if (!templateReviewOverlay || !template) {
             return;
         }
+
+        templateReviewReturnFocus = trigger || document.activeElement;
+        templateReviewOverlay.classList.remove('is-applying');
+        templateReviewOverlay.dataset.templateType = template.project_type || '';
+        templateReviewOverlay.innerHTML = renderProjectTemplateReview(template);
+        templateReviewOverlay.hidden = false;
+        templateReviewOverlay.setAttribute('aria-hidden', 'false');
+        templateReviewOverlay.querySelector('[data-confirm-template-apply]')?.focus();
+    }
+
+    function closeProjectTemplateReview(returnFocus = true) {
+        if (!templateReviewOverlay || templateReviewOverlay.hidden) {
+            return;
+        }
+
+        templateReviewOverlay.hidden = true;
+        templateReviewOverlay.setAttribute('aria-hidden', 'true');
+        templateReviewOverlay.classList.remove('is-applying');
+        templateReviewOverlay.innerHTML = '';
+        templateReviewOverlay.dataset.templateType = '';
+
+        if (returnFocus && templateReviewReturnFocus instanceof HTMLElement) {
+            templateReviewReturnFocus.focus();
+        }
+        templateReviewReturnFocus = null;
+    }
+
+    function closePriorityInsight(returnFocus = false) {
+        const trigger = addClientForm.querySelector('[data-priority-insight-trigger]');
+        const popover = addClientForm.querySelector('[data-priority-insight-popover]');
+        if (!trigger || !popover) {
+            return;
+        }
+
+        popover.hidden = true;
+        trigger.classList.remove('is-open');
+        trigger.setAttribute('aria-expanded', 'false');
+
+        if (returnFocus) {
+            trigger.focus();
+        }
+    }
+
+    function togglePriorityInsight() {
+        const trigger = addClientForm.querySelector('[data-priority-insight-trigger]');
+        const popover = addClientForm.querySelector('[data-priority-insight-popover]');
+        if (!trigger || !popover) {
+            return;
+        }
+
+        const shouldOpen = popover.hidden;
+        popover.hidden = !shouldOpen;
+        trigger.classList.toggle('is-open', shouldOpen);
+        trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    }
+
+    function updatePriorityInsight(priorityMarkup, hasBudget, previewAmount, adjustedBudget) {
+        const trigger = addClientForm.querySelector('[data-priority-insight-trigger]');
+        const popover = addClientForm.querySelector('[data-priority-insight-popover]');
+        if (!trigger || !popover) {
+            return;
+        }
+
+        const amountText = hasBudget ? formatPeso(previewAmount) : 'Budget not entered yet';
+        const totalText = hasBudget ? `Adjusted intake budget: ${formatPeso(adjustedBudget)}.` : 'Enter budget later to calculate the exact amount.';
+        const label = `${priorityMarkup.label} priority adds +${priorityMarkup.percent}%`;
+
+        trigger.title = label;
+        trigger.setAttribute('aria-label', `View priority impact: ${label}`);
+        popover.innerHTML = `
+            <strong>${escapeHtml(label)}</strong>
+            <span>${escapeHtml(priorityMarkup.reason)}</span>
+            <span class="priority-impact-amount">${escapeHtml(amountText)}</span>
+            <span>${escapeHtml(totalText)}</span>
+        `;
+    }
+
+    function updateTemplateRecommendation() {
+        const trigger = addClientForm.querySelector('[data-template-recommendation]');
+        if (!trigger) {
+            return;
+        }
+
+        trigger.hidden = true;
+        trigger.dataset.templateType = '';
+        trigger.classList.remove('is-applied');
+        trigger.innerHTML = '<i class="fas fa-magic" aria-hidden="true"></i>';
 
         const projectType = getFormValue('project_type');
         const template = findProjectTemplate(projectType);
         if (!projectType) {
             templateApplyMessage = '';
-            panel.hidden = false;
-            panel.innerHTML = '<strong>Project template search</strong><span>Enter a project type to search existing templates. New project types can still be planned manually.</span>';
             return;
         }
         if (!template) {
             templateApplyMessage = '';
-            panel.hidden = false;
-            panel.innerHTML = `<strong>New project type</strong><span>No saved template matches "${escapeHtml(projectType)}". Complete the intake manually; after finalization, this project can be learned as a new template.</span>`;
             return;
         }
 
         const templateType = normalizeTemplateType(template.project_type);
-        if (normalizeTemplateType(projectType) === templateType && appliedProjectTemplateType !== templateType) {
-            applyProjectTemplate(template);
-            return;
-        }
-
-        const budgetRange = `${new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(template.budget_min || 0))} - ${new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(template.budget_max || 0))}`;
-        const appliedStatus = templateApplyMessage && appliedProjectTemplateType === templateType
-            ? `<span class="template-apply-status"><i class="fas fa-circle-check"></i>${escapeHtml(templateApplyMessage)}</span>`
-            : '';
-        panel.hidden = false;
-        panel.innerHTML = `
-            <strong>Recommended template: ${escapeHtml(template.project_type)}</strong>
-            <span>${escapeHtml(template.duration_label || 'Timeline TBD')} | ${escapeHtml(budgetRange)} | ${escapeHtml(template.methodology || 'Methodology TBD')} | ${escapeHtml(template.complexity_level || 'medium')} complexity</span>
-            <span>Features: ${escapeHtml(template.core_features || 'No feature list saved yet.')}</span>
-            <span>Architect preview: ${escapeHtml(template.tech_stack || 'No stack saved yet.')} | ${escapeHtml(template.team_composition || 'No team saved yet.')}</span>
-            <span>${escapeHtml(template.payment_terms || 'Payment terms can be finalized by Sales.')}</span>
-            ${appliedStatus}
-            <button type="button" class="btn btn-outline-primary btn-sm" data-apply-project-template>Apply template suggestions</button>
-        `;
+        const isApplied = templateApplyMessage && appliedProjectTemplateType === templateType;
+        trigger.hidden = false;
+        trigger.dataset.templateType = template.project_type || '';
+        trigger.classList.toggle('is-applied', Boolean(isApplied));
+        trigger.title = isApplied
+            ? `${template.project_type} template applied. Click to review details.`
+            : `${template.project_type} recommendation available. Click to review before applying.`;
+        trigger.setAttribute('aria-label', trigger.title);
+        trigger.innerHTML = `<i class="fas ${isApplied ? 'fa-check-circle' : 'fa-magic'}" aria-hidden="true"></i>`;
     }
 
     function getPriorityMarkup(priorityValue = getFormValue('priority') || 'medium') {
@@ -5420,6 +7055,7 @@ if (addClientModalElement && addClientForm) {
             : budget;
         const previewAmount = hasBudget ? baseBudget * priorityMarkup.rate : 0;
         const adjustedBudget = hasBudget ? baseBudget + previewAmount : 0;
+        updatePriorityInsight(priorityMarkup, hasBudget, previewAmount, adjustedBudget);
         if (generatedComplexityField) {
             generatedComplexityField.value = assessment.level;
         }
@@ -5743,6 +7379,9 @@ if (addClientModalElement && addClientForm) {
                 field.value = typeof value === 'string' ? value : '';
             }
         });
+        resizeAdditionalRequirementsField();
+        resizeSalesNotesField();
+        updateAttachmentSummary();
         formTouched = false;
         activeDraftLoaded = true;
         activeDraftId = draftData.id;
@@ -5773,6 +7412,13 @@ if (addClientModalElement && addClientForm) {
         templateApplyMessage = '';
         autoBudgetBase = null;
         autoBudgetFromTemplate = false;
+        if (addClientForm.elements.additional_requirements) {
+            addClientForm.elements.additional_requirements.style.height = '';
+        }
+        if (addClientForm.elements.sales_notes) {
+            addClientForm.elements.sales_notes.style.height = '';
+        }
+        updateAttachmentSummary();
         hideUnsavedClosePanel();
         updateDraftStatus(false);
         showClientStep(0);
@@ -5793,6 +7439,13 @@ if (addClientModalElement && addClientForm) {
         templateApplyMessage = '';
         autoBudgetBase = null;
         autoBudgetFromTemplate = false;
+        if (addClientForm.elements.additional_requirements) {
+            addClientForm.elements.additional_requirements.style.height = '';
+        }
+        if (addClientForm.elements.sales_notes) {
+            addClientForm.elements.sales_notes.style.height = '';
+        }
+        updateAttachmentSummary();
         hideUnsavedClosePanel();
         updateDraftStatus(false);
         showClientStep(0);
@@ -6056,6 +7709,12 @@ if (addClientModalElement && addClientForm) {
         if (architectHandoffNote) {
             architectHandoffNote.hidden = currentStep === stepPanels.length - 1;
         }
+        if (currentStep === 1) {
+            window.requestAnimationFrame(resizeAdditionalRequirementsField);
+        }
+        if (currentStep === 2) {
+            queueResizeSalesNotesField();
+        }
     }
 
     function requestAddClientClose() {
@@ -6070,6 +7729,7 @@ if (addClientModalElement && addClientForm) {
 
     addClientForm.addEventListener('input', (event) => {
         if (event.target?.name === 'project_type') {
+            closeProjectTemplateReview(false);
             if (autoBudgetFromTemplate && addClientForm.elements.sales_budget) {
                 addClientForm.elements.sales_budget.value = '';
             }
@@ -6078,29 +7738,101 @@ if (addClientModalElement && addClientForm) {
             templateApplyMessage = '';
             autoBudgetBase = null;
             autoBudgetFromTemplate = false;
+            updateTemplateRecommendation();
         }
         if (event.target?.name === 'sales_budget') {
             autoBudgetBase = null;
             autoBudgetFromTemplate = false;
+        }
+        if (event.target?.name === 'additional_requirements') {
+            resizeAdditionalRequirementsField();
+        }
+        if (event.target?.name === 'sales_notes') {
+            resizeSalesNotesField();
         }
         formTouched = true;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
     });
 
-    addClientForm.addEventListener('change', () => {
+    addClientForm.addEventListener('change', (event) => {
+        if (event.target?.matches('[data-attachment-input]')) {
+            updateAttachmentSummary();
+        }
         formTouched = true;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
     });
 
     addClientForm.addEventListener('click', (event) => {
-        const applyButton = event.target.closest('[data-apply-project-template]');
-        if (!applyButton) {
+        const priorityInsightButton = event.target.closest('[data-priority-insight-trigger]');
+        if (priorityInsightButton) {
+            togglePriorityInsight();
             return;
         }
 
-        applyProjectTemplate(findProjectTemplate(), { force: true, showSuccess: true });
+        if (!event.target.closest('.priority-field-shell')) {
+            closePriorityInsight(false);
+        }
+
+        const reviewButton = event.target.closest('[data-review-project-template]');
+        if (reviewButton) {
+            const template = findProjectTemplate(reviewButton.dataset.templateType || getFormValue('project_type'));
+            if (template) {
+                openProjectTemplateReview(template, reviewButton);
+            }
+            return;
+        }
+
+        const closeReviewButton = event.target.closest('[data-close-template-review], [data-cancel-template-apply]');
+        if (closeReviewButton || event.target === templateReviewOverlay) {
+            if (templateReviewOverlay?.classList.contains('is-applying')) {
+                return;
+            }
+            closeProjectTemplateReview(true);
+            return;
+        }
+
+        const confirmButton = event.target.closest('[data-confirm-template-apply]');
+        if (!confirmButton) {
+            return;
+        }
+
+        const template = findProjectTemplate(templateReviewOverlay?.dataset.templateType || getFormValue('project_type'));
+        if (template) {
+            templateReviewOverlay?.classList.add('is-applying');
+            confirmButton.disabled = true;
+            confirmButton.innerHTML = '<i class="fas fa-check me-1"></i> Applying';
+            templateReviewOverlay?.querySelector('[data-cancel-template-apply]')?.setAttribute('disabled', 'disabled');
+            templateReviewOverlay?.querySelector('[data-close-template-review]')?.setAttribute('disabled', 'disabled');
+            const hasSystemLoading = typeof window.appShowLoading === 'function' && typeof window.appHideLoading === 'function';
+            if (hasSystemLoading) {
+                window.appShowLoading('Applying template', 'Please wait while the saved project baseline is applied.');
+            }
+
+            window.setTimeout(() => {
+                try {
+                    closeProjectTemplateReview(false);
+                    applyProjectTemplate(template, { force: true, showSuccess: true });
+                } finally {
+                    if (hasSystemLoading) {
+                        window.appHideLoading();
+                    }
+                }
+            }, hasSystemLoading ? 650 : 250);
+        }
+    });
+
+    addClientForm.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && templateReviewOverlay && !templateReviewOverlay.hidden) {
+            event.preventDefault();
+            closeProjectTemplateReview(true);
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            closePriorityInsight(true);
+        }
     });
 
     if (requestedFeatureList) {
@@ -6329,13 +8061,22 @@ if (addClientModalElement && addClientForm) {
     });
 
     addClientModalElement.addEventListener('show.bs.modal', () => {
+        syncAddClientPageBounds();
         if (!activeDraftLoaded) {
             resetCurrentClientInput();
         }
     });
 
+    window.addEventListener('resize', () => {
+        if (addClientModalElement.classList.contains('show')) {
+            syncAddClientPageBounds();
+        }
+    });
+
     addClientModalElement.addEventListener('hidden.bs.modal', () => {
         showClientStep(0);
+        closeProjectTemplateReview(false);
+        closePriorityInsight(false);
         hideUnsavedClosePanel();
         activeDraftLoaded = false;
         activeDraftId = null;
