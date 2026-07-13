@@ -297,6 +297,70 @@ function salesClientsInsertProject($conn, array $data): int
     return $projectId;
 }
 
+function salesClientsEnsureClientFolder(mysqli|PgsqlMysqliCompatConnection $conn, int $clientId, string $clientName, int $createdBy): int
+{
+    $checkStmt = $conn->prepare(
+        "SELECT id
+         FROM folders
+         WHERE parent_id IS NULL AND client_id = ? AND folder_type = 'client'
+         LIMIT 1"
+    );
+    if ($checkStmt === false) {
+        throw new RuntimeException('Unable to prepare client folder lookup.' . salesClientsDbError($conn));
+    }
+
+    $checkStmt->bind_param('i', $clientId);
+    $checkStmt->execute();
+    $existing = $checkStmt->get_result()->fetch_assoc();
+    $checkStmt->close();
+
+    if ($existing) {
+        return (int) $existing['id'];
+    }
+
+    $createStmt = $conn->prepare(
+        "INSERT INTO folders (name, folder_type, client_id, parent_id, role, created_by)
+         VALUES (?, 'client', ?, NULL, NULL, ?)"
+    );
+    if ($createStmt === false) {
+        throw new RuntimeException('Unable to prepare client folder creation.' . salesClientsDbError($conn));
+    }
+
+    $createStmt->bind_param('sii', $clientName, $clientId, $createdBy);
+    if (!$createStmt->execute()) {
+        throw new RuntimeException('Unable to create client folder.' . salesClientsDbError($conn));
+    }
+
+    $folderId = (int) $createStmt->insert_id;
+    $createStmt->close();
+
+    return $folderId;
+}
+
+function salesClientsCreateSharedProjectFolder(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    int $clientId,
+    int $projectId,
+    int $clientFolderId,
+    string $projectName,
+    int $createdBy
+): void {
+    $sharedFolderName = 'Shared - ' . $projectName;
+    $sharedFolderStmt = $conn->prepare(
+        "INSERT INTO folders (name, folder_type, client_id, project_id, parent_id, role, created_by)
+         VALUES (?, 'project', ?, ?, ?, NULL, ?)"
+    );
+    if ($sharedFolderStmt === false) {
+        throw new RuntimeException('Unable to prepare shared folder creation.' . salesClientsDbError($conn));
+    }
+
+    $sharedFolderStmt->bind_param('siiii', $sharedFolderName, $clientId, $projectId, $clientFolderId, $createdBy);
+    if (!$sharedFolderStmt->execute()) {
+        throw new RuntimeException('Unable to create shared project folder.' . salesClientsDbError($conn));
+    }
+    $sharedFolderStmt->close();
+}
+
 function salesClientsSaveAttachments(array $files): array
 {
     $saved = [];
@@ -459,7 +523,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         } elseif ($timelineEndTimeInput !== '' && $timelineEndTime === null) {
             $_SESSION['error'] = 'Project deadline time must be valid.';
         } else {
-            $deadline = $clientDeadline ?: $timelineEnd;
+            $deadline = $deadline ?: $timelineEnd;
             $conn->begin_transaction();
 
             try {
@@ -475,19 +539,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $clientId = $stmt->insert_id;
                 $stmt->close();
 
-                $createClientFolderStmt = $conn->prepare(
-                    "INSERT INTO folders (name, folder_type, client_id, parent_id, role, created_by)
-                     VALUES (?, 'client', ?, NULL, NULL, ?)"
-                );
-                if ($createClientFolderStmt === false) {
-                    throw new RuntimeException('Unable to prepare client folder creation.');
-                }
-                $createClientFolderStmt->bind_param('sii', $name, $clientId, $user['id']);
-                if (!$createClientFolderStmt->execute()) {
-                    throw new RuntimeException('Unable to create client folder.');
-                }
-                $clientFolderId = $createClientFolderStmt->insert_id;
-                $createClientFolderStmt->close();
+                $clientFolderId = salesClientsEnsureClientFolder($conn, (int) $clientId, $name, (int) $user['id']);
 
                 $projectId = null;
                 if ($projectName !== '') {
@@ -514,22 +566,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         'sales_attachments' => $attachmentsJson,
                     ]);
 
-                    // Create shared project folder under client folder
-                    $sharedFolderName = "Shared - " . $projectName;
-                    $sharedFolderStmt = $conn->prepare(
-                        "INSERT INTO folders (name, folder_type, client_id, project_id, parent_id, role, created_by) 
-                         VALUES (?, 'project', ?, ?, ?, NULL, ?)"
-                    );
-                    if ($sharedFolderStmt === false) {
-                        throw new RuntimeException('Unable to prepare shared folder creation.' . salesClientsDbError($conn));
-                    }
-                    $sharedFolderStmt->bind_param('siiii', $sharedFolderName, $clientId, $projectId, $clientFolderId, $user['id']);
-                    if (!$sharedFolderStmt->execute()) {
-                        throw new RuntimeException('Unable to create shared project folder.' . salesClientsDbError($conn));
-                    }
-                    $sharedFolderId = $sharedFolderStmt->insert_id;
-                    $sharedFolderStmt->close();
-
+                    salesClientsCreateSharedProjectFolder($conn, (int) $clientId, (int) $projectId, (int) $clientFolderId, $projectName, (int) $user['id']);
                 }
 
                 $conn->commit();
@@ -586,6 +623,146 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $_SESSION['error'] = 'Unable to save client and requirements. ' . $e->getMessage();
             }
         }
+    } elseif (isset($_POST['add_project'])) {
+        $clientId = (int) ($_POST['client_id'] ?? 0);
+        $projectName = trim((string) ($_POST['project_name'] ?? ''));
+        $projectType = trim((string) ($_POST['project_type'] ?? ''));
+        $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
+        $projectTemplateId = $projectTemplate ? (int) ($projectTemplate['id'] ?? 0) : null;
+        $projectTemplateSnapshot = $projectTemplate ? json_encode($projectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
+        $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
+        $meetingNotes = trim((string) ($_POST['meeting_notes'] ?? ''));
+        $mom = trim((string) ($_POST['mom'] ?? ''));
+        $requestedFeatures = trim((string) ($_POST['requested_features'] ?? ''));
+        $additionalRequirements = trim((string) ($_POST['additional_requirements'] ?? ''));
+        $priority = trim((string) ($_POST['priority'] ?? 'medium'));
+        if (!in_array($priority, ['low', 'medium', 'high', 'critical'], true)) {
+            $priority = 'medium';
+        }
+        $salesNotes = trim((string) ($_POST['sales_notes'] ?? ''));
+        $salesBudgetInput = trim((string) ($_POST['sales_budget'] ?? ''));
+        $salesBudget = parseSalesBudgetInput($salesBudgetInput);
+        $timelineStart = parseSalesDateInput((string) ($_POST['timeline_start'] ?? ''));
+        $timelineEnd = parseSalesDateInput((string) ($_POST['timeline_end'] ?? ''));
+        $timelineStartTimeInput = trim((string) ($_POST['timeline_start_time'] ?? ''));
+        $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ''));
+        $timelineStartTime = parseSalesTimeInput($timelineStartTimeInput);
+        $timelineEndTime = parseSalesTimeInput($timelineEndTimeInput);
+        $generatedComplexity = salesClientsProjectComplexityValue(
+            projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $salesBudget, $priority)
+        );
+        $requirementsSummary = $requestedFeatures;
+        if ($additionalRequirements !== '') {
+            $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Additional Requirements:' . "\n" . $additionalRequirements;
+        }
+        if (!$hasSalesBudget && $salesBudgetInput !== '') {
+            $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Budget:' . "\n" . $salesBudgetInput;
+        }
+
+        $clientStmt = $conn->prepare('SELECT id, name, contact_person, email FROM clients WHERE id = ? LIMIT 1');
+        if ($clientStmt === false) {
+            $_SESSION['error'] = 'Unable to prepare client lookup.';
+        } else {
+            $clientStmt->bind_param('i', $clientId);
+            $clientStmt->execute();
+            $projectClient = $clientStmt->get_result()->fetch_assoc();
+            $clientStmt->close();
+
+            if (!$projectClient) {
+                $_SESSION['error'] = 'Client not found.';
+            } elseif ($projectName === '') {
+                $_SESSION['error'] = 'Project name is required.';
+            } elseif ($projectType === '') {
+                $_SESSION['error'] = 'Project type is required.';
+            } elseif ($salesBudgetInput !== '' && $salesBudget === null) {
+                $_SESSION['error'] = 'Budget must be a valid number.';
+            } elseif ($timelineStartTimeInput !== '' && $timelineStartTime === null) {
+                $_SESSION['error'] = 'Timeline start time must be valid.';
+            } elseif ($timelineEndTimeInput !== '' && $timelineEndTime === null) {
+                $_SESSION['error'] = 'Project deadline time must be valid.';
+            } else {
+                $conn->begin_transaction();
+
+                try {
+                    $attachmentsJson = json_encode(salesClientsSaveAttachments($_FILES['project_attachments'] ?? []), JSON_UNESCAPED_SLASHES);
+                    $projectId = salesClientsInsertProject($conn, [
+                        'client_id' => $clientId,
+                        'name' => $projectName,
+                        'description' => $projectDescription,
+                        'timeline_start' => $timelineStart,
+                        'timeline_end' => $timelineEnd,
+                        'meeting_notes' => $meetingNotes,
+                        'mom' => $mom,
+                        'requested_features' => $requirementsSummary,
+                        'sales_budget' => $salesBudget === null ? null : number_format($salesBudget, 2, '.', ''),
+                        'timeline_start_time' => $timelineStartTime,
+                        'timeline_end_time' => $timelineEndTime,
+                        'created_by' => $user['id'],
+                        'project_type' => $projectType,
+                        'project_template_id' => $projectTemplateId,
+                        'project_template_snapshot' => $projectTemplateSnapshot,
+                        'methodology_template' => $projectTemplate ? (string) ($projectTemplate['methodology'] ?? '') : null,
+                        'complexity_level' => $generatedComplexity,
+                        'priority' => $priority,
+                        'sales_notes' => $salesNotes,
+                        'sales_attachments' => $attachmentsJson,
+                    ]);
+
+                    $clientFolderId = salesClientsEnsureClientFolder(
+                        $conn,
+                        $clientId,
+                        (string) $projectClient['name'],
+                        (int) $user['id']
+                    );
+                    salesClientsCreateSharedProjectFolder($conn, $clientId, $projectId, $clientFolderId, $projectName, (int) $user['id']);
+
+                    if ($timelineEnd !== null) {
+                        $deadlineStmt = $conn->prepare('UPDATE clients SET deadline = COALESCE(deadline, ?) WHERE id = ?');
+                        if ($deadlineStmt !== false) {
+                            $deadlineStmt->bind_param('si', $timelineEnd, $clientId);
+                            $deadlineStmt->execute();
+                            $deadlineStmt->close();
+                        }
+                    }
+
+                    $conn->commit();
+
+                    workflowNotifyRoles(
+                        $conn,
+                        ['architect'],
+                        'New Project Requirements Ready',
+                        'Sales submitted a new project for architectural review: ' . $projectName,
+                        BASE_URL . 'modules/architect/project-review.php?id=' . $projectId,
+                        (int) $projectId,
+                        'project',
+                        'projects'
+                    );
+
+                    $clientStartEmailResult = salesClientsSendProjectStartingEmail(
+                        (string) ($projectClient['email'] ?? ''),
+                        (string) ($projectClient['contact_person'] ?? ''),
+                        (string) ($projectClient['name'] ?? ''),
+                        $projectName,
+                        $projectType,
+                        $timelineStart,
+                        $timelineStartTime,
+                        $timelineEnd,
+                        $timelineEndTime,
+                        $salesBudget
+                    );
+                    if (empty($clientStartEmailResult['success'])) {
+                        error_log('Client project start email failed for client_id=' . $clientId . ', project_id=' . $projectId . ': ' . (string) ($clientStartEmailResult['error'] ?? 'Unknown mail error.'));
+                    }
+
+                    logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);
+                    $_SESSION['success'] = 'Project added to ' . (string) $projectClient['name'] . ' and sent to Architect review successfully.';
+                } catch (Throwable $e) {
+                    $conn->rollback();
+                    error_log('Sales add project error: ' . $e->getMessage());
+                    $_SESSION['error'] = 'Unable to add project. ' . $e->getMessage();
+                }
+            }
+        }
     } elseif (isset($_POST['update_client'])) {
         $id = $_POST['id'];
         $name = $_POST['name'];
@@ -637,19 +814,8 @@ $featureCondition = projectProgressFeatureCondition('t');
 $mergedCondition = projectProgressMergedCondition('t');
 $query = "
     SELECT
-        c.*,
-        COALESCE(cp.total_features, 0) AS total_features,
-        COALESCE(cp.merged_features, 0) AS merged_features
+        c.*
     FROM clients c
-    LEFT JOIN (
-        SELECT
-            p.client_id,
-            COUNT(t.id) AS total_features,
-            SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END) AS merged_features
-        FROM projects p
-        LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
-        GROUP BY p.client_id
-    ) cp ON cp.client_id = c.id
     WHERE 1=1
 ";
 if ($search) {
@@ -661,6 +827,49 @@ if ($statusFilter) {
 $query .= " ORDER BY c.created_at DESC";
 
 $clients = salesClientsQuery($conn, $query);
+$clientRows = [];
+$projectsByClient = [];
+if ($clients) {
+    while ($clientRow = $clients->fetch_assoc()) {
+        $clientId = (int) ($clientRow['id'] ?? 0);
+        $clientRows[] = $clientRow;
+        $projectsByClient[$clientId] = [];
+    }
+}
+
+if ($clientRows) {
+    $clientIds = array_map(static fn($clientRow) => (int) $clientRow['id'], $clientRows);
+    $clientIdsSql = implode(',', array_filter($clientIds, static fn($clientId) => $clientId > 0));
+    if ($clientIdsSql !== '') {
+        $projectRows = salesClientsQuery($conn, "
+            SELECT
+                p.id,
+                p.client_id,
+                p.name,
+                p.status,
+                p.timeline_end,
+                p.created_at,
+                COALESCE(COUNT(t.id), 0) AS total_features,
+                COALESCE(SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END), 0) AS merged_features
+            FROM projects p
+            LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
+            WHERE p.client_id IN ({$clientIdsSql})
+            GROUP BY p.id, p.client_id, p.name, p.status, p.timeline_end, p.created_at
+            ORDER BY p.created_at DESC, p.id DESC
+        ");
+
+        if ($projectRows) {
+            while ($projectRow = $projectRows->fetch_assoc()) {
+                $clientId = (int) ($projectRow['client_id'] ?? 0);
+                $projectRow['progress'] = projectProgressPercent(
+                    (int) ($projectRow['total_features'] ?? 0),
+                    (int) ($projectRow['merged_features'] ?? 0)
+                );
+                $projectsByClient[$clientId][] = $projectRow;
+            }
+        }
+    }
+}
 
 // Get statistics
 $totalClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients");
@@ -1127,29 +1336,134 @@ include '../../includes/navbar.php';
     color: #854d0e;
 }
 
-/* Progress Bar */
-.progress-wrapper {
-    min-width: 100px;
+.project-row-toggle {
+    min-width: 162px;
+    min-height: 40px;
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--gray-900);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.55rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
-.progress {
-    height: 6px;
-    background: var(--gray-200);
-    border-radius: 10px;
+.project-row-toggle span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.project-row-toggle[aria-expanded="true"] {
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
+.project-row-toggle[aria-expanded="true"] .project-row-chevron {
+    transform: rotate(180deg);
+}
+
+.project-row-chevron {
+    color: var(--gray-600);
+    transition: transform 0.2s ease;
+}
+
+.client-table tr.client-row {
+    transition: background 0.2s ease;
+}
+
+.client-table tr.client-row.has-projects {
+    cursor: pointer;
+}
+
+.client-table tr.client-row.is-expanded,
+.client-table tr.client-row.has-projects:hover {
+    background: var(--gray-50);
+}
+
+.project-expansion-row td {
+    padding: 0;
+    border-bottom: 1px solid var(--gray-200);
+    background: #fbfdff;
+}
+
+.project-expansion-shell {
+    max-height: 0;
+    opacity: 0;
     overflow: hidden;
+    transform: translateY(-6px);
+    transition: max-height 0.35s ease, opacity 0.25s ease, transform 0.35s ease;
 }
 
-.progress-bar {
-    background: linear-gradient(90deg, var(--theme-primary) 0%, var(--theme-primary-light) 100%);
-    border-radius: 10px;
+.project-expansion-row.is-open .project-expansion-shell {
+    opacity: 1;
+    transform: translateY(0);
 }
 
-.progress-text {
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: var(--theme-primary);
-    margin-top: 0.25rem;
-    display: block;
+.project-expansion-inner {
+    padding: 0.95rem 1.5rem 1.1rem;
+}
+
+.project-expansion-list {
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 12px 26px rgba(15, 42, 64, 0.08);
+    padding: 0.45rem;
+}
+
+.project-expansion-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.85rem;
+    padding: 0.75rem;
+    border-radius: 8px;
+}
+
+.project-expansion-item + .project-expansion-item {
+    border-top: 1px solid var(--gray-100);
+}
+
+.project-expansion-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.45rem;
+    min-width: 0;
+}
+
+.project-expansion-main strong {
+    flex-basis: 100%;
+    color: var(--gray-900);
+    font-size: 0.88rem;
+}
+
+.project-status-pill,
+.project-progress-pill {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    border-radius: 999px;
+    padding: 0.18rem 0.5rem;
+    font-size: 0.66rem;
+    font-weight: 700;
+}
+
+.project-status-pill {
+    background: var(--gray-100);
+    color: var(--gray-600);
+}
+
+.project-progress-pill {
+    background: #e0f2fe;
+    color: var(--theme-primary-dark);
 }
 
 /* Deadline */
@@ -1220,6 +1534,16 @@ include '../../includes/navbar.php';
 
 .btn-icon.edit:hover {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
+    color: white;
+}
+
+.btn-icon.add-project {
+    background: #eef6ff;
+    color: var(--theme-primary);
+}
+
+.btn-icon.add-project:hover {
+    background: var(--theme-primary);
     color: white;
 }
 
@@ -1345,6 +1669,10 @@ include '../../includes/navbar.php';
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.75rem;
     margin-bottom: 1rem;
+}
+
+.modal-modern.add-project-modal .add-client-stepper {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .modal-modern.add-client-modal .stepper-item {
@@ -1820,6 +2148,14 @@ include '../../includes/navbar.php';
     display: grid;
     grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
     gap: 0.65rem;
+}
+
+.modal-modern.add-project-modal .add-project-review-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.modal-modern.add-project-modal .add-project-review-requirements {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .modal-modern.add-client-modal .review-block {
@@ -2534,13 +2870,35 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tab-btn.is-active,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-text,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-summary span {
     color: var(--theme-primary) !important;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress {
-    background: rgba(157, 182, 207, 0.18);
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-row-toggle,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-expansion-list {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table tr.client-row.is-expanded,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table tr.client-row.has-projects:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-expansion-row td {
+    background: rgba(31, 99, 146, 0.08);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-expansion-main strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-status-pill {
+    background: rgba(157, 182, 207, 0.16);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-progress-pill {
+    background: rgba(31, 99, 146, 0.22);
+    color: #66c8ff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .unsaved-close-panel {
@@ -2710,7 +3068,7 @@ include '../../includes/navbar.php';
                 Client Directory
             </h5>
             <div>
-                <span class="text-muted small">Showing <?php echo $clients ? $clients->num_rows : 0; ?> clients</span>
+                <span class="text-muted small">Showing <?php echo count($clientRows); ?> clients</span>
             </div>
         </div>
 
@@ -2759,30 +3117,35 @@ include '../../includes/navbar.php';
         
         <!-- Clients Table -->
         <div class="table-container">
-            <?php if($clients && $clients->num_rows > 0): ?>
+            <?php if(count($clientRows) > 0): ?>
             <table class="client-table">
                 <thead>
                     <tr>
                         <th>Client</th>
                         <th>Contact Person</th>
                         <th>Status</th>
-                        <th>Progress</th>
-                        <th>Project Deadline</th>
+                        <th>Projects</th>
                         <th>Actions</th>
+                    </tr>
                     </thead>
                 <tbody>
-    <?php while($client = $clients->fetch_assoc()): ?>
+    <?php foreach($clientRows as $client): ?>
     <?php 
-    $clientDeadline = (string) ($client['deadline'] ?? '');
-    $clientDeadlineTimestamp = $clientDeadline !== '' ? strtotime($clientDeadline) : false;
-    $daysLeft = $clientDeadlineTimestamp !== false ? ceil(($clientDeadlineTimestamp - time()) / (60 * 60 * 24)) : null;
-    $deadlineClass = $daysLeft === null ? 'normal' : ($daysLeft <= 7 ? 'urgent' : ($daysLeft <= 30 ? 'warning' : 'normal'));
-    $featureProgress = projectProgressPercent((int) ($client['total_features'] ?? 0), (int) ($client['merged_features'] ?? 0));
-    $downloadableRepository = $featureProgress === 100
+    $clientId = (int) ($client['id'] ?? 0);
+    $clientProjects = $projectsByClient[(int) $client['id']] ?? [];
+    $projectPanelId = 'clientProjectsPanel' . $clientId;
+    $hasCompletedProject = false;
+    foreach ($clientProjects as $projectForDownload) {
+        if ((int) ($projectForDownload['progress'] ?? 0) === 100) {
+            $hasCompletedProject = true;
+            break;
+        }
+    }
+    $downloadableRepository = $hasCompletedProject
         ? salesClientsDownloadableRepositoryForClient($conn, (int) $client['id'], (int) ($user['id'] ?? 0))
         : null;
     ?>
-    <tr>
+    <tr class="client-row <?php echo $clientProjects ? 'has-projects' : ''; ?>" <?php echo $clientProjects ? 'data-project-row="' . $projectPanelId . '"' : ''; ?>>
         <td>
             <div class="client-name"><?php echo htmlspecialchars($client['name']); ?></div>
             <div class="client-email"><?php echo htmlspecialchars($client['email']); ?></div>
@@ -2794,23 +3157,16 @@ include '../../includes/navbar.php';
             </span>
         </td>
         <td>
-            <div class="progress-wrapper">
-                <div class="progress">
-                    <div class="progress-bar" style="width: <?php echo $featureProgress; ?>%"></div>
-                </div>
-                <span class="progress-text"><?php echo $featureProgress; ?>% Complete</span>
-            </div>
-        </td>
-        <td>
-            <?php if($client['deadline']): ?>
-            <div class="deadline-info">
-                <div class="deadline-date"><?php echo $clientDeadlineTimestamp !== false ? date('M d, Y', $clientDeadlineTimestamp) : 'No deadline'; ?></div>
-                <span class="deadline-days <?php echo $deadlineClass; ?>">
-                    <?php echo $daysLeft; ?> days left
-                </span>
-            </div>
+            <?php if($clientProjects): ?>
+                <button type="button" class="project-row-toggle" aria-expanded="false" aria-controls="<?php echo $projectPanelId; ?>" data-project-toggle="<?php echo $projectPanelId; ?>">
+                    <span>
+                        <i class="fas fa-folder-open"></i>
+                        <?php echo count($clientProjects); ?> project<?php echo count($clientProjects) === 1 ? '' : 's'; ?>
+                    </span>
+                    <i class="fas fa-chevron-down project-row-chevron"></i>
+                </button>
             <?php else: ?>
-            <span class="text-muted">Not set</span>
+                <span class="text-muted small">No projects yet</span>
             <?php endif; ?>
         </td>
         <td>
@@ -2820,6 +3176,9 @@ include '../../includes/navbar.php';
                 </button>
                 <button class="btn-icon edit" onclick="editClient(<?php echo htmlspecialchars(json_encode($client)); ?>)">
                     <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-icon add-project" title="Add project" onclick="openAddProjectModal(<?php echo (int) $client['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $client['name'])); ?>)">
+                    <i class="fas fa-folder-plus"></i>
                 </button>
                 <?php if ($downloadableRepository && (int) ($downloadableRepository['repository_id'] ?? 0) > 0): ?>
                     <a
@@ -2836,7 +3195,45 @@ include '../../includes/navbar.php';
             </div>
         </td>
     </tr>
-    <?php endwhile; ?>
+    <?php if($clientProjects): ?>
+    <tr class="project-expansion-row" id="<?php echo $projectPanelId; ?>">
+        <td colspan="5">
+            <div class="project-expansion-shell">
+                <div class="project-expansion-inner">
+                    <div class="project-expansion-list">
+                        <?php foreach($clientProjects as $project): ?>
+                            <?php
+                            $projectDeadline = (string) ($project['timeline_end'] ?? '');
+                            $projectDeadlineTimestamp = $projectDeadline !== '' ? strtotime($projectDeadline) : false;
+                            $projectDaysLeft = $projectDeadlineTimestamp !== false ? ceil(($projectDeadlineTimestamp - time()) / (60 * 60 * 24)) : null;
+                            $projectDeadlineClass = $projectDaysLeft === null ? 'normal' : ($projectDaysLeft <= 7 ? 'urgent' : ($projectDaysLeft <= 30 ? 'warning' : 'normal'));
+                            $projectProgress = (int) ($project['progress'] ?? 0);
+                            ?>
+                            <div class="project-expansion-item">
+                                <div class="project-expansion-main">
+                                    <strong><?php echo htmlspecialchars((string) $project['name']); ?></strong>
+                                    <span class="project-status-pill"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $project['status']))); ?></span>
+                                    <?php if($projectDeadlineTimestamp !== false): ?>
+                                        <span class="deadline-days <?php echo $projectDeadlineClass; ?>">
+                                            <?php echo date('M d, Y', $projectDeadlineTimestamp); ?>
+                                            <?php if($projectDaysLeft !== null): ?>
+                                                (<?php echo $projectDaysLeft; ?> days left)
+                                            <?php endif; ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="text-muted small">No deadline</span>
+                                    <?php endif; ?>
+                                </div>
+                                <span class="project-progress-pill"><?php echo $projectProgress; ?>% Complete</span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </td>
+    </tr>
+    <?php endif; ?>
+    <?php endforeach; ?>
 </tbody>
             </table>
             <?php else: ?>
@@ -3247,6 +3644,302 @@ include '../../includes/navbar.php';
     </div>
 </div>
 
+<!-- Add Project Modal -->
+<div class="modal fade modal-modern add-client-modal add-project-modal" id="addProjectModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-folder-plus me-2"></i> Add Project
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="addProjectForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Adding project" data-loading-text="Please wait while the project is added and sent to Architect review.">
+                <input type="hidden" name="add_project" value="1">
+                <input type="hidden" name="client_id" id="add_project_client_id">
+                <div class="modal-body">
+                    <div class="add-client-stepper" aria-label="Add project progress">
+                        <div class="stepper-tooltip-wrap">
+                            <button type="button" class="stepper-item is-active" data-add-project-step-target="0" aria-current="step" disabled>
+                                <span>1</span>
+                                <strong>Project Intake</strong>
+                            </button>
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Capture the project scope, requested features, meeting notes, requirements, priority, and attachments." aria-label="About Project Intake">
+                                <i class="fas fa-info" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="stepper-tooltip-wrap">
+                            <button type="button" class="stepper-item" data-add-project-step-target="1" disabled>
+                                <span>2</span>
+                                <strong>Timeline &amp; Budget</strong>
+                            </button>
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Set the schedule and budget, then review the automatically generated project complexity." aria-label="About Timeline and Budget">
+                                <i class="fas fa-info" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="stepper-tooltip-wrap">
+                            <button type="button" class="stepper-item" data-add-project-step-target="2" disabled>
+                                <span>3</span>
+                                <strong>Review</strong>
+                            </button>
+                            <button type="button" class="stepper-info" data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-container="body" title="Confirm the project information before sending it for Architect review." aria-label="About Review">
+                                <i class="fas fa-info" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="architect-handoff-note">
+                        <i class="fas fa-building" aria-hidden="true"></i>
+                        <span>Adding project for <strong id="addProjectClientName">Selected client</strong>. Fields marked <strong>*</strong> are required before the project can be sent to Architect.</span>
+                    </div>
+
+                    <div class="add-client-layout">
+                        <div class="field-group add-client-step" data-add-project-step="0">
+                            <div class="section-title"><i class="fas fa-clipboard-list"></i> Project Intake</div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Project Name<span class="required-mark">*</span></label>
+                                    <input type="text" name="project_name" class="form-control" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Project Type<span class="required-mark">*</span></label>
+                                    <input type="text" name="project_type" class="form-control" list="projectTemplateTypes" placeholder="e.g. E-commerce Website" required autocomplete="off">
+                                    <div class="calculation-note" data-add-project-template-recommendation hidden>
+                                        <strong>Project template search</strong>
+                                        <span>Choose a project type to apply saved template details.</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Project Description<span class="required-mark">*</span></label>
+                                    <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution" required></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Requested System Features<span class="required-mark">*</span></label>
+                                    <div class="requested-feature-builder">
+                                        <input type="hidden" name="requested_features" id="addProjectRequestedFeaturesField">
+                                        <div class="requested-feature-list" id="addProjectRequestedFeatureList">
+                                            <div class="requested-feature-item">
+                                                <input type="text" class="form-control" data-add-project-feature-input placeholder="Feature item">
+                                                <button type="button" class="btn btn-outline-danger" data-remove-add-project-feature aria-label="Remove feature">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="requested-feature-actions">
+                                            <button type="button" class="btn btn-outline-primary btn-sm" id="addProjectRequestedFeature">
+                                                <i class="fas fa-plus me-1"></i> Add Feature Item
+                                            </button>
+                                        </div>
+                                        <div class="mini-note">Add at least one feature the Architect can evaluate.</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Meeting Notes <span class="optional-label">(Optional)</span></label>
+                                    <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Minutes of the Meeting (MOM) <span class="optional-label">(Optional)</span></label>
+                                    <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Additional Requirements <span class="optional-label">(Optional)</span></label>
+                                    <textarea name="additional_requirements" class="form-control" rows="3" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Priority</label>
+                                    <select name="priority" class="form-select">
+                                        <option value="low">Low</option>
+                                        <option value="medium" selected>Medium</option>
+                                        <option value="high">High</option>
+                                        <option value="critical">Critical</option>
+                                    </select>
+                                    <div class="calculation-note" data-add-project-priority-markup-preview>
+                                        <strong>Medium priority adds +10%</strong>
+                                        <span>Requires more planning, testing, and attention than the standard development process.</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Attachments <span class="optional-label">(Optional)</span></label>
+                                    <input type="file" name="project_attachments[]" class="form-control" multiple>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="field-group add-client-step" data-add-project-step="1" hidden>
+                            <div class="section-title"><i class="fas fa-calendar-check"></i> Timeline &amp; Budget</div>
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <label class="form-label">Timeline Start</label>
+                                    <input type="date" name="timeline_start" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Start Time<span class="required-mark">*</span></label>
+                                    <input type="time" name="timeline_start_time" class="form-control" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Project Deadline</label>
+                                    <input type="date" name="timeline_end" class="form-control">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Deadline Time</label>
+                                    <input type="time" name="timeline_end_time" class="form-control">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Budget<span class="required-mark">*</span></label>
+                                    <input type="number" name="sales_budget" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00" required>
+                                    <div class="mini-note" data-add-project-budget-helper>Required as the decision insight budget baseline.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Generated Complexity</label>
+                                    <input type="text" class="form-control" data-add-project-generated-complexity readonly value="Low">
+                                    <div class="calculation-note" data-add-project-complexity-reason>
+                                        <strong>Low complexity</strong>
+                                        <span>Calculated automatically from budget, timeline, and priority.</span>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="calculation-note" data-add-project-priority-price-preview>
+                                        <strong>Priority price preview</strong>
+                                        <span>Enter a budget to preview the added priority price during project intake. Final pricing is recalculated later from the Expert project cost estimate.</span>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Sales Notes <span class="optional-label">(Optional)</span></label>
+                                    <textarea name="sales_notes" class="form-control" rows="3" placeholder="Internal notes for Architect review"></textarea>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-card">
+                                        <span>Outcome</span>
+                                        <strong>Adds this project to the selected client and sends it to Architect review</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="field-group add-client-step review-step" data-add-project-step="2" hidden>
+                            <div class="section-title"><i class="fas fa-clipboard-check"></i> Final Review</div>
+                            <div class="review-summary">
+                                <div class="review-ready-banner">
+                                    <span class="review-ready-icon"><i class="fas fa-check"></i></span>
+                                    <div class="review-ready-copy">
+                                        <strong>Ready for confirmation</strong>
+                                        <span>Review the project intake details before handing it to the Architect.</span>
+                                    </div>
+                                    <span class="review-ready-badge"><i class="fas fa-circle-check"></i> Intake complete</span>
+                                </div>
+
+                                <div class="review-primary-grid add-project-review-grid">
+                                    <section class="review-card" aria-labelledby="addProjectReviewProjectHeading">
+                                        <header class="review-card-header">
+                                            <span class="review-card-icon"><i class="fas fa-folder-open"></i></span>
+                                            <div class="review-card-heading">
+                                                <h6 id="addProjectReviewProjectHeading">Project Overview</h6>
+                                                <span>Commercial and delivery snapshot</span>
+                                            </div>
+                                        </header>
+                                        <div class="review-highlight">
+                                            <span>Project</span>
+                                            <strong class="review-summary-value" data-add-project-summary-field="project_name">Not provided</strong>
+                                        </div>
+                                        <div class="review-chip-row">
+                                            <span class="review-chip" data-add-project-summary-chip="priority"><i class="fas fa-flag"></i><span data-add-project-summary-field="priority">Medium</span></span>
+                                            <span class="review-chip" data-add-project-summary-chip="generated_complexity"><i class="fas fa-layer-group"></i><span data-add-project-summary-field="generated_complexity">Low</span> complexity</span>
+                                        </div>
+                                        <div class="review-key-grid">
+                                            <div class="review-key-item">
+                                                <span class="review-key-label">Project type</span>
+                                                <span class="review-key-value review-summary-value" data-add-project-summary-field="project_type">Not provided</span>
+                                            </div>
+                                            <div class="review-key-item review-key-item--wide">
+                                                <span class="review-key-label">Delivery timeline</span>
+                                                <span class="review-key-value review-summary-value" data-add-project-summary-field="timeline">Not set</span>
+                                            </div>
+                                            <div class="review-key-item">
+                                                <span class="review-key-label">Budget</span>
+                                                <span class="review-key-value review-summary-value" data-add-project-summary-field="sales_budget">Not provided</span>
+                                            </div>
+                                            <div class="review-key-item">
+                                                <span class="review-key-label">Scope size</span>
+                                                <span class="review-key-value review-summary-value" data-add-project-summary-field="requested_feature_count">0 features</span>
+                                            </div>
+                                            <div class="review-key-item review-key-item--wide">
+                                                <span class="review-key-label">Priority price preview</span>
+                                                <span class="review-key-value review-summary-value" data-add-project-summary-field="priority_markup_detail">Not provided</span>
+                                            </div>
+                                            <div class="review-key-item review-key-item--wide">
+                                                <span class="review-key-label">Complexity reason</span>
+                                                <span class="review-key-value review-summary-value" data-add-project-summary-field="complexity_reason">Not provided</span>
+                                            </div>
+                                            <div class="review-key-item review-key-item--wide">
+                                                <span class="review-key-label">Attachments</span>
+                                                <span class="review-key-value review-summary-value" data-add-project-summary-field="attachments">No attachments</span>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section class="review-card" aria-labelledby="addProjectReviewRequirementsHeading">
+                                        <header class="review-card-header">
+                                            <span class="review-card-icon"><i class="fas fa-list-check"></i></span>
+                                            <div class="review-card-heading">
+                                                <h6 id="addProjectReviewRequirementsHeading">Requirements &amp; Notes</h6>
+                                                <span>What the Architect will receive</span>
+                                            </div>
+                                        </header>
+                                        <div class="review-requirements-grid add-project-review-requirements">
+                                            <div class="review-block">
+                                                <span class="review-block-label">Project description</span>
+                                                <span class="review-summary-value" data-add-project-summary-field="project_description">Not provided</span>
+                                            </div>
+                                            <div class="review-block">
+                                                <span class="review-block-label">Requested features</span>
+                                                <ul class="review-feature-list" data-add-project-summary-feature-list>
+                                                    <li class="is-empty">Not provided</li>
+                                                </ul>
+                                            </div>
+                                            <div class="review-block review-block--wide">
+                                                <span class="review-block-label">Additional requirements</span>
+                                                <span class="review-summary-value" data-add-project-summary-field="additional_requirements">Not provided</span>
+                                            </div>
+                                            <div class="review-block">
+                                                <span class="review-block-label">Meeting notes</span>
+                                                <span class="review-summary-value" data-add-project-summary-field="meeting_notes">Not provided</span>
+                                            </div>
+                                            <div class="review-block">
+                                                <span class="review-block-label">Minutes of meeting</span>
+                                                <span class="review-summary-value" data-add-project-summary-field="mom">Not provided</span>
+                                            </div>
+                                            <div class="review-block review-block--wide">
+                                                <span class="review-block-label">Internal sales notes</span>
+                                                <span class="review-summary-value" data-add-project-summary-field="sales_notes">Not provided</span>
+                                            </div>
+                                        </div>
+                                    </section>
+                                </div>
+
+                                <div class="review-handoff">
+                                    <i class="fas fa-paper-plane"></i>
+                                    <div class="review-handoff-copy">
+                                        <strong>What happens after submission?</strong>
+                                        <span>The project is added under the selected client, a shared project folder is created, and Architect is notified to begin review.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer add-client-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-outline-secondary" data-add-project-prev hidden>Previous</button>
+                    <button type="button" class="btn-add-modern" data-add-project-next>Next</button>
+                    <button type="submit" name="add_project" class="btn-add-modern" data-add-project-submit hidden>
+                        <i class="fas fa-paper-plane me-1"></i> Add Project
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Edit Client Modal -->
 <div class="modal fade modal-modern" id="editClientModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -3288,10 +3981,6 @@ include '../../includes/navbar.php';
                                 <option value="inactive">Inactive</option>
                                 <option value="pending">Pending</option>
                             </select>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Progress (%)</label>
-                            <input type="number" name="progress" id="edit_progress" class="form-control" min="0" max="100">
                         </div>
                     </div>
                 </div>
@@ -3386,6 +4075,7 @@ include '../../includes/navbar.php';
 
 <script>
 const savedClientDraftId = <?php echo json_encode($savedClientDraftId); ?>;
+const projectTemplates = <?php echo json_encode($projectTemplates, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
 
 function applyFilters() {
     const search = document.getElementById('searchInput').value;
@@ -3406,10 +4096,806 @@ function editClient(client) {
     document.getElementById('edit_phone').value = client.phone;
     document.getElementById('edit_address').value = client.address;
     document.getElementById('edit_status').value = client.status;
-    document.getElementById('edit_progress').value = client.progress;
     
     new bootstrap.Modal(document.getElementById('editClientModal')).show();
 }
+
+function openAddProjectModal(clientId, clientName) {
+    const modalElement = document.getElementById('addProjectModal');
+    const form = document.getElementById('addProjectForm');
+    const clientIdField = document.getElementById('add_project_client_id');
+    const clientNameElement = document.getElementById('addProjectClientName');
+
+    if (!modalElement || !form || !clientIdField) {
+        return;
+    }
+
+    form.reset();
+    clientIdField.value = clientId;
+    renderAddProjectFeatureRows('');
+    resetAddProjectTemplateState();
+    if (clientNameElement) {
+        clientNameElement.textContent = clientName || 'Selected client';
+    }
+    updateAddProjectTemplateRecommendation();
+    updateAddProjectGeneratedComplexity();
+    showAddProjectStep(0);
+
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+}
+
+let appliedAddProjectTemplateType = '';
+let addProjectAutoBudgetBase = null;
+let addProjectAutoBudgetFromTemplate = false;
+
+function normalizeSalesTemplateType(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function escapeClientHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = String(value ?? '');
+    return div.innerHTML;
+}
+
+function formatProjectPeso(value) {
+    return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value || 0));
+}
+
+function addProjectDatePlusDays(dateValue, daysToAdd) {
+    const baseDate = dateValue ? new Date(dateValue + 'T00:00:00') : new Date();
+    if (Number.isNaN(baseDate.getTime())) {
+        return '';
+    }
+    baseDate.setDate(baseDate.getDate() + Math.max(0, Number(daysToAdd) || 0));
+    return [
+        baseDate.getFullYear(),
+        String(baseDate.getMonth() + 1).padStart(2, '0'),
+        String(baseDate.getDate()).padStart(2, '0')
+    ].join('-');
+}
+
+function getAddProjectPriorityMarkup(priorityValue) {
+    const normalized = String(priorityValue || 'medium').toLowerCase();
+    if (normalized === 'low') {
+        return {
+            label: 'Low',
+            percent: 0,
+            rate: 0,
+            reason: 'Standard development process with no urgency premium.'
+        };
+    }
+    if (normalized === 'high') {
+        return {
+            label: 'High',
+            percent: 25,
+            rate: 0.25,
+            reason: 'Urgent or critical features require extra effort, overtime, and more experienced developers.'
+        };
+    }
+    if (normalized === 'critical') {
+        return {
+            label: 'Critical',
+            percent: 30,
+            rate: 0.30,
+            reason: 'Critical delivery pressure uses the top priority premium for overtime, senior oversight, and rapid turnaround.'
+        };
+    }
+    return {
+        label: 'Medium',
+        percent: 10,
+        rate: 0.10,
+        reason: 'Requires more planning, testing, and attention than the standard development process.'
+    };
+}
+
+function findSalesProjectTemplate(value) {
+    const needle = normalizeSalesTemplateType(value);
+    if (!needle) {
+        return null;
+    }
+
+    const exactMatch = projectTemplates.find((template) => normalizeSalesTemplateType(template.project_type) === needle);
+    if (exactMatch) {
+        return exactMatch;
+    }
+
+    const genericTokens = new Set(['system', 'app', 'application', 'management', 'platform', 'website', 'portal']);
+    const needleTokens = needle.split(' ').filter(Boolean);
+    const distinctiveNeedleTokens = needleTokens.filter((token) => !genericTokens.has(token));
+    if (distinctiveNeedleTokens.length === 0) {
+        return null;
+    }
+
+    const scoredMatches = projectTemplates
+        .map((template) => {
+            const candidate = normalizeSalesTemplateType(template.project_type);
+            const candidateTokens = candidate.split(' ').filter(Boolean);
+            const sharedTokens = needleTokens.filter((token) => candidateTokens.includes(token));
+            const sharedDistinctiveTokens = distinctiveNeedleTokens.filter((token) => candidateTokens.includes(token));
+            const directMatch = candidate.includes(needle) || needle.includes(candidate);
+            const score = (sharedTokens.length / Math.max(needleTokens.length, candidateTokens.length))
+                + (sharedDistinctiveTokens.length * 0.5)
+                + (directMatch ? 0.5 : 0);
+
+            return { template, score, sharedDistinctiveCount: sharedDistinctiveTokens.length };
+        })
+        .filter((match) => match.sharedDistinctiveCount > 0 && match.score >= 0.65)
+        .sort((a, b) => b.score - a.score);
+
+    if (scoredMatches.length === 0 || (scoredMatches.length > 1 && scoredMatches[0].score === scoredMatches[1].score)) {
+        return null;
+    }
+
+    return scoredMatches[0].template;
+}
+
+function syncAddProjectBudgetWithPriority() {
+    const form = document.getElementById('addProjectForm');
+    if (!form || !addProjectAutoBudgetFromTemplate || !Number.isFinite(Number(addProjectAutoBudgetBase)) || Number(addProjectAutoBudgetBase) <= 0) {
+        return;
+    }
+
+    const markup = getAddProjectPriorityMarkup(form.elements.priority?.value || 'medium');
+    form.elements.sales_budget.value = (Number(addProjectAutoBudgetBase) * (1 + markup.rate)).toFixed(2);
+}
+
+function resetAddProjectTemplateState() {
+    appliedAddProjectTemplateType = '';
+    addProjectAutoBudgetBase = null;
+    addProjectAutoBudgetFromTemplate = false;
+    const panel = document.querySelector('#addProjectForm [data-add-project-template-recommendation]');
+    if (panel) {
+        panel.hidden = true;
+        panel.innerHTML = '<strong>Project template search</strong><span>Choose a project type to apply saved template details.</span>';
+    }
+}
+
+function applyAddProjectTemplate(template, options = {}) {
+    const form = document.getElementById('addProjectForm');
+    if (!form || !template) {
+        return;
+    }
+
+    const force = Boolean(options.force);
+    appliedAddProjectTemplateType = normalizeSalesTemplateType(template.project_type);
+
+    if (form.elements.project_type) {
+        form.elements.project_type.value = template.project_type || '';
+    }
+    if (form.elements.project_description && (force || !form.elements.project_description.value.trim())) {
+        form.elements.project_description.value = template.project_description || `${template.project_type} based on the ${template.methodology || 'recommended'} project template.`;
+    }
+    if (form.elements.requested_features && Array.isArray(template.feature_items) && template.feature_items.length > 0 && (force || !getAddProjectFeatureValues().length)) {
+        renderAddProjectFeatureRows(template.feature_items.join("\n"));
+    }
+    if (form.elements.sales_budget && Number(template.budget_min || 0) > 0 && (force || !form.elements.sales_budget.value.trim() || addProjectAutoBudgetFromTemplate)) {
+        addProjectAutoBudgetBase = Number(template.budget_min || 0);
+        addProjectAutoBudgetFromTemplate = true;
+        syncAddProjectBudgetWithPriority();
+    }
+    if (form.elements.timeline_start && (force || !form.elements.timeline_start.value)) {
+        form.elements.timeline_start.value = addProjectDatePlusDays('', 0);
+    }
+    if (form.elements.timeline_end && Number(template.duration_max_weeks || 0) > 0 && (force || !form.elements.timeline_end.value)) {
+        const startValue = form.elements.timeline_start?.value || addProjectDatePlusDays('', 0);
+        form.elements.timeline_end.value = addProjectDatePlusDays(startValue, Number(template.duration_max_weeks || 0) * 7);
+    }
+    if (form.elements.additional_requirements && (force || !form.elements.additional_requirements.value.trim())) {
+        form.elements.additional_requirements.value = [
+            template.functional_requirements ? 'Functional requirements: ' + template.functional_requirements : '',
+            template.non_functional_requirements ? 'Non-functional requirements: ' + template.non_functional_requirements : '',
+            template.integrations ? 'Suggested integrations: ' + template.integrations : '',
+            template.third_party_services ? 'Third-party services/APIs: ' + template.third_party_services : '',
+            template.payment_terms ? 'Suggested payment terms: ' + template.payment_terms : ''
+        ].filter(Boolean).join("\n");
+    }
+    if (form.elements.sales_notes && (force || !form.elements.sales_notes.value.trim())) {
+        form.elements.sales_notes.value = [
+            template.sales_notes || '',
+            template.suggested_milestones ? 'Suggested milestones: ' + template.suggested_milestones : '',
+            template.methodology ? 'Recommended methodology: ' + template.methodology : '',
+            template.tech_stack ? 'Architect recommendation preview: ' + template.tech_stack : '',
+            template.team_composition ? 'Suggested team: ' + template.team_composition : '',
+            template.maintenance_support ? 'Maintenance/support: ' + template.maintenance_support : ''
+        ].filter(Boolean).join("\n");
+    }
+
+    updateAddProjectTemplateRecommendation();
+    updateAddProjectGeneratedComplexity();
+}
+
+function updateAddProjectTemplateRecommendation() {
+    const form = document.getElementById('addProjectForm');
+    const panel = document.querySelector('#addProjectForm [data-add-project-template-recommendation]');
+    if (!form || !panel) {
+        return;
+    }
+
+    const projectType = String(form.elements.project_type?.value || '').trim();
+    const template = findSalesProjectTemplate(projectType);
+    if (!projectType) {
+        panel.hidden = false;
+        panel.innerHTML = '<strong>Project template search</strong><span>Choose a project type to apply saved template details.</span>';
+        return;
+    }
+    if (!template) {
+        panel.hidden = false;
+        panel.innerHTML = `<strong>New project type</strong><span>No saved template matches "${escapeClientHtml(projectType)}". Fill the project details manually.</span>`;
+        return;
+    }
+
+    const templateType = normalizeSalesTemplateType(template.project_type);
+    if (normalizeSalesTemplateType(projectType) === templateType && appliedAddProjectTemplateType !== templateType) {
+        applyAddProjectTemplate(template);
+        return;
+    }
+
+    const budgetRange = `${formatProjectPeso(template.budget_min || 0)} - ${formatProjectPeso(template.budget_max || 0)}`;
+    const appliedStatus = appliedAddProjectTemplateType === templateType
+        ? '<span class="template-apply-status"><i class="fas fa-circle-check"></i>Template suggestions applied.</span>'
+        : '';
+    panel.hidden = false;
+    panel.innerHTML = `
+        <strong>Recommended template: ${escapeClientHtml(template.project_type)}</strong>
+        <span>${escapeClientHtml(template.duration_label || 'Timeline TBD')} | ${escapeClientHtml(budgetRange)} | ${escapeClientHtml(template.methodology || 'Methodology TBD')}</span>
+        <span>Features: ${escapeClientHtml(template.core_features || 'No feature list saved yet.')}</span>
+        ${appliedStatus}
+        <button type="button" class="btn btn-outline-primary btn-sm" data-apply-add-project-template>Apply template suggestions</button>
+    `;
+}
+
+function createAddProjectFeatureRow(value = '') {
+    const item = document.createElement('div');
+    item.className = 'requested-feature-item';
+    item.innerHTML = `
+        <input type="text" class="form-control" data-add-project-feature-input placeholder="Feature item">
+        <button type="button" class="btn btn-outline-danger" data-remove-add-project-feature aria-label="Remove feature">
+            <i class="fas fa-trash"></i>
+        </button>
+    `;
+
+    const input = item.querySelector('[data-add-project-feature-input]');
+    if (input) {
+        input.value = value;
+    }
+
+    return item;
+}
+
+function getAddProjectFeatureValues() {
+    return Array.from(document.querySelectorAll('#addProjectRequestedFeatureList [data-add-project-feature-input]'))
+        .map((input) => String(input.value || '').trim())
+        .filter((value) => value !== '');
+}
+
+function syncAddProjectFeatureField() {
+    const field = document.getElementById('addProjectRequestedFeaturesField');
+    if (field) {
+        field.value = getAddProjectFeatureValues().join("\n");
+    }
+}
+
+function updateAddProjectFeatureRemoveButtons() {
+    const featureList = document.getElementById('addProjectRequestedFeatureList');
+    if (!featureList) {
+        return;
+    }
+
+    const items = Array.from(featureList.querySelectorAll('.requested-feature-item'));
+    items.forEach((item) => {
+        const button = item.querySelector('[data-remove-add-project-feature]');
+        if (button) {
+            button.disabled = items.length <= 1;
+        }
+    });
+}
+
+function renderAddProjectFeatureRows(rawValue = '') {
+    const featureList = document.getElementById('addProjectRequestedFeatureList');
+    if (!featureList) {
+        return;
+    }
+
+    const features = String(rawValue || '')
+        .split(/\r?\n/)
+        .map((feature) => feature.trim())
+        .filter((feature) => feature !== '');
+
+    featureList.innerHTML = '';
+    (features.length > 0 ? features : ['']).forEach((feature) => {
+        featureList.appendChild(createAddProjectFeatureRow(feature));
+    });
+
+    updateAddProjectFeatureRemoveButtons();
+    syncAddProjectFeatureField();
+}
+
+function getAddProjectValue(name) {
+    const form = document.getElementById('addProjectForm');
+    const field = form?.elements[name];
+    return field ? String(field.value || '').trim() : '';
+}
+
+function formatAddProjectDate(value) {
+    if (!value) {
+        return '';
+    }
+
+    const parts = value.split('-').map(Number);
+    if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+        return value;
+    }
+
+    return new Date(parts[0], parts[1] - 1, parts[2]).toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
+}
+
+function formatAddProjectTime(value) {
+    if (!value) {
+        return '';
+    }
+
+    const parts = value.split(':').map(Number);
+    if (parts.length < 2 || parts.some((part) => Number.isNaN(part))) {
+        return value;
+    }
+
+    const parsed = new Date();
+    parsed.setHours(parts[0], parts[1], 0, 0);
+    return parsed.toLocaleTimeString([], {
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
+function formatAddProjectDateTime(dateValue, timeValue) {
+    const date = formatAddProjectDate(dateValue);
+    const time = formatAddProjectTime(timeValue);
+    if (date && time) {
+        return `${date}, ${time}`;
+    }
+    return date || time;
+}
+
+function buildAddProjectTimelineSummary() {
+    const start = formatAddProjectDateTime(getAddProjectValue('timeline_start'), getAddProjectValue('timeline_start_time'));
+    const end = formatAddProjectDateTime(getAddProjectValue('timeline_end'), getAddProjectValue('timeline_end_time'));
+
+    if (start && end) {
+        return `${start} to ${end}`;
+    }
+    if (start) {
+        return `Starts ${start}`;
+    }
+    if (end) {
+        return `Due ${end}`;
+    }
+    return '';
+}
+
+function getAddProjectComplexityAssessment() {
+    const startValue = getAddProjectValue('timeline_start');
+    const endValue = getAddProjectValue('timeline_end');
+    const budgetRaw = getAddProjectValue('sales_budget').replace(/,/g, '');
+    const priorityValue = getAddProjectValue('priority') || 'medium';
+    const budget = Number(budgetRaw);
+    let days = 0;
+
+    if (startValue && endValue) {
+        const startDate = new Date(startValue + 'T00:00:00');
+        const endDate = new Date(endValue + 'T00:00:00');
+        if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime()) && endDate >= startDate) {
+            days = Math.floor((endDate - startDate) / 86400000) + 1;
+        }
+    }
+
+    const budgetBand = Number.isFinite(budget) && budget >= 500000
+        ? (budget <= 1500000 ? 'medium' : 'high')
+        : 'low';
+    const timelineBand = days > 0 && days <= 30
+        ? 'short'
+        : (days > 0 && days <= 90 ? 'moderate' : 'long');
+    const score = (
+        ({ low: 0, medium: 1, high: 2 }[budgetBand] ?? 1)
+        + ({ long: 0, moderate: 1, short: 2 }[timelineBand] ?? 1)
+        + ({ low: 0, medium: 1, high: 2, critical: 2 }[String(priorityValue).toLowerCase()] ?? 1)
+    );
+    const level = score >= 4 ? 'High' : (score >= 2 ? 'Medium' : 'Low');
+    const budgetLabel = ({ low: 'Low budget', medium: 'Medium budget', high: 'High budget' }[budgetBand] || 'Medium budget');
+    const timelineLabel = ({ long: 'Long timeline', moderate: 'Moderate timeline', short: 'Short timeline' }[timelineBand] || 'Moderate timeline');
+    const priorityLabel = getAddProjectPriorityMarkup(priorityValue).label + ' priority';
+    const reason = `${level} complexity because the intake combines ${budgetLabel.toLowerCase()}, ${timelineLabel.toLowerCase()}, and ${priorityLabel.toLowerCase()} for a score of ${score}/6.`;
+
+    return { level, reason, score };
+}
+
+function updateAddProjectGeneratedComplexity() {
+    const form = document.getElementById('addProjectForm');
+    if (!form) {
+        return;
+    }
+
+    syncAddProjectBudgetWithPriority();
+    const assessment = getAddProjectComplexityAssessment();
+    const priorityMarkup = getAddProjectPriorityMarkup(form.elements.priority?.value || 'medium');
+    const budgetRaw = getAddProjectValue('sales_budget').replace(/,/g, '');
+    const budget = Number(budgetRaw);
+    const hasBudget = budgetRaw !== '' && Number.isFinite(budget);
+    const baseBudget = addProjectAutoBudgetFromTemplate && Number.isFinite(Number(addProjectAutoBudgetBase)) && Number(addProjectAutoBudgetBase) > 0
+        ? Number(addProjectAutoBudgetBase)
+        : budget;
+    const previewAmount = hasBudget ? baseBudget * priorityMarkup.rate : 0;
+    const adjustedBudget = hasBudget ? baseBudget + previewAmount : 0;
+
+    const complexityField = form.querySelector('[data-add-project-generated-complexity]');
+    if (complexityField) {
+        complexityField.value = assessment.level;
+    }
+
+    const complexityReason = form.querySelector('[data-add-project-complexity-reason]');
+    if (complexityReason) {
+        complexityReason.innerHTML = `<strong>${escapeClientHtml(assessment.level)} complexity</strong><span>${escapeClientHtml(assessment.reason)}</span>`;
+    }
+
+    const priorityMarkupPreview = form.querySelector('[data-add-project-priority-markup-preview]');
+    if (priorityMarkupPreview) {
+        priorityMarkupPreview.innerHTML = `<strong>${escapeClientHtml(priorityMarkup.label)} priority adds +${priorityMarkup.percent}%</strong><span>${escapeClientHtml(priorityMarkup.reason)}</span>`;
+    }
+
+    const priorityPricePreview = form.querySelector('[data-add-project-priority-price-preview]');
+    if (priorityPricePreview) {
+        const amountText = hasBudget ? formatProjectPeso(previewAmount) : 'Enter a budget to calculate the amount';
+        const totalText = hasBudget ? ` Adjusted intake budget: ${formatProjectPeso(adjustedBudget)}.` : '';
+        priorityPricePreview.innerHTML = `<strong>Priority price preview: ${escapeClientHtml(amountText)}</strong><span>${escapeClientHtml(priorityMarkup.label)} priority adds ${priorityMarkup.percent}% to the base budget during intake.${escapeClientHtml(totalText)} Final pricing is recalculated later from the Expert project cost estimate.</span>`;
+    }
+
+    const budgetHelper = form.querySelector('[data-add-project-budget-helper]');
+    if (budgetHelper) {
+        budgetHelper.textContent = addProjectAutoBudgetFromTemplate && hasBudget
+            ? `Auto-adjusted from template base ${formatProjectPeso(baseBudget)} plus ${priorityMarkup.label.toLowerCase()} priority markup ${formatProjectPeso(previewAmount)}. You can still type a custom budget.`
+            : 'Required as the decision insight budget baseline.';
+    }
+}
+
+function renderAddProjectSummary() {
+    const form = document.getElementById('addProjectForm');
+    if (!form) {
+        return;
+    }
+
+    syncAddProjectFeatureField();
+    updateAddProjectGeneratedComplexity();
+    const features = getAddProjectFeatureValues();
+    const attachmentInput = form.querySelector('input[name="project_attachments[]"]');
+    const attachmentNames = Array.from(attachmentInput?.files || []).map((file) => file.name).filter(Boolean);
+    const priorityMarkup = getAddProjectPriorityMarkup(getAddProjectValue('priority') || 'medium');
+    const assessment = getAddProjectComplexityAssessment();
+    const budgetRaw = getAddProjectValue('sales_budget').replace(/,/g, '');
+    const budget = Number(budgetRaw);
+    const hasBudget = budgetRaw !== '' && Number.isFinite(budget);
+    const summaryBaseBudget = addProjectAutoBudgetFromTemplate && Number.isFinite(Number(addProjectAutoBudgetBase)) && Number(addProjectAutoBudgetBase) > 0
+        ? Number(addProjectAutoBudgetBase)
+        : budget;
+    const priorityMarkupAmount = hasBudget ? summaryBaseBudget * priorityMarkup.rate : 0;
+    const priorityMarkupDetail = hasBudget
+        ? `${priorityMarkup.label} priority adds ${priorityMarkup.percent}% (${formatProjectPeso(priorityMarkupAmount)}) based on a ${formatProjectPeso(summaryBaseBudget)} base budget. ${priorityMarkup.reason}`
+        : `${priorityMarkup.label} priority adds ${priorityMarkup.percent}%. ${priorityMarkup.reason}`;
+    const summaryData = {
+        project_name: getAddProjectValue('project_name'),
+        project_type: getAddProjectValue('project_type'),
+        timeline: buildAddProjectTimelineSummary(),
+        sales_budget: hasBudget ? formatProjectPeso(budget) : '',
+        priority: getAddProjectValue('priority') || 'medium',
+        generated_complexity: assessment.level,
+        priority_markup_detail: priorityMarkupDetail,
+        complexity_reason: assessment.reason,
+        attachments: attachmentNames.join("\n"),
+        requested_feature_count: `${features.length} feature${features.length === 1 ? '' : 's'}`,
+        project_description: getAddProjectValue('project_description'),
+        additional_requirements: getAddProjectValue('additional_requirements'),
+        meeting_notes: getAddProjectValue('meeting_notes'),
+        mom: getAddProjectValue('mom'),
+        sales_notes: getAddProjectValue('sales_notes')
+    };
+
+    form.querySelectorAll('[data-add-project-summary-field]').forEach((field) => {
+        const key = field.dataset.addProjectSummaryField || '';
+        const fallback = key === 'timeline'
+            ? 'Not set'
+            : (key === 'attachments' ? 'No attachments' : 'Not provided');
+        const value = summaryData[key] || '';
+        field.textContent = value || fallback;
+        field.classList.toggle('is-empty', value === '');
+
+        const chip = field.closest('[data-add-project-summary-chip]');
+        if (chip) {
+            chip.dataset.value = String(value || '').toLowerCase();
+        }
+    });
+
+    const featureList = form.querySelector('[data-add-project-summary-feature-list]');
+    if (featureList) {
+        featureList.replaceChildren();
+        if (features.length === 0) {
+            const emptyItem = document.createElement('li');
+            emptyItem.className = 'is-empty';
+            emptyItem.textContent = 'Not provided';
+            featureList.appendChild(emptyItem);
+        } else {
+            features.forEach((feature) => {
+                const item = document.createElement('li');
+                item.textContent = feature;
+                featureList.appendChild(item);
+            });
+        }
+    }
+}
+
+function prepareAddProjectFeatureValidation(shouldReport = true) {
+    const featureInputs = Array.from(document.querySelectorAll('#addProjectRequestedFeatureList [data-add-project-feature-input]'));
+    featureInputs.forEach((input) => input.setCustomValidity(''));
+
+    if (getAddProjectFeatureValues().length > 0) {
+        return true;
+    }
+
+    const firstInput = featureInputs[0];
+    if (firstInput) {
+        firstInput.setCustomValidity('Add at least one requested feature before sending the project to Architect.');
+        if (shouldReport) {
+            firstInput.reportValidity();
+        }
+    }
+    return false;
+}
+
+function prepareAddProjectTimelineValidation(shouldReport = true) {
+    const form = document.getElementById('addProjectForm');
+    const startDateField = form?.elements.timeline_start;
+    const startTimeField = form?.elements.timeline_start_time;
+    const endDateField = form?.elements.timeline_end;
+    const endTimeField = form?.elements.timeline_end_time;
+    if (!startDateField || !startTimeField || !endDateField || !endTimeField) {
+        return true;
+    }
+
+    endDateField.setCustomValidity('');
+    endTimeField.setCustomValidity('');
+    if (!startDateField.value || !startTimeField.value || !endDateField.value || !endTimeField.value) {
+        return true;
+    }
+
+    const startAt = new Date(`${startDateField.value}T${startTimeField.value}:00`);
+    const endAt = new Date(`${endDateField.value}T${endTimeField.value}:00`);
+    if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime()) || endAt <= startAt) {
+        endTimeField.setCustomValidity('Project deadline must be later than the timeline start date and time.');
+        if (shouldReport) {
+            endTimeField.reportValidity();
+        }
+        return false;
+    }
+
+    return true;
+}
+
+function validateAddProjectStep(stepIndex, shouldReport = true) {
+    const form = document.getElementById('addProjectForm');
+    const panel = form?.querySelector(`[data-add-project-step="${stepIndex}"]`);
+    if (!panel) {
+        return true;
+    }
+
+    if (stepIndex === 0 && !prepareAddProjectFeatureValidation(shouldReport)) {
+        return false;
+    }
+    if (stepIndex === 1 && !prepareAddProjectTimelineValidation(shouldReport)) {
+        return false;
+    }
+
+    const fields = Array.from(panel.querySelectorAll('input, select, textarea'));
+    for (const field of fields) {
+        if (!field.checkValidity()) {
+            if (shouldReport) {
+                field.reportValidity();
+            }
+            return false;
+        }
+    }
+
+    return true;
+}
+
+let currentAddProjectStep = 0;
+
+function showAddProjectStep(stepIndex) {
+    const modal = document.getElementById('addProjectModal');
+    if (!modal) {
+        return;
+    }
+
+    const panels = Array.from(modal.querySelectorAll('[data-add-project-step]'));
+    const buttons = Array.from(modal.querySelectorAll('[data-add-project-step-target]'));
+    const previousButton = modal.querySelector('[data-add-project-prev]');
+    const nextButton = modal.querySelector('[data-add-project-next]');
+    const submitButton = modal.querySelector('[data-add-project-submit]');
+    const handoffNote = modal.querySelector('.architect-handoff-note');
+
+    currentAddProjectStep = Math.max(0, Math.min(stepIndex, panels.length - 1));
+    if (currentAddProjectStep === panels.length - 1) {
+        renderAddProjectSummary();
+    }
+
+    panels.forEach((panel, index) => {
+        panel.hidden = index !== currentAddProjectStep;
+    });
+    buttons.forEach((button, index) => {
+        button.classList.toggle('is-active', index === currentAddProjectStep);
+        button.classList.toggle('is-complete', index < currentAddProjectStep);
+        button.setAttribute('aria-current', index === currentAddProjectStep ? 'step' : 'false');
+    });
+
+    if (previousButton) {
+        previousButton.hidden = currentAddProjectStep === 0;
+    }
+    if (nextButton) {
+        nextButton.hidden = currentAddProjectStep === panels.length - 1;
+    }
+    if (submitButton) {
+        submitButton.hidden = currentAddProjectStep !== panels.length - 1;
+    }
+    if (handoffNote) {
+        handoffNote.hidden = currentAddProjectStep === panels.length - 1;
+    }
+}
+
+const addProjectFormElement = document.getElementById('addProjectForm');
+if (addProjectFormElement) {
+    addProjectFormElement.addEventListener('input', function (event) {
+        if (event.target?.name === 'project_type') {
+            if (addProjectAutoBudgetFromTemplate && addProjectFormElement.elements.sales_budget) {
+                addProjectFormElement.elements.sales_budget.value = '';
+            }
+            addProjectAutoBudgetBase = null;
+            addProjectAutoBudgetFromTemplate = false;
+            appliedAddProjectTemplateType = '';
+            updateAddProjectTemplateRecommendation();
+        }
+        if (event.target?.name === 'sales_budget') {
+            addProjectAutoBudgetBase = null;
+            addProjectAutoBudgetFromTemplate = false;
+        }
+        if (event.target?.matches('[data-add-project-feature-input]')) {
+            event.target.setCustomValidity('');
+            syncAddProjectFeatureField();
+        }
+        if (['timeline_start', 'timeline_start_time', 'timeline_end', 'timeline_end_time', 'sales_budget', 'priority'].includes(event.target?.name || '')) {
+            addProjectFormElement.elements.timeline_end?.setCustomValidity('');
+            addProjectFormElement.elements.timeline_end_time?.setCustomValidity('');
+            updateAddProjectGeneratedComplexity();
+        }
+    });
+
+    addProjectFormElement.addEventListener('change', function (event) {
+        if (event.target?.name === 'project_type') {
+            updateAddProjectTemplateRecommendation();
+        }
+        if (event.target?.name === 'priority') {
+            syncAddProjectBudgetWithPriority();
+            updateAddProjectTemplateRecommendation();
+        }
+    });
+
+    addProjectFormElement.addEventListener('click', function (event) {
+        const nextButton = event.target.closest('[data-add-project-next]');
+        if (nextButton) {
+            if (validateAddProjectStep(currentAddProjectStep, true)) {
+                showAddProjectStep(currentAddProjectStep + 1);
+            }
+            return;
+        }
+
+        const previousButton = event.target.closest('[data-add-project-prev]');
+        if (previousButton) {
+            showAddProjectStep(currentAddProjectStep - 1);
+            return;
+        }
+
+        const addFeatureButton = event.target.closest('#addProjectRequestedFeature');
+        if (addFeatureButton) {
+            const featureList = document.getElementById('addProjectRequestedFeatureList');
+            featureList?.appendChild(createAddProjectFeatureRow(''));
+            updateAddProjectFeatureRemoveButtons();
+            featureList?.querySelector('.requested-feature-item:last-child [data-add-project-feature-input]')?.focus();
+            syncAddProjectFeatureField();
+            return;
+        }
+
+        const removeFeatureButton = event.target.closest('[data-remove-add-project-feature]');
+        if (removeFeatureButton) {
+            removeFeatureButton.closest('.requested-feature-item')?.remove();
+            updateAddProjectFeatureRemoveButtons();
+            syncAddProjectFeatureField();
+            return;
+        }
+
+        const applyButton = event.target.closest('[data-apply-add-project-template]');
+        if (!applyButton) {
+            return;
+        }
+
+        applyAddProjectTemplate(findSalesProjectTemplate(addProjectFormElement.elements.project_type?.value), { force: true });
+    });
+
+    addProjectFormElement.addEventListener('submit', function (event) {
+        syncAddProjectFeatureField();
+        if (currentAddProjectStep < 2) {
+            event.preventDefault();
+            if (validateAddProjectStep(currentAddProjectStep, true)) {
+                showAddProjectStep(currentAddProjectStep + 1);
+            }
+            return;
+        }
+
+        for (let index = 0; index <= 1; index += 1) {
+            if (!validateAddProjectStep(index, false)) {
+                event.preventDefault();
+                showAddProjectStep(index);
+                validateAddProjectStep(index, true);
+                return;
+            }
+        }
+    });
+}
+
+function setProjectRowExpanded(panelId, shouldExpand) {
+    const panel = document.getElementById(panelId);
+    const toggle = document.querySelector(`[data-project-toggle="${panelId}"]`);
+    const row = document.querySelector(`[data-project-row="${panelId}"]`);
+
+    if (!panel || !toggle || !row) {
+        return;
+    }
+
+    const shell = panel.querySelector('.project-expansion-shell');
+    panel.classList.toggle('is-open', shouldExpand);
+    row.classList.toggle('is-expanded', shouldExpand);
+    toggle.setAttribute('aria-expanded', shouldExpand ? 'true' : 'false');
+
+    if (shell) {
+        shell.style.maxHeight = shouldExpand ? `${shell.scrollHeight}px` : '0px';
+    }
+}
+
+document.addEventListener('click', function (event) {
+    const toggle = event.target.closest('[data-project-toggle]');
+    if (toggle) {
+        event.stopPropagation();
+        const panelId = toggle.getAttribute('data-project-toggle');
+        setProjectRowExpanded(panelId, toggle.getAttribute('aria-expanded') !== 'true');
+        return;
+    }
+
+    const row = event.target.closest('[data-project-row]');
+    if (!row || event.target.closest('.action-buttons, button, a, input, select, textarea')) {
+        return;
+    }
+
+    const panelId = row.getAttribute('data-project-row');
+    const toggleForRow = document.querySelector(`[data-project-toggle="${panelId}"]`);
+    if (toggleForRow) {
+        setProjectRowExpanded(panelId, toggleForRow.getAttribute('aria-expanded') !== 'true');
+    }
+});
+
+window.addEventListener('resize', function () {
+    document.querySelectorAll('.project-expansion-row.is-open .project-expansion-shell').forEach((shell) => {
+        shell.style.maxHeight = `${shell.scrollHeight}px`;
+    });
+});
 
 function viewClient(id) {
     $.ajax({
@@ -3438,11 +4924,10 @@ function viewClient(id) {
                         <div class="client-detail-panel">
                             <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-chart-line me-2"></i>Project Status</h6>
                             <p><strong>Status:</strong> <span class="badge-status ${client.status}">${client.status}</span></p>
-                            <p><strong>Progress:</strong> ${client.progress}%</p>
-                            <div class="progress mb-2">
-                                <div class="progress-bar" style="width: ${client.progress}%"></div>
-                            </div>
                             <p><strong>Project Deadline:</strong> ${client.deadline ? new Date(client.deadline).toLocaleDateString() : 'Not set'}</p>
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="viewAddProjectButton">
+                                <i class="fas fa-folder-plus me-1"></i> Add Project
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -3456,6 +4941,12 @@ function viewClient(id) {
                 </div>
             `;
             $('#viewClientContent').html(html);
+            const viewAddProjectButton = document.getElementById('viewAddProjectButton');
+            if (viewAddProjectButton) {
+                viewAddProjectButton.addEventListener('click', function () {
+                    openAddProjectModal(Number(client.id) || 0, client.name || 'Selected client');
+                });
+            }
             
             $.ajax({
                 url: '../../api/get-client-projects.php',
@@ -3466,13 +4957,17 @@ function viewClient(id) {
                     if(projects.length > 0) {
                         let projectsHtml = '<div class="list-group">';
                         projects.forEach(project => {
+                            const progress = Number(project.progress || 0);
                             projectsHtml += `
                                 <div class="client-project-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>${project.name}</strong><br>
                                         <small class="text-muted">Created: ${new Date(project.created_at).toLocaleDateString()}</small>
                                     </div>
-                                    <span class="badge-status ${project.status === 'completed' ? 'active' : 'pending'}">${project.status}</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="project-progress-pill">${progress}% Complete</span>
+                                        <span class="badge-status ${project.status === 'completed' ? 'active' : 'pending'}">${project.status}</span>
+                                    </div>
                                 </div>
                             `;
                         });
@@ -3553,7 +5048,6 @@ const addClientModalElement = document.getElementById('addClientModal');
 const addClientForm = document.getElementById('addClientForm');
 
 if (addClientModalElement && addClientForm) {
-    const projectTemplates = <?php echo json_encode($projectTemplates, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     const addClientDraftsKey = 'erniPms.sales.addClientDrafts.v1';
     const legacyDraftKeys = [
         'erniPms.sales.addClientDraft.v2',
