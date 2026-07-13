@@ -245,15 +245,16 @@ function di_render_project_attention_banner(mysqli|PgsqlMysqliCompatConnection $
     static $stylesPrinted = false;
     if (!$stylesPrinted) {
         echo '<style>
-        .project-insight-alert{align-items:center;background:#fff7ed;border:1px solid #fed7aa;border-left:5px solid #f97316;border-radius:12px;box-shadow:0 10px 24px rgba(15,23,42,.08);color:#7c2d12;display:flex;gap:.9rem;margin-bottom:1rem;padding:1rem 1.1rem}
-        .project-insight-alert__icon{align-items:center;background:#f97316;border-radius:999px;color:#fff;display:inline-flex;flex:0 0 auto;font-weight:800;height:34px;justify-content:center;width:34px}
+        @keyframes projectInsightAttentionHeartbeat{0%,100%{box-shadow:0 0 0 1px rgba(249,115,22,.14),0 0 16px rgba(249,115,22,.12),0 10px 24px rgba(15,23,42,.06)}45%{box-shadow:0 0 0 1px rgba(249,115,22,.26),0 0 28px rgba(249,115,22,.28),0 12px 28px rgba(15,23,42,.08)}70%{box-shadow:0 0 0 1px rgba(249,115,22,.18),0 0 20px rgba(249,115,22,.18),0 10px 24px rgba(15,23,42,.06)}}
+        .project-insight-alert{align-items:center;background:#fff7ed;border:1px solid rgba(249,115,22,.46);border-radius:12px;box-shadow:0 0 0 1px rgba(249,115,22,.14),0 0 18px rgba(249,115,22,.14),0 10px 24px rgba(15,23,42,.06);animation:projectInsightAttentionHeartbeat 1.9s ease-in-out infinite;color:#7c2d12;display:flex;gap:.9rem;margin-bottom:1rem;padding:1rem 1.1rem}
+        .project-insight-alert__icon{align-items:center;background:#f97316;border-radius:999px;color:#fff;display:inline-flex;flex:0 0 auto;font-weight:700;height:34px;justify-content:center;width:34px}
         .project-insight-alert__body{min-width:0}
         .project-insight-alert__body strong{display:block;font-size:.98rem;margin-bottom:.15rem}
         .project-insight-alert__body span{display:block;font-size:.86rem;line-height:1.35}
-        .project-insight-alert__action{background:#f97316;border-radius:999px;color:#fff;font-size:.84rem;font-weight:700;margin-left:auto;padding:.55rem .9rem;text-decoration:none;white-space:nowrap}
+        .project-insight-alert__action{background:#f97316;border-radius:999px;color:#fff;font-size:.84rem;font-weight:600;margin-left:auto;padding:.55rem .9rem;text-decoration:none;white-space:nowrap}
         .project-insight-alert__action:hover{background:#ea580c;color:#fff}
         @media(max-width:768px){.project-insight-alert{align-items:flex-start;flex-direction:column}.project-insight-alert__action{margin-left:0}}
-        :is(html[data-theme="dark"],body[data-theme="dark"],body.dark-mode) .project-insight-alert{background:rgba(249,115,22,.12);border-color:rgba(251,146,60,.35);color:#fed7aa}
+        :is(html[data-theme="dark"],body[data-theme="dark"],body.dark-mode) .project-insight-alert{background:rgba(249,115,22,.12);border-color:rgba(251,146,60,.48);box-shadow:0 0 0 1px rgba(251,146,60,.14),0 0 24px rgba(146,64,14,.34),0 10px 24px rgba(0,0,0,.24);color:#fed7aa}
         </style>';
         $stylesPrinted = true;
     }

@@ -39,32 +39,32 @@ function delayInsightsEnsureStyles(): void
     $stylesPrinted = true;
     echo '<style>
         .delay-insights-wrap{margin-bottom:2rem;}
-        .delay-insights-card{background:#fff;border:1px solid #e9ecef;border-radius:24px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 1px 2px rgba(0,0,0,.03);overflow:hidden;}
-        .delay-insights-head{padding:1.5rem 1.75rem;border-bottom:1px solid #e9ecef;background:linear-gradient(135deg,rgba(31,99,146,.06) 0%,rgba(24,79,115,.02) 100%);}
-        .delay-insights-head h4{margin:0 0 .35rem;font-size:1.1rem;font-weight:700;color:#1f6392;display:flex;align-items:center;gap:.6rem;}
+        .delay-insights-card{background:#fff;border:1px solid rgba(31,99,146,.14);border-radius:24px;box-shadow:0 12px 28px rgba(15,76,129,.08);overflow:hidden;}
+        .delay-insights-head{padding:1.5rem 1.75rem;border-bottom:1px solid rgba(31,99,146,.10);background:#f8fcff;}
+        .delay-insights-head h4{margin:0 0 .35rem;font-size:1.1rem;font-weight:600;color:#1f6392;display:flex;align-items:center;gap:.6rem;}
         .delay-insights-head p{margin:0;color:#6c757d;font-size:.85rem;line-height:1.5;}
         .delay-insight-item{padding:1.5rem 1.75rem;border-bottom:1px solid #e9ecef;}
         .delay-insight-item:last-child{border-bottom:none;}
         .delay-insight-project{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:1.25rem;flex-wrap:wrap;}
-        .delay-insight-project h5{margin:0 0 .35rem;font-size:1rem;font-weight:700;color:#212529;}
+        .delay-insight-project h5{margin:0 0 .35rem;font-size:1rem;font-weight:600;color:#212529;}
         .delay-insight-project p{margin:0;color:#6c757d;font-size:.8rem;}
-        .delay-risk-badge{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .8rem;border-radius:999px;font-size:.72rem;font-weight:700;}
+        .delay-risk-badge{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .8rem;border-radius:999px;font-size:.72rem;font-weight:600;}
         .delay-risk-low{background:#d1fae5;color:#047857;}
         .delay-risk-medium{background:#fef3c7;color:#b45309;}
         .delay-risk-high{background:#fee2e2;color:#b91c1c;}
         .delay-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;}
         .delay-panel{border:1px solid #e9ecef;border-radius:18px;padding:1rem 1.1rem;background:#fff;}
-        .delay-panel.before{background:linear-gradient(180deg,rgba(59,130,246,.05) 0%,rgba(255,255,255,1) 100%);}
-        .delay-panel.after{background:linear-gradient(180deg,rgba(245,158,11,.06) 0%,rgba(255,255,255,1) 100%);}
-        .delay-panel-title{display:flex;align-items:center;gap:.5rem;font-size:.82rem;font-weight:700;color:#212529;margin-bottom:.9rem;text-transform:uppercase;letter-spacing:.04em;}
+        .delay-panel.before{background:#fff;}
+        .delay-panel.after{background:#fff;}
+        .delay-panel-title{display:flex;align-items:center;gap:.5rem;font-size:.82rem;font-weight:600;color:#212529;margin-bottom:.9rem;text-transform:uppercase;letter-spacing:.04em;}
         .delay-metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-bottom:.85rem;}
         .delay-metric{background:#fff;border:1px solid #e9ecef;border-radius:14px;padding:.8rem .9rem;}
         .delay-metric span{display:block;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:#6c757d;margin-bottom:.25rem;}
         .delay-metric strong{font-size:1.45rem;line-height:1;color:#1f6392;}
         .delay-bar{height:10px;border-radius:999px;background:#e9ecef;overflow:hidden;margin:.85rem 0 1rem;}
         .delay-bar span{display:block;height:100%;border-radius:999px;}
-        .delay-bar.delay span{background:linear-gradient(90deg,#f59e0b 0%,#dc2626 100%);}
-        .delay-bar.success span{background:linear-gradient(90deg,#10b981 0%,#059669 100%);}
+        .delay-bar.delay span{background:#dc2626;}
+        .delay-bar.success span{background:#10b981;}
         .delay-copy{font-size:.82rem;color:#495057;line-height:1.55;margin:0 0 .8rem;}
         .delay-list{margin:0;padding-left:1rem;color:#495057;font-size:.8rem;}
         .delay-list li{margin-bottom:.45rem;}
@@ -74,31 +74,36 @@ function delayInsightsEnsureStyles(): void
         .delay-owners{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.85rem;}
         .delay-owner{display:inline-flex;align-items:center;padding:.42rem .72rem;border-radius:999px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:.74rem;font-weight:600;}
         .delay-note{display:inline-flex;align-items:center;gap:.45rem;padding:.6rem .75rem;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0;color:#475569;font-size:.76rem;margin-top:.8rem;}
-        .delay-action{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;padding:.62rem .95rem;border:none;border-radius:999px;background:linear-gradient(135deg,#1f6392 0%,#184f73 100%);color:#fff;text-decoration:none;font-size:.78rem;font-weight:600;transition:transform .2s ease,box-shadow .2s ease;}
-        .delay-action:hover{color:#fff;transform:translateY(-1px);box-shadow:0 6px 16px rgba(31,99,146,.25);}
+        .delay-action{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;padding:.62rem .95rem;border:none;border-radius:999px;background:#1f6392;color:#fff;text-decoration:none;font-size:.78rem;font-weight:600;transition:background .2s ease,box-shadow .2s ease;}
+        .delay-action:hover{color:#fff;background:#184f73;box-shadow:0 6px 16px rgba(31,99,146,.25);}
         .delay-insight-project-right{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;justify-content:flex-end;}
-        .delay-compact-card{background:linear-gradient(180deg,#ffffff 0%,#fbfdff 100%);border:1px solid #e9ecef;border-radius:24px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 1px 2px rgba(0,0,0,.03);overflow:hidden;margin-bottom:2rem;}
-        .delay-compact-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.35rem 1.5rem;border-bottom:1px solid #e9ecef;background:linear-gradient(135deg,rgba(31,99,146,.08) 0%,rgba(24,79,115,.02) 100%);}
+        .delay-compact-card{background:#fff;border:1px solid rgba(31,99,146,.14);border-radius:24px;box-shadow:0 12px 28px rgba(15,76,129,.08);overflow:hidden;margin-bottom:2rem;}
+        .delay-compact-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.35rem 1.5rem;border-bottom:1px solid rgba(31,99,146,.10);background:#f8fcff;}
         .delay-compact-head-copy{min-width:0;}
-        .delay-compact-head h4{margin:0 0 .3rem;font-size:1rem;font-weight:700;color:#1f6392;display:flex;align-items:center;gap:.55rem;}
+        .delay-compact-head h4{margin:0 0 .3rem;font-size:1rem;font-weight:600;color:#1f6392;display:flex;align-items:center;gap:.55rem;}
         .delay-compact-head p{margin:0;color:#6c757d;font-size:.82rem;line-height:1.55;max-width:700px;}
-        .delay-compact-count{display:inline-flex;align-items:center;justify-content:center;padding:.45rem .8rem;border-radius:999px;background:#fff;color:#1f6392;border:1px solid rgba(31,99,146,.16);font-size:.72rem;font-weight:700;white-space:nowrap;}
+        .delay-compact-count{display:inline-flex;align-items:center;justify-content:center;padding:.45rem .8rem;border-radius:999px;background:#fff;color:#1f6392;border:1px solid rgba(31,99,146,.16);font-size:.72rem;font-weight:600;white-space:nowrap;}
         .delay-compact-list{display:grid;gap:1rem;padding:1rem 1.1rem 1.1rem;}
-        .delay-compact-row{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(110px,.42fr) minmax(110px,.42fr) auto;gap:1rem;align-items:stretch;padding:1.1rem 1.15rem;border:1px solid #e4edf5;border-radius:20px;background:linear-gradient(135deg,#ffffff 0%,#f8fbfd 100%);box-shadow:0 10px 24px rgba(15,74,110,.05);transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease;}
-        .delay-compact-row:hover{border-color:#cfe0ec;box-shadow:0 14px 28px rgba(15,74,110,.08);transform:translateY(-1px);}
+        .delay-compact-row{display:grid;grid-template-columns:minmax(0,1fr) 150px 150px 150px;gap:1rem;align-items:center;padding:1.05rem 1.15rem;border:1px solid #d9e8f3;border-radius:18px;background:#fff;box-shadow:0 10px 24px rgba(15,74,110,.06);transition:border-color .2s ease,box-shadow .2s ease;}
+        .delay-compact-row:hover{border-color:#aecadf;box-shadow:0 14px 28px rgba(15,74,110,.09);}
+        .delay-compact-row.delay-row-risk-high{border-color:rgba(220,38,38,.46);box-shadow:0 0 0 1px rgba(220,38,38,.12),0 0 22px rgba(220,38,38,.16),0 14px 30px rgba(15,74,110,.06);}
+        .delay-compact-row.delay-row-risk-high:hover{border-color:rgba(220,38,38,.58);box-shadow:0 0 0 1px rgba(220,38,38,.18),0 0 28px rgba(220,38,38,.22),0 16px 34px rgba(15,74,110,.08);}
         .delay-compact-main{min-width:0;display:flex;flex-direction:column;justify-content:space-between;gap:.8rem;}
-        .delay-compact-top{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;}
-        .delay-compact-title{min-width:0;}
-        .delay-compact-title strong{display:block;font-size:.98rem;font-weight:700;color:#212529;line-height:1.3;margin-bottom:.55rem;}
+        .delay-compact-top{display:block;min-width:0;}
+        .delay-compact-title{min-width:0;display:grid;gap:.55rem;}
+        .delay-compact-title-row{display:flex;align-items:center;gap:.75rem;min-width:0;flex-wrap:wrap;}
+        .delay-compact-title strong{display:block;font-size:.98rem;font-weight:600;color:#212529;line-height:1.3;}
         .delay-compact-meta{display:flex;flex-wrap:wrap;gap:.5rem;}
-        .delay-compact-meta span{display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:#fff;border:1px solid #e7edf3;color:#5c6b79;font-size:.72rem;line-height:1;}
-        .delay-compact-note{font-size:.79rem;line-height:1.6;color:#52606d;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-        .delay-compact-metric{min-width:0;display:flex;flex-direction:column;justify-content:center;padding:.8rem .85rem;border:1px solid #dce7ef;border-radius:16px;background:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.7);}
-        .delay-compact-metric label{display:block;font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:#6c757d;margin-bottom:.2rem;}
-        .delay-compact-metric strong{font-size:1.15rem;color:#1f6392;line-height:1.1;}
-        .delay-compact-action{align-self:center;white-space:nowrap;}
+        .delay-compact-meta span{display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:#f8fafc;border:1px solid #e2eaf1;color:#52616f;font-size:.72rem;line-height:1;}
+        .delay-compact-note{max-width:780px;font-size:.82rem;line-height:1.55;color:#425466;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+        .delay-compact-metric{min-width:0;display:flex;flex-direction:column;justify-content:center;min-height:86px;padding:.75rem .85rem;border:1px solid #dce7ef;border-radius:14px;background:#fbfdff;box-shadow:inset 0 1px 0 rgba(255,255,255,.7);}
+        .delay-compact-metric label{display:block;font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;color:#6c757d;margin-bottom:.35rem;}
+        .delay-compact-metric strong{font-size:1.35rem;font-weight:600;color:#1f6392;line-height:1.1;}
+        .delay-row-risk-high .delay-metric-delay{border-color:rgba(220,38,38,.26);background:#fffafa;}
+        .delay-row-risk-high .delay-metric-delay strong{color:#b91c1c;}
+        .delay-compact-action{align-self:center;justify-self:stretch;min-height:48px;white-space:nowrap;border-radius:14px;}
          .delay-compact-empty{padding:1.5rem;color:#6c757d;font-size:.85rem;text-align:center;}
-         @media (max-width: 1199.98px){.delay-compact-row{grid-template-columns:minmax(0,1fr) repeat(2,minmax(120px,1fr));}.delay-compact-action{grid-column:1/-1;justify-self:flex-start;}}
+         @media (max-width: 1199.98px){.delay-compact-row{grid-template-columns:minmax(0,1fr) repeat(2,minmax(120px,1fr));}.delay-compact-action{grid-column:1/-1;justify-self:flex-start;min-width:150px;}}
          @media (max-width: 991.98px){.delay-panels{grid-template-columns:1fr;}}
          @media (max-width: 767.98px){.delay-insights-head,.delay-insight-item{padding:1.2rem;}.delay-compact-head{padding:1.2rem;flex-direction:column;align-items:flex-start;}.delay-compact-list{padding:1rem;}.delay-metric-grid{grid-template-columns:1fr;}.delay-compact-row{grid-template-columns:1fr;align-items:flex-start;padding:1rem;}.delay-compact-top{flex-direction:column;align-items:flex-start;}.delay-compact-metric{min-width:0;width:100%;}.delay-compact-action{width:100%;justify-self:stretch;}.delay-insight-project-right{justify-content:flex-start;}}
          html[data-theme="dark"] .delay-insights-card,
@@ -109,7 +114,7 @@ function delayInsightsEnsureStyles(): void
          }
          html[data-theme="dark"] .delay-insights-head,
          html[data-theme="dark"] .delay-compact-head{
-             background:linear-gradient(135deg,rgba(31,99,146,.20) 0%,rgba(12,31,49,.96) 100%);
+             background:rgba(12,31,49,.96);
              border-bottom-color:rgba(138,210,255,.10);
          }
          html[data-theme="dark"] .delay-insights-head h4,
@@ -135,12 +140,20 @@ function delayInsightsEnsureStyles(): void
          html[data-theme="dark"] .delay-insight-item,
          html[data-theme="dark"] .delay-compact-row{
              border-color:rgba(138,210,255,.10);
-             background:linear-gradient(135deg,rgba(12,31,49,.96) 0%,rgba(8,20,32,.98) 100%);
+             background:rgba(12,31,49,.96);
              box-shadow:0 10px 24px rgba(0,0,0,.24);
          }
          html[data-theme="dark"] .delay-compact-row:hover{
              border-color:rgba(138,210,255,.18);
              box-shadow:0 14px 28px rgba(0,0,0,.30);
+         }
+         html[data-theme="dark"] .delay-compact-row.delay-row-risk-high{
+             border-color:rgba(248,113,113,.48);
+             box-shadow:0 0 0 1px rgba(248,113,113,.14),0 0 26px rgba(127,29,29,.34),0 14px 30px rgba(0,0,0,.24);
+         }
+         html[data-theme="dark"] .delay-compact-row.delay-row-risk-high:hover{
+             border-color:rgba(248,113,113,.62);
+             box-shadow:0 0 0 1px rgba(248,113,113,.2),0 0 34px rgba(127,29,29,.42),0 16px 34px rgba(0,0,0,.30);
          }
          html[data-theme="dark"] .delay-panel,
          html[data-theme="dark"] .delay-metric,
@@ -150,10 +163,10 @@ function delayInsightsEnsureStyles(): void
              box-shadow:none;
          }
          html[data-theme="dark"] .delay-panel.before{
-             background:linear-gradient(180deg,rgba(31,99,146,.18) 0%,rgba(9,24,38,.96) 100%);
+             background:rgba(9,24,38,.96);
          }
          html[data-theme="dark"] .delay-panel.after{
-             background:linear-gradient(180deg,rgba(245,158,11,.12) 0%,rgba(9,24,38,.96) 100%);
+             background:rgba(9,24,38,.96);
          }
          html[data-theme="dark"] .delay-metric span,
          html[data-theme="dark"] .delay-compact-metric label,
@@ -164,6 +177,13 @@ function delayInsightsEnsureStyles(): void
          html[data-theme="dark"] .delay-metric strong,
          html[data-theme="dark"] .delay-compact-metric strong{
              color:#8cc7ff;
+         }
+         html[data-theme="dark"] .delay-row-risk-high .delay-metric-delay{
+             background:rgba(69,16,16,.35);
+             border-color:rgba(248,113,113,.28);
+         }
+         html[data-theme="dark"] .delay-row-risk-high .delay-metric-delay strong{
+             color:#fca5a5;
          }
          html[data-theme="dark"] .delay-bar{
              background:#163044;
@@ -235,26 +255,30 @@ function delayInsightsRenderCompactList(mysqli|PgsqlMysqliCompatConnection $conn
     echo '<div class="delay-compact-list">';
 
     foreach ($insights as $insight) {
-        $riskClass = $insight['before']['risk_level'] === 'High' ? 'delay-risk-high' : ($insight['before']['risk_level'] === 'Medium' ? 'delay-risk-medium' : 'delay-risk-low');
+        $riskLevel = (string) $insight['before']['risk_level'];
+        $riskClass = $riskLevel === 'High' ? 'delay-risk-high' : ($riskLevel === 'Medium' ? 'delay-risk-medium' : 'delay-risk-low');
+        $riskRowClass = $riskLevel === 'High' ? ' delay-row-risk-high' : '';
         $projectUrl = BASE_URL . 'modules/insights/decision-center.php?project_id=' . (int) $insight['project']['id'];
 
-        echo '<article class="delay-compact-row">';
+        echo '<article class="delay-compact-row' . $riskRowClass . '">';
         echo '<div class="delay-compact-main">';
         echo '<div class="delay-compact-top">';
         echo '<div class="delay-compact-title">';
+        echo '<div class="delay-compact-title-row">';
         echo '<strong>' . htmlspecialchars($insight['project']['name']) . '</strong>';
+        echo '<span class="delay-risk-badge ' . $riskClass . '"><i class="fas fa-signal"></i> ' . htmlspecialchars($riskLevel) . ' Risk</span>';
+        echo '</div>';
         echo '<div class="delay-compact-meta">';
         echo '<span><i class="fas fa-user-tie"></i> ' . htmlspecialchars($insight['project']['client_name']) . '</span>';
         echo '<span><i class="fas fa-layer-group"></i> ' . htmlspecialchars($insight['project']['status_label']) . '</span>';
         echo '<span><i class="fas fa-calendar-alt"></i> ' . htmlspecialchars($insight['project']['timeline_label']) . '</span>';
         echo '</div>';
         echo '</div>';
-        echo '<span class="delay-risk-badge ' . $riskClass . '"><i class="fas fa-signal"></i> ' . htmlspecialchars($insight['before']['risk_level']) . ' Risk</span>';
         echo '</div>';
         echo '<div class="delay-compact-note">' . htmlspecialchars($insight['after']['summary']) . '</div>';
         echo '</div>';
-        echo '<div class="delay-compact-metric"><label>Delay Chance</label><strong>' . (int) $insight['before']['delay_probability'] . '%</strong></div>';
-        echo '<div class="delay-compact-metric"><label>Success Chance</label><strong>' . (int) $insight['before']['success_probability'] . '%</strong></div>';
+        echo '<div class="delay-compact-metric delay-metric-delay"><label>Delay Chance</label><strong>' . (int) $insight['before']['delay_probability'] . '%</strong></div>';
+        echo '<div class="delay-compact-metric delay-metric-success"><label>Success Chance</label><strong>' . (int) $insight['before']['success_probability'] . '%</strong></div>';
         echo '<a class="delay-action delay-compact-action" href="' . htmlspecialchars($projectUrl) . '"><i class="fas fa-arrow-right"></i> ' . htmlspecialchars($buttonLabel) . '</a>';
         echo '</article>';
     }

@@ -159,12 +159,14 @@ function isSidebarItemActive(array $item, string $currentPage, string $currentPa
         <?php foreach ($currentMenu as $item): ?>
             <a
                 href="<?php echo BASE_URL . ltrim($item['url'], '/'); ?>"
-                class="menu-item <?php echo isSidebarItemActive($item, $currentPage, $currentPath) ? 'active' : ''; ?>"
+                class="menu-item <?php echo isSidebarItemActive($item, $currentPage, $currentPath) ? 'active' : ''; ?> <?php echo !empty($item['attention']) && $projectInsightsAttentionCount > 0 ? 'has-attention' : ''; ?>"
             >
                 <i class="fas fa-<?php echo htmlspecialchars($item['icon']); ?> menu-icon"></i>
                 <span class="menu-label sidebar-label"><?php echo htmlspecialchars($item['label']); ?></span>
                 <?php if (!empty($item['attention']) && $projectInsightsAttentionCount > 0): ?>
-                    <span class="sidebar-attention-badge" title="<?php echo (int) $projectInsightsAttentionCount; ?> project<?php echo $projectInsightsAttentionCount === 1 ? '' : 's'; ?> need attention<?php echo $projectInsightsAttentionTitle !== '' ? ': ' . htmlspecialchars($projectInsightsAttentionTitle) : ''; ?>">!</span>
+                    <span class="sidebar-attention-badge" title="<?php echo (int) $projectInsightsAttentionCount; ?> project<?php echo $projectInsightsAttentionCount === 1 ? '' : 's'; ?> need attention<?php echo $projectInsightsAttentionTitle !== '' ? ': ' . htmlspecialchars($projectInsightsAttentionTitle) : ''; ?>" aria-label="Project insights need attention">
+                        <i class="fas fa-exclamation"></i>
+                    </span>
                 <?php endif; ?>
             </a>
         <?php endforeach; ?>

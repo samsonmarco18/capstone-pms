@@ -763,9 +763,34 @@ body,
 }
 
 .attention-alert {
-    border: 1px solid #f4d35e !important;
-    border-left: 1px solid #f4d35e !important;
+    border: 1px solid rgba(245, 158, 11, 0.48) !important;
     border-radius: 14px;
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12), 0 0 22px rgba(245, 158, 11, 0.16);
+    animation: decisionAttentionHeartbeat 1.9s ease-in-out infinite;
+}
+
+@keyframes decisionAttentionHeartbeat {
+    0%, 100% {
+        box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.12), 0 0 16px rgba(245, 158, 11, 0.12), 0 8px 20px rgba(15, 74, 110, 0.04);
+    }
+    45% {
+        box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.24), 0 0 28px rgba(245, 158, 11, 0.28), 0 10px 24px rgba(15, 74, 110, 0.06);
+    }
+    70% {
+        box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.18), 0 0 20px rgba(245, 158, 11, 0.18), 0 8px 20px rgba(15, 74, 110, 0.04);
+    }
+}
+
+@keyframes decisionRiskHeartbeat {
+    0%, 100% {
+        box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.12), 0 0 18px rgba(220, 38, 38, 0.14), 0 10px 24px rgba(15, 74, 110, 0.05);
+    }
+    45% {
+        box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.24), 0 0 32px rgba(220, 38, 38, 0.28), 0 12px 28px rgba(15, 74, 110, 0.07);
+    }
+    70% {
+        box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.18), 0 0 22px rgba(220, 38, 38, 0.2), 0 10px 24px rgba(15, 74, 110, 0.05);
+    }
 }
 
 .overview-project-card {
@@ -838,14 +863,21 @@ body,
 }
 
 .overview-project-card.risk-high {
-    border-color: var(--gray-200);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+    border-color: rgba(220, 38, 38, 0.46);
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.12), 0 0 22px rgba(220, 38, 38, 0.16), 0 10px 24px rgba(15, 74, 110, 0.05);
 }
 
 .overview-project-card.needs-attention {
-    border-color: #f59e0b;
-    box-shadow: 0 8px 22px rgba(245, 158, 11, 0.16);
+    border-color: rgba(245, 158, 11, 0.54);
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.14), 0 0 24px rgba(245, 158, 11, 0.18), 0 10px 24px rgba(15, 74, 110, 0.05);
+    animation: decisionAttentionHeartbeat 1.9s ease-in-out infinite;
     position: relative;
+}
+
+.overview-project-card.risk-high.needs-attention {
+    border-color: rgba(220, 38, 38, 0.58);
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.18), 0 0 28px rgba(220, 38, 38, 0.22), 0 12px 28px rgba(15, 74, 110, 0.06);
+    animation: decisionRiskHeartbeat 1.9s ease-in-out infinite;
 }
 
 .overview-project-head {
@@ -1086,6 +1118,16 @@ body,
     padding: 1.3rem;
     position: relative;
     overflow: hidden;
+}
+
+.metric-card.tone-danger {
+    border-color: rgba(220, 38, 38, 0.44);
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.12), 0 0 22px rgba(220, 38, 38, 0.14), var(--shadow-sm);
+}
+
+.metric-card.tone-warning {
+    border-color: rgba(245, 158, 11, 0.38);
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.1), 0 0 18px rgba(245, 158, 11, 0.12), var(--shadow-sm);
 }
 
 .metric-card .icon {
@@ -1330,6 +1372,16 @@ body,
     border-radius: 18px;
     padding: 1rem;
     background: #fff;
+}
+
+.insight-item.tone-danger {
+    border-color: rgba(220, 38, 38, 0.42);
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.1), 0 0 20px rgba(220, 38, 38, 0.13);
+}
+
+.insight-item.tone-warning {
+    border-color: rgba(245, 158, 11, 0.38);
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.1), 0 0 18px rgba(245, 158, 11, 0.12);
 }
 
 .insight-item h6 {
@@ -1589,9 +1641,31 @@ body,
     box-shadow: 0 16px 36px rgba(3, 14, 25, 0.22);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-high {
+    border-color: rgba(248, 113, 113, 0.52);
+    box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.14), 0 0 26px rgba(127, 29, 29, 0.34), 0 16px 36px rgba(3, 14, 25, 0.22);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.needs-attention {
-    border-color: #f59e0b;
-    box-shadow: 0 16px 36px rgba(245, 158, 11, .12);
+    border-color: rgba(251, 146, 60, 0.56);
+    box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.16), 0 0 28px rgba(146, 64, 14, 0.34), 0 16px 36px rgba(3, 14, 25, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-high.needs-attention {
+    border-color: rgba(248, 113, 113, 0.62);
+    box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.2), 0 0 34px rgba(127, 29, 29, 0.42), 0 16px 36px rgba(3, 14, 25, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .metric-card.tone-danger,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .insight-item.tone-danger {
+    border-color: rgba(248, 113, 113, 0.48);
+    box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.12), 0 0 24px rgba(127, 29, 29, 0.28), 0 16px 36px rgba(3, 14, 25, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .metric-card.tone-warning,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .insight-item.tone-warning {
+    border-color: rgba(251, 146, 60, 0.42);
+    box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.12), 0 0 22px rgba(146, 64, 14, 0.24), 0 16px 36px rgba(3, 14, 25, 0.18);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-note {
@@ -1716,7 +1790,7 @@ body,
         <div class="col-12">
             <div class="metric-grid mb-0">
                 <?php foreach ($roleMetricCards as $card): ?>
-                    <div class="metric-card">
+                    <div class="metric-card tone-<?php echo htmlspecialchars($card['tone']); ?>">
                         <i class="fas fa-<?php echo htmlspecialchars($card['icon']); ?> icon tone-<?php echo htmlspecialchars($card['tone']); ?>"></i>
                         <div class="label"><?php echo htmlspecialchars($card['label']); ?></div>
                         <div class="value tone-<?php echo htmlspecialchars($card['tone']); ?>">
@@ -1751,7 +1825,7 @@ body,
                 <div class="card-body">
                     <div class="insight-list">
                         <?php foreach ($topInsights as $insight): ?>
-                            <div class="insight-item">
+                            <div class="insight-item tone-<?php echo htmlspecialchars($insight['band']['tone']); ?>">
                                 <div class="d-flex justify-content-between gap-2 align-items-start">
                                     <h6><?php echo htmlspecialchars($insight['title']); ?></h6>
                                     <span class="badge-tone <?php echo htmlspecialchars($insight['band']['tone']); ?>"><?php echo htmlspecialchars($insight['band']['label']); ?></span>
@@ -2130,7 +2204,7 @@ body,
                 <div class="card-body">
                     <div class="insight-list">
                         <?php foreach ($topInsights as $insight): ?>
-                            <div class="insight-item">
+                            <div class="insight-item tone-<?php echo htmlspecialchars($insight['band']['tone']); ?>">
                                 <div class="d-flex justify-content-between gap-2 align-items-start">
                                     <h6><?php echo htmlspecialchars($insight['title']); ?></h6>
                                     <span class="badge-tone <?php echo htmlspecialchars($insight['band']['tone']); ?>"><?php echo htmlspecialchars($insight['band']['label']); ?></span>

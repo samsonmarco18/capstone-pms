@@ -272,6 +272,23 @@ include __DIR__ . '/includes/navbar.php';
     display: grid;
     gap: 1.1rem;
     color: #172033;
+    --calendar-primary: #1f6392;
+    --calendar-primary-dark: #184f73;
+    --calendar-surface: rgba(255, 255, 255, 0.94);
+    --calendar-head: rgba(248, 252, 255, 0.96);
+    --calendar-border: rgba(31, 99, 146, 0.14);
+    --calendar-border-strong: rgba(34, 211, 238, 0.22);
+    --calendar-shadow: 0 10px 24px rgba(15, 76, 129, 0.07);
+    --calendar-shadow-hover: 0 14px 30px rgba(15, 76, 129, 0.10);
+    --calendar-card-bg:
+        radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.12), transparent 34%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0) 38%, rgba(31, 99, 146, 0.055) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 56%),
+        var(--calendar-surface);
+    --calendar-day-bg:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.82) 58%, rgba(31, 99, 146, 0.035) 100%);
+    --calendar-grid-bg:
+        linear-gradient(180deg, rgba(248, 252, 255, 0.94) 0%, rgba(255, 255, 255, 0.98) 100%);
 }
 
 .calendar-hero {
@@ -281,7 +298,7 @@ include __DIR__ . '/includes/navbar.php';
     gap: 1rem;
     padding: 1.45rem 1.55rem;
     border-radius: 18px;
-    background: linear-gradient(#184f73 72%);
+    background: linear-gradient(135deg, #1f6392 0%, #184f73 100%);
     color: #fff;
     box-shadow: 0 20px 45px rgba(31, 99, 146, 0.2);
 }
@@ -322,12 +339,12 @@ include __DIR__ . '/includes/navbar.php';
     background: rgba(255, 255, 255, 0.12);
     color: #fff;
     text-decoration: none;
-    transition: transform 0.18s ease, background 0.18s ease;
+    transition: background 0.18s ease, border-color 0.18s ease;
 }
 
 .calendar-nav a:hover {
-    transform: translateY(-1px);
     background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.28);
 }
 
 .calendar-stats {
@@ -339,9 +356,9 @@ include __DIR__ . '/includes/navbar.php';
 .calendar-stat {
     padding: 1rem 1.1rem;
     border-radius: 12px;
-    border: 1px solid #e9eef4;
-    background: #fff;
-    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+    border: 1px solid var(--calendar-border);
+    background: var(--calendar-card-bg);
+    box-shadow: var(--calendar-shadow), 0 0 18px rgba(34, 211, 238, 0.05);
 }
 
 .calendar-stat span {
@@ -364,8 +381,9 @@ include __DIR__ . '/includes/navbar.php';
 .calendar-card {
     border: 0;
     border-radius: 16px;
+    background: var(--calendar-card-bg);
     overflow: hidden;
-    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+    box-shadow: var(--calendar-shadow), inset 0 0 0 1px var(--calendar-border);
 }
 
 .calendar-card__header {
@@ -374,8 +392,8 @@ include __DIR__ . '/includes/navbar.php';
     justify-content: space-between;
     gap: 1rem;
     padding: 1.2rem 1.4rem;
-    border-bottom: 1px solid rgba(31, 99, 146, 0.08);
-    background: #fff;
+    border-bottom: 1px solid rgba(31, 99, 146, 0.10);
+    background: var(--calendar-head);
 }
 
 .calendar-card__header h2,
@@ -391,7 +409,7 @@ include __DIR__ . '/includes/navbar.php';
     grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 0.5rem;
     padding: 1.4rem;
-    background: linear-gradient(180deg, #fbfdff 0%, #ffffff 100%);
+    background: var(--calendar-grid-bg);
 }
 
 .calendar-weekday {
@@ -414,15 +432,14 @@ include __DIR__ . '/includes/navbar.php';
     flex-direction: column;
     gap: 0.45rem;
     padding: 0.55rem;
-    border: 1px solid #e9eef4;
-    background: #fff;
+    border: 1px solid rgba(31, 99, 146, 0.11);
+    background: var(--calendar-day-bg);
     color: #184f73;
     text-decoration: none;
-    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+    transition: box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
 }
 
 .calendar-day:hover {
-    transform: translateY(-1px);
     border-color: rgba(31, 99, 146, 0.3);
     box-shadow: 0 10px 20px rgba(31, 99, 146, 0.08);
 }
@@ -528,9 +545,9 @@ include __DIR__ . '/includes/navbar.php';
 
 .calendar-panel {
     border-radius: 16px;
-    border: 1px solid #e9eef4;
-    background: #fff;
-    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.06);
+    border: 1px solid var(--calendar-border);
+    background: var(--calendar-card-bg);
+    box-shadow: var(--calendar-shadow), 0 0 18px rgba(34, 211, 238, 0.05);
 }
 
 .calendar-panel__header {
@@ -539,7 +556,8 @@ include __DIR__ . '/includes/navbar.php';
     justify-content: space-between;
     gap: 0.75rem;
     padding: 1.1rem 1.25rem;
-    border-bottom: 1px solid #eef2f6;
+    border-bottom: 1px solid rgba(31, 99, 146, 0.10);
+    background: var(--calendar-head);
 }
 
 .calendar-panel__header h3 {
@@ -655,6 +673,21 @@ include __DIR__ . '/includes/navbar.php';
 
 html[data-theme="dark"] .calendar-shell {
     color: #d8e6f3;
+    --calendar-surface: rgba(10, 22, 35, 0.88);
+    --calendar-head: rgba(12, 31, 49, 0.96);
+    --calendar-border: rgba(138, 210, 255, 0.10);
+    --calendar-border-strong: rgba(138, 210, 255, 0.20);
+    --calendar-shadow: 0 14px 32px rgba(0, 0, 0, 0.30);
+    --calendar-shadow-hover: 0 18px 40px rgba(0, 0, 0, 0.36);
+    --calendar-card-bg:
+        radial-gradient(circle at 100% 0%, rgba(76, 184, 255, 0.14), transparent 34%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 38%, rgba(76, 184, 255, 0.08) 100%),
+        linear-gradient(180deg, rgba(138, 210, 255, 0.055), transparent 56%),
+        var(--calendar-surface);
+    --calendar-day-bg:
+        linear-gradient(135deg, rgba(12, 31, 49, 0.92) 0%, rgba(10, 22, 35, 0.88) 58%, rgba(76, 184, 255, 0.055) 100%);
+    --calendar-grid-bg:
+        linear-gradient(180deg, rgba(12, 31, 49, 0.94) 0%, rgba(8, 20, 32, 0.98) 100%);
 }
 
 html[data-theme="dark"] .calendar-hero {
@@ -675,8 +708,22 @@ html[data-theme="dark"] .calendar-stat,
 html[data-theme="dark"] .calendar-card__header,
 html[data-theme="dark"] .calendar-day,
 html[data-theme="dark"] .calendar-panel {
-    background: rgba(10, 22, 35, 0.88);
     border-color: rgba(138, 210, 255, 0.10);
+}
+
+html[data-theme="dark"] .calendar-stat,
+html[data-theme="dark"] .calendar-card,
+html[data-theme="dark"] .calendar-panel {
+    background: var(--calendar-card-bg);
+}
+
+html[data-theme="dark"] .calendar-card__header,
+html[data-theme="dark"] .calendar-panel__header {
+    background: var(--calendar-head);
+}
+
+html[data-theme="dark"] .calendar-day {
+    background: var(--calendar-day-bg);
 }
 
 html[data-theme="dark"] .calendar-stat strong {
@@ -689,7 +736,7 @@ html[data-theme="dark"] .calendar-panel {
 }
 
 html[data-theme="dark"] .calendar-grid {
-    background: linear-gradient(180deg, rgba(12, 31, 49, 0.94) 0%, rgba(8, 20, 32, 0.98) 100%);
+    background: var(--calendar-grid-bg);
 }
 
 html[data-theme="dark"] .calendar-day:hover {

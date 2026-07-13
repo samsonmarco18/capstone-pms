@@ -1695,6 +1695,40 @@ body {
     scrollbar-gutter: stable;
 }
 
+@keyframes sidebarAttentionHeartbeat {
+    0%, 100% {
+        box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.18), 0 0 0 rgba(249, 115, 22, 0);
+    }
+    45% {
+        box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.28), 0 0 18px rgba(249, 115, 22, 0.34);
+    }
+    70% {
+        box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.22), 0 0 10px rgba(249, 115, 22, 0.22);
+    }
+}
+
+#sidebar-wrapper .menu-item.has-attention {
+    background: #fff8ed;
+    box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.18), 0 0 16px rgba(249, 115, 22, 0.12);
+}
+
+#sidebar-wrapper .menu-item.has-attention:hover,
+#sidebar-wrapper .menu-item.has-attention.active {
+    background: #fff4e5;
+    box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.26), 0 0 20px rgba(249, 115, 22, 0.18);
+}
+
+#sidebar-wrapper .sidebar-attention-badge {
+    background: #f97316;
+    border: 1px solid rgba(255, 255, 255, 0.65);
+    box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.22), 0 0 14px rgba(249, 115, 22, 0.26);
+    animation: sidebarAttentionHeartbeat 1.8s ease-in-out infinite;
+}
+
+#sidebar-wrapper .sidebar-attention-badge i {
+    font-size: 0.58rem;
+}
+
 #sidebar-wrapper .sidebar-nav::-webkit-scrollbar {
     width: 8px;
 }
@@ -2875,4 +2909,707 @@ body {
 
 .dev-dashboard .badge {
     font-size: 0.7rem;
+}
+
+/* Shared role dashboard visual polish */
+.role-dashboard-shell {
+    --role-dashboard-primary: #1f6392;
+    --role-dashboard-border: rgba(31, 99, 146, 0.14);
+    --role-dashboard-border-strong: rgba(34, 211, 238, 0.24);
+    --role-dashboard-surface: rgba(255, 255, 255, 0.94);
+    --role-dashboard-head: rgba(248, 252, 255, 0.96);
+    --role-dashboard-card-sheen: rgba(255, 255, 255, 0.82);
+    --role-dashboard-card-sheen-soft: rgba(255, 255, 255, 0.42);
+    --role-dashboard-card-glow: rgba(34, 211, 238, 0.12);
+    --role-dashboard-card-tint: rgba(31, 99, 146, 0.055);
+    --role-dashboard-grid-line: rgba(31, 99, 146, 0.055);
+    --role-dashboard-node: rgba(34, 211, 238, 0.12);
+    --role-dashboard-shadow: 0 10px 24px rgba(15, 76, 129, 0.07);
+    --role-dashboard-shadow-hover: 0 14px 30px rgba(15, 76, 129, 0.10);
+    --role-dashboard-glow: 0 0 18px rgba(34, 211, 238, 0.05);
+    --role-dashboard-glow-hover: 0 0 24px rgba(34, 211, 238, 0.08);
+}
+
+.role-dashboard-shell.role-dashboard-shell > .row:first-child .card.card,
+.role-dashboard-shell.role-dashboard-shell .card.card,
+.role-dashboard-shell.role-dashboard-shell .stat-card.stat-card,
+.role-dashboard-shell.role-dashboard-shell .stat-card-modern.stat-card-modern,
+.role-dashboard-shell.role-dashboard-shell .qa-stat-card.qa-stat-card,
+.role-dashboard-shell.role-dashboard-shell .dashboard-mini-stat.dashboard-mini-stat {
+    background:
+        radial-gradient(circle at 100% 0%, var(--role-dashboard-card-glow), transparent 34%),
+        linear-gradient(135deg, var(--role-dashboard-card-sheen) 0%, rgba(255, 255, 255, 0) 38%, var(--role-dashboard-card-tint) 100%),
+        linear-gradient(180deg, var(--role-dashboard-card-sheen-soft), transparent 56%),
+        var(--role-dashboard-surface) !important;
+    border: 1px solid var(--role-dashboard-border) !important;
+    border-radius: 20px;
+    box-shadow: var(--role-dashboard-shadow), var(--role-dashboard-glow) !important;
+    transition: border-color 0.22s ease, box-shadow 0.22s ease !important;
+    backdrop-filter: blur(12px);
+    isolation: isolate;
+    overflow: hidden;
+    position: relative;
+}
+
+.role-dashboard-shell.role-dashboard-shell > .row:first-child .card.card {
+    border-radius: 24px;
+    box-shadow: var(--role-dashboard-shadow), var(--role-dashboard-glow) !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .card.card:hover,
+.role-dashboard-shell.role-dashboard-shell .stat-card.stat-card:hover,
+.role-dashboard-shell.role-dashboard-shell .stat-card-modern.stat-card-modern:hover,
+.role-dashboard-shell.role-dashboard-shell .qa-stat-card.qa-stat-card:hover,
+.role-dashboard-shell.role-dashboard-shell .dashboard-mini-stat.dashboard-mini-stat:hover {
+    border-color: var(--role-dashboard-border-strong) !important;
+    box-shadow: var(--role-dashboard-shadow-hover), var(--role-dashboard-glow-hover) !important;
+    transform: none !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card,
+.role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card,
+.role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern {
+    --role-stat-color: #1f6392;
+    --role-stat-foreground: #ffffff;
+    --role-stat-muted: rgba(255, 255, 255, 0.78);
+    --role-stat-tint: rgba(255, 255, 255, 0.18);
+    --role-stat-glow: rgba(31, 99, 146, 0.26);
+    --role-stat-border: rgba(255, 255, 255, 0.24);
+    --role-stat-border-strong: rgba(255, 255, 255, 0.38);
+    --role-stat-card-start: #1f6392;
+    --role-stat-card-end: #0e7490;
+    --role-dashboard-card-sheen: rgba(255, 255, 255, 0.18);
+    --role-dashboard-card-sheen-soft: rgba(255, 255, 255, 0.10);
+    --role-dashboard-card-glow: var(--role-stat-glow);
+    --role-dashboard-card-tint: var(--role-stat-tint);
+    --role-dashboard-surface: linear-gradient(135deg, var(--role-stat-card-start) 0%, var(--role-stat-card-end) 100%);
+    --role-dashboard-border: var(--role-stat-border);
+    --role-dashboard-border-strong: var(--role-stat-border-strong);
+    --stat-color: var(--role-stat-color);
+}
+
+.role-dashboard-shell.role-dashboard-shell .admin-stat-active,
+.role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(3) {
+    --role-stat-color: #ffffff;
+    --role-stat-tint: rgba(255, 255, 255, 0.16);
+    --role-stat-glow: rgba(5, 150, 105, 0.24);
+    --role-stat-border: rgba(255, 255, 255, 0.22);
+    --role-stat-border-strong: rgba(255, 255, 255, 0.36);
+    --role-stat-card-start: #059669;
+    --role-stat-card-end: #0f766e;
+}
+
+.role-dashboard-shell.role-dashboard-shell .admin-stat-tech,
+.role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(2) {
+    --role-stat-color: #ffffff;
+    --role-stat-tint: rgba(255, 255, 255, 0.16);
+    --role-stat-glow: rgba(37, 99, 235, 0.24);
+    --role-stat-border: rgba(255, 255, 255, 0.22);
+    --role-stat-border-strong: rgba(255, 255, 255, 0.36);
+    --role-stat-card-start: #2563eb;
+    --role-stat-card-end: #4f46e5;
+}
+
+.role-dashboard-shell.role-dashboard-shell .admin-stat-users {
+    --role-stat-color: #ffffff;
+    --role-stat-tint: rgba(255, 255, 255, 0.16);
+    --role-stat-glow: rgba(14, 116, 144, 0.24);
+    --role-stat-border: rgba(255, 255, 255, 0.22);
+    --role-stat-border-strong: rgba(255, 255, 255, 0.36);
+    --role-stat-card-start: #0e7490;
+    --role-stat-card-end: #0f766e;
+}
+
+.role-dashboard-shell.role-dashboard-shell .admin-stat-security,
+.role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(4) {
+    --role-stat-color: #ffffff;
+    --role-stat-tint: rgba(255, 255, 255, 0.16);
+    --role-stat-glow: rgba(217, 119, 6, 0.24);
+    --role-stat-border: rgba(255, 255, 255, 0.22);
+    --role-stat-border-strong: rgba(255, 255, 255, 0.36);
+    --role-stat-card-start: #d97706;
+    --role-stat-card-end: #b45309;
+}
+
+@supports selector(.card:has(.fa-check-circle)) {
+    .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-check-circle),
+    .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-circle-check),
+    .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-check-circle) {
+        --role-stat-color: #ffffff;
+        --role-stat-tint: rgba(255, 255, 255, 0.16);
+        --role-stat-glow: rgba(5, 150, 105, 0.24);
+        --role-stat-border: rgba(255, 255, 255, 0.22);
+        --role-stat-border-strong: rgba(255, 255, 255, 0.36);
+        --role-stat-card-start: #059669;
+        --role-stat-card-end: #0f766e;
+    }
+
+    .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-clock),
+    .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-calendar-check),
+    .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-clock),
+    .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-calendar-check) {
+        --role-stat-color: #ffffff;
+        --role-stat-tint: rgba(255, 255, 255, 0.16);
+        --role-stat-glow: rgba(217, 119, 6, 0.24);
+        --role-stat-border: rgba(255, 255, 255, 0.22);
+        --role-stat-border-strong: rgba(255, 255, 255, 0.36);
+        --role-stat-card-start: #d97706;
+        --role-stat-card-end: #b45309;
+    }
+
+    .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-exclamation-triangle),
+    .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-triangle-exclamation),
+    .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-rotate-left),
+    .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-exclamation-triangle),
+    .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-triangle-exclamation),
+    .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-rotate-left) {
+        --role-stat-color: #ffffff;
+        --role-stat-tint: rgba(255, 255, 255, 0.16);
+        --role-stat-glow: rgba(220, 38, 38, 0.24);
+        --role-stat-border: rgba(255, 255, 255, 0.22);
+        --role-stat-border-strong: rgba(255, 255, 255, 0.36);
+        --role-stat-card-start: #dc2626;
+        --role-stat-card-end: #991b1b;
+    }
+
+    .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-play-circle),
+    .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-spinner),
+    .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-play-circle),
+    .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-spinner) {
+        --role-stat-color: #ffffff;
+        --role-stat-tint: rgba(255, 255, 255, 0.16);
+        --role-stat-glow: rgba(14, 116, 144, 0.24);
+        --role-stat-border: rgba(255, 255, 255, 0.22);
+        --role-stat-border-strong: rgba(255, 255, 255, 0.36);
+        --role-stat-card-start: #0e7490;
+        --role-stat-card-end: #0f766e;
+    }
+}
+
+.role-dashboard-shell.role-dashboard-shell .dashboard-chart-card.dashboard-chart-card::before,
+.role-dashboard-shell.role-dashboard-shell .chart-card.chart-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 84% 18%, var(--role-dashboard-node) 0 2px, transparent 2.5px),
+        radial-gradient(circle at 18% 82%, rgba(31, 99, 146, 0.045), transparent 34%),
+        linear-gradient(120deg, rgba(31, 99, 146, 0.025), transparent 46%, var(--role-dashboard-card-tint)),
+        linear-gradient(var(--role-dashboard-grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--role-dashboard-grid-line) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 18px 18px, 18px 18px;
+    opacity: 0.72;
+    z-index: 0;
+}
+
+.role-dashboard-shell.role-dashboard-shell .dashboard-chart-card.dashboard-chart-card > .card-header,
+.role-dashboard-shell.role-dashboard-shell .dashboard-chart-card.dashboard-chart-card > .card-body,
+.role-dashboard-shell.role-dashboard-shell .dashboard-chart-card.dashboard-chart-card > .card-footer,
+.role-dashboard-shell.role-dashboard-shell .chart-card.chart-card > .card-header,
+.role-dashboard-shell.role-dashboard-shell .chart-card.chart-card > .card-body,
+.role-dashboard-shell.role-dashboard-shell .chart-card.chart-card > .card-footer {
+    position: relative;
+    z-index: 1;
+}
+
+@supports selector(.card:has(canvas)) {
+    .role-dashboard-shell.role-dashboard-shell .card.card:has(canvas)::before {
+        background:
+            radial-gradient(circle at 84% 18%, var(--role-dashboard-node) 0 2px, transparent 2.5px),
+            radial-gradient(circle at 18% 82%, rgba(31, 99, 146, 0.045), transparent 34%),
+            linear-gradient(120deg, rgba(31, 99, 146, 0.025), transparent 46%, var(--role-dashboard-card-tint)),
+            linear-gradient(var(--role-dashboard-grid-line) 1px, transparent 1px),
+            linear-gradient(90deg, var(--role-dashboard-grid-line) 1px, transparent 1px);
+        background-size: 100% 100%, 100% 100%, 100% 100%, 18px 18px, 18px 18px;
+        opacity: 0.72;
+    }
+
+    .role-dashboard-shell.role-dashboard-shell .card.card:has(canvas) > .card-header,
+    .role-dashboard-shell.role-dashboard-shell .card.card:has(canvas) > .card-body {
+        position: relative;
+        z-index: 1;
+    }
+}
+
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card.h-100 {
+    height: auto !important;
+    min-height: 0 !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card.h-100 > .card-body {
+    min-height: 0;
+    padding: 1.5rem !important;
+    position: relative;
+}
+
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card.h-100 .h1 {
+    font-size: 2.5rem;
+    line-height: 1;
+    margin-bottom: 0.25rem !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card.h-100 .ms-3 {
+    margin: 0 !important;
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+}
+
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card.h-100 .ms-3 i {
+    font-size: 1.7rem !important;
+    opacity: 0.78 !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .dashboard-mini-stat.dashboard-mini-stat {
+    border-radius: 16px;
+    box-shadow: 0 8px 20px rgba(15, 76, 129, 0.06), var(--role-dashboard-glow) !important;
+    flex: 0 1 230px !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .dashboard-mini-stat.dashboard-mini-stat .card-body {
+    padding: 1rem !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .dashboard-mini-stat.dashboard-mini-stat .dashboard-mini-stat-value {
+    font-size: 1.75rem !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .card-header.card-header {
+    background: var(--role-dashboard-head) !important;
+    border-bottom: 1px solid rgba(31, 99, 146, 0.10) !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .card-header h5,
+.role-dashboard-shell.role-dashboard-shell .card-header h5 i {
+    color: var(--role-dashboard-primary);
+}
+
+.role-dashboard-shell.role-dashboard-shell .card-header h5,
+.role-dashboard-shell.role-dashboard-shell .timeline-title,
+.role-dashboard-shell.role-dashboard-shell .qa-stat-label,
+.role-dashboard-shell.role-dashboard-shell .stat-label,
+.role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-label {
+    font-weight: 600 !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .h1.fw-bold,
+.role-dashboard-shell.role-dashboard-shell .dashboard-mini-stat-value,
+.role-dashboard-shell.role-dashboard-shell .stat-number,
+.role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-number,
+.role-dashboard-shell.role-dashboard-shell .qa-stat-number {
+    font-weight: 600 !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell [class*="-overview-badge"] {
+    background: var(--role-dashboard-primary) !important;
+    border-radius: 999px;
+    box-shadow: 0 12px 26px rgba(31, 99, 146, 0.22), inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+    color: #fff !important;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+.role-dashboard-shell.role-dashboard-shell .stat-icon,
+.role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-icon,
+.role-dashboard-shell.role-dashboard-shell .qa-stat-icon,
+.role-dashboard-shell.role-dashboard-shell .card-body .fa,
+.role-dashboard-shell.role-dashboard-shell .card-body .fas {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .stat-icon,
+.role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-icon,
+.role-dashboard-shell.role-dashboard-shell .qa-stat-icon,
+.role-dashboard-shell.role-dashboard-shell .admin-stat-icon {
+    color: var(--role-stat-foreground, var(--role-dashboard-primary)) !important;
+    opacity: 0.78;
+}
+
+.role-dashboard-shell.role-dashboard-shell .admin-stat-value,
+.role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-number,
+.role-dashboard-shell.role-dashboard-shell .qa-stat-number,
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .h1 {
+    color: var(--role-stat-foreground, var(--role-dashboard-primary)) !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .ms-3 i {
+    color: var(--role-stat-foreground, var(--role-dashboard-primary)) !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .admin-stat-label,
+.role-dashboard-shell.role-dashboard-shell .admin-stat-sub,
+.role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-label,
+.role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-sub,
+.role-dashboard-shell.role-dashboard-shell .qa-stat-label,
+.role-dashboard-shell.role-dashboard-shell .qa-stat-sub,
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .text-muted,
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card small {
+    color: var(--role-stat-muted, rgba(255, 255, 255, 0.78)) !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell .list-group-item,
+.role-dashboard-shell.role-dashboard-shell .timeline-item {
+    border-color: rgba(31, 99, 146, 0.10) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell {
+    --role-dashboard-border: rgba(138, 210, 255, 0.10);
+    --role-dashboard-border-strong: rgba(138, 210, 255, 0.20);
+    --role-dashboard-surface: rgba(10, 22, 35, 0.88);
+    --role-dashboard-head: rgba(12, 31, 49, 0.96);
+    --role-dashboard-shadow: 0 14px 32px rgba(0, 0, 0, 0.30);
+    --role-dashboard-shadow-hover: 0 18px 40px rgba(0, 0, 0, 0.36);
+    --role-dashboard-glow: 0 0 26px rgba(76, 184, 255, 0.07);
+    --role-dashboard-glow-hover: 0 0 32px rgba(76, 184, 255, 0.12);
+    --role-dashboard-card-sheen: rgba(255, 255, 255, 0.035);
+    --role-dashboard-card-sheen-soft: rgba(138, 210, 255, 0.055);
+    --role-dashboard-card-glow: rgba(76, 184, 255, 0.14);
+    --role-dashboard-card-tint: rgba(76, 184, 255, 0.08);
+    --role-dashboard-grid-line: rgba(138, 210, 255, 0.075);
+    --role-dashboard-node: rgba(34, 211, 238, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern {
+    --role-stat-card-start: #0c293d;
+    --role-stat-card-end: #071b2b;
+    --role-dashboard-surface: linear-gradient(135deg, var(--role-stat-card-start) 0%, var(--role-stat-card-end) 100%);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .admin-stat-active,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(3) {
+    --role-stat-card-start: #0b3329;
+    --role-stat-card-end: #071f1a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .admin-stat-tech,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(2) {
+    --role-stat-card-start: #10234d;
+    --role-stat-card-end: #0a1830;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .admin-stat-users {
+    --role-stat-card-start: #07313a;
+    --role-stat-card-end: #071f27;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .admin-stat-security,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(4) {
+    --role-stat-card-start: #3a250c;
+    --role-stat-card-end: #201509;
+}
+
+@supports selector(.card:has(.fa-check-circle)) {
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-check-circle),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-circle-check),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-check-circle) {
+        --role-stat-card-start: #0b3329;
+        --role-stat-card-end: #071f1a;
+    }
+
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-clock),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-calendar-check),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-clock),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-calendar-check) {
+        --role-stat-card-start: #3a250c;
+        --role-stat-card-end: #201509;
+    }
+
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-exclamation-triangle),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-triangle-exclamation),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-rotate-left),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-exclamation-triangle),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-triangle-exclamation),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-rotate-left) {
+        --role-stat-card-start: #3b1518;
+        --role-stat-card-end: #231013;
+    }
+
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-play-circle),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-spinner),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-play-circle),
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-spinner) {
+        --role-stat-card-start: #07313a;
+        --role-stat-card-end: #071f27;
+    }
+}
+
+/* App-wide Sales-inspired component consistency */
+:root {
+    --app-ui-primary: #1f6392;
+    --app-ui-primary-dark: #184f73;
+    --app-ui-surface: rgba(255, 255, 255, 0.94);
+    --app-ui-head: rgba(248, 252, 255, 0.96);
+    --app-ui-border: rgba(31, 99, 146, 0.14);
+    --app-ui-border-strong: rgba(34, 211, 238, 0.24);
+    --app-ui-shadow: 0 10px 24px rgba(15, 76, 129, 0.07);
+    --app-ui-shadow-hover: 0 14px 30px rgba(15, 76, 129, 0.10);
+    --app-ui-glow: 0 0 18px rgba(34, 211, 238, 0.05);
+    --app-ui-text: #212529;
+    --app-ui-muted: #6c757d;
+    --app-ui-card-sheen: rgba(255, 255, 255, 0.82);
+    --app-ui-card-sheen-soft: rgba(255, 255, 255, 0.42);
+    --app-ui-card-glow: rgba(34, 211, 238, 0.12);
+    --app-ui-card-tint: rgba(31, 99, 146, 0.055);
+    --app-ui-grid-line: rgba(31, 99, 146, 0.055);
+    --app-ui-node: rgba(34, 211, 238, 0.12);
+}
+
+#page-content-wrapper .card:hover,
+#page-content-wrapper .btn:hover,
+#page-content-wrapper .btn:focus {
+    transform: none !important;
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .card {
+    background:
+        radial-gradient(circle at 100% 0%, var(--app-ui-card-glow), transparent 34%),
+        linear-gradient(135deg, var(--app-ui-card-sheen) 0%, rgba(255, 255, 255, 0) 38%, var(--app-ui-card-tint) 100%),
+        linear-gradient(180deg, var(--app-ui-card-sheen-soft), transparent 56%),
+        var(--app-ui-surface) !important;
+    border: 1px solid var(--app-ui-border) !important;
+    border-radius: 20px;
+    box-shadow: var(--app-ui-shadow), var(--app-ui-glow) !important;
+    transition: border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease !important;
+    backdrop-filter: blur(12px);
+    isolation: isolate;
+    overflow: hidden;
+    position: relative;
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .card:hover {
+    border-color: var(--app-ui-border-strong) !important;
+    box-shadow: var(--app-ui-shadow-hover), 0 0 24px rgba(34, 211, 238, 0.08) !important;
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) :is(.stat-card-modern, .stat-card, .stat-card-mini, .qa-stat-card, .client-card, .metric-card, .overview-project-card, .project-card, .report-card, .summary-card, .info-card, .review-card) {
+    background:
+        radial-gradient(circle at 100% 0%, var(--app-ui-card-glow), transparent 34%),
+        linear-gradient(135deg, var(--app-ui-card-sheen) 0%, rgba(255, 255, 255, 0) 38%, var(--app-ui-card-tint) 100%),
+        linear-gradient(180deg, var(--app-ui-card-sheen-soft), transparent 56%),
+        var(--app-ui-surface) !important;
+    border: 1px solid var(--app-ui-border) !important;
+    border-radius: 20px;
+    box-shadow: var(--app-ui-shadow), var(--app-ui-glow) !important;
+    isolation: isolate;
+    overflow: hidden;
+    position: relative;
+    transition: border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease !important;
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) :is(.stat-card-modern, .stat-card, .stat-card-mini, .qa-stat-card, .client-card, .metric-card, .overview-project-card, .project-card, .report-card, .summary-card, .info-card, .review-card):hover {
+    border-color: var(--app-ui-border-strong) !important;
+    box-shadow: var(--app-ui-shadow-hover), 0 0 24px rgba(34, 211, 238, 0.08) !important;
+    transform: none !important;
+}
+
+#page-content-wrapper :is(.chart-card, .dashboard-chart-card) {
+    isolation: isolate;
+    overflow: hidden;
+    position: relative;
+}
+
+#page-content-wrapper :is(.chart-card, .dashboard-chart-card)::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 84% 18%, var(--app-ui-node) 0 2px, transparent 2.5px),
+        radial-gradient(circle at 18% 82%, rgba(31, 99, 146, 0.045), transparent 34%),
+        linear-gradient(120deg, rgba(31, 99, 146, 0.025), transparent 46%, var(--app-ui-card-tint)),
+        linear-gradient(var(--app-ui-grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--app-ui-grid-line) 1px, transparent 1px);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 18px 18px, 18px 18px;
+    opacity: 0.72;
+    z-index: 0;
+}
+
+#page-content-wrapper :is(.chart-card, .dashboard-chart-card) > .card-header,
+#page-content-wrapper :is(.chart-card, .dashboard-chart-card) > .card-body,
+#page-content-wrapper :is(.chart-card, .dashboard-chart-card) > .card-footer {
+    position: relative;
+    z-index: 1;
+}
+
+@supports selector(.card:has(canvas)) {
+    #page-content-wrapper .card:has(canvas) {
+        isolation: isolate;
+        overflow: hidden;
+        position: relative;
+    }
+
+    #page-content-wrapper .card:has(canvas)::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(circle at 84% 18%, var(--app-ui-node) 0 2px, transparent 2.5px),
+            radial-gradient(circle at 18% 82%, rgba(31, 99, 146, 0.045), transparent 34%),
+            linear-gradient(120deg, rgba(31, 99, 146, 0.025), transparent 46%, var(--app-ui-card-tint)),
+            linear-gradient(var(--app-ui-grid-line) 1px, transparent 1px),
+            linear-gradient(90deg, var(--app-ui-grid-line) 1px, transparent 1px);
+        background-size: 100% 100%, 100% 100%, 100% 100%, 18px 18px, 18px 18px;
+        opacity: 0.72;
+        z-index: 0;
+    }
+
+    #page-content-wrapper .card:has(canvas) > .card-header,
+    #page-content-wrapper .card:has(canvas) > .card-body,
+    #page-content-wrapper .card:has(canvas) > .card-footer {
+        position: relative;
+        z-index: 1;
+    }
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .card-header {
+    background: var(--app-ui-head) !important;
+    border-bottom: 1px solid rgba(31, 99, 146, 0.10) !important;
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .card-header h1,
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .card-header h2,
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .card-header h3,
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .card-header h4,
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .card-header h5,
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .card-header h6,
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .card-header i {
+    color: var(--app-ui-primary) !important;
+    font-weight: 600;
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .table-responsive {
+    border: 1px solid rgba(31, 99, 146, 0.10);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .table {
+    color: var(--app-ui-text);
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .table thead,
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .table thead th {
+    background: var(--app-ui-head) !important;
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .table th {
+    border-bottom: 1px solid rgba(31, 99, 146, 0.12) !important;
+    color: var(--app-ui-primary) !important;
+    font-weight: 600;
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .table td {
+    border-bottom: 1px solid rgba(31, 99, 146, 0.08) !important;
+}
+
+#page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .table tbody tr:hover {
+    background: rgba(31, 99, 146, 0.04) !important;
+}
+
+#page-content-wrapper .form-control,
+#page-content-wrapper .form-select {
+    border: 1px solid rgba(31, 99, 146, 0.16);
+    border-radius: 10px;
+    box-shadow: none;
+}
+
+#page-content-wrapper .form-control:focus,
+#page-content-wrapper .form-select:focus {
+    border-color: rgba(31, 99, 146, 0.42);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.10);
+}
+
+#page-content-wrapper .btn {
+    border-radius: 10px;
+    font-weight: 600;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#page-content-wrapper .btn-primary,
+#page-content-wrapper .btn-primary-custom,
+#page-content-wrapper .btn-primary-modern {
+    background: var(--app-ui-primary) !important;
+    border-color: var(--app-ui-primary) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.16);
+}
+
+#page-content-wrapper .btn-primary:hover,
+#page-content-wrapper .btn-primary-custom:hover,
+#page-content-wrapper .btn-primary-modern:hover {
+    background: var(--app-ui-primary-dark) !important;
+    border-color: var(--app-ui-primary-dark) !important;
+    box-shadow: 0 10px 22px rgba(31, 99, 146, 0.22);
+}
+
+#page-content-wrapper .btn-outline-primary {
+    border-color: rgba(31, 99, 146, 0.28) !important;
+    color: var(--app-ui-primary) !important;
+}
+
+#page-content-wrapper .btn-outline-primary:hover {
+    background: var(--app-ui-primary) !important;
+    color: #fff !important;
+}
+
+#page-content-wrapper .badge {
+    border-radius: 999px;
+    font-weight: 600;
+}
+
+#page-content-wrapper .alert {
+    border-left: 0 !important;
+    border-radius: 14px;
+    box-shadow: 0 10px 24px rgba(15, 76, 129, 0.06);
+}
+
+#page-content-wrapper .modal:not(.app-logout-modal) .modal-content {
+    border: 1px solid var(--app-ui-border);
+    border-radius: 22px;
+    box-shadow: 0 28px 70px rgba(15, 76, 129, 0.18), var(--app-ui-glow);
+}
+
+#page-content-wrapper .modal:not(.app-logout-modal) .modal-header {
+    background: var(--app-ui-head);
+    border-bottom: 1px solid rgba(31, 99, 146, 0.10);
+}
+
+#page-content-wrapper .modal:not(.app-logout-modal) .modal-title {
+    color: var(--app-ui-text);
+    font-weight: 600;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) {
+    --app-ui-surface: rgba(10, 22, 35, 0.88);
+    --app-ui-head: rgba(12, 31, 49, 0.96);
+    --app-ui-border: rgba(138, 210, 255, 0.10);
+    --app-ui-border-strong: rgba(138, 210, 255, 0.20);
+    --app-ui-shadow: 0 14px 32px rgba(0, 0, 0, 0.30);
+    --app-ui-shadow-hover: 0 18px 40px rgba(0, 0, 0, 0.36);
+    --app-ui-glow: 0 0 26px rgba(76, 184, 255, 0.07);
+    --app-ui-text: #d8e6f3;
+    --app-ui-muted: #90aeca;
+    --app-ui-card-sheen: rgba(255, 255, 255, 0.035);
+    --app-ui-card-sheen-soft: rgba(138, 210, 255, 0.055);
+    --app-ui-card-glow: rgba(76, 184, 255, 0.14);
+    --app-ui-card-tint: rgba(76, 184, 255, 0.08);
+    --app-ui-grid-line: rgba(138, 210, 255, 0.075);
+    --app-ui-node: rgba(34, 211, 238, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper .form-select {
+    background: rgba(12, 31, 49, 0.92);
+    border-color: rgba(138, 210, 255, 0.12);
+    color: var(--app-ui-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper .table {
+    color: var(--app-ui-text);
 }

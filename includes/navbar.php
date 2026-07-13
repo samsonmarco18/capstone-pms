@@ -443,6 +443,48 @@ $appUserContext = [
             background: rgba(144, 174, 202, 0.12);
             color: #ffffff;
         }
+
+        #page-content-wrapper .app-logout-modal .modal-content {
+            border: 0 !important;
+            border-radius: 20px !important;
+            overflow: hidden !important;
+            box-shadow: 0 28px 72px rgba(8, 31, 50, 0.24) !important;
+        }
+
+        #page-content-wrapper .app-logout-modal .modal-header {
+            background: linear-gradient(135deg, #0d6786 0%, #0a5570 100%) !important;
+            border: 0 !important;
+            color: #fff !important;
+        }
+
+        #page-content-wrapper .app-logout-modal .modal-title {
+            color: #fff !important;
+        }
+
+        #page-content-wrapper .app-logout-modal .app-logout-modal-eyebrow {
+            color: rgba(255, 255, 255, 0.75) !important;
+        }
+
+        #page-content-wrapper .app-logout-modal .modal-footer {
+            background: #f8fbfd !important;
+            border-top: 1px solid rgba(18, 80, 127, 0.08) !important;
+        }
+
+        :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper .app-logout-modal .modal-content {
+            background: #071321 !important;
+            border: 1px solid rgba(138, 210, 255, 0.12) !important;
+            box-shadow: 0 28px 72px rgba(0, 0, 0, 0.42) !important;
+            color: #d8e6f3 !important;
+        }
+
+        :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper .app-logout-modal .modal-header {
+            background: linear-gradient(135deg, #0b3654 0%, #0f5f94 100%) !important;
+        }
+
+        :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper .app-logout-modal .modal-footer {
+            background: #06111e !important;
+            border-top-color: rgba(138, 210, 255, 0.08) !important;
+        }
     </style>
 
     <form method="POST" action="<?php echo BASE_URL; ?>logout.php" id="logoutForm" class="d-none"></form>

@@ -570,7 +570,7 @@ include '../../includes/navbar.php';
 }
 </style>
 
-<div class="container-fluid px-4 py-4">
+<div class="container-fluid px-4 py-4 role-dashboard-shell">
     <!-- Welcome Section -->
     <div class="row mb-4">
         <div class="col-12">
@@ -589,7 +589,7 @@ include '../../includes/navbar.php';
     </div>
 
     <!-- Statistics Cards -->
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-4 role-stats-row">
         <div class="col-xl-3 col-md-6">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-body p-4">

@@ -1002,7 +1002,7 @@ include '../../includes/navbar.php';
 }
 </style>
 
-<div class="container-fluid px-4 py-4">
+<div class="container-fluid px-4 py-4 role-dashboard-shell">
     <!-- Welcome Section -->
     <div class="row mb-4">
         <div class="col-12">

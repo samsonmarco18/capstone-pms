@@ -65,15 +65,6 @@ html:not([data-theme="dark"]) #page-content-wrapper {
     background: #ffffff;
 }
 
-.card {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08) !important;
-}
-
 .bg-opacity-10 {
     --bs-bg-opacity: 0.1;
 }
@@ -101,19 +92,110 @@ html:not([data-theme="dark"]) #page-content-wrapper {
     color: #fff !important;
 }
 
-.dashboard-mini-stat {
-    flex: 1;
-    background: var(--dashboard-surface) !important;
-    border: 1px solid var(--dashboard-border) !important;
-    box-shadow: var(--dashboard-shadow);
+.admin-stats-grid {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 1rem;
 }
 
-.dashboard-mini-stat .text-muted {
-    color: var(--dashboard-muted) !important;
+.admin-stat-card {
+    --stat-color: var(--theme-primary);
+    border-radius: 18px !important;
+    height: 132px !important;
+    margin-bottom: 0 !important;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
 }
 
-.dashboard-mini-stat-value {
-    color: var(--theme-primary) !important;
+.admin-stat-card .card-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    padding: 0.95rem 1.1rem !important;
+    position: relative;
+}
+
+.admin-stat-password {
+    --stat-color: #1f6392;
+}
+
+.admin-stat-active {
+    --stat-color: #059669;
+}
+
+.admin-stat-tech {
+    --stat-color: #2563eb;
+}
+
+.admin-stat-users {
+    --stat-color: #0e7490;
+}
+
+.admin-stat-security {
+    --stat-color: #d97706;
+}
+
+.admin-stat-label {
+    color: var(--dashboard-muted);
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    margin-bottom: 0.35rem;
+    min-height: 1.55rem;
+    padding-right: 1.9rem;
+    text-transform: uppercase;
+}
+
+.admin-stat-value {
+    color: var(--stat-color);
+    font-size: 1.9rem;
+    font-weight: 600;
+    line-height: 1;
+    margin-bottom: 0.35rem;
+}
+
+.admin-stat-sub {
+    color: var(--dashboard-muted);
+    display: -webkit-box;
+    font-size: 0.68rem;
+    line-height: 1.25;
+    margin: 0;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+}
+
+.admin-stat-icon {
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--stat-color);
+    font-size: 1.3rem;
+    opacity: 0.78;
+    position: absolute;
+    right: 0.95rem;
+    top: 0.9rem;
+}
+
+@media (max-width: 1199.98px) {
+    .admin-stats-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 991.98px) {
+    .admin-stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575.98px) {
+    .admin-stats-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .dashboard-chart-card .card-header {
@@ -126,39 +208,17 @@ html:not([data-theme="dark"]) #page-content-wrapper {
 }
 </style>
 
-<div class="container-fluid px-4 py-3">
+<div class="container-fluid px-4 py-3 role-dashboard-shell">
     <!-- Welcome Section -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card border-0 shadow-sm">
                 <div class="card-body p-4">
                     <div class="row align-items-center">
-                        <div class="col-md-7 mb-3 mb-md-0">
+                        <div class="col-12">
                             <span class="badge admin-overview-badge mb-2 px-3 py-2">Administration Overview</span>
                             <h1 class="h3 mb-1">Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h1>
                             <p class="text-muted mb-0 small">Track technologies, user activity, and governance signals from one clean control center.</p>
-                        </div>
-                        <div class="col-md-5">
-                            <div class="d-flex gap-2 justify-content-md-end">
-                                <div class="card dashboard-mini-stat">
-                                    <div class="card-body p-3">
-                                        <div class="d-flex justify-content-between align-items-start mb-2">
-                                            <div class="text-muted small text-uppercase fw-semibold">Password Requests</div>
-                                            <i class="fas fa-heartbeat" style="font-size: 20px; color: var(--theme-primary); opacity: 0.65;"></i>
-                                        </div>
-                                        <div class="fw-bold fs-2 dashboard-mini-stat-value"><?php echo $passwordResetPending; ?></div>
-                                    </div>
-                                </div>
-                                <div class="card dashboard-mini-stat">
-                                    <div class="card-body p-3">
-                                        <div class="d-flex justify-content-between align-items-start mb-2">
-                                            <div class="text-muted small text-uppercase fw-semibold">Active Services</div>
-                                            <i class="fas fa-microchip" style="font-size: 20px; color: var(--theme-primary); opacity: 0.65;"></i>
-                                        </div>
-                                        <div class="fw-bold fs-4 dashboard-mini-stat-value"><?php echo $techCount; ?></div>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -167,55 +227,49 @@ html:not([data-theme="dark"]) #page-content-wrapper {
     </div>
 
     <!-- Statistics Cards -->
-    <div class="row g-3 mb-4">
-        <div class="col-xl-4 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <div class="text-muted text-uppercase small fw-semibold mb-2">Technologies / Services</div>
-                            <div class="h1 fw-bold mb-2 dashboard-mini-stat-value"><?php echo $techCount; ?></div>
-                            <small class="text-muted">Azure-style catalog and renewals</small>
-                        </div>
-                        <div class="ms-3">
-                            <i class="fas fa-microchip" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
-                        </div>
-                    </div>
-                </div>
+    <div class="admin-stats-grid mb-4">
+        <div class="card admin-stat-card admin-stat-password">
+            <div class="card-body">
+                <i class="fas fa-heartbeat admin-stat-icon"></i>
+                <div class="admin-stat-label">Password Requests</div>
+                <div class="admin-stat-value"><?php echo $passwordResetPending; ?></div>
+                <p class="admin-stat-sub">Pending account recovery</p>
             </div>
         </div>
-        
-        <div class="col-xl-4 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <div class="text-muted text-uppercase small fw-semibold mb-2">Total Users</div>
-                            <div class="h1 fw-bold mb-2 dashboard-mini-stat-value"><?php echo $userCount; ?></div>
-                            <small class="text-muted">Role-based access across six departments</small>
-                        </div>
-                        <div class="ms-3">
-                            <i class="fas fa-users" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
-                        </div>
-                    </div>
-                </div>
+
+        <div class="card admin-stat-card admin-stat-active">
+            <div class="card-body">
+                <i class="fas fa-server admin-stat-icon"></i>
+                <div class="admin-stat-label">Active Services</div>
+                <div class="admin-stat-value"><?php echo $techCount; ?></div>
+                <p class="admin-stat-sub">Currently tracked tools</p>
             </div>
         </div>
-        
-        <div class="col-xl-4 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div class="flex-grow-1">
-                            <div class="text-muted text-uppercase small fw-semibold mb-2">Security Reports</div>
-                            <div class="h1 fw-bold mb-2 dashboard-mini-stat-value"><?php echo $securityReports; ?></div>
-                            <small class="text-muted">Audit-backed monitoring and recovery</small>
-                        </div>
-                        <div class="ms-3">
-                            <i class="fas fa-shield-alt" style="font-size: 2.5rem; color: var(--theme-primary); opacity: 0.65;"></i>
-                        </div>
-                    </div>
-                </div>
+
+        <div class="card admin-stat-card admin-stat-tech">
+            <div class="card-body">
+                <i class="fas fa-microchip admin-stat-icon"></i>
+                <div class="admin-stat-label">Technologies / Services</div>
+                <div class="admin-stat-value"><?php echo $techCount; ?></div>
+                <p class="admin-stat-sub">Azure-style catalog and renewals</p>
+            </div>
+        </div>
+
+        <div class="card admin-stat-card admin-stat-users">
+            <div class="card-body">
+                <i class="fas fa-users admin-stat-icon"></i>
+                <div class="admin-stat-label">Total Users</div>
+                <div class="admin-stat-value"><?php echo $userCount; ?></div>
+                <p class="admin-stat-sub">Role-based access across departments</p>
+            </div>
+        </div>
+
+        <div class="card admin-stat-card admin-stat-security">
+            <div class="card-body">
+                <i class="fas fa-shield-alt admin-stat-icon"></i>
+                <div class="admin-stat-label">Security Reports</div>
+                <div class="admin-stat-value"><?php echo $securityReports; ?></div>
+                <p class="admin-stat-sub">Audit-backed monitoring and recovery</p>
             </div>
         </div>
     </div>
