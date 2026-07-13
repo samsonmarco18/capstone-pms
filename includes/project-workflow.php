@@ -285,7 +285,20 @@ function projectWorkflowEnsureExpertDepartmentSeed(mysqli|PgsqlMysqliCompatConne
     }
 }
 
-function projectWorkflowClassifyComplexity(?string $timelineStart, ?string $timelineEnd, int $featureCount): string
+function projectWorkflowClassifyBudget(?float $budget): string
+{
+    if ($budget === null || $budget < 500000) {
+        return 'low';
+    }
+
+    if ($budget <= 1500000) {
+        return 'medium';
+    }
+
+    return 'high';
+}
+
+function projectWorkflowClassifyTimeline(?string $timelineStart, ?string $timelineEnd): string
 {
     $days = 0;
     if ($timelineStart && $timelineEnd) {
@@ -296,13 +309,33 @@ function projectWorkflowClassifyComplexity(?string $timelineStart, ?string $time
         }
     }
 
-    if ($featureCount >= 20 || ($featureCount >= 12 && $days > 120)) {
-        return 'Enterprise';
+    if ($days > 0 && $days <= 30) {
+        return 'short';
     }
-    if ($featureCount >= 12 || $days > 90) {
+
+    if ($days > 0 && $days <= 90) {
+        return 'moderate';
+    }
+
+    return 'long';
+}
+
+function projectWorkflowClassifyComplexity(?string $timelineStart, ?string $timelineEnd, ?float $budget, string $priority): string
+{
+    $budgetBand = projectWorkflowClassifyBudget($budget);
+    $timelineBand = projectWorkflowClassifyTimeline($timelineStart, $timelineEnd);
+    $priorityBand = strtolower(trim($priority));
+
+    $budgetScore = ['low' => 0, 'medium' => 1, 'high' => 2][$budgetBand] ?? 1;
+    $timelineScore = ['long' => 0, 'moderate' => 1, 'short' => 2][$timelineBand] ?? 1;
+    $priorityScore = ['low' => 0, 'medium' => 1, 'high' => 2, 'critical' => 2][$priorityBand] ?? 1;
+
+    $score = $budgetScore + $timelineScore + $priorityScore;
+    if ($score >= 4) {
         return 'High';
     }
-    if ($featureCount >= 6 || $days > 30) {
+
+    if ($score >= 2) {
         return 'Medium';
     }
 
@@ -323,6 +356,7 @@ function projectWorkflowEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): 
 
     $textType = defined('DB_DRIVER') && DB_DRIVER === 'pgsql' ? 'TEXT' : 'LONGTEXT';
     $columns = [
+        'project_type' => 'VARCHAR(80) NULL',
         'priority' => 'VARCHAR(30) NULL',
         'sales_notes' => 'TEXT NULL',
         'sales_attachments' => "{$textType} NULL",

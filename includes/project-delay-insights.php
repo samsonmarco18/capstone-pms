@@ -585,8 +585,10 @@ function delayInsightsBuildBeforeMetrics(array $project): array
 
     $complexity = (string) ($project['complexity_level'] ?? 'medium');
     $complexityRiskMap = [
+        'low' => 4,
         'simple' => 4,
         'medium' => 10,
+        'high' => 18,
         'complex' => 18,
     ];
 

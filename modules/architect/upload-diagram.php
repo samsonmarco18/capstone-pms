@@ -47,7 +47,7 @@ if (!$hasIncludedDepartments && dbTableExists($conn, 'developer_allocations')) {
 
 if (!$hasIncludedDepartments) {
     $_SESSION['error'] = 'Select the departments included in this project before uploading architecture documents.';
-    header('Location: developer-allocation.php?id=' . $projectId);
+    header('Location: ../roadmap/methodology.php?project_id=' . $projectId);
     exit();
 }
 

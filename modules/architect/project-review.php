@@ -1,11 +1,13 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-workflow.php';
+require_once '../../includes/project-template.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
 projectWorkflowEnsureSchema($conn);
+projectTemplateEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $hasSalesBudget = dbColumnExists($conn, 'projects', 'sales_budget');
 
@@ -59,6 +61,12 @@ if (!$project) {
 }
 
 $requestedFeatureItems = projectReviewParseRequestedFeatures($project['requested_features'] ?? '');
+$projectTemplate = !empty($project['project_template_snapshot'])
+    ? json_decode((string) $project['project_template_snapshot'], true)
+    : null;
+if (!is_array($projectTemplate)) {
+    $projectTemplate = projectTemplateFindByType($conn, (string) ($project['project_type'] ?? ''));
+}
 $salesAttachments = [];
 if (!empty($project['sales_attachments'])) {
     $decodedAttachments = json_decode((string) $project['sales_attachments'], true);
@@ -572,6 +580,82 @@ a.progress-step:hover {
                     <?php endif; ?>
                 </div>
             </div>
+
+            <?php if (is_array($projectTemplate)): ?>
+            <div class="info-card">
+                <div class="card-header">
+                    <h5><i class="fas fa-lightbulb"></i> Template-Based Architect Recommendations</h5>
+                </div>
+                <div class="card-body">
+                    <div class="detail-row">
+                        <div class="detail-label">Template Match</div>
+                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['project_type'] ?? 'Matched template')); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Recommended Methodology</div>
+                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['methodology'] ?? 'Not specified')); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Technology Stack</div>
+                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['tech_stack'] ?? 'Not specified')); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Developer Roles / Team</div>
+                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['team_composition'] ?? 'Not specified')); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Milestones / Phases</div>
+                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['suggested_milestones'] ?? ($projectTemplate['default_project_phases'] ?? 'Not specified'))); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Estimated Workload</div>
+                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['workload_estimate'] ?? ($projectTemplate['duration_label'] ?? 'Not specified'))); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Infrastructure</div>
+                        <div class="detail-value"><?php echo htmlspecialchars(trim((string) ($projectTemplate['hosting_platform'] ?? '') . ' | ' . (string) ($projectTemplate['deployment_environment'] ?? '') . ' | ' . (string) ($projectTemplate['database_technology'] ?? ''), ' |') ?: 'Not specified'); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Authentication</div>
+                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['auth_method'] ?? 'Not specified')); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Integrations</div>
+                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['integrations'] ?? 'Confirm during technical planning.')); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Third-Party Services / APIs</div>
+                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['third_party_services'] ?? 'Confirm during technical planning.')); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Security Requirements</div>
+                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['security_requirements'] ?? 'Confirm during technical planning.')); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Testing / Documentation</div>
+                        <div class="detail-value"><?php echo htmlspecialchars(trim((string) ($projectTemplate['testing_requirements'] ?? '') . ' ' . (string) ($projectTemplate['documentation_requirements'] ?? '')) ?: 'Not specified'); ?></div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Backup / Support</div>
+                        <div class="detail-value"><?php echo htmlspecialchars(trim((string) ($projectTemplate['backup_recovery_strategy'] ?? '') . ' ' . (string) ($projectTemplate['maintenance_support'] ?? '')) ?: 'Not specified'); ?></div>
+                    </div>
+                    <div class="content-box">
+                        <?php echo htmlspecialchars(trim((string) ($projectTemplate['architecture_notes'] ?? '') . "\n" . (string) ($projectTemplate['risk_assessment'] ?? '') . "\n" . (string) ($projectTemplate['implementation_notes'] ?? '')) ?: 'Use this template as a starting point and customize it according to client requirements.'); ?>
+                    </div>
+                </div>
+            </div>
+            <?php else: ?>
+            <div class="info-card">
+                <div class="card-header">
+                    <h5><i class="fas fa-lightbulb"></i> Template-Based Architect Recommendations</h5>
+                </div>
+                <div class="card-body">
+                    <div class="content-box">
+                        No matching project template was found. Complete the technical planning manually; once finalized, this project type can be learned as a new template.
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <div class="info-card">
                 <div class="card-header">

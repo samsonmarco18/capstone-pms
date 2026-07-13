@@ -1,9 +1,11 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-template.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectTemplateEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $pageError = null;
 
@@ -69,12 +71,36 @@ if (!$project && $pageError === null) {
     exit();
 }
 
+$projectTemplate = null;
+$templateFeatureLookup = [];
+if ($project) {
+    $projectTemplate = !empty($project['project_template_snapshot'])
+        ? json_decode((string) $project['project_template_snapshot'], true)
+        : null;
+    if (!is_array($projectTemplate)) {
+        $projectTemplate = projectTemplateFindByType($conn, (string) ($project['project_type'] ?? ''));
+    }
+    if (is_array($projectTemplate)) {
+        foreach (($projectTemplate['feature_items'] ?? []) as $templateFeature) {
+            $normalizedFeature = architectFeatureNormalizeTitle((string) $templateFeature);
+            if ($normalizedFeature !== '') {
+                $templateFeatureLookup[$normalizedFeature] = true;
+            }
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
     $features = $_POST['new_features'] ?? [];
+    $existingFeatureControls = $_POST['existing_features'] ?? [];
+    if (!is_array($existingFeatureControls)) {
+        $existingFeatureControls = [];
+    }
     $existingFeatureTitles = [];
+    $existingFeatureRows = [];
 
     $existingTitleResult = $conn->query("
-        SELECT title
+        SELECT id, title, description, priority, status, assigned_to
         FROM tasks
         WHERE project_id = $projectId
           AND task_type = 'feature'
@@ -82,6 +108,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
 
     if ($existingTitleResult !== false) {
         while ($row = $existingTitleResult->fetch_assoc()) {
+            $featureId = (int) ($row['id'] ?? 0);
+            if ($featureId > 0) {
+                $existingFeatureRows[$featureId] = $row;
+            }
             $normalizedTitle = architectFeatureNormalizeTitle((string) ($row['title'] ?? ''));
             if ($normalizedTitle !== '') {
                 $existingFeatureTitles[$normalizedTitle] = true;
@@ -93,6 +123,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
     try {
         $savedCount = 0;
         $skippedCount = 0;
+        $updatedCount = 0;
+        $removedCount = 0;
+        $lockedCount = 0;
+
+        foreach ($existingFeatureControls as $featureId => $control) {
+            $featureId = (int) $featureId;
+            if ($featureId <= 0 || !is_array($control) || !isset($existingFeatureRows[$featureId])) {
+                continue;
+            }
+
+            $existingRow = $existingFeatureRows[$featureId];
+            $oldTitle = trim((string) ($existingRow['title'] ?? ''));
+            $oldNormalizedTitle = architectFeatureNormalizeTitle($oldTitle);
+            $status = (string) ($existingRow['status'] ?? 'todo');
+            $isEditable = empty($existingRow['assigned_to']) && $status === 'todo';
+            if (!$isEditable) {
+                $lockedCount++;
+                continue;
+            }
+
+            $includeFeature = (string) ($control['include'] ?? '') === '1';
+            if (!$includeFeature) {
+                $deleteStmt = $conn->prepare("DELETE FROM tasks WHERE id = ? AND project_id = ? AND task_type = 'feature' AND status = 'todo' AND (assigned_to IS NULL OR assigned_to = 0)");
+                if ($deleteStmt === false) {
+                    throw new RuntimeException('Failed to prepare feature removal.');
+                }
+                $deleteStmt->bind_param('ii', $featureId, $projectId);
+                if (!$deleteStmt->execute()) {
+                    $deleteStmt->close();
+                    throw new RuntimeException('Failed to remove saved feature.');
+                }
+                $removedCount += $deleteStmt->affected_rows > 0 ? 1 : 0;
+                $deleteStmt->close();
+                if ($oldNormalizedTitle !== '') {
+                    unset($existingFeatureTitles[$oldNormalizedTitle]);
+                }
+                continue;
+            }
+
+            $title = trim((string) ($control['title'] ?? $oldTitle));
+            $description = trim((string) ($control['description'] ?? ($existingRow['description'] ?? '')));
+            if ($title === '') {
+                $title = $oldTitle;
+            }
+
+            $normalizedTitle = architectFeatureNormalizeTitle($title);
+            if ($normalizedTitle !== $oldNormalizedTitle && isset($existingFeatureTitles[$normalizedTitle])) {
+                $skippedCount++;
+                continue;
+            }
+
+            $updateStmt = $conn->prepare("
+                UPDATE tasks
+                SET title = ?, description = ?
+                WHERE id = ? AND project_id = ? AND task_type = 'feature' AND status = 'todo' AND (assigned_to IS NULL OR assigned_to = 0)
+            ");
+            if ($updateStmt === false) {
+                throw new RuntimeException('Failed to prepare saved feature update.');
+            }
+            $updateStmt->bind_param('ssii', $title, $description, $featureId, $projectId);
+            if (!$updateStmt->execute()) {
+                $updateStmt->close();
+                throw new RuntimeException('Failed to update saved feature.');
+            }
+            if ($updateStmt->affected_rows > 0) {
+                $updatedCount++;
+            }
+            $updateStmt->close();
+
+            if ($oldNormalizedTitle !== '') {
+                unset($existingFeatureTitles[$oldNormalizedTitle]);
+            }
+            if ($normalizedTitle !== '') {
+                $existingFeatureTitles[$normalizedTitle] = true;
+            }
+        }
 
         foreach ($features as $feature) {
             if (!is_array($feature)) {
@@ -146,12 +252,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
 
         logActivity($user['id'], 'define_features', 'projects', $projectId, null, [
             'new_features' => $features,
+            'existing_features' => $existingFeatureControls,
             'saved_count' => $savedCount,
+            'updated_count' => $updatedCount,
+            'removed_count' => $removedCount,
+            'locked_count' => $lockedCount,
             'skipped_duplicate_count' => $skippedCount,
         ]);
         $conn->commit();
+        $changes = [];
         if ($savedCount > 0) {
-            $_SESSION['success'] = $savedCount . ' new feature' . ($savedCount === 1 ? '' : 's') . ' saved successfully.';
+            $changes[] = $savedCount . ' new';
+        }
+        if ($updatedCount > 0) {
+            $changes[] = $updatedCount . ' updated';
+        }
+        if ($removedCount > 0) {
+            $changes[] = $removedCount . ' removed';
+        }
+
+        if ($changes !== []) {
+            $_SESSION['success'] = 'Features saved: ' . implode(', ', $changes) . '.';
         } else {
             $_SESSION['success'] = $skippedCount > 0
                 ? 'Duplicate feature titles were skipped. Existing saved features were kept.'
@@ -170,7 +291,7 @@ $existingFeatures = [];
 $existingFeatureLookup = [];
 if ($project) {
     $featureResult = $conn->query("
-        SELECT id, title, description, priority
+        SELECT id, title, description, priority, status, assigned_to
         FROM tasks
         WHERE project_id = $projectId
           AND task_type = 'feature'
@@ -192,9 +313,14 @@ if ($project) {
 }
 
 $salesRequestedFeatures = [];
+$salesFeatureLookup = [];
 if ($project) {
     foreach (architectFeatureParseSalesItems($project['requested_features'] ?? '') as $salesFeature) {
-        if (!isset($existingFeatureLookup[architectFeatureNormalizeTitle($salesFeature)])) {
+        $normalizedSalesFeature = architectFeatureNormalizeTitle($salesFeature);
+        if ($normalizedSalesFeature !== '') {
+            $salesFeatureLookup[$normalizedSalesFeature] = true;
+        }
+        if (!isset($existingFeatureLookup[$normalizedSalesFeature])) {
             $salesRequestedFeatures[] = $salesFeature;
         }
     }
@@ -262,13 +388,21 @@ include '../../includes/navbar.php';
 
 .saved-feature {
     display: grid;
-    grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.4fr);
+    grid-template-columns: auto minmax(180px, 1fr) minmax(220px, 1.4fr);
     gap: 0.75rem;
     align-items: start;
     background: #ffffff;
     border: 1px solid var(--gray-200);
     border-radius: 12px;
     padding: 0.9rem 1rem;
+}
+
+.saved-feature.is-locked {
+    background: var(--gray-50);
+}
+
+.saved-feature-check {
+    padding-top: 2.1rem;
 }
 
 .saved-feature-title {
@@ -281,6 +415,10 @@ include '../../includes/navbar.php';
     color: var(--gray-600);
     font-size: 0.88rem;
     word-break: break-word;
+}
+
+.saved-feature-status-note {
+    grid-column: 2 / -1;
 }
 
 .sales-requested-list {
@@ -731,13 +869,58 @@ a.progress-step:hover {
             </div>
             <div class="saved-feature-list">
                 <?php foreach ($existingFeatures as $feature): ?>
-                    <div class="saved-feature">
+                    <?php
+                        $featureId = (int) ($feature['id'] ?? 0);
+                        $featureTitle = (string) ($feature['title'] ?? '');
+                        $featureDescription = (string) ($feature['description'] ?? '');
+                        $featureStatus = (string) ($feature['status'] ?? 'todo');
+                        $isFeatureEditable = empty($feature['assigned_to']) && $featureStatus === 'todo';
+                        $normalizedFeatureTitle = architectFeatureNormalizeTitle($featureTitle);
+                        $isRecommendedFeature = isset($templateFeatureLookup[$normalizedFeatureTitle]) || isset($salesFeatureLookup[$normalizedFeatureTitle]);
+                    ?>
+                    <div class="saved-feature <?php echo $isFeatureEditable ? '' : 'is-locked'; ?>" data-existing-feature>
+                        <div class="form-check saved-feature-check">
+                            <input type="hidden" name="existing_features[<?php echo $featureId; ?>][include]" value="<?php echo $isFeatureEditable ? '0' : '1'; ?>">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                value="1"
+                                name="existing_features[<?php echo $featureId; ?>][include]"
+                                id="existingFeature<?php echo $featureId; ?>"
+                                data-existing-feature-toggle
+                                data-recommended-feature="<?php echo $isRecommendedFeature ? htmlspecialchars($featureTitle) : ''; ?>"
+                                checked
+                                <?php echo $isFeatureEditable ? '' : 'disabled'; ?>
+                            >
+                        </div>
                         <div>
-                            <div class="saved-feature-title"><?php echo htmlspecialchars($feature['title']); ?></div>
+                            <label class="form-label" for="existingFeatureTitle<?php echo $featureId; ?>">Feature Title</label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="existingFeatureTitle<?php echo $featureId; ?>"
+                                name="existing_features[<?php echo $featureId; ?>][title]"
+                                value="<?php echo htmlspecialchars($featureTitle); ?>"
+                                data-existing-feature-field
+                                <?php echo $isFeatureEditable ? '' : 'disabled'; ?>
+                            >
                         </div>
-                        <div class="saved-feature-description">
-                            <?php echo htmlspecialchars(trim((string) $feature['description']) !== '' ? $feature['description'] : 'No description added.'); ?>
+                        <div>
+                            <label class="form-label" for="existingFeatureDescription<?php echo $featureId; ?>">Description</label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="existingFeatureDescription<?php echo $featureId; ?>"
+                                name="existing_features[<?php echo $featureId; ?>][description]"
+                                value="<?php echo htmlspecialchars($featureDescription); ?>"
+                                placeholder="No description added."
+                                data-existing-feature-field
+                                <?php echo $isFeatureEditable ? '' : 'disabled'; ?>
+                            >
                         </div>
+                        <small class="saved-feature-description saved-feature-status-note">
+                            <?php echo $isFeatureEditable ? 'Editable until assigned or passed forward.' : 'Locked after assignment or progress.'; ?>
+                        </small>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -759,6 +942,8 @@ a.progress-step:hover {
                                 name="new_features[<?php echo $index; ?>][include]"
                                 id="salesFeature<?php echo $index; ?>"
                                 data-sales-feature-toggle
+                                data-recommended-feature="<?php echo htmlspecialchars($salesFeature); ?>"
+                                checked
                             >
                             <label class="form-check-label" for="salesFeature<?php echo $index; ?>">
                                 <span class="sales-requested-title"><?php echo htmlspecialchars($salesFeature); ?></span>
@@ -907,6 +1092,30 @@ function updateRemoveButtons() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-existing-feature-toggle]').forEach((checkbox) => {
+        const wrapper = checkbox.closest('[data-existing-feature]');
+        const fields = wrapper ? Array.from(wrapper.querySelectorAll('[data-existing-feature-field]')) : [];
+
+        function syncExistingFeatureFields() {
+            fields.forEach((field) => {
+                field.disabled = checkbox.disabled || !checkbox.checked;
+            });
+        }
+
+        checkbox.addEventListener('change', () => {
+            if (!checkbox.checked && checkbox.dataset.recommendedFeature) {
+                const suggestionName = checkbox.dataset.recommendedFeature || 'this feature';
+                const shouldRemove = window.confirm(`The selected project template recommends adding "${suggestionName}" based on similar completed projects. Are you sure you want to remove or skip this recommendation?`);
+                if (!shouldRemove) {
+                    checkbox.checked = true;
+                }
+            }
+            syncExistingFeatureFields();
+        });
+
+        syncExistingFeatureFields();
+    });
+
     document.querySelectorAll('[data-sales-feature-toggle]').forEach((checkbox) => {
         const wrapper = checkbox.closest('[data-sales-requested-feature]');
         const fields = wrapper ? Array.from(wrapper.querySelectorAll('[data-sales-feature-field]')) : [];
@@ -917,7 +1126,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        checkbox.addEventListener('change', syncSalesFeatureFields);
+        checkbox.addEventListener('change', () => {
+            if (!checkbox.checked) {
+                const suggestionName = checkbox.dataset.recommendedFeature || 'this feature';
+                const shouldRemove = window.confirm(`The selected project template recommends adding "${suggestionName}" based on similar completed projects. Are you sure you want to remove or skip this recommendation?`);
+                if (!shouldRemove) {
+                    checkbox.checked = true;
+                }
+            }
+            syncSalesFeatureFields();
+        });
         syncSalesFeatureFields();
     });
     updateFeatureIndexes();

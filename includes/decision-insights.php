@@ -849,8 +849,10 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
     $budgetDrift = di_clamp(di_ratio($overspendForecast, max($budgetTotal, 1.0)) * 100);
 
     $complexityScoreMap = [
+        'low' => 35.0,
         'simple' => 35.0,
         'medium' => 60.0,
+        'high' => 85.0,
         'complex' => 85.0,
     ];
     $complexityScore = $complexityScoreMap[$project['complexity_level'] ?? 'medium'] ?? 60.0;

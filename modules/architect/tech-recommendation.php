@@ -1,9 +1,11 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-template.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectTemplateEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 $hasCloudPlatform = dbColumnExists($conn, 'projects', 'cloud_platform');
@@ -15,6 +17,48 @@ $project = $conn->query("SELECT * FROM projects WHERE id = $projectId")->fetch_a
 if (!$project) {
     header('Location: projects.php');
     exit();
+}
+$projectTemplate = !empty($project['project_template_snapshot'])
+    ? json_decode((string) $project['project_template_snapshot'], true)
+    : null;
+if (!is_array($projectTemplate)) {
+    $projectTemplate = projectTemplateFindByType($conn, (string) ($project['project_type'] ?? ''));
+}
+
+function architectTechNormalize(string $value): string
+{
+    return strtolower(trim((string) preg_replace('/[^a-z0-9+#.]+/i', ' ', $value)));
+}
+
+function architectTechIsTemplateRecommended(array $template = null, string $technologyName = '', string $technologyCategory = ''): bool
+{
+    if (!$template || $technologyName === '') {
+        return false;
+    }
+
+    $needle = architectTechNormalize($technologyName);
+    $category = architectTechNormalize($technologyCategory);
+    $haystack = trim($needle . ' ' . $category);
+    foreach (($template['tech_items'] ?? []) as $item) {
+        $candidate = architectTechNormalize((string) $item);
+        if ($candidate !== '' && ($candidate === $needle || str_contains($candidate, $needle) || str_contains($needle, $candidate))) {
+            return true;
+        }
+
+        $isDatabaseRecommendation = preg_match('/\b(mysql|mariadb|postgres|postgresql|sql|database|firestore|firebase)\b/i', (string) $item) === 1;
+        $isDatabaseService = str_contains($haystack, 'database') || str_contains($haystack, 'sql');
+        if ($isDatabaseRecommendation && $isDatabaseService) {
+            return true;
+        }
+
+        $isHostingRecommendation = preg_match('/\b(hosting|vps|cloud|aws|azure|web app|managed application)\b/i', (string) $item) === 1;
+        $isHostingService = str_contains($haystack, 'cloud') || str_contains($haystack, 'hosting') || str_contains($haystack, 'web app');
+        if ($isHostingRecommendation && $isHostingService) {
+            return true;
+        }
+    }
+
+    return false;
 }
 $technologies = $conn->query("SELECT * FROM technologies WHERE status = 'active'");
 
@@ -607,6 +651,20 @@ a.progress-step:hover {
 
     <?php include '../../includes/architect-project-review-panel.php'; ?>
 
+    <?php if (is_array($projectTemplate)): ?>
+    <div class="info-card mb-4">
+        <div class="card-header">
+            <h5><i class="fas fa-lightbulb"></i> Template Technology Recommendation</h5>
+        </div>
+        <div class="card-body">
+            <p class="mb-2"><strong><?php echo htmlspecialchars((string) ($projectTemplate['project_type'] ?? 'Matched template')); ?></strong></p>
+            <p class="mb-2"><strong>Suggested stack:</strong> <?php echo htmlspecialchars((string) ($projectTemplate['tech_stack'] ?? 'Not specified')); ?></p>
+            <p class="mb-2"><strong>Methodology:</strong> <?php echo htmlspecialchars((string) ($projectTemplate['methodology'] ?? 'Not specified')); ?></p>
+            <p class="mb-0 text-muted"><?php echo htmlspecialchars((string) ($projectTemplate['architecture_notes'] ?? 'Use this template as a starting point and adjust the selected technologies for the client.')); ?></p>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <div class="row g-4">
         <!-- Main Form Column -->
         <div class="col-lg-8">
@@ -618,26 +676,35 @@ a.progress-step:hover {
                     <div class="card-body">
                         <div id="technologiesContainer">
                             <?php while($tech = $technologies->fetch_assoc()): ?>
+                            <?php
+                                $savedRecommendation = $existingRecommendations[(int) $tech['id']] ?? null;
+                                $templateRecommended = architectTechIsTemplateRecommended($projectTemplate, (string) ($tech['name'] ?? ''), (string) ($tech['category'] ?? ''));
+                                $isChecked = $savedRecommendation || $templateRecommended;
+                            ?>
                             <div class="tech-item">
                                 <div class="row g-2">
                                     <div class="col-md-4">
                                         <div class="form-check">
-                                            <?php $savedRecommendation = $existingRecommendations[(int) $tech['id']] ?? null; ?>
                                             <input class="form-check-input tech-checkbox" type="checkbox" 
                                                    name="technologies[<?php echo $tech['id']; ?>][id]" 
                                                    value="<?php echo $tech['id']; ?>" 
                                                    id="tech_<?php echo $tech['id']; ?>"
-                                                   <?php echo $savedRecommendation ? 'checked' : ''; ?>>
+                                                   data-template-recommended="<?php echo $templateRecommended ? '1' : '0'; ?>"
+                                                   data-template-name="<?php echo htmlspecialchars((string) $tech['name']); ?>"
+                                                   <?php echo $isChecked ? 'checked' : ''; ?>>
                                             <label class="form-check-label fw-bold" for="tech_<?php echo $tech['id']; ?>">
                                                 <?php echo htmlspecialchars($tech['name']); ?>
                                             </label>
+                                            <?php if ($templateRecommended): ?>
+                                                <span class="badge bg-info-subtle text-info-emphasis ms-1">Template</span>
+                                            <?php endif; ?>
                                             <br>
                                             <small class="text-muted">Category: <?php echo $tech['category']; ?></small>
                                         </div>
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label">Service Type</label>
-                                        <select name="technologies[<?php echo $tech['id']; ?>][service_type]" class="form-select-modern" <?php echo $savedRecommendation ? '' : 'disabled'; ?>>
+                                        <select name="technologies[<?php echo $tech['id']; ?>][service_type]" class="form-select-modern" <?php echo $isChecked ? '' : 'disabled'; ?>>
                                             <option value="Development" <?php echo (($savedRecommendation['service_type'] ?? '') === 'Development') ? 'selected' : ''; ?>>Development</option>
                                             <option value="Testing" <?php echo (($savedRecommendation['service_type'] ?? '') === 'Testing') ? 'selected' : ''; ?>>Testing</option>
                                             <option value="Production" <?php echo (($savedRecommendation['service_type'] ?? '') === 'Production') ? 'selected' : ''; ?>>Production</option>
@@ -648,12 +715,12 @@ a.progress-step:hover {
                                         <label class="form-label">Monthly Cost (PHP)</label>
                                         <input type="number" name="technologies[<?php echo $tech['id']; ?>][cost]" 
                                                class="form-control-modern" step="0.01" 
-                                               value="<?php echo htmlspecialchars((string) ($savedRecommendation['estimated_cost'] ?? $tech['price'])); ?>" <?php echo $savedRecommendation ? '' : 'disabled'; ?>>
+                                               value="<?php echo htmlspecialchars((string) ($savedRecommendation['estimated_cost'] ?? $tech['price'])); ?>" <?php echo $isChecked ? '' : 'disabled'; ?>>
                                     </div>
                                     <div class="col-md-3">
                                         <label class="form-label">Notes</label>
                                         <input type="text" name="technologies[<?php echo $tech['id']; ?>][notes]" 
-                                               class="form-control-modern" placeholder="Optional" value="<?php echo htmlspecialchars((string) ($savedRecommendation['notes'] ?? '')); ?>" <?php echo $savedRecommendation ? '' : 'disabled'; ?>>
+                                               class="form-control-modern" placeholder="Optional" value="<?php echo htmlspecialchars((string) ($savedRecommendation['notes'] ?? ($templateRecommended ? 'Recommended by selected project template.' : ''))); ?>" <?php echo $isChecked ? '' : 'disabled'; ?>>
                                     </div>
                                 </div>
                             </div>
@@ -742,6 +809,13 @@ a.progress-step:hover {
 <script>
 $(document).ready(function() {
     $('.tech-checkbox').change(function() {
+        if (!$(this).is(':checked') && String($(this).data('template-recommended')) === '1') {
+            const suggestionName = $(this).data('template-name') || 'this technology';
+            const shouldRemove = window.confirm(`The selected project template recommends adding "${suggestionName}" based on similar completed projects. Are you sure you want to remove or skip this recommendation?`);
+            if (!shouldRemove) {
+                $(this).prop('checked', true);
+            }
+        }
         const container = $(this).closest('.tech-item');
         const inputs = container.find('select, input[type="number"], input[type="text"]');
         if($(this).is(':checked')) { inputs.prop('disabled', false); } 

@@ -1,11 +1,13 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-workflow.php';
+require_once '../../includes/project-template.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
 projectWorkflowEnsureSchema($conn);
+projectTemplateEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 $allocationRoles = [
@@ -56,11 +58,64 @@ function allocationAvailableForRole(array $availableDevs, string $role): int
     return $available;
 }
 
+function allocationTemplateRoleCounts(?array $template): array
+{
+    if (!$template) {
+        return [];
+    }
+
+    $team = (string) (($template['developer_roles_allocation'] ?? '') ?: ($template['team_composition'] ?? ''));
+    $counts = [];
+    foreach (explode(',', $team) as $part) {
+        $part = trim($part);
+        if ($part === '' || !preg_match('/(\d+)\s+(.+)/', $part, $matches)) {
+            continue;
+        }
+        $count = max(0, (int) $matches[1]);
+        $roleText = strtolower(trim((string) $matches[2]));
+        $roles = [];
+        if (str_contains($roleText, 'full')) {
+            $roles = ['Frontend', 'Backend'];
+        } elseif (str_contains($roleText, 'ui') || str_contains($roleText, 'ux')) {
+            $roles = ['UI/UX'];
+        } elseif (str_contains($roleText, 'front')) {
+            $roles = ['Frontend'];
+        } elseif (str_contains($roleText, 'back')) {
+            $roles = ['Backend'];
+        } elseif (str_contains($roleText, 'mobile')) {
+            $roles = ['Mobile'];
+        } elseif (str_contains($roleText, 'qa') || str_contains($roleText, 'test')) {
+            $roles = ['QA'];
+        } elseif (str_contains($roleText, 'database')) {
+            $roles = ['Database'];
+        } elseif (str_contains($roleText, 'devops')) {
+            $roles = ['DevOps'];
+        } elseif (str_contains($roleText, 'security')) {
+            $roles = ['Security'];
+        } elseif (str_contains($roleText, 'ai')) {
+            $roles = ['AI'];
+        }
+
+        foreach ($roles as $role) {
+            $counts[$role] = ($counts[$role] ?? 0) + $count;
+        }
+    }
+
+    return $counts;
+}
+
 $project = $conn->query("SELECT * FROM projects WHERE id = $projectId")->fetch_assoc();
 if (!$project) {
     header('Location: projects.php');
     exit();
 }
+$projectTemplate = !empty($project['project_template_snapshot'])
+    ? json_decode((string) $project['project_template_snapshot'], true)
+    : null;
+if (!is_array($projectTemplate)) {
+    $projectTemplate = projectTemplateFindByType($conn, (string) ($project['project_type'] ?? ''));
+}
+$templateRoleCounts = allocationTemplateRoleCounts($projectTemplate);
 
 if (!dbColumnExists($conn, 'projects', 'included_departments')) {
     $conn->query("ALTER TABLE projects ADD COLUMN included_departments " . (DB_DRIVER === 'pgsql' ? 'TEXT' : 'LONGTEXT') . " NULL");
@@ -756,6 +811,18 @@ a.progress-step:hover {
     <div class="row g-4">
         <!-- Main Form Column -->
         <div class="col-lg-8">
+            <?php if (is_array($projectTemplate)): ?>
+            <div class="info-card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-lightbulb"></i> Template Team Recommendation</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2"><strong><?php echo htmlspecialchars((string) ($projectTemplate['project_type'] ?? 'Matched template')); ?></strong></p>
+                    <p class="mb-2"><strong>Suggested team:</strong> <?php echo htmlspecialchars((string) (($projectTemplate['developer_roles_allocation'] ?? '') ?: ($projectTemplate['team_composition'] ?? 'Not specified'))); ?></p>
+                    <p class="mb-0 text-muted"><?php echo htmlspecialchars((string) ($projectTemplate['implementation_notes'] ?? 'Adjust role counts based on actual client scope and available team capacity.')); ?></p>
+                </div>
+            </div>
+            <?php endif; ?>
             <div class="form-card">
                 <div class="card-header">
                     <h5><i class="fas fa-user-plus"></i> Team Requirements</h5>
@@ -786,15 +853,17 @@ a.progress-step:hover {
                                 </thead>
                                 <tbody>
                                     <?php
-                                    foreach($allocationRoles as $role => $limits):
-                                        $isMandatory = in_array($role, $mandatoryDepartments, true);
-                                        $isIncluded = isset($includedDepartmentLookup[$role]);
-                                        if ($isMandatory) {
-                                            $isIncluded = true;
-                                        }
-                                        $existing = array_key_exists($role, $existingAllocations)
-                                            ? (int) ($existingAllocations[$role]['required_count'] ?? 0)
-                                            : ($isIncluded ? (int) ($limits['min'] ?? 0) : 0);
+foreach($allocationRoles as $role => $limits):
+    $isMandatory = in_array($role, $mandatoryDepartments, true);
+    $templateRecommendedCount = (int) ($templateRoleCounts[$role] ?? 0);
+    $isTemplateRecommended = $templateRecommendedCount > 0;
+    $isIncluded = isset($includedDepartmentLookup[$role]) || (count($existingAllocations) === 0 && $isTemplateRecommended);
+    if ($isMandatory) {
+        $isIncluded = true;
+    }
+    $existing = array_key_exists($role, $existingAllocations)
+        ? (int) ($existingAllocations[$role]['required_count'] ?? 0)
+        : ($isIncluded ? max((int) ($limits['min'] ?? 0), $templateRecommendedCount) : 0);
                                         if ($isMandatory) {
                                             $existing = max((int) ($limits['min'] ?? 0), $existing);
                                         }
@@ -815,11 +884,16 @@ a.progress-step:hover {
                                                     name="allocations[<?php echo $role; ?>][included]"
                                                     value="1"
                                                     data-role="<?php echo htmlspecialchars($role); ?>"
+                                                    data-template-recommended="<?php echo $isTemplateRecommended ? '1' : '0'; ?>"
+                                                    data-template-count="<?php echo $templateRecommendedCount; ?>"
                                                     onchange="toggleDepartmentRow(this)"
                                                     <?php echo $isIncluded ? 'checked' : ''; ?>
                                                     <?php echo $isMandatory ? 'disabled' : ''; ?>
                                                 >
-                                                <span><?php echo $role; ?></span>
+                                            <span><?php echo $role; ?></span>
+                                            <?php if ($isTemplateRecommended): ?>
+                                                <span class="badge bg-info-subtle text-info-emphasis ms-1">Template: <?php echo $templateRecommendedCount; ?></span>
+                                            <?php endif; ?>
                                             </label>
                                             <span class="department-role-note"><?php echo $isMandatory ? 'First handoff for expert estimation.' : 'SUL and team members are matched by this department.'; ?></span>
                                         </td>
@@ -831,6 +905,8 @@ a.progress-step:hover {
                                                    <?php echo $isMandatory ? 'required' : ''; ?>
                                                    max="<?php echo (int) $inputMax; ?>"
                                                    data-min-recommended="<?php echo (int) ($limits['min'] ?? 0); ?>"
+                                                   data-template-recommended="<?php echo $isTemplateRecommended ? '1' : '0'; ?>"
+                                                   data-template-count="<?php echo $templateRecommendedCount; ?>"
                                                    onchange="checkAvailability(this, '<?php echo $role; ?>')">
                                             <input type="hidden" name="allocations[<?php echo $role; ?>][complexity]" value="<?php echo htmlspecialchars($existingComplexity); ?>">
                                         </td>
@@ -925,6 +1001,14 @@ function toggleDepartmentRow(checkbox) {
     const statusCell = row.querySelector('.status-cell');
 
     if (!checkbox.checked) {
+        if (String(checkbox.dataset.templateRecommended || '0') === '1') {
+            const role = checkbox.dataset.role || row.cells[0].textContent.trim();
+            const shouldRemove = window.confirm(`The selected project template recommends adding "${role}" based on similar completed projects. Are you sure you want to remove or skip this recommendation?`);
+            if (!shouldRemove) {
+                checkbox.checked = true;
+                return;
+            }
+        }
         input.value = 0;
         statusCell.innerHTML = '<span class="text-muted">Not included</span>';
         checkAllAvailability();
@@ -947,7 +1031,15 @@ function checkAvailability(input, role) {
         return;
     }
 
-    const required = parseInt(input.value) || 0;
+    let required = parseInt(input.value) || 0;
+    const templateCount = parseInt(input.dataset.templateCount || '0', 10);
+    if (String(input.dataset.templateRecommended || '0') === '1' && templateCount > 0 && required < templateCount) {
+        const shouldReduce = window.confirm(`The selected project template recommends adding ${templateCount} ${role} resource${templateCount === 1 ? '' : 's'} based on similar completed projects. Are you sure you want to reduce or skip this recommendation?`);
+        if (!shouldReduce) {
+            input.value = templateCount;
+            required = templateCount;
+        }
+    }
     const available = parseInt(input.closest('tr').querySelector('.badge-available').textContent) || 0;
     const statusCell = input.closest('tr').querySelector('.status-cell');
     if (required > 0) {

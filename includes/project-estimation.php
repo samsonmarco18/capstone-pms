@@ -169,18 +169,79 @@ function projectEstimationDepartmentLabel(string $department): string
     };
 }
 
-function projectEstimationComplexity(int $durationMonths, int $headcount, int $techCount): string
+function projectEstimationComplexityScore(int $durationMonths, int $headcount, int $techCount): int
 {
     $score = 0;
     $score += $durationMonths >= 12 ? 3 : ($durationMonths >= 6 ? 2 : 1);
     $score += $headcount >= 10 ? 3 : ($headcount >= 5 ? 2 : 1);
     $score += $techCount >= 8 ? 3 : ($techCount >= 4 ? 2 : 1);
 
+    return $score;
+}
+
+function projectEstimationComplexity(int $durationMonths, int $headcount, int $techCount): string
+{
+    $score = projectEstimationComplexityScore($durationMonths, $headcount, $techCount);
+
     return match (true) {
         $score >= 8 => 'Critical',
         $score >= 6 => 'High',
         $score >= 4 => 'Medium',
         default => 'Low',
+    };
+}
+
+function projectEstimationComplexityReason(int $durationMonths, int $headcount, int $techCount): string
+{
+    $score = projectEstimationComplexityScore($durationMonths, $headcount, $techCount);
+    $complexity = projectEstimationComplexity($durationMonths, $headcount, $techCount);
+    $durationText = $durationMonths . ' month' . ($durationMonths === 1 ? '' : 's');
+    $headcountText = $headcount . ' planned developer position' . ($headcount === 1 ? '' : 's');
+    $techText = $techCount . ' selected technolog' . ($techCount === 1 ? 'y' : 'ies');
+
+    $reason = match ($complexity) {
+        'Critical' => 'The timeline, staffing, and technology stack are all in the upper range, so delivery risk and coordination effort are critical.',
+        'High' => 'At least two planning inputs are heavy enough to require tighter coordination, stronger expertise, and more delivery control.',
+        'Medium' => 'The project has a balanced workload: one or more inputs need extra planning, but the scope is not in the highest risk range.',
+        default => 'The timeline, staffing, and technology stack are all in the lighter range, so normal planning and delivery effort should be enough.',
+    };
+
+    return "{$complexity} complexity because {$durationText}, {$headcountText}, and {$techText} produce a planning score of {$score}/9. {$reason}";
+}
+
+function projectEstimationPriorityMarkup(string $priority): array
+{
+    $normalized = strtolower(trim($priority));
+
+    return match ($normalized) {
+        'low' => [
+            'level' => 'low',
+            'label' => 'Low',
+            'rate' => 0.0,
+            'percent' => 0,
+            'reason' => 'Standard development process with no urgency premium.',
+        ],
+        'high' => [
+            'level' => 'high',
+            'label' => 'High',
+            'rate' => 0.25,
+            'percent' => 25,
+            'reason' => 'Urgent or critical features require extra effort, overtime, and more experienced developers.',
+        ],
+        'critical' => [
+            'level' => 'critical',
+            'label' => 'Critical',
+            'rate' => 0.30,
+            'percent' => 30,
+            'reason' => 'Critical delivery pressure uses the top priority premium for overtime, senior oversight, and rapid turnaround.',
+        ],
+        default => [
+            'level' => 'medium',
+            'label' => 'Medium',
+            'rate' => 0.10,
+            'percent' => 10,
+            'reason' => 'Requires more planning, testing, and attention than the standard development process.',
+        ],
     };
 }
 
@@ -353,9 +414,12 @@ function projectEstimationSave(
     $developerMonthlyCost = array_sum(array_map(static fn(array $row): float => (float) $row['total_cost_based_on_developers'], $rows));
     $developerCost = $developerMonthlyCost * $durationMonths;
     $technologyCost = $techMonthlyCost * $durationMonths;
-    $overallCost = $developerCost + $technologyCost + $additionalCosts;
+    $baseCost = $developerCost + $technologyCost + $additionalCosts;
 
-    $project = $conn->query("SELECT sales_budget FROM projects WHERE id = {$projectId} LIMIT 1")->fetch_assoc() ?: [];
+    $project = $conn->query("SELECT sales_budget, priority FROM projects WHERE id = {$projectId} LIMIT 1")->fetch_assoc() ?: [];
+    $priorityMarkup = projectEstimationPriorityMarkup((string) ($project['priority'] ?? 'medium'));
+    $priorityMarkupAmount = $baseCost * (float) $priorityMarkup['rate'];
+    $overallCost = $baseCost + $priorityMarkupAmount;
     $budget = (float) ($project['sales_budget'] ?? 0);
     $remaining = $budget - $overallCost;
     $allocationJson = json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -458,6 +522,12 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         array_sum(array_map(static fn(array $row): int => (int) ($row['required_count'] ?? 0), $allocations)),
         count($technologies)
     );
+    $complexityReason = projectEstimationComplexityReason(
+        $durationMonths,
+        array_sum(array_map(static fn(array $row): int => (int) ($row['required_count'] ?? 0), $allocations)),
+        count($technologies)
+    );
+    $priorityMarkup = projectEstimationPriorityMarkup((string) ($project['priority'] ?? 'medium'));
     $savedRows = [];
     if (!empty($estimation['allocation_json'])) {
         $decoded = json_decode((string) $estimation['allocation_json'], true);
@@ -533,6 +603,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .overview-cell { min-width: 0; padding: 0.85rem 0; background: transparent; border: 0; border-bottom: 1px solid var(--pe-line); border-radius: 0; }
     .overview-cell span { display: block; color: var(--pe-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
     .overview-cell strong { display: block; color: var(--pe-ink); font-size: 0.9rem; margin-top: 0.28rem; overflow-wrap: anywhere; }
+    .overview-detail { display: block; margin-top: 0.32rem; color: var(--pe-muted); font-size: 0.76rem; line-height: 1.45; }
     .estimate-table { width: 100%; border-collapse: separate; border-spacing: 0; }
     .estimate-table th, .estimate-table td { padding: 0.78rem; border-bottom: 1px solid var(--pe-line); vertical-align: middle; font-size: 0.82rem; }
     .estimate-table th { color: var(--pe-muted); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.045em; background: #f6f9fc; }
@@ -548,7 +619,8 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .summary-cell { padding: 1rem; border-radius: 12px; border: 1px solid var(--pe-line); background: #fff; }
     .summary-cell span { display: block; font-size: 0.68rem; color: var(--pe-muted); font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
     .summary-cell strong { display: block; font-size: 1.08rem; color: var(--pe-primary); margin-top: 0.28rem; }
-    .summary-cell:nth-child(4) { background: #eef7fc; border-color: #cfe5f3; }
+    .summary-note { margin-top: 0.45rem; color: var(--pe-muted); font-size: 0.76rem; line-height: 1.45; }
+    .summary-cell.is-primary { background: #eef7fc; border-color: #cfe5f3; }
     .project-estimation-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding-top: 1rem; border-top: 1px solid var(--pe-line); }
     .project-estimation-submit-note { display: flex; align-items: center; gap: 0.55rem; max-width: 560px; color: var(--pe-muted); font-size: 0.76rem; line-height: 1.45; }
     .project-estimation-submit-note i { color: var(--pe-primary); }
@@ -716,7 +788,8 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                 <div class="overview-cell"><span>Project Timeline</span><strong><?php echo htmlspecialchars((string) ($project['timeline_start'] ?? 'TBD')); ?> to <?php echo htmlspecialchars((string) ($project['timeline_end'] ?? 'TBD')); ?></strong></div>
                                 <div class="overview-cell"><span>Estimate Duration Basis</span><strong><?php echo htmlspecialchars((string) ($durationWindow['label'] ?? 'Project timeline')); ?>: <?php echo htmlspecialchars((string) (($durationWindow['start'] ?? '') ?: 'TBD')); ?> to <?php echo htmlspecialchars((string) (($durationWindow['end'] ?? '') ?: 'TBD')); ?></strong></div>
                                 <div class="overview-cell"><span>Client Budget</span><strong><?php echo projectEstimationPeso((float) ($project['sales_budget'] ?? 0)); ?></strong></div>
-                                <div class="overview-cell"><span>Project Complexity</span><strong><?php echo htmlspecialchars($complexity); ?></strong></div>
+                                <div class="overview-cell"><span>Project Priority</span><strong><?php echo htmlspecialchars($priorityMarkup['label']); ?></strong><small class="overview-detail"><?php echo htmlspecialchars((string) $priorityMarkup['percent']); ?>% priority markup. <?php echo htmlspecialchars((string) $priorityMarkup['reason']); ?></small></div>
+                                <div class="overview-cell"><span>Project Complexity</span><strong><?php echo htmlspecialchars($complexity); ?></strong><small class="overview-detail"><?php echo htmlspecialchars($complexityReason); ?></small></div>
                                 <div class="overview-cell"><span>Technology Stack</span><strong><?php echo count($technologies) > 0 ? htmlspecialchars(implode(', ', array_map(static fn(array $row): string => (string) $row['technology_name'], $technologies))) : 'No stack selected'; ?></strong></div>
                             </div>
                         </div>
@@ -828,7 +901,9 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                 <div class="summary-cell"><span>Total Developer Cost</span><strong id="summaryDeveloperCost">&#8369;0.00</strong></div>
                                 <div class="summary-cell"><span>Total Technology Stack Cost</span><strong id="summaryTechCost">&#8369;0.00</strong></div>
                                 <div class="summary-cell"><span>Additional Project Costs</span><strong id="summaryAdditionalCost">&#8369;0.00</strong></div>
-                                <div class="summary-cell"><span>Overall Estimated Project Cost</span><strong id="summaryOverallCost">&#8369;0.00</strong></div>
+                                <div class="summary-cell"><span>Base Project Cost</span><strong id="summaryBaseCost">&#8369;0.00</strong></div>
+                                <div class="summary-cell"><span>Priority Markup</span><strong id="summaryPriorityMarkup">&#8369;0.00</strong><small class="summary-note" id="summaryPriorityReason"><?php echo htmlspecialchars((string) $priorityMarkup['reason']); ?></small></div>
+                                <div class="summary-cell is-primary"><span>Overall Estimated Project Cost</span><strong id="summaryOverallCost">&#8369;0.00</strong></div>
                                 <div class="summary-cell"><span>Client Budget</span><strong id="summaryBudget"><?php echo projectEstimationPeso((float) ($project['sales_budget'] ?? 0)); ?></strong></div>
                                 <div class="summary-cell"><span>Remaining Budget</span><strong id="summaryRemainingBudget">&#8369;0.00</strong></div>
                             </div>
@@ -858,6 +933,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         const durationMonths = Number(document.getElementById('projectDurationMonths')?.value || 1);
         const techMonthly = Number(document.getElementById('techMonthlyTotal')?.value || 0);
         const clientBudget = <?php echo json_encode((float) ($project['sales_budget'] ?? 0)); ?>;
+        const priorityMarkup = <?php echo json_encode($priorityMarkup); ?>;
         const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
         const estimationForm = document.getElementById('projectCostEstimationForm');
         const submissionStatus = document.querySelector('[data-project-estimation-submitted]');
@@ -943,7 +1019,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             const developerTotal = developerMonthly * durationMonths;
             const techTotal = techMonthly * durationMonths;
             const additional = Math.max(0, Number(document.getElementById('additionalCostsInput')?.value || 0));
-            const overall = developerTotal + techTotal + additional;
+            const baseCost = developerTotal + techTotal + additional;
+            const priorityRate = Math.max(0, Number(priorityMarkup.rate || 0));
+            const priorityMarkupAmount = baseCost * priorityRate;
+            const overall = baseCost + priorityMarkupAmount;
             const remaining = clientBudget - overall;
 
             const tbody = document.getElementById('developerCostRows');
@@ -971,8 +1050,14 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             setText('summaryDeveloperCost', developerTotal);
             setText('summaryTechCost', techTotal);
             setText('summaryAdditionalCost', additional);
+            setText('summaryBaseCost', baseCost);
+            setText('summaryPriorityMarkup', priorityMarkupAmount);
             setText('summaryOverallCost', overall);
             setText('summaryRemainingBudget', remaining);
+            const priorityReason = document.getElementById('summaryPriorityReason');
+            if (priorityReason) {
+                priorityReason.textContent = `${priorityMarkup.label || 'Medium'} priority adds ${Number(priorityMarkup.percent || 0)}% (${peso.format(priorityMarkupAmount)}). ${priorityMarkup.reason || ''}`;
+            }
             document.getElementById('summaryRemainingBudget')?.classList.toggle('money-negative', remaining < 0);
             document.getElementById('summaryRemainingBudget')?.classList.toggle('money-positive', remaining >= 0);
         }

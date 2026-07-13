@@ -4,11 +4,13 @@ require_once '../../includes/project-delay-insights.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
 require_once '../../includes/project-workflow.php';
+require_once '../../includes/project-template.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
 projectWorkflowEnsureSchema($conn);
+projectTemplateEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 
 $hasCloudPlatform = dbColumnExists($conn, 'projects', 'cloud_platform');
@@ -186,6 +188,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         header('Location: projects.php?submitted=' . $projectId);
         exit();
     }
+
+    projectTemplateCaptureProject($conn, $projectId);
 
     projectWorkflowNotifyDepartmentSuls(
         $conn,

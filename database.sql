@@ -96,6 +96,9 @@ CREATE TABLE projects (
     mom TEXT,
     requested_features LONGTEXT,
     included_departments LONGTEXT,
+    project_type VARCHAR(80) NULL,
+    project_template_id INT NULL,
+    project_template_snapshot LONGTEXT NULL,
     sales_budget DECIMAL(15, 2) NULL,
     cloud_platform VARCHAR(100),
     database_server VARCHAR(100),
@@ -114,6 +117,54 @@ CREATE TABLE projects (
     INDEX idx_status (status),
     INDEX idx_client_id (client_id),
     INDEX idx_architect_id (architect_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- PROJECT TEMPLATES TABLE
+-- =====================================================
+CREATE TABLE project_templates (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    project_type VARCHAR(120) NOT NULL,
+    normalized_type VARCHAR(120) NOT NULL,
+    duration_label VARCHAR(80) NULL,
+    duration_min_weeks INT DEFAULT 0,
+    duration_max_weeks INT DEFAULT 0,
+    budget_min DECIMAL(15, 2) DEFAULT 0,
+    budget_max DECIMAL(15, 2) DEFAULT 0,
+    methodology VARCHAR(80) NULL,
+    core_features LONGTEXT NULL,
+    tech_stack LONGTEXT NULL,
+    team_composition LONGTEXT NULL,
+    complexity_level VARCHAR(40) DEFAULT 'medium',
+    payment_terms VARCHAR(255) NULL,
+    sales_notes LONGTEXT NULL,
+    integrations LONGTEXT NULL,
+    security_requirements LONGTEXT NULL,
+    architecture_notes LONGTEXT NULL,
+    workload_estimate VARCHAR(120) NULL,
+    project_description LONGTEXT NULL,
+    suggested_milestones LONGTEXT NULL,
+    default_project_phases LONGTEXT NULL,
+    functional_requirements LONGTEXT NULL,
+    non_functional_requirements LONGTEXT NULL,
+    third_party_services LONGTEXT NULL,
+    hosting_platform VARCHAR(120) NULL,
+    deployment_environment VARCHAR(120) NULL,
+    database_technology VARCHAR(120) NULL,
+    auth_method VARCHAR(160) NULL,
+    backup_recovery_strategy LONGTEXT NULL,
+    developer_roles_allocation LONGTEXT NULL,
+    testing_requirements LONGTEXT NULL,
+    documentation_requirements LONGTEXT NULL,
+    maintenance_support LONGTEXT NULL,
+    risk_assessment LONGTEXT NULL,
+    implementation_notes LONGTEXT NULL,
+    source VARCHAR(40) DEFAULT 'seed',
+    usage_count INT DEFAULT 0,
+    learned_from_project_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_project_template_type (normalized_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================

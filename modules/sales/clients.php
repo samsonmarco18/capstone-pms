@@ -3,11 +3,14 @@ require_once '../../includes/auth.php';
 require_once '../../includes/project-progress.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/project-workflow.php';
+require_once '../../includes/project-template.php';
 requireRole('sales');
 
 $conn = getConnection();
 $user = getCurrentUser();
 projectWorkflowEnsureSchema($conn);
+projectTemplateEnsureSchema($conn);
+$projectTemplates = projectTemplateAll($conn);
 $hasSalesBudget = dbColumnExists($conn, 'projects', 'sales_budget');
 $hasTimelineStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasTimelineEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
@@ -96,18 +99,23 @@ function parseSalesDateInput(string $value): ?string
     return $trimmed;
 }
 
-function salesClientsFeatureCount(string $requestedFeatures): int
-{
-    return count(array_filter(array_map('trim', preg_split('/\R/', $requestedFeatures) ?: [])));
-}
-
 function salesClientsProjectComplexityValue(string $complexity): string
 {
-    return match (strtolower(trim($complexity))) {
-        'low', 'simple' => 'simple',
-        'high', 'critical', 'enterprise', 'complex' => 'complex',
+    $value = match (strtolower(trim($complexity))) {
+        'low', 'simple' => 'low',
+        'high', 'critical', 'enterprise', 'complex' => 'high',
         default => 'medium',
     };
+
+    if (defined('DB_DRIVER') && DB_DRIVER === 'pgsql') {
+        return match ($value) {
+            'low' => 'simple',
+            'high' => 'complex',
+            default => 'medium',
+        };
+    }
+
+    return $value;
 }
 
 function salesClientsBindAndExecute($stmt, string $types, array $params): bool
@@ -150,6 +158,10 @@ function salesClientsInsertProject($conn, array $data): int
     ];
 
     $optionalColumns = [
+        'project_type' => ['s', $data['project_type']],
+        'project_template_id' => ['i', $data['project_template_id']],
+        'project_template_snapshot' => ['s', $data['project_template_snapshot']],
+        'methodology_template' => ['s', $data['methodology_template']],
         'sales_budget' => ['s', $data['sales_budget']],
         'timeline_start_time' => ['s', $data['timeline_start_time']],
         'timeline_end_time' => ['s', $data['timeline_end_time']],
@@ -305,6 +317,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $deadline = $deadline !== '' ? $deadline : null;
 
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
+        $projectType = trim((string) ($_POST['project_type'] ?? ''));
+        $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
+        $projectTemplateId = $projectTemplate ? (int) ($projectTemplate['id'] ?? 0) : null;
+        $projectTemplateSnapshot = $projectTemplate ? json_encode($projectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
         $meetingNotes = trim((string) ($_POST['meeting_notes'] ?? ''));
         $mom = trim((string) ($_POST['mom'] ?? ''));
@@ -323,9 +339,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ''));
         $timelineStartTime = parseSalesTimeInput($timelineStartTimeInput);
         $timelineEndTime = parseSalesTimeInput($timelineEndTimeInput);
-        $featureCount = salesClientsFeatureCount($requestedFeatures);
         $generatedComplexity = salesClientsProjectComplexityValue(
-            projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $featureCount)
+            projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $salesBudget, $priority)
         );
         $requirementsSummary = $requestedFeatures;
         if ($additionalRequirements !== '') {
@@ -337,6 +352,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if ($name === '') {
             $_SESSION['error'] = 'Client name is required.';
+        } elseif ($projectName !== '' && $projectType === '') {
+            $_SESSION['error'] = 'Project type is required.';
         } elseif ($salesBudgetInput !== '' && $salesBudget === null) {
             $_SESSION['error'] = 'Budget must be a valid number.';
         } elseif ($timelineStartTimeInput !== '' && $timelineStartTime === null) {
@@ -389,6 +406,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         'timeline_start_time' => $timelineStartTime,
                         'timeline_end_time' => $timelineEndTime,
                         'created_by' => $user['id'],
+                        'project_type' => $projectType,
+                        'project_template_id' => $projectTemplateId,
+                        'project_template_snapshot' => $projectTemplateSnapshot,
+                        'methodology_template' => $projectTemplate ? (string) ($projectTemplate['methodology'] ?? '') : null,
                         'complexity_level' => $generatedComplexity,
                         'priority' => $priority,
                         'sales_notes' => $salesNotes,
@@ -1338,12 +1359,38 @@ include '../../includes/navbar.php';
     margin-bottom: 0;
 }
 
-.modal-modern.add-client-modal .mini-note {
-    margin-top: 0.5rem;
-    color: var(--gray-500);
-    font-size: 0.78rem;
-    line-height: 1.4;
-}
+    .modal-modern.add-client-modal .mini-note {
+        margin-top: 0.5rem;
+        color: var(--gray-500);
+        font-size: 0.78rem;
+        line-height: 1.4;
+    }
+
+    .modal-modern.add-client-modal .calculation-note {
+        display: grid;
+        gap: 0.28rem;
+        margin-top: 0.65rem;
+        padding: 0.75rem 0.85rem;
+        border: 1px solid #dbeafe;
+        border-radius: 10px;
+        background: #eff6ff;
+        color: #1e4f78;
+        font-size: 0.78rem;
+        line-height: 1.45;
+    }
+
+    .modal-modern.add-client-modal .calculation-note strong {
+        color: #173f61;
+        font-size: 0.86rem;
+    }
+
+    .modal-modern.add-client-modal .template-apply-status {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        color: #047857;
+        font-weight: 700;
+    }
 
 .modal-modern.add-client-modal .required-mark {
     color: #dc2626;
@@ -2773,9 +2820,22 @@ include '../../includes/navbar.php';
                         <div class="field-group add-client-step" data-client-step="1" hidden>
                             <div class="section-title"><i class="fas fa-clipboard-list"></i> Project Intake</div>
                             <div class="row g-3">
-                                <div class="col-12">
+                                <div class="col-md-6">
                                     <label class="form-label">Project Name<span class="required-mark">*</span></label>
                                     <input type="text" name="project_name" class="form-control" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Project Type<span class="required-mark">*</span></label>
+                                    <input type="text" name="project_type" class="form-control" list="projectTemplateTypes" placeholder="e.g. E-commerce Website" required autocomplete="off">
+                                    <datalist id="projectTemplateTypes">
+                                        <?php foreach ($projectTemplates as $template): ?>
+                                            <option value="<?php echo htmlspecialchars((string) $template['project_type']); ?>"></option>
+                                        <?php endforeach; ?>
+                                    </datalist>
+                                    <div class="calculation-note" data-template-recommendation hidden>
+                                        <strong>No project template selected</strong>
+                                        <span>Enter a project type to search existing templates. New types can still be planned manually.</span>
+                                    </div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Project Description<span class="required-mark">*</span></label>
@@ -2821,6 +2881,10 @@ include '../../includes/navbar.php';
                                         <option value="high">High</option>
                                         <option value="critical">Critical</option>
                                     </select>
+                                    <div class="calculation-note" data-priority-markup-preview>
+                                        <strong>Medium priority adds +10%</strong>
+                                        <span>Requires more planning, testing, and attention than the standard development process.</span>
+                                    </div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Attachments <span class="optional-label">(Optional)</span></label>
@@ -2851,12 +2915,21 @@ include '../../includes/navbar.php';
                                 <div class="col-md-6">
                                     <label class="form-label">Budget<span class="required-mark">*</span></label>
                                     <input type="number" name="sales_budget" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00" required>
-                                    <div class="mini-note">Required as the decision insight budget baseline.</div>
+                                    <div class="mini-note" data-budget-helper>Required as the decision insight budget baseline.</div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Generated Complexity</label>
                                     <input type="text" class="form-control" data-generated-complexity readonly value="Low">
-                                    <div class="mini-note">Calculated automatically from timeline and feature count.</div>
+                                    <div class="calculation-note" data-complexity-reason>
+                                        <strong>Low complexity</strong>
+                                        <span>Calculated automatically from budget, timeline, and priority.</span>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="calculation-note" data-priority-price-preview>
+                                        <strong>Priority price preview</strong>
+                                        <span>Enter a budget to preview the added priority price during client intake. Final pricing is recalculated later from the Expert project cost estimate.</span>
+                                    </div>
                                 </div>
                                 <div class="col-12">
                                     <label class="form-label">Sales Notes <span class="optional-label">(Optional)</span></label>
@@ -2933,6 +3006,10 @@ include '../../includes/navbar.php';
                                             <span class="review-chip" data-summary-chip="generated_complexity"><i class="fas fa-layer-group"></i><span data-summary-field="generated_complexity">Low</span> complexity</span>
                                         </div>
                                         <div class="review-key-grid">
+                                            <div class="review-key-item">
+                                                <span class="review-key-label">Project type</span>
+                                                <span class="review-key-value review-summary-value" data-summary-field="project_type">Not provided</span>
+                                            </div>
                                             <div class="review-key-item review-key-item--wide">
                                                 <span class="review-key-label">Delivery timeline</span>
                                                 <span class="review-key-value review-summary-value" data-summary-field="timeline">Not set</span>
@@ -2944,6 +3021,14 @@ include '../../includes/navbar.php';
                                             <div class="review-key-item">
                                                 <span class="review-key-label">Scope size</span>
                                                 <span class="review-key-value review-summary-value" data-summary-field="requested_feature_count">0 features</span>
+                                            </div>
+                                            <div class="review-key-item review-key-item--wide">
+                                                <span class="review-key-label">Priority price preview</span>
+                                                <span class="review-key-value review-summary-value" data-summary-field="priority_markup_detail">Not provided</span>
+                                            </div>
+                                            <div class="review-key-item review-key-item--wide">
+                                                <span class="review-key-label">Complexity reason</span>
+                                                <span class="review-key-value review-summary-value" data-summary-field="complexity_reason">Not provided</span>
                                             </div>
                                             <div class="review-key-item review-key-item--wide">
                                                 <span class="review-key-label">Attachments</span>
@@ -3347,6 +3432,7 @@ const addClientModalElement = document.getElementById('addClientModal');
 const addClientForm = document.getElementById('addClientForm');
 
 if (addClientModalElement && addClientForm) {
+    const projectTemplates = <?php echo json_encode($projectTemplates, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     const addClientDraftsKey = 'erniPms.sales.addClientDrafts.v1';
     const legacyDraftKeys = [
         'erniPms.sales.addClientDraft.v2',
@@ -3384,6 +3470,68 @@ if (addClientModalElement && addClientForm) {
     let activeDraftLoaded = false;
     let activeDraftId = null;
     let isSubmittingClient = false;
+    let appliedProjectTemplateType = '';
+    let recommendedFeatureTitles = new Set();
+    let templateApplyMessage = '';
+    let autoBudgetBase = null;
+    let autoBudgetFromTemplate = false;
+
+    function normalizeTemplateType(value) {
+        return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    }
+
+    function formatPeso(value) {
+        return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value || 0));
+    }
+
+    function findProjectTemplate(value = getFormValue('project_type')) {
+        const needle = normalizeTemplateType(value);
+        if (!needle) {
+            return null;
+        }
+
+        const exactMatch = projectTemplates.find((template) => normalizeTemplateType(template.project_type) === needle);
+        if (exactMatch) {
+            return exactMatch;
+        }
+
+        const genericTokens = new Set(['system', 'app', 'application', 'management', 'platform', 'website', 'portal']);
+        const needleTokens = needle.split(' ').filter(Boolean);
+        const distinctiveNeedleTokens = needleTokens.filter((token) => !genericTokens.has(token));
+        if (distinctiveNeedleTokens.length === 0) {
+            return null;
+        }
+
+        const scoredMatches = projectTemplates
+            .map((template) => {
+                const candidate = normalizeTemplateType(template.project_type);
+                const candidateTokens = candidate.split(' ').filter(Boolean);
+                const sharedTokens = needleTokens.filter((token) => candidateTokens.includes(token));
+                const sharedDistinctiveTokens = distinctiveNeedleTokens.filter((token) => candidateTokens.includes(token));
+                const directMatch = candidate.includes(needle) || needle.includes(candidate);
+                const score = (sharedTokens.length / Math.max(needleTokens.length, candidateTokens.length))
+                    + (sharedDistinctiveTokens.length * 0.5)
+                    + (directMatch ? 0.5 : 0);
+
+                return { template, score, sharedDistinctiveCount: sharedDistinctiveTokens.length };
+            })
+            .filter((match) => match.sharedDistinctiveCount > 0 && match.score >= 0.65)
+            .sort((a, b) => b.score - a.score);
+
+        if (scoredMatches.length === 0) {
+            return null;
+        }
+
+        if (scoredMatches.length > 1 && scoredMatches[0].score === scoredMatches[1].score) {
+            return null;
+        }
+
+        return scoredMatches[0].template;
+    }
+
+    function isRecommendedFeature(value) {
+        return recommendedFeatureTitles.has(normalizeTemplateType(value));
+    }
 
     function getDraftData() {
         syncRequestedFeaturesField();
@@ -3410,6 +3558,7 @@ if (addClientModalElement && addClientForm) {
         const input = item.querySelector('[data-requested-feature-input]');
         if (input) {
             input.value = value;
+            input.dataset.templateRecommended = isRecommendedFeature(value) ? '1' : '0';
         }
 
         return item;
@@ -3431,10 +3580,179 @@ if (addClientModalElement && addClientForm) {
         }
     }
 
-    function calculateGeneratedComplexity() {
-        const featureCount = getRequestedFeatureValues().length;
+    function addDaysToDateInput(dateValue, daysToAdd) {
+        const baseDate = dateValue ? new Date(dateValue + 'T00:00:00') : new Date();
+        if (Number.isNaN(baseDate.getTime())) {
+            return '';
+        }
+        baseDate.setDate(baseDate.getDate() + Math.max(0, Number(daysToAdd) || 0));
+        const year = baseDate.getFullYear();
+        const month = String(baseDate.getMonth() + 1).padStart(2, '0');
+        const day = String(baseDate.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function applyProjectTemplate(template, options = {}) {
+        if (!template) {
+            return;
+        }
+
+        const force = Boolean(options.force);
+        const showSuccess = Boolean(options.showSuccess);
+        appliedProjectTemplateType = normalizeTemplateType(template.project_type);
+        recommendedFeatureTitles = new Set((template.feature_items || []).map((feature) => normalizeTemplateType(feature)));
+
+        if (addClientForm.elements.project_type) {
+            addClientForm.elements.project_type.value = template.project_type || '';
+        }
+        if (addClientForm.elements.project_description && (force || !getFormValue('project_description'))) {
+            addClientForm.elements.project_description.value = template.project_description || `${template.project_type} based on the ${template.methodology || 'recommended'} project template.`;
+        }
+        if (Array.isArray(template.feature_items) && template.feature_items.length > 0) {
+            renderRequestedFeatureRows(template.feature_items.join("\n"));
+        }
+        if (addClientForm.elements.sales_budget && Number(template.budget_min || 0) > 0 && (force || !getFormValue('sales_budget') || autoBudgetFromTemplate)) {
+            autoBudgetBase = Number(template.budget_min || 0);
+            autoBudgetFromTemplate = true;
+            syncAutoBudgetWithPriority();
+        }
+        if (addClientForm.elements.timeline_start && (force || !getFormValue('timeline_start'))) {
+            addClientForm.elements.timeline_start.value = addDaysToDateInput('', 0);
+        }
+        if (addClientForm.elements.timeline_end && Number(template.duration_max_weeks || 0) > 0 && (force || !getFormValue('timeline_end'))) {
+            const startValue = getFormValue('timeline_start') || addDaysToDateInput('', 0);
+            addClientForm.elements.timeline_end.value = addDaysToDateInput(startValue, Number(template.duration_max_weeks || 0) * 7);
+        }
+        if (addClientForm.elements.additional_requirements && (force || !getFormValue('additional_requirements'))) {
+            addClientForm.elements.additional_requirements.value = [
+                template.functional_requirements ? 'Functional requirements: ' + template.functional_requirements : '',
+                template.non_functional_requirements ? 'Non-functional requirements: ' + template.non_functional_requirements : '',
+                template.integrations ? 'Suggested integrations: ' + template.integrations : '',
+                template.third_party_services ? 'Third-party services/APIs: ' + template.third_party_services : '',
+                template.payment_terms ? 'Suggested payment terms: ' + template.payment_terms : ''
+            ].filter(Boolean).join("\n");
+        }
+        if (addClientForm.elements.sales_notes && (force || !getFormValue('sales_notes'))) {
+            addClientForm.elements.sales_notes.value = [
+                template.sales_notes || '',
+                template.suggested_milestones ? 'Suggested milestones: ' + template.suggested_milestones : '',
+                template.methodology ? 'Recommended methodology: ' + template.methodology : '',
+                template.tech_stack ? 'Architect recommendation preview: ' + template.tech_stack : '',
+                template.team_composition ? 'Suggested team: ' + template.team_composition : '',
+                template.maintenance_support ? 'Maintenance/support: ' + template.maintenance_support : ''
+            ].filter(Boolean).join("\n");
+        }
+        if (showSuccess) {
+            const priorityMarkup = getPriorityMarkup();
+            const baseBudget = Number(template.budget_min || 0);
+            const adjustedBudget = baseBudget > 0 ? baseBudget * (1 + priorityMarkup.rate) : 0;
+            templateApplyMessage = baseBudget > 0
+                ? `${template.project_type} template applied. Budget set to ${formatPeso(adjustedBudget)} from ${formatPeso(baseBudget)} base plus ${priorityMarkup.label.toLowerCase()} priority.`
+                : `${template.project_type} template applied.`;
+        }
+
+        formTouched = true;
+        hideUnsavedClosePanel();
+        syncRequestedFeaturesField();
+        updateGeneratedComplexity();
+        updateTemplateRecommendation();
+        updateDraftStatus(false);
+    }
+
+    function updateTemplateRecommendation() {
+        const panel = addClientForm.querySelector('[data-template-recommendation]');
+        if (!panel) {
+            return;
+        }
+
+        const projectType = getFormValue('project_type');
+        const template = findProjectTemplate(projectType);
+        if (!projectType) {
+            templateApplyMessage = '';
+            panel.hidden = false;
+            panel.innerHTML = '<strong>Project template search</strong><span>Enter a project type to search existing templates. New project types can still be planned manually.</span>';
+            return;
+        }
+        if (!template) {
+            templateApplyMessage = '';
+            panel.hidden = false;
+            panel.innerHTML = `<strong>New project type</strong><span>No saved template matches "${escapeHtml(projectType)}". Complete the intake manually; after finalization, this project can be learned as a new template.</span>`;
+            return;
+        }
+
+        const templateType = normalizeTemplateType(template.project_type);
+        if (normalizeTemplateType(projectType) === templateType && appliedProjectTemplateType !== templateType) {
+            applyProjectTemplate(template);
+            return;
+        }
+
+        const budgetRange = `${new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(template.budget_min || 0))} - ${new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(template.budget_max || 0))}`;
+        const appliedStatus = templateApplyMessage && appliedProjectTemplateType === templateType
+            ? `<span class="template-apply-status"><i class="fas fa-circle-check"></i>${escapeHtml(templateApplyMessage)}</span>`
+            : '';
+        panel.hidden = false;
+        panel.innerHTML = `
+            <strong>Recommended template: ${escapeHtml(template.project_type)}</strong>
+            <span>${escapeHtml(template.duration_label || 'Timeline TBD')} | ${escapeHtml(budgetRange)} | ${escapeHtml(template.methodology || 'Methodology TBD')} | ${escapeHtml(template.complexity_level || 'medium')} complexity</span>
+            <span>Features: ${escapeHtml(template.core_features || 'No feature list saved yet.')}</span>
+            <span>Architect preview: ${escapeHtml(template.tech_stack || 'No stack saved yet.')} | ${escapeHtml(template.team_composition || 'No team saved yet.')}</span>
+            <span>${escapeHtml(template.payment_terms || 'Payment terms can be finalized by Sales.')}</span>
+            ${appliedStatus}
+            <button type="button" class="btn btn-outline-primary btn-sm" data-apply-project-template>Apply template suggestions</button>
+        `;
+    }
+
+    function getPriorityMarkup(priorityValue = getFormValue('priority') || 'medium') {
+        const normalized = String(priorityValue || 'medium').toLowerCase();
+        if (normalized === 'low') {
+            return {
+                label: 'Low',
+                percent: 0,
+                rate: 0,
+                reason: 'Standard development process with no urgency premium.'
+            };
+        }
+        if (normalized === 'high') {
+            return {
+                label: 'High',
+                percent: 25,
+                rate: 0.25,
+                reason: 'Urgent or critical features require extra effort, overtime, and more experienced developers.'
+            };
+        }
+        if (normalized === 'critical') {
+            return {
+                label: 'Critical',
+                percent: 30,
+                rate: 0.30,
+                reason: 'Critical delivery pressure uses the top priority premium for overtime, senior oversight, and rapid turnaround.'
+            };
+        }
+        return {
+            label: 'Medium',
+            percent: 10,
+            rate: 0.10,
+            reason: 'Requires more planning, testing, and attention than the standard development process.'
+        };
+    }
+
+    function syncAutoBudgetWithPriority() {
+        const budgetField = addClientForm.elements.sales_budget;
+        if (!budgetField || !autoBudgetFromTemplate || !Number.isFinite(Number(autoBudgetBase)) || Number(autoBudgetBase) <= 0) {
+            return;
+        }
+
+        const priorityMarkup = getPriorityMarkup();
+        const adjustedBudget = Number(autoBudgetBase) * (1 + priorityMarkup.rate);
+        budgetField.value = adjustedBudget.toFixed(2);
+    }
+
+    function getComplexityAssessment() {
         const startValue = addClientForm.elements.timeline_start?.value || '';
         const endValue = addClientForm.elements.timeline_end?.value || '';
+        const budgetValue = String(addClientForm.elements.sales_budget?.value || '').replace(/,/g, '').trim();
+        const priorityValue = String(addClientForm.elements.priority?.value || 'medium').toLowerCase();
+        const budget = Number(budgetValue);
         let days = 0;
 
         if (startValue && endValue) {
@@ -3445,15 +3763,78 @@ if (addClientModalElement && addClientForm) {
             }
         }
 
-        if (featureCount >= 20 || (featureCount >= 12 && days > 120)) return 'Enterprise';
-        if (featureCount >= 12 || days > 90) return 'High';
-        if (featureCount >= 6 || days > 30) return 'Medium';
-        return 'Low';
+        const budgetBand = Number.isFinite(budget) && budget >= 500000
+            ? (budget <= 1500000 ? 'medium' : 'high')
+            : 'low';
+        const timelineBand = days > 0 && days <= 30
+            ? 'short'
+            : (days > 0 && days <= 90 ? 'moderate' : 'long');
+        const score = (
+            ({ low: 0, medium: 1, high: 2 }[budgetBand] ?? 1)
+            + ({ long: 0, moderate: 1, short: 2 }[timelineBand] ?? 1)
+            + ({ low: 0, medium: 1, high: 2, critical: 2 }[priorityValue] ?? 1)
+        );
+        const level = score >= 4 ? 'High' : (score >= 2 ? 'Medium' : 'Low');
+        const budgetLabel = ({ low: 'Low budget', medium: 'Medium budget', high: 'High budget' }[budgetBand] || 'Medium budget');
+        const timelineLabel = ({ long: 'Long timeline', moderate: 'Moderate timeline', short: 'Short timeline' }[timelineBand] || 'Moderate timeline');
+        const priorityLabel = getPriorityMarkup(priorityValue).label + ' priority';
+        const reason = `${level} complexity because the intake combines ${budgetLabel.toLowerCase()}, ${timelineLabel.toLowerCase()}, and ${priorityLabel.toLowerCase()} for a score of ${score}/6. ${
+            level === 'High'
+                ? 'Tighter deadline pressure, higher budget scope, or urgent priority increases delivery coordination and effort.'
+                : (level === 'Medium'
+                    ? 'Some planning pressure exists, but the intake is not in the highest risk range.'
+                    : 'Budget, timeline, and priority are in the lighter range, so standard planning should be enough.')
+        }`;
+
+        return { level, reason, budgetBand, timelineBand, score, days };
+    }
+
+    function calculateGeneratedComplexity() {
+        return getComplexityAssessment().level;
     }
 
     function updateGeneratedComplexity() {
+        syncAutoBudgetWithPriority();
+        const assessment = getComplexityAssessment();
+        const priorityMarkup = getPriorityMarkup();
+        const budgetRaw = String(addClientForm.elements.sales_budget?.value || '').replace(/,/g, '').trim();
+        const budget = Number(budgetRaw);
+        const hasBudget = budgetRaw !== '' && Number.isFinite(budget);
+        const baseBudget = autoBudgetFromTemplate && Number.isFinite(Number(autoBudgetBase)) && Number(autoBudgetBase) > 0
+            ? Number(autoBudgetBase)
+            : budget;
+        const previewAmount = hasBudget ? baseBudget * priorityMarkup.rate : 0;
+        const adjustedBudget = hasBudget ? baseBudget + previewAmount : 0;
         if (generatedComplexityField) {
-            generatedComplexityField.value = calculateGeneratedComplexity();
+            generatedComplexityField.value = assessment.level;
+        }
+
+        const complexityReason = addClientForm.querySelector('[data-complexity-reason]');
+        if (complexityReason) {
+            complexityReason.innerHTML = `<strong>${escapeHtml(assessment.level)} complexity</strong><span>${escapeHtml(assessment.reason)}</span>`;
+        }
+
+        const priorityMarkupPreview = addClientForm.querySelector('[data-priority-markup-preview]');
+        if (priorityMarkupPreview) {
+            priorityMarkupPreview.innerHTML = `<strong>${escapeHtml(priorityMarkup.label)} priority adds +${priorityMarkup.percent}%</strong><span>${escapeHtml(priorityMarkup.reason)}</span>`;
+        }
+
+        const priorityPricePreview = addClientForm.querySelector('[data-priority-price-preview]');
+        if (priorityPricePreview) {
+            const amountText = hasBudget
+                ? formatPeso(previewAmount)
+                : 'Enter a budget to calculate the amount';
+            const totalText = hasBudget ? ` Adjusted intake budget: ${formatPeso(adjustedBudget)}.` : '';
+            priorityPricePreview.innerHTML = `<strong>Priority price preview: ${escapeHtml(amountText)}</strong><span>${escapeHtml(priorityMarkup.label)} priority adds ${priorityMarkup.percent}% to the base budget during intake.${escapeHtml(totalText)} Final pricing is recalculated later from the Expert project cost estimate.</span>`;
+        }
+
+        const budgetHelper = addClientForm.querySelector('[data-budget-helper]');
+        if (budgetHelper) {
+            if (autoBudgetFromTemplate && hasBudget) {
+                budgetHelper.textContent = `Auto-adjusted from template base ${formatPeso(baseBudget)} plus ${priorityMarkup.label.toLowerCase()} priority markup ${formatPeso(previewAmount)}. You can still type a custom budget.`;
+            } else {
+                budgetHelper.textContent = 'Required as the decision insight budget baseline.';
+            }
         }
     }
 
@@ -3685,6 +4066,7 @@ if (addClientModalElement && addClientForm) {
             draftStatus.textContent = hasDraft ? 'Draft saved on this browser' : (formTouched ? 'Unsaved changes' : 'Draft not started');
         }
         updateGeneratedComplexity();
+        updateTemplateRecommendation();
         updateSaveDraftButton();
         renderDraftList();
     }
@@ -3749,10 +4131,15 @@ if (addClientModalElement && addClientForm) {
         formTouched = false;
         activeDraftLoaded = true;
         activeDraftId = draftData.id;
+        autoBudgetBase = null;
+        autoBudgetFromTemplate = false;
         if (draftIdField) {
             draftIdField.value = activeDraftId;
         }
         hideUnsavedClosePanel();
+        appliedProjectTemplateType = normalizeTemplateType(getFormValue('project_type'));
+        recommendedFeatureTitles = new Set();
+        templateApplyMessage = '';
         updateDraftStatus(true);
     }
 
@@ -3766,6 +4153,11 @@ if (addClientModalElement && addClientForm) {
         if (draftIdField) {
             draftIdField.value = '';
         }
+        appliedProjectTemplateType = '';
+        recommendedFeatureTitles = new Set();
+        templateApplyMessage = '';
+        autoBudgetBase = null;
+        autoBudgetFromTemplate = false;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
         showClientStep(0);
@@ -3781,6 +4173,11 @@ if (addClientModalElement && addClientForm) {
         if (draftIdField) {
             draftIdField.value = '';
         }
+        appliedProjectTemplateType = '';
+        recommendedFeatureTitles = new Set();
+        templateApplyMessage = '';
+        autoBudgetBase = null;
+        autoBudgetFromTemplate = false;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
         showClientStep(0);
@@ -3883,6 +4280,18 @@ if (addClientModalElement && addClientForm) {
         const attachmentNames = Array.from(attachmentInput?.files || [])
             .map((file) => file.name)
             .filter(Boolean);
+        const priorityMarkup = getPriorityMarkup();
+        const complexityAssessment = getComplexityAssessment();
+        const budgetRaw = String(getFormValue('sales_budget') || '').replace(/,/g, '').trim();
+        const budget = Number(budgetRaw);
+        const hasBudget = budgetRaw !== '' && Number.isFinite(budget);
+        const summaryBaseBudget = autoBudgetFromTemplate && Number.isFinite(Number(autoBudgetBase)) && Number(autoBudgetBase) > 0
+            ? Number(autoBudgetBase)
+            : budget;
+        const priorityMarkupAmount = hasBudget ? summaryBaseBudget * priorityMarkup.rate : 0;
+        const priorityMarkupDetail = hasBudget
+            ? `${priorityMarkup.label} priority adds ${priorityMarkup.percent}% (${formatPeso(priorityMarkupAmount)}) based on a ${formatPeso(summaryBaseBudget)} base budget. ${priorityMarkup.reason}`
+            : `${priorityMarkup.label} priority adds ${priorityMarkup.percent}%. ${priorityMarkup.reason}`;
         const summaryData = {
             name: getFormValue('name'),
             contact_person: getFormValue('contact_person'),
@@ -3890,10 +4299,13 @@ if (addClientModalElement && addClientForm) {
             phone: getFormValue('phone'),
             address: getFormValue('address'),
             project_name: getFormValue('project_name'),
+            project_type: getFormValue('project_type'),
             timeline: buildTimelineSummary(),
             sales_budget: formatBudget(getFormValue('sales_budget')),
             priority: getFormValue('priority') || 'medium',
-            generated_complexity: generatedComplexityField ? generatedComplexityField.value : calculateGeneratedComplexity(),
+            generated_complexity: complexityAssessment.level,
+            priority_markup_detail: priorityMarkupDetail,
+            complexity_reason: complexityAssessment.reason,
             attachments: attachmentNames.join("\n"),
             requested_feature_count: `${requestedFeatures.length} feature${requestedFeatures.length === 1 ? '' : 's'}`,
             project_description: getFormValue('project_description'),
@@ -4041,7 +4453,21 @@ if (addClientModalElement && addClientForm) {
         showUnsavedClosePanel();
     }
 
-    addClientForm.addEventListener('input', () => {
+    addClientForm.addEventListener('input', (event) => {
+        if (event.target?.name === 'project_type') {
+            if (autoBudgetFromTemplate && addClientForm.elements.sales_budget) {
+                addClientForm.elements.sales_budget.value = '';
+            }
+            appliedProjectTemplateType = '';
+            recommendedFeatureTitles = new Set();
+            templateApplyMessage = '';
+            autoBudgetBase = null;
+            autoBudgetFromTemplate = false;
+        }
+        if (event.target?.name === 'sales_budget') {
+            autoBudgetBase = null;
+            autoBudgetFromTemplate = false;
+        }
         formTouched = true;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
@@ -4051,6 +4477,15 @@ if (addClientModalElement && addClientForm) {
         formTouched = true;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
+    });
+
+    addClientForm.addEventListener('click', (event) => {
+        const applyButton = event.target.closest('[data-apply-project-template]');
+        if (!applyButton) {
+            return;
+        }
+
+        applyProjectTemplate(findProjectTemplate(), { force: true, showSuccess: true });
     });
 
     if (requestedFeatureList) {
@@ -4072,11 +4507,20 @@ if (addClientModalElement && addClientForm) {
             if (!item) {
                 return;
             }
+            const input = item.querySelector('[data-requested-feature-input]');
+            const featureName = String(input?.value || '').trim();
+            if (featureName !== '' && isRecommendedFeature(featureName)) {
+                const shouldRemove = window.confirm(`The selected project template recommends adding "${featureName}" based on similar completed projects. Are you sure you want to remove or skip this recommendation?`);
+                if (!shouldRemove) {
+                    return;
+                }
+                recommendedFeatureTitles.delete(normalizeTemplateType(featureName));
+            }
 
             if (items.length <= 1) {
-                const input = item.querySelector('[data-requested-feature-input]');
                 if (input) {
                     input.value = '';
+                    input.dataset.templateRecommended = '0';
                 }
             } else {
                 item.remove();

@@ -2,6 +2,7 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/methodology-roadmap.php';
 require_once '../../includes/project-workflow.php';
+require_once '../../includes/project-template.php';
 
 requireRole(['sales', 'architect', 'sul', 'qa', 'expert', 'developer']);
 
@@ -458,10 +459,30 @@ function roadmapGetProject(mysqli|PgsqlMysqliCompatConnection $conn, int $projec
 
 roadmapEnsureSchema($conn);
 methodologyRoadmapEnsureSchema($conn);
+projectTemplateEnsureSchema($conn);
 
 $canEditArchitecture = $role === 'architect';
 $canEditExpertInput = $role === 'expert';
 $methodologyTemplates = methodologyRoadmapTemplates();
+
+function roadmapMethodologyTemplateKeyFromLabel(array $templates, string $label): string
+{
+    $target = projectTemplateNormalizeType(str_replace(['_', '-'], ' ', $label));
+    if ($target === '') {
+        return '';
+    }
+
+    foreach ($templates as $templateKey => $template) {
+        $keyCandidate = projectTemplateNormalizeType(str_replace(['_', '-'], ' ', (string) $templateKey));
+        $nameCandidate = projectTemplateNormalizeType((string) ($template['name'] ?? ''));
+        if ($target === $keyCandidate || $target === $nameCandidate) {
+            return (string) $templateKey;
+        }
+    }
+
+    return '';
+}
+
 $projects = [];
 $requestedProjectId = isset($_GET['project_id']) ? (int) $_GET['project_id'] : 0;
 $accessClause = roadmapProjectAccessClause($conn, $user, 'p');
@@ -499,6 +520,21 @@ if (!$selectedProject && count($projects) > 0) {
     $selectedProjectId = (int) $projects[0]['id'];
     $selectedProject = roadmapGetProject($conn, $selectedProjectId, $user);
 }
+$selectedProjectTemplate = null;
+$suggestedMethodologyLabel = '';
+$suggestedMethodologyKey = '';
+if ($selectedProject) {
+    $selectedProjectTemplate = !empty($selectedProject['project_template_snapshot'])
+        ? json_decode((string) $selectedProject['project_template_snapshot'], true)
+        : null;
+    if (!is_array($selectedProjectTemplate)) {
+        $selectedProjectTemplate = projectTemplateFindByType($conn, (string) ($selectedProject['project_type'] ?? ''));
+    }
+    if (is_array($selectedProjectTemplate)) {
+        $suggestedMethodologyLabel = trim((string) ($selectedProjectTemplate['methodology'] ?? ''));
+        $suggestedMethodologyKey = roadmapMethodologyTemplateKeyFromLabel($methodologyTemplates, $suggestedMethodologyLabel);
+    }
+}
 $projectDepartments = $selectedProject
     ? projectWorkflowSelectedDepartments($conn, $selectedProjectId, $selectedProject)
     : [];
@@ -506,6 +542,10 @@ $projectDepartmentAllocations = $selectedProject
     ? projectWorkflowDepartmentAllocations($conn, $selectedProjectId, $selectedProject)
     : [];
 $projectDeveloperCapacity = array_sum($projectDepartmentAllocations);
+$documentGateMessage = '';
+if ($selectedProject && $canEditArchitecture && $projectDepartments === []) {
+    $documentGateMessage = 'Select the departments included in this project before uploading architecture documents.';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $postedProjectId = (int) ($_POST['project_id'] ?? 0);
@@ -2510,6 +2550,14 @@ include '../../includes/navbar.php';
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss error message"></button>
         </div>
     <?php endif; ?>
+    <div class="alert roadmap-feedback roadmap-feedback--error d-none" role="alert" id="roadmapInlineError">
+        <span class="roadmap-feedback__icon"><i class="fas fa-circle-exclamation" aria-hidden="true"></i></span>
+        <div class="roadmap-feedback__content">
+            <strong>Needs attention</strong>
+            <span></span>
+        </div>
+        <button type="button" class="btn-close" aria-label="Dismiss error message" data-dismiss-inline-error></button>
+    </div>
 
     <?php if ($selectedProject && $canEditArchitecture): ?>
         <nav aria-label="breadcrumb">
@@ -2591,7 +2639,12 @@ include '../../includes/navbar.php';
                         <button class="btn btn-primary" type="button" onclick="openPhaseModal()">
                             <i class="fas fa-plus me-2" aria-hidden="true"></i> Add Phase
                         </button>
-                        <a class="btn btn-outline-primary" href="<?php echo BASE_URL; ?>modules/architect/upload-diagram.php?id=<?php echo (int) $selectedProjectId; ?>">
+                        <a
+                            class="btn btn-outline-primary"
+                            href="<?php echo BASE_URL; ?>modules/architect/upload-diagram.php?id=<?php echo (int) $selectedProjectId; ?>"
+                            data-continue-documents
+                            data-block-message="<?php echo htmlspecialchars($documentGateMessage); ?>"
+                        >
                             Continue to Documents <i class="fas fa-arrow-right ms-2" aria-hidden="true"></i>
                         </a>
                     </div>
@@ -2618,6 +2671,25 @@ include '../../includes/navbar.php';
         <?php endif; ?>
 
         <?php if ($canEditArchitecture && $selectedProject): ?>
+            <?php if (is_array($selectedProjectTemplate) && $suggestedMethodologyLabel !== ''): ?>
+                <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-3 mt-2 mb-0">
+                    <div>
+                        <strong>Suggested methodology:</strong>
+                        <?php echo htmlspecialchars($suggestedMethodologyLabel); ?>
+                        <span class="text-muted ms-2">from <?php echo htmlspecialchars((string) ($selectedProjectTemplate['project_type'] ?? 'the matched project template')); ?></span>
+                    </div>
+                    <?php if ($suggestedMethodologyKey !== ''): ?>
+                        <button
+                            class="btn btn-outline-primary btn-sm"
+                            type="button"
+                            id="acceptSuggestedMethodology"
+                            data-methodology-key="<?php echo htmlspecialchars($suggestedMethodologyKey); ?>"
+                        >
+                            <i class="fas fa-check me-1"></i> Accept Suggested Methodology
+                        </button>
+                    <?php endif; ?>
+                </div>
+            <?php endif; ?>
             <form method="POST" id="methodologyTemplateForm" class="row g-3 align-items-end mt-2" data-confirm-skip="1" data-generic-draft-disabled="1" data-app-loading data-loading-title="Applying template" data-loading-text="Generating the methodology phases now.">
                 <input type="hidden" name="apply_template" value="1">
                 <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
@@ -3393,12 +3465,52 @@ const deleteTaskForm = document.getElementById('deleteTaskForm');
 const deleteTaskButton = document.getElementById('deleteTaskButton');
 const methodologyTemplateForm = document.getElementById('methodologyTemplateForm');
 const replaceExistingTemplate = document.getElementById('replaceExistingTemplate');
+const acceptSuggestedMethodology = document.getElementById('acceptSuggestedMethodology');
+const continueDocumentsLink = document.querySelector('[data-continue-documents]');
+const roadmapInlineError = document.getElementById('roadmapInlineError');
 const taskDepartmentToggles = Array.from(document.querySelectorAll('.task-department-toggle'));
 const bulkPlaceFeaturesInput = document.getElementById('bulkPlaceFeatures');
 const bulkFeaturePickerWrap = document.getElementById('bulkFeaturePickerWrap');
 const bulkWorkflowTaskInputs = Array.from(document.querySelectorAll('.bulk-workflow-task-checkbox'));
 const bulkSelectAllFeatures = document.getElementById('bulkSelectAllFeatures');
 const bulkClearFeatures = document.getElementById('bulkClearFeatures');
+
+function showRoadmapInlineError(message) {
+    if (!roadmapInlineError) {
+        window.alert(message);
+        return;
+    }
+
+    const messageElement = roadmapInlineError.querySelector('.roadmap-feedback__content span');
+    if (messageElement) messageElement.textContent = message;
+    roadmapInlineError.classList.remove('d-none');
+    roadmapInlineError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+roadmapInlineError?.querySelector('[data-dismiss-inline-error]')?.addEventListener('click', () => {
+    roadmapInlineError.classList.add('d-none');
+});
+
+continueDocumentsLink?.addEventListener('click', (event) => {
+    const blockMessage = String(continueDocumentsLink.dataset.blockMessage || '').trim();
+    if (blockMessage === '') {
+        return;
+    }
+
+    event.preventDefault();
+    showRoadmapInlineError(blockMessage);
+});
+
+acceptSuggestedMethodology?.addEventListener('click', () => {
+    const templateKey = acceptSuggestedMethodology.dataset.methodologyKey || '';
+    const methodologySelect = methodologyTemplateForm?.querySelector('select[name="methodology_template"]');
+    if (!templateKey || !methodologyTemplateForm || !methodologySelect) {
+        return;
+    }
+
+    methodologySelect.value = templateKey;
+    methodologyTemplateForm.requestSubmit();
+});
 
 methodologyTemplateForm?.addEventListener('submit', async (event) => {
     if (!replaceExistingTemplate?.checked || methodologyTemplateForm.dataset.replaceConfirmed === '1') {

@@ -770,7 +770,7 @@ $reviewTasks = $conn->query("
 ");
 
 $projectEstimationReviews = $conn->query("
-    SELECT e.*, p.name AS project_name, p.sales_budget, c.name AS client_name, u.full_name AS expert_name
+    SELECT e.*, p.name AS project_name, p.sales_budget, p.priority, c.name AS client_name, u.full_name AS expert_name
     FROM expert_project_estimations e
     JOIN projects p ON p.id = e.project_id
     JOIN clients c ON c.id = p.client_id
@@ -4679,7 +4679,12 @@ include '../../includes/navbar.php';
                             </div>
                             <div class="review-queue-list">
                         <?php while($estimate = $projectEstimationReviews->fetch_assoc()): ?>
-                        <?php $projectReviewPanelId = 'projectEstimationReview' . (int) $estimate['id']; ?>
+                        <?php
+                            $projectReviewPanelId = 'projectEstimationReview' . (int) $estimate['id'];
+                            $projectBaseCost = (float) $estimate['total_developer_cost'] + (float) $estimate['total_technology_stack_cost'] + (float) $estimate['additional_costs'];
+                            $projectPriorityMarkup = projectEstimationPriorityMarkup((string) ($estimate['priority'] ?? 'medium'));
+                            $projectPriorityMarkupAmount = $projectBaseCost * (float) $projectPriorityMarkup['rate'];
+                        ?>
                         <article class="project-review-card" data-project-review-card>
                             <button type="button" class="project-review-toggle" aria-expanded="false" aria-controls="<?php echo $projectReviewPanelId; ?>">
                                 <span class="project-review-identity">
@@ -4710,6 +4715,15 @@ include '../../includes/navbar.php';
                                     <div class="project-review-cost">
                                         <span>Technology stack</span>
                                         <strong><?php echo projectEstimationPeso((float) $estimate['total_technology_stack_cost']); ?></strong>
+                                    </div>
+                                    <div class="project-review-cost">
+                                        <span>Base project cost</span>
+                                        <strong><?php echo projectEstimationPeso($projectBaseCost); ?></strong>
+                                    </div>
+                                    <div class="project-review-cost">
+                                        <span>Priority markup (<?php echo htmlspecialchars((string) $projectPriorityMarkup['percent']); ?>%)</span>
+                                        <strong><?php echo projectEstimationPeso($projectPriorityMarkupAmount); ?></strong>
+                                        <small class="text-muted d-block mt-1"><?php echo htmlspecialchars((string) $projectPriorityMarkup['reason']); ?></small>
                                     </div>
                                     <div class="project-review-cost is-primary">
                                         <span>Overall estimate</span>
