@@ -118,6 +118,104 @@ function salesClientsProjectComplexityValue(string $complexity): string
     return $value;
 }
 
+function salesClientsFormatProjectStartEmailDate(?string $date, ?string $time = null): string
+{
+    $date = trim((string) $date);
+    if ($date === '') {
+        return 'Not set';
+    }
+
+    $parsedDate = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (!$parsedDate || $parsedDate->format('Y-m-d') !== $date) {
+        return $date;
+    }
+
+    $label = $parsedDate->format('F j, Y');
+    $time = trim((string) $time);
+    if ($time !== '') {
+        $parsedTime = DateTimeImmutable::createFromFormat('H:i:s', $time)
+            ?: DateTimeImmutable::createFromFormat('H:i', $time);
+        if ($parsedTime) {
+            $label .= ' at ' . $parsedTime->format('g:i A');
+        }
+    }
+
+    return $label;
+}
+
+function salesClientsSendProjectStartingEmail(
+    string $clientEmail,
+    string $contactPerson,
+    string $clientName,
+    string $projectName,
+    string $projectType,
+    ?string $timelineStart,
+    ?string $timelineStartTime,
+    ?string $timelineEnd,
+    ?string $timelineEndTime,
+    ?float $salesBudget
+): array {
+    $clientEmail = trim($clientEmail);
+    if (!filter_var($clientEmail, FILTER_VALIDATE_EMAIL)) {
+        return ['success' => false, 'error' => 'Client email is missing or invalid.'];
+    }
+
+    $recipientName = trim($contactPerson) !== '' ? trim($contactPerson) : trim($clientName);
+    if ($recipientName === '') {
+        $recipientName = 'Client';
+    }
+
+    $projectLabel = trim($projectName) !== '' ? trim($projectName) : 'your project';
+    $details = [
+        'Project' => $projectLabel,
+        'Project Type' => trim($projectType) !== '' ? trim($projectType) : 'Not specified',
+        'Start Date' => salesClientsFormatProjectStartEmailDate($timelineStart, $timelineStartTime),
+        'Target Deadline' => salesClientsFormatProjectStartEmailDate($timelineEnd, $timelineEndTime),
+    ];
+
+    if ($salesBudget !== null) {
+        $details['Estimated Budget'] = 'PHP ' . number_format($salesBudget, 2);
+    }
+
+    $safeRecipientName = htmlspecialchars($recipientName, ENT_QUOTES, 'UTF-8');
+    $safeProjectLabel = htmlspecialchars($projectLabel, ENT_QUOTES, 'UTF-8');
+    $detailRows = '';
+    foreach ($details as $label => $value) {
+        $detailRows .= '<tr>'
+            . '<td style="padding:8px 10px;border-bottom:1px solid #e5edf5;color:#64748b;width:150px;">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</td>'
+            . '<td style="padding:8px 10px;border-bottom:1px solid #e5edf5;color:#0f172a;font-weight:600;">' . htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8') . '</td>'
+            . '</tr>';
+    }
+
+    $subject = 'Your ERNI project is starting: ' . $projectLabel;
+    $htmlBody = '<div style="font-family:Arial,sans-serif;max-width:660px;margin:0 auto;padding:24px;background:#f5f7fb;color:#1f2937;">'
+        . '<div style="background:#ffffff;border:1px solid #dbe3ef;border-radius:16px;padding:24px;">'
+        . '<h2 style="margin:0 0 12px;color:#1f6392;">Your project is starting</h2>'
+        . '<p style="margin:0 0 12px;line-height:1.6;">Good day ' . $safeRecipientName . ',</p>'
+        . '<p style="margin:0 0 16px;line-height:1.6;">Thank you for trusting ERNI Development Center Philippines, Inc. We have created your project record for <strong>' . $safeProjectLabel . '</strong>, and our team is starting the planning and review process.</p>'
+        . '<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;margin:16px 0;background:#f8fafc;border:1px solid #e5edf5;border-radius:12px;overflow:hidden;">'
+        . $detailRows
+        . '</table>'
+        . '<p style="margin:16px 0 0;line-height:1.6;">We will contact you if we need additional details before the next project step.</p>'
+        . '<p style="margin:16px 0 0;color:#64748b;font-size:13px;">This email was sent automatically by ERNI PMS.</p>'
+        . '</div></div>';
+
+    $textLines = [
+        'Good day ' . $recipientName . ',',
+        '',
+        'Thank you for trusting ERNI Development Center Philippines, Inc. We have created your project record for ' . $projectLabel . ', and our team is starting the planning and review process.',
+        '',
+        'Project details:',
+    ];
+    foreach ($details as $label => $value) {
+        $textLines[] = $label . ': ' . (string) $value;
+    }
+    $textLines[] = '';
+    $textLines[] = 'We will contact you if we need additional details before the next project step.';
+
+    return sendSystemEmail($clientEmail, $subject, $htmlBody, implode("\n", $textLines));
+}
+
 function salesClientsBindAndExecute($stmt, string $types, array $params): bool
 {
     $refs = [];
@@ -435,6 +533,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
 
                 $conn->commit();
+                $clientStartEmailResult = null;
                 if ($projectId) {
                     workflowNotifyRoles(
                         $conn,
@@ -446,6 +545,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         'project',
                         'projects'
                     );
+
+                    $clientStartEmailResult = salesClientsSendProjectStartingEmail(
+                        $email,
+                        $contactPerson,
+                        $name,
+                        $projectName,
+                        $projectType,
+                        $timelineStart,
+                        $timelineStartTime,
+                        $timelineEnd,
+                        $timelineEndTime,
+                        $salesBudget
+                    );
+                    if (empty($clientStartEmailResult['success'])) {
+                        error_log('Client project start email failed for client_id=' . (int) $clientId . ', project_id=' . (int) $projectId . ': ' . (string) ($clientStartEmailResult['error'] ?? 'Unknown mail error.'));
+                    }
                 }
                 logActivity($user['id'], 'add_client', 'clients', $clientId, null, $_POST);
                 $clientDraftId = trim((string) ($_POST['client_draft_id'] ?? ''));
@@ -455,7 +570,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
                 if ($projectId) {
                     logActivity($user['id'], 'create_project_requirements', 'projects', $projectId, null, $_POST);
-                    $_SESSION['success'] = 'Client and complete project intake sent to Architect review successfully.';
+                    $clientEmailStatus = '';
+                    if (is_array($clientStartEmailResult) && !empty($clientStartEmailResult['success'])) {
+                        $clientEmailStatus = ' Client project start email sent.';
+                    } elseif (is_array($clientStartEmailResult)) {
+                        $clientEmailStatus = ' Client was saved, but the project start email was not sent: ' . (string) ($clientStartEmailResult['error'] ?? 'Unknown mail error.');
+                    }
+                    $_SESSION['success'] = 'Client and complete project intake sent to Architect review successfully.' . $clientEmailStatus;
                 } else {
                     $_SESSION['success'] = "Client added and shared client folder created. No project created because project name was empty.";
                 }
