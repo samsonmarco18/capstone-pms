@@ -2305,31 +2305,43 @@ const statusData = <?php
     $statuses = [];
     $statusCounts = [];
     $statusColors = [];
+    $statusHoverColors = [];
+    $statusColorMap = [
+        'pending' => ['#f59e0b', '#d97706'],
+        'planning' => ['#f59e0b', '#d97706'],
+        'requirements_gathering' => ['#2563eb', '#1d4ed8'],
+        'requirement_gathering' => ['#2563eb', '#1d4ed8'],
+        'in_progress' => ['#0e7490', '#0f766e'],
+        'active' => ['#0e7490', '#0f766e'],
+        'review' => ['#8b5cf6', '#7c3aed'],
+        'completed' => ['#10b981', '#059669'],
+        'cancelled' => ['#ef4444', '#dc2626'],
+        'on_hold' => ['#64748b', '#475569'],
+    ];
+    $fallbackStatusPalette = [
+        ['#1f6392', '#0f4a6e'],
+        ['#0e7490', '#0f766e'],
+        ['#8b5cf6', '#7c3aed'],
+        ['#f59e0b', '#d97706'],
+        ['#10b981', '#059669'],
+        ['#ef4444', '#dc2626'],
+    ];
+    $fallbackIndex = 0;
+
     while($row = $projectStatus->fetch_assoc()) {
-        $statuses[] = ucfirst($row['status']);
+        $rawStatus = strtolower((string) $row['status']);
+        $statuses[] = ucwords(str_replace('_', ' ', $rawStatus));
         $statusCounts[] = $row['count'];
-        // Color mapping
-        switch($row['status']) {
-            case 'planning':
-                $statusColors[] = '#f59e0b';
-                break;
-            case 'in_progress':
-                $statusColors[] = '#1f6392';
-                break;
-            case 'review':
-                $statusColors[] = '#8b5cf6';
-                break;
-            case 'completed':
-                $statusColors[] = '#10b981';
-                break;
-            case 'cancelled':
-                $statusColors[] = '#ef4444';
-                break;
-            default:
-                $statusColors[] = '#6c757d';
+
+        $statusPalette = $statusColorMap[$rawStatus] ?? $fallbackStatusPalette[$fallbackIndex % count($fallbackStatusPalette)];
+        $statusColors[] = $statusPalette[0];
+        $statusHoverColors[] = $statusPalette[1];
+
+        if (!isset($statusColorMap[$rawStatus])) {
+            $fallbackIndex++;
         }
     }
-    echo json_encode(['labels' => $statuses, 'data' => $statusCounts, 'colors' => $statusColors]);
+    echo json_encode(['labels' => $statuses, 'data' => $statusCounts, 'colors' => $statusColors, 'hoverColors' => $statusHoverColors]);
 ?>;
 
 const statusCtx = document.getElementById('statusChart').getContext('2d');
@@ -2340,6 +2352,7 @@ new Chart(statusCtx, {
         datasets: [{
             data: statusData.data,
             backgroundColor: statusData.colors,
+            hoverBackgroundColor: statusData.hoverColors,
             borderColor: '#ffffff',
             borderWidth: 4,
             hoverOffset: 4,
