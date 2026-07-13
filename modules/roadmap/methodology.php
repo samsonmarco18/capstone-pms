@@ -543,9 +543,7 @@ $projectDepartmentAllocations = $selectedProject
     : [];
 $projectDeveloperCapacity = array_sum($projectDepartmentAllocations);
 $documentGateMessage = '';
-if ($selectedProject && $canEditArchitecture && $projectDepartments === []) {
-    $documentGateMessage = 'Select the departments included in this project before uploading architecture documents.';
-}
+$summaryGateMessage = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $postedProjectId = (int) ($_POST['project_id'] ?? 0);
@@ -1288,6 +1286,41 @@ $timelineTotalDays = max(1, ((int) $timelineStart->diff($timelineEnd)->format('%
 $phaseCount = count($phases);
 $taskCount = count($allTasks);
 $expertPeopleTotal = array_sum(array_map(static fn(array $task): int => (int) ($task['expert_people_count'] ?? 0), $allTasks));
+$methodologyCompletion = $selectedProject ? methodologyRoadmapCompletion($conn, $selectedProjectId) : [
+    'feature_count' => 0,
+    'phase_count' => 0,
+    'scheduled_feature_count' => 0,
+    'unscheduled_count' => 0,
+    'is_complete' => false,
+];
+if ($selectedProject && $canEditArchitecture) {
+    if ($projectDepartments === []) {
+        $documentGateMessage = 'Select the departments included in this project before uploading architecture documents.';
+    } elseif ((int) ($methodologyCompletion['feature_count'] ?? 0) <= 0) {
+        $documentGateMessage = 'Save at least one project feature before uploading architecture documents.';
+    } elseif ((int) ($methodologyCompletion['phase_count'] ?? 0) <= 0) {
+        $documentGateMessage = 'Apply a methodology template or add at least one roadmap phase before uploading architecture documents.';
+    } elseif ((int) ($methodologyCompletion['unscheduled_count'] ?? 0) > 0) {
+        $documentGateMessage = 'Schedule all saved features in the roadmap before uploading architecture documents. '
+            . (int) ($methodologyCompletion['unscheduled_count'] ?? 0)
+            . ' feature'
+            . ((int) ($methodologyCompletion['unscheduled_count'] ?? 0) === 1 ? ' is' : 's are')
+            . ' still unscheduled.';
+    }
+    $summaryGateMessage = $documentGateMessage;
+    if ($summaryGateMessage === '') {
+        $documentTypesResult = $conn->query("SELECT DISTINCT document_type FROM architecture_documents WHERE project_id = {$selectedProjectId}");
+        $documentTypes = [];
+        if ($documentTypesResult) {
+            while ($documentTypeRow = $documentTypesResult->fetch_assoc()) {
+                $documentTypes[] = (string) ($documentTypeRow['document_type'] ?? '');
+            }
+        }
+        if (!in_array('architecture_plan', $documentTypes, true) || !in_array('workflow_diagram', $documentTypes, true)) {
+            $summaryGateMessage = 'Upload the required Architecture Plan and Workflow Diagram before moving to Summary.';
+        }
+    }
+}
 $finalPhaseId = $phases !== [] ? (int) array_key_last($phases) : 0;
 $departmentUsedCounts = [];
 foreach ($allTasks as $task) {
@@ -2582,9 +2615,19 @@ include '../../includes/navbar.php';
             <div class="progress-line completed"></div>
             <a class="progress-step active" href="<?php echo BASE_URL; ?>modules/roadmap/methodology.php?project_id=<?php echo (int) $selectedProjectId; ?>"><div class="step-number">5</div><div class="step-label">Roadmap</div></a>
             <div class="progress-line"></div>
-            <a class="progress-step" href="<?php echo BASE_URL; ?>modules/architect/upload-diagram.php?id=<?php echo (int) $selectedProjectId; ?>"><div class="step-number">6</div><div class="step-label">Documents</div></a>
+            <a
+                class="progress-step"
+                href="<?php echo BASE_URL; ?>modules/architect/upload-diagram.php?id=<?php echo (int) $selectedProjectId; ?>"
+                data-gated-forward-link
+                data-block-message="<?php echo htmlspecialchars($documentGateMessage); ?>"
+            ><div class="step-number">6</div><div class="step-label">Documents</div></a>
             <div class="progress-line"></div>
-            <a class="progress-step" href="<?php echo BASE_URL; ?>modules/architect/summary.php?id=<?php echo (int) $selectedProjectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
+            <a
+                class="progress-step"
+                href="<?php echo BASE_URL; ?>modules/architect/summary.php?id=<?php echo (int) $selectedProjectId; ?>"
+                data-gated-forward-link
+                data-block-message="<?php echo htmlspecialchars($summaryGateMessage); ?>"
+            ><div class="step-number">7</div><div class="step-label">Summary</div></a>
         </div>
 
         <?php
@@ -2642,7 +2685,7 @@ include '../../includes/navbar.php';
                         <a
                             class="btn btn-outline-primary"
                             href="<?php echo BASE_URL; ?>modules/architect/upload-diagram.php?id=<?php echo (int) $selectedProjectId; ?>"
-                            data-continue-documents
+                            data-gated-forward-link
                             data-block-message="<?php echo htmlspecialchars($documentGateMessage); ?>"
                         >
                             Continue to Documents <i class="fas fa-arrow-right ms-2" aria-hidden="true"></i>
@@ -3466,7 +3509,7 @@ const deleteTaskButton = document.getElementById('deleteTaskButton');
 const methodologyTemplateForm = document.getElementById('methodologyTemplateForm');
 const replaceExistingTemplate = document.getElementById('replaceExistingTemplate');
 const acceptSuggestedMethodology = document.getElementById('acceptSuggestedMethodology');
-const continueDocumentsLink = document.querySelector('[data-continue-documents]');
+const gatedForwardLinks = Array.from(document.querySelectorAll('[data-gated-forward-link]'));
 const roadmapInlineError = document.getElementById('roadmapInlineError');
 const taskDepartmentToggles = Array.from(document.querySelectorAll('.task-department-toggle'));
 const bulkPlaceFeaturesInput = document.getElementById('bulkPlaceFeatures');
@@ -3491,14 +3534,16 @@ roadmapInlineError?.querySelector('[data-dismiss-inline-error]')?.addEventListen
     roadmapInlineError.classList.add('d-none');
 });
 
-continueDocumentsLink?.addEventListener('click', (event) => {
-    const blockMessage = String(continueDocumentsLink.dataset.blockMessage || '').trim();
-    if (blockMessage === '') {
-        return;
-    }
+gatedForwardLinks.forEach((link) => {
+    link.addEventListener('click', (event) => {
+        const blockMessage = String(link.dataset.blockMessage || '').trim();
+        if (blockMessage === '') {
+            return;
+        }
 
-    event.preventDefault();
-    showRoadmapInlineError(blockMessage);
+        event.preventDefault();
+        showRoadmapInlineError(blockMessage);
+    });
 });
 
 acceptSuggestedMethodology?.addEventListener('click', () => {

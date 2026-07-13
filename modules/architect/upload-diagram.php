@@ -1,11 +1,13 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/file-storage.php';
+require_once '../../includes/methodology-roadmap.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
+methodologyRoadmapEnsureSchema($conn);
 
 function normalizeArchitectureDocumentType(?string $value): string
 {
@@ -47,6 +49,25 @@ if (!$hasIncludedDepartments && dbTableExists($conn, 'developer_allocations')) {
 
 if (!$hasIncludedDepartments) {
     $_SESSION['error'] = 'Select the departments included in this project before uploading architecture documents.';
+    header('Location: ../roadmap/methodology.php?project_id=' . $projectId);
+    exit();
+}
+
+$methodologyCompletion = methodologyRoadmapCompletion($conn, $projectId);
+if (!(bool) ($methodologyCompletion['is_complete'] ?? false)) {
+    if ((int) ($methodologyCompletion['feature_count'] ?? 0) <= 0) {
+        $_SESSION['error'] = 'Save at least one project feature before uploading architecture documents.';
+    } elseif ((int) ($methodologyCompletion['phase_count'] ?? 0) <= 0) {
+        $_SESSION['error'] = 'Apply a methodology template or add at least one roadmap phase before uploading architecture documents.';
+    } elseif ((int) ($methodologyCompletion['unscheduled_count'] ?? 0) > 0) {
+        $_SESSION['error'] = 'Schedule all saved features in the roadmap before uploading architecture documents. '
+            . (int) ($methodologyCompletion['unscheduled_count'] ?? 0)
+            . ' feature'
+            . ((int) ($methodologyCompletion['unscheduled_count'] ?? 0) === 1 ? ' is' : 's are')
+            . ' still unscheduled.';
+    } else {
+        $_SESSION['error'] = 'Complete the methodology roadmap before uploading architecture documents.';
+    }
     header('Location: ../roadmap/methodology.php?project_id=' . $projectId);
     exit();
 }
@@ -703,7 +724,16 @@ a.progress-step:hover {
         <div class="progress-line completed"></div>
         <a class="progress-step active" href="upload-diagram.php?id=<?php echo $projectId; ?>"><div class="step-number">6</div><div class="step-label">Documents</div></a>
         <div class="progress-line"></div>
-        <a class="progress-step" href="summary.php?id=<?php echo $projectId; ?>"><div class="step-number">7</div><div class="step-label">Summary</div></a>
+        <a
+            class="progress-step"
+            href="summary.php?id=<?php echo $projectId; ?>"
+            data-summary-gate="<?php echo $checklistReadyForSummary ? '' : 'Upload both an Architecture Plan and a Workflow Diagram before proceeding to Summary.'; ?>"
+        ><div class="step-number">7</div><div class="step-label">Summary</div></a>
+    </div>
+
+    <div class="alert alert-warning d-none" role="alert" id="documentInlineError">
+        <strong>Needs attention</strong>
+        <span></span>
     </div>
 
     <?php include '../../includes/architect-project-review-panel.php'; ?>
@@ -813,6 +843,22 @@ a.progress-step:hover {
 </div>
 
 <script>
+const summaryGateLink = document.querySelector('[data-summary-gate]');
+const documentInlineError = document.getElementById('documentInlineError');
+
+summaryGateLink?.addEventListener('click', (event) => {
+    const message = String(summaryGateLink.dataset.summaryGate || '').trim();
+    if (message === '') {
+        return;
+    }
+
+    event.preventDefault();
+    const messageElement = documentInlineError?.querySelector('span');
+    if (messageElement) messageElement.textContent = message;
+    documentInlineError?.classList.remove('d-none');
+    documentInlineError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
 async function deleteDocument(id) {
     const confirmed = await appConfirm({
         title: 'Delete Document',

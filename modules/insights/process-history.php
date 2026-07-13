@@ -30,9 +30,17 @@ if (!in_array($activeTab, ['movements', 'durations'], true)) {
 }
 
 $events = processHistoryLoadEvents($conn, $accessibleProjectIds, $selectedProjectId);
-$events = processHistorySortEvents($events, $projectNames, $sort);
 $taskDurations = processHistoryLoadTaskDurations($conn, $accessibleProjectIds, $selectedProjectId);
 $taskDurations = processHistorySortTasks($taskDurations, $projectNames, $sort);
+if ($events === [] && $taskDurations !== []) {
+    $events = processHistoryEventsFromTaskDurations($taskDurations);
+}
+$events = array_merge(
+    $events,
+    processHistoryLoadProjectLifecycleEvents($conn, $accessibleProjectIds, $selectedProjectId, $events)
+);
+$events = processHistoryRecalculateEventGaps($events);
+$events = processHistorySortEvents($events, $projectNames, $sort);
 $summary = processHistorySummary($events);
 $taskSummary = processHistoryTaskSummary($taskDurations);
 $slowestEvent = $summary['slowest_event'];

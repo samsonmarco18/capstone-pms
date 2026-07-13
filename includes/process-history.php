@@ -101,6 +101,9 @@ function processHistoryStatusLabel(?string $status): string
 function processHistoryEventItem(array $row): string
 {
     $table = (string) ($row['table_name'] ?? '');
+    if ($table === 'projects') {
+        return trim((string) ($row['project_name'] ?? '')) ?: 'Project #' . (int) ($row['record_id'] ?? 0);
+    }
     if ($table === 'tasks') {
         return trim((string) ($row['task_title'] ?? '')) ?: 'Task #' . (int) ($row['record_id'] ?? 0);
     }
@@ -179,6 +182,7 @@ function processHistoryLoadEvents(mysqli|PgsqlMysqliCompatConnection $conn, arra
             u.full_name,
             u.role,
             {$projectExpr} AS project_id,
+            p.name AS project_name,
             t.title AS task_title,
             mp.name AS phase_name,
             mt.title AS roadmap_task_title,
@@ -187,6 +191,7 @@ function processHistoryLoadEvents(mysqli|PgsqlMysqliCompatConnection $conn, arra
             rm.summary AS merge_summary
         FROM audit_logs al
         LEFT JOIN users u ON u.id = al.user_id
+        LEFT JOIN projects p ON al.table_name = 'projects' AND p.id = al.record_id
         LEFT JOIN tasks t ON al.table_name = 'tasks' AND t.id = al.record_id
         LEFT JOIN methodology_phases mp ON al.table_name = 'methodology_phases' AND mp.id = al.record_id
         LEFT JOIN methodology_tasks mt ON al.table_name = 'methodology_tasks' AND mt.id = al.record_id
@@ -263,6 +268,273 @@ function processHistoryLoadEvents(mysqli|PgsqlMysqliCompatConnection $conn, arra
     }
 
     return $events;
+}
+
+function processHistoryEventsFromTaskDurations(array $tasks): array
+{
+    $eventsByProject = [];
+    $eventId = 1000000;
+
+    foreach ($tasks as $task) {
+        $projectId = (int) ($task['project_id'] ?? 0);
+        $taskId = (int) ($task['id'] ?? 0);
+        if ($projectId <= 0 || $taskId <= 0) {
+            continue;
+        }
+
+        $title = (string) ($task['title'] ?? 'Task');
+        $actor = (string) ($task['assigned_to'] ?? 'Assigned developer');
+        $statusLabel = (string) ($task['status_label'] ?? processHistoryStatusLabel((string) ($task['status'] ?? '')));
+        $planningStart = processHistoryTimestamp($task['planning_start_at'] ?? null);
+        $developerStart = processHistoryTimestamp($task['developer_started_at'] ?? null);
+        $completedAt = processHistoryTimestamp($task['completed_at'] ?? null);
+        $latestAt = (int) ($task['latest_timestamp'] ?? 0);
+
+        $pushEvent = static function (
+            int $timestamp,
+            string $label,
+            string $category,
+            string $tone,
+            string $description,
+            string $fromStatus = '',
+            string $toStatus = ''
+        ) use (&$eventsByProject, &$eventId, $projectId, $taskId, $title, $actor): void {
+            if ($timestamp <= 0) {
+                return;
+            }
+
+            $eventsByProject[$projectId][] = [
+                'id' => $eventId++,
+                'project_id' => $projectId,
+                'action' => 'derived_task_movement',
+                'label' => $label,
+                'category' => $category,
+                'tone' => $tone,
+                'item' => $title,
+                'actor' => $actor,
+                'role' => 'developer',
+                'from_status' => $fromStatus,
+                'to_status' => $toStatus,
+                'description' => $description,
+                'created_at' => date('Y-m-d H:i:s', $timestamp),
+                'timestamp' => $timestamp,
+                'gap_seconds' => null,
+                'since_start_seconds' => 0,
+                'source_task_id' => $taskId,
+            ];
+        };
+
+        $pushEvent(
+            $planningStart ?? $latestAt,
+            'Feature entered workflow',
+            'Planning',
+            'planning',
+            'Derived from the feature task or roadmap schedule because no audit movement entry was found.',
+            '',
+            'Planned'
+        );
+
+        if ($developerStart !== null && $developerStart !== $planningStart) {
+            $pushEvent(
+                $developerStart,
+                'Developer work started',
+                'Task Movement',
+                'task',
+                'Derived from the assigned developer start date or roadmap schedule.',
+                'Planned',
+                $statusLabel !== '' ? $statusLabel : 'In Progress'
+            );
+        }
+
+        if ($completedAt !== null) {
+            $pushEvent(
+                $completedAt,
+                'Developer work completed',
+                'Task Movement',
+                'approval',
+                'Derived from the task completion or approved department work timestamp.',
+                $statusLabel !== '' ? $statusLabel : 'In Progress',
+                'Completed'
+            );
+        } elseif ($latestAt > 0 && $latestAt !== $planningStart && $latestAt !== $developerStart) {
+            $pushEvent(
+                $latestAt,
+                'Task status updated',
+                'Task Movement',
+                'task',
+                'Derived from the latest known task or roadmap update timestamp.',
+                '',
+                $statusLabel
+            );
+        }
+    }
+
+    $events = [];
+    foreach ($eventsByProject as $projectId => $rows) {
+        usort($rows, static fn(array $a, array $b): int => [$a['timestamp'], $a['id']] <=> [$b['timestamp'], $b['id']]);
+        $previousTimestamp = null;
+        $firstTimestamp = isset($rows[0]) ? (int) $rows[0]['timestamp'] : null;
+        foreach ($rows as $row) {
+            $row['gap_seconds'] = $previousTimestamp === null ? null : max(0, (int) $row['timestamp'] - $previousTimestamp);
+            $row['since_start_seconds'] = $firstTimestamp === null ? 0 : max(0, (int) $row['timestamp'] - $firstTimestamp);
+            $previousTimestamp = (int) $row['timestamp'];
+            $events[] = $row;
+        }
+    }
+
+    return $events;
+}
+
+function processHistoryLoadProjectLifecycleEvents(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    array $projectIds,
+    int $selectedProjectId = 0,
+    array $existingEvents = []
+): array {
+    $projectIds = array_values(array_unique(array_filter(array_map('intval', $projectIds))));
+    if ($projectIds === []) {
+        return [];
+    }
+    if ($selectedProjectId > 0 && in_array($selectedProjectId, $projectIds, true)) {
+        $projectIds = [$selectedProjectId];
+    }
+
+    $existingCreationProjects = [];
+    $existingTimelineStartProjects = [];
+    foreach ($existingEvents as $event) {
+        $projectId = (int) ($event['project_id'] ?? 0);
+        $action = (string) ($event['action'] ?? '');
+        if ($projectId <= 0) {
+            continue;
+        }
+        if (in_array($action, ['create_project_requirements', 'project_created'], true)) {
+            $existingCreationProjects[$projectId] = true;
+        }
+        if ($action === 'project_timeline_started') {
+            $existingTimelineStartProjects[$projectId] = true;
+        }
+    }
+
+    $projectIdList = implode(',', $projectIds);
+    $hasTimelineStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
+    $timelineStartTimeSelect = $hasTimelineStartTime ? 'p.timeline_start_time' : "NULL AS timeline_start_time";
+    $result = $conn->query("
+        SELECT
+            p.id,
+            p.name,
+            p.status,
+            p.timeline_start,
+            {$timelineStartTimeSelect},
+            p.created_at,
+            u.full_name AS creator_name,
+            u.role AS creator_role
+        FROM projects p
+        LEFT JOIN users u ON u.id = p.created_by
+        WHERE p.id IN ({$projectIdList})
+    ");
+
+    if (!$result) {
+        return [];
+    }
+
+    $eventsByProject = [];
+    $eventId = 2000000;
+    while ($project = $result->fetch_assoc()) {
+        $projectId = (int) ($project['id'] ?? 0);
+        if ($projectId <= 0) {
+            continue;
+        }
+
+        $projectName = trim((string) ($project['name'] ?? '')) ?: 'Project #' . $projectId;
+        $actor = trim((string) ($project['creator_name'] ?? '')) ?: 'System';
+        $role = (string) ($project['creator_role'] ?? '');
+        $createdAt = processHistoryTimestamp($project['created_at'] ?? null);
+        if ($createdAt !== null && !isset($existingCreationProjects[$projectId])) {
+            $eventsByProject[$projectId][] = [
+                'id' => $eventId++,
+                'project_id' => $projectId,
+                'action' => 'project_created',
+                'label' => 'Project created',
+                'category' => 'Planning',
+                'tone' => 'planning',
+                'item' => $projectName,
+                'actor' => $actor,
+                'role' => $role,
+                'from_status' => '',
+                'to_status' => processHistoryStatusLabel((string) ($project['status'] ?? 'pending')),
+                'description' => 'Project record created and added to the planning workflow.',
+                'created_at' => date('Y-m-d H:i:s', $createdAt),
+                'timestamp' => $createdAt,
+                'gap_seconds' => null,
+                'since_start_seconds' => 0,
+            ];
+        }
+
+        $timelineStartDate = trim((string) ($project['timeline_start'] ?? ''));
+        if ($timelineStartDate !== '' && !isset($existingTimelineStartProjects[$projectId])) {
+            $timelineStartTime = trim((string) ($project['timeline_start_time'] ?? ''));
+            $timelineStartValue = $timelineStartDate . ' ' . ($timelineStartTime !== '' ? $timelineStartTime : '00:00:00');
+            $timelineStartAt = processHistoryTimestamp($timelineStartValue);
+            if ($timelineStartAt !== null && ($createdAt === null || abs($timelineStartAt - $createdAt) > 60)) {
+                $eventsByProject[$projectId][] = [
+                    'id' => $eventId++,
+                    'project_id' => $projectId,
+                    'action' => 'project_timeline_started',
+                    'label' => 'Project timeline started',
+                    'category' => 'Planning',
+                    'tone' => 'roadmap',
+                    'item' => $projectName,
+                    'actor' => $actor,
+                    'role' => $role,
+                    'from_status' => '',
+                    'to_status' => processHistoryStatusLabel((string) ($project['status'] ?? 'pending')),
+                    'description' => 'Derived from the project timeline start date set during intake.',
+                    'created_at' => date('Y-m-d H:i:s', $timelineStartAt),
+                    'timestamp' => $timelineStartAt,
+                    'gap_seconds' => null,
+                    'since_start_seconds' => 0,
+                ];
+            }
+        }
+    }
+
+    $events = [];
+    foreach ($eventsByProject as $projectId => $rows) {
+        usort($rows, static fn(array $a, array $b): int => [$a['timestamp'], $a['id']] <=> [$b['timestamp'], $b['id']]);
+        foreach ($rows as $row) {
+            $events[] = $row;
+        }
+    }
+
+    return $events;
+}
+
+function processHistoryRecalculateEventGaps(array $events): array
+{
+    $eventsByProject = [];
+    foreach ($events as $event) {
+        $projectId = (int) ($event['project_id'] ?? 0);
+        if ($projectId <= 0) {
+            continue;
+        }
+        $eventsByProject[$projectId][] = $event;
+    }
+
+    $recalculated = [];
+    foreach ($eventsByProject as $projectId => $rows) {
+        usort($rows, static fn(array $a, array $b): int => [(int) ($a['timestamp'] ?? 0), (int) ($a['id'] ?? 0)] <=> [(int) ($b['timestamp'] ?? 0), (int) ($b['id'] ?? 0)]);
+        $previousTimestamp = null;
+        $firstTimestamp = isset($rows[0]) ? (int) ($rows[0]['timestamp'] ?? 0) : null;
+        foreach ($rows as $row) {
+            $timestamp = (int) ($row['timestamp'] ?? 0);
+            $row['gap_seconds'] = $previousTimestamp === null ? null : max(0, $timestamp - $previousTimestamp);
+            $row['since_start_seconds'] = $firstTimestamp === null ? 0 : max(0, $timestamp - $firstTimestamp);
+            $previousTimestamp = $timestamp;
+            $recalculated[] = $row;
+        }
+    }
+
+    return $recalculated;
 }
 
 function processHistoryLoadTaskDurations(mysqli|PgsqlMysqliCompatConnection $conn, array $projectIds, int $selectedProjectId = 0): array
