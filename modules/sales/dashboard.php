@@ -1279,15 +1279,56 @@ include '../../includes/navbar.php';
 }
 
 .release-progress {
-    min-width: 150px;
-    text-align: right;
+    width: min(100%, 360px);
+    min-width: 300px;
 }
 
-.release-progress-label {
+.release-progress-legend {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 0.65rem;
+}
+
+.release-progress-metric {
+    display: flex;
+    min-width: 0;
+    min-height: 58px;
+    padding: 0.55rem 0.45rem;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.76);
+}
+
+.release-progress-metric-label {
+    width: 100%;
+    color: var(--gray-600);
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.release-progress-metric-value {
+    margin-top: 0.2rem;
+    color: var(--gray-900);
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.release-progress-metric:first-child .release-progress-metric-value {
+    color: #059669;
+}
+
+.release-progress-metric:nth-child(2) .release-progress-metric-value {
     color: var(--theme-primary);
-    font-size: 0.74rem;
-    font-weight: 600;
-    margin-bottom: 0.35rem;
 }
 
 .release-progress-track {
@@ -1707,7 +1748,18 @@ body.dark-mode .release-feature input:checked ~ small {
     .release-progress {
         width: 100%;
         min-width: 0;
-        text-align: left;
+    }
+
+    .release-progress-legend {
+        gap: 0.45rem;
+    }
+
+    .release-progress-metric {
+        padding-inline: 0.25rem;
+    }
+
+    .release-progress-metric-label {
+        font-size: 0.58rem;
     }
 
     .release-download-btn {
@@ -1834,8 +1886,19 @@ body.dark-mode .release-feature input:checked ~ small {
                                             <div class="release-project-client"><?php echo htmlspecialchars((string) $projectChecklist['client_name']); ?></div>
                                         </div>
                                         <div class="release-progress">
-                                            <div class="release-progress-label">
-                                                <?php echo (int) $projectChecklist['merged_features']; ?> / <?php echo (int) $projectChecklist['total_features']; ?> merged
+                                            <div class="release-progress-legend" aria-label="Project release progress">
+                                                <div class="release-progress-metric">
+                                                    <span class="release-progress-metric-label">Merged</span>
+                                                    <span class="release-progress-metric-value"><?php echo (int) $projectChecklist['merged_features']; ?></span>
+                                                </div>
+                                                <div class="release-progress-metric">
+                                                    <span class="release-progress-metric-label">Waiting</span>
+                                                    <span class="release-progress-metric-value"><?php echo max(0, (int) $projectChecklist['total_features'] - (int) $projectChecklist['merged_features']); ?></span>
+                                                </div>
+                                                <div class="release-progress-metric">
+                                                    <span class="release-progress-metric-label">Complete</span>
+                                                    <span class="release-progress-metric-value"><?php echo (int) $projectChecklist['progress']; ?>%</span>
+                                                </div>
                                             </div>
                                             <div class="release-progress-track">
                                                 <div class="release-progress-bar" style="width: <?php echo (int) $projectChecklist['progress']; ?>%;"></div>
