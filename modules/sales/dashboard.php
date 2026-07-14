@@ -1265,63 +1265,63 @@ include '../../includes/navbar.php';
 /* Project Release Checklist */
 .release-graph-layout {
     display: grid;
-    grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
+    grid-template-columns: 1fr;
     gap: 1.25rem;
-    padding: 1.25rem;
+    padding: 0;
     align-items: stretch;
 }
 
 .release-chart-panel {
-    min-height: 560px;
-    padding: 1.35rem 1.35rem 1.6rem;
-    border: 1px solid var(--tech-border);
+    min-height: 250px;
+    padding: 20px 0 0 0;
+    border: none;
     border-radius: 8px;
-    background:
-        linear-gradient(rgba(31, 99, 146, 0.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(31, 99, 146, 0.035) 1px, transparent 1px),
-        #ffffff;
+    background: none;
     background-size: 28px 28px;
-    box-shadow: 0 14px 30px rgba(15, 76, 129, 0.08), 0 0 24px rgba(34, 211, 238, 0.06);
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    gap: 1.3rem;
-    align-content: stretch;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    align-items: center;
+    justify-content: center;
 }
 
 .release-chart-panel canvas {
     align-self: center;
-    height: 405px !important;
+    height: 175px !important;
     width: 100% !important;
 }
 
 .release-chart-summary {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.65rem;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: 0.8rem;
 }
 
 .release-summary-pill {
     display: grid;
-    gap: 0.12rem;
+    gap: 0.3rem;
     min-width: 0;
-    padding: 0.7rem 0.8rem;
+    padding: 0.6rem 0.75rem;
     border: 1px solid rgba(31, 99, 146, 0.12);
-    border-radius: 8px;
+    border-radius: 6px;
     background: rgba(255, 255, 255, 0.86);
-    box-shadow: 0 8px 18px rgba(15, 76, 129, 0.05);
+    box-shadow: 0 2px 6px rgba(15, 76, 129, 0.03);
 }
 
 .release-summary-pill span {
     color: var(--gray-600);
-    font-size: 0.68rem;
+    font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .release-summary-pill strong {
     color: var(--gray-900);
-    font-size: 1.25rem;
-    line-height: 1.1;
+    font-size: 1.1rem;
+    line-height: 1.2;
+    font-weight: 700;
 }
 
 .release-summary-pill.merged strong {
@@ -1333,7 +1333,7 @@ include '../../includes/navbar.php';
 }
 
 .release-checklist {
-    display: grid;
+    display: none;
     gap: 0.85rem;
     align-content: start;
     max-height: 560px;
@@ -1483,9 +1483,8 @@ include '../../includes/navbar.php';
     background: #d1fae5;
 }
 
-.sales-insights-more {
-    margin-top: 0.85rem;
-    margin-left: auto;
+.sales-insights-column .delay-insights-wrap {
+    margin-bottom: 0;
 }
 
 html[data-theme="dark"] .sales-dashboard-hero,
@@ -2005,9 +2004,10 @@ body.dark-mode .release-feature input:checked ~ small {
         </div>
     </div>
 
+    <!-- Status and Insights Row -->
     <div class="row g-4 mb-4">
-        <div class="col-12">
-            <div class="list-card">
+        <div class="col-lg-6">
+            <div class="chart-card">
                 <div class="card-header">
                     <h5>
                         <i class="fas fa-list-check"></i>
@@ -2108,11 +2108,7 @@ body.dark-mode .release-feature input:checked ~ small {
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- Status and Insights Row -->
-    <div class="row g-4 mb-4">
-        <div class="col-lg-5">
+        <div class="col-lg-6">
             <div class="chart-card">
                 <div class="card-header">
                     <h5>
@@ -2121,28 +2117,15 @@ body.dark-mode .release-feature input:checked ~ small {
                     </h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="statusChart" style="height: 280px; width: 100%;"></canvas>
+                    <canvas id="statusChart" style="height: 20px; width: 100%;"></canvas>
                 </div>
             </div>
         </div>
-        <div class="col-lg-7 sales-insights-column">
-            <?php
-            delayInsightsRenderCompactList($conn, $user, [
-                'limit' => 3,
-                'title' => 'Project Insight List',
-                'subtitle' => 'Top three project signals with direct links to the full insight page.',
-                'button_label' => 'View Project',
-            ]);
-            ?>
-            <a class="delay-action sales-insights-more" href="<?php echo htmlspecialchars(BASE_URL . 'modules/insights/decision-center.php'); ?>">
-                <i class="fas fa-arrow-right"></i> See More
-            </a>
-        </div>
     </div>
 
-    <!-- Recent Clients Row -->
-    <div class="row g-4">
-        <div class="col-12">
+    <!-- Insights and Recent Clients Row -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
             <div class="list-card">
                 <div class="card-header">
                     <h5>
@@ -2181,6 +2164,18 @@ body.dark-mode .release-feature input:checked ~ small {
                     <?php endif; ?>
                 </div>
             </div>
+        </div>
+        <div class="col-lg-6 sales-insights-column">
+            <?php
+            delayInsightsRenderCompactList($conn, $user, [
+                'limit' => 3,
+                'title' => 'Project Insight List',
+                'subtitle' => 'Top three project signals with direct links to the full insight page.',
+                'button_label' => 'View Project',
+                'more_label' => 'See More',
+                'more_url' => BASE_URL . 'modules/insights/decision-center.php',
+            ]);
+            ?>
         </div>
     </div>
 </div>
@@ -2477,35 +2472,27 @@ const releaseChecklistData = <?php
 const releaseChecklistCanvas = document.getElementById('releaseChecklistChart');
 if (releaseChecklistCanvas) {
     new Chart(releaseChecklistCanvas.getContext('2d'), {
-        type: 'doughnut',
+        type: 'bar',
         data: {
             labels: releaseChecklistData.labels,
             datasets: [{
+                label: 'Count',
                 data: releaseChecklistData.data,
                 backgroundColor: releaseChecklistData.colors,
                 hoverBackgroundColor: releaseChecklistData.hoverColors,
-                borderColor: '#ffffff',
-                borderWidth: 4,
-                hoverOffset: 4,
-                spacing: 3
+                borderRadius: 6,
+                borderSkipped: false,
+                barThickness: 'flex',
+                maxBarThickness: 50
             }]
         },
         options: {
+            indexAxis: 'x',
             responsive: true,
             maintainAspectRatio: false,
-            cutout: '66%',
             plugins: {
                 legend: {
-                    position: 'bottom',
-                    labels: {
-                        usePointStyle: true,
-                        boxWidth: 8,
-                        padding: 16,
-                        color: '#495057',
-                        font: {
-                            size: 11
-                        }
-                    }
+                    display: false
                 },
                 tooltip: {
                     backgroundColor: '#ffffff',
@@ -2516,11 +2503,37 @@ if (releaseChecklistCanvas) {
                     padding: 12,
                     callbacks: {
                         label: function(context) {
-                            const label = context.label || '';
                             const value = context.raw || 0;
-                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const total = releaseChecklistData.data.reduce((a, b) => a + b, 0);
                             const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
-                            return `${label}: ${value} (${percentage}%)`;
+                            return `${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        drawBorder: false,
+                        color: 'rgba(31, 99, 146, 0.06)'
+                    },
+                    ticks: {
+                        color: '#6b7280',
+                        font: {
+                            size: 10
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#6b7280',
+                        font: {
+                            size: 11,
+                            weight: 600
                         }
                     }
                 }
@@ -2590,7 +2603,7 @@ new Chart(statusCtx, {
     },
     options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         cutout: '66%',
         plugins: {
             legend: {
