@@ -2005,6 +2005,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 
 .modal-modern.add-client-modal .timeline-budget-card {
     min-width: 0;
+    position: relative;
     padding: 1rem 1.05rem;
     border: 1px solid rgba(31, 99, 146, 0.14);
     border-radius: 18px;
@@ -2049,6 +2050,78 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     height: 100%;
 }
 
+.modal-modern.add-client-modal .complexity-field-shell {
+    position: relative;
+}
+
+.modal-modern.add-client-modal .complexity-insight-trigger {
+    position: absolute;
+    top: -0.48rem;
+    right: -0.36rem;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 50%;
+    background: #fff7ed;
+    color: #d97706;
+    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.18);
+    transform-origin: 50% 88%;
+    animation: priorityAttentionSway 1.6s ease-in-out infinite;
+    cursor: pointer;
+}
+
+.modal-modern.add-client-modal .complexity-insight-trigger i {
+    font-size: 0.82rem;
+}
+
+.modal-modern.add-client-modal .complexity-insight-trigger:hover,
+.modal-modern.add-client-modal .complexity-insight-trigger:focus-visible,
+.modal-modern.add-client-modal .complexity-insight-trigger.is-open {
+    background: #d97706;
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(217, 119, 6, 0.26);
+    outline: none;
+    animation-play-state: paused;
+    transform: rotate(0deg) scale(1.06);
+}
+
+.modal-modern.add-client-modal .complexity-insight-popover {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 0.58rem);
+    z-index: 68;
+    display: grid;
+    width: min(390px, 84vw);
+    gap: 0.38rem;
+    padding: 0.82rem 0.9rem;
+    border: 1px solid rgba(31, 99, 146, 0.16);
+    border-radius: 14px;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.10), rgba(255, 255, 255, 0.92)),
+        #f8fcff;
+    color: #1e4f78;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    box-shadow: 0 18px 38px rgba(15, 76, 129, 0.18);
+}
+
+.modal-modern.add-client-modal .complexity-insight-popover[hidden] {
+    display: none;
+}
+
+.modal-modern.add-client-modal .complexity-insight-popover strong {
+    color: #173f61;
+    font-size: 0.86rem;
+}
+
+.modal-modern.add-client-modal .complexity-field-shell > .calculation-note {
+    display: none;
+}
+
 .modal-modern.add-client-modal .template-type-picker {
     position: relative;
 }
@@ -2062,7 +2135,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 }
 
 .modal-modern.add-client-modal .template-field-shell .template-type-picker .form-control {
-    padding-right: 5.4rem;
+    padding-right: 2.5rem;
 }
 
 .modal-modern.add-client-modal .template-type-picker::after {
@@ -2081,8 +2154,8 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 .modal-modern.add-client-modal .template-recommendation-trigger {
     --template-pulse-rgb: 13, 103, 134;
     position: absolute;
-    top: 50%;
-    right: 2.32rem;
+    top: -0.48rem;
+    right: -0.36rem;
     z-index: 5;
     isolation: isolate;
     display: inline-flex;
@@ -2097,7 +2170,8 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
         #ffffff;
     color: #0d6786;
     box-shadow: 0 8px 18px rgba(13, 103, 134, 0.18);
-    transform: translateY(-50%);
+    transform-origin: 50% 88%;
+    animation: priorityAttentionSway 1.6s ease-in-out infinite;
     transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
@@ -2123,7 +2197,8 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     color: #ffffff;
     box-shadow: 0 10px 22px rgba(13, 103, 134, 0.28);
     outline: none;
-    transform: translateY(-50%) scale(1.04);
+    animation-play-state: paused;
+    transform: rotate(0deg) scale(1.04);
 }
 
 .modal-modern.add-client-modal .template-recommendation-trigger.is-applied {
@@ -2131,6 +2206,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     border-color: rgba(16, 134, 94, 0.28);
     color: #10865e;
     box-shadow: 0 8px 18px rgba(16, 134, 94, 0.16);
+    animation: none;
 }
 
 .modal-modern.add-client-modal .template-recommendation-trigger.is-applied::before {
@@ -2184,41 +2260,70 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 }
 
 .modal-modern.add-client-modal .priority-select-wrap .form-select {
-    padding-right: 4.8rem;
+    padding-right: 2.25rem;
 }
 
 .modal-modern.add-client-modal .priority-insight-trigger {
     position: absolute;
-    top: 50%;
-    right: 2.15rem;
+    top: -0.48rem;
+    right: -0.36rem;
     z-index: 4;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
-    border: 1px solid rgba(13, 103, 134, 0.2);
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(245, 158, 11, 0.35);
     border-radius: 50%;
-    background: #eef9fc;
-    color: #0d6786;
-    box-shadow: 0 8px 18px rgba(13, 103, 134, 0.12);
-    transform: translateY(-50%);
-    transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    background: #fff7ed;
+    color: #d97706;
+    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.18);
+    transform-origin: 50% 88%;
+    animation: priorityAttentionSway 1.6s ease-in-out infinite;
+    transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.modal-modern.add-client-modal .priority-insight-trigger i {
+    font-size: 0.82rem;
+}
+
+@keyframes priorityAttentionSway {
+    0%, 72%, 100% {
+        transform: rotate(0deg);
+    }
+
+    78% {
+        transform: rotate(-10deg) translateX(-1px);
+    }
+
+    84% {
+        transform: rotate(10deg) translateX(1px);
+    }
+
+    90% {
+        transform: rotate(-7deg) translateX(-1px);
+    }
+
+    96% {
+        transform: rotate(5deg) translateX(1px);
+    }
 }
 
 .modal-modern.add-client-modal .priority-insight-trigger:hover,
 .modal-modern.add-client-modal .priority-insight-trigger:focus-visible,
 .modal-modern.add-client-modal .priority-insight-trigger.is-open {
-    background: #0d6786;
+    background: #d97706;
     color: #ffffff;
+    box-shadow: 0 10px 22px rgba(217, 119, 6, 0.26);
     outline: none;
-    transform: translateY(-50%) scale(1.04);
+    animation-play-state: paused;
+    transform: rotate(0deg) scale(1.06);
 }
 
 .modal-modern.add-client-modal .priority-insight-popover {
     position: absolute;
-    top: calc(100% + 0.48rem);
-    left: 0;
+    right: 0;
+    bottom: calc(100% + 0.58rem);
     z-index: 65;
     display: grid;
     width: min(360px, 92vw);
@@ -3840,15 +3945,30 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger {
-    background: rgba(13, 103, 134, 0.26);
-    border-color: rgba(138, 210, 255, 0.2);
-    color: #8fd3ff;
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(251, 191, 36, 0.28);
+    color: #fbbf24;
+    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.20);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger {
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(251, 191, 36, 0.28);
+    color: #fbbf24;
+    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.20);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger:hover,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger:focus-visible,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger.is-open {
-    background: #0d6786;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger.is-open,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger.is-open,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger.is-open {
+    background: #d97706;
     color: #ffffff;
 }
 
@@ -3872,6 +3992,21 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     background: rgba(10, 27, 44, 0.74);
     border-color: rgba(138, 210, 255, 0.14);
     color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-popover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-popover {
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.20), rgba(7, 19, 33, 0.9)),
+        #091827;
+    border-color: rgba(138, 210, 255, 0.18);
+    box-shadow: 0 18px 38px rgba(3, 14, 25, 0.34);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-popover strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-popover strong {
+    color: #d7e4f2;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-kicker,
@@ -4681,7 +4816,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                                                     <option value="critical">Critical</option>
                                                 </select>
                                                 <button type="button" class="priority-insight-trigger" data-priority-insight-trigger aria-label="View priority impact" aria-expanded="false">
-                                                    <i class="fas fa-chart-line" aria-hidden="true"></i>
+                                                    <i class="fas fa-exclamation" aria-hidden="true"></i>
                                                 </button>
                                                 <div class="priority-insight-popover" data-priority-insight-popover hidden></div>
                                             </div>
@@ -4731,7 +4866,14 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                                     <input type="number" name="sales_budget" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00" required>
                                     <div class="mini-note" data-budget-helper>Required as the decision insight budget baseline.</div>
                                 </div>
-                                <div class="timeline-budget-card">
+                                <div class="timeline-budget-card complexity-field-shell">
+                                    <button type="button" class="complexity-insight-trigger" data-complexity-insight-trigger aria-label="Show generated complexity explanation" aria-expanded="false">
+                                        <i class="fas fa-exclamation" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="complexity-insight-popover" data-complexity-popover hidden>
+                                        <strong>Low complexity</strong>
+                                        <span>Calculated automatically from budget, timeline, and priority.</span>
+                                    </div>
                                     <div class="timeline-budget-card-title"><i class="fas fa-layer-group"></i> Complexity Signal</div>
                                     <label class="form-label">Generated Complexity</label>
                                     <input type="text" class="form-control" data-generated-complexity readonly value="Low">
@@ -5093,7 +5235,14 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                                     <input type="number" name="sales_budget" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00" required>
                                     <div class="mini-note" data-add-project-budget-helper>Required as the decision insight budget baseline.</div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-6 complexity-field-shell">
+                                    <button type="button" class="complexity-insight-trigger" data-complexity-insight-trigger aria-label="Show generated complexity explanation" aria-expanded="false">
+                                        <i class="fas fa-exclamation" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="complexity-insight-popover" data-complexity-popover hidden>
+                                        <strong>Low complexity</strong>
+                                        <span>Calculated automatically from budget, timeline, and priority.</span>
+                                    </div>
                                     <label class="form-label">Generated Complexity</label>
                                     <input type="text" class="form-control" data-add-project-generated-complexity readonly value="Low">
                                     <div class="calculation-note" data-add-project-complexity-reason>
@@ -5440,6 +5589,41 @@ function escapeClientHtml(value) {
     const div = document.createElement('div');
     div.textContent = String(value ?? '');
     return div.innerHTML;
+}
+
+function syncComplexityPopover(reasonElement, popoverElement) {
+    if (reasonElement && popoverElement) {
+        popoverElement.innerHTML = reasonElement.innerHTML;
+    }
+}
+
+function closeComplexityInsight(scope = document, returnFocus = false) {
+    scope.querySelectorAll('[data-complexity-popover]').forEach((popover) => {
+        const shell = popover.closest('.complexity-field-shell');
+        const trigger = shell?.querySelector('[data-complexity-insight-trigger]');
+        if (!popover.hidden) {
+            popover.hidden = true;
+            trigger?.classList.remove('is-open');
+            trigger?.setAttribute('aria-expanded', 'false');
+            if (returnFocus) {
+                trigger?.focus();
+            }
+        }
+    });
+}
+
+function toggleComplexityInsight(trigger, scope = document) {
+    const shell = trigger?.closest('.complexity-field-shell');
+    const popover = shell?.querySelector('[data-complexity-popover]');
+    if (!popover) {
+        return;
+    }
+
+    const shouldOpen = popover.hidden;
+    closeComplexityInsight(scope, false);
+    popover.hidden = !shouldOpen;
+    trigger.classList.toggle('is-open', shouldOpen);
+    trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
 }
 
 const projectTemplateTypeNames = Array.from(new Set(
@@ -5929,6 +6113,7 @@ function updateAddProjectGeneratedComplexity() {
     if (complexityReason) {
         complexityReason.innerHTML = `<strong>${escapeClientHtml(assessment.level)} complexity</strong><span>${escapeClientHtml(assessment.reason)}</span>`;
     }
+    syncComplexityPopover(complexityReason, form.querySelector('[data-complexity-popover]'));
 
     const priorityMarkupPreview = form.querySelector('[data-add-project-priority-markup-preview]');
     if (priorityMarkupPreview) {
@@ -6179,6 +6364,16 @@ if (addProjectFormElement) {
     });
 
     addProjectFormElement.addEventListener('click', function (event) {
+        const complexityInsightButton = event.target.closest('[data-complexity-insight-trigger]');
+        if (complexityInsightButton) {
+            toggleComplexityInsight(complexityInsightButton, addProjectFormElement);
+            return;
+        }
+
+        if (!event.target.closest('.complexity-field-shell')) {
+            closeComplexityInsight(addProjectFormElement, false);
+        }
+
         const nextButton = event.target.closest('[data-add-project-next]');
         if (nextButton) {
             if (validateAddProjectStep(currentAddProjectStep, true)) {
@@ -6217,6 +6412,12 @@ if (addProjectFormElement) {
         }
 
         applyAddProjectTemplate(findSalesProjectTemplate(addProjectFormElement.elements.project_type?.value), { force: true });
+    });
+
+    addProjectFormElement.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeComplexityInsight(addProjectFormElement, true);
+        }
     });
 
     addProjectFormElement.addEventListener('submit', function (event) {
@@ -6908,7 +7109,7 @@ if (addClientModalElement && addClientForm) {
         const totalText = hasBudget ? `Adjusted intake budget: ${formatPeso(adjustedBudget)}.` : 'Enter budget later to calculate the exact amount.';
         const label = `${priorityMarkup.label} priority adds +${priorityMarkup.percent}%`;
 
-        trigger.title = label;
+        trigger.removeAttribute('title');
         trigger.setAttribute('aria-label', `View priority impact: ${label}`);
         popover.innerHTML = `
             <strong>${escapeHtml(label)}</strong>
@@ -6942,13 +7143,14 @@ if (addClientModalElement && addClientForm) {
 
         const templateType = normalizeTemplateType(template.project_type);
         const isApplied = templateApplyMessage && appliedProjectTemplateType === templateType;
+        const triggerLabel = isApplied
+            ? `${template.project_type} template applied. Click to review details.`
+            : `${template.project_type} recommendation available. Click to review before applying.`;
         trigger.hidden = false;
         trigger.dataset.templateType = template.project_type || '';
         trigger.classList.toggle('is-applied', Boolean(isApplied));
-        trigger.title = isApplied
-            ? `${template.project_type} template applied. Click to review details.`
-            : `${template.project_type} recommendation available. Click to review before applying.`;
-        trigger.setAttribute('aria-label', trigger.title);
+        trigger.removeAttribute('title');
+        trigger.setAttribute('aria-label', triggerLabel);
         trigger.innerHTML = `<i class="fas ${isApplied ? 'fa-check-circle' : 'fa-magic'}" aria-hidden="true"></i>`;
     }
 
@@ -7064,6 +7266,7 @@ if (addClientModalElement && addClientForm) {
         if (complexityReason) {
             complexityReason.innerHTML = `<strong>${escapeHtml(assessment.level)} complexity</strong><span>${escapeHtml(assessment.reason)}</span>`;
         }
+        syncComplexityPopover(complexityReason, addClientForm.querySelector('[data-complexity-popover]'));
 
         const priorityMarkupPreview = addClientForm.querySelector('[data-priority-markup-preview]');
         if (priorityMarkupPreview) {
@@ -7783,8 +7986,20 @@ if (addClientModalElement && addClientForm) {
     });
 
     addClientForm.addEventListener('click', (event) => {
+        const complexityInsightButton = event.target.closest('[data-complexity-insight-trigger]');
+        if (complexityInsightButton) {
+            closePriorityInsight(false);
+            toggleComplexityInsight(complexityInsightButton, addClientForm);
+            return;
+        }
+
+        if (!event.target.closest('.complexity-field-shell')) {
+            closeComplexityInsight(addClientForm, false);
+        }
+
         const priorityInsightButton = event.target.closest('[data-priority-insight-trigger]');
         if (priorityInsightButton) {
+            closeComplexityInsight(addClientForm, false);
             togglePriorityInsight();
             return;
         }
@@ -7850,6 +8065,7 @@ if (addClientModalElement && addClientForm) {
 
         if (event.key === 'Escape') {
             closePriorityInsight(true);
+            closeComplexityInsight(addClientForm, true);
         }
     });
 
