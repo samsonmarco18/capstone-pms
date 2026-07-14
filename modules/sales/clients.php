@@ -5537,9 +5537,9 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 </div>
 
 <style>
-body.sales-assistant-open #chat-bot-float { display:block !important; width:165px; height:165px; left:auto; top:auto; right:24px; bottom:92px; margin:0; transform:none; animation:salesBotArrive .38s cubic-bezier(.2,.8,.2,1) both; }
+body.sales-assistant-open #chat-bot-float { display:block !important; width:125px; height:145px; left:auto; top:auto; right:24px; bottom:92px; margin:0; transform:none; animation:salesBotArrive .38s cubic-bezier(.2,.8,.2,1) both; }
 body.sales-assistant-open #chat-bot-float[hidden] { display:none !important; }
-body.sales-assistant-open #chat-bot-float .chat-bot-speech { width:330px; min-width:330px; max-height:none; overflow:visible; pointer-events:auto; padding:1rem; top:38%; animation:salesBubbleArrive .32s ease both; }
+body.sales-assistant-open #chat-bot-float .chat-bot-speech { width:330px; min-width:330px; max-height:none; overflow:visible; pointer-events:auto; padding:1rem; top:24%; animation:salesBubbleArrive .32s ease both; }
 body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:salesRobotFloat 3.2s ease-in-out infinite; will-change:transform; }
 #addClientForm .template-type-picker::after, #addProjectForm .template-type-picker::after { display:none !important; }
 #addClientForm [data-template-picker-input], #addProjectForm [data-template-picker-input] { padding-right:.9rem !important; }
@@ -5567,7 +5567,7 @@ body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:
 @keyframes salesBotArrive { from{opacity:0;transform:translateY(18px) scale(.9)} to{opacity:1;transform:none} }
 @keyframes salesBubbleArrive { from{opacity:0;transform:translateY(-45%) translateX(18px) scale(.94)} to{opacity:1;transform:translateY(-50%)} }
 @keyframes salesRobotFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-@media(max-width:900px){ body.sales-assistant-open #chat-bot-float{width:120px;height:120px;right:10px;bottom:75px;} body.sales-assistant-open #chat-bot-float .chat-bot-speech{width:min(280px,calc(100vw - 145px));min-width:230px;right:calc(100% - 38px);top:10%;} }
+@media(max-width:900px){ body.sales-assistant-open #chat-bot-float{width:108px;height:126px;right:10px;bottom:75px;} body.sales-assistant-open #chat-bot-float .chat-bot-speech{width:min(280px,calc(100vw - 132px));min-width:230px;right:calc(100% - 28px);top:10%;} }
 </style>
 
 <script>
@@ -5582,14 +5582,17 @@ const salesTemplateAssistant = (() => {
     let backAction = null;
     let feedbackSequence = 0;
     let emotionTimer = null;
+    let winkTimer = null;
     let idleBlinkTimer = null;
     let messageDismissTimer = null;
     let reactionAnimations = [];
     let featureSession = { accepted:0, rejected:0 };
     let browsingChoices = false;
 
-    const robotLottie = () => window.chatBotFloatLottie || null;
+    const robotLottie = () => window.chatBotFloatRobot || window.chatBotFloatLottie || null;
     const robotLayer = (name) => {
+        const controlledPart = window.chatBotFloatRobot?.getPart?.(name);
+        if (controlledPart) return controlledPart;
         const elements = robotLottie()?.renderer?.elements || [];
         const layer = elements.find(element => String(element?.data?.nm || '').toLowerCase() === name.toLowerCase());
         return layer?.baseElement || layer?.layerElement || null;
@@ -5633,9 +5636,20 @@ const salesTemplateAssistant = (() => {
         }
     };
     const blinkRobotEyes = () => {
+        if (window.chatBotFloatRobot?.blink) {
+            window.chatBotFloatRobot.blink();
+            return;
+        }
         const eyes = robotEyeLayer();
         if (!eyes?.animate) return;
-        eyes.animate([{scale:'1 1'},{scale:'1 .08',offset:.45},{scale:'1 .08',offset:.58},{scale:'1 1'}], {duration:280,easing:'ease-in-out'});
+        eyes.animate([{transform:'scaleY(1)'},{transform:'scaleY(.08)',offset:.45},{transform:'scaleY(.08)',offset:.58},{transform:'scaleY(1)'}], {duration:280,easing:'ease-in-out'});
+    };
+    const winkRobotEye = (side = 'right') => {
+        const controller = window.chatBotFloatRobot;
+        if (controller?.wink?.(side)?.length) {
+            return;
+        }
+        blinkRobotEyes();
     };
     const scheduleIdleBlink = () => {
         window.clearTimeout(idleBlinkTimer);
@@ -5644,7 +5658,7 @@ const salesTemplateAssistant = (() => {
             const animation = robotLottie();
             const isReacting = bot?.classList.contains('is-happy') || bot?.classList.contains('is-sad')
                 || bot?.classList.contains('is-amazed') || bot?.classList.contains('is-winking');
-            if (bot && !bot.hidden && !browsingChoices && !isReacting && animation?.isPaused) {
+            if (bot && !bot.hidden && !browsingChoices && !isReacting && animation) {
                 blinkRobotEyes();
             }
             scheduleIdleBlink();
@@ -5664,49 +5678,35 @@ const salesTemplateAssistant = (() => {
 
     const setEmotion = (emotion = '', duration = 1100) => {
         const bot = document.getElementById('chat-bot-float');
+        const assistant = window.chatBotFloatRobot;
         if (!bot) return;
-        prepareRobotLayers();
-        const animation = robotLottie();
-        const eyes = robotEyeLayer();
         window.clearTimeout(emotionTimer);
+        window.clearTimeout(winkTimer);
         window.clearTimeout(idleBlinkTimer);
         stopReactionAnimations();
         bot.classList.remove('is-happy', 'is-sad', 'is-amazed', 'is-winking');
-        if (eyes) {
-            eyes.style.scale = '';
-            if (!browsingChoices) eyes.style.translate = '0px 0px';
+        if (emotion) bot.classList.add(`is-${emotion}`);
+        assistant?.setEmotion?.(emotion, 0);
+        if (!emotion) {
+            assistant?.resetLook?.();
+            scheduleIdleBlink();
+            return;
         }
-        if (!emotion) { scheduleIdleBlink(); return; }
-        bot.classList.add(`is-${emotion}`);
-        animateRobotEmotion(emotion);
-        if (emotion === 'happy' && eyes) {
-            eyes.style.transformOrigin = 'center';
-            eyes.style.scale = '1.04 .78';
-        }
-        if (emotion === 'sad' && eyes) {
-            eyes.style.transformOrigin = 'center';
-            eyes.style.scale = '.9 .62';
-            eyes.style.translate = '0px 2px';
-        }
-        if (emotion === 'amazed') {
-            if (eyes) {
-                eyes.style.transformOrigin = 'center';
-                eyes.style.scale = '1.13';
-            }
-        }
-        if (emotion === 'winking' && animation?.playSegments) {
-            blinkRobotEyes();
-            window.setTimeout(blinkRobotEyes, 320);
+        if (emotion === 'happy') {
+            winkTimer = window.setTimeout(() => {
+                if (bot.classList.contains('is-happy')) assistant?.wink?.('right');
+            }, Math.max(1250, duration));
+        } else if (emotion === 'winking') {
+            assistant?.wink?.('right');
         }
         if (duration > 0) {
+            const clearDelay = emotion === 'happy' ? Math.max(1250, duration) + 1150 : duration;
             emotionTimer = window.setTimeout(() => {
                 bot.classList.remove(`is-${emotion}`);
-                if (eyes) {
-                    eyes.style.scale = '';
-                    if (!browsingChoices) eyes.style.translate = '0px 0px';
-                }
+                assistant?.setEmotion?.('');
+                assistant?.resetLook?.();
                 scheduleIdleBlink();
-            }, duration);
+            }, clearDelay);
         }
     };
 
@@ -5877,6 +5877,7 @@ const salesTemplateAssistant = (() => {
         }
         bot.hidden = false;
         bot.setAttribute('aria-hidden', 'false');
+        window.chatBotWidgetRobot?.wake?.();
         document.body.classList.add('sales-assistant-open');
         const choices = Array.isArray(item.choices) ? `<div class="sales-bot-choice-list">${item.choices.map((choice, choiceIndex) =>
             `<button type="button" class="sales-bot-choice" data-sales-bot-choice="${choiceIndex}"><strong>${escapeClientHtml(choice.label)}</strong><em>${escapeClientHtml(choice.version)}</em></button>`
@@ -5885,8 +5886,7 @@ const salesTemplateAssistant = (() => {
         const progress = item.information || item.choices || queue.length < 2 ? '' : `<span class="sales-bot-progress">Suggestion ${index + 1} of ${queue.length}</span>`;
         browsingChoices = Boolean(item.choices);
         if (browsingChoices) {
-            const eyes = robotEyeLayer();
-            if (eyes) eyes.style.translate = '0px 0px';
+            window.chatBotFloatRobot?.resetLook?.();
         }
         speech.hidden = false;
         speech.innerHTML = `<div class="sales-bot-heading-row"><div class="sales-bot-head">${escapeClientHtml(item.heading || 'My suggestion')}</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div>
@@ -6025,8 +6025,7 @@ const salesTemplateAssistant = (() => {
             const restore = rememberViewport();
             const choice = queue[index]?.choices?.[Number(choiceButton.dataset.salesBotChoice)];
             browsingChoices = false;
-            const eyes = robotEyeLayer();
-            if (eyes) eyes.style.translate = '0px 0px';
+            window.chatBotFloatRobot?.resetLook?.();
             choice?.apply?.();
             showFeedback(choice || { field:'project_type', label:'Project type' }, 'accepted', close);
             restore();
@@ -6086,29 +6085,14 @@ const salesTemplateAssistant = (() => {
     document.addEventListener('pointermove', event => {
         const bot = document.getElementById('chat-bot-float');
         if (!bot || bot.hidden || !browsingChoices) return;
-        const eyeLayer = robotEyeLayer();
-        if (!eyeLayer) return;
-        const faceLayer = robotLayer('face');
-        const rect = (faceLayer || eyeLayer).getBoundingClientRect();
-        const botRect = bot.getBoundingClientRect();
-        const centerX = rect.width > 10 ? rect.left + rect.width / 2 : botRect.left + botRect.width / 2;
-        const centerY = rect.height > 10 ? rect.top + rect.height / 2 : botRect.top + botRect.height * 0.31;
-        const deltaX = event.clientX - centerX;
-        const deltaY = event.clientY - centerY;
-        const distance = Math.max(1, Math.hypot(deltaX, deltaY));
-        const strength = Math.min(1, distance / 180);
-        const lookX = (deltaX / distance) * 7 * strength;
-        const lookY = Math.abs(deltaY) < 34 ? 0 : (deltaY / distance) * 3.2 * strength;
-        eyeLayer.style.translate = `${lookX}px ${lookY}px`;
-        eyeLayer.style.transition = 'translate 55ms linear';
+        window.chatBotFloatRobot?.lookAt?.(event.clientX, event.clientY);
     }, { passive:true });
     const close = () => {
         continueAction = null;
         backAction = null;
         browsingChoices = false;
         setEmotion('');
-        const eyeLayer = robotEyeLayer();
-        if (eyeLayer) { eyeLayer.style.translate = '0px 0px'; eyeLayer.style.scale = ''; }
+        window.chatBotFloatRobot?.resetLook?.();
         const bot = document.getElementById('chat-bot-float');
         const speech = bot?.querySelector('.chat-bot-speech');
         if (!bot || !speech) return;

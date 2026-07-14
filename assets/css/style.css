@@ -2175,8 +2175,8 @@ body {
     right: 92px;
     bottom: 94px;
     z-index: 1088;
-    width: 260px;
-    height: 260px;
+    width: 125px;
+    height: 145px;
     cursor: grab;
     touch-action: none;
 }
@@ -2189,9 +2189,41 @@ body {
     cursor: grabbing;
 }
 
+.chat-bot-float.is-leaving-bed .chat-bot-float-animation {
+    animation: evxAssistantEmergeFromBed .72s cubic-bezier(.16, .8, .22, 1) both !important;
+}
+
+.chat-bot-float.is-returning-bed {
+    pointer-events: none;
+}
+
+.chat-bot-float.is-returning-bed .chat-bot-float-animation {
+    animation: evxAssistantReturnToBed .64s cubic-bezier(.35, 0, .3, 1) both !important;
+}
+
+.chat-bot-float.is-returning-bed .chat-bot-speech {
+    animation: evxAssistantSpeechSleep .3s ease both !important;
+}
+
+@keyframes evxAssistantEmergeFromBed {
+    0%, 24% { opacity: 0; transform: translate(22px, 24px) scale(.58); }
+    68% { opacity: 1; transform: translate(-2px, -4px) scale(1.04); }
+    100% { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+
+@keyframes evxAssistantReturnToBed {
+    0% { opacity: 1; transform: translate(0, 0) scale(1); }
+    35% { opacity: 1; transform: translate(-2px, -4px) scale(1.02); }
+    100% { opacity: 0; transform: translate(22px, 24px) scale(.58); }
+}
+
+@keyframes evxAssistantSpeechSleep {
+    to { opacity: 0; transform: translateY(-50%) translateX(12px) scale(.96); }
+}
+
 .chat-bot-speech {
     position: absolute;
-    top: 34%;
+    top: 24%;
     right: calc(100% - 34px);
     z-index: 3;
     min-width: 152px;
@@ -2290,8 +2322,414 @@ body {
 .chat-bot-float-animation svg {
     width: 100% !important;
     height: 100% !important;
-    transform: scale(1.08);
     transform-origin: center;
+}
+
+/* Code-built ERNI assistant. All expressions and body motion use one SVG controller. */
+.evx-assistant {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    filter: drop-shadow(0 12px 12px rgba(17, 59, 91, 0.16));
+}
+
+.evx-sleep-scene {
+    display: none;
+}
+
+.evx-assistant:is([data-mode="sleeping"], [data-mode="waking"], [data-mode="returning"], [data-mode="empty-bed"]) .evx-sleep-scene {
+    display: block;
+}
+
+.evx-assistant:is([data-mode="sleeping"], [data-mode="waking"], [data-mode="returning"], [data-mode="empty-bed"]) :is(.evx-character, .evx-ground-shadow, .evx-emotion-sparks) {
+    display: none;
+}
+
+.evx-assistant[data-mode="sleeping"] .evx-sleeper {
+    transform-origin: 107px 130px;
+    animation: evxAssistantSleepBreath 3.2s ease-in-out infinite;
+}
+
+.evx-assistant[data-mode="sleeping"] .evx-sleep-blanket {
+    transform-origin: 110px 188px;
+    animation: evxAssistantBlanketBreath 3.2s ease-in-out infinite;
+}
+
+.evx-assistant[data-mode="sleeping"] .evx-sleep-z {
+    animation: evxAssistantSleepZ 2.4s ease-in-out infinite;
+}
+
+.evx-assistant[data-mode="waking"] .evx-sleeper {
+    transform-origin: 107px 130px;
+    animation: evxAssistantLeaveBed .7s cubic-bezier(.2, .75, .2, 1) both;
+}
+
+.evx-assistant[data-mode="returning"] .evx-sleeper {
+    transform-origin: 107px 130px;
+    animation: evxAssistantEnterBed .74s cubic-bezier(.2, .72, .2, 1) both;
+}
+
+.evx-assistant[data-mode="waking"] .evx-sleep-z,
+.evx-assistant[data-mode="returning"] .evx-sleep-z,
+.evx-assistant[data-mode="empty-bed"] :is(.evx-sleeper, .evx-sleep-z) {
+    display: none;
+}
+
+.evx-assistant[data-mode="waking"] .evx-sleeper {
+    display: block;
+}
+
+.chat-bot-animation .evx-assistant {
+    transform: scale(1.15);
+}
+
+.chat-bot-float-animation .evx-assistant {
+    transform: scale(1.02);
+}
+
+.evx-character {
+    transform-origin: 110px 128px;
+    animation: evxAssistantFloat 3.4s cubic-bezier(.45, 0, .55, 1) infinite;
+}
+
+.evx-body,
+.evx-head,
+.evx-arm,
+.evx-leg,
+.evx-hand {
+    transform-box: view-box;
+}
+
+.evx-eye {
+    transform-box: fill-box;
+    transform-origin: center center;
+}
+
+.evx-body {
+    transform-origin: 110px 149px;
+    animation: evxAssistantBreathe 2.8s ease-in-out infinite;
+}
+
+.evx-head {
+    transform-origin: 110px 105px;
+    animation: evxAssistantHeadIdle 5.4s ease-in-out infinite;
+}
+
+.evx-left-arm {
+    transform-origin: 67px 120px;
+}
+
+.evx-right-arm {
+    transform-origin: 153px 120px;
+}
+
+.evx-left-hand {
+    transform-origin: 52px 179px;
+}
+
+.evx-right-hand {
+    transform-origin: 168px 179px;
+}
+
+.evx-left-leg {
+    transform-origin: 87px 180px;
+}
+
+.evx-right-leg {
+    transform-origin: 133px 180px;
+}
+
+.evx-eye-track {
+    transform: none;
+}
+
+.evx-pupil,
+.evx-pupil-glint {
+    transform-box: fill-box;
+    transform-origin: center center;
+    transform: translate(var(--evx-look-x, 0), var(--evx-look-y, 0));
+    transition: transform 145ms cubic-bezier(.2, .72, .22, 1);
+    will-change: transform;
+}
+
+.evx-eye-happy,
+.evx-eye-sad,
+.evx-eye-wink,
+.evx-mouth-sad,
+.evx-mouth-amazed,
+.evx-tear,
+.evx-emotion-sparks {
+    opacity: 0;
+}
+
+.evx-eye,
+.evx-eye-open,
+.evx-pupil,
+.evx-pupil-glint,
+.evx-mouth,
+.evx-tear,
+.evx-emotion-sparks {
+    transition: opacity 140ms ease, transform 180ms ease;
+}
+
+.evx-assistant.is-blinking:not([data-emotion="winking"]) .evx-eye {
+    animation: evxAssistantBlink 230ms cubic-bezier(.45, 0, .3, 1) both;
+}
+
+.evx-assistant[data-emotion="happy"] .evx-eye-open,
+.evx-assistant[data-emotion="happy"] .evx-pupil,
+.evx-assistant[data-emotion="happy"] .evx-pupil-glint,
+.evx-assistant[data-emotion="happy"] .evx-mouth-sad,
+.evx-assistant[data-emotion="happy"] .evx-mouth-amazed {
+    opacity: 0;
+}
+
+.evx-assistant[data-emotion="happy"] .evx-eye-happy,
+.evx-assistant[data-emotion="happy"] .evx-mouth-smile {
+    opacity: 1;
+}
+
+.evx-assistant[data-emotion="happy"] .evx-left-arm {
+    animation: evxAssistantCheerLeft 1.55s cubic-bezier(.2, .78, .2, 1) 1;
+}
+
+.evx-assistant[data-emotion="happy"] .evx-right-arm {
+    animation: evxAssistantCheerRight 1.55s cubic-bezier(.2, .78, .2, 1) 1;
+}
+
+.evx-assistant[data-emotion="happy"] .evx-character {
+    animation: evxAssistantHappyBounce 1.55s cubic-bezier(.2, .78, .25, 1) 1;
+}
+
+.evx-assistant[data-emotion="sad"] .evx-eye-open,
+.evx-assistant[data-emotion="sad"] .evx-pupil,
+.evx-assistant[data-emotion="sad"] .evx-pupil-glint,
+.evx-assistant[data-emotion="sad"] .evx-eye-happy,
+.evx-assistant[data-emotion="sad"] .evx-mouth-smile {
+    opacity: 0;
+}
+
+.evx-assistant[data-emotion="sad"] .evx-eye-sad,
+.evx-assistant[data-emotion="sad"] .evx-mouth-sad,
+.evx-assistant[data-emotion="sad"] .evx-tear {
+    opacity: 1;
+}
+
+.evx-assistant[data-emotion="sad"] .evx-character {
+    transform: translateY(7px);
+    animation: none;
+}
+
+.evx-assistant[data-emotion="sad"] .evx-head {
+    transform: translateY(4px) rotate(-3deg);
+    animation: none;
+}
+
+.evx-assistant[data-emotion="sad"] .evx-left-arm {
+    transform: rotate(10deg) translateY(5px);
+}
+
+.evx-assistant[data-emotion="sad"] .evx-right-arm {
+    transform: rotate(-10deg) translateY(5px);
+}
+
+.evx-assistant[data-emotion="amazed"] .evx-eye {
+    transform: scale(1.22);
+    transform-origin: center;
+}
+
+.evx-assistant[data-emotion="amazed"] .evx-mouth-smile {
+    opacity: 0;
+}
+
+.evx-assistant[data-emotion="amazed"] .evx-mouth-amazed,
+.evx-assistant[data-emotion="amazed"] .evx-emotion-sparks {
+    opacity: 1;
+}
+
+.evx-assistant[data-emotion="amazed"] .evx-left-arm {
+    animation: evxAssistantAmazedLeft .72s ease-in-out infinite alternate;
+}
+
+.evx-assistant[data-emotion="amazed"] .evx-right-arm {
+    animation: evxAssistantAmazedRight .72s ease-in-out infinite alternate;
+}
+
+.evx-assistant[data-emotion="winking"] .evx-eye-open,
+.evx-assistant[data-emotion="winking"] .evx-pupil,
+.evx-assistant[data-emotion="winking"] .evx-pupil-glint,
+.evx-assistant[data-emotion="winking"] .evx-eye-happy,
+.evx-assistant[data-emotion="winking"] .evx-eye-sad {
+    opacity: 0;
+}
+
+.evx-assistant[data-emotion="winking"] .evx-left-eye .evx-eye-happy,
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-right-eye .evx-eye-happy,
+.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-eye .evx-eye-wink,
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-eye-wink {
+    opacity: 1;
+}
+
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-right-eye .evx-eye-wink,
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-eye-happy {
+    opacity: 0;
+}
+
+.evx-assistant[data-emotion="winking"] .evx-right-arm {
+    animation: evxAssistantWaveRight 1.02s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-eye .evx-eye-wink,
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-eye-wink {
+    transform-box: fill-box;
+    transform-origin: center center;
+    animation: evxAssistantWinkEye 1.02s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-eye .evx-eye-open,
+.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-eye .evx-pupil,
+.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-eye .evx-pupil-glint,
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-eye-open,
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-pupil,
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-pupil-glint {
+    animation: evxAssistantWinkOpen 1.02s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-right-arm {
+    animation: none;
+}
+
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-arm {
+    animation: evxAssistantWaveLeft 1.02s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.evx-assistant[data-emotion="thinking"] .evx-left-arm {
+    transform: rotate(-34deg) translate(9px, -15px);
+}
+
+.evx-assistant[data-emotion="thinking"] .evx-head {
+    transform: rotate(4deg);
+    animation: none;
+}
+
+@keyframes evxAssistantFloat {
+    0%, 100% { transform: translateY(1px); }
+    50% { transform: translateY(-6px); }
+}
+
+@keyframes evxAssistantSleepBreath {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(1.5px) scale(1.008); }
+}
+
+@keyframes evxAssistantBlanketBreath {
+    0%, 100% { transform: scaleY(1); }
+    50% { transform: scaleY(1.018); }
+}
+
+@keyframes evxAssistantSleepZ {
+    0%, 100% { opacity: .35; transform: translateY(3px); }
+    50% { opacity: 1; transform: translateY(-4px); }
+}
+
+@keyframes evxAssistantLeaveBed {
+    0% { opacity: 1; transform: translate(0, 0) scale(1); }
+    38% { opacity: 1; transform: translate(0, -12px) scale(1.02); }
+    100% { opacity: 0; transform: translate(48px, -48px) scale(.72); }
+}
+
+@keyframes evxAssistantEnterBed {
+    0% { opacity: 0; transform: translate(48px, -48px) scale(.72); }
+    45% { opacity: 1; transform: translate(0, -12px) scale(1.02); }
+    72% { opacity: 1; transform: translate(0, 3px) scale(.995); }
+    100% { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+
+@keyframes evxAssistantBlink {
+    0%, 100% { transform: scaleY(1); }
+    42%, 58% { transform: scaleY(.08); }
+}
+
+@keyframes evxAssistantWinkEye {
+    0%, 15%, 88%, 100% { opacity: 0; transform: scale(.88); }
+    30%, 74% { opacity: 1; transform: scale(1.06); }
+    44%, 64% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes evxAssistantWinkOpen {
+    0%, 14% { opacity: 1; transform: scaleY(1); }
+    28%, 76% { opacity: 0; transform: scaleY(.08); }
+    90%, 100% { opacity: 1; transform: scaleY(1); }
+}
+
+@keyframes evxAssistantBreathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.015, 1.025); }
+}
+
+@keyframes evxAssistantHeadIdle {
+    0%, 42%, 100% { transform: translateY(0); }
+    47% { transform: translateY(1.5px); }
+    52% { transform: translateY(0); }
+}
+
+@keyframes evxAssistantHappyBounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    32% { transform: translateY(-8px) scale(1.02); }
+    58% { transform: translateY(-5px) scale(1.015); }
+    76% { transform: translateY(-8px) scale(1.02); }
+}
+
+@keyframes evxAssistantCheerLeft {
+    0%, 100% { transform: rotate(0); }
+    28% { transform: rotate(72deg) translate(-2px, -5px); }
+    48% { transform: rotate(86deg) translate(-3px, -7px); }
+    66% { transform: rotate(74deg) translate(-2px, -5px); }
+    80% { transform: rotate(84deg) translate(-3px, -7px); }
+}
+
+@keyframes evxAssistantCheerRight {
+    0%, 100% { transform: rotate(0); }
+    28% { transform: rotate(-72deg) translate(2px, -5px); }
+    48% { transform: rotate(-86deg) translate(3px, -7px); }
+    66% { transform: rotate(-74deg) translate(2px, -5px); }
+    80% { transform: rotate(-84deg) translate(3px, -7px); }
+}
+
+@keyframes evxAssistantAmazedLeft {
+    from { transform: rotate(34deg) translate(-1px, -3px); }
+    to { transform: rotate(48deg) translate(-3px, -6px); }
+}
+
+@keyframes evxAssistantAmazedRight {
+    from { transform: rotate(-34deg) translate(1px, -3px); }
+    to { transform: rotate(-48deg) translate(3px, -6px); }
+}
+
+@keyframes evxAssistantWaveRight {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(-108deg) translate(12px, -15px); }
+    42% { transform: rotate(-96deg) translate(10px, -17px); }
+    60% { transform: rotate(-112deg) translate(13px, -14px); }
+    78% { transform: rotate(-99deg) translate(11px, -16px); }
+}
+
+@keyframes evxAssistantWaveLeft {
+    0%, 100% { transform: rotate(0); }
+    25% { transform: rotate(108deg) translate(-12px, -15px); }
+    42% { transform: rotate(96deg) translate(-10px, -17px); }
+    60% { transform: rotate(112deg) translate(-13px, -14px); }
+    78% { transform: rotate(99deg) translate(-11px, -16px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .evx-character,
+    .evx-body,
+    .evx-head,
+    .evx-assistant[data-emotion] .evx-arm {
+        animation: none !important;
+    }
 }
 
 .chat-unread-badge {
@@ -3075,8 +3513,8 @@ body {
     .chat-bot-float {
         right: 58px;
         bottom: 84px;
-        width: 210px;
-        height: 210px;
+        width: 108px;
+        height: 126px;
     }
 
     .chat-bot-speech {
