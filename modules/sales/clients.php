@@ -5574,6 +5574,33 @@ body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:
 const savedClientDraftId = <?php echo json_encode($savedClientDraftId); ?>;
 const projectTemplates = <?php echo json_encode($projectTemplates, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
 
+function getPriorityAdjustedTemplateWeeks(template, priorityValue = 'medium') {
+    let minimumWeeks = Math.max(0, Math.round(Number(template?.duration_min_weeks || 0)));
+    let maximumWeeks = Math.max(0, Math.round(Number(template?.duration_max_weeks || 0)));
+    if (!minimumWeeks && !maximumWeeks) return 0;
+    if (!minimumWeeks) minimumWeeks = maximumWeeks;
+    if (!maximumWeeks) maximumWeeks = minimumWeeks;
+    if (minimumWeeks > maximumWeeks) [minimumWeeks, maximumWeeks] = [maximumWeeks, minimumWeeks];
+
+    const priority = String(priorityValue || 'medium').toLowerCase();
+    const hasRange = minimumWeeks < maximumWeeks;
+    if (priority === 'critical') {
+        return Math.max(1, hasRange ? Math.floor(minimumWeeks * .8) : Math.floor(maximumWeeks * .65));
+    }
+    if (priority === 'high') {
+        return Math.max(1, hasRange ? minimumWeeks : Math.floor(maximumWeeks * .8));
+    }
+    if (priority === 'low') {
+        return Math.max(1, hasRange ? maximumWeeks : Math.ceil(maximumWeeks * 1.2));
+    }
+    return Math.max(1, hasRange ? Math.round((minimumWeeks + maximumWeeks) / 2) : maximumWeeks);
+}
+
+function getPriorityDurationName(priorityValue = 'medium') {
+    const normalized = String(priorityValue || 'medium').toLowerCase();
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 const salesTemplateAssistant = (() => {
     let queue = [];
     let index = 0;
@@ -5948,7 +5975,8 @@ const salesTemplateAssistant = (() => {
                 return show(form, [{ heading:'Feature suggestions complete', label:'All learned template features have already been reviewed or added. Nice work!', information:true }]);
             }
         }
-        const timelineWeeks = Math.max(1, Number(template.duration_max_weeks || 1));
+        const priorityValue = form.elements.priority?.value || 'medium';
+        const timelineWeeks = getPriorityAdjustedTemplateWeeks(template, priorityValue) || 1;
         const timelineDays = timelineWeeks * 7;
         const timelineStartValue = form.elements.timeline_start?.value || new Date().toISOString().slice(0, 10);
         const timelineStartDate = new Date(`${timelineStartValue}T00:00:00`);
@@ -5959,10 +5987,12 @@ const salesTemplateAssistant = (() => {
         const timelineSuggestion = {
             field:'timeline_end',
             heading:'Suggested project timeline',
-            label:`Start: ${readableDate(timelineStartValue)} · Deadline: ${readableDate(timelineDeadlineValue)} · ${timelineDays} calendar days (${timelineWeeks} weeks)`,
+            label:`Priority: ${getPriorityDurationName(priorityValue)} · Start: ${readableDate(timelineStartValue)} · Deadline: ${readableDate(timelineDeadlineValue)} · ${timelineDays} calendar days (${timelineWeeks} weeks)`,
             apply:() => {
                 setField('timeline_start', timelineStartValue);
                 setField('timeline_end', timelineDeadlineValue);
+                const timelineEnd = activeForm?.elements?.timeline_end;
+                if (timelineEnd) timelineEnd.dataset.templateDurationAuto = '1';
             }
         };
         const maps = {
@@ -6424,6 +6454,21 @@ function findSalesProjectTemplate(value) {
     return scoredMatches[0].template;
 }
 
+function syncAddProjectTimelineWithPriority(force = false) {
+    const form = document.getElementById('addProjectForm');
+    const timelineEnd = form?.elements?.timeline_end;
+    const template = form ? findSalesProjectTemplate(form.elements.project_type?.value || '') : null;
+    if (!form || !timelineEnd || !template) return;
+    if (!force && timelineEnd.value && timelineEnd.dataset.templateDurationAuto !== '1') return;
+
+    const weeks = getPriorityAdjustedTemplateWeeks(template, form.elements.priority?.value || 'medium');
+    if (!weeks) return;
+    const startValue = form.elements.timeline_start?.value || addProjectDatePlusDays('', 0);
+    timelineEnd.value = addProjectDatePlusDays(startValue, weeks * 7);
+    timelineEnd.dataset.templateDurationAuto = '1';
+    timelineEnd.dataset.templateDurationWeeks = String(weeks);
+}
+
 function syncAddProjectBudgetWithPriority() {
     const form = document.getElementById('addProjectForm');
     if (!form || !addProjectAutoBudgetFromTemplate || !Number.isFinite(Number(addProjectAutoBudgetBase)) || Number(addProjectAutoBudgetBase) <= 0) {
@@ -6471,9 +6516,12 @@ function applyAddProjectTemplate(template, options = {}) {
     if (form.elements.timeline_start && (force || !form.elements.timeline_start.value)) {
         form.elements.timeline_start.value = addProjectDatePlusDays('', 0);
     }
-    if (form.elements.timeline_end && Number(template.duration_max_weeks || 0) > 0 && (force || !form.elements.timeline_end.value)) {
+    if (form.elements.timeline_end && getPriorityAdjustedTemplateWeeks(template, form.elements.priority?.value || 'medium') > 0 && (force || !form.elements.timeline_end.value)) {
         const startValue = form.elements.timeline_start?.value || addProjectDatePlusDays('', 0);
-        form.elements.timeline_end.value = addProjectDatePlusDays(startValue, Number(template.duration_max_weeks || 0) * 7);
+        const durationWeeks = getPriorityAdjustedTemplateWeeks(template, form.elements.priority?.value || 'medium');
+        form.elements.timeline_end.value = addProjectDatePlusDays(startValue, durationWeeks * 7);
+        form.elements.timeline_end.dataset.templateDurationAuto = '1';
+        form.elements.timeline_end.dataset.templateDurationWeeks = String(durationWeeks);
     }
     if (form.elements.additional_requirements && (force || !form.elements.additional_requirements.value.trim())) {
         form.elements.additional_requirements.value = [
@@ -6963,6 +7011,13 @@ if (addProjectFormElement) {
             addProjectAutoBudgetBase = null;
             addProjectAutoBudgetFromTemplate = false;
         }
+        if (event.target?.name === 'timeline_end') {
+            delete event.target.dataset.templateDurationAuto;
+            delete event.target.dataset.templateDurationWeeks;
+        }
+        if (event.target?.name === 'timeline_start' && addProjectFormElement.elements.timeline_end?.dataset.templateDurationAuto === '1') {
+            syncAddProjectTimelineWithPriority(true);
+        }
         if (event.target?.matches('[data-add-project-feature-input]')) {
             event.target.setCustomValidity('');
             syncAddProjectFeatureField();
@@ -6980,6 +7035,7 @@ if (addProjectFormElement) {
         }
         if (event.target?.name === 'priority') {
             syncAddProjectBudgetWithPriority();
+            syncAddProjectTimelineWithPriority(false);
             updateAddProjectTemplateRecommendation();
         }
     });
@@ -7486,6 +7542,20 @@ if (addClientModalElement && addClientForm) {
         return `${year}-${month}-${day}`;
     }
 
+    function syncClientTimelineWithPriority(force = false) {
+        const timelineEnd = addClientForm.elements.timeline_end;
+        const template = findProjectTemplate(getFormValue('project_type'));
+        if (!timelineEnd || !template) return;
+        if (!force && timelineEnd.value && timelineEnd.dataset.templateDurationAuto !== '1') return;
+
+        const weeks = getPriorityAdjustedTemplateWeeks(template, addClientForm.elements.priority?.value || 'medium');
+        if (!weeks) return;
+        const startValue = getFormValue('timeline_start') || addDaysToDateInput('', 0);
+        timelineEnd.value = addDaysToDateInput(startValue, weeks * 7);
+        timelineEnd.dataset.templateDurationAuto = '1';
+        timelineEnd.dataset.templateDurationWeeks = String(weeks);
+    }
+
     function applyProjectTemplate(template, options = {}) {
         if (!template) {
             return;
@@ -7513,9 +7583,12 @@ if (addClientModalElement && addClientForm) {
         if (addClientForm.elements.timeline_start && (force || !getFormValue('timeline_start'))) {
             addClientForm.elements.timeline_start.value = addDaysToDateInput('', 0);
         }
-        if (addClientForm.elements.timeline_end && Number(template.duration_max_weeks || 0) > 0 && (force || !getFormValue('timeline_end'))) {
+        if (addClientForm.elements.timeline_end && getPriorityAdjustedTemplateWeeks(template, addClientForm.elements.priority?.value || 'medium') > 0 && (force || !getFormValue('timeline_end'))) {
             const startValue = getFormValue('timeline_start') || addDaysToDateInput('', 0);
-            addClientForm.elements.timeline_end.value = addDaysToDateInput(startValue, Number(template.duration_max_weeks || 0) * 7);
+            const durationWeeks = getPriorityAdjustedTemplateWeeks(template, addClientForm.elements.priority?.value || 'medium');
+            addClientForm.elements.timeline_end.value = addDaysToDateInput(startValue, durationWeeks * 7);
+            addClientForm.elements.timeline_end.dataset.templateDurationAuto = '1';
+            addClientForm.elements.timeline_end.dataset.templateDurationWeeks = String(durationWeeks);
         }
         if (addClientForm.elements.additional_requirements && (force || !getFormValue('additional_requirements'))) {
             addClientForm.elements.additional_requirements.value = [
@@ -8606,6 +8679,13 @@ if (addClientModalElement && addClientForm) {
         if (event.target?.name === 'sales_notes') {
             resizeSalesNotesField();
         }
+        if (event.target?.name === 'timeline_end') {
+            delete event.target.dataset.templateDurationAuto;
+            delete event.target.dataset.templateDurationWeeks;
+        }
+        if (event.target?.name === 'timeline_start' && addClientForm.elements.timeline_end?.dataset.templateDurationAuto === '1') {
+            syncClientTimelineWithPriority(true);
+        }
         formTouched = true;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
@@ -8614,6 +8694,9 @@ if (addClientModalElement && addClientForm) {
     addClientForm.addEventListener('change', (event) => {
         if (event.target?.matches('[data-attachment-input]')) {
             updateAttachmentSummary();
+        }
+        if (event.target?.name === 'priority') {
+            syncClientTimelineWithPriority(false);
         }
         formTouched = true;
         hideUnsavedClosePanel();
