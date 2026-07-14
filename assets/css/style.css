@@ -2970,19 +2970,14 @@ body {
 .role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card,
 .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern {
     --role-stat-color: #1f6392;
-    --role-stat-foreground: #ffffff;
-    --role-stat-muted: rgba(255, 255, 255, 0.78);
-    --role-stat-tint: rgba(255, 255, 255, 0.18);
-    --role-stat-glow: rgba(31, 99, 146, 0.26);
-    --role-stat-border: rgba(255, 255, 255, 0.24);
-    --role-stat-border-strong: rgba(255, 255, 255, 0.38);
-    --role-stat-card-start: #1f6392;
-    --role-stat-card-end: #0e7490;
-    --role-dashboard-card-sheen: rgba(255, 255, 255, 0.18);
-    --role-dashboard-card-sheen-soft: rgba(255, 255, 255, 0.10);
+    --role-stat-foreground: var(--role-dashboard-primary);
+    --role-stat-muted: #6c757d;
+    --role-stat-glow: rgba(31, 99, 146, 0.10);
+    --role-stat-border: rgba(31, 99, 146, 0.14);
+    --role-stat-border-strong: rgba(31, 99, 146, 0.28);
     --role-dashboard-card-glow: var(--role-stat-glow);
-    --role-dashboard-card-tint: var(--role-stat-tint);
-    --role-dashboard-surface: linear-gradient(135deg, var(--role-stat-card-start) 0%, var(--role-stat-card-end) 100%);
+    --role-dashboard-card-tint: rgba(31, 99, 146, 0.055);
+    --role-dashboard-surface: rgba(255, 255, 255, 0.94);
     --role-dashboard-border: var(--role-stat-border);
     --role-dashboard-border-strong: var(--role-stat-border-strong);
     --stat-color: var(--role-stat-color);
@@ -2990,71 +2985,53 @@ body {
 
 .role-dashboard-shell.role-dashboard-shell .admin-stat-active,
 .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(3) {
-    --role-stat-color: #ffffff;
-    --role-stat-tint: rgba(255, 255, 255, 0.16);
-    --role-stat-glow: rgba(5, 150, 105, 0.24);
-    --role-stat-border: rgba(255, 255, 255, 0.22);
-    --role-stat-border-strong: rgba(255, 255, 255, 0.36);
-    --role-stat-card-start: #059669;
-    --role-stat-card-end: #0f766e;
+    --role-stat-color: #1f6392;
+    --role-stat-glow: rgba(13, 103, 134, 0.10);
+    --role-stat-border: rgba(13, 103, 134, 0.14);
+    --role-stat-border-strong: rgba(13, 103, 134, 0.28);
 }
 
 .role-dashboard-shell.role-dashboard-shell .admin-stat-tech,
 .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(2) {
-    --role-stat-color: #ffffff;
-    --role-stat-tint: rgba(255, 255, 255, 0.16);
-    --role-stat-glow: rgba(37, 99, 235, 0.24);
-    --role-stat-border: rgba(255, 255, 255, 0.22);
-    --role-stat-border-strong: rgba(255, 255, 255, 0.36);
-    --role-stat-card-start: #2563eb;
-    --role-stat-card-end: #4f46e5;
+    --role-stat-color: #1f6392;
+    --role-stat-glow: rgba(47, 128, 200, 0.10);
+    --role-stat-border: rgba(47, 128, 200, 0.14);
+    --role-stat-border-strong: rgba(47, 128, 200, 0.28);
 }
 
 .role-dashboard-shell.role-dashboard-shell .admin-stat-users {
-    --role-stat-color: #ffffff;
-    --role-stat-tint: rgba(255, 255, 255, 0.16);
-    --role-stat-glow: rgba(14, 116, 144, 0.24);
-    --role-stat-border: rgba(255, 255, 255, 0.22);
-    --role-stat-border-strong: rgba(255, 255, 255, 0.36);
-    --role-stat-card-start: #0e7490;
-    --role-stat-card-end: #0f766e;
+    --role-stat-color: #1f6392;
+    --role-stat-glow: rgba(14, 116, 144, 0.10);
+    --role-stat-border: rgba(14, 116, 144, 0.14);
+    --role-stat-border-strong: rgba(14, 116, 144, 0.28);
 }
 
 .role-dashboard-shell.role-dashboard-shell .admin-stat-security,
 .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(4) {
-    --role-stat-color: #ffffff;
-    --role-stat-tint: rgba(255, 255, 255, 0.16);
-    --role-stat-glow: rgba(217, 119, 6, 0.24);
-    --role-stat-border: rgba(255, 255, 255, 0.22);
-    --role-stat-border-strong: rgba(255, 255, 255, 0.36);
-    --role-stat-card-start: #d97706;
-    --role-stat-card-end: #b45309;
+    --role-stat-color: #1f6392;
+    --role-stat-glow: rgba(42, 122, 183, 0.10);
+    --role-stat-border: rgba(42, 122, 183, 0.14);
+    --role-stat-border-strong: rgba(42, 122, 183, 0.28);
 }
 
 @supports selector(.card:has(.fa-check-circle)) {
     .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-check-circle),
     .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-circle-check),
     .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-check-circle) {
-        --role-stat-color: #ffffff;
-        --role-stat-tint: rgba(255, 255, 255, 0.16);
-        --role-stat-glow: rgba(5, 150, 105, 0.24);
-        --role-stat-border: rgba(255, 255, 255, 0.22);
-        --role-stat-border-strong: rgba(255, 255, 255, 0.36);
-        --role-stat-card-start: #059669;
-        --role-stat-card-end: #0f766e;
+        --role-stat-color: #1f6392;
+        --role-stat-glow: rgba(13, 103, 134, 0.10);
+        --role-stat-border: rgba(13, 103, 134, 0.14);
+        --role-stat-border-strong: rgba(13, 103, 134, 0.28);
     }
 
     .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-clock),
     .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-calendar-check),
     .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-clock),
     .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-calendar-check) {
-        --role-stat-color: #ffffff;
-        --role-stat-tint: rgba(255, 255, 255, 0.16);
-        --role-stat-glow: rgba(217, 119, 6, 0.24);
-        --role-stat-border: rgba(255, 255, 255, 0.22);
-        --role-stat-border-strong: rgba(255, 255, 255, 0.36);
-        --role-stat-card-start: #d97706;
-        --role-stat-card-end: #b45309;
+        --role-stat-color: #1f6392;
+        --role-stat-glow: rgba(42, 122, 183, 0.10);
+        --role-stat-border: rgba(42, 122, 183, 0.14);
+        --role-stat-border-strong: rgba(42, 122, 183, 0.28);
     }
 
     .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-exclamation-triangle),
@@ -3063,26 +3040,20 @@ body {
     .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-exclamation-triangle),
     .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-triangle-exclamation),
     .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-rotate-left) {
-        --role-stat-color: #ffffff;
-        --role-stat-tint: rgba(255, 255, 255, 0.16);
-        --role-stat-glow: rgba(220, 38, 38, 0.24);
-        --role-stat-border: rgba(255, 255, 255, 0.22);
-        --role-stat-border-strong: rgba(255, 255, 255, 0.36);
-        --role-stat-card-start: #dc2626;
-        --role-stat-card-end: #991b1b;
+        --role-stat-color: #1f6392;
+        --role-stat-glow: rgba(31, 99, 146, 0.10);
+        --role-stat-border: rgba(31, 99, 146, 0.14);
+        --role-stat-border-strong: rgba(31, 99, 146, 0.28);
     }
 
     .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-play-circle),
     .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-spinner),
     .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-play-circle),
     .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-spinner) {
-        --role-stat-color: #ffffff;
-        --role-stat-tint: rgba(255, 255, 255, 0.16);
-        --role-stat-glow: rgba(14, 116, 144, 0.24);
-        --role-stat-border: rgba(255, 255, 255, 0.22);
-        --role-stat-border-strong: rgba(255, 255, 255, 0.36);
-        --role-stat-card-start: #0e7490;
-        --role-stat-card-end: #0f766e;
+        --role-stat-color: #1f6392;
+        --role-stat-glow: rgba(14, 116, 144, 0.10);
+        --role-stat-border: rgba(14, 116, 144, 0.14);
+        --role-stat-border-strong: rgba(14, 116, 144, 0.28);
     }
 }
 
@@ -3275,67 +3246,13 @@ body {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern {
-    --role-stat-card-start: #0c293d;
-    --role-stat-card-end: #071b2b;
-    --role-dashboard-surface: linear-gradient(135deg, var(--role-stat-card-start) 0%, var(--role-stat-card-end) 100%);
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .admin-stat-active,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(3) {
-    --role-stat-card-start: #0b3329;
-    --role-stat-card-end: #071f1a;
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .admin-stat-tech,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(2) {
-    --role-stat-card-start: #10234d;
-    --role-stat-card-end: #0a1830;
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .admin-stat-users {
-    --role-stat-card-start: #07313a;
-    --role-stat-card-end: #071f27;
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .admin-stat-security,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(4) {
-    --role-stat-card-start: #3a250c;
-    --role-stat-card-end: #201509;
-}
-
-@supports selector(.card:has(.fa-check-circle)) {
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-check-circle),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-circle-check),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-check-circle) {
-        --role-stat-card-start: #0b3329;
-        --role-stat-card-end: #071f1a;
-    }
-
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-clock),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-calendar-check),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-clock),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-calendar-check) {
-        --role-stat-card-start: #3a250c;
-        --role-stat-card-end: #201509;
-    }
-
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-exclamation-triangle),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-triangle-exclamation),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-rotate-left),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-exclamation-triangle),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-triangle-exclamation),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-rotate-left) {
-        --role-stat-card-start: #3b1518;
-        --role-stat-card-end: #231013;
-    }
-
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-play-circle),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:has(.fa-spinner),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-play-circle),
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:has(.fa-spinner) {
-        --role-stat-card-start: #07313a;
-        --role-stat-card-end: #071f27;
-    }
+    --role-stat-foreground: #eaf6ff;
+    --role-stat-muted: rgba(234, 246, 255, 0.68);
+    --role-stat-border: rgba(78, 155, 199, 0.22);
+    --role-stat-border-strong: rgba(78, 155, 199, 0.34);
+    --role-dashboard-surface: rgba(10, 22, 35, 0.88);
+    --role-dashboard-border: var(--role-stat-border);
+    --role-dashboard-border-strong: var(--role-stat-border-strong);
 }
 
 /* App-wide Sales-inspired component consistency */

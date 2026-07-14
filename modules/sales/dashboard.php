@@ -397,18 +397,19 @@ include '../../includes/navbar.php';
 
 .stat-card-modern {
     --stat-color: var(--theme-primary);
-    --stat-bg-tint: var(--tech-panel-tint);
-    --stat-card-start: #1f6392;
-    --stat-card-end: #0e7490;
-    --stat-foreground: #ffffff;
-    --stat-muted: rgba(255, 255, 255, 0.78);
+    --stat-foreground: var(--theme-primary-dark);
+    --stat-muted: var(--text-muted);
     --stat-border: var(--tech-border);
     --stat-border-hover: rgba(34, 211, 238, 0.28);
     --stat-glow: rgba(34, 211, 238, 0.07);
     --stat-glow-hover: rgba(34, 211, 238, 0.13);
     --stat-grid-line: var(--tech-grid-line);
     --stat-node: var(--tech-node);
-    background: linear-gradient(135deg, var(--stat-card-start) 0%, var(--stat-card-end) 100%);
+    background:
+        radial-gradient(circle at 100% 0%, var(--card-corner-glow), transparent 34%),
+        linear-gradient(135deg, var(--card-sheen) 0%, rgba(255, 255, 255, 0) 38%, var(--tech-panel-tint) 100%),
+        linear-gradient(180deg, var(--card-sheen-soft), transparent 56%),
+        #ffffff;
     border-radius: 20px;
     padding: 1.5rem;
     box-shadow: var(--shadow-sm), 0 0 26px var(--stat-glow);
@@ -421,51 +422,35 @@ include '../../includes/navbar.php';
 }
 
 .stat-clients {
-    --stat-color: #ffffff;
-    --stat-bg-tint: rgba(255, 255, 255, 0.18);
-    --stat-card-start: #1f6392;
-    --stat-card-end: #0e7490;
-    --stat-border: rgba(255, 255, 255, 0.24);
-    --stat-border-hover: rgba(255, 255, 255, 0.38);
-    --stat-glow: rgba(31, 99, 146, 0.26);
-    --stat-glow-hover: rgba(31, 99, 146, 0.34);
+    --stat-border: rgba(31, 99, 146, 0.14);
+    --stat-border-hover: rgba(31, 99, 146, 0.28);
+    --stat-glow: rgba(31, 99, 146, 0.10);
+    --stat-glow-hover: rgba(31, 99, 146, 0.18);
     --stat-grid-line: rgba(31, 99, 146, 0.055);
 }
 
 .stat-projects {
-    --stat-color: #ffffff;
-    --stat-bg-tint: rgba(255, 255, 255, 0.16);
-    --stat-card-start: #2563eb;
-    --stat-card-end: #4f46e5;
-    --stat-border: rgba(255, 255, 255, 0.22);
-    --stat-border-hover: rgba(255, 255, 255, 0.36);
-    --stat-glow: rgba(37, 99, 235, 0.24);
-    --stat-glow-hover: rgba(37, 99, 235, 0.34);
-    --stat-grid-line: rgba(37, 99, 235, 0.05);
+    --stat-border: rgba(47, 128, 200, 0.14);
+    --stat-border-hover: rgba(47, 128, 200, 0.28);
+    --stat-glow: rgba(47, 128, 200, 0.10);
+    --stat-glow-hover: rgba(47, 128, 200, 0.18);
+    --stat-grid-line: rgba(47, 128, 200, 0.05);
 }
 
 .stat-active {
-    --stat-color: #ffffff;
-    --stat-bg-tint: rgba(255, 255, 255, 0.16);
-    --stat-card-start: #059669;
-    --stat-card-end: #0f766e;
-    --stat-border: rgba(255, 255, 255, 0.22);
-    --stat-border-hover: rgba(255, 255, 255, 0.36);
-    --stat-glow: rgba(5, 150, 105, 0.24);
-    --stat-glow-hover: rgba(5, 150, 105, 0.34);
-    --stat-grid-line: rgba(5, 150, 105, 0.05);
+    --stat-border: rgba(13, 103, 134, 0.14);
+    --stat-border-hover: rgba(13, 103, 134, 0.28);
+    --stat-glow: rgba(13, 103, 134, 0.10);
+    --stat-glow-hover: rgba(13, 103, 134, 0.18);
+    --stat-grid-line: rgba(31, 114, 168, 0.05);
 }
 
 .stat-completion {
-    --stat-color: #ffffff;
-    --stat-bg-tint: rgba(255, 255, 255, 0.16);
-    --stat-card-start: #d97706;
-    --stat-card-end: #b45309;
-    --stat-border: rgba(255, 255, 255, 0.22);
-    --stat-border-hover: rgba(255, 255, 255, 0.36);
-    --stat-glow: rgba(217, 119, 6, 0.24);
-    --stat-glow-hover: rgba(217, 119, 6, 0.34);
-    --stat-grid-line: rgba(217, 119, 6, 0.05);
+    --stat-border: rgba(42, 122, 183, 0.14);
+    --stat-border-hover: rgba(42, 122, 183, 0.28);
+    --stat-glow: rgba(42, 122, 183, 0.10);
+    --stat-glow-hover: rgba(42, 122, 183, 0.18);
+    --stat-grid-line: rgba(42, 122, 183, 0.05);
 }
 
 .stat-card-modern:hover {
@@ -478,9 +463,7 @@ include '../../includes/navbar.php';
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background:
-        radial-gradient(circle at 100% 0%, var(--stat-bg-tint), transparent 38%),
-        linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, transparent 42%, rgba(0, 0, 0, 0.08) 100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.10));
     opacity: 1;
     z-index: 0;
 }
@@ -494,9 +477,9 @@ include '../../includes/navbar.php';
     position: absolute;
     right: 1rem;
     top: 1rem;
-    color: var(--stat-foreground);
+    color: var(--theme-primary);
     font-size: 1.6rem;
-    opacity: 0.86;
+    opacity: 0.78;
 }
 
 .stat-card-modern .stat-label {
@@ -1459,32 +1442,25 @@ body.dark-mode .sales-dashboard-shell {
 html[data-theme="dark"] .stat-card-modern,
 body[data-theme="dark"] .stat-card-modern,
 body.dark-mode .stat-card-modern {
-    --stat-bg-tint: rgba(76, 184, 255, 0.08);
-    --stat-card-start: #0c293d;
-    --stat-card-end: #071b2b;
+    --stat-foreground: #eaf6ff;
+    --stat-muted: rgba(234, 246, 255, 0.68);
+    --stat-border: rgba(78, 155, 199, 0.22);
+    --stat-border-hover: rgba(78, 155, 199, 0.34);
     --stat-grid-line: rgba(138, 210, 255, 0.07);
     --stat-node: rgba(34, 211, 238, 0.16);
+    background:
+        radial-gradient(circle at 100% 0%, var(--card-corner-glow), transparent 34%),
+        linear-gradient(135deg, var(--card-sheen) 0%, rgba(255, 255, 255, 0) 38%, var(--tech-panel-tint) 100%),
+        linear-gradient(180deg, var(--card-sheen-soft), transparent 56%),
+        rgba(12, 31, 49, 0.96);
 }
 
-html[data-theme="dark"] .stat-projects,
-body[data-theme="dark"] .stat-projects,
-body.dark-mode .stat-projects {
-    --stat-card-start: #10234d;
-    --stat-card-end: #0a1830;
-}
-
-html[data-theme="dark"] .stat-active,
-body[data-theme="dark"] .stat-active,
-body.dark-mode .stat-active {
-    --stat-card-start: #0b3329;
-    --stat-card-end: #071f1a;
-}
-
-html[data-theme="dark"] .stat-completion,
-body[data-theme="dark"] .stat-completion,
-body.dark-mode .stat-completion {
-    --stat-card-start: #3a250c;
-    --stat-card-end: #201509;
+html[data-theme="dark"] .stat-card-modern::before,
+body[data-theme="dark"] .stat-card-modern::before,
+body.dark-mode .stat-card-modern::before {
+    inset: 0;
+    border-radius: 0;
+    background: linear-gradient(90deg, transparent, rgba(138, 210, 255, 0.055));
 }
 
 html[data-theme="dark"] .sales-dashboard-hero .text-muted,
