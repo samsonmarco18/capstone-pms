@@ -5567,7 +5567,7 @@ body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:
 @keyframes salesBotArrive { from{opacity:0;transform:translateY(18px) scale(.9)} to{opacity:1;transform:none} }
 @keyframes salesBubbleArrive { from{opacity:0;transform:translateY(-45%) translateX(18px) scale(.94)} to{opacity:1;transform:translateY(-50%)} }
 @keyframes salesRobotFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-@media(max-width:900px){ body.sales-assistant-open #chat-bot-float{width:108px;height:126px;right:10px;bottom:75px;} body.sales-assistant-open #chat-bot-float .chat-bot-speech{width:min(280px,calc(100vw - 132px));min-width:230px;right:calc(100% - 28px);top:10%;} }
+@media(max-width:900px){ body.sales-assistant-open #chat-bot-float{width:108px;height:126px;right:10px;bottom:75px;} body.sales-assistant-open #chat-bot-float .chat-bot-speech{width:min(280px,calc(100vw - 132px));min-width:230px;right:calc(100% + 6px);top:10%;} }
 </style>
 
 <script>

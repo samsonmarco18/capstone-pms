@@ -2224,7 +2224,7 @@ body {
 .chat-bot-speech {
     position: absolute;
     top: 24%;
-    right: calc(100% - 34px);
+    right: calc(100% + 8px);
     z-index: 3;
     min-width: 152px;
     padding: 0.78rem 0.9rem 0.78rem 1rem;
@@ -3518,7 +3518,7 @@ body {
     }
 
     .chat-bot-speech {
-        right: calc(100% - 28px);
+        right: calc(100% + 6px);
         min-width: 126px;
         padding: 0.62rem 0.72rem;
     }
