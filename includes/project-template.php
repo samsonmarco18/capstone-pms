@@ -128,6 +128,7 @@ function projectTemplatePayload(array $template): array
 
     return [
         'id' => (int) ($template['id'] ?? 0),
+        'template_version' => max(1, (int) ($template['template_version'] ?? 1)),
         'project_type' => (string) ($template['project_type'] ?? ''),
         'duration_label' => (string) ($template['duration_label'] ?? ''),
         'duration_min_weeks' => (int) ($template['duration_min_weeks'] ?? 0),
@@ -185,6 +186,7 @@ function projectTemplateEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): 
             id {$idType},
             project_type VARCHAR(120) NOT NULL,
             normalized_type VARCHAR(120) NOT NULL,
+            template_version INT NOT NULL DEFAULT 1,
             duration_label VARCHAR(80) NULL,
             duration_min_weeks INT DEFAULT 0,
             duration_max_weeks INT DEFAULT 0,
@@ -228,6 +230,7 @@ function projectTemplateEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): 
     ");
 
     $templateColumns = [
+        'template_version' => 'INT NOT NULL DEFAULT 1',
         'project_description' => "{$textType} NULL",
         'suggested_milestones' => "{$textType} NULL",
         'default_project_phases' => "{$textType} NULL",
@@ -409,7 +412,7 @@ function projectTemplateAll(mysqli|PgsqlMysqliCompatConnection $conn): array
 {
     projectTemplateEnsureSchema($conn);
     $rows = [];
-    $result = $conn->query('SELECT * FROM project_templates ORDER BY usage_count DESC, project_type ASC');
+    $result = $conn->query('SELECT * FROM project_templates ORDER BY project_type ASC, template_version DESC, usage_count DESC');
     if ($result) {
         while ($row = $result->fetch_assoc()) {
             $rows[] = projectTemplatePayload($row);
@@ -438,6 +441,23 @@ function projectTemplateFindByType(mysqli|PgsqlMysqliCompatConnection $conn, str
     }
 
     return $best;
+}
+
+function projectTemplateFindById(mysqli|PgsqlMysqliCompatConnection $conn, int $templateId): ?array
+{
+    projectTemplateEnsureSchema($conn);
+    if ($templateId <= 0) {
+        return null;
+    }
+    $stmt = $conn->prepare('SELECT * FROM project_templates WHERE id = ? LIMIT 1');
+    if ($stmt === false) {
+        return null;
+    }
+    $stmt->bind_param('i', $templateId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc() ?: null;
+    $stmt->close();
+    return $row ? projectTemplatePayload($row) : null;
 }
 
 function projectTemplateCaptureProject(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId): void
@@ -494,69 +514,51 @@ function projectTemplateCaptureProject(mysqli|PgsqlMysqliCompatConnection $conn,
 
     $existing = projectTemplateFindByType($conn, $projectType);
     $normalized = projectTemplateNormalizeType($projectType);
-    $durationLabel = $timelineWeeks > 0 ? $timelineWeeks . ' weeks' : (string) ($existing['duration_label'] ?? '');
+    $templateWeeks = $timelineWeeks > 0 ? $timelineWeeks : (int) ($existing['duration_max_weeks'] ?? 0);
+    $durationLabel = $templateWeeks > 0 ? $templateWeeks . ' weeks' : (string) ($existing['duration_label'] ?? '');
     $budgetMin = $budget > 0 ? $budget : (float) ($existing['budget_min'] ?? 0);
     $budgetMax = $budget > 0 ? $budget : (float) ($existing['budget_max'] ?? 0);
     $techStack = implode(', ', array_unique(array_filter($techItems))) ?: (string) ($existing['tech_stack'] ?? '');
     $team = implode(', ', array_unique(array_filter($teamItems))) ?: (string) ($existing['team_composition'] ?? '');
     $complexity = strtolower((string) ($project['complexity_level'] ?? ($existing['complexity_level'] ?? 'medium')));
-    $source = $existing && (int) ($existing['id'] ?? 0) > 0 ? 'learned_update' : 'learned';
     $details = projectTemplateDefaultDetails($projectType, $features, $techStack, $team, $methodology, $durationLabel);
 
     if ($existing && (int) ($existing['id'] ?? 0) > 0) {
-        $templateId = (int) $existing['id'];
-        $stmt = $conn->prepare("
-            UPDATE project_templates
-            SET project_type = ?, normalized_type = ?, duration_label = ?, duration_min_weeks = ?, duration_max_weeks = ?,
-                budget_min = ?, budget_max = ?, methodology = ?, core_features = ?, tech_stack = ?, team_composition = ?,
-                complexity_level = ?, source = ?, project_description = ?, suggested_milestones = ?,
-                default_project_phases = ?, functional_requirements = ?, non_functional_requirements = ?,
-                third_party_services = ?, hosting_platform = ?, deployment_environment = ?, database_technology = ?,
-                auth_method = ?, backup_recovery_strategy = ?, developer_roles_allocation = ?, testing_requirements = ?,
-                documentation_requirements = ?, maintenance_support = ?, risk_assessment = ?, implementation_notes = ?,
-                usage_count = usage_count + 1, learned_from_project_id = ?
-            WHERE id = ?
-        ");
-        $types = 'sssiidd' . str_repeat('s', 23) . 'ii';
-        $stmt->bind_param(
-            $types,
-            $projectType,
-            $normalized,
-            $durationLabel,
-            $timelineWeeks,
-            $timelineWeeks,
-            $budgetMin,
-            $budgetMax,
-            $methodology,
-            $features,
-            $techStack,
-            $team,
-            $complexity,
-            $source,
-            $details['project_description'],
-            $details['suggested_milestones'],
-            $details['default_project_phases'],
-            $details['functional_requirements'],
-            $details['non_functional_requirements'],
-            $details['third_party_services'],
-            $details['hosting_platform'],
-            $details['deployment_environment'],
-            $details['database_technology'],
-            $details['auth_method'],
-            $details['backup_recovery_strategy'],
-            $details['developer_roles_allocation'],
-            $details['testing_requirements'],
-            $details['documentation_requirements'],
-            $details['maintenance_support'],
-            $details['risk_assessment'],
-            $details['implementation_notes'],
-            $projectId,
-            $templateId
-        );
-    } else {
+        $unchanged = trim((string) ($existing['core_features'] ?? '')) === $features
+            && trim((string) ($existing['methodology'] ?? '')) === $methodology
+            && trim((string) ($existing['tech_stack'] ?? '')) === $techStack
+            && trim((string) ($existing['team_composition'] ?? '')) === $team
+            && (float) ($existing['budget_min'] ?? 0) === $budgetMin
+            && (int) ($existing['duration_max_weeks'] ?? 0) === $templateWeeks
+            && strtolower((string) ($existing['complexity_level'] ?? 'medium')) === $complexity;
+        if ($unchanged) {
+            $templateId = (int) $existing['id'];
+            $usageStmt = $conn->prepare('UPDATE project_templates SET usage_count = usage_count + 1, learned_from_project_id = ? WHERE id = ?');
+            if ($usageStmt !== false) {
+                $usageStmt->bind_param('ii', $projectId, $templateId);
+                $usageStmt->execute();
+                $usageStmt->close();
+            }
+            return;
+        }
+    }
+
+    $nextVersion = 1;
+    if ($existing) {
+        $versionStmt = $conn->prepare('SELECT MAX(template_version) AS max_version FROM project_templates WHERE project_type = ?');
+        if ($versionStmt !== false) {
+            $versionStmt->bind_param('s', $projectType);
+            $versionStmt->execute();
+            $versionRow = $versionStmt->get_result()->fetch_assoc();
+            $nextVersion = max(2, (int) ($versionRow['max_version'] ?? 1) + 1);
+            $versionStmt->close();
+        }
+        $normalized .= '::v' . $nextVersion;
+    }
+
         $stmt = $conn->prepare("
             INSERT INTO project_templates (
-                project_type, normalized_type, duration_label, duration_min_weeks, duration_max_weeks,
+                project_type, normalized_type, template_version, duration_label, duration_min_weeks, duration_max_weeks,
                 budget_min, budget_max, methodology, core_features, tech_stack, team_composition,
                 complexity_level, project_description, suggested_milestones, default_project_phases,
                 functional_requirements, non_functional_requirements, third_party_services, hosting_platform,
@@ -564,16 +566,17 @@ function projectTemplateCaptureProject(mysqli|PgsqlMysqliCompatConnection $conn,
                 developer_roles_allocation, testing_requirements, documentation_requirements,
                 maintenance_support, risk_assessment, implementation_notes, source, usage_count,
                 learned_from_project_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'learned', 1, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'learned', 1, ?)
         ");
-        $types = 'sssiidd' . str_repeat('s', 22) . 'i';
+        $types = 'ssi' . 'siidd' . str_repeat('s', 22) . 'i';
         $stmt->bind_param(
             $types,
             $projectType,
             $normalized,
+            $nextVersion,
             $durationLabel,
-            $timelineWeeks,
-            $timelineWeeks,
+            $templateWeeks,
+            $templateWeeks,
             $budgetMin,
             $budgetMax,
             $methodology,
@@ -600,7 +603,6 @@ function projectTemplateCaptureProject(mysqli|PgsqlMysqliCompatConnection $conn,
             $details['implementation_notes'],
             $projectId
         );
-    }
     $stmt->execute();
     $stmt->close();
 }

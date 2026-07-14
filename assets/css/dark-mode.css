@@ -746,6 +746,51 @@ body.dark-mode .chat-widget {
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.36);
 }
 
+html[data-theme="dark"] .chat-bot-speech,
+html[data-theme="dark"] .chat-bot-widget-speech,
+body[data-theme="dark"] .chat-bot-speech,
+body[data-theme="dark"] .chat-bot-widget-speech,
+body.dark-mode .chat-bot-speech,
+body.dark-mode .chat-bot-widget-speech {
+    background:
+        radial-gradient(circle at 18% 18%, rgba(138, 210, 255, 0.24), transparent 36%),
+        linear-gradient(135deg, rgba(9, 39, 64, 0.98), rgba(11, 77, 116, 0.94) 56%, rgba(6, 23, 39, 0.98)),
+        #091827;
+    border-color: rgba(138, 210, 255, 0.26);
+    box-shadow:
+        0 0 0 1px rgba(138, 210, 255, 0.08) inset,
+        0 16px 34px rgba(3, 14, 25, 0.46),
+        0 0 30px rgba(79, 207, 255, 0.16);
+}
+
+html[data-theme="dark"] .chat-bot-speech::after,
+html[data-theme="dark"] .chat-bot-widget-speech::after,
+body[data-theme="dark"] .chat-bot-speech::after,
+body[data-theme="dark"] .chat-bot-widget-speech::after,
+body.dark-mode .chat-bot-speech::after,
+body.dark-mode .chat-bot-widget-speech::after {
+    background: linear-gradient(135deg, rgba(11, 77, 116, 0.96), rgba(6, 23, 39, 0.98));
+    border-color: rgba(138, 210, 255, 0.24);
+}
+
+html[data-theme="dark"] .chat-bot-speech strong,
+html[data-theme="dark"] .chat-bot-widget-speech strong,
+body[data-theme="dark"] .chat-bot-speech strong,
+body[data-theme="dark"] .chat-bot-widget-speech strong,
+body.dark-mode .chat-bot-speech strong,
+body.dark-mode .chat-bot-widget-speech strong {
+    color: #e7f8ff;
+}
+
+html[data-theme="dark"] .chat-bot-speech span,
+html[data-theme="dark"] .chat-bot-widget-speech span,
+body[data-theme="dark"] .chat-bot-speech span,
+body[data-theme="dark"] .chat-bot-widget-speech span,
+body.dark-mode .chat-bot-speech span,
+body.dark-mode .chat-bot-widget-speech span {
+    color: #8fd3ff;
+}
+
 html[data-theme="dark"] .chat-header,
 body[data-theme="dark"] .chat-header,
 body.dark-mode .chat-header {

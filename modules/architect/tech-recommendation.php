@@ -370,31 +370,97 @@ a.progress-step:hover {
 }
 
 /* Tech Item */
+#technologiesContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+}
+
 .tech-item {
-    background: var(--gray-50);
-    border: 1px solid var(--gray-200);
-    border-radius: 16px;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    transition: all 0.2s ease;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.12), transparent 34%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0) 38%, rgba(31, 99, 146, 0.055) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 56%),
+        rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 20px;
+    padding: 1rem 1.15rem;
+    margin-bottom: 0;
+    transition: border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+    box-shadow: 0 10px 24px rgba(15, 76, 129, 0.07), 0 0 18px rgba(34, 211, 238, 0.05);
+    overflow: hidden;
 }
 
 .tech-item:hover {
-    border-color: var(--theme-primary);
-    box-shadow: var(--shadow-sm);
+    border-color: rgba(34, 211, 238, 0.24);
+    box-shadow: 0 14px 30px rgba(15, 76, 129, 0.10), 0 0 24px rgba(34, 211, 238, 0.08);
 }
 
 .tech-checkbox {
     width: 18px;
     height: 18px;
-    margin-top: 0.2rem;
+    margin-top: 0.12rem;
     cursor: pointer;
+    flex: 0 0 auto;
+}
+
+.tech-item .row {
+    align-items: end;
+}
+
+.tech-item .form-check {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    column-gap: 0.6rem;
+    align-items: start;
+    margin: 0;
+    min-height: 72px;
+}
+
+.tech-item .form-check > .form-check-input {
+    margin-left: 0;
+}
+
+.tech-title-wrap {
+    min-width: 0;
+}
+
+.tech-title-line {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+}
+
+.tech-template-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0.18rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(31, 99, 146, 0.10);
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    color: var(--theme-primary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.tech-category {
+    display: block;
+    margin-top: 0.45rem;
+    color: #5f7898;
+    font-size: 0.82rem;
+    line-height: 1.35;
 }
 
 .form-check-label {
     font-weight: 600;
     color: var(--gray-900);
     cursor: pointer;
+    font-size: 0.98rem;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
 }
 
 /* Form Elements */
@@ -411,10 +477,11 @@ a.progress-step:hover {
 .form-control-modern,
 .form-select-modern {
     width: 100%;
-    padding: 0.6rem 0.8rem;
+    min-height: 48px;
+    padding: 0.65rem 0.9rem;
     border: 1px solid var(--gray-300);
-    border-radius: 10px;
-    font-size: 0.85rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
     transition: all 0.2s;
     background: white;
 }
@@ -540,7 +607,10 @@ a.progress-step:hover {
     .progress-indicator { padding: 0.75rem; }
     .progress-step .step-label { font-size: 0.6rem; }
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
-    .tech-item .row > div { margin-bottom: 0.5rem; }
+    .tech-item { padding: 0.9rem; }
+    .tech-item .row > div { margin-bottom: 0.65rem; }
+    .tech-item .row > div:last-child { margin-bottom: 0; }
+    .tech-item .form-check { min-height: auto; }
     .form-card .card-body { padding: 1.25rem; }
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
@@ -603,6 +673,24 @@ a.progress-step:hover {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select-modern:disabled {
     background: #06111e !important;
     color: #7f9db7 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-item {
+    background:
+        radial-gradient(circle at 100% 0%, rgba(76, 184, 255, 0.14), transparent 34%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 38%, rgba(76, 184, 255, 0.08) 100%),
+        linear-gradient(180deg, rgba(138, 210, 255, 0.055), transparent 56%),
+        rgba(10, 22, 35, 0.88) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-template-badge {
+    background: rgba(76, 184, 255, 0.14);
+    border-color: rgba(138, 210, 255, 0.18);
+    color: #93c5fd;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-category {
+    color: #9db6cf !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-table td {
@@ -692,14 +780,17 @@ a.progress-step:hover {
                                                    data-template-recommended="<?php echo $templateRecommended ? '1' : '0'; ?>"
                                                    data-template-name="<?php echo htmlspecialchars((string) $tech['name']); ?>"
                                                    <?php echo $isChecked ? 'checked' : ''; ?>>
-                                            <label class="form-check-label fw-bold" for="tech_<?php echo $tech['id']; ?>">
-                                                <?php echo htmlspecialchars($tech['name']); ?>
-                                            </label>
-                                            <?php if ($templateRecommended): ?>
-                                                <span class="badge bg-info-subtle text-info-emphasis ms-1">Template</span>
-                                            <?php endif; ?>
-                                            <br>
-                                            <small class="text-muted">Category: <?php echo $tech['category']; ?></small>
+                                            <div class="tech-title-wrap">
+                                                <div class="tech-title-line">
+                                                    <label class="form-check-label fw-bold" for="tech_<?php echo $tech['id']; ?>">
+                                                        <?php echo htmlspecialchars($tech['name']); ?>
+                                                    </label>
+                                                    <?php if ($templateRecommended): ?>
+                                                        <span class="tech-template-badge">Template</span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <small class="tech-category">Category: <?php echo htmlspecialchars((string) $tech['category']); ?></small>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="col-md-3">

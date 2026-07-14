@@ -156,6 +156,9 @@ function setChatVisibility(isOpen, persist = true) {
     $('#chat-widget-minimized')
         .toggleClass('chat-launcher-hidden', isOpen)
         .css('display', isOpen ? 'none' : 'block');
+    $('#chat-bot-widget')
+        .toggleClass('chat-bot-hidden', isOpen)
+        .css('display', isOpen ? 'none' : 'flex');
 
     if (persist) {
         localStorage.setItem(chatStateKey, String(isOpen));

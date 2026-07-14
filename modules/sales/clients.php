@@ -480,7 +480,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectType = trim((string) ($_POST['project_type'] ?? ''));
-        $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
+        $requestedTemplateId = (int) ($_POST['project_template_id'] ?? 0);
+        $projectTemplate = $requestedTemplateId > 0 ? projectTemplateFindById($conn, $requestedTemplateId) : null;
+        if (!$projectTemplate || projectTemplateNormalizeType((string) ($projectTemplate['project_type'] ?? '')) !== projectTemplateNormalizeType($projectType)) {
+            $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
+        }
         $projectTemplateId = $projectTemplate ? (int) ($projectTemplate['id'] ?? 0) : null;
         $projectTemplateSnapshot = $projectTemplate ? json_encode($projectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -627,7 +631,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $clientId = (int) ($_POST['client_id'] ?? 0);
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectType = trim((string) ($_POST['project_type'] ?? ''));
-        $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
+        $requestedTemplateId = (int) ($_POST['project_template_id'] ?? 0);
+        $projectTemplate = $requestedTemplateId > 0 ? projectTemplateFindById($conn, $requestedTemplateId) : null;
+        if (!$projectTemplate || projectTemplateNormalizeType((string) ($projectTemplate['project_type'] ?? '')) !== projectTemplateNormalizeType($projectType)) {
+            $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
+        }
         $projectTemplateId = $projectTemplate ? (int) ($projectTemplate['id'] ?? 0) : null;
         $projectTemplateSnapshot = $projectTemplate ? json_encode($projectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -2005,6 +2013,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 
 .modal-modern.add-client-modal .timeline-budget-card {
     min-width: 0;
+    position: relative;
     padding: 1rem 1.05rem;
     border: 1px solid rgba(31, 99, 146, 0.14);
     border-radius: 18px;
@@ -2049,6 +2058,78 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     height: 100%;
 }
 
+.modal-modern.add-client-modal .complexity-field-shell {
+    position: relative;
+}
+
+.modal-modern.add-client-modal .complexity-insight-trigger {
+    position: absolute;
+    top: -0.48rem;
+    right: -0.36rem;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 50%;
+    background: #fff7ed;
+    color: #d97706;
+    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.18);
+    transform-origin: 50% 88%;
+    animation: priorityAttentionSway 1.6s ease-in-out infinite;
+    cursor: pointer;
+}
+
+.modal-modern.add-client-modal .complexity-insight-trigger i {
+    font-size: 0.82rem;
+}
+
+.modal-modern.add-client-modal .complexity-insight-trigger:hover,
+.modal-modern.add-client-modal .complexity-insight-trigger:focus-visible,
+.modal-modern.add-client-modal .complexity-insight-trigger.is-open {
+    background: #d97706;
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(217, 119, 6, 0.26);
+    outline: none;
+    animation-play-state: paused;
+    transform: rotate(0deg) scale(1.06);
+}
+
+.modal-modern.add-client-modal .complexity-insight-popover {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 0.58rem);
+    z-index: 68;
+    display: grid;
+    width: min(390px, 84vw);
+    gap: 0.38rem;
+    padding: 0.82rem 0.9rem;
+    border: 1px solid rgba(31, 99, 146, 0.16);
+    border-radius: 14px;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.10), rgba(255, 255, 255, 0.92)),
+        #f8fcff;
+    color: #1e4f78;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    box-shadow: 0 18px 38px rgba(15, 76, 129, 0.18);
+}
+
+.modal-modern.add-client-modal .complexity-insight-popover[hidden] {
+    display: none;
+}
+
+.modal-modern.add-client-modal .complexity-insight-popover strong {
+    color: #173f61;
+    font-size: 0.86rem;
+}
+
+.modal-modern.add-client-modal .complexity-field-shell > .calculation-note {
+    display: none;
+}
+
 .modal-modern.add-client-modal .template-type-picker {
     position: relative;
 }
@@ -2062,7 +2143,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 }
 
 .modal-modern.add-client-modal .template-field-shell .template-type-picker .form-control {
-    padding-right: 5.4rem;
+    padding-right: 2.5rem;
 }
 
 .modal-modern.add-client-modal .template-type-picker::after {
@@ -2081,8 +2162,8 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 .modal-modern.add-client-modal .template-recommendation-trigger {
     --template-pulse-rgb: 13, 103, 134;
     position: absolute;
-    top: 50%;
-    right: 2.32rem;
+    top: -0.48rem;
+    right: -0.36rem;
     z-index: 5;
     isolation: isolate;
     display: inline-flex;
@@ -2097,7 +2178,8 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
         #ffffff;
     color: #0d6786;
     box-shadow: 0 8px 18px rgba(13, 103, 134, 0.18);
-    transform: translateY(-50%);
+    transform-origin: 50% 88%;
+    animation: priorityAttentionSway 1.6s ease-in-out infinite;
     transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
 }
 
@@ -2123,7 +2205,8 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     color: #ffffff;
     box-shadow: 0 10px 22px rgba(13, 103, 134, 0.28);
     outline: none;
-    transform: translateY(-50%) scale(1.04);
+    animation-play-state: paused;
+    transform: rotate(0deg) scale(1.04);
 }
 
 .modal-modern.add-client-modal .template-recommendation-trigger.is-applied {
@@ -2131,6 +2214,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     border-color: rgba(16, 134, 94, 0.28);
     color: #10865e;
     box-shadow: 0 8px 18px rgba(16, 134, 94, 0.16);
+    animation: none;
 }
 
 .modal-modern.add-client-modal .template-recommendation-trigger.is-applied::before {
@@ -2184,41 +2268,70 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 }
 
 .modal-modern.add-client-modal .priority-select-wrap .form-select {
-    padding-right: 4.8rem;
+    padding-right: 2.25rem;
 }
 
 .modal-modern.add-client-modal .priority-insight-trigger {
     position: absolute;
-    top: 50%;
-    right: 2.15rem;
+    top: -0.48rem;
+    right: -0.36rem;
     z-index: 4;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
-    border: 1px solid rgba(13, 103, 134, 0.2);
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(245, 158, 11, 0.35);
     border-radius: 50%;
-    background: #eef9fc;
-    color: #0d6786;
-    box-shadow: 0 8px 18px rgba(13, 103, 134, 0.12);
-    transform: translateY(-50%);
-    transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    background: #fff7ed;
+    color: #d97706;
+    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.18);
+    transform-origin: 50% 88%;
+    animation: priorityAttentionSway 1.6s ease-in-out infinite;
+    transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.modal-modern.add-client-modal .priority-insight-trigger i {
+    font-size: 0.82rem;
+}
+
+@keyframes priorityAttentionSway {
+    0%, 72%, 100% {
+        transform: rotate(0deg);
+    }
+
+    78% {
+        transform: rotate(-10deg) translateX(-1px);
+    }
+
+    84% {
+        transform: rotate(10deg) translateX(1px);
+    }
+
+    90% {
+        transform: rotate(-7deg) translateX(-1px);
+    }
+
+    96% {
+        transform: rotate(5deg) translateX(1px);
+    }
 }
 
 .modal-modern.add-client-modal .priority-insight-trigger:hover,
 .modal-modern.add-client-modal .priority-insight-trigger:focus-visible,
 .modal-modern.add-client-modal .priority-insight-trigger.is-open {
-    background: #0d6786;
+    background: #d97706;
     color: #ffffff;
+    box-shadow: 0 10px 22px rgba(217, 119, 6, 0.26);
     outline: none;
-    transform: translateY(-50%) scale(1.04);
+    animation-play-state: paused;
+    transform: rotate(0deg) scale(1.06);
 }
 
 .modal-modern.add-client-modal .priority-insight-popover {
     position: absolute;
-    top: calc(100% + 0.48rem);
-    left: 0;
+    right: 0;
+    bottom: calc(100% + 0.58rem);
     z-index: 65;
     display: grid;
     width: min(360px, 92vw);
@@ -3401,7 +3514,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 }
 
 #addClientModal.modal-modern.add-client-modal .add-client-actions {
-    padding-right: 5.25rem;
+    padding-right: 0;
 }
 
 @media (max-width: 991.98px) {
@@ -3840,15 +3953,30 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger {
-    background: rgba(13, 103, 134, 0.26);
-    border-color: rgba(138, 210, 255, 0.2);
-    color: #8fd3ff;
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(251, 191, 36, 0.28);
+    color: #fbbf24;
+    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.20);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger {
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(251, 191, 36, 0.28);
+    color: #fbbf24;
+    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.20);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger:hover,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger:focus-visible,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger.is-open {
-    background: #0d6786;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger.is-open,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger.is-open,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger.is-open {
+    background: #d97706;
     color: #ffffff;
 }
 
@@ -3872,6 +4000,21 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     background: rgba(10, 27, 44, 0.74);
     border-color: rgba(138, 210, 255, 0.14);
     color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-popover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-popover {
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.20), rgba(7, 19, 33, 0.9)),
+        #091827;
+    border-color: rgba(138, 210, 255, 0.18);
+    box-shadow: 0 18px 38px rgba(3, 14, 25, 0.34);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-popover strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-popover strong {
+    color: #d7e4f2;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .dss-kicker,
@@ -4534,7 +4677,6 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                 <h5 class="modal-title">
                     <i class="fas fa-user-plus me-2"></i> Add New Client
                 </h5>
-                <button type="button" class="btn-close add-client-close" aria-label="Close"></button>
             </div>
             <form method="POST" id="addClientForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Sending to Architect" data-loading-text="Please wait while the qualified client intake, project folder, and Architect notification are saved.">
                 <input type="hidden" name="client_draft_id" data-client-draft-id value="">
@@ -4626,6 +4768,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                                         </button>
                                         <div class="template-suggestions-menu" data-template-picker-menu hidden></div>
                                     </div>
+                                    <select name="project_template_id" class="form-select mt-2" data-template-version-select hidden aria-label="Template version"></select>
                                 </div>
                                 <div class="project-description-field">
                                     <label class="form-label">Project Description<span class="required-mark">*</span></label>
@@ -4681,7 +4824,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                                                     <option value="critical">Critical</option>
                                                 </select>
                                                 <button type="button" class="priority-insight-trigger" data-priority-insight-trigger aria-label="View priority impact" aria-expanded="false">
-                                                    <i class="fas fa-chart-line" aria-hidden="true"></i>
+                                                    <i class="fas fa-exclamation" aria-hidden="true"></i>
                                                 </button>
                                                 <div class="priority-insight-popover" data-priority-insight-popover hidden></div>
                                             </div>
@@ -4731,7 +4874,14 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                                     <input type="number" name="sales_budget" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00" required>
                                     <div class="mini-note" data-budget-helper>Required as the decision insight budget baseline.</div>
                                 </div>
-                                <div class="timeline-budget-card">
+                                <div class="timeline-budget-card complexity-field-shell">
+                                    <button type="button" class="complexity-insight-trigger" data-complexity-insight-trigger aria-label="Show generated complexity explanation" aria-expanded="false">
+                                        <i class="fas fa-exclamation" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="complexity-insight-popover" data-complexity-popover hidden>
+                                        <strong>Low complexity</strong>
+                                        <span>Calculated automatically from budget, timeline, and priority.</span>
+                                    </div>
                                     <div class="timeline-budget-card-title"><i class="fas fa-layer-group"></i> Complexity Signal</div>
                                     <label class="form-label">Generated Complexity</label>
                                     <input type="text" class="form-control" data-generated-complexity readonly value="Low">
@@ -4918,6 +5068,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                     <div class="modal-footer add-client-footer">
                         <span class="draft-status" data-draft-status>Draft not started</span>
                         <div class="add-client-actions">
+                            <button type="button" class="btn btn-outline-secondary add-client-close">Cancel</button>
                             <button type="button" class="btn btn-outline-primary" data-save-draft disabled>Save Draft</button>
                             <button type="button" class="btn btn-outline-secondary" data-client-prev hidden>Previous</button>
                             <button type="button" class="btn-add-modern" data-client-next>Next</button>
@@ -5008,6 +5159,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                                         <input type="text" name="project_type" class="form-control" placeholder="e.g. E-commerce Website" required autocomplete="off" data-template-picker-input>
                                         <div class="template-suggestions-menu" data-template-picker-menu hidden></div>
                                     </div>
+                                    <select name="project_template_id" class="form-select mt-2" data-template-version-select hidden aria-label="Template version"></select>
                                     <div class="calculation-note" data-add-project-template-recommendation hidden>
                                         <strong>Project template search</strong>
                                         <span>Choose a project type to apply saved template details.</span>
@@ -5093,7 +5245,14 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                                     <input type="number" name="sales_budget" class="form-control" min="0.01" step="0.01" inputmode="decimal" placeholder="e.g. 1500000.00" required>
                                     <div class="mini-note" data-add-project-budget-helper>Required as the decision insight budget baseline.</div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-6 complexity-field-shell">
+                                    <button type="button" class="complexity-insight-trigger" data-complexity-insight-trigger aria-label="Show generated complexity explanation" aria-expanded="false">
+                                        <i class="fas fa-exclamation" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="complexity-insight-popover" data-complexity-popover hidden>
+                                        <strong>Low complexity</strong>
+                                        <span>Calculated automatically from budget, timeline, and priority.</span>
+                                    </div>
                                     <label class="form-label">Generated Complexity</label>
                                     <input type="text" class="form-control" data-add-project-generated-complexity readonly value="Low">
                                     <div class="calculation-note" data-add-project-complexity-reason>
@@ -5377,9 +5536,627 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     </div>
 </div>
 
+<style>
+body.sales-assistant-open #chat-bot-float { display:block !important; width:125px; height:145px; left:auto; top:auto; right:24px; bottom:92px; margin:0; transform:none; animation:salesBotArrive .38s cubic-bezier(.2,.8,.2,1) both; }
+body.sales-assistant-open #chat-bot-float[hidden] { display:none !important; }
+body.sales-assistant-open #chat-bot-float .chat-bot-speech { width:330px; min-width:330px; max-height:none; overflow:visible; pointer-events:auto; padding:1rem; top:24%; animation:salesBubbleArrive .32s ease both; }
+body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:salesRobotFloat 3.2s ease-in-out infinite; will-change:transform; }
+#addClientForm .template-type-picker::after, #addProjectForm .template-type-picker::after { display:none !important; }
+#addClientForm [data-template-picker-input], #addProjectForm [data-template-picker-input] { padding-right:.9rem !important; }
+#addClientForm [data-template-version-select], #addProjectForm [data-template-version-select] { display:none !important; }
+.sales-bot-head { padding-left:.75rem; font-weight:800; color:#083a5d; }
+.sales-bot-heading-row { position:relative; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:.6rem; }
+.sales-bot-dismiss { flex:0 0 auto; border:0; border-radius:999px; background:rgba(255,255,255,.72); color:#0b5d89; width:27px; height:27px; cursor:pointer; transition:transform .18s ease,background .18s ease; }
+.sales-bot-dismiss:hover { transform:translateX(-2px); background:#fff; }
+.sales-bot-copy { margin:.45rem 0 .7rem !important; font-weight:600 !important; line-height:1.4; white-space:normal; }
+.sales-bot-version { display:inline-block !important; width:auto; margin:0 0 .45rem !important; padding:.2rem .55rem; border-radius:999px; background:rgba(255,255,255,.72); font-size:.7rem !important; }
+.sales-bot-actions { display:flex; gap:.5rem; position:relative; z-index:4; }
+.sales-bot-actions button { flex:1; border:0; border-radius:9px; padding:.48rem .65rem; font-size:.76rem; font-weight:800; cursor:pointer; transition:transform .18s ease,box-shadow .18s ease; }
+.sales-bot-actions button:hover { transform:translateY(-2px); box-shadow:0 6px 14px rgba(8,58,93,.18); }
+.sales-bot-accept { background:#087bb9; color:#fff; }
+.sales-bot-reject { background:rgba(255,255,255,.78); color:#174c6d; }
+.sales-bot-progress { margin:.6rem 0 0 !important; font-size:.68rem !important; opacity:.78; }
+.sales-bot-choice-list { position:relative; z-index:4; display:grid; gap:.4rem; max-height:245px; overflow-y:auto; overflow-x:hidden; padding:.1rem .2rem .1rem 0; scrollbar-width:thin; }
+.sales-bot-choice { display:flex; align-items:center; justify-content:space-between; gap:.65rem; width:100%; border:1px solid rgba(8,123,185,.2); border-radius:10px; background:rgba(255,255,255,.82); color:#0b466d; padding:.58rem .7rem; text-align:left; cursor:pointer; transition:transform .18s ease,background .18s ease; }
+.sales-bot-choice:hover { transform:translateX(3px); background:#fff; }
+.sales-bot-choice strong { padding:0 !important; font-size:.76rem !important; }
+.sales-bot-choice em { flex:0 0 auto; border-radius:999px; background:#dff5ff; padding:.18rem .45rem; color:#087bb9; font-size:.66rem; font-style:normal; font-weight:800; }
+#chat-bot-float.is-sad .chat-bot-speech { border-color:rgba(231,139,57,.62); box-shadow:0 16px 34px rgba(180,91,20,.22),0 0 22px rgba(255,169,74,.22); }
+.sales-lottie-head,.sales-lottie-left-hand,.sales-lottie-left-forearm,.sales-lottie-right-hand,.sales-lottie-right-forearm { transform-box:fill-box; transform-origin:center; }
+.sales-lottie-head { translate:0 7px; }
+@keyframes salesBotArrive { from{opacity:0;transform:translateY(18px) scale(.9)} to{opacity:1;transform:none} }
+@keyframes salesBubbleArrive { from{opacity:0;transform:translateY(-45%) translateX(18px) scale(.94)} to{opacity:1;transform:translateY(-50%)} }
+@keyframes salesRobotFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+@media(max-width:900px){ body.sales-assistant-open #chat-bot-float{width:108px;height:126px;right:10px;bottom:75px;} body.sales-assistant-open #chat-bot-float .chat-bot-speech{width:min(280px,calc(100vw - 132px));min-width:230px;right:calc(100% + 6px);top:10%;} }
+</style>
+
 <script>
 const savedClientDraftId = <?php echo json_encode($savedClientDraftId); ?>;
 const projectTemplates = <?php echo json_encode($projectTemplates, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
+
+function getPriorityAdjustedTemplateWeeks(template, priorityValue = 'medium') {
+    let minimumWeeks = Math.max(0, Math.round(Number(template?.duration_min_weeks || 0)));
+    let maximumWeeks = Math.max(0, Math.round(Number(template?.duration_max_weeks || 0)));
+    if (!minimumWeeks && !maximumWeeks) return 0;
+    if (!minimumWeeks) minimumWeeks = maximumWeeks;
+    if (!maximumWeeks) maximumWeeks = minimumWeeks;
+    if (minimumWeeks > maximumWeeks) [minimumWeeks, maximumWeeks] = [maximumWeeks, minimumWeeks];
+
+    const priority = String(priorityValue || 'medium').toLowerCase();
+    const hasRange = minimumWeeks < maximumWeeks;
+    if (priority === 'critical') {
+        return Math.max(1, hasRange ? Math.floor(minimumWeeks * .8) : Math.floor(maximumWeeks * .65));
+    }
+    if (priority === 'high') {
+        return Math.max(1, hasRange ? minimumWeeks : Math.floor(maximumWeeks * .8));
+    }
+    if (priority === 'low') {
+        return Math.max(1, hasRange ? maximumWeeks : Math.ceil(maximumWeeks * 1.2));
+    }
+    return Math.max(1, hasRange ? Math.round((minimumWeeks + maximumWeeks) / 2) : maximumWeeks);
+}
+
+function getPriorityDurationName(priorityValue = 'medium') {
+    const normalized = String(priorityValue || 'medium').toLowerCase();
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+const salesTemplateAssistant = (() => {
+    let queue = [];
+    let index = 0;
+    let activeForm = null;
+    let continueAction = null;
+    let backAction = null;
+    let feedbackSequence = 0;
+    let emotionTimer = null;
+    let winkTimer = null;
+    let idleBlinkTimer = null;
+    let messageDismissTimer = null;
+    let reactionAnimations = [];
+    let featureSession = { accepted:0, rejected:0 };
+    let browsingChoices = false;
+
+    const robotLottie = () => window.chatBotFloatRobot || window.chatBotFloatLottie || null;
+    const robotLayer = (name) => {
+        const controlledPart = window.chatBotFloatRobot?.getPart?.(name);
+        if (controlledPart) return controlledPart;
+        const elements = robotLottie()?.renderer?.elements || [];
+        const layer = elements.find(element => String(element?.data?.nm || '').toLowerCase() === name.toLowerCase());
+        return layer?.baseElement || layer?.layerElement || null;
+    };
+    const robotEyeLayer = () => robotLayer('eyes');
+    const prepareRobotLayers = () => {
+        const layers = {
+            head:'sales-lottie-head',
+            'l hand':'sales-lottie-left-hand',
+            'l hand 2':'sales-lottie-left-forearm',
+            'r hand':'sales-lottie-right-hand',
+            'r hand 2':'sales-lottie-right-forearm'
+        };
+        Object.entries(layers).forEach(([name, className]) => robotLayer(name)?.classList.add(className));
+    };
+    const stopReactionAnimations = () => {
+        reactionAnimations.forEach(animation => animation.cancel());
+        reactionAnimations = [];
+    };
+    const animateRobotLayer = (name, keyframes, options) => {
+        const layer = robotLayer(name);
+        if (!layer?.animate) return;
+        reactionAnimations.push(layer.animate(keyframes, { easing:'ease-in-out', fill:'none', ...options }));
+    };
+    const animateRobotEmotion = emotion => {
+        const repeat = emotion === 'amazed' ? Infinity : 2;
+        const duration = emotion === 'winking' ? 520 : 720;
+        if (emotion === 'happy' || emotion === 'winking') {
+            animateRobotLayer('l hand', [{translate:'0 0'},{translate:'0 -7px'},{translate:'0 0'}], {duration,iterations:repeat});
+            animateRobotLayer('l hand 2', [{translate:'0 0'},{translate:'0 -7px'},{translate:'0 0'}], {duration,iterations:repeat});
+            animateRobotLayer('r hand', [{translate:'0 0'},{translate:'0 -8px'},{translate:'0 0'}], {duration,iterations:emotion === 'winking' ? 3 : repeat});
+            animateRobotLayer('r hand 2', [{translate:'0 0'},{translate:'0 -8px'},{translate:'0 0'}], {duration,iterations:emotion === 'winking' ? 3 : repeat});
+        } else if (emotion === 'sad') {
+            animateRobotLayer('l hand', [{translate:'0 0'},{translate:'0 5px'},{translate:'0 0'}], {duration,iterations:repeat});
+            animateRobotLayer('r hand', [{translate:'0 0'},{translate:'0 5px'},{translate:'0 0'}], {duration,iterations:repeat});
+        } else if (emotion === 'amazed') {
+            animateRobotLayer('l hand', [{translate:'0 0'},{translate:'0 -9px'}], {duration,iterations:repeat,direction:'alternate'});
+            animateRobotLayer('l hand 2', [{translate:'0 0'},{translate:'0 -9px'}], {duration,iterations:repeat,direction:'alternate'});
+            animateRobotLayer('r hand', [{translate:'0 0'},{translate:'0 -9px'}], {duration,iterations:repeat,direction:'alternate'});
+            animateRobotLayer('r hand 2', [{translate:'0 0'},{translate:'0 -9px'}], {duration,iterations:repeat,direction:'alternate'});
+        }
+    };
+    const blinkRobotEyes = () => {
+        if (window.chatBotFloatRobot?.blink) {
+            window.chatBotFloatRobot.blink();
+            return;
+        }
+        const eyes = robotEyeLayer();
+        if (!eyes?.animate) return;
+        eyes.animate([{transform:'scaleY(1)'},{transform:'scaleY(.08)',offset:.45},{transform:'scaleY(.08)',offset:.58},{transform:'scaleY(1)'}], {duration:280,easing:'ease-in-out'});
+    };
+    const winkRobotEye = (side = 'right') => {
+        const controller = window.chatBotFloatRobot;
+        if (controller?.wink?.(side)?.length) {
+            return;
+        }
+        blinkRobotEyes();
+    };
+    const scheduleIdleBlink = () => {
+        window.clearTimeout(idleBlinkTimer);
+        idleBlinkTimer = window.setTimeout(() => {
+            const bot = document.getElementById('chat-bot-float');
+            const animation = robotLottie();
+            const isReacting = bot?.classList.contains('is-happy') || bot?.classList.contains('is-sad')
+                || bot?.classList.contains('is-amazed') || bot?.classList.contains('is-winking');
+            if (bot && !bot.hidden && !browsingChoices && !isReacting && animation) {
+                blinkRobotEyes();
+            }
+            scheduleIdleBlink();
+        }, 2800 + Math.round(Math.random() * 2200));
+    };
+    const dismissSpeech = () => {
+        window.clearTimeout(messageDismissTimer);
+        browsingChoices = false;
+        setEmotion('');
+        const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
+        if (speech) speech.hidden = true;
+    };
+    const scheduleMessageDismiss = (delay = 5000) => {
+        window.clearTimeout(messageDismissTimer);
+        messageDismissTimer = window.setTimeout(dismissSpeech, delay);
+    };
+
+    const setEmotion = (emotion = '', duration = 1100) => {
+        const bot = document.getElementById('chat-bot-float');
+        const assistant = window.chatBotFloatRobot;
+        if (!bot) return;
+        window.clearTimeout(emotionTimer);
+        window.clearTimeout(winkTimer);
+        window.clearTimeout(idleBlinkTimer);
+        stopReactionAnimations();
+        bot.classList.remove('is-happy', 'is-sad', 'is-amazed', 'is-winking');
+        if (emotion) bot.classList.add(`is-${emotion}`);
+        assistant?.setEmotion?.(emotion, 0);
+        if (!emotion) {
+            assistant?.resetLook?.();
+            scheduleIdleBlink();
+            return;
+        }
+        if (emotion === 'happy') {
+            winkTimer = window.setTimeout(() => {
+                if (bot.classList.contains('is-happy')) assistant?.wink?.('right');
+            }, Math.max(1250, duration));
+        } else if (emotion === 'winking') {
+            assistant?.wink?.('right');
+        }
+        if (duration > 0) {
+            const clearDelay = emotion === 'happy' ? Math.max(1250, duration) + 1150 : duration;
+            emotionTimer = window.setTimeout(() => {
+                bot.classList.remove(`is-${emotion}`);
+                assistant?.setEmotion?.('');
+                assistant?.resetLook?.();
+                scheduleIdleBlink();
+            }, clearDelay);
+        }
+    };
+
+    const rememberViewport = () => {
+        const positions = [];
+        let node = activeForm;
+        while (node) {
+            if (node.scrollTop || node.scrollLeft || node.scrollHeight > node.clientHeight || node.scrollWidth > node.clientWidth) {
+                positions.push({ node, top:node.scrollTop, left:node.scrollLeft });
+            }
+            node = node.parentElement;
+        }
+        activeForm?.querySelectorAll('.modal-body, .field-group, .requested-feature-list').forEach(scrollNode => {
+            if (!positions.some(position => position.node === scrollNode)) {
+                positions.push({ node:scrollNode, top:scrollNode.scrollTop, left:scrollNode.scrollLeft });
+            }
+        });
+        const pageX = window.scrollX;
+        const pageY = window.scrollY;
+        return () => {
+            const restore = () => {
+                window.scrollTo(pageX, pageY);
+                positions.forEach(position => {
+                    position.node.scrollTop = position.top;
+                    position.node.scrollLeft = position.left;
+                });
+            };
+            restore();
+            requestAnimationFrame(() => { restore(); requestAnimationFrame(restore); });
+            [0, 50, 150, 300].forEach(delay => window.setTimeout(restore, delay));
+        };
+    };
+
+    const feedbackMessage = (item, action) => {
+        const field = item.field || 'suggestion';
+        const value = String(item.label || 'this suggestion');
+        const accepted = {
+            project_type:[`Great choice. ${value} is now the active project baseline.`, `I linked ${value} and its selected version to this intake.`],
+            project_description:['Project description updated. You can still refine the wording.', 'The suggested project summary is now in the description field.'],
+            requested_features:[`Added “${value}” to the requested features.`, `Feature accepted. “${value}” is now included for Architect review.`],
+            additional_requirements:['Added that requirement without replacing your existing notes.', 'The requirement was appended to the current project details.'],
+            sales_budget:['Budget suggestion applied. Priority adjustments can still be reviewed.', 'The historical template budget is now your starting estimate.'],
+            timeline_end:['Timeline suggestion applied from the selected template duration.', 'The proposed deadline is now set and remains editable.'],
+            priority:[`Priority updated to ${value}.`, `The ${value.toLowerCase()} priority recommendation is now applied.`],
+            sales_notes:['Added the recommendation to Sales notes.', 'That historical insight is now included in the Sales handoff notes.']
+        };
+        const rejected = {
+            project_description:['Description suggestion skipped. Your current wording stays unchanged.', 'No description was applied; you can write a custom project summary.'],
+            requested_features:[`Skipped “${value}”. It was not added to the project.`, `Feature rejected. “${value}” remains outside the requested scope.`],
+            additional_requirements:['Requirement skipped. Existing requirements were not changed.', 'I left that recommendation out of the additional requirements.'],
+            sales_budget:['Budget suggestion skipped. Your current amount stays unchanged.', 'No template budget was applied; you can enter a custom estimate.'],
+            timeline_end:['Timeline suggestion skipped. The current dates remain unchanged.', 'I did not apply the suggested duration to this project.'],
+            priority:['Priority suggestion skipped. Your current selection remains.', 'No priority change was made.'],
+            sales_notes:['Sales note skipped. Your current notes remain unchanged.', 'I left that recommendation out of the Sales handoff.']
+        };
+        const pool = (action === 'accepted' ? accepted : rejected)[field]
+            || (action === 'accepted' ? ['Suggestion accepted and applied to this field.'] : ['Suggestion rejected; no change was made.']);
+        const messageNumber = feedbackSequence++;
+        let message = pool[messageNumber % pool.length];
+        if (messageNumber % 3 === 1) {
+            const encouragement = action === 'accepted'
+                ? {
+                    project_type:'Nice start — the rest of the intake will be easier to shape from here.',
+                    project_description:'Good progress — the project is becoming clearer.',
+                    requested_features:'You’re building a focused scope one feature at a time.',
+                    additional_requirements:'Great detail — this will help the Architect plan confidently.',
+                    sales_budget:'Good step — a clear baseline makes estimation easier.',
+                    timeline_end:'Nice work — the delivery plan is taking shape.',
+                    priority:'Good decision — this keeps planning aligned with urgency.',
+                    sales_notes:'Well done — the handoff context is getting stronger.'
+                }
+                : {
+                    project_description:'That’s okay — keeping your own wording is a valid choice.',
+                    requested_features:'Good call — a focused scope is often stronger than a crowded one.',
+                    additional_requirements:'No problem — only keep requirements that truly add value.',
+                    sales_budget:'That’s fine — you can use the amount that best fits this client.',
+                    timeline_end:'No worries — choose a schedule that feels realistic.',
+                    priority:'That’s okay — your judgment should lead the final priority.',
+                    sales_notes:'Good choice — concise notes can make the handoff clearer.'
+                };
+            message += ' ' + (encouragement[field] || (action === 'accepted' ? 'Nice progress — keep going.' : 'That’s okay — you’re still in control.'));
+        }
+        return message;
+    };
+
+    const showFeedback = (item, action, after) => {
+        const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
+        if (!speech) { after(); return; }
+        setEmotion(action === 'accepted' ? 'happy' : 'sad', 1500);
+        continueAction = after;
+        backAction = action === 'rejected' ? () => { setEmotion(''); render(); } : null;
+        const heading = action === 'accepted'
+            ? 'Done — suggestion applied'
+            : (item.field === 'requested_features' ? 'Scope warning — feature skipped' : 'Okay — suggestion skipped');
+        speech.hidden = false;
+        speech.innerHTML = `<div class="sales-bot-heading-row"><div class="sales-bot-head">${escapeClientHtml(heading)}</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div>
+            <span class="sales-bot-copy">${escapeClientHtml(feedbackMessage(item, action))}</span>
+            <div class="sales-bot-actions">${action === 'rejected' ? '<button type="button" class="sales-bot-reject" data-sales-bot-back><i class="fas fa-arrow-left" aria-hidden="true"></i> Go back</button>' : ''}<button type="button" class="sales-bot-accept" data-sales-bot-continue>Continue</button></div>`;
+        scheduleMessageDismiss(5000);
+    };
+
+    const showFeatureSummary = () => {
+        const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
+        if (!speech) { close(); return; }
+        setEmotion(featureSession.accepted > 0 ? 'winking' : 'sad', 0);
+        continueAction = close;
+        backAction = null;
+        const acceptedText = `${featureSession.accepted} feature${featureSession.accepted === 1 ? '' : 's'} added`;
+        const rejectedText = `${featureSession.rejected} skipped`;
+        const encouragement = featureSession.accepted > 0
+            ? 'Nice work — your requested scope is ready for the next field.'
+            : 'No changes were made. You can add the features that fit this project best.';
+        speech.hidden = false;
+        speech.innerHTML = `<div class="sales-bot-heading-row"><div class="sales-bot-head">Feature review complete</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div>
+            <span class="sales-bot-copy">${escapeClientHtml(`${acceptedText}, ${rejectedText}. ${encouragement}`)}</span>
+            <div class="sales-bot-actions"><button type="button" class="sales-bot-accept" data-sales-bot-continue>Finish</button></div>`;
+        scheduleMessageDismiss(6000);
+    };
+
+    const advanceFeatureQueue = () => {
+        index++;
+        index < queue.length ? render() : showFeatureSummary();
+    };
+
+    const templateFor = (form) => {
+        const selectedId = Number(form?.querySelector('[data-template-version-select]')?.value || 0);
+        const type = normalizeSalesTemplateType(form?.elements?.project_type?.value);
+        return projectTemplates.find(item => selectedId && Number(item.id) === selectedId)
+            || projectTemplates.find(item => normalizeSalesTemplateType(item.project_type) === type)
+            || null;
+    };
+    const setField = (name, value) => {
+        const field = activeForm?.elements?.[name];
+        if (!field) return;
+        field.value = value;
+        field.dispatchEvent(new Event('input', { bubbles:true }));
+        field.dispatchEvent(new Event('change', { bubbles:true }));
+    };
+    const addFeature = (value) => {
+        const selector = activeForm?.id === 'addProjectForm' ? '[data-add-project-feature-input]' : '[data-requested-feature-input]';
+        const inputs = Array.from(activeForm?.querySelectorAll(selector) || []);
+        let input = inputs.find(item => !String(item.value || '').trim());
+        if (!input && inputs.length) {
+            const row = inputs[inputs.length - 1].closest('.requested-feature-item')?.cloneNode(true);
+            input = row?.querySelector(selector);
+            if (input && row) {
+                input.value = '';
+                inputs[inputs.length - 1].closest('.requested-feature-item')?.parentElement?.appendChild(row);
+            }
+        }
+        if (input) {
+            input.value = value;
+            input.dispatchEvent(new Event('input', { bubbles:true }));
+            input.dispatchEvent(new Event('change', { bubbles:true }));
+        }
+    };
+    const render = () => {
+        const bot = document.getElementById('chat-bot-float');
+        const speech = bot?.querySelector('.chat-bot-speech');
+        if (!bot || !speech || !queue[index]) return;
+        const item = queue[index];
+        const wasOpen = document.body.classList.contains('sales-assistant-open');
+        if (!wasOpen) {
+            bot.style.left = '';
+            bot.style.top = '';
+            bot.style.right = '';
+            bot.style.bottom = '';
+        }
+        bot.hidden = false;
+        bot.setAttribute('aria-hidden', 'false');
+        window.chatBotWidgetRobot?.wake?.();
+        document.body.classList.add('sales-assistant-open');
+        const choices = Array.isArray(item.choices) ? `<div class="sales-bot-choice-list">${item.choices.map((choice, choiceIndex) =>
+            `<button type="button" class="sales-bot-choice" data-sales-bot-choice="${choiceIndex}"><strong>${escapeClientHtml(choice.label)}</strong><em>${escapeClientHtml(choice.version)}</em></button>`
+        ).join('')}</div>` : '';
+        const actions = item.information || item.choices ? '' : '<div class="sales-bot-actions"><button type="button" class="sales-bot-reject" data-sales-bot-reject>Reject</button><button type="button" class="sales-bot-accept" data-sales-bot-accept>Accept</button></div>';
+        const progress = item.information || item.choices || queue.length < 2 ? '' : `<span class="sales-bot-progress">Suggestion ${index + 1} of ${queue.length}</span>`;
+        browsingChoices = Boolean(item.choices);
+        if (browsingChoices) {
+            window.chatBotFloatRobot?.resetLook?.();
+        }
+        speech.hidden = false;
+        speech.innerHTML = `<div class="sales-bot-heading-row"><div class="sales-bot-head">${escapeClientHtml(item.heading || 'My suggestion')}</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div>
+            ${item.version ? `<span class="sales-bot-version">${escapeClientHtml(item.version)}</span>` : ''}
+            ${item.label ? `<span class="sales-bot-copy">${escapeClientHtml(item.label)}</span>` : ''}
+            ${choices}${actions}${progress}`;
+        scheduleIdleBlink();
+        scheduleMessageDismiss(item.choices ? 9000 : 6000);
+        if (item.choices) setEmotion('amazed', 0);
+    };
+    const show = (form, items) => {
+        activeForm = form;
+        queue = items.filter(item => item && String(item.label || '').trim());
+        index = 0;
+        if (queue.length) render();
+    };
+    const projectTypes = (form) => {
+        const query = normalizeSalesTemplateType(form?.elements?.project_type?.value);
+        const projectName = normalizeSalesTemplateType(form?.elements?.project_name?.value);
+        const terms = (query || projectName).split(' ').filter(term => term.length > 2);
+        let matches = projectTemplates.filter(template => {
+            if (!terms.length) return true;
+            const candidate = normalizeSalesTemplateType(template.project_type);
+            return terms.some(term => candidate.includes(term));
+        });
+        if (!matches.length && query) {
+            matches = projectTemplates.filter(template => normalizeSalesTemplateType(template.project_type).split(' ').some(word => query.includes(word) || word.includes(query)));
+        }
+        const choices = matches.slice(0, 8).map(template => ({
+            label:template.project_type,
+            field:'project_type',
+            version:`V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...projectTemplates.filter(item => item.project_type === template.project_type).map(item => Number(item.template_version || 1))) ? ' · Latest' : ''}`,
+            apply:() => {
+                setField('project_type', template.project_type);
+                const select = activeForm.querySelector('[data-template-version-select]');
+                if (select) { select.value = String(template.id); select.dispatchEvent(new Event('change', { bubbles:true })); }
+            }
+        }));
+        show(form, [{
+            heading: query ? 'Matching project types' : 'Choose a project type',
+            label: choices.length ? 'Select the best match. The list updates as you type.' : `No learned template matches “${form?.elements?.project_type?.value || ''}”. You may continue with a new project type.`,
+            choices,
+            information: choices.length === 0
+        }]);
+    };
+    const forField = (form, field) => {
+        const template = templateFor(form);
+        if (field === 'project_type') return projectTypes(form);
+        if (!template) return show(form, [{ heading:'Choose a project type first', label:'I will suggest this field after you choose a matching project type.', information:true }]);
+        const featureSelector = form.id === 'addProjectForm' ? '[data-add-project-feature-input]' : '[data-requested-feature-input]';
+        const existingFeatures = new Set(Array.from(form.querySelectorAll(featureSelector))
+            .map(input => normalizeSalesTemplateType(input.value)).filter(Boolean));
+        const availableFeatureSuggestions = (template.feature_items || [])
+            .filter(value => !existingFeatures.has(normalizeSalesTemplateType(value)));
+        if (field === 'requested_features') {
+            featureSession = { accepted:0, rejected:0 };
+            if (!availableFeatureSuggestions.length) {
+                setEmotion('winking', 1800);
+                return show(form, [{ heading:'Feature suggestions complete', label:'All learned template features have already been reviewed or added. Nice work!', information:true }]);
+            }
+        }
+        const priorityValue = form.elements.priority?.value || 'medium';
+        const timelineWeeks = getPriorityAdjustedTemplateWeeks(template, priorityValue) || 1;
+        const timelineDays = timelineWeeks * 7;
+        const timelineStartValue = form.elements.timeline_start?.value || new Date().toISOString().slice(0, 10);
+        const timelineStartDate = new Date(`${timelineStartValue}T00:00:00`);
+        const timelineDeadlineDate = new Date(timelineStartDate);
+        timelineDeadlineDate.setDate(timelineDeadlineDate.getDate() + timelineDays);
+        const timelineDeadlineValue = timelineDeadlineDate.toISOString().slice(0, 10);
+        const readableDate = value => new Intl.DateTimeFormat('en-PH', { year:'numeric', month:'short', day:'numeric' }).format(new Date(`${value}T00:00:00`));
+        const timelineSuggestion = {
+            field:'timeline_end',
+            heading:'Suggested project timeline',
+            label:`Priority: ${getPriorityDurationName(priorityValue)} · Start: ${readableDate(timelineStartValue)} · Deadline: ${readableDate(timelineDeadlineValue)} · ${timelineDays} calendar days (${timelineWeeks} weeks)`,
+            apply:() => {
+                setField('timeline_start', timelineStartValue);
+                setField('timeline_end', timelineDeadlineValue);
+                const timelineEnd = activeForm?.elements?.timeline_end;
+                if (timelineEnd) timelineEnd.dataset.templateDurationAuto = '1';
+            }
+        };
+        const maps = {
+            project_description:[{field:'project_description',heading:'Project description',label:template.project_description,apply:()=>setField('project_description',template.project_description)}],
+            requested_features:availableFeatureSuggestions.map(value=>({field:'requested_features',heading:'Suggested feature',label:value,version:`From ${template.project_type} V${template.template_version || 1}`,apply:()=>addFeature(value)})),
+            additional_requirements:[template.non_functional_requirements,template.integrations,template.third_party_services].map(value=>({field:'additional_requirements',heading:'Additional requirement',label:value,apply:()=>setField('additional_requirements',[activeForm.elements.additional_requirements?.value,value].filter(Boolean).join('\n'))})),
+            sales_budget:[{field:'sales_budget',heading:'Suggested starting budget',label:new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP'}).format(Number(template.budget_min || 0)),apply:()=>setField('sales_budget',Number(template.budget_min || 0).toFixed(2))}],
+            timeline_start:[timelineSuggestion],
+            timeline_end:[timelineSuggestion],
+            priority:[{field:'priority',heading:'Suggested priority',label:String(template.complexity_level || 'medium').toLowerCase()==='high'?'High':'Medium',apply:()=>setField('priority',String(template.complexity_level || '').toLowerCase()==='high'?'high':'medium')}],
+            sales_notes:[template.sales_notes,template.suggested_milestones,template.maintenance_support].map(value=>({field:'sales_notes',heading:'Sales note suggestion',label:value,apply:()=>setField('sales_notes',[activeForm.elements.sales_notes?.value,value].filter(Boolean).join('\n'))}))
+        };
+        show(form, maps[field] || []);
+    };
+    document.addEventListener('pointerdown', event => {
+        if (!event.target.closest('[data-sales-bot-choice], [data-sales-bot-accept], [data-sales-bot-reject], [data-sales-bot-continue], [data-sales-bot-back], [data-sales-bot-dismiss]')) {
+            return;
+        }
+        const restore = rememberViewport();
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        restore();
+    }, true);
+    document.addEventListener('click', event => {
+        const assistantControl = event.target.closest('[data-sales-bot-choice], [data-sales-bot-accept], [data-sales-bot-reject], [data-sales-bot-continue], [data-sales-bot-back], [data-sales-bot-dismiss]');
+        if (assistantControl) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            window.clearTimeout(messageDismissTimer);
+        } else if (event.target.closest('.chat-bot-speech')) {
+            event.stopPropagation();
+        }
+        const dismissButton = event.target.closest('[data-sales-bot-dismiss]');
+        if (dismissButton) {
+            const restore = rememberViewport();
+            dismissSpeech();
+            restore();
+            return;
+        }
+        const backButton = event.target.closest('[data-sales-bot-back]');
+        if (backButton) {
+            const restore = rememberViewport();
+            const previous = backAction;
+            backAction = null;
+            previous?.();
+            restore();
+            return;
+        }
+        const continueButton = event.target.closest('[data-sales-bot-continue]');
+        if (continueButton) {
+            const restore = rememberViewport();
+            const next = continueAction;
+            continueAction = null;
+            next?.();
+            restore();
+            return;
+        }
+        const choiceButton = event.target.closest('[data-sales-bot-choice]');
+        if (choiceButton) {
+            const restore = rememberViewport();
+            const choice = queue[index]?.choices?.[Number(choiceButton.dataset.salesBotChoice)];
+            browsingChoices = false;
+            window.chatBotFloatRobot?.resetLook?.();
+            choice?.apply?.();
+            showFeedback(choice || { field:'project_type', label:'Project type' }, 'accepted', close);
+            restore();
+            return;
+        }
+        if (event.target.closest('[data-sales-bot-accept]')) {
+            const restore = rememberViewport();
+            const item = queue[index];
+            item?.apply?.();
+            if (item?.field === 'requested_features') {
+                featureSession.accepted++;
+                setEmotion('happy', 900);
+                advanceFeatureQueue();
+                restore();
+                return;
+            }
+            showFeedback(item || {}, 'accepted', () => {
+                if (item?.complete) { close(); return; }
+                index++;
+                index < queue.length ? render() : close();
+            });
+            restore();
+            return;
+        }
+        if (event.target.closest('[data-sales-bot-reject]')) {
+            const restore = rememberViewport();
+            const item = queue[index];
+            if (item?.field === 'requested_features') {
+                featureSession.rejected++;
+                showFeedback(item, 'rejected', advanceFeatureQueue);
+                backAction = () => {
+                    featureSession.rejected = Math.max(0, featureSession.rejected - 1);
+                    setEmotion('');
+                    render();
+                };
+                restore();
+                return;
+            }
+            showFeedback(item || {}, 'rejected', () => {
+                index++;
+                index < queue.length ? render() : close();
+            });
+            restore();
+        }
+    }, true);
+    document.addEventListener('pointerover', event => {
+        if (event.target.closest?.('.chat-bot-speech')) {
+            window.clearTimeout(messageDismissTimer);
+        }
+    });
+    document.addEventListener('pointerout', event => {
+        const speech = event.target.closest?.('.chat-bot-speech');
+        if (speech && !event.relatedTarget?.closest?.('.chat-bot-speech')) {
+            scheduleMessageDismiss(speech.querySelector('.sales-bot-choice-list') ? 9000 : 5000);
+        }
+    });
+    document.addEventListener('pointermove', event => {
+        const bot = document.getElementById('chat-bot-float');
+        if (!bot || bot.hidden || !browsingChoices) return;
+        window.chatBotFloatRobot?.lookAt?.(event.clientX, event.clientY);
+    }, { passive:true });
+    const close = () => {
+        continueAction = null;
+        backAction = null;
+        browsingChoices = false;
+        setEmotion('');
+        window.chatBotFloatRobot?.resetLook?.();
+        const bot = document.getElementById('chat-bot-float');
+        const speech = bot?.querySelector('.chat-bot-speech');
+        if (!bot || !speech) return;
+        document.body.classList.add('sales-assistant-open');
+        bot.hidden = false;
+        bot.setAttribute('aria-hidden', 'false');
+        speech.hidden = false;
+        speech.innerHTML = '<div class="sales-bot-heading-row"><div class="sales-bot-head">Hi, good day!</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div><span class="sales-bot-copy">I am ready whenever you want help with another field.</span>';
+        scheduleMessageDismiss(4500);
+    };
+    return { forField, close };
+})();
+
+document.addEventListener('focusin', event => {
+    const form = event.target.closest('#addClientForm, #addProjectForm');
+    if (!form) return;
+    const field = event.target.matches('[data-requested-feature-input],[data-add-project-feature-input]') ? 'requested_features' : event.target.name;
+    if (['project_type','project_description','requested_features','additional_requirements','sales_budget','timeline_start','timeline_end','priority','sales_notes'].includes(field)) {
+        salesTemplateAssistant.forField(form, field);
+    }
+});
+document.addEventListener('input', event => {
+    const form = event.target.closest?.('#addClientForm, #addProjectForm');
+    if (form && event.target.name === 'project_type' && document.activeElement === event.target) {
+        salesTemplateAssistant.forField(form, 'project_type');
+    }
+});
+document.addEventListener('keydown', event => {
+    const form = event.target.closest?.('#addClientForm, #addProjectForm');
+    if (form && event.target.name === 'project_type' && event.key === 'Enter') {
+        event.preventDefault();
+    }
+});
+document.querySelectorAll('#addClientModal, #addProjectModal').forEach(modal => modal.addEventListener('hidden.bs.modal', () => salesTemplateAssistant.close()));
 
 function applyFilters() {
     const search = document.getElementById('searchInput').value;
@@ -5442,6 +6219,41 @@ function escapeClientHtml(value) {
     return div.innerHTML;
 }
 
+function syncComplexityPopover(reasonElement, popoverElement) {
+    if (reasonElement && popoverElement) {
+        popoverElement.innerHTML = reasonElement.innerHTML;
+    }
+}
+
+function closeComplexityInsight(scope = document, returnFocus = false) {
+    scope.querySelectorAll('[data-complexity-popover]').forEach((popover) => {
+        const shell = popover.closest('.complexity-field-shell');
+        const trigger = shell?.querySelector('[data-complexity-insight-trigger]');
+        if (!popover.hidden) {
+            popover.hidden = true;
+            trigger?.classList.remove('is-open');
+            trigger?.setAttribute('aria-expanded', 'false');
+            if (returnFocus) {
+                trigger?.focus();
+            }
+        }
+    });
+}
+
+function toggleComplexityInsight(trigger, scope = document) {
+    const shell = trigger?.closest('.complexity-field-shell');
+    const popover = shell?.querySelector('[data-complexity-popover]');
+    if (!popover) {
+        return;
+    }
+
+    const shouldOpen = popover.hidden;
+    closeComplexityInsight(scope, false);
+    popover.hidden = !shouldOpen;
+    trigger.classList.toggle('is-open', shouldOpen);
+    trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
 const projectTemplateTypeNames = Array.from(new Set(
     (Array.isArray(projectTemplates) ? projectTemplates : [])
         .map((template) => String(template.project_type || '').trim())
@@ -5459,12 +6271,29 @@ function closeTemplatePickers(exceptMenu = null) {
 function initProjectTemplatePicker(picker) {
     const input = picker.querySelector('[data-template-picker-input]');
     const menu = picker.querySelector('[data-template-picker-menu]');
+    const versionSelect = picker.closest('form')?.querySelector('[data-template-version-select]');
     if (!input || !menu) {
         return;
     }
 
     let selectingTemplate = false;
+    const syncVersions = () => {
+        if (!versionSelect) return;
+        const needle = normalizeSalesTemplateType(input.value);
+        const versions = projectTemplates
+            .filter((template) => normalizeSalesTemplateType(template.project_type) === needle)
+            .sort((a, b) => Number(b.template_version || 1) - Number(a.template_version || 1));
+        versionSelect.innerHTML = versions.map((template) =>
+            `<option value="${Number(template.id || 0)}">V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...versions.map(item => Number(item.template_version || 1))) ? ' (Latest)' : ''}</option>`
+        ).join('');
+        versionSelect.hidden = versions.length < 2;
+        if (versions.length === 1) versionSelect.value = String(versions[0].id || '');
+    };
     const renderMenu = () => {
+        if (picker.closest('#addClientForm, #addProjectForm')) {
+            menu.hidden = true;
+            return;
+        }
         if (selectingTemplate) {
             return;
         }
@@ -5492,7 +6321,7 @@ function initProjectTemplatePicker(picker) {
     };
 
     input.addEventListener('focus', renderMenu);
-    input.addEventListener('input', renderMenu);
+    input.addEventListener('input', () => { syncVersions(); renderMenu(); });
     input.addEventListener('click', renderMenu);
     input.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
@@ -5517,6 +6346,10 @@ function initProjectTemplatePicker(picker) {
         input.dispatchEvent(new Event('change', { bubbles: true }));
         selectingTemplate = false;
         input.focus();
+    });
+
+    versionSelect?.addEventListener('change', () => {
+        input.dispatchEvent(new Event('change', { bubbles: true }));
     });
 }
 
@@ -5584,7 +6417,9 @@ function findSalesProjectTemplate(value) {
         return null;
     }
 
-    const exactMatch = projectTemplates.find((template) => normalizeSalesTemplateType(template.project_type) === needle);
+    const selectedId = Number(document.querySelector('#addProjectForm [data-template-version-select]')?.value || 0);
+    const exactMatch = projectTemplates.find((template) => selectedId > 0 && Number(template.id) === selectedId)
+        || projectTemplates.find((template) => normalizeSalesTemplateType(template.project_type) === needle);
     if (exactMatch) {
         return exactMatch;
     }
@@ -5617,6 +6452,21 @@ function findSalesProjectTemplate(value) {
     }
 
     return scoredMatches[0].template;
+}
+
+function syncAddProjectTimelineWithPriority(force = false) {
+    const form = document.getElementById('addProjectForm');
+    const timelineEnd = form?.elements?.timeline_end;
+    const template = form ? findSalesProjectTemplate(form.elements.project_type?.value || '') : null;
+    if (!form || !timelineEnd || !template) return;
+    if (!force && timelineEnd.value && timelineEnd.dataset.templateDurationAuto !== '1') return;
+
+    const weeks = getPriorityAdjustedTemplateWeeks(template, form.elements.priority?.value || 'medium');
+    if (!weeks) return;
+    const startValue = form.elements.timeline_start?.value || addProjectDatePlusDays('', 0);
+    timelineEnd.value = addProjectDatePlusDays(startValue, weeks * 7);
+    timelineEnd.dataset.templateDurationAuto = '1';
+    timelineEnd.dataset.templateDurationWeeks = String(weeks);
 }
 
 function syncAddProjectBudgetWithPriority() {
@@ -5666,9 +6516,12 @@ function applyAddProjectTemplate(template, options = {}) {
     if (form.elements.timeline_start && (force || !form.elements.timeline_start.value)) {
         form.elements.timeline_start.value = addProjectDatePlusDays('', 0);
     }
-    if (form.elements.timeline_end && Number(template.duration_max_weeks || 0) > 0 && (force || !form.elements.timeline_end.value)) {
+    if (form.elements.timeline_end && getPriorityAdjustedTemplateWeeks(template, form.elements.priority?.value || 'medium') > 0 && (force || !form.elements.timeline_end.value)) {
         const startValue = form.elements.timeline_start?.value || addProjectDatePlusDays('', 0);
-        form.elements.timeline_end.value = addProjectDatePlusDays(startValue, Number(template.duration_max_weeks || 0) * 7);
+        const durationWeeks = getPriorityAdjustedTemplateWeeks(template, form.elements.priority?.value || 'medium');
+        form.elements.timeline_end.value = addProjectDatePlusDays(startValue, durationWeeks * 7);
+        form.elements.timeline_end.dataset.templateDurationAuto = '1';
+        form.elements.timeline_end.dataset.templateDurationWeeks = String(durationWeeks);
     }
     if (form.elements.additional_requirements && (force || !form.elements.additional_requirements.value.trim())) {
         form.elements.additional_requirements.value = [
@@ -5929,6 +6782,7 @@ function updateAddProjectGeneratedComplexity() {
     if (complexityReason) {
         complexityReason.innerHTML = `<strong>${escapeClientHtml(assessment.level)} complexity</strong><span>${escapeClientHtml(assessment.reason)}</span>`;
     }
+    syncComplexityPopover(complexityReason, form.querySelector('[data-complexity-popover]'));
 
     const priorityMarkupPreview = form.querySelector('[data-add-project-priority-markup-preview]');
     if (priorityMarkupPreview) {
@@ -6157,6 +7011,13 @@ if (addProjectFormElement) {
             addProjectAutoBudgetBase = null;
             addProjectAutoBudgetFromTemplate = false;
         }
+        if (event.target?.name === 'timeline_end') {
+            delete event.target.dataset.templateDurationAuto;
+            delete event.target.dataset.templateDurationWeeks;
+        }
+        if (event.target?.name === 'timeline_start' && addProjectFormElement.elements.timeline_end?.dataset.templateDurationAuto === '1') {
+            syncAddProjectTimelineWithPriority(true);
+        }
         if (event.target?.matches('[data-add-project-feature-input]')) {
             event.target.setCustomValidity('');
             syncAddProjectFeatureField();
@@ -6174,11 +7035,22 @@ if (addProjectFormElement) {
         }
         if (event.target?.name === 'priority') {
             syncAddProjectBudgetWithPriority();
+            syncAddProjectTimelineWithPriority(false);
             updateAddProjectTemplateRecommendation();
         }
     });
 
     addProjectFormElement.addEventListener('click', function (event) {
+        const complexityInsightButton = event.target.closest('[data-complexity-insight-trigger]');
+        if (complexityInsightButton) {
+            toggleComplexityInsight(complexityInsightButton, addProjectFormElement);
+            return;
+        }
+
+        if (!event.target.closest('.complexity-field-shell')) {
+            closeComplexityInsight(addProjectFormElement, false);
+        }
+
         const nextButton = event.target.closest('[data-add-project-next]');
         if (nextButton) {
             if (validateAddProjectStep(currentAddProjectStep, true)) {
@@ -6217,6 +7089,12 @@ if (addProjectFormElement) {
         }
 
         applyAddProjectTemplate(findSalesProjectTemplate(addProjectFormElement.elements.project_type?.value), { force: true });
+    });
+
+    addProjectFormElement.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeComplexityInsight(addProjectFormElement, true);
+        }
     });
 
     addProjectFormElement.addEventListener('submit', function (event) {
@@ -6560,7 +7438,9 @@ if (addClientModalElement && addClientForm) {
             return null;
         }
 
-        const exactMatch = projectTemplates.find((template) => normalizeTemplateType(template.project_type) === needle);
+        const selectedId = Number(addClientForm.querySelector('[data-template-version-select]')?.value || 0);
+        const exactMatch = projectTemplates.find((template) => selectedId > 0 && Number(template.id) === selectedId)
+            || projectTemplates.find((template) => normalizeTemplateType(template.project_type) === needle);
         if (exactMatch) {
             return exactMatch;
         }
@@ -6662,6 +7542,20 @@ if (addClientModalElement && addClientForm) {
         return `${year}-${month}-${day}`;
     }
 
+    function syncClientTimelineWithPriority(force = false) {
+        const timelineEnd = addClientForm.elements.timeline_end;
+        const template = findProjectTemplate(getFormValue('project_type'));
+        if (!timelineEnd || !template) return;
+        if (!force && timelineEnd.value && timelineEnd.dataset.templateDurationAuto !== '1') return;
+
+        const weeks = getPriorityAdjustedTemplateWeeks(template, addClientForm.elements.priority?.value || 'medium');
+        if (!weeks) return;
+        const startValue = getFormValue('timeline_start') || addDaysToDateInput('', 0);
+        timelineEnd.value = addDaysToDateInput(startValue, weeks * 7);
+        timelineEnd.dataset.templateDurationAuto = '1';
+        timelineEnd.dataset.templateDurationWeeks = String(weeks);
+    }
+
     function applyProjectTemplate(template, options = {}) {
         if (!template) {
             return;
@@ -6689,9 +7583,12 @@ if (addClientModalElement && addClientForm) {
         if (addClientForm.elements.timeline_start && (force || !getFormValue('timeline_start'))) {
             addClientForm.elements.timeline_start.value = addDaysToDateInput('', 0);
         }
-        if (addClientForm.elements.timeline_end && Number(template.duration_max_weeks || 0) > 0 && (force || !getFormValue('timeline_end'))) {
+        if (addClientForm.elements.timeline_end && getPriorityAdjustedTemplateWeeks(template, addClientForm.elements.priority?.value || 'medium') > 0 && (force || !getFormValue('timeline_end'))) {
             const startValue = getFormValue('timeline_start') || addDaysToDateInput('', 0);
-            addClientForm.elements.timeline_end.value = addDaysToDateInput(startValue, Number(template.duration_max_weeks || 0) * 7);
+            const durationWeeks = getPriorityAdjustedTemplateWeeks(template, addClientForm.elements.priority?.value || 'medium');
+            addClientForm.elements.timeline_end.value = addDaysToDateInput(startValue, durationWeeks * 7);
+            addClientForm.elements.timeline_end.dataset.templateDurationAuto = '1';
+            addClientForm.elements.timeline_end.dataset.templateDurationWeeks = String(durationWeeks);
         }
         if (addClientForm.elements.additional_requirements && (force || !getFormValue('additional_requirements'))) {
             addClientForm.elements.additional_requirements.value = [
@@ -6908,7 +7805,7 @@ if (addClientModalElement && addClientForm) {
         const totalText = hasBudget ? `Adjusted intake budget: ${formatPeso(adjustedBudget)}.` : 'Enter budget later to calculate the exact amount.';
         const label = `${priorityMarkup.label} priority adds +${priorityMarkup.percent}%`;
 
-        trigger.title = label;
+        trigger.removeAttribute('title');
         trigger.setAttribute('aria-label', `View priority impact: ${label}`);
         popover.innerHTML = `
             <strong>${escapeHtml(label)}</strong>
@@ -6942,13 +7839,14 @@ if (addClientModalElement && addClientForm) {
 
         const templateType = normalizeTemplateType(template.project_type);
         const isApplied = templateApplyMessage && appliedProjectTemplateType === templateType;
+        const triggerLabel = isApplied
+            ? `${template.project_type} template applied. Click to review details.`
+            : `${template.project_type} recommendation available. Click to review before applying.`;
         trigger.hidden = false;
         trigger.dataset.templateType = template.project_type || '';
         trigger.classList.toggle('is-applied', Boolean(isApplied));
-        trigger.title = isApplied
-            ? `${template.project_type} template applied. Click to review details.`
-            : `${template.project_type} recommendation available. Click to review before applying.`;
-        trigger.setAttribute('aria-label', trigger.title);
+        trigger.removeAttribute('title');
+        trigger.setAttribute('aria-label', triggerLabel);
         trigger.innerHTML = `<i class="fas ${isApplied ? 'fa-check-circle' : 'fa-magic'}" aria-hidden="true"></i>`;
     }
 
@@ -7064,6 +7962,7 @@ if (addClientModalElement && addClientForm) {
         if (complexityReason) {
             complexityReason.innerHTML = `<strong>${escapeHtml(assessment.level)} complexity</strong><span>${escapeHtml(assessment.reason)}</span>`;
         }
+        syncComplexityPopover(complexityReason, addClientForm.querySelector('[data-complexity-popover]'));
 
         const priorityMarkupPreview = addClientForm.querySelector('[data-priority-markup-preview]');
         if (priorityMarkupPreview) {
@@ -7122,8 +8021,26 @@ if (addClientModalElement && addClientForm) {
         });
     }
 
+    function isMeaningfulDraftValue(key, value) {
+        if (key.startsWith('_') || key === 'client_draft_id' || key === 'attachments[]') {
+            return false;
+        }
+
+        const normalizedValue = String(value || '').trim();
+        if (normalizedValue === '') {
+            return false;
+        }
+
+        const defaultDraftValues = {
+            priority: 'medium'
+        };
+
+        return !(Object.prototype.hasOwnProperty.call(defaultDraftValues, key)
+            && normalizedValue === defaultDraftValues[key]);
+    }
+
     function hasDraftValues(data = getDraftData()) {
-        return Object.entries(data).some(([key, value]) => !key.startsWith('_') && String(value).trim() !== '');
+        return Object.entries(data).some(([key, value]) => isMeaningfulDraftValue(key, value));
     }
 
     function createDraftId() {
@@ -7312,6 +8229,12 @@ if (addClientModalElement && addClientForm) {
         }
     }
 
+    function showDraftFeedback(message, type = 'success') {
+        if (typeof window.appToast === 'function') {
+            window.appToast('Client Draft', message, type);
+        }
+    }
+
     function updateDraftStatus(hasDraft = hasDraftValues()) {
         if (draftStatus) {
             draftStatus.textContent = hasDraft ? 'Draft saved on this browser' : (formTouched ? 'Unsaved changes' : 'Draft not started');
@@ -7322,7 +8245,7 @@ if (addClientModalElement && addClientForm) {
         renderDraftList();
     }
 
-    function saveAddClientDraft() {
+    function saveAddClientDraft(showFeedback = false) {
         const draftData = getDraftData();
         if (!hasDraftValues(draftData)) {
             if (activeDraftId) {
@@ -7331,6 +8254,9 @@ if (addClientModalElement && addClientForm) {
                 activeDraftId = null;
             }
             updateDraftStatus(false);
+            if (showFeedback) {
+                showDraftFeedback('There is no client intake data to save yet.', 'warning');
+            }
             return;
         }
 
@@ -7356,6 +8282,9 @@ if (addClientModalElement && addClientForm) {
         }
         activeDraftLoaded = true;
         updateDraftStatus(true);
+        if (showFeedback) {
+            showDraftFeedback('Draft saved on this browser.');
+        }
     }
 
     function loadAddClientDraft(draftId = null) {
@@ -7718,7 +8647,7 @@ if (addClientModalElement && addClientForm) {
     }
 
     function requestAddClientClose() {
-        if (!hasDraftValues()) {
+        if (!formTouched || !hasDraftValues()) {
             resetCurrentClientInput();
             addClientModal.hide();
             return;
@@ -7750,6 +8679,13 @@ if (addClientModalElement && addClientForm) {
         if (event.target?.name === 'sales_notes') {
             resizeSalesNotesField();
         }
+        if (event.target?.name === 'timeline_end') {
+            delete event.target.dataset.templateDurationAuto;
+            delete event.target.dataset.templateDurationWeeks;
+        }
+        if (event.target?.name === 'timeline_start' && addClientForm.elements.timeline_end?.dataset.templateDurationAuto === '1') {
+            syncClientTimelineWithPriority(true);
+        }
         formTouched = true;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
@@ -7759,14 +8695,29 @@ if (addClientModalElement && addClientForm) {
         if (event.target?.matches('[data-attachment-input]')) {
             updateAttachmentSummary();
         }
+        if (event.target?.name === 'priority') {
+            syncClientTimelineWithPriority(false);
+        }
         formTouched = true;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
     });
 
     addClientForm.addEventListener('click', (event) => {
+        const complexityInsightButton = event.target.closest('[data-complexity-insight-trigger]');
+        if (complexityInsightButton) {
+            closePriorityInsight(false);
+            toggleComplexityInsight(complexityInsightButton, addClientForm);
+            return;
+        }
+
+        if (!event.target.closest('.complexity-field-shell')) {
+            closeComplexityInsight(addClientForm, false);
+        }
+
         const priorityInsightButton = event.target.closest('[data-priority-insight-trigger]');
         if (priorityInsightButton) {
+            closeComplexityInsight(addClientForm, false);
             togglePriorityInsight();
             return;
         }
@@ -7832,6 +8783,7 @@ if (addClientModalElement && addClientForm) {
 
         if (event.key === 'Escape') {
             closePriorityInsight(true);
+            closeComplexityInsight(addClientForm, true);
         }
     });
 
@@ -7843,7 +8795,7 @@ if (addClientModalElement && addClientForm) {
             }
         });
 
-        requestedFeatureList.addEventListener('click', (event) => {
+        requestedFeatureList.addEventListener('click', async (event) => {
             const removeButton = event.target.closest('[data-remove-requested-feature]');
             if (!removeButton) {
                 return;
@@ -7856,11 +8808,28 @@ if (addClientModalElement && addClientForm) {
             }
             const input = item.querySelector('[data-requested-feature-input]');
             const featureName = String(input?.value || '').trim();
-            if (featureName !== '' && isRecommendedFeature(featureName)) {
-                const shouldRemove = window.confirm(`The selected project template recommends adding "${featureName}" based on similar completed projects. Are you sure you want to remove or skip this recommendation?`);
+            const isRecommended = featureName !== '' && isRecommendedFeature(featureName);
+            if (featureName !== '') {
+                const shouldRemove = typeof window.appConfirm === 'function'
+                    ? await window.appConfirm({
+                        title: 'Remove Feature',
+                        titleIcon: 'fas fa-layer-group',
+                        subject: `Remove "${featureName}"?`,
+                        message: isRecommended
+                            ? 'This feature is recommended by the selected project template. Removing it may reduce the Architect handoff context.'
+                            : 'This feature will be removed from the client intake draft.',
+                        icon: 'fas fa-trash-can fa-lg',
+                        confirmIcon: 'fas fa-trash',
+                        confirmText: 'Remove Feature',
+                        variant: 'danger'
+                    })
+                    : false;
                 if (!shouldRemove) {
                     return;
                 }
+            }
+
+            if (isRecommended) {
                 recommendedFeatureTitles.delete(normalizeTemplateType(featureName));
             }
 
@@ -7921,7 +8890,7 @@ if (addClientModalElement && addClientForm) {
                 return;
             }
 
-            saveAddClientDraft();
+            saveAddClientDraft(true);
             formTouched = false;
             hideUnsavedClosePanel();
         });
@@ -7940,7 +8909,7 @@ if (addClientModalElement && addClientForm) {
 
     if (saveCloseDraftButton) {
         saveCloseDraftButton.addEventListener('click', () => {
-            saveAddClientDraft();
+            saveAddClientDraft(true);
             resetCurrentClientInput();
             addClientModal.hide();
             showClientTab('drafts');
@@ -8003,6 +8972,16 @@ if (addClientModalElement && addClientForm) {
         }
         isSubmittingClient = true;
         formTouched = false;
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+        if (isSubmittingClient || !formTouched || !hasDraftValues()) {
+            return;
+        }
+
+        saveAddClientDraft(false);
+        event.preventDefault();
+        event.returnValue = '';
     });
 
     if (draftList) {

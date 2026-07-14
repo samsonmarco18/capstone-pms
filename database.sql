@@ -126,6 +126,7 @@ CREATE TABLE project_templates (
     id INT PRIMARY KEY AUTO_INCREMENT,
     project_type VARCHAR(120) NOT NULL,
     normalized_type VARCHAR(120) NOT NULL,
+    template_version INT NOT NULL DEFAULT 1,
     duration_label VARCHAR(80) NULL,
     duration_min_weeks INT DEFAULT 0,
     duration_max_weeks INT DEFAULT 0,

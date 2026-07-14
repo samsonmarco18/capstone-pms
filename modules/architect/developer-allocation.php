@@ -455,6 +455,7 @@ a.progress-step:hover {
 .allocation-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
 }
 
 .allocation-table thead {
@@ -470,6 +471,20 @@ a.progress-step:hover {
     letter-spacing: 0.5px;
     color: var(--gray-600);
     border-bottom: 1px solid var(--gray-200);
+}
+
+.allocation-table th:nth-child(1) {
+    width: 44%;
+}
+
+.allocation-table th:nth-child(2),
+.allocation-table th:nth-child(3) {
+    width: 16%;
+    text-align: center;
+}
+
+.allocation-table th:nth-child(4) {
+    width: 24%;
 }
 
 .department-toggle-wrap {
@@ -496,9 +511,18 @@ a.progress-step:hover {
 }
 
 .allocation-table td {
-    padding: 0.75rem 1rem;
+    padding: 1rem 1.25rem;
     vertical-align: middle;
     border-bottom: 1px solid var(--gray-200);
+}
+
+.allocation-table td:nth-child(2),
+.allocation-table td:nth-child(3) {
+    text-align: center;
+}
+
+.allocation-table td:nth-child(4) {
+    min-width: 180px;
 }
 
 .allocation-table tr:hover {
@@ -554,29 +578,64 @@ a.progress-step:hover {
 }
 
 .form-control-sm {
-    width: 80px;
+    width: 96px;
     text-align: center;
+    min-height: 44px;
+    margin: 0 auto;
+    border-radius: 12px;
 }
 
 /* Badges */
 .badge-available {
-    display: inline-block;
-    padding: 0.25rem 0.6rem;
-    border-radius: 20px;
-    font-size: 0.7rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 88px;
+    min-height: 34px;
+    padding: 0.4rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.76rem;
     font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
     background: #dbeafe;
-    color: #2563eb;
+    color: #1d5f9b;
+    border: 1px solid rgba(37, 99, 235, 0.10);
+}
+
+.badge-success,
+.badge-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0.38rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.1;
+    white-space: nowrap;
 }
 
 .badge-success {
-    background: #d1fae5;
-    color: #059669;
+    background: #dcfce7;
+    color: #047857;
+    border: 1px solid rgba(4, 120, 87, 0.12);
 }
 
 .badge-danger {
     background: #fee2e2;
-    color: #dc2626;
+    color: #b91c1c;
+    border: 1px solid rgba(185, 28, 28, 0.12);
+}
+
+.status-cell {
+    color: var(--gray-600);
+}
+
+.status-cell .text-muted {
+    font-size: 0.8rem;
+    white-space: nowrap;
 }
 
 /* Sidebar Card */
@@ -711,9 +770,12 @@ a.progress-step:hover {
     .progress-indicator { padding: 0.75rem; }
     .progress-step .step-label { font-size: 0.6rem; }
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
-    .allocation-table { font-size: 0.8rem; }
+    .allocation-table {
+        min-width: 760px;
+        font-size: 0.8rem;
+    }
     .allocation-table th, .allocation-table td { padding: 0.5rem; }
-    .form-control-sm { width: 60px; }
+    .form-control-sm { width: 72px; min-height: 38px; }
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
     background: #06111e;
@@ -755,6 +817,24 @@ a.progress-step:hover {
     background: #071321 !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
     color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-available {
+    background: rgba(59, 130, 246, 0.16);
+    border-color: rgba(96, 165, 250, 0.22);
+    color: #93c5fd;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-success {
+    background: rgba(16, 185, 129, 0.14);
+    border-color: rgba(52, 211, 153, 0.22);
+    color: #86efac;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-danger {
+    background: rgba(239, 68, 68, 0.14);
+    border-color: rgba(248, 113, 113, 0.22);
+    color: #fca5a5;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .readonly-complexity-field {
@@ -914,7 +994,7 @@ foreach($allocationRoles as $role => $limits):
                                         <td class="status-cell">
                                             <?php if($existing > 0): ?>
                                                 <span class="badge-<?php echo $isShortage ? 'danger' : 'success'; ?>">
-                                                    <?php echo $isShortage ? 'Shortage!' : 'Sufficient'; ?>
+                                                    <?php echo $isShortage ? 'Need ' . ($existing - $available) . ' more' : 'Sufficient'; ?>
                                                 </span>
                                             <?php endif; ?>
                                         </td>
@@ -1043,7 +1123,7 @@ function checkAvailability(input, role) {
     const available = parseInt(input.closest('tr').querySelector('.badge-available').textContent) || 0;
     const statusCell = input.closest('tr').querySelector('.status-cell');
     if (required > 0) {
-        statusCell.innerHTML = required > available ? '<span class="badge-danger">Shortage! Need ' + (required - available) + ' more</span>' : '<span class="badge-success">Sufficient</span>';
+        statusCell.innerHTML = required > available ? '<span class="badge-danger">Need ' + (required - available) + ' more</span>' : '<span class="badge-success">Sufficient</span>';
     } else { statusCell.innerHTML = ''; }
     checkAllAvailability();
 }
