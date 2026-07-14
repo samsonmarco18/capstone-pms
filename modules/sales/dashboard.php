@@ -101,6 +101,7 @@ $activeClients = $conn->query("SELECT COUNT(*) as count FROM clients WHERE statu
 $totalProjects = $conn->query("SELECT COUNT(*) as count FROM projects")->fetch_assoc()['count'];
 $activeProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status != 'completed'")->fetch_assoc()['count'];
 $completedProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status = 'completed'")->fetch_assoc()['count'];
+$overdueProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE timeline_end IS NOT NULL AND timeline_end < CURDATE() AND status NOT IN ('completed', 'cancelled')")->fetch_assoc()['count'];
 
 // Get recent clients
 $recentClients = $conn->query("SELECT * FROM clients ORDER BY created_at DESC LIMIT 5");
@@ -274,6 +275,17 @@ $monthlySales = $conn->query("
 ");
 
 $projectChecklists = fetchSalesProjectChecklists($conn, 5);
+$releaseMergedTotal = 0;
+$releaseWaitingTotal = 0;
+$releaseFeatureTotal = 0;
+foreach ($projectChecklists as $projectChecklistSummary) {
+    $mergedCount = (int) ($projectChecklistSummary['merged_features'] ?? 0);
+    $totalCount = (int) ($projectChecklistSummary['total_features'] ?? 0);
+    $releaseMergedTotal += $mergedCount;
+    $releaseFeatureTotal += $totalCount;
+    $releaseWaitingTotal += max(0, $totalCount - $mergedCount);
+}
+$releaseCompletionRate = $releaseFeatureTotal > 0 ? (int) round(($releaseMergedTotal / $releaseFeatureTotal) * 100) : 0;
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -445,12 +457,38 @@ include '../../includes/navbar.php';
     --stat-grid-line: rgba(31, 114, 168, 0.05);
 }
 
-.stat-completion {
-    --stat-border: rgba(42, 122, 183, 0.14);
-    --stat-border-hover: rgba(42, 122, 183, 0.28);
-    --stat-glow: rgba(42, 122, 183, 0.10);
-    --stat-glow-hover: rgba(42, 122, 183, 0.18);
-    --stat-grid-line: rgba(42, 122, 183, 0.05);
+.stat-overdue {
+    --stat-color: #dc2626;
+    --stat-foreground: #b91c1c;
+    --stat-border: rgba(220, 38, 38, 0.24);
+    --stat-border-hover: rgba(220, 38, 38, 0.45);
+    --stat-glow: rgba(220, 38, 38, 0.10);
+    --stat-glow-hover: rgba(220, 38, 38, 0.18);
+    --stat-grid-line: rgba(220, 38, 38, 0.055);
+    border-color: var(--stat-border);
+}
+
+.stat-overdue.has-alert {
+    animation: overdueHeartbeat 1.8s ease-in-out infinite;
+}
+
+.stat-overdue .stat-icon {
+    color: #dc2626;
+}
+
+@keyframes overdueHeartbeat {
+    0%, 100% {
+        box-shadow: var(--shadow-sm), 0 0 0 rgba(220, 38, 38, 0);
+    }
+    28% {
+        box-shadow: var(--shadow-md), 0 0 0 4px rgba(220, 38, 38, 0.12), 0 0 30px rgba(220, 38, 38, 0.18);
+    }
+    44% {
+        box-shadow: var(--shadow-sm), 0 0 0 1px rgba(220, 38, 38, 0.08);
+    }
+    64% {
+        box-shadow: var(--shadow-md), 0 0 0 5px rgba(220, 38, 38, 0.10), 0 0 26px rgba(220, 38, 38, 0.16);
+    }
 }
 
 .stat-card-modern:hover {
@@ -1051,6 +1089,11 @@ include '../../includes/navbar.php';
     overflow: hidden;
 }
 
+.calendar-scroll {
+    width: 100%;
+    overflow-x: visible;
+}
+
 .calendar-weekday,
 .calendar-day {
     min-width: 0;
@@ -1220,18 +1263,90 @@ include '../../includes/navbar.php';
 }
 
 /* Project Release Checklist */
+.release-graph-layout {
+    display: grid;
+    grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.1fr);
+    gap: 1.25rem;
+    padding: 1.25rem;
+    align-items: stretch;
+}
+
+.release-chart-panel {
+    min-height: 560px;
+    padding: 1.35rem 1.35rem 1.6rem;
+    border: 1px solid var(--tech-border);
+    border-radius: 8px;
+    background:
+        linear-gradient(rgba(31, 99, 146, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(31, 99, 146, 0.035) 1px, transparent 1px),
+        #ffffff;
+    background-size: 28px 28px;
+    box-shadow: 0 14px 30px rgba(15, 76, 129, 0.08), 0 0 24px rgba(34, 211, 238, 0.06);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 1.3rem;
+    align-content: stretch;
+}
+
+.release-chart-panel canvas {
+    align-self: center;
+    height: 405px !important;
+    width: 100% !important;
+}
+
+.release-chart-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.release-summary-pill {
+    display: grid;
+    gap: 0.12rem;
+    min-width: 0;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid rgba(31, 99, 146, 0.12);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.86);
+    box-shadow: 0 8px 18px rgba(15, 76, 129, 0.05);
+}
+
+.release-summary-pill span {
+    color: var(--gray-600);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.release-summary-pill strong {
+    color: var(--gray-900);
+    font-size: 1.25rem;
+    line-height: 1.1;
+}
+
+.release-summary-pill.merged strong {
+    color: #059669;
+}
+
+.release-summary-pill.waiting strong {
+    color: var(--theme-primary);
+}
+
 .release-checklist {
     display: grid;
-    gap: 1rem;
-    padding: 1.25rem;
+    gap: 0.85rem;
+    align-content: start;
+    max-height: 560px;
+    overflow: auto;
+    padding-right: 0.2rem;
 }
 
 .release-project {
     border: 1px solid var(--tech-border);
     border-radius: 8px;
-    padding: 1rem;
-    background: #ffffff;
-    box-shadow: 0 14px 30px rgba(15, 76, 129, 0.08), 0 0 24px rgba(34, 211, 238, 0.06);
+    padding: 0.95rem;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 10px 24px rgba(15, 76, 129, 0.06);
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
@@ -1322,6 +1437,9 @@ include '../../includes/navbar.php';
 .release-feature-list {
     display: grid;
     gap: 0.45rem;
+    max-height: 104px;
+    overflow: auto;
+    padding-right: 0.2rem;
 }
 
 .release-feature {
@@ -1332,7 +1450,10 @@ include '../../includes/navbar.php';
     min-width: 0;
     color: var(--gray-900);
     font-size: 0.84rem;
-    background: #ffffff;
+    background: rgba(248, 250, 252, 0.72);
+    border: 1px solid rgba(31, 99, 146, 0.08);
+    border-radius: 8px;
+    padding: 0.42rem 0.5rem;
 }
 
 .release-feature input {
@@ -1362,6 +1483,11 @@ include '../../includes/navbar.php';
     background: #d1fae5;
 }
 
+.sales-insights-more {
+    margin-top: 0.85rem;
+    margin-left: auto;
+}
+
 html[data-theme="dark"] .sales-dashboard-hero,
 body[data-theme="dark"] .sales-dashboard-hero,
 body.dark-mode .sales-dashboard-hero,
@@ -1373,7 +1499,13 @@ body[data-theme="dark"] .list-card,
 body.dark-mode .list-card,
 html[data-theme="dark"] .planner-modal .modal-content,
 body[data-theme="dark"] .planner-modal .modal-content,
-body.dark-mode .planner-modal .modal-content {
+body.dark-mode .planner-modal .modal-content,
+html[data-theme="dark"] .release-chart-panel,
+body[data-theme="dark"] .release-chart-panel,
+body.dark-mode .release-chart-panel,
+html[data-theme="dark"] .release-project,
+body[data-theme="dark"] .release-project,
+body.dark-mode .release-project {
     background: #071321;
     border-color: rgba(31, 99, 146, 0.24) !important;
     box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26);
@@ -1690,6 +1822,24 @@ body.dark-mode .release-feature input:checked ~ small {
         width: 100%;
     }
 
+    .release-graph-layout {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+    }
+
+    .release-chart-panel {
+        min-height: auto;
+    }
+
+    .release-chart-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .release-checklist {
+        max-height: none;
+        overflow: visible;
+    }
+
     .release-feature {
         grid-template-columns: 18px minmax(0, 1fr);
     }
@@ -1697,6 +1847,16 @@ body.dark-mode .release-feature input:checked ~ small {
     .release-feature small {
         grid-column: 2;
         white-space: normal;
+    }
+
+    .calendar-scroll {
+        overflow-x: auto;
+        padding-bottom: 0.35rem;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .calendar-scroll .calendar-grid {
+        min-width: 720px;
     }
 }
 </style>
@@ -1742,24 +1902,15 @@ body.dark-mode .release-feature input:checked ~ small {
             <div class="stat-sub">Currently ongoing</div>
         </div>
         
-        <div class="stat-card-modern stat-completion">
-            <i class="fas fa-trophy stat-icon"></i>
-            <div class="stat-label">Completion Rate</div>
-            <div class="stat-number"><?php echo $totalProjects > 0 ? round(($completedProjects / $totalProjects) * 100) : 0; ?>%</div>
-            <div class="stat-sub">Project success rate</div>
+        <div class="stat-card-modern stat-overdue <?php echo (int) $overdueProjects > 0 ? 'has-alert' : ''; ?>">
+            <i class="fas fa-heart-pulse stat-icon"></i>
+            <div class="stat-label">Overdue</div>
+            <div class="stat-number"><?php echo (int) $overdueProjects; ?></div>
+            <div class="stat-sub"><?php echo (int) $overdueProjects > 0 ? 'Needs immediate follow-up' : 'No overdue projects'; ?></div>
         </div>
     </div>
 
-    <?php
-    delayInsightsRenderCompactList($conn, $user, [
-        'limit' => 4,
-        'title' => 'Project Insight List',
-        'subtitle' => 'Small one-line project signals with direct links to the full insight page.',
-        'button_label' => 'View Project',
-    ]);
-    ?>
-
-    <!-- Charts Row -->
+    <!-- Trends and Calendar Row -->
     <div class="row g-4 mb-4">
         <div class="col-lg-8">
             <div class="chart-card">
@@ -1774,152 +1925,8 @@ body.dark-mode .release-feature input:checked ~ small {
                 </div>
             </div>
         </div>
-        
+
         <div class="col-lg-4">
-            <div class="chart-card">
-                <div class="card-header">
-                    <h5>
-                        <i class="fas fa-chart-pie"></i>
-                        Project Status Distribution
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="statusChart" style="height: 280px; width: 100%;"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-4 mb-4">
-        <div class="col-12">
-            <div class="list-card">
-                <div class="card-header">
-                    <h5>
-                        <i class="fas fa-list-check"></i>
-                        Project Release Checklist
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <?php if ($projectChecklists): ?>
-                        <div class="release-checklist">
-                            <?php foreach ($projectChecklists as $projectChecklist): ?>
-                                <div class="release-project">
-                                    <div class="release-project-header">
-                                        <div>
-                                            <h6 class="release-project-title"><?php echo htmlspecialchars((string) $projectChecklist['project_name']); ?></h6>
-                                            <div class="release-project-client"><?php echo htmlspecialchars((string) $projectChecklist['client_name']); ?></div>
-                                        </div>
-                                        <div class="release-progress">
-                                            <div class="release-progress-label">
-                                                <?php echo (int) $projectChecklist['merged_features']; ?> / <?php echo (int) $projectChecklist['total_features']; ?> merged
-                                            </div>
-                                            <div class="release-progress-track">
-                                                <div class="release-progress-bar" style="width: <?php echo (int) $projectChecklist['progress']; ?>%;"></div>
-                                            </div>
-                                            <?php
-                                            $canDownloadChecklistRepository = (string) ($projectChecklist['project_status'] ?? '') === 'completed'
-                                                && (int) ($projectChecklist['repository_id'] ?? 0) > 0
-                                                && (
-                                                    (int) ($projectChecklist['project_created_by'] ?? 0) === $currentUserId
-                                                    || (int) ($projectChecklist['client_created_by'] ?? 0) === $currentUserId
-                                                );
-                                            ?>
-                                            <?php if ($canDownloadChecklistRepository): ?>
-                                                <a
-                                                    class="release-download-btn"
-                                                    href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . (int) $projectChecklist['repository_id']); ?>"
-                                                    title="Download <?php echo htmlspecialchars((string) (($projectChecklist['repository_branch_name'] ?? '') ?: 'main')); ?> branch code"
-                                                >
-                                                    <i class="fas fa-download"></i>
-                                                    Main Branch
-                                                </a>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-
-                                    <?php
-                                    $renderFeatureList = static function (array $features): void {
-                                        echo '<div class="release-feature-list">';
-                                        foreach ($features as $feature) {
-                                            $isMerged = !empty($feature['is_merged']);
-                                            $mergedBy = trim((string) ($feature['architect_name'] ?? ''));
-                                            echo '<label class="release-feature">';
-                                            echo '<input type="checkbox" disabled ' . ($isMerged ? 'checked' : '') . '>';
-                                            echo '<span>' . htmlspecialchars((string) ($feature['title'] ?? 'Feature')) . '</span>';
-                                            echo '<small>' . ($isMerged ? 'Merged' . ($mergedBy !== '' ? ' by ' . htmlspecialchars($mergedBy) : '') : 'Waiting') . '</small>';
-                                            echo '</label>';
-                                        }
-                                        echo '</div>';
-                                    };
-                                    ?>
-
-                                    <?php if (!empty($projectChecklist['features'])): ?>
-                                        <div class="release-section-title">Features</div>
-                                        <?php $renderFeatureList($projectChecklist['features']); ?>
-                                    <?php endif; ?>
-
-                                    <?php if (!empty($projectChecklist['additional_features'])): ?>
-                                        <div class="release-section-title">Additional Features</div>
-                                        <?php $renderFeatureList($projectChecklist['additional_features']); ?>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="empty-state-modern">
-                            <i class="fas fa-list-check"></i>
-                            <p>No feature checklist items yet</p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Lists Row -->
-    <div class="row g-4">
-        <div class="col-lg-7">
-            <div class="list-card">
-                <div class="card-header">
-                    <h5>
-                        <i class="fas fa-user-plus"></i>
-                        Recent Clients
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <?php if($recentClients->num_rows > 0): ?>
-                        <?php while($client = $recentClients->fetch_assoc()): ?>
-                        <div class="list-item-modern">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="client-info">
-                                    <h6><?php echo htmlspecialchars($client['name']); ?></h6>
-                                    <div class="client-details">
-                                        <span><i class="fas fa-envelope"></i> <?php echo htmlspecialchars($client['email']); ?></span>
-                                        <span>
-                                            <i class="fas fa-circle"></i> 
-                                            <span class="badge-modern <?php echo $client['status']; ?>">
-                                                <?php echo ucfirst($client['status']); ?>
-                                            </span>
-                                        </span>
-                                    </div>
-                                </div>
-                                <a href="clients.php?view=<?php echo $client['id']; ?>" class="btn-view">
-                                    <i class="fas fa-eye"></i> View
-                                </a>
-                            </div>
-                        </div>
-                        <?php endwhile; ?>
-                    <?php else: ?>
-                        <div class="empty-state-modern">
-                            <i class="fas fa-user-friends"></i>
-                            <p>No clients found</p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-5">
             <div class="list-card">
                 <div class="card-body">
                     <div class="agenda-preview">
@@ -1997,6 +2004,185 @@ body.dark-mode .release-feature input:checked ~ small {
             </div>
         </div>
     </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="list-card">
+                <div class="card-header">
+                    <h5>
+                        <i class="fas fa-list-check"></i>
+                        Project Release Checklist
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <?php if ($projectChecklists): ?>
+                        <div class="release-graph-layout">
+                            <div class="release-chart-panel">
+                                <div class="release-chart-summary">
+                                    <div class="release-summary-pill merged">
+                                        <span>Merged</span>
+                                        <strong><?php echo (int) $releaseMergedTotal; ?></strong>
+                                    </div>
+                                    <div class="release-summary-pill waiting">
+                                        <span>Waiting</span>
+                                        <strong><?php echo (int) $releaseWaitingTotal; ?></strong>
+                                    </div>
+                                    <div class="release-summary-pill">
+                                        <span>Complete</span>
+                                        <strong><?php echo (int) $releaseCompletionRate; ?>%</strong>
+                                    </div>
+                                </div>
+                                <canvas id="releaseChecklistChart"></canvas>
+                            </div>
+                            <div class="release-checklist">
+                                <?php foreach ($projectChecklists as $projectChecklist): ?>
+                                    <div class="release-project">
+                                        <div class="release-project-header">
+                                            <div>
+                                                <h6 class="release-project-title"><?php echo htmlspecialchars((string) $projectChecklist['project_name']); ?></h6>
+                                                <div class="release-project-client"><?php echo htmlspecialchars((string) $projectChecklist['client_name']); ?></div>
+                                            </div>
+                                            <div class="release-progress">
+                                                <div class="release-progress-label">
+                                                    <?php echo (int) $projectChecklist['merged_features']; ?> / <?php echo (int) $projectChecklist['total_features']; ?> merged
+                                                </div>
+                                                <div class="release-progress-track">
+                                                    <div class="release-progress-bar" style="width: <?php echo (int) $projectChecklist['progress']; ?>%;"></div>
+                                                </div>
+                                                <?php
+                                                $canDownloadChecklistRepository = (string) ($projectChecklist['project_status'] ?? '') === 'completed'
+                                                    && (int) ($projectChecklist['repository_id'] ?? 0) > 0
+                                                    && (
+                                                        (int) ($projectChecklist['project_created_by'] ?? 0) === $currentUserId
+                                                        || (int) ($projectChecklist['client_created_by'] ?? 0) === $currentUserId
+                                                    );
+                                                ?>
+                                                <?php if ($canDownloadChecklistRepository): ?>
+                                                    <a
+                                                        class="release-download-btn"
+                                                        href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . (int) $projectChecklist['repository_id']); ?>"
+                                                        title="Download <?php echo htmlspecialchars((string) (($projectChecklist['repository_branch_name'] ?? '') ?: 'main')); ?> branch code"
+                                                    >
+                                                        <i class="fas fa-download"></i>
+                                                        Main Branch
+                                                    </a>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+
+                                        <?php
+                                        $renderFeatureList = static function (array $features): void {
+                                            echo '<div class="release-feature-list">';
+                                            foreach ($features as $feature) {
+                                                $isMerged = !empty($feature['is_merged']);
+                                                $mergedBy = trim((string) ($feature['architect_name'] ?? ''));
+                                                echo '<label class="release-feature">';
+                                                echo '<input type="checkbox" disabled ' . ($isMerged ? 'checked' : '') . '>';
+                                                echo '<span>' . htmlspecialchars((string) ($feature['title'] ?? 'Feature')) . '</span>';
+                                                echo '<small>' . ($isMerged ? 'Merged' . ($mergedBy !== '' ? ' by ' . htmlspecialchars($mergedBy) : '') : 'Waiting') . '</small>';
+                                                echo '</label>';
+                                            }
+                                            echo '</div>';
+                                        };
+                                        ?>
+
+                                        <?php if (!empty($projectChecklist['features'])): ?>
+                                            <div class="release-section-title">Features</div>
+                                            <?php $renderFeatureList($projectChecklist['features']); ?>
+                                        <?php endif; ?>
+
+                                        <?php if (!empty($projectChecklist['additional_features'])): ?>
+                                            <div class="release-section-title">Additional Features</div>
+                                            <?php $renderFeatureList($projectChecklist['additional_features']); ?>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <div class="empty-state-modern">
+                            <i class="fas fa-list-check"></i>
+                            <p>No feature checklist items yet</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status and Insights Row -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-5">
+            <div class="chart-card">
+                <div class="card-header">
+                    <h5>
+                        <i class="fas fa-chart-pie"></i>
+                        Project Status Distribution
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="statusChart" style="height: 280px; width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7 sales-insights-column">
+            <?php
+            delayInsightsRenderCompactList($conn, $user, [
+                'limit' => 3,
+                'title' => 'Project Insight List',
+                'subtitle' => 'Top three project signals with direct links to the full insight page.',
+                'button_label' => 'View Project',
+            ]);
+            ?>
+            <a class="delay-action sales-insights-more" href="<?php echo htmlspecialchars(BASE_URL . 'modules/insights/decision-center.php'); ?>">
+                <i class="fas fa-arrow-right"></i> See More
+            </a>
+        </div>
+    </div>
+
+    <!-- Recent Clients Row -->
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="list-card">
+                <div class="card-header">
+                    <h5>
+                        <i class="fas fa-user-plus"></i>
+                        Recent Clients
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <?php if($recentClients->num_rows > 0): ?>
+                        <?php while($client = $recentClients->fetch_assoc()): ?>
+                        <div class="list-item-modern">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="client-info">
+                                    <h6><?php echo htmlspecialchars($client['name']); ?></h6>
+                                    <div class="client-details">
+                                        <span><i class="fas fa-envelope"></i> <?php echo htmlspecialchars($client['email']); ?></span>
+                                        <span>
+                                            <i class="fas fa-circle"></i> 
+                                            <span class="badge-modern <?php echo $client['status']; ?>">
+                                                <?php echo ucfirst($client['status']); ?>
+                                            </span>
+                                        </span>
+                                    </div>
+                                </div>
+                                <a href="clients.php?view=<?php echo $client['id']; ?>" class="btn-view">
+                                    <i class="fas fa-eye"></i> View
+                                </a>
+                            </div>
+                        </div>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <div class="empty-state-modern">
+                            <i class="fas fa-user-friends"></i>
+                            <p>No clients found</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade planner-modal" id="salesPlannerModal" tabindex="-1" aria-labelledby="salesPlannerModalLabel" aria-hidden="true">
@@ -2026,42 +2212,44 @@ body.dark-mode .release-feature input:checked ~ small {
                         </div>
                     </div>
 
-                    <div class="calendar-grid mb-3">
-                        <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $weekday): ?>
-                            <div class="calendar-weekday"><?php echo $weekday; ?></div>
-                        <?php endforeach; ?>
+                    <div class="calendar-scroll mb-3">
+                        <div class="calendar-grid">
+                            <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $weekday): ?>
+                                <div class="calendar-weekday"><?php echo $weekday; ?></div>
+                            <?php endforeach; ?>
 
-                        <?php
-                        $cursorDate = clone $firstCalendarDay;
-                        while ($cursorDate <= $lastCalendarDay):
-                            $dateString = $cursorDate->format('Y-m-d');
-                            $datePlans = $plansByDate[$dateString] ?? [];
-                            $isCurrentMonth = $cursorDate->format('Y-m') === $calendarMonth;
-                            $isToday = $dateString === date('Y-m-d');
-                        ?>
-                            <div
-                                class="calendar-day <?php echo !$isCurrentMonth ? 'is-muted' : ''; ?> <?php echo $isToday ? 'is-today' : ''; ?>"
-                                data-plan-date="<?php echo htmlspecialchars($dateString); ?>"
-                            >
-                                <span class="calendar-date"><?php echo htmlspecialchars($cursorDate->format('j')); ?></span>
-                                <?php foreach (array_slice($datePlans, 0, 2) as $plan): ?>
-                                    <button
-                                        type="button"
-                                        class="calendar-plan-chip"
-                                        style="background: <?php echo htmlspecialchars((string) ($plan['color_code'] ?? '#1f6392')); ?>;"
-                                        title="<?php echo htmlspecialchars((string) ($plan['title'] ?? 'Plan')); ?>"
-                                    >
-                                        <?php echo htmlspecialchars((string) ($plan['title'] ?? 'Plan')); ?>
-                                    </button>
-                                <?php endforeach; ?>
-                                <?php if (count($datePlans) > 2): ?>
-                                    <span class="calendar-more">+<?php echo count($datePlans) - 2; ?> more</span>
-                                <?php endif; ?>
-                            </div>
-                        <?php
-                            $cursorDate->modify('+1 day');
-                        endwhile;
-                        ?>
+                            <?php
+                            $cursorDate = clone $firstCalendarDay;
+                            while ($cursorDate <= $lastCalendarDay):
+                                $dateString = $cursorDate->format('Y-m-d');
+                                $datePlans = $plansByDate[$dateString] ?? [];
+                                $isCurrentMonth = $cursorDate->format('Y-m') === $calendarMonth;
+                                $isToday = $dateString === date('Y-m-d');
+                            ?>
+                                <div
+                                    class="calendar-day <?php echo !$isCurrentMonth ? 'is-muted' : ''; ?> <?php echo $isToday ? 'is-today' : ''; ?>"
+                                    data-plan-date="<?php echo htmlspecialchars($dateString); ?>"
+                                >
+                                    <span class="calendar-date"><?php echo htmlspecialchars($cursorDate->format('j')); ?></span>
+                                    <?php foreach (array_slice($datePlans, 0, 2) as $plan): ?>
+                                        <button
+                                            type="button"
+                                            class="calendar-plan-chip"
+                                            style="background: <?php echo htmlspecialchars((string) ($plan['color_code'] ?? '#1f6392')); ?>;"
+                                            title="<?php echo htmlspecialchars((string) ($plan['title'] ?? 'Plan')); ?>"
+                                        >
+                                            <?php echo htmlspecialchars((string) ($plan['title'] ?? 'Plan')); ?>
+                                        </button>
+                                    <?php endforeach; ?>
+                                    <?php if (count($datePlans) > 2): ?>
+                                        <span class="calendar-more">+<?php echo count($datePlans) - 2; ?> more</span>
+                                    <?php endif; ?>
+                                </div>
+                            <?php
+                                $cursorDate->modify('+1 day');
+                            endwhile;
+                            ?>
+                        </div>
                     </div>
 
                     <div class="planner-side">
@@ -2275,6 +2463,71 @@ new Chart(trendsCtx, {
         }
     }
 });
+
+// Project Release Checklist Chart
+const releaseChecklistData = <?php
+    echo json_encode([
+        'labels' => ['Merged', 'Waiting'],
+        'data' => [$releaseMergedTotal, $releaseWaitingTotal],
+        'colors' => ['#10b981', 'rgba(31, 99, 146, 0.22)'],
+        'hoverColors' => ['#059669', 'rgba(31, 99, 146, 0.34)'],
+    ]);
+?>;
+
+const releaseChecklistCanvas = document.getElementById('releaseChecklistChart');
+if (releaseChecklistCanvas) {
+    new Chart(releaseChecklistCanvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: releaseChecklistData.labels,
+            datasets: [{
+                data: releaseChecklistData.data,
+                backgroundColor: releaseChecklistData.colors,
+                hoverBackgroundColor: releaseChecklistData.hoverColors,
+                borderColor: '#ffffff',
+                borderWidth: 4,
+                hoverOffset: 4,
+                spacing: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '66%',
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        boxWidth: 8,
+                        padding: 16,
+                        color: '#495057',
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#ffffff',
+                    borderColor: 'rgba(31, 99, 146, 0.16)',
+                    borderWidth: 1,
+                    titleColor: '#212529',
+                    bodyColor: '#495057',
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
 
 // Status Chart
 const statusData = <?php 

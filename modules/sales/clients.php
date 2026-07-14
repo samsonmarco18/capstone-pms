@@ -3506,7 +3506,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 }
 
 #addClientModal.modal-modern.add-client-modal .add-client-actions {
-    padding-right: 5.25rem;
+    padding-right: 0;
 }
 
 @media (max-width: 991.98px) {
@@ -4669,7 +4669,6 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                 <h5 class="modal-title">
                     <i class="fas fa-user-plus me-2"></i> Add New Client
                 </h5>
-                <button type="button" class="btn-close add-client-close" aria-label="Close"></button>
             </div>
             <form method="POST" id="addClientForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Sending to Architect" data-loading-text="Please wait while the qualified client intake, project folder, and Architect notification are saved.">
                 <input type="hidden" name="client_draft_id" data-client-draft-id value="">
@@ -5060,6 +5059,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                     <div class="modal-footer add-client-footer">
                         <span class="draft-status" data-draft-status>Draft not started</span>
                         <div class="add-client-actions">
+                            <button type="button" class="btn btn-outline-secondary add-client-close">Cancel</button>
                             <button type="button" class="btn btn-outline-primary" data-save-draft disabled>Save Draft</button>
                             <button type="button" class="btn btn-outline-secondary" data-client-prev hidden>Previous</button>
                             <button type="button" class="btn-add-modern" data-client-next>Next</button>
@@ -7533,6 +7533,12 @@ if (addClientModalElement && addClientForm) {
         }
     }
 
+    function showDraftFeedback(message, type = 'success') {
+        if (typeof window.appToast === 'function') {
+            window.appToast('Client Draft', message, type);
+        }
+    }
+
     function updateDraftStatus(hasDraft = hasDraftValues()) {
         if (draftStatus) {
             draftStatus.textContent = hasDraft ? 'Draft saved on this browser' : (formTouched ? 'Unsaved changes' : 'Draft not started');
@@ -7543,7 +7549,7 @@ if (addClientModalElement && addClientForm) {
         renderDraftList();
     }
 
-    function saveAddClientDraft() {
+    function saveAddClientDraft(showFeedback = false) {
         const draftData = getDraftData();
         if (!hasDraftValues(draftData)) {
             if (activeDraftId) {
@@ -7552,6 +7558,9 @@ if (addClientModalElement && addClientForm) {
                 activeDraftId = null;
             }
             updateDraftStatus(false);
+            if (showFeedback) {
+                showDraftFeedback('There is no client intake data to save yet.', 'warning');
+            }
             return;
         }
 
@@ -7577,6 +7586,9 @@ if (addClientModalElement && addClientForm) {
         }
         activeDraftLoaded = true;
         updateDraftStatus(true);
+        if (showFeedback) {
+            showDraftFeedback('Draft saved on this browser.');
+        }
     }
 
     function loadAddClientDraft(draftId = null) {
@@ -8077,7 +8089,7 @@ if (addClientModalElement && addClientForm) {
             }
         });
 
-        requestedFeatureList.addEventListener('click', (event) => {
+        requestedFeatureList.addEventListener('click', async (event) => {
             const removeButton = event.target.closest('[data-remove-requested-feature]');
             if (!removeButton) {
                 return;
@@ -8090,11 +8102,28 @@ if (addClientModalElement && addClientForm) {
             }
             const input = item.querySelector('[data-requested-feature-input]');
             const featureName = String(input?.value || '').trim();
-            if (featureName !== '' && isRecommendedFeature(featureName)) {
-                const shouldRemove = window.confirm(`The selected project template recommends adding "${featureName}" based on similar completed projects. Are you sure you want to remove or skip this recommendation?`);
+            const isRecommended = featureName !== '' && isRecommendedFeature(featureName);
+            if (featureName !== '') {
+                const shouldRemove = typeof window.appConfirm === 'function'
+                    ? await window.appConfirm({
+                        title: 'Remove Feature',
+                        titleIcon: 'fas fa-layer-group',
+                        subject: `Remove "${featureName}"?`,
+                        message: isRecommended
+                            ? 'This feature is recommended by the selected project template. Removing it may reduce the Architect handoff context.'
+                            : 'This feature will be removed from the client intake draft.',
+                        icon: 'fas fa-trash-can fa-lg',
+                        confirmIcon: 'fas fa-trash',
+                        confirmText: 'Remove Feature',
+                        variant: 'danger'
+                    })
+                    : false;
                 if (!shouldRemove) {
                     return;
                 }
+            }
+
+            if (isRecommended) {
                 recommendedFeatureTitles.delete(normalizeTemplateType(featureName));
             }
 
@@ -8155,7 +8184,7 @@ if (addClientModalElement && addClientForm) {
                 return;
             }
 
-            saveAddClientDraft();
+            saveAddClientDraft(true);
             formTouched = false;
             hideUnsavedClosePanel();
         });
@@ -8174,7 +8203,7 @@ if (addClientModalElement && addClientForm) {
 
     if (saveCloseDraftButton) {
         saveCloseDraftButton.addEventListener('click', () => {
-            saveAddClientDraft();
+            saveAddClientDraft(true);
             resetCurrentClientInput();
             addClientModal.hide();
             showClientTab('drafts');
@@ -8237,6 +8266,16 @@ if (addClientModalElement && addClientForm) {
         }
         isSubmittingClient = true;
         formTouched = false;
+    });
+
+    window.addEventListener('beforeunload', (event) => {
+        if (isSubmittingClient || !formTouched || !hasDraftValues()) {
+            return;
+        }
+
+        saveAddClientDraft(false);
+        event.preventDefault();
+        event.returnValue = '';
     });
 
     if (draftList) {
