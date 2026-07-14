@@ -180,10 +180,6 @@ $isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
 </div>
 
 <button id="chat-bot-widget" class="chat-bot-widget" type="button" aria-label="Open chat" style="display: flex;">
-    <span class="chat-bot-widget-speech" aria-hidden="true">
-        <strong>Hi</strong>
-        <span>I'm listening</span>
-    </span>
     <span id="chatBotAnimation" class="chat-bot-animation" aria-hidden="true">
         <i class="fas fa-robot"></i>
     </span>
@@ -191,8 +187,7 @@ $isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
 
 <div id="chat-bot-float" class="chat-bot-float" hidden aria-hidden="true">
     <div class="chat-bot-speech" aria-hidden="true">
-        <strong data-chat-bot-type="title" data-chat-bot-text="Hi, hello"></strong>
-        <span data-chat-bot-type="message" data-chat-bot-text="I'm listening."></span>
+        <strong data-chat-bot-type="title" data-chat-bot-text="Hi, good day!"></strong>
     </div>
     <div id="chatBotFloatAnimation" class="chat-bot-float-animation" aria-hidden="true">
         <i class="fas fa-robot"></i>
@@ -243,16 +238,13 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const title = botFloat.querySelector('[data-chat-bot-type="title"]');
-        const message = botFloat.querySelector('[data-chat-bot-type="message"]');
-        if (!title || !message) {
+        if (!title) {
             return;
         }
 
         clearTimeout(botTypeTimer);
         title.textContent = '';
-        message.textContent = '';
         title.classList.add('is-typing');
-        message.classList.remove('is-typing');
 
         const typeInto = function (element, text, index, done) {
             if (index <= text.length) {
@@ -267,12 +259,7 @@ document.addEventListener('DOMContentLoaded', function () {
             done?.();
         };
 
-        typeInto(title, title.dataset.chatBotText || '', 0, function () {
-            message.classList.add('is-typing');
-            botTypeTimer = setTimeout(function () {
-                typeInto(message, message.dataset.chatBotText || '', 0);
-            }, 180);
-        });
+        typeInto(title, title.dataset.chatBotText || '', 0);
     };
 
     minimized.addEventListener('click', function () {
@@ -304,6 +291,10 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     botFloat?.addEventListener('pointerdown', function (event) {
+        if (event.target instanceof Element && event.target.closest('.chat-bot-speech')) {
+            return;
+        }
+
         const rect = botFloat.getBoundingClientRect();
         botFloatPointer = {
             id: event.pointerId,
@@ -366,19 +357,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 renderer: 'svg',
                 loop: true,
                 autoplay: true,
-                path: `${baseUrl}assets/animations/Ai%20Robot%20Vector%20Art.json`
+                path: `${baseUrl}assets/animations/Ai%20Robot%20Vector%20Art.json?v=20260714-original-motion`
             });
         }
 
         if (floatingBot && !floatingBot.dataset.lottieReady) {
             floatingBot.dataset.lottieReady = 'true';
             floatingBot.innerHTML = '';
-            window.lottie.loadAnimation({
+            window.chatBotFloatLottie = window.lottie.loadAnimation({
                 container: floatingBot,
                 renderer: 'svg',
                 loop: true,
                 autoplay: true,
-                path: `${baseUrl}assets/animations/Ai%20Robot%20Vector%20Art.json`
+                path: `${baseUrl}assets/animations/Ai%20Robot%20Vector%20Art.json?v=20260714-original-motion`
             });
         }
     };

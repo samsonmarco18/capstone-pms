@@ -480,7 +480,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectType = trim((string) ($_POST['project_type'] ?? ''));
-        $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
+        $requestedTemplateId = (int) ($_POST['project_template_id'] ?? 0);
+        $projectTemplate = $requestedTemplateId > 0 ? projectTemplateFindById($conn, $requestedTemplateId) : null;
+        if (!$projectTemplate || projectTemplateNormalizeType((string) ($projectTemplate['project_type'] ?? '')) !== projectTemplateNormalizeType($projectType)) {
+            $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
+        }
         $projectTemplateId = $projectTemplate ? (int) ($projectTemplate['id'] ?? 0) : null;
         $projectTemplateSnapshot = $projectTemplate ? json_encode($projectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -627,7 +631,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $clientId = (int) ($_POST['client_id'] ?? 0);
         $projectName = trim((string) ($_POST['project_name'] ?? ''));
         $projectType = trim((string) ($_POST['project_type'] ?? ''));
-        $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
+        $requestedTemplateId = (int) ($_POST['project_template_id'] ?? 0);
+        $projectTemplate = $requestedTemplateId > 0 ? projectTemplateFindById($conn, $requestedTemplateId) : null;
+        if (!$projectTemplate || projectTemplateNormalizeType((string) ($projectTemplate['project_type'] ?? '')) !== projectTemplateNormalizeType($projectType)) {
+            $projectTemplate = $projectType !== '' ? projectTemplateFindByType($conn, $projectType) : null;
+        }
         $projectTemplateId = $projectTemplate ? (int) ($projectTemplate['id'] ?? 0) : null;
         $projectTemplateSnapshot = $projectTemplate ? json_encode($projectTemplate, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null;
         $projectDescription = trim((string) ($_POST['project_description'] ?? ''));
@@ -4760,6 +4768,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                                         </button>
                                         <div class="template-suggestions-menu" data-template-picker-menu hidden></div>
                                     </div>
+                                    <select name="project_template_id" class="form-select mt-2" data-template-version-select hidden aria-label="Template version"></select>
                                 </div>
                                 <div class="project-description-field">
                                     <label class="form-label">Project Description<span class="required-mark">*</span></label>
@@ -5150,6 +5159,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                                         <input type="text" name="project_type" class="form-control" placeholder="e.g. E-commerce Website" required autocomplete="off" data-template-picker-input>
                                         <div class="template-suggestions-menu" data-template-picker-menu hidden></div>
                                     </div>
+                                    <select name="project_template_id" class="form-select mt-2" data-template-version-select hidden aria-label="Template version"></select>
                                     <div class="calculation-note" data-add-project-template-recommendation hidden>
                                         <strong>Project template search</strong>
                                         <span>Choose a project type to apply saved template details.</span>
@@ -5526,9 +5536,613 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     </div>
 </div>
 
+<style>
+body.sales-assistant-open #chat-bot-float { display:block !important; width:165px; height:165px; left:auto; top:auto; right:24px; bottom:92px; margin:0; transform:none; animation:salesBotArrive .38s cubic-bezier(.2,.8,.2,1) both; }
+body.sales-assistant-open #chat-bot-float[hidden] { display:none !important; }
+body.sales-assistant-open #chat-bot-float .chat-bot-speech { width:330px; min-width:330px; max-height:none; overflow:visible; pointer-events:auto; padding:1rem; top:38%; animation:salesBubbleArrive .32s ease both; }
+body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:salesRobotFloat 3.2s ease-in-out infinite; will-change:transform; }
+#addClientForm .template-type-picker::after, #addProjectForm .template-type-picker::after { display:none !important; }
+#addClientForm [data-template-picker-input], #addProjectForm [data-template-picker-input] { padding-right:.9rem !important; }
+#addClientForm [data-template-version-select], #addProjectForm [data-template-version-select] { display:none !important; }
+.sales-bot-head { padding-left:.75rem; font-weight:800; color:#083a5d; }
+.sales-bot-heading-row { position:relative; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:.6rem; }
+.sales-bot-dismiss { flex:0 0 auto; border:0; border-radius:999px; background:rgba(255,255,255,.72); color:#0b5d89; width:27px; height:27px; cursor:pointer; transition:transform .18s ease,background .18s ease; }
+.sales-bot-dismiss:hover { transform:translateX(-2px); background:#fff; }
+.sales-bot-copy { margin:.45rem 0 .7rem !important; font-weight:600 !important; line-height:1.4; white-space:normal; }
+.sales-bot-version { display:inline-block !important; width:auto; margin:0 0 .45rem !important; padding:.2rem .55rem; border-radius:999px; background:rgba(255,255,255,.72); font-size:.7rem !important; }
+.sales-bot-actions { display:flex; gap:.5rem; position:relative; z-index:4; }
+.sales-bot-actions button { flex:1; border:0; border-radius:9px; padding:.48rem .65rem; font-size:.76rem; font-weight:800; cursor:pointer; transition:transform .18s ease,box-shadow .18s ease; }
+.sales-bot-actions button:hover { transform:translateY(-2px); box-shadow:0 6px 14px rgba(8,58,93,.18); }
+.sales-bot-accept { background:#087bb9; color:#fff; }
+.sales-bot-reject { background:rgba(255,255,255,.78); color:#174c6d; }
+.sales-bot-progress { margin:.6rem 0 0 !important; font-size:.68rem !important; opacity:.78; }
+.sales-bot-choice-list { position:relative; z-index:4; display:grid; gap:.4rem; max-height:245px; overflow-y:auto; overflow-x:hidden; padding:.1rem .2rem .1rem 0; scrollbar-width:thin; }
+.sales-bot-choice { display:flex; align-items:center; justify-content:space-between; gap:.65rem; width:100%; border:1px solid rgba(8,123,185,.2); border-radius:10px; background:rgba(255,255,255,.82); color:#0b466d; padding:.58rem .7rem; text-align:left; cursor:pointer; transition:transform .18s ease,background .18s ease; }
+.sales-bot-choice:hover { transform:translateX(3px); background:#fff; }
+.sales-bot-choice strong { padding:0 !important; font-size:.76rem !important; }
+.sales-bot-choice em { flex:0 0 auto; border-radius:999px; background:#dff5ff; padding:.18rem .45rem; color:#087bb9; font-size:.66rem; font-style:normal; font-weight:800; }
+#chat-bot-float.is-sad .chat-bot-speech { border-color:rgba(231,139,57,.62); box-shadow:0 16px 34px rgba(180,91,20,.22),0 0 22px rgba(255,169,74,.22); }
+.sales-lottie-head,.sales-lottie-left-hand,.sales-lottie-left-forearm,.sales-lottie-right-hand,.sales-lottie-right-forearm { transform-box:fill-box; transform-origin:center; }
+.sales-lottie-head { translate:0 7px; }
+@keyframes salesBotArrive { from{opacity:0;transform:translateY(18px) scale(.9)} to{opacity:1;transform:none} }
+@keyframes salesBubbleArrive { from{opacity:0;transform:translateY(-45%) translateX(18px) scale(.94)} to{opacity:1;transform:translateY(-50%)} }
+@keyframes salesRobotFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+@media(max-width:900px){ body.sales-assistant-open #chat-bot-float{width:120px;height:120px;right:10px;bottom:75px;} body.sales-assistant-open #chat-bot-float .chat-bot-speech{width:min(280px,calc(100vw - 145px));min-width:230px;right:calc(100% - 38px);top:10%;} }
+</style>
+
 <script>
 const savedClientDraftId = <?php echo json_encode($savedClientDraftId); ?>;
 const projectTemplates = <?php echo json_encode($projectTemplates, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
+
+const salesTemplateAssistant = (() => {
+    let queue = [];
+    let index = 0;
+    let activeForm = null;
+    let continueAction = null;
+    let backAction = null;
+    let feedbackSequence = 0;
+    let emotionTimer = null;
+    let idleBlinkTimer = null;
+    let messageDismissTimer = null;
+    let reactionAnimations = [];
+    let featureSession = { accepted:0, rejected:0 };
+    let browsingChoices = false;
+
+    const robotLottie = () => window.chatBotFloatLottie || null;
+    const robotLayer = (name) => {
+        const elements = robotLottie()?.renderer?.elements || [];
+        const layer = elements.find(element => String(element?.data?.nm || '').toLowerCase() === name.toLowerCase());
+        return layer?.baseElement || layer?.layerElement || null;
+    };
+    const robotEyeLayer = () => robotLayer('eyes');
+    const prepareRobotLayers = () => {
+        const layers = {
+            head:'sales-lottie-head',
+            'l hand':'sales-lottie-left-hand',
+            'l hand 2':'sales-lottie-left-forearm',
+            'r hand':'sales-lottie-right-hand',
+            'r hand 2':'sales-lottie-right-forearm'
+        };
+        Object.entries(layers).forEach(([name, className]) => robotLayer(name)?.classList.add(className));
+    };
+    const stopReactionAnimations = () => {
+        reactionAnimations.forEach(animation => animation.cancel());
+        reactionAnimations = [];
+    };
+    const animateRobotLayer = (name, keyframes, options) => {
+        const layer = robotLayer(name);
+        if (!layer?.animate) return;
+        reactionAnimations.push(layer.animate(keyframes, { easing:'ease-in-out', fill:'none', ...options }));
+    };
+    const animateRobotEmotion = emotion => {
+        const repeat = emotion === 'amazed' ? Infinity : 2;
+        const duration = emotion === 'winking' ? 520 : 720;
+        if (emotion === 'happy' || emotion === 'winking') {
+            animateRobotLayer('l hand', [{translate:'0 0'},{translate:'0 -7px'},{translate:'0 0'}], {duration,iterations:repeat});
+            animateRobotLayer('l hand 2', [{translate:'0 0'},{translate:'0 -7px'},{translate:'0 0'}], {duration,iterations:repeat});
+            animateRobotLayer('r hand', [{translate:'0 0'},{translate:'0 -8px'},{translate:'0 0'}], {duration,iterations:emotion === 'winking' ? 3 : repeat});
+            animateRobotLayer('r hand 2', [{translate:'0 0'},{translate:'0 -8px'},{translate:'0 0'}], {duration,iterations:emotion === 'winking' ? 3 : repeat});
+        } else if (emotion === 'sad') {
+            animateRobotLayer('l hand', [{translate:'0 0'},{translate:'0 5px'},{translate:'0 0'}], {duration,iterations:repeat});
+            animateRobotLayer('r hand', [{translate:'0 0'},{translate:'0 5px'},{translate:'0 0'}], {duration,iterations:repeat});
+        } else if (emotion === 'amazed') {
+            animateRobotLayer('l hand', [{translate:'0 0'},{translate:'0 -9px'}], {duration,iterations:repeat,direction:'alternate'});
+            animateRobotLayer('l hand 2', [{translate:'0 0'},{translate:'0 -9px'}], {duration,iterations:repeat,direction:'alternate'});
+            animateRobotLayer('r hand', [{translate:'0 0'},{translate:'0 -9px'}], {duration,iterations:repeat,direction:'alternate'});
+            animateRobotLayer('r hand 2', [{translate:'0 0'},{translate:'0 -9px'}], {duration,iterations:repeat,direction:'alternate'});
+        }
+    };
+    const blinkRobotEyes = () => {
+        const eyes = robotEyeLayer();
+        if (!eyes?.animate) return;
+        eyes.animate([{scale:'1 1'},{scale:'1 .08',offset:.45},{scale:'1 .08',offset:.58},{scale:'1 1'}], {duration:280,easing:'ease-in-out'});
+    };
+    const scheduleIdleBlink = () => {
+        window.clearTimeout(idleBlinkTimer);
+        idleBlinkTimer = window.setTimeout(() => {
+            const bot = document.getElementById('chat-bot-float');
+            const animation = robotLottie();
+            const isReacting = bot?.classList.contains('is-happy') || bot?.classList.contains('is-sad')
+                || bot?.classList.contains('is-amazed') || bot?.classList.contains('is-winking');
+            if (bot && !bot.hidden && !browsingChoices && !isReacting && animation?.isPaused) {
+                blinkRobotEyes();
+            }
+            scheduleIdleBlink();
+        }, 2800 + Math.round(Math.random() * 2200));
+    };
+    const dismissSpeech = () => {
+        window.clearTimeout(messageDismissTimer);
+        browsingChoices = false;
+        setEmotion('');
+        const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
+        if (speech) speech.hidden = true;
+    };
+    const scheduleMessageDismiss = (delay = 5000) => {
+        window.clearTimeout(messageDismissTimer);
+        messageDismissTimer = window.setTimeout(dismissSpeech, delay);
+    };
+
+    const setEmotion = (emotion = '', duration = 1100) => {
+        const bot = document.getElementById('chat-bot-float');
+        if (!bot) return;
+        prepareRobotLayers();
+        const animation = robotLottie();
+        const eyes = robotEyeLayer();
+        window.clearTimeout(emotionTimer);
+        window.clearTimeout(idleBlinkTimer);
+        stopReactionAnimations();
+        bot.classList.remove('is-happy', 'is-sad', 'is-amazed', 'is-winking');
+        if (eyes) {
+            eyes.style.scale = '';
+            if (!browsingChoices) eyes.style.translate = '0px 0px';
+        }
+        if (!emotion) { scheduleIdleBlink(); return; }
+        bot.classList.add(`is-${emotion}`);
+        animateRobotEmotion(emotion);
+        if (emotion === 'happy' && eyes) {
+            eyes.style.transformOrigin = 'center';
+            eyes.style.scale = '1.04 .78';
+        }
+        if (emotion === 'sad' && eyes) {
+            eyes.style.transformOrigin = 'center';
+            eyes.style.scale = '.9 .62';
+            eyes.style.translate = '0px 2px';
+        }
+        if (emotion === 'amazed') {
+            if (eyes) {
+                eyes.style.transformOrigin = 'center';
+                eyes.style.scale = '1.13';
+            }
+        }
+        if (emotion === 'winking' && animation?.playSegments) {
+            blinkRobotEyes();
+            window.setTimeout(blinkRobotEyes, 320);
+        }
+        if (duration > 0) {
+            emotionTimer = window.setTimeout(() => {
+                bot.classList.remove(`is-${emotion}`);
+                if (eyes) {
+                    eyes.style.scale = '';
+                    if (!browsingChoices) eyes.style.translate = '0px 0px';
+                }
+                scheduleIdleBlink();
+            }, duration);
+        }
+    };
+
+    const rememberViewport = () => {
+        const positions = [];
+        let node = activeForm;
+        while (node) {
+            if (node.scrollTop || node.scrollLeft || node.scrollHeight > node.clientHeight || node.scrollWidth > node.clientWidth) {
+                positions.push({ node, top:node.scrollTop, left:node.scrollLeft });
+            }
+            node = node.parentElement;
+        }
+        activeForm?.querySelectorAll('.modal-body, .field-group, .requested-feature-list').forEach(scrollNode => {
+            if (!positions.some(position => position.node === scrollNode)) {
+                positions.push({ node:scrollNode, top:scrollNode.scrollTop, left:scrollNode.scrollLeft });
+            }
+        });
+        const pageX = window.scrollX;
+        const pageY = window.scrollY;
+        return () => {
+            const restore = () => {
+                window.scrollTo(pageX, pageY);
+                positions.forEach(position => {
+                    position.node.scrollTop = position.top;
+                    position.node.scrollLeft = position.left;
+                });
+            };
+            restore();
+            requestAnimationFrame(() => { restore(); requestAnimationFrame(restore); });
+            [0, 50, 150, 300].forEach(delay => window.setTimeout(restore, delay));
+        };
+    };
+
+    const feedbackMessage = (item, action) => {
+        const field = item.field || 'suggestion';
+        const value = String(item.label || 'this suggestion');
+        const accepted = {
+            project_type:[`Great choice. ${value} is now the active project baseline.`, `I linked ${value} and its selected version to this intake.`],
+            project_description:['Project description updated. You can still refine the wording.', 'The suggested project summary is now in the description field.'],
+            requested_features:[`Added “${value}” to the requested features.`, `Feature accepted. “${value}” is now included for Architect review.`],
+            additional_requirements:['Added that requirement without replacing your existing notes.', 'The requirement was appended to the current project details.'],
+            sales_budget:['Budget suggestion applied. Priority adjustments can still be reviewed.', 'The historical template budget is now your starting estimate.'],
+            timeline_end:['Timeline suggestion applied from the selected template duration.', 'The proposed deadline is now set and remains editable.'],
+            priority:[`Priority updated to ${value}.`, `The ${value.toLowerCase()} priority recommendation is now applied.`],
+            sales_notes:['Added the recommendation to Sales notes.', 'That historical insight is now included in the Sales handoff notes.']
+        };
+        const rejected = {
+            project_description:['Description suggestion skipped. Your current wording stays unchanged.', 'No description was applied; you can write a custom project summary.'],
+            requested_features:[`Skipped “${value}”. It was not added to the project.`, `Feature rejected. “${value}” remains outside the requested scope.`],
+            additional_requirements:['Requirement skipped. Existing requirements were not changed.', 'I left that recommendation out of the additional requirements.'],
+            sales_budget:['Budget suggestion skipped. Your current amount stays unchanged.', 'No template budget was applied; you can enter a custom estimate.'],
+            timeline_end:['Timeline suggestion skipped. The current dates remain unchanged.', 'I did not apply the suggested duration to this project.'],
+            priority:['Priority suggestion skipped. Your current selection remains.', 'No priority change was made.'],
+            sales_notes:['Sales note skipped. Your current notes remain unchanged.', 'I left that recommendation out of the Sales handoff.']
+        };
+        const pool = (action === 'accepted' ? accepted : rejected)[field]
+            || (action === 'accepted' ? ['Suggestion accepted and applied to this field.'] : ['Suggestion rejected; no change was made.']);
+        const messageNumber = feedbackSequence++;
+        let message = pool[messageNumber % pool.length];
+        if (messageNumber % 3 === 1) {
+            const encouragement = action === 'accepted'
+                ? {
+                    project_type:'Nice start — the rest of the intake will be easier to shape from here.',
+                    project_description:'Good progress — the project is becoming clearer.',
+                    requested_features:'You’re building a focused scope one feature at a time.',
+                    additional_requirements:'Great detail — this will help the Architect plan confidently.',
+                    sales_budget:'Good step — a clear baseline makes estimation easier.',
+                    timeline_end:'Nice work — the delivery plan is taking shape.',
+                    priority:'Good decision — this keeps planning aligned with urgency.',
+                    sales_notes:'Well done — the handoff context is getting stronger.'
+                }
+                : {
+                    project_description:'That’s okay — keeping your own wording is a valid choice.',
+                    requested_features:'Good call — a focused scope is often stronger than a crowded one.',
+                    additional_requirements:'No problem — only keep requirements that truly add value.',
+                    sales_budget:'That’s fine — you can use the amount that best fits this client.',
+                    timeline_end:'No worries — choose a schedule that feels realistic.',
+                    priority:'That’s okay — your judgment should lead the final priority.',
+                    sales_notes:'Good choice — concise notes can make the handoff clearer.'
+                };
+            message += ' ' + (encouragement[field] || (action === 'accepted' ? 'Nice progress — keep going.' : 'That’s okay — you’re still in control.'));
+        }
+        return message;
+    };
+
+    const showFeedback = (item, action, after) => {
+        const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
+        if (!speech) { after(); return; }
+        setEmotion(action === 'accepted' ? 'happy' : 'sad', 1500);
+        continueAction = after;
+        backAction = action === 'rejected' ? () => { setEmotion(''); render(); } : null;
+        const heading = action === 'accepted'
+            ? 'Done — suggestion applied'
+            : (item.field === 'requested_features' ? 'Scope warning — feature skipped' : 'Okay — suggestion skipped');
+        speech.hidden = false;
+        speech.innerHTML = `<div class="sales-bot-heading-row"><div class="sales-bot-head">${escapeClientHtml(heading)}</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div>
+            <span class="sales-bot-copy">${escapeClientHtml(feedbackMessage(item, action))}</span>
+            <div class="sales-bot-actions">${action === 'rejected' ? '<button type="button" class="sales-bot-reject" data-sales-bot-back><i class="fas fa-arrow-left" aria-hidden="true"></i> Go back</button>' : ''}<button type="button" class="sales-bot-accept" data-sales-bot-continue>Continue</button></div>`;
+        scheduleMessageDismiss(5000);
+    };
+
+    const showFeatureSummary = () => {
+        const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
+        if (!speech) { close(); return; }
+        setEmotion(featureSession.accepted > 0 ? 'winking' : 'sad', 0);
+        continueAction = close;
+        backAction = null;
+        const acceptedText = `${featureSession.accepted} feature${featureSession.accepted === 1 ? '' : 's'} added`;
+        const rejectedText = `${featureSession.rejected} skipped`;
+        const encouragement = featureSession.accepted > 0
+            ? 'Nice work — your requested scope is ready for the next field.'
+            : 'No changes were made. You can add the features that fit this project best.';
+        speech.hidden = false;
+        speech.innerHTML = `<div class="sales-bot-heading-row"><div class="sales-bot-head">Feature review complete</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div>
+            <span class="sales-bot-copy">${escapeClientHtml(`${acceptedText}, ${rejectedText}. ${encouragement}`)}</span>
+            <div class="sales-bot-actions"><button type="button" class="sales-bot-accept" data-sales-bot-continue>Finish</button></div>`;
+        scheduleMessageDismiss(6000);
+    };
+
+    const advanceFeatureQueue = () => {
+        index++;
+        index < queue.length ? render() : showFeatureSummary();
+    };
+
+    const templateFor = (form) => {
+        const selectedId = Number(form?.querySelector('[data-template-version-select]')?.value || 0);
+        const type = normalizeSalesTemplateType(form?.elements?.project_type?.value);
+        return projectTemplates.find(item => selectedId && Number(item.id) === selectedId)
+            || projectTemplates.find(item => normalizeSalesTemplateType(item.project_type) === type)
+            || null;
+    };
+    const setField = (name, value) => {
+        const field = activeForm?.elements?.[name];
+        if (!field) return;
+        field.value = value;
+        field.dispatchEvent(new Event('input', { bubbles:true }));
+        field.dispatchEvent(new Event('change', { bubbles:true }));
+    };
+    const addFeature = (value) => {
+        const selector = activeForm?.id === 'addProjectForm' ? '[data-add-project-feature-input]' : '[data-requested-feature-input]';
+        const inputs = Array.from(activeForm?.querySelectorAll(selector) || []);
+        let input = inputs.find(item => !String(item.value || '').trim());
+        if (!input && inputs.length) {
+            const row = inputs[inputs.length - 1].closest('.requested-feature-item')?.cloneNode(true);
+            input = row?.querySelector(selector);
+            if (input && row) {
+                input.value = '';
+                inputs[inputs.length - 1].closest('.requested-feature-item')?.parentElement?.appendChild(row);
+            }
+        }
+        if (input) {
+            input.value = value;
+            input.dispatchEvent(new Event('input', { bubbles:true }));
+            input.dispatchEvent(new Event('change', { bubbles:true }));
+        }
+    };
+    const render = () => {
+        const bot = document.getElementById('chat-bot-float');
+        const speech = bot?.querySelector('.chat-bot-speech');
+        if (!bot || !speech || !queue[index]) return;
+        const item = queue[index];
+        const wasOpen = document.body.classList.contains('sales-assistant-open');
+        if (!wasOpen) {
+            bot.style.left = '';
+            bot.style.top = '';
+            bot.style.right = '';
+            bot.style.bottom = '';
+        }
+        bot.hidden = false;
+        bot.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('sales-assistant-open');
+        const choices = Array.isArray(item.choices) ? `<div class="sales-bot-choice-list">${item.choices.map((choice, choiceIndex) =>
+            `<button type="button" class="sales-bot-choice" data-sales-bot-choice="${choiceIndex}"><strong>${escapeClientHtml(choice.label)}</strong><em>${escapeClientHtml(choice.version)}</em></button>`
+        ).join('')}</div>` : '';
+        const actions = item.information || item.choices ? '' : '<div class="sales-bot-actions"><button type="button" class="sales-bot-reject" data-sales-bot-reject>Reject</button><button type="button" class="sales-bot-accept" data-sales-bot-accept>Accept</button></div>';
+        const progress = item.information || item.choices || queue.length < 2 ? '' : `<span class="sales-bot-progress">Suggestion ${index + 1} of ${queue.length}</span>`;
+        browsingChoices = Boolean(item.choices);
+        if (browsingChoices) {
+            const eyes = robotEyeLayer();
+            if (eyes) eyes.style.translate = '0px 0px';
+        }
+        speech.hidden = false;
+        speech.innerHTML = `<div class="sales-bot-heading-row"><div class="sales-bot-head">${escapeClientHtml(item.heading || 'My suggestion')}</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div>
+            ${item.version ? `<span class="sales-bot-version">${escapeClientHtml(item.version)}</span>` : ''}
+            ${item.label ? `<span class="sales-bot-copy">${escapeClientHtml(item.label)}</span>` : ''}
+            ${choices}${actions}${progress}`;
+        scheduleIdleBlink();
+        scheduleMessageDismiss(item.choices ? 9000 : 6000);
+        if (item.choices) setEmotion('amazed', 0);
+    };
+    const show = (form, items) => {
+        activeForm = form;
+        queue = items.filter(item => item && String(item.label || '').trim());
+        index = 0;
+        if (queue.length) render();
+    };
+    const projectTypes = (form) => {
+        const query = normalizeSalesTemplateType(form?.elements?.project_type?.value);
+        const projectName = normalizeSalesTemplateType(form?.elements?.project_name?.value);
+        const terms = (query || projectName).split(' ').filter(term => term.length > 2);
+        let matches = projectTemplates.filter(template => {
+            if (!terms.length) return true;
+            const candidate = normalizeSalesTemplateType(template.project_type);
+            return terms.some(term => candidate.includes(term));
+        });
+        if (!matches.length && query) {
+            matches = projectTemplates.filter(template => normalizeSalesTemplateType(template.project_type).split(' ').some(word => query.includes(word) || word.includes(query)));
+        }
+        const choices = matches.slice(0, 8).map(template => ({
+            label:template.project_type,
+            field:'project_type',
+            version:`V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...projectTemplates.filter(item => item.project_type === template.project_type).map(item => Number(item.template_version || 1))) ? ' · Latest' : ''}`,
+            apply:() => {
+                setField('project_type', template.project_type);
+                const select = activeForm.querySelector('[data-template-version-select]');
+                if (select) { select.value = String(template.id); select.dispatchEvent(new Event('change', { bubbles:true })); }
+            }
+        }));
+        show(form, [{
+            heading: query ? 'Matching project types' : 'Choose a project type',
+            label: choices.length ? 'Select the best match. The list updates as you type.' : `No learned template matches “${form?.elements?.project_type?.value || ''}”. You may continue with a new project type.`,
+            choices,
+            information: choices.length === 0
+        }]);
+    };
+    const forField = (form, field) => {
+        const template = templateFor(form);
+        if (field === 'project_type') return projectTypes(form);
+        if (!template) return show(form, [{ heading:'Choose a project type first', label:'I will suggest this field after you choose a matching project type.', information:true }]);
+        const featureSelector = form.id === 'addProjectForm' ? '[data-add-project-feature-input]' : '[data-requested-feature-input]';
+        const existingFeatures = new Set(Array.from(form.querySelectorAll(featureSelector))
+            .map(input => normalizeSalesTemplateType(input.value)).filter(Boolean));
+        const availableFeatureSuggestions = (template.feature_items || [])
+            .filter(value => !existingFeatures.has(normalizeSalesTemplateType(value)));
+        if (field === 'requested_features') {
+            featureSession = { accepted:0, rejected:0 };
+            if (!availableFeatureSuggestions.length) {
+                setEmotion('winking', 1800);
+                return show(form, [{ heading:'Feature suggestions complete', label:'All learned template features have already been reviewed or added. Nice work!', information:true }]);
+            }
+        }
+        const timelineWeeks = Math.max(1, Number(template.duration_max_weeks || 1));
+        const timelineDays = timelineWeeks * 7;
+        const timelineStartValue = form.elements.timeline_start?.value || new Date().toISOString().slice(0, 10);
+        const timelineStartDate = new Date(`${timelineStartValue}T00:00:00`);
+        const timelineDeadlineDate = new Date(timelineStartDate);
+        timelineDeadlineDate.setDate(timelineDeadlineDate.getDate() + timelineDays);
+        const timelineDeadlineValue = timelineDeadlineDate.toISOString().slice(0, 10);
+        const readableDate = value => new Intl.DateTimeFormat('en-PH', { year:'numeric', month:'short', day:'numeric' }).format(new Date(`${value}T00:00:00`));
+        const timelineSuggestion = {
+            field:'timeline_end',
+            heading:'Suggested project timeline',
+            label:`Start: ${readableDate(timelineStartValue)} · Deadline: ${readableDate(timelineDeadlineValue)} · ${timelineDays} calendar days (${timelineWeeks} weeks)`,
+            apply:() => {
+                setField('timeline_start', timelineStartValue);
+                setField('timeline_end', timelineDeadlineValue);
+            }
+        };
+        const maps = {
+            project_description:[{field:'project_description',heading:'Project description',label:template.project_description,apply:()=>setField('project_description',template.project_description)}],
+            requested_features:availableFeatureSuggestions.map(value=>({field:'requested_features',heading:'Suggested feature',label:value,version:`From ${template.project_type} V${template.template_version || 1}`,apply:()=>addFeature(value)})),
+            additional_requirements:[template.non_functional_requirements,template.integrations,template.third_party_services].map(value=>({field:'additional_requirements',heading:'Additional requirement',label:value,apply:()=>setField('additional_requirements',[activeForm.elements.additional_requirements?.value,value].filter(Boolean).join('\n'))})),
+            sales_budget:[{field:'sales_budget',heading:'Suggested starting budget',label:new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP'}).format(Number(template.budget_min || 0)),apply:()=>setField('sales_budget',Number(template.budget_min || 0).toFixed(2))}],
+            timeline_start:[timelineSuggestion],
+            timeline_end:[timelineSuggestion],
+            priority:[{field:'priority',heading:'Suggested priority',label:String(template.complexity_level || 'medium').toLowerCase()==='high'?'High':'Medium',apply:()=>setField('priority',String(template.complexity_level || '').toLowerCase()==='high'?'high':'medium')}],
+            sales_notes:[template.sales_notes,template.suggested_milestones,template.maintenance_support].map(value=>({field:'sales_notes',heading:'Sales note suggestion',label:value,apply:()=>setField('sales_notes',[activeForm.elements.sales_notes?.value,value].filter(Boolean).join('\n'))}))
+        };
+        show(form, maps[field] || []);
+    };
+    document.addEventListener('pointerdown', event => {
+        if (!event.target.closest('[data-sales-bot-choice], [data-sales-bot-accept], [data-sales-bot-reject], [data-sales-bot-continue], [data-sales-bot-back], [data-sales-bot-dismiss]')) {
+            return;
+        }
+        const restore = rememberViewport();
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        restore();
+    }, true);
+    document.addEventListener('click', event => {
+        const assistantControl = event.target.closest('[data-sales-bot-choice], [data-sales-bot-accept], [data-sales-bot-reject], [data-sales-bot-continue], [data-sales-bot-back], [data-sales-bot-dismiss]');
+        if (assistantControl) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            window.clearTimeout(messageDismissTimer);
+        } else if (event.target.closest('.chat-bot-speech')) {
+            event.stopPropagation();
+        }
+        const dismissButton = event.target.closest('[data-sales-bot-dismiss]');
+        if (dismissButton) {
+            const restore = rememberViewport();
+            dismissSpeech();
+            restore();
+            return;
+        }
+        const backButton = event.target.closest('[data-sales-bot-back]');
+        if (backButton) {
+            const restore = rememberViewport();
+            const previous = backAction;
+            backAction = null;
+            previous?.();
+            restore();
+            return;
+        }
+        const continueButton = event.target.closest('[data-sales-bot-continue]');
+        if (continueButton) {
+            const restore = rememberViewport();
+            const next = continueAction;
+            continueAction = null;
+            next?.();
+            restore();
+            return;
+        }
+        const choiceButton = event.target.closest('[data-sales-bot-choice]');
+        if (choiceButton) {
+            const restore = rememberViewport();
+            const choice = queue[index]?.choices?.[Number(choiceButton.dataset.salesBotChoice)];
+            browsingChoices = false;
+            const eyes = robotEyeLayer();
+            if (eyes) eyes.style.translate = '0px 0px';
+            choice?.apply?.();
+            showFeedback(choice || { field:'project_type', label:'Project type' }, 'accepted', close);
+            restore();
+            return;
+        }
+        if (event.target.closest('[data-sales-bot-accept]')) {
+            const restore = rememberViewport();
+            const item = queue[index];
+            item?.apply?.();
+            if (item?.field === 'requested_features') {
+                featureSession.accepted++;
+                setEmotion('happy', 900);
+                advanceFeatureQueue();
+                restore();
+                return;
+            }
+            showFeedback(item || {}, 'accepted', () => {
+                if (item?.complete) { close(); return; }
+                index++;
+                index < queue.length ? render() : close();
+            });
+            restore();
+            return;
+        }
+        if (event.target.closest('[data-sales-bot-reject]')) {
+            const restore = rememberViewport();
+            const item = queue[index];
+            if (item?.field === 'requested_features') {
+                featureSession.rejected++;
+                showFeedback(item, 'rejected', advanceFeatureQueue);
+                backAction = () => {
+                    featureSession.rejected = Math.max(0, featureSession.rejected - 1);
+                    setEmotion('');
+                    render();
+                };
+                restore();
+                return;
+            }
+            showFeedback(item || {}, 'rejected', () => {
+                index++;
+                index < queue.length ? render() : close();
+            });
+            restore();
+        }
+    }, true);
+    document.addEventListener('pointerover', event => {
+        if (event.target.closest?.('.chat-bot-speech')) {
+            window.clearTimeout(messageDismissTimer);
+        }
+    });
+    document.addEventListener('pointerout', event => {
+        const speech = event.target.closest?.('.chat-bot-speech');
+        if (speech && !event.relatedTarget?.closest?.('.chat-bot-speech')) {
+            scheduleMessageDismiss(speech.querySelector('.sales-bot-choice-list') ? 9000 : 5000);
+        }
+    });
+    document.addEventListener('pointermove', event => {
+        const bot = document.getElementById('chat-bot-float');
+        if (!bot || bot.hidden || !browsingChoices) return;
+        const eyeLayer = robotEyeLayer();
+        if (!eyeLayer) return;
+        const faceLayer = robotLayer('face');
+        const rect = (faceLayer || eyeLayer).getBoundingClientRect();
+        const botRect = bot.getBoundingClientRect();
+        const centerX = rect.width > 10 ? rect.left + rect.width / 2 : botRect.left + botRect.width / 2;
+        const centerY = rect.height > 10 ? rect.top + rect.height / 2 : botRect.top + botRect.height * 0.31;
+        const deltaX = event.clientX - centerX;
+        const deltaY = event.clientY - centerY;
+        const distance = Math.max(1, Math.hypot(deltaX, deltaY));
+        const strength = Math.min(1, distance / 180);
+        const lookX = (deltaX / distance) * 7 * strength;
+        const lookY = Math.abs(deltaY) < 34 ? 0 : (deltaY / distance) * 3.2 * strength;
+        eyeLayer.style.translate = `${lookX}px ${lookY}px`;
+        eyeLayer.style.transition = 'translate 55ms linear';
+    }, { passive:true });
+    const close = () => {
+        continueAction = null;
+        backAction = null;
+        browsingChoices = false;
+        setEmotion('');
+        const eyeLayer = robotEyeLayer();
+        if (eyeLayer) { eyeLayer.style.translate = '0px 0px'; eyeLayer.style.scale = ''; }
+        const bot = document.getElementById('chat-bot-float');
+        const speech = bot?.querySelector('.chat-bot-speech');
+        if (!bot || !speech) return;
+        document.body.classList.add('sales-assistant-open');
+        bot.hidden = false;
+        bot.setAttribute('aria-hidden', 'false');
+        speech.hidden = false;
+        speech.innerHTML = '<div class="sales-bot-heading-row"><div class="sales-bot-head">Hi, good day!</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div><span class="sales-bot-copy">I am ready whenever you want help with another field.</span>';
+        scheduleMessageDismiss(4500);
+    };
+    return { forField, close };
+})();
+
+document.addEventListener('focusin', event => {
+    const form = event.target.closest('#addClientForm, #addProjectForm');
+    if (!form) return;
+    const field = event.target.matches('[data-requested-feature-input],[data-add-project-feature-input]') ? 'requested_features' : event.target.name;
+    if (['project_type','project_description','requested_features','additional_requirements','sales_budget','timeline_start','timeline_end','priority','sales_notes'].includes(field)) {
+        salesTemplateAssistant.forField(form, field);
+    }
+});
+document.addEventListener('input', event => {
+    const form = event.target.closest?.('#addClientForm, #addProjectForm');
+    if (form && event.target.name === 'project_type' && document.activeElement === event.target) {
+        salesTemplateAssistant.forField(form, 'project_type');
+    }
+});
+document.addEventListener('keydown', event => {
+    const form = event.target.closest?.('#addClientForm, #addProjectForm');
+    if (form && event.target.name === 'project_type' && event.key === 'Enter') {
+        event.preventDefault();
+    }
+});
+document.querySelectorAll('#addClientModal, #addProjectModal').forEach(modal => modal.addEventListener('hidden.bs.modal', () => salesTemplateAssistant.close()));
 
 function applyFilters() {
     const search = document.getElementById('searchInput').value;
@@ -5643,12 +6257,29 @@ function closeTemplatePickers(exceptMenu = null) {
 function initProjectTemplatePicker(picker) {
     const input = picker.querySelector('[data-template-picker-input]');
     const menu = picker.querySelector('[data-template-picker-menu]');
+    const versionSelect = picker.closest('form')?.querySelector('[data-template-version-select]');
     if (!input || !menu) {
         return;
     }
 
     let selectingTemplate = false;
+    const syncVersions = () => {
+        if (!versionSelect) return;
+        const needle = normalizeSalesTemplateType(input.value);
+        const versions = projectTemplates
+            .filter((template) => normalizeSalesTemplateType(template.project_type) === needle)
+            .sort((a, b) => Number(b.template_version || 1) - Number(a.template_version || 1));
+        versionSelect.innerHTML = versions.map((template) =>
+            `<option value="${Number(template.id || 0)}">V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...versions.map(item => Number(item.template_version || 1))) ? ' (Latest)' : ''}</option>`
+        ).join('');
+        versionSelect.hidden = versions.length < 2;
+        if (versions.length === 1) versionSelect.value = String(versions[0].id || '');
+    };
     const renderMenu = () => {
+        if (picker.closest('#addClientForm, #addProjectForm')) {
+            menu.hidden = true;
+            return;
+        }
         if (selectingTemplate) {
             return;
         }
@@ -5676,7 +6307,7 @@ function initProjectTemplatePicker(picker) {
     };
 
     input.addEventListener('focus', renderMenu);
-    input.addEventListener('input', renderMenu);
+    input.addEventListener('input', () => { syncVersions(); renderMenu(); });
     input.addEventListener('click', renderMenu);
     input.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
@@ -5701,6 +6332,10 @@ function initProjectTemplatePicker(picker) {
         input.dispatchEvent(new Event('change', { bubbles: true }));
         selectingTemplate = false;
         input.focus();
+    });
+
+    versionSelect?.addEventListener('change', () => {
+        input.dispatchEvent(new Event('change', { bubbles: true }));
     });
 }
 
@@ -5768,7 +6403,9 @@ function findSalesProjectTemplate(value) {
         return null;
     }
 
-    const exactMatch = projectTemplates.find((template) => normalizeSalesTemplateType(template.project_type) === needle);
+    const selectedId = Number(document.querySelector('#addProjectForm [data-template-version-select]')?.value || 0);
+    const exactMatch = projectTemplates.find((template) => selectedId > 0 && Number(template.id) === selectedId)
+        || projectTemplates.find((template) => normalizeSalesTemplateType(template.project_type) === needle);
     if (exactMatch) {
         return exactMatch;
     }
@@ -6761,7 +7398,9 @@ if (addClientModalElement && addClientForm) {
             return null;
         }
 
-        const exactMatch = projectTemplates.find((template) => normalizeTemplateType(template.project_type) === needle);
+        const selectedId = Number(addClientForm.querySelector('[data-template-version-select]')?.value || 0);
+        const exactMatch = projectTemplates.find((template) => selectedId > 0 && Number(template.id) === selectedId)
+            || projectTemplates.find((template) => normalizeTemplateType(template.project_type) === needle);
         if (exactMatch) {
             return exactMatch;
         }
