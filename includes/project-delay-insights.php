@@ -268,14 +268,8 @@ function delayInsightsRenderCompactList(mysqli|PgsqlMysqliCompatConnection $conn
         echo '<strong>' . htmlspecialchars($insight['project']['name']) . '</strong>';
         echo '<span class="delay-risk-badge ' . $riskClass . '"><i class="fas fa-signal"></i> ' . htmlspecialchars($riskLevel) . ' Risk</span>';
         echo '</div>';
-        echo '<div class="delay-compact-meta">';
-        echo '<span><i class="fas fa-user-tie"></i> ' . htmlspecialchars($insight['project']['client_name']) . '</span>';
-        echo '<span><i class="fas fa-layer-group"></i> ' . htmlspecialchars($insight['project']['status_label']) . '</span>';
-        echo '<span><i class="fas fa-calendar-alt"></i> ' . htmlspecialchars($insight['project']['timeline_label']) . '</span>';
         echo '</div>';
         echo '</div>';
-        echo '</div>';
-        echo '<div class="delay-compact-note">' . htmlspecialchars($insight['after']['summary']) . '</div>';
         echo '</div>';
         echo '<div class="delay-compact-metric delay-metric-delay"><label>Delay Chance</label><strong>' . (int) $insight['before']['delay_probability'] . '%</strong></div>';
         echo '<div class="delay-compact-metric delay-metric-success"><label>Success Chance</label><strong>' . (int) $insight['before']['success_probability'] . '%</strong></div>';
