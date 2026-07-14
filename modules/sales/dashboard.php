@@ -1295,14 +1295,14 @@ include '../../includes/navbar.php';
 .release-chart-summary {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-    gap: 0.35rem;
+    gap: 0.8rem;
 }
 
 .release-summary-pill {
     display: grid;
-    gap: 0.05rem;
+    gap: 0.3rem;
     min-width: 0;
-    padding: 0.35rem 0.45rem;
+    padding: 0.6rem 0.75rem;
     border: 1px solid rgba(31, 99, 146, 0.12);
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.86);
@@ -1311,15 +1311,17 @@ include '../../includes/navbar.php';
 
 .release-summary-pill span {
     color: var(--gray-600);
-    font-size: 0.55rem;
+    font-size: 0.7rem;
     font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .release-summary-pill strong {
     color: var(--gray-900);
-    font-size: 0.95rem;
-    line-height: 1;
+    font-size: 1.1rem;
+    line-height: 1.2;
+    font-weight: 700;
 }
 
 .release-summary-pill.merged strong {
