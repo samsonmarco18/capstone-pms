@@ -7122,8 +7122,26 @@ if (addClientModalElement && addClientForm) {
         });
     }
 
+    function isMeaningfulDraftValue(key, value) {
+        if (key.startsWith('_') || key === 'client_draft_id' || key === 'attachments[]') {
+            return false;
+        }
+
+        const normalizedValue = String(value || '').trim();
+        if (normalizedValue === '') {
+            return false;
+        }
+
+        const defaultDraftValues = {
+            priority: 'medium'
+        };
+
+        return !(Object.prototype.hasOwnProperty.call(defaultDraftValues, key)
+            && normalizedValue === defaultDraftValues[key]);
+    }
+
     function hasDraftValues(data = getDraftData()) {
-        return Object.entries(data).some(([key, value]) => !key.startsWith('_') && String(value).trim() !== '');
+        return Object.entries(data).some(([key, value]) => isMeaningfulDraftValue(key, value));
     }
 
     function createDraftId() {
@@ -7718,7 +7736,7 @@ if (addClientModalElement && addClientForm) {
     }
 
     function requestAddClientClose() {
-        if (!hasDraftValues()) {
+        if (!formTouched || !hasDraftValues()) {
             resetCurrentClientInput();
             addClientModal.hide();
             return;
