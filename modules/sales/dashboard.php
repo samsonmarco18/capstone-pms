@@ -1293,43 +1293,64 @@ include '../../includes/navbar.php';
 }
 
 .release-chart-summary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-    gap: 0.8rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem 1.25rem;
+    width: 100%;
 }
 
 .release-summary-pill {
-    display: grid;
-    gap: 0.3rem;
-    min-width: 0;
-    padding: 0.6rem 0.75rem;
-    border: 1px solid rgba(31, 99, 146, 0.12);
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.86);
-    box-shadow: 0 2px 6px rgba(15, 76, 129, 0.03);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: max-content;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.release-summary-pill::before {
+    content: "";
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    border-radius: 50%;
+    background: #1f6392;
+}
+
+.release-summary-pill.merged::before {
+    background: #10b981;
+}
+
+.release-summary-pill.waiting::before {
+    background: rgba(31, 99, 146, 0.35);
 }
 
 .release-summary-pill span {
     color: var(--gray-600);
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1;
+    text-transform: none;
+    letter-spacing: 0;
 }
 
 .release-summary-pill strong {
-    color: var(--gray-900);
-    font-size: 1.1rem;
-    line-height: 1.2;
-    font-weight: 700;
+    color: var(--gray-600);
+    font-size: 0.8rem;
+    line-height: 1;
+    font-weight: 600;
 }
 
 .release-summary-pill.merged strong {
-    color: #059669;
+    color: var(--gray-600);
 }
 
 .release-summary-pill.waiting strong {
-    color: var(--theme-primary);
+    color: var(--gray-600);
 }
 
 .release-checklist {
@@ -1377,20 +1398,24 @@ include '../../includes/navbar.php';
 }
 
 .release-progress {
-    width: min(100%, 360px);
-    min-width: 300px;
+    width: min(100%, 390px);
+    min-width: 350px;
 }
 
 .release-progress-legend {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.65rem;
+    display: flex;
+    width: 100%;
+    gap: 0.75rem;
+    align-items: stretch;
+    justify-content: center;
     margin-bottom: 0.65rem;
 }
 
 .release-progress-metric {
     display: flex;
-    min-width: 0;
+    width: 104px;
+    min-width: 104px;
+    flex: 0 0 104px;
     min-height: 58px;
     padding: 0.55rem 0.45rem;
     align-items: center;
@@ -1411,6 +1436,7 @@ include '../../includes/navbar.php';
     letter-spacing: 0.04em;
     text-transform: uppercase;
     white-space: nowrap;
+    overflow: visible;
 }
 
 .release-progress-metric-value {
@@ -1862,6 +1888,9 @@ body.dark-mode .release-feature input:checked ~ small {
     }
 
     .release-progress-metric {
+        width: 96px;
+        min-width: 96px;
+        flex: 0 0 96px;
         padding-inline: 0.25rem;
     }
 
@@ -1883,7 +1912,7 @@ body.dark-mode .release-feature input:checked ~ small {
     }
 
     .release-chart-summary {
-        grid-template-columns: 1fr;
+        gap: 0.55rem 0.9rem;
     }
 
     .release-checklist {
