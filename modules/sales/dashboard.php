@@ -1481,9 +1481,8 @@ include '../../includes/navbar.php';
     background: #d1fae5;
 }
 
-.sales-insights-more {
-    margin-top: 0.85rem;
-    margin-left: auto;
+.sales-insights-column .delay-insights-wrap {
+    margin-bottom: 0;
 }
 
 html[data-theme="dark"] .sales-dashboard-hero,
@@ -2171,11 +2170,10 @@ body.dark-mode .release-feature input:checked ~ small {
                 'title' => 'Project Insight List',
                 'subtitle' => 'Top three project signals with direct links to the full insight page.',
                 'button_label' => 'View Project',
+                'more_label' => 'See More',
+                'more_url' => BASE_URL . 'modules/insights/decision-center.php',
             ]);
             ?>
-            <a class="delay-action sales-insights-more" href="<?php echo htmlspecialchars(BASE_URL . 'modules/insights/decision-center.php'); ?>">
-                <i class="fas fa-arrow-right"></i> See More
-            </a>
         </div>
     </div>
 </div>
