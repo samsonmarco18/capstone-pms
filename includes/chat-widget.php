@@ -234,7 +234,7 @@ document.addEventListener('DOMContentLoaded', function () {
         minimized.style.display = 'none';
     };
 
-    const typeBotSpeech = function () {
+    const resetBotSpeech = function () {
         if (!botFloat) {
             return;
         }
@@ -246,7 +246,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
         clearTimeout(botTypeTimer);
         title.textContent = '';
-        title.classList.add('is-typing');
+        title.classList.remove('is-typing');
+    };
+
+    const typeBotSpeech = function (startDelay = 0) {
+        if (!botFloat) {
+            return;
+        }
+
+        const title = botFloat.querySelector('[data-chat-bot-type="title"]');
+        if (!title) {
+            return;
+        }
+
+        clearTimeout(botTypeTimer);
+        title.textContent = '';
 
         const typeInto = function (element, text, index, done) {
             if (index <= text.length) {
@@ -261,7 +275,17 @@ document.addEventListener('DOMContentLoaded', function () {
             done?.();
         };
 
-        typeInto(title, title.dataset.chatBotText || '', 0);
+        const startTyping = function () {
+            title.classList.add('is-typing');
+            typeInto(title, title.dataset.chatBotText || '', 0);
+        };
+
+        if (startDelay > 0) {
+            botTypeTimer = setTimeout(startTyping, startDelay);
+            return;
+        }
+
+        startTyping();
     };
 
     minimized.addEventListener('click', function () {
@@ -275,18 +299,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const shouldShow = botFloat.hidden;
         clearTimeout(botTransitionTimer);
-        botFloat.classList.remove('is-leaving-bed', 'is-returning-bed');
+        botFloat.classList.remove('is-leaving-bed', 'is-returning-bed', 'is-preparing-speech', 'is-speaking');
         if (shouldShow) {
+            resetBotSpeech();
             botFloat.hidden = false;
             botFloat.setAttribute('aria-hidden', 'false');
-            botFloat.classList.add('is-leaving-bed');
+            botFloat.classList.add('is-leaving-bed', 'is-preparing-speech');
             window.chatBotWidgetRobot?.wake?.();
-            typeBotSpeech();
             window.setTimeout(function () {
                 window.chatBotFloatRobot?.wink?.('right');
             }, 420);
             botTransitionTimer = window.setTimeout(function () {
                 botFloat.classList.remove('is-leaving-bed');
+                botFloat.classList.remove('is-preparing-speech');
+                botFloat.classList.add('is-speaking');
+                typeBotSpeech(260);
+                botTransitionTimer = window.setTimeout(function () {
+                    botFloat.classList.remove('is-speaking');
+                }, 520);
             }, 760);
         } else {
             botFloat.setAttribute('aria-hidden', 'true');

@@ -2189,8 +2189,18 @@ body {
     cursor: grabbing;
 }
 
+.chat-bot-float.is-preparing-speech .chat-bot-speech {
+    opacity: 0;
+    transform: translateY(-50%) translateX(18px);
+    visibility: hidden;
+}
+
 .chat-bot-float.is-leaving-bed .chat-bot-float-animation {
     animation: evxAssistantEmergeFromBed .72s cubic-bezier(.16, .8, .22, 1) both !important;
+}
+
+.chat-bot-float.is-speaking .chat-bot-speech {
+    animation: evxAssistantSpeechWake .48s cubic-bezier(.16, .86, .22, 1) both;
 }
 
 .chat-bot-float.is-returning-bed {
@@ -2217,6 +2227,21 @@ body {
     100% { opacity: 0; transform: translate(22px, 24px) scale(.58); }
 }
 
+@keyframes evxAssistantSpeechWake {
+    0% {
+        opacity: 1;
+        transform: translateY(-50%) translateX(18px);
+    }
+    68% {
+        opacity: 1;
+        transform: translateY(-50%) translateX(-3px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(-50%) translateX(0);
+    }
+}
+
 @keyframes evxAssistantSpeechSleep {
     to { opacity: 0; transform: translateY(-50%) translateX(12px) scale(.96); }
 }
@@ -2227,12 +2252,13 @@ body {
     right: calc(100% + 8px);
     z-index: 3;
     min-width: 152px;
+    min-height: 48px;
     padding: 0.78rem 0.9rem 0.78rem 1rem;
     border: 1px solid rgba(77, 190, 238, 0.32);
     border-radius: 18px 18px 6px 18px;
     background:
-        radial-gradient(circle at 18% 18%, rgba(255, 255, 255, 0.92), transparent 34%),
-        linear-gradient(135deg, rgba(228, 249, 255, 0.98), rgba(116, 217, 255, 0.92) 52%, rgba(29, 144, 214, 0.92)),
+        radial-gradient(circle at 18% 18%, #ffffff, transparent 34%),
+        linear-gradient(135deg, #e4f9ff, #74d9ff 52%, #1d90d6),
         #dff8ff;
     color: #0b466d;
     box-shadow:
@@ -2242,6 +2268,7 @@ body {
     transform: translateY(-50%);
     pointer-events: none;
     overflow: visible;
+    will-change: transform, opacity;
 }
 
 .chat-bot-speech::before {
@@ -2265,7 +2292,7 @@ body {
     right: -9px;
     width: 18px;
     height: 18px;
-    background: linear-gradient(135deg, rgba(116, 217, 255, 0.95), rgba(29, 144, 214, 0.95));
+    background: linear-gradient(135deg, #74d9ff, #1d90d6);
     border-top: 1px solid rgba(77, 190, 238, 0.32);
     border-right: 1px solid rgba(77, 190, 238, 0.32);
     transform: translateY(-50%) rotate(45deg);
@@ -2277,6 +2304,8 @@ body {
     position: relative;
     z-index: 1;
     display: block;
+    min-height: 1.15em;
+    line-height: 1.15;
 }
 
 .chat-bot-speech .is-typing::after {
