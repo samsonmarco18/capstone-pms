@@ -1554,6 +1554,325 @@ include '../../includes/navbar.php';
     margin-bottom: 0;
 }
 
+/* Evortix 3D surface system */
+.sales-dashboard-shell {
+    --depth-edge: rgba(15, 74, 110, 0.12);
+    --depth-shadow: rgba(15, 74, 110, 0.2);
+    --surface-highlight: rgba(255, 255, 255, 0.92);
+    perspective: 1600px;
+    isolation: isolate;
+}
+
+.sales-dashboard-shell::before,
+.sales-dashboard-shell::after {
+    content: "";
+    position: fixed;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: 50%;
+    filter: blur(2px);
+}
+
+.sales-dashboard-shell::before {
+    width: 420px;
+    height: 420px;
+    top: 8%;
+    right: -180px;
+    background: radial-gradient(circle, rgba(34, 211, 238, 0.1), rgba(31, 99, 146, 0.035) 46%, transparent 72%);
+}
+
+.sales-dashboard-shell::after {
+    width: 360px;
+    height: 360px;
+    bottom: -160px;
+    left: 8%;
+    background: radial-gradient(circle, rgba(31, 99, 146, 0.09), transparent 70%);
+}
+
+.sales-dashboard-hero,
+.stat-card-modern {
+    --tilt-x: 0deg;
+    --tilt-y: 0deg;
+    --pointer-x: 50%;
+    --pointer-y: 50%;
+    transform: perspective(1100px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translate3d(0, var(--card-lift, 0), 0);
+    transform-style: preserve-3d;
+    will-change: transform;
+    transition: transform 0.18s ease-out, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.sales-dashboard-hero {
+    box-shadow:
+        inset 0 1px 0 var(--surface-highlight),
+        0 7px 0 rgba(15, 74, 110, 0.1),
+        0 22px 42px rgba(15, 74, 110, 0.15),
+        0 0 38px rgba(34, 211, 238, 0.09) !important;
+}
+
+.sales-dashboard-hero:hover {
+    --card-lift: -4px;
+    box-shadow:
+        inset 0 1px 0 var(--surface-highlight),
+        0 9px 0 rgba(15, 74, 110, 0.1),
+        0 30px 54px rgba(15, 74, 110, 0.2),
+        0 0 42px rgba(34, 211, 238, 0.13) !important;
+}
+
+.sales-dashboard-hero::after,
+.stat-card-modern::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(circle at var(--pointer-x) var(--pointer-y), rgba(255, 255, 255, 0.78), transparent 34%);
+    transition: opacity 0.2s ease;
+}
+
+.sales-dashboard-hero.is-tilting::after,
+.stat-card-modern.is-tilting::after {
+    opacity: 0.45;
+}
+
+.sales-dashboard-hero .card-body,
+.stat-card-modern > * {
+    transform: translateZ(24px);
+}
+
+.sales-dashboard-hero .sales-overview-badge {
+    transform: translateZ(38px);
+}
+
+.stat-card-modern {
+    box-shadow:
+        inset 0 1px 0 var(--surface-highlight),
+        0 6px 0 var(--stat-border),
+        0 18px 32px var(--stat-glow);
+}
+
+.stat-card-modern:hover {
+    --card-lift: -8px;
+    box-shadow:
+        inset 0 1px 0 var(--surface-highlight),
+        0 9px 0 var(--stat-border),
+        0 28px 48px var(--stat-glow-hover),
+        0 0 32px var(--stat-glow-hover);
+}
+
+.stat-card-modern .stat-icon {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--stat-color) 20%, transparent);
+    border-radius: 16px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), color-mix(in srgb, var(--stat-color) 9%, white));
+    box-shadow:
+        inset 2px 2px 0 rgba(255, 255, 255, 0.9),
+        0 5px 0 color-mix(in srgb, var(--stat-color) 16%, transparent),
+        0 12px 20px color-mix(in srgb, var(--stat-color) 16%, transparent);
+    transform: translateZ(52px) rotate(-4deg);
+}
+
+.stat-card-modern:hover .stat-icon {
+    transform: translateZ(66px) rotate(0deg) scale(1.04);
+}
+
+.stat-card-modern .stat-icon,
+.chart-card,
+.list-card,
+.agenda-summary,
+.agenda-date-group,
+.planner-panel,
+.plan-item {
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.chart-card,
+.list-card {
+    transform: perspective(1400px) translateZ(0);
+    transform-style: preserve-3d;
+    box-shadow:
+        inset 0 1px 0 var(--surface-highlight),
+        0 6px 0 rgba(15, 74, 110, 0.085),
+        0 20px 38px rgba(15, 74, 110, 0.11),
+        0 0 28px rgba(34, 211, 238, 0.07);
+}
+
+.chart-card:hover,
+.list-card:hover {
+    transform: perspective(1400px) translate3d(0, -6px, 18px) rotateX(0.8deg);
+    box-shadow:
+        inset 0 1px 0 var(--surface-highlight),
+        0 9px 0 rgba(15, 74, 110, 0.085),
+        0 30px 54px rgba(15, 74, 110, 0.16),
+        0 0 34px rgba(34, 211, 238, 0.11);
+}
+
+.chart-card .card-header,
+.list-card .card-header {
+    box-shadow: 0 5px 12px rgba(15, 74, 110, 0.06);
+}
+
+.agenda-summary,
+.agenda-date-group,
+.planner-panel,
+.plan-item {
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.88),
+        0 4px 0 rgba(15, 74, 110, 0.07),
+        0 12px 24px rgba(15, 74, 110, 0.08);
+}
+
+.agenda-date-group:hover,
+.plan-item:hover {
+    transform: translate3d(0, -3px, 0);
+    border-color: rgba(31, 99, 146, 0.22);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.92),
+        0 6px 0 rgba(15, 74, 110, 0.08),
+        0 17px 28px rgba(15, 74, 110, 0.12);
+}
+
+.sales-dashboard-shell .btn-primary,
+.agenda-open-btn,
+.btn-view,
+.planner-nav a {
+    box-shadow: 0 4px 0 rgba(15, 74, 110, 0.34), 0 9px 16px rgba(15, 74, 110, 0.14);
+    transform: translateY(-2px);
+}
+
+.sales-dashboard-shell .btn-primary:active,
+.agenda-open-btn:active,
+.btn-view:active,
+.planner-nav a:active {
+    box-shadow: 0 1px 0 rgba(15, 74, 110, 0.34), 0 4px 8px rgba(15, 74, 110, 0.12);
+    transform: translateY(2px);
+}
+
+.evortix-3d-scene {
+    position: relative;
+    width: min(100%, 300px);
+    height: 138px;
+    margin-left: auto;
+    perspective: 900px;
+    transform-style: preserve-3d;
+}
+
+.evortix-3d-platform {
+    position: absolute;
+    width: 220px;
+    height: 112px;
+    left: 50%;
+    top: 50%;
+    border: 1px solid rgba(31, 99, 146, 0.24);
+    border-radius: 28px;
+    background:
+        linear-gradient(rgba(31, 99, 146, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(31, 99, 146, 0.08) 1px, transparent 1px),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(219, 240, 252, 0.72));
+    background-size: 22px 22px, 22px 22px, 100% 100%;
+    box-shadow:
+        -9px 12px 0 rgba(15, 74, 110, 0.1),
+        -18px 25px 38px rgba(15, 74, 110, 0.18),
+        0 0 30px rgba(34, 211, 238, 0.12);
+    transform: translate(-50%, -50%) rotateX(61deg) rotateZ(-25deg);
+    transform-style: preserve-3d;
+    animation: evortixPlatformFloat 5s ease-in-out infinite;
+}
+
+.evortix-3d-core {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 68px;
+    height: 68px;
+    display: grid;
+    place-items: center;
+    color: #ffffff;
+    font-size: 1.45rem;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 22px;
+    background: linear-gradient(145deg, #41a7d8, #15557f);
+    box-shadow:
+        inset 4px 4px 8px rgba(255, 255, 255, 0.3),
+        inset -5px -6px 10px rgba(7, 48, 78, 0.26),
+        -8px 13px 0 #0f4a6e,
+        -14px 24px 26px rgba(15, 74, 110, 0.28),
+        0 0 28px rgba(34, 211, 238, 0.28);
+    transform: translate(-50%, -68%) translateZ(58px) rotateZ(25deg) rotateX(-12deg);
+}
+
+.evortix-3d-pillar {
+    position: absolute;
+    bottom: 28px;
+    width: 22px;
+    border-radius: 7px 7px 4px 4px;
+    background: linear-gradient(90deg, #0f4a6e, #3a9acc 72%, #8ed9f4);
+    box-shadow: -5px 7px 0 rgba(15, 74, 110, 0.3), -8px 12px 14px rgba(15, 74, 110, 0.2);
+    transform: translateZ(24px) rotateZ(25deg) rotateX(-8deg);
+    transform-origin: bottom;
+}
+
+.evortix-3d-pillar.pillar-one {
+    left: 38px;
+    height: 34px;
+}
+
+.evortix-3d-pillar.pillar-two {
+    right: 38px;
+    height: 54px;
+}
+
+.evortix-3d-pillar.pillar-three {
+    right: 68px;
+    bottom: 16px;
+    height: 27px;
+}
+
+.evortix-3d-orbit {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 152px;
+    height: 58px;
+    border: 2px solid rgba(34, 211, 238, 0.38);
+    border-left-color: rgba(31, 99, 146, 0.08);
+    border-radius: 50%;
+    transform: translate(-50%, -72%) translateZ(74px) rotateZ(18deg);
+    animation: evortixOrbit 7s linear infinite;
+}
+
+.evortix-3d-orbit::after {
+    content: "";
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    right: 13px;
+    top: 2px;
+    border-radius: 50%;
+    background: #22d3ee;
+    box-shadow: 0 0 0 5px rgba(34, 211, 238, 0.12), 0 0 18px #22d3ee;
+}
+
+@keyframes evortixPlatformFloat {
+    0%, 100% { transform: translate(-50%, -50%) rotateX(61deg) rotateZ(-25deg) translateZ(0); }
+    50% { transform: translate(-50%, -54%) rotateX(61deg) rotateZ(-25deg) translateZ(8px); }
+}
+
+@keyframes evortixOrbit {
+    to { transform: translate(-50%, -72%) translateZ(74px) rotateZ(378deg); }
+}
+
+@keyframes overdueHeartbeat {
+    0%, 100% { filter: drop-shadow(0 0 0 rgba(220, 38, 38, 0)); }
+    32% { filter: drop-shadow(0 0 9px rgba(220, 38, 38, 0.3)); }
+    48% { filter: drop-shadow(0 0 2px rgba(220, 38, 38, 0.08)); }
+    68% { filter: drop-shadow(0 0 7px rgba(220, 38, 38, 0.24)); }
+}
+
 html[data-theme="dark"] .sales-dashboard-hero,
 body[data-theme="dark"] .sales-dashboard-hero,
 body.dark-mode .sales-dashboard-hero,
@@ -1840,6 +2159,55 @@ body.dark-mode .release-feature input:checked ~ small {
     color: #7ee3bd;
 }
 
+html[data-theme="dark"] .sales-dashboard-hero,
+body[data-theme="dark"] .sales-dashboard-hero,
+body.dark-mode .sales-dashboard-hero,
+html[data-theme="dark"] .chart-card,
+body[data-theme="dark"] .chart-card,
+body.dark-mode .chart-card,
+html[data-theme="dark"] .list-card,
+body[data-theme="dark"] .list-card,
+body.dark-mode .list-card {
+    --surface-highlight: rgba(138, 210, 255, 0.08);
+    box-shadow:
+        inset 0 1px 0 var(--surface-highlight),
+        0 7px 0 rgba(2, 11, 20, 0.66),
+        0 24px 44px rgba(2, 11, 20, 0.34),
+        0 0 34px rgba(34, 211, 238, 0.07) !important;
+}
+
+html[data-theme="dark"] .stat-card-modern,
+body[data-theme="dark"] .stat-card-modern,
+body.dark-mode .stat-card-modern {
+    --surface-highlight: rgba(138, 210, 255, 0.1);
+    box-shadow:
+        inset 0 1px 0 var(--surface-highlight),
+        0 6px 0 rgba(2, 11, 20, 0.7),
+        0 20px 36px rgba(2, 11, 20, 0.34);
+}
+
+html[data-theme="dark"] .stat-card-modern .stat-icon,
+body[data-theme="dark"] .stat-card-modern .stat-icon,
+body.dark-mode .stat-card-modern .stat-icon {
+    background: linear-gradient(145deg, rgba(23, 63, 91, 0.98), rgba(7, 25, 41, 0.98));
+    border-color: rgba(138, 210, 255, 0.18);
+    box-shadow:
+        inset 2px 2px 0 rgba(138, 210, 255, 0.1),
+        0 5px 0 rgba(2, 11, 20, 0.72),
+        0 14px 22px rgba(2, 11, 20, 0.36);
+}
+
+html[data-theme="dark"] .evortix-3d-platform,
+body[data-theme="dark"] .evortix-3d-platform,
+body.dark-mode .evortix-3d-platform {
+    background:
+        linear-gradient(rgba(138, 210, 255, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(138, 210, 255, 0.1) 1px, transparent 1px),
+        linear-gradient(145deg, rgba(18, 49, 72, 0.98), rgba(5, 21, 35, 0.98));
+    background-size: 22px 22px, 22px 22px, 100% 100%;
+    box-shadow: -9px 12px 0 rgba(2, 11, 20, 0.72), -18px 25px 38px rgba(2, 11, 20, 0.42), 0 0 30px rgba(34, 211, 238, 0.11);
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .stats-grid {
@@ -1939,6 +2307,28 @@ body.dark-mode .release-feature input:checked ~ small {
         min-width: 720px;
     }
 }
+
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+    .sales-dashboard-hero,
+    .stat-card-modern,
+    .chart-card,
+    .list-card {
+        --tilt-x: 0deg !important;
+        --tilt-y: 0deg !important;
+        --card-lift: 0px !important;
+        transform: none !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .evortix-3d-platform,
+    .evortix-3d-orbit {
+        animation: none !important;
+    }
+
+    .stat-overdue.has-alert {
+        animation: none !important;
+    }
+}
 </style>
 
 <div class="container-fluid px-4 py-4 sales-dashboard-shell">
@@ -1947,11 +2337,22 @@ body.dark-mode .release-feature input:checked ~ small {
         <div class="col-12">
             <div class="card border-0 shadow-sm sales-dashboard-hero">
                 <div class="card-body p-4">
-                    <div class="row align-items-center">
-                        <div class="col-12">
+                    <div class="row align-items-center g-3">
+                        <div class="col-lg-8">
                             <span class="badge sales-overview-badge mb-2 px-3 py-2">Sales Overview</span>
                             <h1 class="h3 mb-1">Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h1>
                             <p class="text-muted mb-0 small">Sales Dashboard - Track clients, manage projects, and monitor performance metrics for business growth.</p>
+                        </div>
+                        <div class="col-lg-4 d-none d-lg-flex justify-content-end">
+                            <div class="evortix-3d-scene" aria-hidden="true">
+                                <div class="evortix-3d-platform">
+                                    <span class="evortix-3d-pillar pillar-one"></span>
+                                    <span class="evortix-3d-pillar pillar-two"></span>
+                                    <span class="evortix-3d-pillar pillar-three"></span>
+                                    <span class="evortix-3d-orbit"></span>
+                                    <span class="evortix-3d-core"><i class="fas fa-chart-line"></i></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2394,6 +2795,52 @@ body.dark-mode .release-feature input:checked ~ small {
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+(() => {
+    const canTilt = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+        && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!canTilt) {
+        return;
+    }
+
+    document.querySelectorAll('.sales-dashboard-hero, .stat-card-modern').forEach((card) => {
+        let animationFrame = null;
+
+        card.addEventListener('pointermove', (event) => {
+            if (animationFrame !== null) {
+                cancelAnimationFrame(animationFrame);
+            }
+
+            animationFrame = requestAnimationFrame(() => {
+                const bounds = card.getBoundingClientRect();
+                const pointerX = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
+                const pointerY = Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height));
+                const intensity = card.classList.contains('sales-dashboard-hero') ? 2.4 : 4.5;
+
+                card.style.setProperty('--tilt-x', `${((0.5 - pointerY) * intensity).toFixed(2)}deg`);
+                card.style.setProperty('--tilt-y', `${((pointerX - 0.5) * intensity).toFixed(2)}deg`);
+                card.style.setProperty('--pointer-x', `${(pointerX * 100).toFixed(1)}%`);
+                card.style.setProperty('--pointer-y', `${(pointerY * 100).toFixed(1)}%`);
+                card.classList.add('is-tilting');
+                animationFrame = null;
+            });
+        });
+
+        card.addEventListener('pointerleave', () => {
+            if (animationFrame !== null) {
+                cancelAnimationFrame(animationFrame);
+                animationFrame = null;
+            }
+
+            card.style.setProperty('--tilt-x', '0deg');
+            card.style.setProperty('--tilt-y', '0deg');
+            card.style.setProperty('--pointer-x', '50%');
+            card.style.setProperty('--pointer-y', '50%');
+            card.classList.remove('is-tilting');
+        });
+    });
+})();
+
 document.querySelectorAll('.delete-plan-form').forEach(function (form) {
     form.addEventListener('submit', async function (event) {
         if (form.dataset.confirmedSubmit === '1') {

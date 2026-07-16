@@ -3649,8 +3649,8 @@ body {
     --role-dashboard-card-tint: rgba(31, 99, 146, 0.055);
     --role-dashboard-grid-line: rgba(31, 99, 146, 0.055);
     --role-dashboard-node: rgba(34, 211, 238, 0.12);
-    --role-dashboard-shadow: 0 10px 24px rgba(15, 76, 129, 0.07);
-    --role-dashboard-shadow-hover: 0 14px 30px rgba(15, 76, 129, 0.10);
+    --role-dashboard-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88), 0 5px 0 rgba(15, 76, 129, 0.075), 0 16px 30px rgba(15, 76, 129, 0.09);
+    --role-dashboard-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 8px 0 rgba(15, 76, 129, 0.085), 0 26px 44px rgba(15, 76, 129, 0.14);
     --role-dashboard-glow: 0 0 18px rgba(34, 211, 238, 0.05);
     --role-dashboard-glow-hover: 0 0 24px rgba(34, 211, 238, 0.08);
 }
@@ -3669,7 +3669,9 @@ body {
     border: 1px solid var(--role-dashboard-border) !important;
     border-radius: 20px;
     box-shadow: var(--role-dashboard-shadow), var(--role-dashboard-glow) !important;
-    transition: border-color 0.22s ease, box-shadow 0.22s ease !important;
+    transform: perspective(1400px) translate3d(0, 0, 0);
+    transform-style: preserve-3d;
+    transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease !important;
     backdrop-filter: blur(12px);
     isolation: isolate;
     overflow: hidden;
@@ -3688,7 +3690,7 @@ body {
 .role-dashboard-shell.role-dashboard-shell .dashboard-mini-stat.dashboard-mini-stat:hover {
     border-color: var(--role-dashboard-border-strong) !important;
     box-shadow: var(--role-dashboard-shadow-hover), var(--role-dashboard-glow-hover) !important;
-    transform: none !important;
+    transform: perspective(1400px) translate3d(0, -5px, 12px) rotateX(0.6deg) !important;
 }
 
 .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card,
@@ -3956,8 +3958,8 @@ body {
     --role-dashboard-border-strong: rgba(138, 210, 255, 0.20);
     --role-dashboard-surface: rgba(10, 22, 35, 0.88);
     --role-dashboard-head: rgba(12, 31, 49, 0.96);
-    --role-dashboard-shadow: 0 14px 32px rgba(0, 0, 0, 0.30);
-    --role-dashboard-shadow-hover: 0 18px 40px rgba(0, 0, 0, 0.36);
+    --role-dashboard-shadow: inset 0 1px 0 rgba(138, 210, 255, 0.07), 0 5px 0 rgba(0, 0, 0, 0.48), 0 18px 34px rgba(0, 0, 0, 0.32);
+    --role-dashboard-shadow-hover: inset 0 1px 0 rgba(138, 210, 255, 0.1), 0 8px 0 rgba(0, 0, 0, 0.52), 0 28px 48px rgba(0, 0, 0, 0.4);
     --role-dashboard-glow: 0 0 26px rgba(76, 184, 255, 0.07);
     --role-dashboard-glow-hover: 0 0 32px rgba(76, 184, 255, 0.12);
     --role-dashboard-card-sheen: rgba(255, 255, 255, 0.035);
@@ -3980,6 +3982,271 @@ body {
     --role-dashboard-border-strong: var(--role-stat-border-strong);
 }
 
+/* Shared 3D role banners and tactile dashboard surfaces */
+.role-dashboard-shell.role-dashboard-shell > .row:first-child .card.card.role-dashboard-hero {
+    --role-hero-tilt-x: 0deg;
+    --role-hero-tilt-y: 0deg;
+    --role-hero-pointer-x: 50%;
+    --role-hero-pointer-y: 50%;
+    --role-hero-lift: 0px;
+    min-height: 184px;
+    overflow: hidden;
+    transform: perspective(1150px) rotateX(var(--role-hero-tilt-x)) rotateY(var(--role-hero-tilt-y)) translate3d(0, var(--role-hero-lift), 0) !important;
+    transform-style: preserve-3d;
+    will-change: transform;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.92),
+        0 7px 0 rgba(15, 76, 129, 0.1),
+        0 22px 42px rgba(15, 76, 129, 0.15),
+        0 0 34px rgba(34, 211, 238, 0.08) !important;
+}
+
+.role-dashboard-shell.role-dashboard-shell > .row:first-child .card.card.role-dashboard-hero:hover {
+    --role-hero-lift: -4px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.94),
+        0 9px 0 rgba(15, 76, 129, 0.1),
+        0 30px 54px rgba(15, 76, 129, 0.2),
+        0 0 42px rgba(34, 211, 238, 0.12) !important;
+}
+
+.role-dashboard-hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0;
+    background: radial-gradient(circle at var(--role-hero-pointer-x) var(--role-hero-pointer-y), rgba(255, 255, 255, 0.76), transparent 34%);
+    transition: opacity 0.2s ease;
+}
+
+.role-dashboard-hero.is-role-hero-tilting::after {
+    opacity: 0.42;
+}
+
+.role-dashboard-hero > .card-body {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    transform: translateZ(22px);
+    transform-style: preserve-3d;
+}
+
+.role-dashboard-hero .role-dashboard-hero-copy {
+    position: relative;
+    z-index: 2;
+    transform: translateZ(24px);
+}
+
+.role-dashboard-hero .role-dashboard-hero-copy .badge {
+    transform: translateZ(14px);
+}
+
+.role-3d-scene {
+    --role-scene-accent: #15557f;
+    --role-scene-accent-light: #41a7d8;
+    --role-scene-rgb: 31, 99, 146;
+    position: relative;
+    width: min(100%, 300px);
+    height: 138px;
+    margin-left: auto;
+    pointer-events: none;
+    perspective: 900px;
+    transform-style: preserve-3d;
+}
+
+.role-3d-scene--admin,
+.role-3d-scene--architect,
+.role-3d-scene--developer,
+.role-3d-scene--expert,
+.role-3d-scene--qa,
+.role-3d-scene--sul {
+    --role-scene-accent: #15557f;
+    --role-scene-accent-light: #41a7d8;
+    --role-scene-rgb: 31, 99, 146;
+}
+
+.role-3d-platform {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 220px;
+    height: 112px;
+    border: 1px solid rgba(var(--role-scene-rgb), 0.26);
+    border-radius: 28px;
+    background:
+        linear-gradient(rgba(var(--role-scene-rgb), 0.09) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(var(--role-scene-rgb), 0.09) 1px, transparent 1px),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(var(--role-scene-rgb), 0.09));
+    background-size: 22px 22px, 22px 22px, 100% 100%;
+    box-shadow:
+        -9px 12px 0 rgba(var(--role-scene-rgb), 0.13),
+        -18px 25px 38px rgba(15, 76, 129, 0.18),
+        0 0 30px rgba(var(--role-scene-rgb), 0.14);
+    transform: translate(-50%, -50%) rotateX(61deg) rotateZ(-25deg);
+    transform-style: preserve-3d;
+    animation: rolePlatformFloat 5s ease-in-out infinite;
+}
+
+.role-3d-core,
+.role-3d-node {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.68);
+    background: linear-gradient(145deg, var(--role-scene-accent-light), var(--role-scene-accent));
+    box-shadow:
+        inset 3px 3px 7px rgba(255, 255, 255, 0.3),
+        inset -4px -5px 9px rgba(7, 48, 78, 0.2),
+        -6px 9px 0 rgba(var(--role-scene-rgb), 0.38),
+        -11px 18px 22px rgba(var(--role-scene-rgb), 0.24);
+}
+
+.role-3d-core {
+    left: 50%;
+    top: 50%;
+    width: 68px;
+    height: 68px;
+    border-radius: 22px;
+    font-size: 1.5rem;
+    transform: translate(-50%, -68%) translateZ(58px) rotateZ(25deg) rotateX(-12deg);
+}
+
+.role-3d-node {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    transform: translateZ(30px) rotateZ(25deg) rotateX(-10deg);
+    animation: roleNodePulse 3.6s ease-in-out infinite;
+}
+
+.role-3d-node--one {
+    left: 24px;
+    bottom: 25px;
+}
+
+.role-3d-node--two {
+    right: 22px;
+    top: 20px;
+    animation-delay: -1.8s;
+}
+
+.role-3d-orbit {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 154px;
+    height: 60px;
+    border: 2px solid rgba(var(--role-scene-rgb), 0.38);
+    border-left-color: rgba(var(--role-scene-rgb), 0.08);
+    border-radius: 50%;
+    transform: translate(-50%, -72%) translateZ(74px) rotateZ(18deg);
+    animation: roleOrbitSpin 7s linear infinite;
+}
+
+.role-3d-orbit::after {
+    content: "";
+    position: absolute;
+    right: 13px;
+    top: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--role-scene-accent-light);
+    box-shadow: 0 0 0 5px rgba(var(--role-scene-rgb), 0.12), 0 0 18px var(--role-scene-accent-light);
+}
+
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .ms-3,
+.role-dashboard-shell.role-dashboard-shell .admin-stat-icon,
+.role-dashboard-shell.role-dashboard-shell .qa-stat-icon,
+.role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern .stat-icon {
+    width: 50px;
+    height: 50px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(31, 99, 146, 0.15);
+    border-radius: 16px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(31, 99, 146, 0.08)) !important;
+    box-shadow:
+        inset 2px 2px 0 rgba(255, 255, 255, 0.9),
+        0 5px 0 rgba(31, 99, 146, 0.12),
+        0 12px 20px rgba(31, 99, 146, 0.13) !important;
+    transform: translateZ(34px) rotate(-4deg);
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+.role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:hover .ms-3,
+.role-dashboard-shell.role-dashboard-shell .admin-stat-card:hover .admin-stat-icon,
+.role-dashboard-shell.role-dashboard-shell .qa-stat-card:hover .qa-stat-icon,
+.role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:hover .stat-icon {
+    transform: translateZ(46px) rotate(0deg) scale(1.04);
+}
+
+@keyframes rolePlatformFloat {
+    0%, 100% { transform: translate(-50%, -50%) rotateX(61deg) rotateZ(-25deg) translateZ(0); }
+    50% { transform: translate(-50%, -54%) rotateX(61deg) rotateZ(-25deg) translateZ(8px); }
+}
+
+@keyframes roleNodePulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.12) drop-shadow(0 0 6px rgba(var(--role-scene-rgb), 0.3)); }
+}
+
+@keyframes roleOrbitSpin {
+    to { transform: translate(-50%, -72%) translateZ(74px) rotateZ(378deg); }
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell > .row:first-child .card.card.role-dashboard-hero {
+    box-shadow:
+        inset 0 1px 0 rgba(138, 210, 255, 0.08),
+        0 7px 0 rgba(0, 0, 0, 0.58),
+        0 24px 44px rgba(0, 0, 0, 0.36),
+        0 0 34px rgba(34, 211, 238, 0.07) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-3d-platform {
+    background:
+        linear-gradient(rgba(var(--role-scene-rgb), 0.13) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(var(--role-scene-rgb), 0.13) 1px, transparent 1px),
+        linear-gradient(145deg, rgba(18, 49, 72, 0.98), rgba(5, 21, 35, 0.98));
+    background-size: 22px 22px, 22px 22px, 100% 100%;
+    box-shadow: -9px 12px 0 rgba(0, 0, 0, 0.62), -18px 25px 38px rgba(0, 0, 0, 0.42), 0 0 30px rgba(var(--role-scene-rgb), 0.13);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .ms-3,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .admin-stat-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .qa-stat-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern .stat-icon {
+    background: linear-gradient(145deg, rgba(23, 63, 91, 0.98), rgba(7, 25, 41, 0.98)) !important;
+    border-color: rgba(138, 210, 255, 0.18);
+    box-shadow: inset 2px 2px 0 rgba(138, 210, 255, 0.1), 0 5px 0 rgba(0, 0, 0, 0.56), 0 14px 22px rgba(0, 0, 0, 0.32) !important;
+}
+
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+    .role-dashboard-shell.role-dashboard-shell .card.card,
+    .role-dashboard-shell.role-dashboard-shell .stat-card.stat-card,
+    .role-dashboard-shell.role-dashboard-shell .stat-card-modern.stat-card-modern,
+    .role-dashboard-shell.role-dashboard-shell .qa-stat-card.qa-stat-card,
+    .role-dashboard-shell.role-dashboard-shell .dashboard-mini-stat.dashboard-mini-stat,
+    .role-dashboard-shell.role-dashboard-shell > .row:first-child .card.card.role-dashboard-hero {
+        --role-hero-tilt-x: 0deg !important;
+        --role-hero-tilt-y: 0deg !important;
+        --role-hero-lift: 0px !important;
+        transform: none !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .role-3d-platform,
+    .role-3d-node,
+    .role-3d-orbit {
+        animation: none !important;
+    }
+}
+
 /* App-wide Sales-inspired component consistency */
 :root {
     --app-ui-primary: #1f6392;
@@ -3988,8 +4255,8 @@ body {
     --app-ui-head: rgba(248, 252, 255, 0.96);
     --app-ui-border: rgba(31, 99, 146, 0.14);
     --app-ui-border-strong: rgba(34, 211, 238, 0.24);
-    --app-ui-shadow: 0 10px 24px rgba(15, 76, 129, 0.07);
-    --app-ui-shadow-hover: 0 14px 30px rgba(15, 76, 129, 0.10);
+    --app-ui-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88), 0 5px 0 rgba(15, 76, 129, 0.075), 0 16px 30px rgba(15, 76, 129, 0.09);
+    --app-ui-shadow-hover: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 8px 0 rgba(15, 76, 129, 0.085), 0 26px 44px rgba(15, 76, 129, 0.14);
     --app-ui-glow: 0 0 18px rgba(34, 211, 238, 0.05);
     --app-ui-text: #212529;
     --app-ui-muted: #6c757d;
@@ -4016,7 +4283,9 @@ body {
     border: 1px solid var(--app-ui-border) !important;
     border-radius: 20px;
     box-shadow: var(--app-ui-shadow), var(--app-ui-glow) !important;
-    transition: border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease !important;
+    transform: perspective(1400px) translate3d(0, 0, 0);
+    transform-style: preserve-3d;
+    transition: border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease, transform 0.22s ease !important;
     backdrop-filter: blur(12px);
     isolation: isolate;
     overflow: hidden;
@@ -4026,6 +4295,7 @@ body {
 #page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) .card:hover {
     border-color: var(--app-ui-border-strong) !important;
     box-shadow: var(--app-ui-shadow-hover), 0 0 24px rgba(34, 211, 238, 0.08) !important;
+    transform: perspective(1400px) translate3d(0, -5px, 12px) rotateX(0.6deg) !important;
 }
 
 #page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) :is(.stat-card-modern, .stat-card, .stat-card-mini, .qa-stat-card, .client-card, .metric-card, .overview-project-card, .project-card, .report-card, .summary-card, .info-card, .review-card) {
@@ -4040,13 +4310,15 @@ body {
     isolation: isolate;
     overflow: hidden;
     position: relative;
-    transition: border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease !important;
+    transform: perspective(1400px) translate3d(0, 0, 0);
+    transform-style: preserve-3d;
+    transition: border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease, transform 0.22s ease !important;
 }
 
 #page-content-wrapper > :is(.container, .container-fluid):not(.sales-dashboard-shell):not(.role-dashboard-shell) :is(.stat-card-modern, .stat-card, .stat-card-mini, .qa-stat-card, .client-card, .metric-card, .overview-project-card, .project-card, .report-card, .summary-card, .info-card, .review-card):hover {
     border-color: var(--app-ui-border-strong) !important;
     box-shadow: var(--app-ui-shadow-hover), 0 0 24px rgba(34, 211, 238, 0.08) !important;
-    transform: none !important;
+    transform: perspective(1400px) translate3d(0, -5px, 12px) rotateX(0.6deg) !important;
 }
 
 #page-content-wrapper :is(.chart-card, .dashboard-chart-card) {
@@ -4232,8 +4504,8 @@ body {
     --app-ui-head: rgba(12, 31, 49, 0.96);
     --app-ui-border: rgba(138, 210, 255, 0.10);
     --app-ui-border-strong: rgba(138, 210, 255, 0.20);
-    --app-ui-shadow: 0 14px 32px rgba(0, 0, 0, 0.30);
-    --app-ui-shadow-hover: 0 18px 40px rgba(0, 0, 0, 0.36);
+    --app-ui-shadow: inset 0 1px 0 rgba(138, 210, 255, 0.07), 0 5px 0 rgba(0, 0, 0, 0.48), 0 18px 34px rgba(0, 0, 0, 0.32);
+    --app-ui-shadow-hover: inset 0 1px 0 rgba(138, 210, 255, 0.1), 0 8px 0 rgba(0, 0, 0, 0.52), 0 28px 48px rgba(0, 0, 0, 0.4);
     --app-ui-glow: 0 0 26px rgba(76, 184, 255, 0.07);
     --app-ui-text: #d8e6f3;
     --app-ui-muted: #90aeca;
@@ -4254,4 +4526,64 @@ body {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper .table {
     color: var(--app-ui-text);
+}
+
+/* System-wide 3D experience for non-dashboard pages */
+#page-content-wrapper.app-3d-enabled {
+    perspective: 1600px;
+}
+
+#page-content-wrapper .app-3d-surface.app-3d-surface {
+    border-color: var(--app-ui-border) !important;
+    box-shadow: var(--app-ui-shadow), var(--app-ui-glow) !important;
+    transform: perspective(1400px) translate3d(0, 0, 0) !important;
+    transform-style: preserve-3d;
+    transition: border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease !important;
+}
+
+#page-content-wrapper .app-3d-surface.app-3d-surface:hover {
+    border-color: var(--app-ui-border-strong) !important;
+    box-shadow: var(--app-ui-shadow-hover), 0 0 24px rgba(34, 211, 238, 0.08) !important;
+    transform: perspective(1400px) translate3d(0, -5px, 12px) rotateX(0.6deg) !important;
+}
+
+#page-content-wrapper .table-responsive {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78), 0 4px 0 rgba(15, 76, 129, 0.06), 0 13px 25px rgba(15, 76, 129, 0.075);
+}
+
+#page-content-wrapper .form-control,
+#page-content-wrapper .form-select {
+    box-shadow: inset 0 2px 5px rgba(15, 76, 129, 0.055);
+}
+
+#page-content-wrapper .btn:not(.btn-close):not(.page-header-help-btn) {
+    box-shadow: 0 3px 0 rgba(15, 76, 129, 0.24), 0 7px 13px rgba(15, 76, 129, 0.11);
+    transform: translateY(-1px) !important;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.16s ease !important;
+}
+
+#page-content-wrapper .btn:not(.btn-close):not(.page-header-help-btn):hover {
+    box-shadow: 0 5px 0 rgba(15, 76, 129, 0.26), 0 11px 18px rgba(15, 76, 129, 0.15);
+    transform: translateY(-3px) !important;
+}
+
+#page-content-wrapper .btn:not(.btn-close):not(.page-header-help-btn):active {
+    box-shadow: 0 1px 0 rgba(15, 76, 129, 0.26), 0 4px 8px rgba(15, 76, 129, 0.1);
+    transform: translateY(1px) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper .table-responsive {
+    box-shadow: inset 0 1px 0 rgba(138, 210, 255, 0.06), 0 4px 0 rgba(0, 0, 0, 0.38), 0 14px 26px rgba(0, 0, 0, 0.24);
+}
+
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+    #page-content-wrapper .app-3d-surface.app-3d-surface,
+    #page-content-wrapper .app-3d-surface.app-3d-surface:hover {
+        transform: none !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    #page-content-wrapper .btn:not(.btn-close):not(.page-header-help-btn) {
+        transform: none !important;
+    }
 }
