@@ -487,8 +487,6 @@ $appUserContext = [
         }
     </style>
 
-    <form method="POST" action="<?php echo BASE_URL; ?>logout.php" id="logoutForm" class="d-none"></form>
-
     <div class="modal fade app-logout-modal" id="logoutConfirmModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content border-0 rounded-4 shadow">
@@ -509,7 +507,7 @@ $appUserContext = [
                 <div class="modal-footer border-0">
                     <div class="app-logout-actions d-flex flex-column flex-sm-row justify-content-center gap-2">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Stay signed in</button>
-                        <button type="button" class="btn btn-primary" id="logoutConfirmBtn" style="background:linear-gradient(180deg,#0d6786,#0a5570);border:0;">Yes, log me out</button>
+                        <button type="button" class="btn btn-primary" id="logoutConfirmBtn" data-logout-url="<?php echo htmlspecialchars(BASE_URL . 'logout.php', ENT_QUOTES, 'UTF-8'); ?>" style="background:linear-gradient(180deg,#0d6786,#0a5570);border:0;">Yes, log me out</button>
                     </div>
                 </div>
             </div>
@@ -528,7 +526,6 @@ $appUserContext = [
         (function () {
             const logoutTriggerBtn = document.getElementById('logoutTriggerBtn');
             const logoutConfirmBtn = document.getElementById('logoutConfirmBtn');
-            const logoutForm = document.getElementById('logoutForm');
             const logoutLoadingOverlay = document.getElementById('logoutLoadingOverlay');
 
             function showLogoutLoading() {
@@ -560,15 +557,33 @@ $appUserContext = [
                 });
             }
 
-            if (logoutConfirmBtn && logoutForm) {
+            if (logoutConfirmBtn) {
                 logoutConfirmBtn.addEventListener('click', function () {
+                    if (logoutConfirmBtn.disabled) {
+                        return;
+                    }
+
+                    logoutConfirmBtn.disabled = true;
                     showLogoutLoading();
+
+                    // Build the POST form only when it is needed and attach it directly
+                    // to <body>. A form rendered in the navbar can be discarded by the
+                    // browser when a page happens to include the navbar inside another
+                    // form, which previously made logout work only on some screens.
+                    const logoutForm = document.createElement('form');
+                    logoutForm.method = 'POST';
+                    logoutForm.action = logoutConfirmBtn.dataset.logoutUrl;
+                    logoutForm.style.display = 'none';
+                    document.body.appendChild(logoutForm);
                     logoutForm.submit();
                 });
             }
 
             window.addEventListener('pageshow', function () {
                 hideLogoutLoading();
+                if (logoutConfirmBtn) {
+                    logoutConfirmBtn.disabled = false;
+                }
             });
         })();
     </script>
