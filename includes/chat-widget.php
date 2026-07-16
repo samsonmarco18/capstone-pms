@@ -273,13 +273,19 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const speech = botFloat.querySelector('.chat-bot-speech');
-        speech?.classList.remove('evortix-project-notification');
-        if (speech) speech.style.pointerEvents = '';
+        speech?.classList.remove('evortix-project-notification', 'evortix-dashboard-summary');
+        if (speech) {
+            speech.hidden = false;
+            speech.style.pointerEvents = '';
+            speech.removeAttribute('role');
+            speech.removeAttribute('data-dashboard-summary-dismissed');
+        }
         speech?.querySelector('.evortix-project-notification-copy')?.remove();
         speech?.querySelector('.evortix-project-notification-action')?.remove();
-        const title = botFloat.querySelector('[data-chat-bot-type="title"]');
+        let title = botFloat.querySelector('[data-chat-bot-type="title"]');
         if (!title) {
-            return;
+            speech.innerHTML = '<strong data-chat-bot-type="title" data-chat-bot-text="Hi, good day!"></strong>';
+            title = speech.querySelector('[data-chat-bot-type="title"]');
         }
 
         clearTimeout(botTypeTimer);
@@ -331,6 +337,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const speech = botFloat.querySelector('.chat-bot-speech');
         if (!speech) return;
 
+        speech.hidden = false;
+        speech.classList.remove('evortix-dashboard-summary');
+        speech.removeAttribute('role');
+        speech.removeAttribute('data-dashboard-summary-dismissed');
         speech.innerHTML = '';
         speech.classList.add('evortix-project-notification');
         speech.setAttribute('aria-hidden', 'false');
@@ -359,13 +369,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (evortixProjectTeamNotification) {
         const storageKey = `evortix.projectNotification.${evortixProjectTeamNotification.id}`;
-        if (!sessionStorage.getItem(storageKey)) {
+        const announceProjectNotification = () => {
+            if (sessionStorage.getItem(storageKey)) return;
             sessionStorage.setItem(storageKey, '1');
             window.setTimeout(() => window.evortixAnnounceNotification(
                 evortixProjectTeamNotification.title,
                 evortixProjectTeamNotification.message,
                 evortixProjectTeamNotification.action_url
             ), 700);
+        };
+        if (window.evortixDashboardWelcomeActive) {
+            document.addEventListener('evortix:dashboard-welcome-complete', announceProjectNotification, { once:true });
+        } else {
+            announceProjectNotification();
         }
     }
 
@@ -388,7 +404,7 @@ document.addEventListener('DOMContentLoaded', function () {
             botFloat.classList.add('is-leaving-bed', 'is-preparing-speech');
             window.chatBotWidgetRobot?.wake?.();
             window.setTimeout(function () {
-                window.chatBotFloatRobot?.wink?.('right');
+                window.chatBotFloatRobot?.wink?.('right', 2600);
             }, 420);
             botTransitionTimer = window.setTimeout(function () {
                 botFloat.classList.remove('is-leaving-bed');
@@ -429,7 +445,11 @@ document.addEventListener('DOMContentLoaded', function () {
         botFloatPointer = {
             id: event.pointerId,
             offsetX: event.clientX - rect.left,
-            offsetY: event.clientY - rect.top
+            offsetY: event.clientY - rect.top,
+            startX: event.clientX,
+            startY: event.clientY,
+            moved: false,
+            onRobot: true
         };
         botFloat.classList.add('is-dragging');
         botFloat.setPointerCapture?.(event.pointerId);
@@ -438,6 +458,10 @@ document.addEventListener('DOMContentLoaded', function () {
     botFloat?.addEventListener('pointermove', function (event) {
         if (!botFloatPointer || botFloatPointer.id !== event.pointerId) {
             return;
+        }
+
+        if (Math.hypot(event.clientX - botFloatPointer.startX, event.clientY - botFloatPointer.startY) > 6) {
+            botFloatPointer.moved = true;
         }
 
         const next = clampBotFloatPosition(
@@ -455,9 +479,18 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        const shouldReact = event.type === 'pointerup'
+            && !botFloatPointer.moved
+            && botFloatPointer.onRobot
+            && !botFloat.hidden
+            && !botFloat.classList.contains('is-leaving-bed')
+            && !botFloat.classList.contains('is-returning-bed');
         botFloatPointer = null;
         botFloat.classList.remove('is-dragging');
         botFloat.releasePointerCapture?.(event.pointerId);
+        if (shouldReact) {
+            window.chatBotFloatRobot?.setEmotion?.('clicked', 1400);
+        }
     };
 
     botFloat?.addEventListener('pointerup', finishBotFloatDrag);

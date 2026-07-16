@@ -75,6 +75,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['login_time'] = time();
                 $_SESSION['last_activity'] = time();
                 $_SESSION['ip_address'] = $ipAddress;
+                if ($user['role'] === 'sales') {
+                    $_SESSION['evortix_sales_dashboard_welcome_pending'] = true;
+                }
 
                 $updateStmt = $conn->prepare('UPDATE users SET last_login = NOW() WHERE id = ?');
                 $updateStmt->bind_param('i', $user['id']);

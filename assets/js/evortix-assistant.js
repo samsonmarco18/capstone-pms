@@ -13,171 +13,158 @@
     const assistantMarkup = id => `
         <svg class="evx-assistant" viewBox="0 0 220 250" role="img" aria-label="Evortix assistant">
             <defs>
-                <linearGradient id="evx-shell-${id}" x1="0" y1="0" x2="1" y2="1">
+                <linearGradient id="evx-shell-${id}" x1=".12" y1=".05" x2=".86" y2=".96">
                     <stop offset="0" stop-color="#ffffff"/>
-                    <stop offset=".55" stop-color="#edf4fb"/>
-                    <stop offset="1" stop-color="#b9c9d9"/>
+                    <stop offset=".34" stop-color="#fbfcfc"/>
+                    <stop offset=".7" stop-color="#e1e5e4"/>
+                    <stop offset="1" stop-color="#aeb5b4"/>
                 </linearGradient>
-                <linearGradient id="evx-shell-shadow-${id}" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stop-color="#eaf3fb"/>
-                    <stop offset="1" stop-color="#8fa7ba"/>
+                <linearGradient id="evx-shell-side-${id}" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#f8faf9"/>
+                    <stop offset=".55" stop-color="#d7dcda"/>
+                    <stop offset="1" stop-color="#969e9d"/>
                 </linearGradient>
-                <linearGradient id="evx-blue-${id}" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0" stop-color="#4ecbff"/>
-                    <stop offset=".48" stop-color="#0b8ef0"/>
-                    <stop offset="1" stop-color="#0862c6"/>
+                <linearGradient id="evx-shell-lower-${id}" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#ffffff"/>
+                    <stop offset=".52" stop-color="#e8ebea"/>
+                    <stop offset="1" stop-color="#a8afad"/>
                 </linearGradient>
-                <linearGradient id="evx-logo-blue-${id}" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0" stop-color="#39a9ff"/>
-                    <stop offset=".45" stop-color="#0878df"/>
-                    <stop offset="1" stop-color="#06469d"/>
-                </linearGradient>
-                <symbol id="evx-system-logo-${id}" viewBox="0 0 100 100">
-                    <path d="M18 27 L69 2 L87 11 L24 44 L18 40Z" fill="url(#evx-logo-blue-${id})" stroke="#062f6d" stroke-width="2.4" stroke-linejoin="round"/>
-                    <path d="M8 61 L57 36 L57 54 L22 73 L8 67Z" fill="url(#evx-logo-blue-${id})" stroke="#062f6d" stroke-width="2.4" stroke-linejoin="round"/>
-                    <path d="M41 82 L91 57 L91 76 L57 96 L41 89Z" fill="url(#evx-logo-blue-${id})" stroke="#062f6d" stroke-width="2.4" stroke-linejoin="round"/>
-                    <path d="M21 28 L69 5 M11 61 L55 39 M44 82 L89 60" stroke="#67bdff" stroke-width="2" stroke-linecap="round" opacity=".62"/>
-                </symbol>
-                <radialGradient id="evx-face-${id}" cx="50%" cy="35%" r="80%">
-                    <stop offset="0" stop-color="#123a62"/>
-                    <stop offset=".58" stop-color="#061d38"/>
-                    <stop offset="1" stop-color="#020d1c"/>
+                <radialGradient id="evx-face-${id}" cx="43%" cy="24%" r="88%">
+                    <stop offset="0" stop-color="#202322"/>
+                    <stop offset=".46" stop-color="#0b0e0d"/>
+                    <stop offset="1" stop-color="#010202"/>
                 </radialGradient>
-                <radialGradient id="evx-eye-${id}" cx="50%" cy="40%" r="65%">
-                    <stop offset="0" stop-color="#d5ffff"/>
-                    <stop offset=".3" stop-color="#65f6ff"/>
-                    <stop offset="1" stop-color="#09aef1"/>
+                <radialGradient id="evx-eye-${id}" cx="38%" cy="30%" r="72%">
+                    <stop offset="0" stop-color="#8ff5ff"/>
+                    <stop offset=".28" stop-color="#35d5f5"/>
+                    <stop offset="1" stop-color="#0098cf"/>
                 </radialGradient>
-                <filter id="evx-shadow-${id}" x="-40%" y="-40%" width="180%" height="180%">
+                <linearGradient id="evx-neck-light-${id}" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0" stop-color="#087eaa" stop-opacity=".12"/>
+                    <stop offset=".5" stop-color="#79ecff"/>
+                    <stop offset="1" stop-color="#087eaa" stop-opacity=".12"/>
+                </linearGradient>
+                <pattern id="evx-led-${id}" width="3.2" height="3.2" patternUnits="userSpaceOnUse">
+                    <circle cx="1" cy="1" r=".62" fill="#d1fbff" opacity=".4"/>
+                </pattern>
+                <filter id="evx-shadow-${id}" x="-50%" y="-50%" width="200%" height="200%">
                     <feGaussianBlur stdDeviation="5"/>
                 </filter>
                 <filter id="evx-glow-${id}" x="-100%" y="-100%" width="300%" height="300%">
-                    <feGaussianBlur stdDeviation="2.6" result="blur"/>
+                    <feGaussianBlur stdDeviation="2.2" result="blur"/>
                     <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                 </filter>
             </defs>
 
-            <ellipse class="evx-ground-shadow" cx="110" cy="229" rx="47" ry="8" fill="#4b789a" opacity=".22" filter="url(#evx-shadow-${id})"/>
+            <ellipse class="evx-ground-shadow" cx="110" cy="229" rx="43" ry="7" fill="#80908f" opacity=".2" filter="url(#evx-shadow-${id})"/>
 
-            <g class="evx-sleep-scene" data-robot-part="bed" aria-label="Evortix sleeping in bed">
-                <ellipse cx="110" cy="220" rx="92" ry="10" fill="#255984" opacity=".22" filter="url(#evx-shadow-${id})"/>
-                <path d="M31 112 Q31 96 47 96 H166 Q184 96 184 114 V193 H31Z" fill="url(#evx-shell-${id})" stroke="#557c9d" stroke-width="3.5"/>
-                <path d="M39 122 Q42 108 57 108 H160 Q174 108 177 122 L174 181 H38Z" fill="#168bea" stroke="#075ba9" stroke-width="3"/>
-                <path class="evx-bed-pillow" d="M65 112 Q107 99 150 112 L148 139 Q107 151 65 139Z" fill="#e4f2ff" stroke="#72a8d4" stroke-width="2.4"/>
-                <path d="M30 177 H191 V207 Q191 217 181 217 H37 Q26 217 26 206 V191 Q26 181 30 177Z" fill="url(#evx-shell-${id})" stroke="#4c7394" stroke-width="3.5"/>
-                <path d="M35 184 H183 V207 Q183 211 178 211 H40 Q34 211 34 205Z" fill="url(#evx-blue-${id})" stroke="#064f99" stroke-width="2.5"/>
-                <rect x="51" y="190" width="116" height="16" rx="8" fill="#071d39" stroke="#5ee8ff" stroke-width="2"/>
-                <use href="#evx-system-logo-${id}" x="101" y="189" width="18" height="18"/>
+            <g class="evx-sleep-scene" data-robot-part="bed" aria-label="Evortix charging">
+                <ellipse class="evx-sleep-dock-shadow" cx="110" cy="222" rx="58" ry="8" fill="#697675" opacity=".2" filter="url(#evx-shadow-${id})"/>
+                <ellipse class="evx-sleep-dock" cx="110" cy="216" rx="55" ry="13" fill="url(#evx-shell-side-${id})" stroke="#aeb6b4" stroke-width="1.5"/>
+                <ellipse class="evx-sleep-dock-light" cx="110" cy="214" rx="39" ry="7" fill="#081111" stroke="#38cceb" stroke-width="2"/>
                 <g class="evx-sleeper" data-robot-part="sleeper">
-                    <rect x="95" y="47" width="25" height="11" rx="6" fill="url(#evx-shell-shadow-${id})"/>
-                    <path d="M51 93 Q54 58 82 52 Q108 46 134 52 Q158 59 163 93 L157 126 Q108 143 59 126Z" fill="url(#evx-shell-${id})" stroke="#b3bdcb" stroke-width="2.6"/>
-                    <rect x="42" y="82" width="15" height="38" rx="8" fill="url(#evx-shell-shadow-${id})"/>
-                    <rect x="158" y="82" width="15" height="38" rx="8" fill="url(#evx-shell-shadow-${id})"/>
-                    <rect x="59" y="69" width="98" height="63" rx="26" fill="url(#evx-face-${id})" stroke="#041426" stroke-width="2.5"/>
-                    <path d="M77 104 Q86 113 95 104 M119 104 Q128 113 137 104" fill="none" stroke="#51f2ff" stroke-width="6" stroke-linecap="round"/>
-                    <path d="M99 116 Q107 123 115 116" fill="none" stroke="#51f2ff" stroke-width="4" stroke-linecap="round"/>
-                    <path d="M73 117 l5 -2 M137 115 l5 2" stroke="#ff86a8" stroke-width="2.5" stroke-linecap="round"/>
+                    <path d="M84 140 C75 148 72 161 76 176 C80 193 93 206 110 211 C127 206 140 193 144 176 C148 161 145 148 136 140 C129 135 119 132 110 132 C101 132 91 135 84 140Z" fill="url(#evx-shell-lower-${id})" stroke="#b0b6b5" stroke-width="1.7"/>
+                    <ellipse cx="110" cy="134" rx="20" ry="5" fill="url(#evx-neck-light-${id})" opacity=".8"/>
+                    <path d="M45 77 C46 38 84 17 110 17 C136 17 174 38 175 77 L171 104 C166 128 142 139 110 139 C78 139 54 128 49 104Z" fill="url(#evx-shell-${id})" stroke="#adb4b2" stroke-width="2"/>
+                    <rect x="38" y="67" width="13" height="35" rx="7" fill="url(#evx-shell-side-${id})"/>
+                    <rect x="169" y="67" width="13" height="35" rx="7" fill="url(#evx-shell-side-${id})"/>
+                    <path d="M53 76 C55 49 77 38 110 38 C143 38 165 49 167 76 L164 98 C160 116 140 124 110 124 C80 124 60 116 56 98Z" fill="url(#evx-face-${id})" stroke="#262b2a" stroke-width="1.7"/>
+                    <path d="M75 84 Q84 94 94 84 M126 84 Q136 94 145 84" fill="none" stroke="#2ec8ee" stroke-width="6" stroke-linecap="round" filter="url(#evx-glow-${id})"/>
+                    <path d="M69 38 L64 9 M151 38 L156 9" stroke="#aeb4b2" stroke-width="2.2" stroke-linecap="round"/>
                 </g>
-                <path class="evx-sleep-blanket" d="M36 128 Q75 116 113 122 Q151 117 180 134 L177 181 H36Z" fill="url(#evx-blue-${id})" stroke="#075eaf" stroke-width="3"/>
-                <path class="evx-sleep-blanket" d="M45 144 Q108 131 173 146 M45 162 Q109 149 175 163" fill="none" stroke="#78ccff" stroke-width="1.7" opacity=".5"/>
-                <path d="M58 151 l4 7 8 1-6 5 2 8-8-4-7 4 2-8-6-5 8-1Z M131 143 l3 5 6 1-5 4 2 6-6-3-5 3 1-6-4-4 6-1Z" fill="#a7dcff" opacity=".58"/>
                 <g class="evx-sleep-z" aria-hidden="true">
-                    <text x="169" y="64" fill="#168ff0" font-family="Arial, sans-serif" font-size="20" font-weight="900">Z</text>
-                    <text x="188" y="42" fill="#54bdff" font-family="Arial, sans-serif" font-size="14" font-weight="900">Z</text>
+                    <text x="171" y="65" fill="#25bee9" font-family="Arial, sans-serif" font-size="20" font-weight="800">Z</text>
+                    <text x="190" y="42" fill="#68ddf6" font-family="Arial, sans-serif" font-size="14" font-weight="800">Z</text>
                 </g>
             </g>
 
             <g class="evx-character" data-robot-part="character">
-                <g class="evx-legs evx-reference-legs" data-robot-part="legs">
-                    <g class="evx-leg evx-left-leg" data-robot-part="left-leg">
-                        <path d="M79 178 C70 187 68 204 72 216 L91 216 C95 201 95 187 91 178Z" fill="url(#evx-shell-${id})" stroke="#7894ac" stroke-width="2"/>
-                        <path d="M67 212 Q82 207 97 214 L96 224 Q79 230 64 221Z" fill="url(#evx-shell-${id})" stroke="#173c5e" stroke-width="2.4"/>
-                        <path d="M70 216 Q82 214 94 217" fill="none" stroke="#178bea" stroke-width="4" stroke-linecap="round"/>
-                    </g>
-                    <g class="evx-leg evx-right-leg" data-robot-part="right-leg">
-                        <path d="M129 178 C125 188 125 202 129 216 L148 216 C152 203 150 187 141 178Z" fill="url(#evx-shell-${id})" stroke="#7894ac" stroke-width="2"/>
-                        <path d="M123 214 Q139 207 153 212 L156 221 Q141 230 124 224Z" fill="url(#evx-shell-${id})" stroke="#173c5e" stroke-width="2.4"/>
-                        <path d="M128 217 Q140 214 151 216" fill="none" stroke="#178bea" stroke-width="4" stroke-linecap="round"/>
-                    </g>
-                </g>
-
                 <g class="evx-body" data-robot-part="body">
-                    <path d="M74 111 Q110 98 146 111 L151 158 Q145 197 110 209 Q75 197 69 158Z" fill="url(#evx-shell-${id})" stroke="#b3bdcb" stroke-width="2.2"/>
-                    <path d="M82 118 Q110 106 138 118 L143 154 Q139 181 110 190 Q81 181 77 154Z" fill="#f7f9fc" opacity=".72"/>
-                    <path d="M73 157 Q110 177 147 157 L144 176 Q110 198 76 176Z" fill="url(#evx-shell-shadow-${id})" opacity=".58"/>
-                    <path d="M75 158 Q91 166 91 176 Q110 183 129 176 Q129 166 145 158" fill="none" stroke="#aeb8c6" stroke-width="3" stroke-linejoin="round"/>
+                    <path d="M84 140 C75 148 72 162 76 179 C80 197 93 212 110 218 C127 212 140 197 144 179 C148 162 145 148 136 140 C129 135 119 132 110 132 C101 132 91 135 84 140Z" fill="url(#evx-shell-lower-${id})" stroke="#aeb5b3" stroke-width="1.8"/>
+                    <path d="M90 143 C84 155 85 178 91 194 C95 204 102 211 110 215 C99 207 96 192 96 177 C96 159 100 144 108 135 C100 135 94 138 90 143Z" fill="#ffffff" opacity=".48"/>
+                    <path d="M75 174 Q110 184 145 174" fill="none" stroke="#aeb4b2" stroke-width="1.5" opacity=".75"/>
+                    <path d="M76 178 Q110 189 144 178" fill="none" stroke="#ffffff" stroke-width="1" opacity=".65"/>
                 </g>
 
-                <g class="evx-arm evx-left-arm" data-robot-part="left-arm">
-                    <path d="M72 119 Q55 117 47 136 Q38 161 39 184 Q40 199 51 201 Q62 203 68 189 Q74 169 79 139 Q81 124 72 119Z" fill="url(#evx-shell-shadow-${id})" stroke="#b3bdcb" stroke-width="2.2"/>
-                    <g class="evx-hand evx-left-hand" data-robot-part="left-hand">
-                        <path class="evx-wrist-cuff" d="M43 173 Q51 177 60 174 L61 181 Q51 185 42 180Z" fill="url(#evx-blue-${id})" stroke="#084b88" stroke-width="1.8"/>
-                        <rect x="39" y="187" width="5" height="15" rx="2.5" fill="#172938" stroke="#071522" stroke-width="1.4"/>
-                        <rect x="44.5" y="189" width="5" height="17" rx="2.5" fill="#172938" stroke="#071522" stroke-width="1.4"/>
-                        <rect x="50" y="189" width="5" height="16" rx="2.5" fill="#172938" stroke="#071522" stroke-width="1.4"/>
-                        <rect x="55.5" y="187" width="5" height="15" rx="2.5" fill="#172938" stroke="#071522" stroke-width="1.4"/>
-                        <path class="evx-thumb" d="M41 182 Q36 179 33 182 Q30 185 33 189 L40 194 Q43 192 43 188Z" fill="#172938" stroke="#071522" stroke-width="1.6"/>
-                        <path class="evx-palm" d="M41 179 Q50 175 59 179 Q62 183 61 190 Q58 196 50 196 Q42 196 39 190 Q38 184 41 179Z" fill="#172938" stroke="#071522" stroke-width="1.8"/>
-                        <path d="M43 184 Q50 181 58 184 M43 189 Q50 187 58 189" fill="none" stroke="#7690a2" stroke-width="1.25" stroke-linecap="round" opacity=".92"/>
-                    </g>
-                </g>
-
-                <g class="evx-arm evx-right-arm" data-robot-part="right-arm">
-                    <path d="M148 119 Q165 117 173 136 Q182 161 181 184 Q180 199 169 201 Q158 203 152 189 Q146 169 141 139 Q139 124 148 119Z" fill="url(#evx-shell-shadow-${id})" stroke="#b3bdcb" stroke-width="2.2"/>
-                    <g class="evx-hand evx-right-hand" data-robot-part="right-hand">
-                        <path class="evx-wrist-cuff" d="M160 174 Q169 177 177 173 L178 180 Q169 185 159 181Z" fill="url(#evx-blue-${id})" stroke="#084b88" stroke-width="1.8"/>
-                        <rect x="176" y="187" width="5" height="15" rx="2.5" fill="#172938" stroke="#071522" stroke-width="1.4"/>
-                        <rect x="170.5" y="189" width="5" height="17" rx="2.5" fill="#172938" stroke="#071522" stroke-width="1.4"/>
-                        <rect x="165" y="189" width="5" height="16" rx="2.5" fill="#172938" stroke="#071522" stroke-width="1.4"/>
-                        <rect x="159.5" y="187" width="5" height="15" rx="2.5" fill="#172938" stroke="#071522" stroke-width="1.4"/>
-                        <path class="evx-thumb" d="M179 182 Q184 179 187 182 Q190 185 187 189 L180 194 Q177 192 177 188Z" fill="#172938" stroke="#071522" stroke-width="1.6"/>
-                        <path class="evx-palm" d="M161 179 Q170 175 179 179 Q182 183 181 190 Q178 196 170 196 Q162 196 159 190 Q158 184 161 179Z" fill="#172938" stroke="#071522" stroke-width="1.8"/>
-                        <path d="M162 184 Q170 181 177 184 M162 189 Q170 187 177 189" fill="none" stroke="#7690a2" stroke-width="1.25" stroke-linecap="round" opacity=".92"/>
-                    </g>
-                </g>
+                <ellipse class="evx-neck-glow" cx="110" cy="140" rx="23" ry="6.5" fill="#31c6ec" opacity=".34" filter="url(#evx-glow-${id})"/>
+                <ellipse class="evx-neck-ring" cx="110" cy="139" rx="18" ry="4.6" fill="url(#evx-neck-light-${id})" stroke="#d9faff" stroke-width="1.15"/>
+                <ellipse class="evx-neck-shine" cx="106" cy="137.8" rx="8" ry="1.4" fill="#efffff" opacity=".48"/>
 
                 <g class="evx-head" data-robot-part="head">
-                    <rect x="91" y="5" width="38" height="17" rx="9" fill="url(#evx-shell-shadow-${id})"/>
-                    <path d="M43 58 Q45 25 75 18 Q110 9 145 18 Q175 25 177 58 L174 91 Q169 119 110 124 Q51 119 46 91Z" fill="url(#evx-shell-${id})" stroke="#b3bdcb" stroke-width="2.4"/>
-                    <path d="M57 30 Q76 18 94 18" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity=".72"/>
-                    <g class="evx-ear evx-left-ear"><rect x="31" y="50" width="19" height="48" rx="10" fill="url(#evx-shell-shadow-${id})"/></g>
-                    <g class="evx-ear evx-right-ear"><rect x="170" y="50" width="19" height="48" rx="10" fill="url(#evx-shell-shadow-${id})"/></g>
-                    <rect class="evx-face" data-robot-part="face" x="51" y="34" width="118" height="75" rx="29" fill="url(#evx-face-${id})" stroke="#071725" stroke-width="2.4"/>
-                    <path d="M60 44 Q110 26 160 44" fill="none" stroke="#4a718c" stroke-width="2" opacity=".2"/>
+                    <path class="evx-antenna evx-left-antenna" d="M57 50 L51 9" fill="none" stroke="#a9afad" stroke-width="2.4" stroke-linecap="round"/>
+                    <path class="evx-antenna evx-right-antenna" d="M163 50 L169 9" fill="none" stroke="#a9afad" stroke-width="2.4" stroke-linecap="round"/>
+                    <g class="evx-ear evx-left-ear">
+                        <rect x="31" y="61" width="17" height="43" rx="9" fill="url(#evx-shell-side-${id})" stroke="#b2b8b6" stroke-width="1.2"/>
+                        <path d="M39 69 V96" stroke="#f9ffff" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+                    </g>
+                    <g class="evx-ear evx-right-ear">
+                        <rect x="172" y="61" width="17" height="43" rx="9" fill="url(#evx-shell-side-${id})" stroke="#b2b8b6" stroke-width="1.2"/>
+                        <path d="M181 69 V96" stroke="#f9ffff" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+                    </g>
+                    <path class="evx-head-shell" d="M37 72 C38 31 84 8 110 8 C136 8 182 31 183 72 L179 102 C175 126 148 138 110 138 C72 138 45 126 41 102Z" fill="url(#evx-shell-${id})" stroke="#aeb5b3" stroke-width="2.1"/>
+                    <path d="M51 43 C64 20 86 13 107 13" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity=".72"/>
+                    <path class="evx-face" data-robot-part="face" d="M50 70 C52 43 76 33 110 33 C144 33 168 43 170 70 L167 96 C164 116 143 124 110 124 C77 124 56 116 53 96Z" fill="url(#evx-face-${id})" stroke="#252a29" stroke-width="2"/>
+                    <path d="M59 56 C79 39 116 36 146 45" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity=".055"/>
 
                     <g class="evx-face-features" data-robot-part="eyes">
                         <g class="evx-eye-track" data-robot-part="eye-track">
                             <g class="evx-eye evx-left-eye" data-robot-feature="left-eye">
-                                <path class="evx-eye-open" d="M72 76 Q73 61 84 60 Q95 61 96 76 Q84 80 72 76Z" fill="url(#evx-eye-${id})" filter="url(#evx-glow-${id})"/>
-                                <ellipse class="evx-pupil" cx="84" cy="70" rx="3.5" ry="4.8" fill="#0798b8" opacity=".28"/>
-                                <circle class="evx-pupil-glint" cx="82.5" cy="66.5" r="1.5" fill="#dfffff"/>
-                                <path class="evx-eye-happy" d="M74 73 Q84 59 94 73" fill="none" stroke="#51f2ff" stroke-width="7" stroke-linecap="round"/>
-                                <path class="evx-eye-sad" d="M74 65 Q84 75 94 65" fill="none" stroke="#51f2ff" stroke-width="6" stroke-linecap="round"/>
-                                <path class="evx-eye-wink" d="M74 69 L83 76 L94 64" fill="none" stroke="#51f2ff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+                                <ellipse class="evx-eye-open" cx="84" cy="78" rx="11" ry="14" fill="url(#evx-eye-${id})" filter="url(#evx-glow-${id})"/>
+                                <ellipse class="evx-eye-led" cx="84" cy="78" rx="9" ry="12" fill="url(#evx-led-${id})"/>
+                                <path class="evx-eye-laugh" d="M72 84 Q84 65 96 84"/>
+                                <path class="evx-eye-suspicious" d="M72 79 Q84 80 96 79"/>
+                                <path class="evx-eye-cry" d="M72 74 Q84 87 96 74"/>
+                                <path class="evx-eye-wink" d="M72 82 Q84 65 96 82"/>
+                                <path class="evx-eye-heart" d="M84 92 C80 87 69 80 69 71 C69 62 80 60 84 68 C88 60 99 62 99 71 C99 80 88 87 84 92Z"/>
+                                <path class="evx-eye-dead" d="M73 68 L95 88 M95 68 L73 88"/>
+                                <path class="evx-eye-angry" d="M70 68 L98 76 L94 91 Q82 94 73 85Z"/>
+                                <path class="evx-eye-click" d="M72 69 L88 78 L72 87"/>
                             </g>
                             <g class="evx-eye evx-right-eye" data-robot-feature="right-eye">
-                                <path class="evx-eye-open" d="M124 76 Q125 61 136 60 Q147 61 148 76 Q136 80 124 76Z" fill="url(#evx-eye-${id})" filter="url(#evx-glow-${id})"/>
-                                <ellipse class="evx-pupil" cx="136" cy="70" rx="3.5" ry="4.8" fill="#0798b8" opacity=".28"/>
-                                <circle class="evx-pupil-glint" cx="134.5" cy="66.5" r="1.5" fill="#dfffff"/>
-                                <path class="evx-eye-happy" d="M126 73 Q136 59 146 73" fill="none" stroke="#51f2ff" stroke-width="7" stroke-linecap="round"/>
-                                <path class="evx-eye-sad" d="M126 65 Q136 75 146 65" fill="none" stroke="#51f2ff" stroke-width="6" stroke-linecap="round"/>
-                                <path class="evx-eye-wink" d="M126 64 L137 76 L146 66" fill="none" stroke="#51f2ff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+                                <ellipse class="evx-eye-open" cx="136" cy="78" rx="11" ry="14" fill="url(#evx-eye-${id})" filter="url(#evx-glow-${id})"/>
+                                <ellipse class="evx-eye-led" cx="136" cy="78" rx="9" ry="12" fill="url(#evx-led-${id})"/>
+                                <path class="evx-eye-laugh" d="M124 84 Q136 65 148 84"/>
+                                <path class="evx-eye-suspicious" d="M124 79 Q136 80 148 79"/>
+                                <path class="evx-eye-cry" d="M124 74 Q136 87 148 74"/>
+                                <path class="evx-eye-wink" d="M124 82 Q136 65 148 82"/>
+                                <path class="evx-eye-heart" d="M136 92 C132 87 121 80 121 71 C121 62 132 60 136 68 C140 60 151 62 151 71 C151 80 140 87 136 92Z"/>
+                                <path class="evx-eye-dead" d="M125 68 L147 88 M147 68 L125 88"/>
+                                <path class="evx-eye-angry" d="M122 76 L150 68 L147 85 Q138 94 126 91Z"/>
+                                <path class="evx-eye-click" d="M148 69 L132 78 L148 87"/>
                             </g>
                         </g>
-                        <g class="evx-cheeks">
-                            <path d="M68 84 l5 -2 M70 89 l5 -2" stroke="#ff86a8" stroke-width="2.4" stroke-linecap="round"/>
-                            <path d="M147 82 l5 2 M145 87 l5 2" stroke="#ff86a8" stroke-width="2.4" stroke-linecap="round"/>
+                        <g class="evx-laugh-tears" aria-hidden="true">
+                            <path d="M67 83 C61 90 61 96 66 98 C72 96 72 90 67 83Z"/>
+                            <path d="M153 83 C148 90 148 96 154 98 C159 96 159 90 153 83Z"/>
                         </g>
-                        <path class="evx-mouth evx-mouth-smile" d="M99 88 Q110 101 121 88 Q120 101 110 103 Q100 101 99 88Z" fill="#40eaff"/>
-                        <path class="evx-mouth evx-mouth-sad" d="M100 94 Q110 84 120 94" fill="none" stroke="#40eaff" stroke-width="4" stroke-linecap="round"/>
-                        <ellipse class="evx-mouth evx-mouth-amazed" cx="110" cy="89" rx="6" ry="8" fill="#40eaff"/>
-                        <path class="evx-tear" d="M146 80 Q152 88 146 93 Q140 88 146 80Z" fill="#4fcfff"/>
+                        <g class="evx-cry-tears" aria-hidden="true">
+                            <path d="M70 83 C62 94 62 104 70 107 C78 104 78 94 70 83Z"/>
+                            <path d="M150 83 C142 94 142 104 150 107 C158 104 158 94 150 83Z"/>
+                        </g>
+                        <path class="evx-happy-mouth" d="M99 99 Q110 104 121 99 Q119 111 110 114 Q101 111 99 99Z"/>
+                        <path class="evx-sad-mouth" d="M99 110 Q110 98 121 110"/>
+                        <path class="evx-click-mouth" d="M94 96 Q110 101 126 96 Q121 110 110 115 Q99 110 94 96Z"/>
+                    </g>
+                </g>
+
+                <g class="evx-arm evx-left-arm" data-robot-part="left-arm">
+                    <g class="evx-hand evx-left-hand" data-robot-part="left-hand">
+                        <path class="evx-hand-shell" d="M59 145 C66 145 70 151 69 159 C67 176 58 200 50 210 C46 215 40 212 40 205 C40 190 47 161 52 151 C54 147 56 145 59 145Z" fill="url(#evx-shell-side-${id})" stroke="#a9b0ae" stroke-width="1.5"/>
+                        <path class="evx-hand-shade" d="M66 153 C68 167 58 198 48 209 C54 201 64 174 66 153Z" fill="#77807e" opacity=".13"/>
+                        <path class="evx-hand-highlight" d="M57 150 C61 148 64 151 63 157 C61 172 54 194 47 203" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity=".46"/>
+                    </g>
+                </g>
+                <g class="evx-arm evx-right-arm" data-robot-part="right-arm">
+                    <g class="evx-hand evx-right-hand" data-robot-part="right-hand">
+                        <path class="evx-hand-shell" d="M158 150 C163 145 171 145 175 151 C180 158 176 171 169 184 C164 194 157 202 151 200 C145 197 145 189 148 178 L153 157 C154 154 156 152 158 150Z" fill="url(#evx-shell-side-${id})" stroke="#a9b0ae" stroke-width="1.5"/>
+                        <path class="evx-hand-shade" d="M174 153 C178 163 169 189 154 199 C162 189 173 165 174 153Z" fill="#77807e" opacity=".14"/>
+                        <path class="evx-hand-highlight" d="M159 153 C164 149 170 149 173 154 C174 157 174 160 173 164" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" opacity=".48"/>
                     </g>
                 </g>
             </g>
 
             <g class="evx-emotion-sparks" aria-hidden="true">
-                <path d="M28 86 L16 79 M32 72 L25 59 M190 76 L203 65 M192 91 L207 89" stroke="#ffc84b" stroke-width="5" stroke-linecap="round"/>
+                <path d="M26 83 L14 77 M31 67 L24 54 M189 69 L199 58 M191 86 L205 84"/>
             </g>
         </svg>`;
 
@@ -209,7 +196,7 @@
             window.clearTimeout(idleBlinkTimer);
             idleBlinkTimer = window.setTimeout(() => {
                 if (!paused && root.isConnected && root.dataset.mode === 'standing'
-                    && !['amazed', 'winking', 'sad'].includes(root.dataset.emotion || '')) {
+                    && !(root.dataset.emotion || '')) {
                     controller.blink();
                 }
                 scheduleBlink();
@@ -236,13 +223,29 @@
             },
             setEmotion(emotion = '', duration = 0) {
                 window.clearTimeout(emotionTimer);
-                const nextEmotion = emotion === 'happy' ? 'happy'
-                    : emotion === 'sad' ? 'sad'
-                    : emotion === 'amazed' ? 'amazed'
-                    : emotion === 'winking' || emotion === 'wink' ? 'winking'
-                    : emotion === 'thinking' ? 'thinking'
-                    : '';
+                const emotionAliases = {
+                    happy: 'happy',
+                    laugh: 'laugh',
+                    sad: 'sad',
+                    cry: 'cry',
+                    amazed: 'amazed',
+                    winking: 'winking',
+                    wink: 'winking',
+                    thinking: 'thinking',
+                    suspicious: 'suspicious',
+                    pointing: 'pointing',
+                    point: 'pointing',
+                    love: 'love',
+                    death: 'death',
+                    dead: 'death',
+                    angry: 'angry',
+                    clicked: 'clicked',
+                    click: 'clicked',
+                    excited: 'clicked'
+                };
+                const nextEmotion = emotionAliases[String(emotion || '').toLowerCase()] || '';
                 root.dataset.emotion = nextEmotion;
+                if (nextEmotion !== 'pointing') delete root.dataset.pointSide;
                 if (nextEmotion !== 'amazed') this.resetLook();
                 if (duration > 0) {
                     emotionTimer = window.setTimeout(() => this.setEmotion(''), duration);
@@ -256,9 +259,14 @@
                 root.classList.add('is-blinking');
                 blinkTimer = window.setTimeout(() => root.classList.remove('is-blinking'), 250);
             },
-            wink(side = 'right') {
+            wink(side = 'right', duration = 1080) {
                 root.dataset.winkSide = side === 'left' ? 'left' : 'right';
-                this.setEmotion('winking', 1080);
+                this.setEmotion('winking', Math.max(0, Number(duration) || 0));
+                return [root];
+            },
+            point(side = 'right', duration = 0) {
+                root.dataset.pointSide = side === 'left' ? 'left' : 'right';
+                this.setEmotion('pointing', Math.max(0, Number(duration) || 0));
                 return [root];
             },
             lookAt(clientX, clientY) {

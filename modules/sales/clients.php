@@ -5692,6 +5692,24 @@ const salesTemplateAssistant = (() => {
     let reactionAnimations = [];
     let featureSession = { accepted:0, rejected:0 };
     let browsingChoices = false;
+    let visibleNextActionsSignature = '';
+
+    const nextActionsStorageKey = 'evortix.sales.next-best-actions.handled.v1';
+    const handledNextActionsSignature = () => {
+        try {
+            return window.sessionStorage.getItem(nextActionsStorageKey) || '';
+        } catch (error) {
+            return '';
+        }
+    };
+    const markVisibleNextActionsHandled = () => {
+        if (!visibleNextActionsSignature) return;
+        try {
+            window.sessionStorage.setItem(nextActionsStorageKey, visibleNextActionsSignature);
+        } catch (error) {
+            // The assistant still works when storage is unavailable.
+        }
+    };
 
     const robotLottie = () => window.chatBotFloatRobot || window.chatBotFloatLottie || null;
     const robotLayer = (name) => {
@@ -5770,6 +5788,8 @@ const salesTemplateAssistant = (() => {
     };
     const dismissSpeech = () => {
         window.clearTimeout(messageDismissTimer);
+        markVisibleNextActionsHandled();
+        visibleNextActionsSignature = '';
         browsingChoices = false;
         setEmotion('');
         const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
@@ -5801,7 +5821,7 @@ const salesTemplateAssistant = (() => {
                 if (bot.classList.contains('is-happy')) assistant?.wink?.('right');
             }, Math.max(1250, duration));
         } else if (emotion === 'winking') {
-            assistant?.wink?.('right');
+            assistant?.wink?.('right', duration > 0 ? duration : 1080);
         }
         if (duration > 0) {
             const clearDelay = emotion === 'happy' ? Math.max(1250, duration) + 1150 : duration;
@@ -5897,6 +5917,7 @@ const salesTemplateAssistant = (() => {
     };
 
     const showFeedback = (item, action, after) => {
+        visibleNextActionsSignature = '';
         const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
         if (!speech) { after(); return; }
         setEmotion(action === 'accepted' ? 'happy' : 'sad', 1500);
@@ -5913,6 +5934,7 @@ const salesTemplateAssistant = (() => {
     };
 
     const showFeatureSummary = () => {
+        visibleNextActionsSignature = '';
         const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
         if (!speech) { close(); return; }
         setEmotion(featureSession.accepted > 0 ? 'winking' : 'sad', 0);
@@ -5972,6 +5994,7 @@ const salesTemplateAssistant = (() => {
         const speech = bot?.querySelector('.chat-bot-speech');
         if (!bot || !speech || !queue[index]) return;
         const item = queue[index];
+        visibleNextActionsSignature = String(item.nextActionsSignature || '');
         const wasOpen = document.body.classList.contains('sales-assistant-open');
         if (!wasOpen) {
             bot.style.left = '';
@@ -6002,7 +6025,11 @@ const salesTemplateAssistant = (() => {
             ${choices}${actionLinks}${actions}${progress}`;
         scheduleIdleBlink();
         scheduleMessageDismiss(item.choices ? 9000 : 6000);
-        if (item.choices) setEmotion('amazed', 0);
+        if (item.pointingSide) {
+            window.chatBotFloatRobot?.point?.(item.pointingSide, 0);
+        } else if (item.choices) {
+            setEmotion('amazed', 0);
+        }
     };
     const show = (form, items) => {
         activeForm = form;
@@ -6036,7 +6063,8 @@ const salesTemplateAssistant = (() => {
             heading: query ? 'Matching project types' : 'Choose a project type',
             label: choices.length ? 'Select the best match. The list updates as you type.' : `No learned template matches “${form?.elements?.project_type?.value || ''}”. You may continue with a new project type.`,
             choices,
-            information: choices.length === 0
+            information: choices.length === 0,
+            pointingSide: 'left'
         }]);
     };
     const forField = (form, field) => {
@@ -6097,6 +6125,11 @@ const salesTemplateAssistant = (() => {
         restore();
     }, true);
     document.addEventListener('click', event => {
+        const actionLink = event.target.closest('.sales-bot-action-link');
+        if (actionLink) {
+            markVisibleNextActionsHandled();
+            visibleNextActionsSignature = '';
+        }
         const assistantControl = event.target.closest('[data-sales-bot-choice], [data-sales-bot-accept], [data-sales-bot-reject], [data-sales-bot-continue], [data-sales-bot-back], [data-sales-bot-dismiss]');
         if (assistantControl) {
             event.preventDefault();
@@ -6198,6 +6231,7 @@ const salesTemplateAssistant = (() => {
         window.chatBotFloatRobot?.lookAt?.(event.clientX, event.clientY);
     }, { passive:true });
     const close = () => {
+        visibleNextActionsSignature = '';
         continueAction = null;
         backAction = null;
         browsingChoices = false;
@@ -6211,6 +6245,7 @@ const salesTemplateAssistant = (() => {
         bot.setAttribute('aria-hidden', 'false');
         speech.hidden = false;
         speech.innerHTML = '<div class="sales-bot-heading-row"><div class="sales-bot-head">Hi, good day!</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div><span class="sales-bot-copy">I am ready whenever you want help with another field.</span>';
+        setEmotion('winking', 4500);
         scheduleMessageDismiss(4500);
     };
     const announceNextActions = actions => {
@@ -6239,6 +6274,12 @@ const salesTemplateAssistant = (() => {
                 url: projectUrl(item)
             }))
         ];
+        const nextActionsSignature = JSON.stringify(links.map(link => [
+            link.url,
+            link.label,
+            link.context
+        ]));
+        if (handledNextActionsSignature() === nextActionsSignature) return;
 
         show(null, [{
             heading: 'Next best actions',
@@ -6246,7 +6287,9 @@ const salesTemplateAssistant = (() => {
                 ? `${pendingProjects.length} pending, ${inactiveClients.length} inactive, and ${overdueDeliverables.length} overdue. Select an item to open it.`
                 : 'You are all caught up. There are no pending projects, inactive clients, or overdue deliverables requiring attention.',
             links,
-            information: true
+            information: true,
+            pointingSide: links.length ? 'left' : '',
+            nextActionsSignature
         }]);
     };
 

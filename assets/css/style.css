@@ -2395,13 +2395,13 @@ body {
     transform-origin: center;
 }
 
-/* Code-built ERNI assistant. All expressions and body motion use one SVG controller. */
+/* Glossy Evortix assistant, based on the floating cyan-face robot language. */
 .evx-assistant {
     display: block;
     width: 100%;
     height: 100%;
     overflow: visible;
-    filter: drop-shadow(0 12px 12px rgba(17, 59, 91, 0.16));
+    filter: drop-shadow(0 13px 13px rgba(33, 49, 48, 0.18));
 }
 
 .evx-sleep-scene {
@@ -2417,13 +2417,12 @@ body {
 }
 
 .evx-assistant[data-mode="sleeping"] .evx-sleeper {
-    transform-origin: 107px 130px;
+    transform-origin: 110px 150px;
     animation: evxAssistantSleepBreath 3.2s ease-in-out infinite;
 }
 
-.evx-assistant[data-mode="sleeping"] .evx-sleep-blanket {
-    transform-origin: 110px 188px;
-    animation: evxAssistantBlanketBreath 3.2s ease-in-out infinite;
+.evx-assistant[data-mode="sleeping"] .evx-sleep-dock-light {
+    animation: evxAssistantDockPulse 2.4s ease-in-out infinite;
 }
 
 .evx-assistant[data-mode="sleeping"] .evx-sleep-z {
@@ -2431,12 +2430,13 @@ body {
 }
 
 .evx-assistant[data-mode="waking"] .evx-sleeper {
-    transform-origin: 107px 130px;
+    display: block;
+    transform-origin: 110px 150px;
     animation: evxAssistantLeaveBed .7s cubic-bezier(.2, .75, .2, 1) both;
 }
 
 .evx-assistant[data-mode="returning"] .evx-sleeper {
-    transform-origin: 107px 130px;
+    transform-origin: 110px 150px;
     animation: evxAssistantEnterBed .74s cubic-bezier(.2, .72, .2, 1) both;
 }
 
@@ -2446,29 +2446,91 @@ body {
     display: none;
 }
 
-.evx-assistant[data-mode="waking"] .evx-sleeper {
-    display: block;
-}
-
 .chat-bot-animation .evx-assistant {
-    transform: scale(1.15);
+    transform: scale(1.13);
 }
 
 .chat-bot-float-animation .evx-assistant {
-    transform: scale(1.02);
+    transform: scale(1.03);
 }
 
 .evx-character {
-    transform-origin: 110px 128px;
+    transform-origin: 110px 130px;
     animation: evxAssistantFloat 3.4s cubic-bezier(.45, 0, .55, 1) infinite;
 }
 
 .evx-body,
 .evx-head,
 .evx-arm,
-.evx-leg,
-.evx-hand {
+.evx-hand,
+.evx-sleeper,
+.evx-sleep-dock-light {
     transform-box: view-box;
+}
+
+.evx-body {
+    transform-origin: 110px 155px;
+    animation: evxAssistantBreathe 2.8s ease-in-out infinite;
+}
+
+.evx-head {
+    transform-origin: 110px 112px;
+    animation: evxAssistantHeadIdle 5.4s ease-in-out infinite;
+}
+
+.evx-left-arm {
+    transform-origin: 57px 151px;
+}
+
+.evx-right-arm {
+    transform-origin: 163px 151px;
+}
+
+.evx-left-hand,
+.evx-right-hand {
+    transform-origin: inherit;
+}
+
+.evx-arm,
+.evx-hand {
+    transition: transform 280ms cubic-bezier(.2, .75, .2, 1);
+}
+
+.evx-assistant:not([data-emotion]) .evx-left-arm,
+.evx-assistant[data-emotion=""] .evx-left-arm {
+    transform: translateY(4px) rotate(-8deg);
+}
+
+.evx-assistant:not([data-emotion]) .evx-right-arm,
+.evx-assistant[data-emotion=""] .evx-right-arm {
+    transform: translateY(4px) rotate(-16deg);
+}
+
+.evx-assistant:not([data-emotion]) .evx-left-hand,
+.evx-assistant[data-emotion=""] .evx-left-hand {
+    transform: scale(.55, .72);
+}
+
+.evx-assistant:not([data-emotion]) .evx-right-hand,
+.evx-assistant[data-emotion=""] .evx-right-hand {
+    transform: scale(.55, .85);
+}
+
+.evx-hand-shell,
+.evx-hand-shade,
+.evx-hand-highlight {
+    vector-effect: non-scaling-stroke;
+}
+
+.evx-assistant .evx-ground-shadow {
+    transform: translateY(5px) scaleX(.9);
+    transform-origin: center;
+}
+
+.evx-eye-track {
+    transform: translate(var(--evx-look-x, 0), var(--evx-look-y, 0));
+    transition: transform 145ms cubic-bezier(.2, .72, .22, 1);
+    will-change: transform;
 }
 
 .evx-eye {
@@ -2476,155 +2538,161 @@ body {
     transform-origin: center center;
 }
 
-.evx-body {
-    transform-origin: 110px 149px;
-    animation: evxAssistantBreathe 2.8s ease-in-out infinite;
-}
-
-.evx-head {
-    transform-origin: 110px 105px;
-    animation: evxAssistantHeadIdle 5.4s ease-in-out infinite;
-}
-
-.evx-left-arm {
-    transform-origin: 67px 120px;
-}
-
-.evx-right-arm {
-    transform-origin: 153px 120px;
-}
-
-.evx-left-hand {
-    transform-origin: 52px 179px;
-}
-
-.evx-right-hand {
-    transform-origin: 168px 179px;
-}
-
-.evx-left-leg {
-    transform-origin: 87px 180px;
-}
-
-.evx-right-leg {
-    transform-origin: 133px 180px;
-}
-
-.evx-reference-legs,
-.evx-hand {
-    opacity: 0;
-    pointer-events: none;
-}
-
-.evx-assistant .evx-ground-shadow {
-    transform: translateY(7px) scaleX(.82);
-    transform-origin: center;
-}
-
-.evx-eye-track {
-    transform: none;
-}
-
-.evx-pupil,
-.evx-pupil-glint {
-    transform-box: fill-box;
-    transform-origin: center center;
-    transform: translate(var(--evx-look-x, 0), var(--evx-look-y, 0));
-    transition: transform 145ms cubic-bezier(.2, .72, .22, 1);
-    will-change: transform;
-}
-
-.evx-eye-happy,
-.evx-eye-sad,
+.evx-eye-laugh,
+.evx-eye-suspicious,
+.evx-eye-cry,
 .evx-eye-wink,
-.evx-mouth-sad,
-.evx-mouth-amazed,
-.evx-tear,
+.evx-eye-heart,
+.evx-eye-dead,
+.evx-eye-angry,
+.evx-eye-click,
+.evx-happy-mouth,
+.evx-sad-mouth,
+.evx-click-mouth,
+.evx-laugh-tears,
+.evx-cry-tears,
 .evx-emotion-sparks {
     opacity: 0;
 }
 
-.evx-eye,
-.evx-eye-open,
-.evx-pupil,
-.evx-pupil-glint,
-.evx-mouth,
-.evx-tear,
-.evx-emotion-sparks {
-    transition: opacity 140ms ease, transform 180ms ease;
+.evx-eye-laugh,
+.evx-eye-suspicious,
+.evx-eye-cry,
+.evx-eye-wink,
+.evx-eye-dead,
+.evx-eye-click,
+.evx-sad-mouth {
+    fill: none;
+    stroke: #25c5ed;
+    stroke-width: 7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
-.evx-assistant.is-blinking:not([data-emotion="winking"]) .evx-eye {
+.evx-eye-heart,
+.evx-eye-angry,
+.evx-happy-mouth,
+.evx-click-mouth,
+.evx-laugh-tears path,
+.evx-cry-tears path {
+    fill: #25c5ed;
+}
+
+.evx-emotion-sparks path {
+    fill: none;
+    stroke: #34caed;
+    stroke-width: 5;
+    stroke-linecap: round;
+}
+
+.evx-eye-open,
+.evx-eye-led,
+.evx-eye-laugh,
+.evx-eye-suspicious,
+.evx-eye-cry,
+.evx-eye-wink,
+.evx-eye-heart,
+.evx-eye-dead,
+.evx-eye-angry,
+.evx-eye-click,
+.evx-happy-mouth,
+.evx-sad-mouth,
+.evx-click-mouth,
+.evx-laugh-tears,
+.evx-cry-tears,
+.evx-emotion-sparks {
+    transition: opacity 150ms ease, transform 190ms ease;
+}
+
+.evx-assistant.is-blinking:not([data-emotion]) .evx-eye,
+.evx-assistant.is-blinking[data-emotion=""] .evx-eye {
     animation: evxAssistantBlink 230ms cubic-bezier(.45, 0, .3, 1) both;
 }
 
-.evx-assistant[data-emotion="happy"] .evx-eye-open,
-.evx-assistant[data-emotion="happy"] .evx-pupil,
-.evx-assistant[data-emotion="happy"] .evx-pupil-glint,
-.evx-assistant[data-emotion="happy"] .evx-mouth-sad,
-.evx-assistant[data-emotion="happy"] .evx-mouth-amazed {
+.evx-assistant:is([data-emotion="happy"], [data-emotion="laugh"], [data-emotion="suspicious"], [data-emotion="thinking"], [data-emotion="pointing"], [data-emotion="love"], [data-emotion="death"], [data-emotion="sad"], [data-emotion="cry"], [data-emotion="angry"], [data-emotion="winking"], [data-emotion="clicked"]) :is(.evx-eye-open, .evx-eye-led) {
     opacity: 0;
 }
 
-.evx-assistant[data-emotion="happy"] .evx-eye-happy,
-.evx-assistant[data-emotion="happy"] .evx-mouth-smile {
+.evx-assistant[data-emotion="clicked"] :is(.evx-eye-click, .evx-click-mouth) {
     opacity: 1;
 }
 
-.evx-assistant[data-emotion="happy"] .evx-left-arm {
-    animation: evxAssistantCheerLeft 1.55s cubic-bezier(.2, .78, .2, 1) 1;
+.evx-assistant[data-emotion="clicked"] .evx-left-arm {
+    transform: translate(48px, -15px) rotate(28deg);
 }
 
-.evx-assistant[data-emotion="happy"] .evx-right-arm {
-    animation: evxAssistantCheerRight 1.55s cubic-bezier(.2, .78, .2, 1) 1;
+.evx-assistant[data-emotion="clicked"] .evx-right-arm {
+    transform: translate(-48px, -16px) rotate(-53deg);
 }
 
-.evx-assistant[data-emotion="happy"] .evx-character {
+.evx-assistant[data-emotion="clicked"] .evx-left-hand {
+    transform: scale(.75, .72);
+}
+
+.evx-assistant[data-emotion="clicked"] .evx-right-hand {
+    transform: scale(.75, .85);
+}
+
+.evx-assistant[data-emotion="clicked"] .evx-character {
+    animation: evxAssistantClickPop .65s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.evx-assistant:is([data-emotion="happy"], [data-emotion="laugh"], [data-emotion="pointing"]) .evx-eye-laugh,
+.evx-assistant:is([data-emotion="happy"], [data-emotion="laugh"]) .evx-happy-mouth,
+.evx-assistant:is([data-emotion="happy"], [data-emotion="laugh"]) .evx-laugh-tears {
+    opacity: 1;
+}
+
+.evx-assistant:is([data-emotion="happy"], [data-emotion="laugh"]) .evx-left-arm {
+    animation: evxAssistantCheerLeft 1.55s cubic-bezier(.2, .78, .2, 1) 1 both;
+}
+
+.evx-assistant:is([data-emotion="happy"], [data-emotion="laugh"]) .evx-right-arm {
+    animation: evxAssistantCheerRight 1.55s cubic-bezier(.2, .78, .2, 1) 1 both;
+}
+
+.evx-assistant:is([data-emotion="happy"], [data-emotion="laugh"]) .evx-character {
     animation: evxAssistantHappyBounce 1.55s cubic-bezier(.2, .78, .25, 1) 1;
 }
 
-.evx-assistant[data-emotion="sad"] .evx-eye-open,
-.evx-assistant[data-emotion="sad"] .evx-pupil,
-.evx-assistant[data-emotion="sad"] .evx-pupil-glint,
-.evx-assistant[data-emotion="sad"] .evx-eye-happy,
-.evx-assistant[data-emotion="sad"] .evx-mouth-smile {
-    opacity: 0;
-}
-
-.evx-assistant[data-emotion="sad"] .evx-eye-sad,
-.evx-assistant[data-emotion="sad"] .evx-mouth-sad,
-.evx-assistant[data-emotion="sad"] .evx-tear {
+.evx-assistant:is([data-emotion="sad"], [data-emotion="cry"]) .evx-eye-cry,
+.evx-assistant:is([data-emotion="sad"], [data-emotion="cry"]) .evx-sad-mouth,
+.evx-assistant:is([data-emotion="sad"], [data-emotion="cry"]) .evx-cry-tears {
     opacity: 1;
 }
 
-.evx-assistant[data-emotion="sad"] .evx-character {
+.evx-assistant:is([data-emotion="sad"], [data-emotion="cry"]) .evx-character {
     transform: translateY(7px);
     animation: none;
 }
 
-.evx-assistant[data-emotion="sad"] .evx-head {
+.evx-assistant:is([data-emotion="sad"], [data-emotion="cry"]) .evx-head {
     transform: translateY(4px) rotate(-3deg);
     animation: none;
 }
 
-.evx-assistant[data-emotion="sad"] .evx-left-arm {
-    transform: rotate(10deg) translateY(5px);
+.evx-assistant:is([data-emotion="sad"], [data-emotion="cry"]) .evx-left-arm {
+    transform: translateY(4px) rotate(-8deg);
+    animation: evxAssistantSadGestureLeft 1.35s ease-in-out infinite;
 }
 
-.evx-assistant[data-emotion="sad"] .evx-right-arm {
-    transform: rotate(-10deg) translateY(5px);
+.evx-assistant:is([data-emotion="sad"], [data-emotion="cry"]) .evx-right-arm {
+    transform: translateY(4px) rotate(-16deg);
+    animation: evxAssistantSadGestureRight 1.35s ease-in-out infinite;
+}
+
+.evx-assistant:is([data-emotion="sad"], [data-emotion="cry"]) .evx-left-hand {
+    transform: scale(.55, .72);
+}
+
+.evx-assistant:is([data-emotion="sad"], [data-emotion="cry"]) .evx-right-hand {
+    transform: scale(.55, .85);
 }
 
 .evx-assistant[data-emotion="amazed"] .evx-eye {
-    transform: scale(1.22);
-    transform-origin: center;
+    transform: scale(1.28);
 }
 
-.evx-assistant[data-emotion="amazed"] .evx-mouth-smile {
-    opacity: 0;
-}
-
-.evx-assistant[data-emotion="amazed"] .evx-mouth-amazed,
 .evx-assistant[data-emotion="amazed"] .evx-emotion-sparks {
     opacity: 1;
 }
@@ -2637,61 +2705,119 @@ body {
     animation: evxAssistantAmazedRight .72s ease-in-out infinite alternate;
 }
 
-.evx-assistant[data-emotion="winking"] .evx-eye-open,
-.evx-assistant[data-emotion="winking"] .evx-pupil,
-.evx-assistant[data-emotion="winking"] .evx-pupil-glint,
-.evx-assistant[data-emotion="winking"] .evx-eye-happy,
-.evx-assistant[data-emotion="winking"] .evx-eye-sad {
-    opacity: 0;
-}
-
-.evx-assistant[data-emotion="winking"] .evx-left-eye .evx-eye-happy,
-.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-right-eye .evx-eye-happy,
+.evx-assistant[data-emotion="winking"] .evx-left-eye :is(.evx-eye-open, .evx-eye-led),
 .evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-eye .evx-eye-wink,
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-right-eye :is(.evx-eye-open, .evx-eye-led),
 .evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-eye-wink {
     opacity: 1;
 }
 
-.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-right-eye .evx-eye-wink,
-.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-eye-happy {
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye :is(.evx-eye-open, .evx-eye-led),
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-right-eye .evx-eye-wink {
     opacity: 0;
 }
 
-.evx-assistant[data-emotion="winking"] .evx-right-arm {
-    animation: evxAssistantWaveRight 1.02s cubic-bezier(.2, .8, .2, 1) both;
+.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-left-arm {
+    animation: none;
+    transform: translateY(4px) rotate(-8deg);
+}
+
+.evx-assistant[data-emotion="winking"] .evx-head {
+    animation: evxAssistantWinkHead 1.02s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-arm {
+    animation: evxAssistantWinkRaisedRight 1.02s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-hand {
+    transform: scale(1.38, .98);
+}
+
+.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-hand {
+    transform: scale(.7, 1.15);
+}
+
+.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-left-hand {
+    transform: scale(.55, .72);
 }
 
 .evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-eye .evx-eye-wink,
 .evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-eye-wink {
-    transform-box: fill-box;
-    transform-origin: center center;
     animation: evxAssistantWinkEye 1.02s cubic-bezier(.2, .8, .2, 1) both;
 }
 
-.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-eye .evx-eye-open,
-.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-eye .evx-pupil,
-.evx-assistant[data-emotion="winking"]:not([data-wink-side="left"]) .evx-right-eye .evx-pupil-glint,
-.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-eye-open,
-.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-pupil,
-.evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-eye .evx-pupil-glint {
-    animation: evxAssistantWinkOpen 1.02s cubic-bezier(.2, .8, .2, 1) both;
-}
-
 .evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-right-arm {
-    animation: none;
+    animation: evxAssistantWinkRaisedRight 1.02s cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .evx-assistant[data-emotion="winking"][data-wink-side="left"] .evx-left-arm {
-    animation: evxAssistantWaveLeft 1.02s cubic-bezier(.2, .8, .2, 1) both;
+    animation: evxAssistantWinkCheekLeft 1.02s cubic-bezier(.2, .8, .2, 1) both;
 }
 
-.evx-assistant[data-emotion="thinking"] .evx-left-arm {
-    transform: rotate(-34deg) translate(9px, -15px);
+.evx-assistant:is([data-emotion="suspicious"], [data-emotion="thinking"]) .evx-eye-suspicious {
+    opacity: 1;
 }
 
-.evx-assistant[data-emotion="thinking"] .evx-head {
-    transform: rotate(4deg);
+.evx-assistant:is([data-emotion="suspicious"], [data-emotion="thinking"]) .evx-left-arm {
+    transform: rotate(-62deg) translate(1px, -1px);
+}
+
+.evx-assistant:is([data-emotion="suspicious"], [data-emotion="thinking"]) .evx-right-arm {
+    transform: rotate(62deg) translate(-1px, -1px);
+}
+
+.evx-assistant:is([data-emotion="suspicious"], [data-emotion="thinking"]) .evx-head {
+    transform: rotate(3deg);
     animation: none;
+}
+
+.evx-assistant[data-emotion="pointing"]:not([data-point-side="left"]) .evx-left-arm {
+    transform: rotate(-62deg) translate(1px, -1px);
+}
+
+.evx-assistant[data-emotion="pointing"]:not([data-point-side="left"]) .evx-right-arm {
+    animation: evxAssistantPointRight .8s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.evx-assistant[data-emotion="pointing"][data-point-side="left"] .evx-left-arm {
+    animation: evxAssistantPointLeft .8s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.evx-assistant[data-emotion="pointing"][data-point-side="left"] .evx-right-arm {
+    transform: rotate(62deg) translate(-1px, -1px);
+}
+
+.evx-assistant[data-emotion="love"] .evx-eye-heart {
+    opacity: 1;
+}
+
+.evx-assistant[data-emotion="love"] .evx-character {
+    animation: evxAssistantLovePulse 1.35s ease-in-out infinite;
+}
+
+.evx-assistant[data-emotion="death"] .evx-eye-dead {
+    opacity: 1;
+}
+
+.evx-assistant[data-emotion="death"] .evx-character {
+    animation: evxAssistantDeathDrop .68s cubic-bezier(.3, .05, .35, 1) both;
+}
+
+.evx-assistant[data-emotion="angry"] .evx-eye-angry {
+    opacity: 1;
+}
+
+.evx-assistant[data-emotion="angry"] .evx-head {
+    animation: evxAssistantAngryShake .28s ease-in-out infinite alternate;
+}
+
+.evx-assistant[data-emotion="angry"] .evx-right-arm {
+    transform: translate(20px, -8px) rotate(24deg);
+}
+
+.evx-assistant[data-emotion="angry"] .evx-left-arm {
+    transform: rotate(3deg) translate(-1px, 2px);
 }
 
 @keyframes evxAssistantFloat {
@@ -2702,6 +2828,11 @@ body {
 @keyframes evxAssistantSleepBreath {
     0%, 100% { transform: translateY(0) scale(1); }
     50% { transform: translateY(1.5px) scale(1.008); }
+}
+
+@keyframes evxAssistantDockPulse {
+    0%, 100% { opacity: .76; transform: scaleX(.94); }
+    50% { opacity: 1; transform: scaleX(1.04); }
 }
 
 @keyframes evxAssistantBlanketBreath {
@@ -2733,9 +2864,9 @@ body {
 }
 
 @keyframes evxAssistantWinkEye {
-    0%, 15%, 88%, 100% { opacity: 0; transform: scale(.88); }
-    30%, 74% { opacity: 1; transform: scale(1.06); }
-    44%, 64% { opacity: 1; transform: scale(1); }
+    0%, 12% { opacity: 0; transform: scale(.88); }
+    30% { opacity: 1; transform: scale(1.06); }
+    48%, 100% { opacity: 1; transform: scale(1); }
 }
 
 @keyframes evxAssistantWinkOpen {
@@ -2762,20 +2893,45 @@ body {
     76% { transform: translateY(-8px) scale(1.02); }
 }
 
+@keyframes evxAssistantSadGestureLeft {
+    0%, 100% { transform: translateY(4px) rotate(-8deg); }
+    34% { transform: translate(5px, -8px) rotate(-26deg); }
+    48% { transform: translate(3px, -4px) rotate(-18deg); }
+    62% { transform: translate(6px, -9px) rotate(-28deg); }
+    80% { transform: translate(2px, 1px) rotate(-12deg); }
+}
+
+@keyframes evxAssistantSadGestureRight {
+    0%, 100% { transform: translateY(4px) rotate(-16deg); }
+    34% { transform: translate(-5px, -8px) rotate(3deg); }
+    48% { transform: translate(-3px, -4px) rotate(-5deg); }
+    62% { transform: translate(-6px, -9px) rotate(5deg); }
+    80% { transform: translate(-2px, 1px) rotate(-11deg); }
+}
+
+@keyframes evxAssistantClickPop {
+    0% { transform: translateY(4px) scale(.94); }
+    48% { transform: translateY(-5px) scale(1.035); }
+    72% { transform: translateY(-2px) scale(.995); }
+    100% { transform: translateY(0) scale(1); }
+}
+
 @keyframes evxAssistantCheerLeft {
-    0%, 100% { transform: rotate(0); }
+    0% { transform: rotate(0); }
     28% { transform: rotate(72deg) translate(-2px, -5px); }
     48% { transform: rotate(86deg) translate(-3px, -7px); }
     66% { transform: rotate(74deg) translate(-2px, -5px); }
     80% { transform: rotate(84deg) translate(-3px, -7px); }
+    100% { transform: rotate(18deg); }
 }
 
 @keyframes evxAssistantCheerRight {
-    0%, 100% { transform: rotate(0); }
+    0% { transform: rotate(0); }
     28% { transform: rotate(-72deg) translate(2px, -5px); }
     48% { transform: rotate(-86deg) translate(3px, -7px); }
     66% { transform: rotate(-74deg) translate(2px, -5px); }
     80% { transform: rotate(-84deg) translate(3px, -7px); }
+    100% { transform: rotate(-18deg); }
 }
 
 @keyframes evxAssistantAmazedLeft {
@@ -2788,20 +2944,69 @@ body {
     to { transform: rotate(-48deg) translate(3px, -6px); }
 }
 
-@keyframes evxAssistantWaveRight {
-    0%, 100% { transform: rotate(0); }
-    25% { transform: rotate(-108deg) translate(12px, -15px); }
-    42% { transform: rotate(-96deg) translate(10px, -17px); }
-    60% { transform: rotate(-112deg) translate(13px, -14px); }
-    78% { transform: rotate(-99deg) translate(11px, -16px); }
+@keyframes evxAssistantWinkRaisedLeft {
+    0% { transform: translate(0, 0) rotate(0); }
+    34% { transform: translate(-47px, -49px) rotate(-49deg); }
+    55% { transform: translate(-40px, -43px) rotate(-40deg); }
+    76% { transform: translate(-47px, -48px) rotate(-48deg); }
+    100% { transform: translate(-45px, -46px) rotate(-45deg); }
 }
 
-@keyframes evxAssistantWaveLeft {
-    0%, 100% { transform: rotate(0); }
-    25% { transform: rotate(108deg) translate(-12px, -15px); }
-    42% { transform: rotate(96deg) translate(-10px, -17px); }
-    60% { transform: rotate(112deg) translate(-13px, -14px); }
-    78% { transform: rotate(99deg) translate(-11px, -16px); }
+@keyframes evxAssistantWinkHead {
+    0% { transform: translateY(0) rotate(0); }
+    55% { transform: translateY(-2px) rotate(-8deg); }
+    100% { transform: translateY(-1px) rotate(-7deg); }
+}
+
+@keyframes evxAssistantWinkCheekRight {
+    0% { transform: translate(0, 0) rotate(0); }
+    58% { transform: translate(-15px, -30px) rotate(-67deg); }
+    100% { transform: translate(-13px, -26px) rotate(-62deg); }
+}
+
+@keyframes evxAssistantWinkRaisedRight {
+    0% { transform: translate(0, 0) rotate(0); }
+    34% { transform: translate(47px, -49px) rotate(49deg); }
+    55% { transform: translate(40px, -43px) rotate(40deg); }
+    76% { transform: translate(47px, -48px) rotate(48deg); }
+    100% { transform: translate(45px, -46px) rotate(45deg); }
+}
+
+@keyframes evxAssistantWinkCheekLeft {
+    0% { transform: translate(0, 0) rotate(0); }
+    58% { transform: translate(15px, -30px) rotate(67deg); }
+    100% { transform: translate(13px, -26px) rotate(62deg); }
+}
+
+@keyframes evxAssistantPointRight {
+    0% { transform: rotate(0) translate(0, 0); }
+    58% { transform: rotate(-96deg) translate(3px, 2px); }
+    76% { transform: rotate(-87deg) translate(1px, 0); }
+    100% { transform: rotate(-90deg) translate(2px, 0); }
+}
+
+@keyframes evxAssistantPointLeft {
+    0% { transform: rotate(0) translate(0, 0); }
+    58% { transform: rotate(96deg) translate(-3px, 2px); }
+    76% { transform: rotate(87deg) translate(-1px, 0); }
+    100% { transform: rotate(90deg) translate(-2px, 0); }
+}
+
+@keyframes evxAssistantLovePulse {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-4px) scale(1.035); }
+}
+
+@keyframes evxAssistantDeathDrop {
+    0% { transform: translateY(0) rotate(0) scale(1); }
+    58% { transform: translate(-4px, 9px) rotate(-86deg) scale(.82); }
+    78% { transform: translate(-2px, 14px) rotate(-79deg) scale(.82); }
+    100% { transform: translate(-2px, 13px) rotate(-82deg) scale(.82); }
+}
+
+@keyframes evxAssistantAngryShake {
+    from { transform: translateX(-1.5px) rotate(-1.2deg); }
+    to { transform: translateX(1.5px) rotate(1.2deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {

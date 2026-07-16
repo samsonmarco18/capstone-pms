@@ -8,6 +8,8 @@ requireRole('sales');
 $conn = getConnection();
 $user = getCurrentUser();
 $currentUserId = (int) $user['id'];
+$showEvortixLoginWelcome = !empty($_SESSION['evortix_sales_dashboard_welcome_pending']);
+unset($_SESSION['evortix_sales_dashboard_welcome_pending']);
 $hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
 $projectStartTimeSql = $hasProjectStartTime ? "COALESCE(p.timeline_start_time, '09:00:00')" : "'09:00:00'";
@@ -2153,6 +2155,177 @@ body.dark-mode .evortix-3d-platform {
         animation: none !important;
     }
 }
+/* Evortix login flight and live dashboard briefing. */
+.chat-bot-float.is-dashboard-welcome-tour {
+    z-index: 1096;
+    pointer-events: none;
+    will-change: transform, opacity;
+}
+
+.chat-bot-float.is-dashboard-welcome-tour .chat-bot-speech {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+.chat-bot-speech.evortix-dashboard-summary {
+    top: 42%;
+    right: calc(100% + 18px);
+    width: min(390px, calc(100vw - 190px));
+    min-width: 340px;
+    padding: 1rem 1.05rem 1.05rem;
+    border-radius: 22px 22px 8px 22px;
+    pointer-events: auto;
+    animation: evortixDashboardSummaryReveal .55s cubic-bezier(.16, .86, .22, 1) both;
+}
+
+.evortix-dashboard-summary-head {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem;
+    padding-left: .75rem;
+}
+
+.evortix-dashboard-summary-eyebrow {
+    color: #157baa;
+    font-size: .65rem;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
+
+.chat-bot-speech .evortix-dashboard-summary-title {
+    min-height: 0;
+    padding: 0;
+    color: #083a5d;
+    font-size: .98rem;
+    line-height: 1.3;
+}
+
+.evortix-dashboard-summary-close {
+    display: grid;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .7);
+    color: #0d6f9f;
+    cursor: pointer;
+    box-shadow: 0 5px 14px rgba(15, 119, 183, .15);
+}
+
+.evortix-dashboard-summary-intro {
+    position: relative;
+    z-index: 2;
+    margin: .5rem 0 .7rem;
+    color: #175f8f;
+    font-size: .74rem;
+    font-weight: 700;
+}
+
+.evortix-dashboard-summary-grid {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .48rem;
+}
+
+.evortix-dashboard-summary-metric {
+    min-width: 0;
+    padding: .62rem .68rem;
+    border: 1px solid rgba(8, 123, 185, .17);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .78);
+    box-shadow: 0 6px 16px rgba(15, 119, 183, .09);
+}
+
+.evortix-dashboard-summary-metric-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+}
+
+.evortix-dashboard-summary-metric i {
+    color: #138ac1;
+    font-size: .78rem;
+}
+
+.chat-bot-speech .evortix-dashboard-summary-value {
+    min-height: 0;
+    padding: 0;
+    color: #083a5d;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.evortix-dashboard-summary-label {
+    margin-top: .36rem;
+    overflow: hidden;
+    color: #0b466d;
+    font-size: .71rem;
+    font-weight: 850;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.evortix-dashboard-summary-meta {
+    margin-top: .16rem;
+    color: #5b7f97;
+    font-size: .63rem;
+    font-weight: 700;
+}
+
+.evortix-dashboard-summary-metric.is-overdue .evortix-dashboard-summary-value,
+.evortix-dashboard-summary-metric.is-overdue i {
+    color: #c2413b;
+}
+
+.stats-grid.is-evortix-highlight .stat-card-modern {
+    animation: evortixDashboardCardBrief 1.5s ease-in-out 2;
+}
+
+.stats-grid.is-evortix-highlight .stat-card-modern:nth-child(2) { animation-delay: .1s; }
+.stats-grid.is-evortix-highlight .stat-card-modern:nth-child(3) { animation-delay: .2s; }
+.stats-grid.is-evortix-highlight .stat-card-modern:nth-child(4) { animation-delay: .3s; }
+
+@keyframes evortixDashboardSummaryReveal {
+    from { opacity: 0; transform: translateY(-50%) translateX(18px) scale(.94); }
+    to { opacity: 1; transform: translateY(-50%) translateX(0) scale(1); }
+}
+
+@keyframes evortixDashboardCardBrief {
+    0%, 100% { border-color: var(--stat-border); box-shadow: var(--shadow-sm), 0 0 26px var(--stat-glow); }
+    50% { border-color: rgba(34, 190, 238, .5); box-shadow: var(--shadow-md), 0 0 34px rgba(34, 211, 238, .24); }
+}
+
+@media (max-width: 640px) {
+    .chat-bot-speech.evortix-dashboard-summary {
+        right: calc(100% + 9px);
+        width: min(270px, calc(100vw - 145px));
+        min-width: 220px;
+        padding: .85rem;
+    }
+
+    .evortix-dashboard-summary-grid {
+        grid-template-columns: 1fr;
+        max-height: 238px;
+        overflow-y: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chat-bot-speech.evortix-dashboard-summary,
+    .stats-grid.is-evortix-highlight .stat-card-modern {
+        animation: none !important;
+    }
+}
 </style>
 
 <div class="container-fluid px-4 py-4 sales-dashboard-shell role-dashboard-shell">
@@ -2617,6 +2790,208 @@ body.dark-mode .evortix-3d-platform {
 </div>
 
 <script>
+const evortixDashboardWelcomeData = <?php echo json_encode([
+    'enabled' => $showEvortixLoginWelcome,
+    'metrics' => [
+        [
+            'label' => 'Total Clients',
+            'value' => (int) $totalClients,
+            'meta' => (int) $activeClients . ' active clients',
+            'icon' => 'fa-users',
+        ],
+        [
+            'label' => 'Total Projects',
+            'value' => (int) $totalProjects,
+            'meta' => (int) $completedProjects . ' completed',
+            'icon' => 'fa-project-diagram',
+        ],
+        [
+            'label' => 'Active Projects',
+            'value' => (int) $activeProjects,
+            'meta' => 'Currently ongoing',
+            'icon' => 'fa-play-circle',
+        ],
+        [
+            'label' => 'Overdue',
+            'value' => (int) $overdueProjects,
+            'meta' => (int) $overdueProjects > 0 ? 'Needs immediate follow-up' : 'No overdue projects',
+            'icon' => 'fa-heart-pulse',
+            'overdue' => (int) $overdueProjects > 0,
+        ],
+    ],
+], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
+window.evortixDashboardWelcomeActive = Boolean(evortixDashboardWelcomeData.enabled);
+
+document.addEventListener('DOMContentLoaded', async () => {
+    if (!evortixDashboardWelcomeData.enabled) return;
+
+    let completionSignalled = false;
+    const signalWelcomeComplete = () => {
+        if (completionSignalled) return;
+        completionSignalled = true;
+        window.evortixDashboardWelcomeActive = false;
+        document.dispatchEvent(new CustomEvent('evortix:dashboard-welcome-complete'));
+    };
+    const waitForFloatingRobot = () => new Promise(resolve => {
+        if (window.chatBotFloatRobot) {
+            resolve(window.chatBotFloatRobot);
+            return;
+        }
+
+        const ready = event => {
+            if (event.detail?.name !== 'chatBotFloatRobot') return;
+            document.removeEventListener('chatbot:controllable-robot-ready', ready);
+            resolve(event.detail.controller || window.chatBotFloatRobot || null);
+        };
+        document.addEventListener('chatbot:controllable-robot-ready', ready);
+        window.setTimeout(() => {
+            document.removeEventListener('chatbot:controllable-robot-ready', ready);
+            resolve(window.chatBotFloatRobot || null);
+        }, 1800);
+    });
+    const escapeSummaryHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({
+        '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;'
+    })[character]);
+
+    try {
+        const botFloat = document.getElementById('chat-bot-float');
+        const speech = botFloat?.querySelector('.chat-bot-speech');
+        const botWidget = document.getElementById('chat-bot-widget');
+        const statsGrid = document.querySelector('.stats-grid');
+        if (!botFloat || !speech) {
+            signalWelcomeComplete();
+            return;
+        }
+
+        const robot = await waitForFloatingRobot();
+        await new Promise(resolve => window.setTimeout(resolve, 180));
+
+        const restoreDefaultSpeech = () => {
+            speech.hidden = false;
+            speech.className = 'chat-bot-speech';
+            speech.removeAttribute('role');
+            speech.removeAttribute('data-dashboard-summary-dismissed');
+            speech.style.pointerEvents = '';
+            speech.innerHTML = '<strong data-chat-bot-type="title" data-chat-bot-text="Hi, good day!"></strong>';
+        };
+        botWidget?.addEventListener('click', () => {
+            if (botFloat.hidden && speech.hasAttribute('data-dashboard-summary-dismissed')) {
+                restoreDefaultSpeech();
+            }
+        }, true);
+
+        botFloat.classList.remove('is-leaving-bed', 'is-returning-bed', 'is-preparing-speech', 'is-speaking');
+        botFloat.classList.add('is-dashboard-welcome-tour');
+        botFloat.hidden = false;
+        botFloat.setAttribute('aria-hidden', 'false');
+        speech.hidden = true;
+        robot?.wake?.();
+        robot?.setEmotion?.('', 0);
+
+        const botRect = botFloat.getBoundingClientRect();
+        const statsRect = statsGrid?.getBoundingClientRect();
+        const edgeGap = window.innerWidth <= 640 ? 12 : 32;
+        const finalX = Math.max(10, window.innerWidth - botRect.width - edgeGap);
+        const desiredY = statsRect
+            ? statsRect.top + Math.min(statsRect.height * .5, 92) - botRect.height * .38
+            : window.innerHeight * .3;
+        const finalY = Math.min(
+            Math.max(82, desiredY),
+            Math.max(82, window.innerHeight - botRect.height - 18)
+        );
+        botFloat.style.left = `${finalX}px`;
+        botFloat.style.top = `${finalY}px`;
+        botFloat.style.right = 'auto';
+        botFloat.style.bottom = 'auto';
+
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (!reduceMotion && typeof botFloat.animate === 'function') {
+            const finalCenterX = finalX + botRect.width / 2;
+            const finalCenterY = finalY + botRect.height / 2;
+            const radiusX = Math.min(640, Math.max(170, (window.innerWidth - botRect.width) * .43));
+            const radiusY = Math.max(70, Math.min(
+                220,
+                finalCenterY - 24,
+                window.innerHeight - finalCenterY - 24
+            ));
+            const orbitCenterX = finalCenterX - radiusX;
+            const flightFrames = [];
+            for (let step = 0; step <= 8; step++) {
+                const angle = -(Math.PI * 2 * step / 8);
+                const pointX = orbitCenterX + Math.cos(angle) * radiusX;
+                const pointY = finalCenterY + Math.sin(angle) * radiusY;
+                const tilt = step === 0 || step === 8 ? 0 : Math.sin(angle) * -7;
+                flightFrames.push({
+                    offset: step * .105,
+                    opacity: step === 0 ? 0 : 1,
+                    transform: `translate(${(pointX - finalCenterX).toFixed(1)}px, ${(pointY - finalCenterY).toFixed(1)}px) rotate(${tilt.toFixed(1)}deg) scale(${step === 0 ? '.72' : '1'})`
+                });
+            }
+            flightFrames.push({ offset:.94, opacity:1, transform:'translate(-12px, -5px) rotate(-2deg) scale(1.04)' });
+            flightFrames.push({ offset:1, opacity:1, transform:'translate(0, 0) rotate(0) scale(1)' });
+            const flight = botFloat.animate(flightFrames, {
+                duration:4400,
+                easing:'linear',
+                fill:'both'
+            });
+            await flight.finished.catch(() => undefined);
+            flight.cancel();
+        }
+
+        botFloat.classList.remove('is-dashboard-welcome-tour');
+        speech.className = 'chat-bot-speech evortix-dashboard-summary';
+        speech.hidden = false;
+        speech.setAttribute('aria-hidden', 'false');
+        speech.setAttribute('role', 'status');
+        speech.style.pointerEvents = 'auto';
+        const metricsMarkup = evortixDashboardWelcomeData.metrics.map(metric => `
+            <div class="evortix-dashboard-summary-metric${metric.overdue ? ' is-overdue' : ''}">
+                <div class="evortix-dashboard-summary-metric-top">
+                    <i class="fas ${escapeSummaryHtml(metric.icon)}" aria-hidden="true"></i>
+                    <strong class="evortix-dashboard-summary-value">${escapeSummaryHtml(metric.value)}</strong>
+                </div>
+                <div class="evortix-dashboard-summary-label">${escapeSummaryHtml(metric.label)}</div>
+                <div class="evortix-dashboard-summary-meta">${escapeSummaryHtml(metric.meta)}</div>
+            </div>`).join('');
+        speech.innerHTML = `
+            <div class="evortix-dashboard-summary-head">
+                <div>
+                    <div class="evortix-dashboard-summary-eyebrow">Live overview</div>
+                    <strong class="evortix-dashboard-summary-title">Your sales dashboard snapshot</strong>
+                </div>
+                <button type="button" class="evortix-dashboard-summary-close" aria-label="Dismiss dashboard overview">
+                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="evortix-dashboard-summary-intro">Here is what your summary cards are reporting right now.</div>
+            <div class="evortix-dashboard-summary-grid">${metricsMarkup}</div>`;
+
+        statsGrid?.classList.add('is-evortix-highlight');
+        window.setTimeout(() => statsGrid?.classList.remove('is-evortix-highlight'), 3800);
+        if (typeof robot?.point === 'function') robot.point('left', 7000);
+        else robot?.setEmotion?.('happy', 2600);
+
+        let summaryTimer = null;
+        const dismissSummary = () => {
+            window.clearTimeout(summaryTimer);
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+            speech.setAttribute('data-dashboard-summary-dismissed', 'true');
+            robot?.setEmotion?.('', 0);
+            signalWelcomeComplete();
+        };
+        speech.querySelector('.evortix-dashboard-summary-close')?.addEventListener('click', event => {
+            event.stopPropagation();
+            dismissSummary();
+        });
+        summaryTimer = window.setTimeout(dismissSummary, 15000);
+    } catch (error) {
+        console.warn('Evortix dashboard welcome could not complete:', error);
+        document.getElementById('chat-bot-float')?.classList.remove('is-dashboard-welcome-tour');
+        signalWelcomeComplete();
+    }
+});
+
 (() => {
     const canTilt = window.matchMedia('(hover: hover) and (pointer: fine)').matches
         && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
