@@ -1724,7 +1724,7 @@ include '../../includes/navbar.php';
     padding: 1.5rem;
 }
 
-#addClientModal.modal-modern.add-client-modal {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal {
     --add-client-modal-top-offset: var(--add-client-page-top, 86px);
     top: var(--add-client-modal-top-offset);
     left: var(--shell-sidebar-width);
@@ -1741,12 +1741,12 @@ include '../../includes/navbar.php';
     overflow-y: auto;
 }
 
-#page-content-wrapper.sidebar-collapsed #addClientModal.modal-modern.add-client-modal {
+#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal {
     left: var(--shell-sidebar-collapsed-width);
     width: calc(100vw - var(--shell-sidebar-collapsed-width));
 }
 
-body:has(#addClientModal.show) .modal-backdrop {
+body:has(#addClientModal.show, #addProjectModal.show) .modal-backdrop {
     --add-client-modal-top-offset: var(--add-client-page-top, 86px);
     top: var(--add-client-modal-top-offset);
     left: var(--shell-sidebar-width);
@@ -1756,12 +1756,12 @@ body:has(#addClientModal.show) .modal-backdrop {
     bottom: auto;
 }
 
-body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-backdrop {
+body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjectModal).show) .modal-backdrop {
     left: var(--shell-sidebar-collapsed-width);
     width: calc(100vw - var(--shell-sidebar-collapsed-width));
 }
 
-#addClientModal.modal-modern.add-client-modal .modal-dialog {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-dialog {
     width: 100%;
     max-width: none;
     min-height: 100%;
@@ -1771,7 +1771,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     align-items: stretch;
 }
 
-#addClientModal.modal-modern.add-client-modal .modal-content {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-content {
     width: 100%;
     min-height: 100%;
     height: auto;
@@ -1787,33 +1787,33 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     overflow: visible;
 }
 
-#addClientModal.modal-modern.add-client-modal .modal-header {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-header {
     padding: 1rem 1.75rem;
     background: linear-gradient(135deg, #0d6786 0%, #0a5570 100%);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 10px 28px rgba(9, 80, 110, 0.16);
 }
 
-#addClientModal.modal-modern.add-client-modal .modal-header .modal-title,
-#addClientModal.modal-modern.add-client-modal .modal-header .modal-title i {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-header .modal-title,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-header .modal-title i {
     color: #ffffff !important;
 }
 
-#addClientModal.modal-modern.add-client-modal .modal-header .btn-close {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-header .btn-close {
     filter: brightness(0) invert(1);
     opacity: 0.82;
 }
 
-#addClientModal.modal-modern.add-client-modal .modal-header .btn-close:hover {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-header .btn-close:hover {
     opacity: 1;
 }
 
-#addClientModal.modal-modern.add-client-modal form {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal form {
     display: block;
     height: auto;
     overflow: visible;
 }
 
-#addClientModal.modal-modern.add-client-modal .modal-body {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-body {
     position: relative;
     display: grid;
     grid-template-rows: auto auto auto;
@@ -1830,7 +1830,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     gap: 1rem;
 }
 
-#addClientModal.modal-modern.add-client-modal .add-client-layout {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-layout {
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -1842,7 +1842,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     overflow: visible;
 }
 
-#addClientModal.modal-modern.add-client-modal .add-client-step:not([hidden]) {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-step:not([hidden]) {
     flex: 0 0 auto;
 }
 
@@ -1986,7 +1986,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     overflow-y: auto;
 }
 
-#addClientModal.modal-modern.add-client-modal .field-group {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .field-group {
     height: auto;
     min-height: 0;
     overflow: visible;
@@ -2216,106 +2216,6 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     pointer-events: none;
 }
 
-.modal-modern.add-client-modal .template-recommendation-trigger {
-    --template-pulse-rgb: 13, 103, 134;
-    position: absolute;
-    top: -0.48rem;
-    right: -0.36rem;
-    z-index: 5;
-    isolation: isolate;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border: 1px solid rgba(13, 103, 134, 0.24);
-    border-radius: 50%;
-    background:
-        linear-gradient(135deg, rgba(13, 103, 134, 0.18), rgba(255, 255, 255, 0.96)),
-        #ffffff;
-    color: #0d6786;
-    box-shadow: 0 8px 18px rgba(13, 103, 134, 0.18);
-    transform-origin: 50% 88%;
-    animation: priorityAttentionSway 1.6s ease-in-out infinite;
-    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
-}
-
-.modal-modern.add-client-modal .template-recommendation-trigger::before {
-    content: "";
-    position: absolute;
-    inset: -4px;
-    border-radius: inherit;
-    border: 2px solid rgba(var(--template-pulse-rgb), 0.34);
-    box-shadow: 0 0 0 0 rgba(var(--template-pulse-rgb), 0.22);
-    animation: recommendationHeartbeat 1.45s ease-in-out infinite;
-    pointer-events: none;
-    z-index: -1;
-}
-
-.modal-modern.add-client-modal .template-recommendation-trigger[hidden] {
-    display: none;
-}
-
-.modal-modern.add-client-modal .template-recommendation-trigger:hover,
-.modal-modern.add-client-modal .template-recommendation-trigger:focus-visible {
-    background: #0d6786;
-    color: #ffffff;
-    box-shadow: 0 10px 22px rgba(13, 103, 134, 0.28);
-    outline: none;
-    animation-play-state: paused;
-    transform: rotate(0deg) scale(1.04);
-}
-
-.modal-modern.add-client-modal .template-recommendation-trigger.is-applied {
-    --template-pulse-rgb: 16, 134, 94;
-    border-color: rgba(16, 134, 94, 0.28);
-    color: #10865e;
-    box-shadow: 0 8px 18px rgba(16, 134, 94, 0.16);
-    animation: none;
-}
-
-.modal-modern.add-client-modal .template-recommendation-trigger.is-applied::before {
-    animation: none;
-    border-color: rgba(16, 134, 94, 0.34);
-    box-shadow: 0 0 0 0 rgba(16, 134, 94, 0.18);
-    opacity: 0.7;
-}
-
-.modal-modern.add-client-modal .template-recommendation-trigger i {
-    position: relative;
-    z-index: 1;
-    font-size: 0.8rem;
-}
-
-@keyframes recommendationHeartbeat {
-    0%,
-    100% {
-        opacity: 0.82;
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(var(--template-pulse-rgb), 0.18);
-    }
-
-    18% {
-        opacity: 1;
-        transform: scale(1.16);
-        box-shadow: 0 0 0 5px rgba(var(--template-pulse-rgb), 0.06);
-    }
-
-    32% {
-        transform: scale(1);
-    }
-
-    48% {
-        opacity: 0.95;
-        transform: scale(1.1);
-        box-shadow: 0 0 0 8px rgba(var(--template-pulse-rgb), 0);
-    }
-
-    64% {
-        transform: scale(1);
-    }
-}
-
 .modal-modern.add-client-modal .priority-field-shell {
     position: relative;
 }
@@ -2488,12 +2388,6 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .modal-modern.add-client-modal .template-recommendation-trigger::before {
-        animation: none;
-    }
 }
 
 .modal-modern.add-client-modal .template-suggestions-menu {
@@ -2917,7 +2811,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     line-height: 1.45;
 }
 
-#addClientModal.modal-modern.add-client-modal .architect-handoff-note {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .architect-handoff-note {
     margin-bottom: 0;
     border: 1px solid rgba(31, 99, 146, 0.14);
     border-radius: 16px;
@@ -3567,33 +3461,61 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 .modal-modern.add-client-modal .add-client-actions {
     display: inline-flex;
     align-items: center;
-    gap: 0.6rem;
+    justify-content: flex-end;
+    gap: 0.8rem;
+    flex-wrap: wrap;
 }
 
-#addClientModal.modal-modern.add-client-modal .add-client-actions {
-    padding-right: 0;
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-actions {
+    padding-right: 2.25rem;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-actions > button {
+    flex: 0 0 auto;
+    min-width: 98px;
+    margin: 0;
+    white-space: nowrap;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-actions > :is([data-client-next], [data-add-project-next]) {
+    min-width: 88px;
+}
+
+#addProjectModal.modal-modern.add-client-modal .add-client-footer {
+    justify-content: flex-end;
+}
+
+#addProjectModal.modal-modern.add-client-modal .add-project-actions > [data-bs-dismiss="modal"] { order: 1; }
+#addProjectModal.modal-modern.add-client-modal .add-project-actions > [data-generic-save-draft] { order: 2; }
+#addProjectModal.modal-modern.add-client-modal .add-project-actions > [data-add-project-prev] { order: 3; }
+#addProjectModal.modal-modern.add-client-modal .add-project-actions > :is([data-add-project-next], [data-add-project-submit]) { order: 4; }
+#addProjectModal.modal-modern.add-client-modal .add-project-actions > [data-generic-draft-status] {
+    order: 5;
+    align-self: center;
+    margin: 0 !important;
+    white-space: nowrap;
 }
 
 @media (max-width: 991.98px) {
-    #addClientModal.modal-modern.add-client-modal,
-    #page-content-wrapper.sidebar-collapsed #addClientModal.modal-modern.add-client-modal,
-    body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-backdrop,
-    body:has(#addClientModal.show) .modal-backdrop {
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal,
+    #page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal,
+    body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjectModal).show) .modal-backdrop,
+    body:has(#addClientModal.show, #addProjectModal.show) .modal-backdrop {
         --add-client-modal-top-offset: var(--add-client-page-top, 68px);
         left: 0;
         width: 100vw;
     }
 
-    #addClientModal.modal-modern.add-client-modal .modal-body {
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-body {
         overflow: visible;
     }
 
-    #addClientModal.modal-modern.add-client-modal .add-client-layout {
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-layout {
         grid-template-columns: 1fr;
         overflow: visible;
     }
 
-    #addClientModal.modal-modern.add-client-modal .field-group {
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .field-group {
         overflow: visible;
     }
 
@@ -3611,8 +3533,8 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 }
 
 @media (max-width: 768px) {
-    #addClientModal.modal-modern.add-client-modal .modal-header,
-    #addClientModal.modal-modern.add-client-modal .modal-body {
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-header,
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-body {
         padding-left: 1rem;
         padding-right: 1rem;
     }
@@ -3645,7 +3567,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
         align-items: stretch;
     }
 
-    #addClientModal.modal-modern.add-client-modal .modal-footer {
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-footer {
         margin: 0;
         padding: 0.65rem;
     }
@@ -3693,11 +3615,13 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
         grid-template-columns: 1fr 1fr;
     }
 
-    #addClientModal.modal-modern.add-client-modal .add-client-actions {
-        padding-right: 0;
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-actions {
+        padding-right: 2.25rem;
     }
 
-    #addClientModal.modal-modern.add-client-modal .add-client-footer [data-client-submit] {
+    #addClientModal.modal-modern.add-client-modal .add-client-footer [data-client-submit],
+    #addProjectModal.modal-modern.add-client-modal .add-client-footer [data-add-project-submit],
+    #addProjectModal.modal-modern.add-client-modal .add-client-footer [data-generic-draft-status] {
         grid-column: 1 / -1;
     }
 
@@ -3728,7 +3652,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     border-top: 1px solid var(--gray-200);
 }
 
-#addClientModal.modal-modern.add-client-modal .modal-footer {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-footer {
     flex: 0 0 auto;
     margin: 0;
     padding: 0.7rem 1.35rem 0.45rem;
@@ -3739,8 +3663,8 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     backdrop-filter: none;
 }
 
-#addClientModal.modal-modern.add-client-modal .add-client-footer .btn,
-#addClientModal.modal-modern.add-client-modal .add-client-footer .btn-add-modern {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-footer .btn,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-footer .btn-add-modern {
     min-height: 2.45rem;
     padding: 0.52rem 1rem;
     border-radius: 14px;
@@ -3748,7 +3672,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     font-weight: 700;
 }
 
-#addClientModal.modal-modern.add-client-modal .add-client-footer .btn-add-modern {
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-footer .btn-add-modern {
     box-shadow: 0 10px 22px rgba(31, 99, 146, 0.18);
 }
 
@@ -3901,18 +3825,18 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     border-color: rgba(31, 99, 146, 0.24);
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .modal-content {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-content {
     background:
         linear-gradient(135deg, rgba(13, 103, 134, 0.16), rgba(7, 19, 33, 0) 42%),
         #071321;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .modal-header {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-header {
     background: linear-gradient(135deg, #0b3654 0%, #0f5f94 100%);
     border-color: rgba(255, 255, 255, 0.12);
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .modal-footer {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-footer {
     background: transparent;
     border-color: transparent;
     box-shadow: none;
@@ -3929,13 +3853,13 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     color: #8ad2ff;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .field-group {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .field-group {
     background: #0a1b2c;
     border-color: rgba(138, 210, 255, 0.14);
     box-shadow: 0 18px 38px rgba(3, 14, 25, 0.28);
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .add-client-layout {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-layout {
     background: #0a1b2c;
 }
 
@@ -3999,14 +3923,6 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern.add-client-modal .template-suggestion-empty {
     color: #9db6cf;
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .template-recommendation-trigger {
-    background:
-        linear-gradient(135deg, rgba(13, 103, 134, 0.28), rgba(10, 27, 44, 0.92)),
-        #091827;
-    border-color: rgba(138, 210, 255, 0.24);
-    color: #8fd3ff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger {
@@ -4827,9 +4743,6 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                                     <label class="form-label">Project Type<span class="required-mark">*</span></label>
                                     <div class="template-type-picker" data-template-picker>
                                         <input type="text" name="project_type" class="form-control" placeholder="e.g. E-commerce Website" required autocomplete="off" data-template-picker-input>
-                                        <button type="button" class="template-recommendation-trigger" data-template-recommendation data-review-project-template hidden aria-label="Review project template recommendation">
-                                            <i class="fas fa-magic" aria-hidden="true"></i>
-                                        </button>
                                         <div class="template-suggestions-menu" data-template-picker-menu hidden></div>
                                     </div>
                                     <select name="project_template_id" class="form-select mt-2" data-template-version-select hidden aria-label="Template version"></select>
@@ -5162,7 +5075,7 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
 
 <!-- Add Project Modal -->
 <div class="modal fade modal-modern add-client-modal add-project-modal" id="addProjectModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -5455,12 +5368,14 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                     </div>
                 </div>
                 <div class="modal-footer add-client-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-outline-secondary" data-add-project-prev hidden>Previous</button>
-                    <button type="button" class="btn-add-modern" data-add-project-next>Next</button>
-                    <button type="submit" name="add_project" class="btn-add-modern" data-add-project-submit hidden>
-                        <i class="fas fa-paper-plane me-1"></i> Add Project
-                    </button>
+                    <div class="add-client-actions add-project-actions">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-outline-secondary" data-add-project-prev hidden>Previous</button>
+                        <button type="button" class="btn-add-modern" data-add-project-next>Next</button>
+                        <button type="submit" name="add_project" class="btn-add-modern" data-add-project-submit hidden>
+                            <i class="fas fa-paper-plane me-1"></i> Add Project
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>

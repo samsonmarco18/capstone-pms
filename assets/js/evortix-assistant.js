@@ -65,12 +65,21 @@
                 <g class="evx-sleeper" data-robot-part="sleeper">
                     <path d="M84 140 C75 148 72 161 76 176 C80 193 93 206 110 211 C127 206 140 193 144 176 C148 161 145 148 136 140 C129 135 119 132 110 132 C101 132 91 135 84 140Z" fill="url(#evx-shell-lower-${id})" stroke="#b0b6b5" stroke-width="1.7"/>
                     <ellipse cx="110" cy="134" rx="20" ry="5" fill="url(#evx-neck-light-${id})" opacity=".8"/>
+                    <path class="evx-antenna evx-left-antenna" d="M41 72 C40.5 55 42 32 45 14 C48 33 50 55 49 72Z" fill="url(#evx-shell-side-${id})" stroke="#adb3b1" stroke-width="1" stroke-linejoin="round"/>
+                    <path class="evx-antenna evx-right-antenna" d="M179 72 C179.5 55 178 32 175 14 C172 33 170 55 171 72Z" fill="url(#evx-shell-side-${id})" stroke="#adb3b1" stroke-width="1" stroke-linejoin="round"/>
+                    <g class="evx-ear evx-left-ear">
+                        <path d="M45 63 C40 63 37 70 37 82.5 C37 95 40 102 45 102 C50 102 52 95 52 82.5 C52 70 50 63 45 63Z" fill="url(#evx-shell-side-${id})" stroke="#b2b8b6" stroke-width="1"/>
+                        <path d="M45 72 C41 73 39 77 39.5 82 C40 87 42 90 45 91" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" opacity=".56"/>
+                        <path d="M45 75.5 C42.7 76.5 41.5 79 42 82 C42.3 85 43.3 87 45 88" fill="none" stroke="#aab1af" stroke-width="1" stroke-linecap="round" opacity=".72"/>
+                    </g>
+                    <g class="evx-ear evx-right-ear">
+                        <path d="M175 63 C180 63 183 70 183 82.5 C183 95 180 102 175 102 C170 102 168 95 168 82.5 C168 70 170 63 175 63Z" fill="url(#evx-shell-side-${id})" stroke="#b2b8b6" stroke-width="1"/>
+                        <path d="M175 72 C179 73 181 77 180.5 82 C180 87 178 90 175 91" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round" opacity=".56"/>
+                        <path d="M175 75.5 C177.3 76.5 178.5 79 178 82 C177.7 85 176.7 87 175 88" fill="none" stroke="#aab1af" stroke-width="1" stroke-linecap="round" opacity=".72"/>
+                    </g>
                     <path d="M45 77 C46 38 84 17 110 17 C136 17 174 38 175 77 L171 104 C166 128 142 139 110 139 C78 139 54 128 49 104Z" fill="url(#evx-shell-${id})" stroke="#adb4b2" stroke-width="2"/>
-                    <rect x="38" y="67" width="13" height="35" rx="7" fill="url(#evx-shell-side-${id})"/>
-                    <rect x="169" y="67" width="13" height="35" rx="7" fill="url(#evx-shell-side-${id})"/>
                     <path d="M53 76 C55 49 77 38 110 38 C143 38 165 49 167 76 L164 98 C160 116 140 124 110 124 C80 124 60 116 56 98Z" fill="url(#evx-face-${id})" stroke="#262b2a" stroke-width="1.7"/>
                     <path d="M75 84 Q84 94 94 84 M126 84 Q136 94 145 84" fill="none" stroke="#2ec8ee" stroke-width="6" stroke-linecap="round" filter="url(#evx-glow-${id})"/>
-                    <path d="M69 38 L64 9 M151 38 L156 9" stroke="#aeb4b2" stroke-width="2.2" stroke-linecap="round"/>
                 </g>
                 <g class="evx-sleep-z" aria-hidden="true">
                     <text x="171" y="65" fill="#25bee9" font-family="Arial, sans-serif" font-size="20" font-weight="800">Z</text>
@@ -91,15 +100,17 @@
                 <ellipse class="evx-neck-shine" cx="106" cy="137.8" rx="8" ry="1.4" fill="#efffff" opacity=".48"/>
 
                 <g class="evx-head" data-robot-part="head">
-                    <path class="evx-antenna evx-left-antenna" d="M57 50 L51 9" fill="none" stroke="#a9afad" stroke-width="2.4" stroke-linecap="round"/>
-                    <path class="evx-antenna evx-right-antenna" d="M163 50 L169 9" fill="none" stroke="#a9afad" stroke-width="2.4" stroke-linecap="round"/>
+                    <path class="evx-antenna evx-left-antenna" d="M38 68 C37.5 51 39 27 42 10 C45 29 47 51 46 68Z" fill="url(#evx-shell-side-${id})" stroke="#adb3b1" stroke-width="1" stroke-linejoin="round"/>
+                    <path class="evx-antenna evx-right-antenna" d="M182 68 C182.5 51 181 27 178 10 C175 29 173 51 174 68Z" fill="url(#evx-shell-side-${id})" stroke="#adb3b1" stroke-width="1" stroke-linejoin="round"/>
                     <g class="evx-ear evx-left-ear">
-                        <rect x="31" y="61" width="17" height="43" rx="9" fill="url(#evx-shell-side-${id})" stroke="#b2b8b6" stroke-width="1.2"/>
-                        <path d="M39 69 V96" stroke="#f9ffff" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+                        <path d="M40 59 C33 59 29 68 29 81.5 C29 95 33 104 40 104 C47 104 50 95 50 81.5 C50 68 47 59 40 59Z" fill="url(#evx-shell-side-${id})" stroke="#b2b8b6" stroke-width="1.15"/>
+                        <path d="M40 70 C35 71 32.5 76 33 82 C33.5 88 36 92 40 93" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity=".56"/>
+                        <path d="M40 74 C37 75 35.5 78 36 82 C36.3 85.5 37.8 88 40 89" fill="none" stroke="#aab1af" stroke-width="1.15" stroke-linecap="round" opacity=".72"/>
                     </g>
                     <g class="evx-ear evx-right-ear">
-                        <rect x="172" y="61" width="17" height="43" rx="9" fill="url(#evx-shell-side-${id})" stroke="#b2b8b6" stroke-width="1.2"/>
-                        <path d="M181 69 V96" stroke="#f9ffff" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+                        <path d="M180 59 C187 59 191 68 191 81.5 C191 95 187 104 180 104 C173 104 170 95 170 81.5 C170 68 173 59 180 59Z" fill="url(#evx-shell-side-${id})" stroke="#b2b8b6" stroke-width="1.15"/>
+                        <path d="M180 70 C185 71 187.5 76 187 82 C186.5 88 184 92 180 93" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity=".56"/>
+                        <path d="M180 74 C183 75 184.5 78 184 82 C183.7 85.5 182.2 88 180 89" fill="none" stroke="#aab1af" stroke-width="1.15" stroke-linecap="round" opacity=".72"/>
                     </g>
                     <path class="evx-head-shell" d="M37 72 C38 31 84 8 110 8 C136 8 182 31 183 72 L179 102 C175 126 148 138 110 138 C72 138 45 126 41 102Z" fill="url(#evx-shell-${id})" stroke="#aeb5b3" stroke-width="2.1"/>
                     <path d="M51 43 C64 20 86 13 107 13" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity=".72"/>
