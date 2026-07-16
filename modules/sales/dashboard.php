@@ -1556,6 +1556,11 @@ include '../../includes/navbar.php';
     background: #d1fae5;
 }
 
+.sales-insights-column .delay-insights-wrap,
+.sales-insights-column .delay-compact-card {
+    height: 100%;
+}
+
 .sales-insights-column .delay-insights-wrap {
     margin-bottom: 0;
 }
@@ -2293,7 +2298,7 @@ body.dark-mode .evortix-3d-platform {
     <!-- Insights and Recent Clients Row -->
     <div class="row g-4 mb-4">
         <div class="col-lg-6">
-            <div class="list-card">
+            <div class="list-card h-100">
                 <div class="card-header">
                     <h5>
                         <i class="fas fa-user-plus"></i>
@@ -2337,9 +2342,12 @@ body.dark-mode .evortix-3d-platform {
             delayInsightsRenderCompactList($conn, $user, [
                 'limit' => max(1, (int) $insightProjectCount),
                 'risk_level' => 'high',
-                'title' => 'High Risk Project Insights',
-                'subtitle' => 'All High Risk project signals with direct links to each full insight page.',
+                'title' => 'Project Insight List',
+                'subtitle' => 'High-risk project signals with direct links to each full insight page.',
                 'button_label' => 'View Project',
+                'show_empty' => true,
+                'empty_title' => 'No high-risk project insights',
+                'empty_message' => 'Projects will appear here when a high-risk insight needs your attention.',
             ]);
             ?>
         </div>
