@@ -4049,6 +4049,7 @@ body {
     --role-scene-accent-light: #41a7d8;
     --role-scene-rgb: 31, 99, 146;
     position: relative;
+    top: 10px;
     width: min(100%, 300px);
     height: 138px;
     margin-left: auto;
@@ -4224,6 +4225,42 @@ body {
     background: linear-gradient(145deg, rgba(23, 63, 91, 0.98), rgba(7, 25, 41, 0.98)) !important;
     border-color: rgba(138, 210, 255, 0.18);
     box-shadow: inset 2px 2px 0 rgba(138, 210, 255, 0.1), 0 5px 0 rgba(0, 0, 0, 0.56), 0 14px 22px rgba(0, 0, 0, 0.32) !important;
+}
+
+/* Replay dashboard data visuals from their starting state on page load. */
+:is(.role-dashboard-shell, .sales-dashboard-shell).dashboard-load-ready canvas {
+    transform-origin: center;
+    animation: dashboardChartReveal 720ms cubic-bezier(0.22, 1, 0.36, 1) var(--dashboard-chart-delay, 0ms) both;
+}
+
+:is(.role-dashboard-shell, .sales-dashboard-shell).dashboard-load-ready :is(
+    .progress-bar,
+    .progress-bar-custom,
+    .qa-progress-bar,
+    .release-progress-bar
+) {
+    transform-origin: left center;
+    animation: dashboardProgressFill 1100ms cubic-bezier(0.22, 1, 0.36, 1) var(--dashboard-progress-delay, 0ms) both;
+}
+
+@keyframes dashboardChartReveal {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes dashboardProgressFill {
+    from {
+        transform: scaleX(0);
+    }
+    to {
+        transform: scaleX(1);
+    }
 }
 
 @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
