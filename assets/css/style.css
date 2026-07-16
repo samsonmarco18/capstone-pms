@@ -4103,6 +4103,7 @@ body {
 .role-3d-scene--developer,
 .role-3d-scene--expert,
 .role-3d-scene--qa,
+.role-3d-scene--sales,
 .role-3d-scene--sul {
     --role-scene-accent: #15557f;
     --role-scene-accent-light: #41a7d8;

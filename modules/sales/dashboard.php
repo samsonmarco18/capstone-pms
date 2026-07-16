@@ -2018,26 +2018,25 @@ body.dark-mode .evortix-3d-platform {
 }
 </style>
 
-<div class="container-fluid px-4 py-4 sales-dashboard-shell">
+<div class="container-fluid px-4 py-4 sales-dashboard-shell role-dashboard-shell">
     <!-- Welcome Section -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card border-0 shadow-sm sales-dashboard-hero">
+            <div class="card border-0 shadow-sm sales-dashboard-hero role-dashboard-hero">
                 <div class="card-body p-4">
                     <div class="row align-items-center g-3">
-                        <div class="col-lg-8">
+                        <div class="col-lg-8 role-dashboard-hero-copy">
                             <span class="badge sales-overview-badge mb-2 px-3 py-2">Sales Overview</span>
                             <h1 class="h3 mb-1">Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h1>
                             <p class="text-muted mb-0 small">Sales Dashboard - Track clients, manage projects, and monitor performance metrics for business growth.</p>
                         </div>
                         <div class="col-lg-4 d-none d-lg-flex justify-content-end">
-                            <div class="evortix-3d-scene" aria-hidden="true">
-                                <div class="evortix-3d-platform">
-                                    <span class="evortix-3d-pillar pillar-one"></span>
-                                    <span class="evortix-3d-pillar pillar-two"></span>
-                                    <span class="evortix-3d-pillar pillar-three"></span>
-                                    <span class="evortix-3d-orbit"></span>
-                                    <span class="evortix-3d-core"><i class="fas fa-chart-line"></i></span>
+                            <div class="role-3d-scene role-3d-scene--sales" aria-hidden="true">
+                                <div class="role-3d-platform">
+                                    <span class="role-3d-node role-3d-node--one"><i class="fas fa-handshake"></i></span>
+                                    <span class="role-3d-node role-3d-node--two"><i class="fas fa-chart-column"></i></span>
+                                    <span class="role-3d-orbit"></span>
+                                    <span class="role-3d-core"><i class="fas fa-chart-line"></i></span>
                                 </div>
                             </div>
                         </div>
@@ -2487,7 +2486,7 @@ body.dark-mode .evortix-3d-platform {
         return;
     }
 
-    document.querySelectorAll('.sales-dashboard-hero, .stat-card-modern').forEach((card) => {
+    document.querySelectorAll('.stat-card-modern').forEach((card) => {
         let animationFrame = null;
 
         card.addEventListener('pointermove', (event) => {
