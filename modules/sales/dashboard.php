@@ -1739,6 +1739,7 @@ include '../../includes/navbar.php';
 
 .evortix-3d-scene {
     position: relative;
+    top: 10px;
     width: min(100%, 300px);
     height: 138px;
     margin-left: auto;
