@@ -71,8 +71,6 @@ function initAppWide3d() {
         return;
     }
 
-    pageRoot.classList.add('app-3d-enabled');
-
     const surfaceSelector = [
         '.card',
         '.main-card',

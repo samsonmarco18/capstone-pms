@@ -4528,10 +4528,10 @@ body {
     color: var(--app-ui-text);
 }
 
-/* System-wide 3D experience for non-dashboard pages */
-#page-content-wrapper.app-3d-enabled {
-    perspective: 1600px;
-}
+/* System-wide 3D experience for non-dashboard pages.
+ * Keep perspective on each surface instead of the page wrapper: perspective
+ * on this ancestor makes fixed Bootstrap modals use the wrapper as their
+ * containing block, which shifts viewport dialogs on long pages. */
 
 #page-content-wrapper .app-3d-surface.app-3d-surface {
     border-color: var(--app-ui-border) !important;
