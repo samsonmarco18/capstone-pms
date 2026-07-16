@@ -69,11 +69,11 @@
                 <rect x="51" y="190" width="116" height="16" rx="8" fill="#071d39" stroke="#5ee8ff" stroke-width="2"/>
                 <use href="#evx-system-logo-${id}" x="101" y="189" width="18" height="18"/>
                 <g class="evx-sleeper" data-robot-part="sleeper">
-                    <path d="M54 99 Q58 54 107 51 Q156 54 161 99 L154 131 Q107 147 61 131Z" fill="url(#evx-shell-${id})" stroke="#6889a5" stroke-width="2.6"/>
-                    <use href="#evx-system-logo-${id}" x="99" y="57" width="17" height="17"/>
-                    <path d="M55 92 Q44 94 46 113 Q48 125 60 122Z" fill="url(#evx-shell-${id})" stroke="#6889a5" stroke-width="2"/>
-                    <path d="M159 92 Q170 94 168 113 Q166 125 154 122Z" fill="url(#evx-shell-${id})" stroke="#6889a5" stroke-width="2"/>
-                    <rect x="62" y="76" width="91" height="55" rx="25" fill="url(#evx-face-${id})" stroke="#041426" stroke-width="3"/>
+                    <rect x="95" y="47" width="25" height="11" rx="6" fill="url(#evx-shell-shadow-${id})"/>
+                    <path d="M51 93 Q54 58 82 52 Q108 46 134 52 Q158 59 163 93 L157 126 Q108 143 59 126Z" fill="url(#evx-shell-${id})" stroke="#b3bdcb" stroke-width="2.6"/>
+                    <rect x="42" y="82" width="15" height="38" rx="8" fill="url(#evx-shell-shadow-${id})"/>
+                    <rect x="158" y="82" width="15" height="38" rx="8" fill="url(#evx-shell-shadow-${id})"/>
+                    <rect x="59" y="69" width="98" height="63" rx="26" fill="url(#evx-face-${id})" stroke="#041426" stroke-width="2.5"/>
                     <path d="M77 104 Q86 113 95 104 M119 104 Q128 113 137 104" fill="none" stroke="#51f2ff" stroke-width="6" stroke-linecap="round"/>
                     <path d="M99 116 Q107 123 115 116" fill="none" stroke="#51f2ff" stroke-width="4" stroke-linecap="round"/>
                     <path d="M73 117 l5 -2 M137 115 l5 2" stroke="#ff86a8" stroke-width="2.5" stroke-linecap="round"/>
@@ -88,7 +88,7 @@
             </g>
 
             <g class="evx-character" data-robot-part="character">
-                <g class="evx-legs" data-robot-part="legs">
+                <g class="evx-legs evx-reference-legs" data-robot-part="legs">
                     <g class="evx-leg evx-left-leg" data-robot-part="left-leg">
                         <path d="M79 178 C70 187 68 204 72 216 L91 216 C95 201 95 187 91 178Z" fill="url(#evx-shell-${id})" stroke="#7894ac" stroke-width="2"/>
                         <path d="M67 212 Q82 207 97 214 L96 224 Q79 230 64 221Z" fill="url(#evx-shell-${id})" stroke="#173c5e" stroke-width="2.4"/>
@@ -102,20 +102,14 @@
                 </g>
 
                 <g class="evx-body" data-robot-part="body">
-                    <path d="M68 113 Q110 92 152 113 L147 176 Q110 198 73 176Z" fill="url(#evx-shell-${id})" stroke="#7894ac" stroke-width="2.2"/>
-                    <path d="M77 122 Q110 106 143 122 L138 162 Q110 174 82 162Z" fill="#f8fbfe" stroke="#abc0d2" stroke-width="1.8"/>
-                    <path d="M85 153 Q110 165 135 153 L132 176 Q110 187 88 176Z" fill="url(#evx-shell-shadow-${id})" opacity=".7"/>
-                    <path d="M88 120 L97 109 H123 L132 120 L124 136 H96Z" fill="#102d49" stroke="#07213b" stroke-width="2"/>
-                    <path d="M97 118 H123 L119 130 H101Z" fill="url(#evx-blue-${id})" stroke="#5bdfff" stroke-width="1.6"/>
-                    <text x="110" y="149" text-anchor="middle" fill="#123c60" font-family="Arial, sans-serif" font-size="8.5" font-weight="900" letter-spacing=".3">EVORTIX</text>
-                    <path d="M82 137 L72 145 L73 160 L83 157Z" fill="#128fee" stroke="#0b66bb" stroke-width="1.5"/>
-                    <path d="M138 137 L148 145 L147 160 L137 157Z" fill="#128fee" stroke="#0b66bb" stroke-width="1.5"/>
+                    <path d="M74 111 Q110 98 146 111 L151 158 Q145 197 110 209 Q75 197 69 158Z" fill="url(#evx-shell-${id})" stroke="#b3bdcb" stroke-width="2.2"/>
+                    <path d="M82 118 Q110 106 138 118 L143 154 Q139 181 110 190 Q81 181 77 154Z" fill="#f7f9fc" opacity=".72"/>
+                    <path d="M73 157 Q110 177 147 157 L144 176 Q110 198 76 176Z" fill="url(#evx-shell-shadow-${id})" opacity=".58"/>
+                    <path d="M75 158 Q91 166 91 176 Q110 183 129 176 Q129 166 145 158" fill="none" stroke="#aeb8c6" stroke-width="3" stroke-linejoin="round"/>
                 </g>
 
                 <g class="evx-arm evx-left-arm" data-robot-part="left-arm">
-                    <circle cx="67" cy="120" r="12" fill="url(#evx-blue-${id})" stroke="#0b4f93" stroke-width="2"/>
-                    <path d="M61 121 Q44 132 42 153 Q43 167 53 173 Q62 171 64 162 L67 136Z" fill="url(#evx-shell-${id})" stroke="#7894ac" stroke-width="2.2"/>
-                    <path d="M45 151 Q38 169 47 181 Q54 187 61 180 Q67 172 61 163Z" fill="url(#evx-shell-shadow-${id})" stroke="#173c5e" stroke-width="2"/>
+                    <path d="M72 119 Q55 117 47 136 Q38 161 39 184 Q40 199 51 201 Q62 203 68 189 Q74 169 79 139 Q81 124 72 119Z" fill="url(#evx-shell-shadow-${id})" stroke="#b3bdcb" stroke-width="2.2"/>
                     <g class="evx-hand evx-left-hand" data-robot-part="left-hand">
                         <path class="evx-wrist-cuff" d="M43 173 Q51 177 60 174 L61 181 Q51 185 42 180Z" fill="url(#evx-blue-${id})" stroke="#084b88" stroke-width="1.8"/>
                         <rect x="39" y="187" width="5" height="15" rx="2.5" fill="#172938" stroke="#071522" stroke-width="1.4"/>
@@ -129,9 +123,7 @@
                 </g>
 
                 <g class="evx-arm evx-right-arm" data-robot-part="right-arm">
-                    <circle cx="153" cy="120" r="12" fill="url(#evx-blue-${id})" stroke="#0b4f93" stroke-width="2"/>
-                    <path d="M159 121 Q176 132 178 153 Q177 167 167 173 Q158 171 156 162 L153 136Z" fill="url(#evx-shell-${id})" stroke="#7894ac" stroke-width="2.2"/>
-                    <path d="M175 151 Q182 169 173 181 Q166 187 159 180 Q153 172 159 163Z" fill="url(#evx-shell-shadow-${id})" stroke="#173c5e" stroke-width="2"/>
+                    <path d="M148 119 Q165 117 173 136 Q182 161 181 184 Q180 199 169 201 Q158 203 152 189 Q146 169 141 139 Q139 124 148 119Z" fill="url(#evx-shell-shadow-${id})" stroke="#b3bdcb" stroke-width="2.2"/>
                     <g class="evx-hand evx-right-hand" data-robot-part="right-hand">
                         <path class="evx-wrist-cuff" d="M160 174 Q169 177 177 173 L178 180 Q169 185 159 181Z" fill="url(#evx-blue-${id})" stroke="#084b88" stroke-width="1.8"/>
                         <rect x="176" y="187" width="5" height="15" rx="2.5" fill="#172938" stroke="#071522" stroke-width="1.4"/>
@@ -145,28 +137,28 @@
                 </g>
 
                 <g class="evx-head" data-robot-part="head">
-                    <path d="M49 62 Q52 19 110 13 Q168 19 171 62 L164 104 Q110 126 56 104Z" fill="url(#evx-shell-${id})" stroke="#718ba2" stroke-width="2.4"/>
-                    <path d="M72 24 Q110 7 148 24" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity=".8"/>
-                    <use href="#evx-system-logo-${id}" x="100" y="15" width="20" height="20"/>
-                    <g class="evx-ear evx-left-ear"><path d="M48 54 Q36 57 38 79 Q40 94 53 92Z" fill="url(#evx-shell-${id})" stroke="#718ba2" stroke-width="2"/><path d="M45 60 V87" stroke="#118de9" stroke-width="5" stroke-linecap="round"/></g>
-                    <g class="evx-ear evx-right-ear"><path d="M172 54 Q184 57 182 79 Q180 94 167 92Z" fill="url(#evx-shell-${id})" stroke="#718ba2" stroke-width="2"/><path d="M175 60 V87" stroke="#118de9" stroke-width="5" stroke-linecap="round"/></g>
-                    <rect class="evx-face" data-robot-part="face" x="54" y="38" width="112" height="68" rx="31" fill="url(#evx-face-${id})" stroke="#06172a" stroke-width="3"/>
-                    <path d="M68 47 Q110 31 152 47" fill="none" stroke="#5c91b5" stroke-width="2" opacity=".25"/>
+                    <rect x="91" y="5" width="38" height="17" rx="9" fill="url(#evx-shell-shadow-${id})"/>
+                    <path d="M43 58 Q45 25 75 18 Q110 9 145 18 Q175 25 177 58 L174 91 Q169 119 110 124 Q51 119 46 91Z" fill="url(#evx-shell-${id})" stroke="#b3bdcb" stroke-width="2.4"/>
+                    <path d="M57 30 Q76 18 94 18" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity=".72"/>
+                    <g class="evx-ear evx-left-ear"><rect x="31" y="50" width="19" height="48" rx="10" fill="url(#evx-shell-shadow-${id})"/></g>
+                    <g class="evx-ear evx-right-ear"><rect x="170" y="50" width="19" height="48" rx="10" fill="url(#evx-shell-shadow-${id})"/></g>
+                    <rect class="evx-face" data-robot-part="face" x="51" y="34" width="118" height="75" rx="29" fill="url(#evx-face-${id})" stroke="#071725" stroke-width="2.4"/>
+                    <path d="M60 44 Q110 26 160 44" fill="none" stroke="#4a718c" stroke-width="2" opacity=".2"/>
 
                     <g class="evx-face-features" data-robot-part="eyes">
                         <g class="evx-eye-track" data-robot-part="eye-track">
                             <g class="evx-eye evx-left-eye" data-robot-feature="left-eye">
-                                <ellipse class="evx-eye-open" cx="84" cy="69" rx="10" ry="14" fill="url(#evx-eye-${id})" filter="url(#evx-glow-${id})"/>
-                                <ellipse class="evx-pupil" cx="84" cy="70" rx="4.2" ry="6" fill="#04396f"/>
-                                <circle class="evx-pupil-glint" cx="82.5" cy="67.5" r="1.7" fill="#dfffff"/>
+                                <path class="evx-eye-open" d="M72 76 Q73 61 84 60 Q95 61 96 76 Q84 80 72 76Z" fill="url(#evx-eye-${id})" filter="url(#evx-glow-${id})"/>
+                                <ellipse class="evx-pupil" cx="84" cy="70" rx="3.5" ry="4.8" fill="#0798b8" opacity=".28"/>
+                                <circle class="evx-pupil-glint" cx="82.5" cy="66.5" r="1.5" fill="#dfffff"/>
                                 <path class="evx-eye-happy" d="M74 73 Q84 59 94 73" fill="none" stroke="#51f2ff" stroke-width="7" stroke-linecap="round"/>
                                 <path class="evx-eye-sad" d="M74 65 Q84 75 94 65" fill="none" stroke="#51f2ff" stroke-width="6" stroke-linecap="round"/>
                                 <path class="evx-eye-wink" d="M74 69 L83 76 L94 64" fill="none" stroke="#51f2ff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
                             </g>
                             <g class="evx-eye evx-right-eye" data-robot-feature="right-eye">
-                                <ellipse class="evx-eye-open" cx="136" cy="69" rx="10" ry="14" fill="url(#evx-eye-${id})" filter="url(#evx-glow-${id})"/>
-                                <ellipse class="evx-pupil" cx="136" cy="70" rx="4.2" ry="6" fill="#04396f"/>
-                                <circle class="evx-pupil-glint" cx="134.5" cy="67.5" r="1.7" fill="#dfffff"/>
+                                <path class="evx-eye-open" d="M124 76 Q125 61 136 60 Q147 61 148 76 Q136 80 124 76Z" fill="url(#evx-eye-${id})" filter="url(#evx-glow-${id})"/>
+                                <ellipse class="evx-pupil" cx="136" cy="70" rx="3.5" ry="4.8" fill="#0798b8" opacity=".28"/>
+                                <circle class="evx-pupil-glint" cx="134.5" cy="66.5" r="1.5" fill="#dfffff"/>
                                 <path class="evx-eye-happy" d="M126 73 Q136 59 146 73" fill="none" stroke="#51f2ff" stroke-width="7" stroke-linecap="round"/>
                                 <path class="evx-eye-sad" d="M126 65 Q136 75 146 65" fill="none" stroke="#51f2ff" stroke-width="6" stroke-linecap="round"/>
                                 <path class="evx-eye-wink" d="M126 64 L137 76 L146 66" fill="none" stroke="#51f2ff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
@@ -176,7 +168,7 @@
                             <path d="M68 84 l5 -2 M70 89 l5 -2" stroke="#ff86a8" stroke-width="2.4" stroke-linecap="round"/>
                             <path d="M147 82 l5 2 M145 87 l5 2" stroke="#ff86a8" stroke-width="2.4" stroke-linecap="round"/>
                         </g>
-                        <path class="evx-mouth evx-mouth-smile" d="M99 86 Q110 98 121 86" fill="#40eaff" stroke="#40eaff" stroke-width="3" stroke-linecap="round"/>
+                        <path class="evx-mouth evx-mouth-smile" d="M99 88 Q110 101 121 88 Q120 101 110 103 Q100 101 99 88Z" fill="#40eaff"/>
                         <path class="evx-mouth evx-mouth-sad" d="M100 94 Q110 84 120 94" fill="none" stroke="#40eaff" stroke-width="4" stroke-linecap="round"/>
                         <ellipse class="evx-mouth evx-mouth-amazed" cx="110" cy="89" rx="6" ry="8" fill="#40eaff"/>
                         <path class="evx-tear" d="M146 80 Q152 88 146 93 Q140 88 146 80Z" fill="#4fcfff"/>

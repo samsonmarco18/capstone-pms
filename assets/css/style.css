@@ -2510,6 +2510,17 @@ body {
     transform-origin: 133px 180px;
 }
 
+.evx-reference-legs,
+.evx-hand {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.evx-assistant .evx-ground-shadow {
+    transform: translateY(7px) scaleX(.82);
+    transform-origin: center;
+}
+
 .evx-eye-track {
     transform: none;
 }
