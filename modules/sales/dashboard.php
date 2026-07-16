@@ -1560,12 +1560,6 @@ include '../../includes/navbar.php';
     margin-bottom: 0;
 }
 
-.sales-insights-column .delay-compact-list {
-    max-height: 760px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-}
-
 html[data-theme="dark"] .sales-dashboard-hero,
 body[data-theme="dark"] .sales-dashboard-hero,
 body.dark-mode .sales-dashboard-hero,
@@ -1852,6 +1846,55 @@ body.dark-mode .release-feature input:checked ~ small {
     color: #7ee3bd;
 }
 
+html[data-theme="dark"] .sales-dashboard-hero,
+body[data-theme="dark"] .sales-dashboard-hero,
+body.dark-mode .sales-dashboard-hero,
+html[data-theme="dark"] .chart-card,
+body[data-theme="dark"] .chart-card,
+body.dark-mode .chart-card,
+html[data-theme="dark"] .list-card,
+body[data-theme="dark"] .list-card,
+body.dark-mode .list-card {
+    --surface-highlight: rgba(138, 210, 255, 0.08);
+    box-shadow:
+        inset 0 1px 0 var(--surface-highlight),
+        0 7px 0 rgba(2, 11, 20, 0.66),
+        0 24px 44px rgba(2, 11, 20, 0.34),
+        0 0 34px rgba(34, 211, 238, 0.07) !important;
+}
+
+html[data-theme="dark"] .stat-card-modern,
+body[data-theme="dark"] .stat-card-modern,
+body.dark-mode .stat-card-modern {
+    --surface-highlight: rgba(138, 210, 255, 0.1);
+    box-shadow:
+        inset 0 1px 0 var(--surface-highlight),
+        0 6px 0 rgba(2, 11, 20, 0.7),
+        0 20px 36px rgba(2, 11, 20, 0.34);
+}
+
+html[data-theme="dark"] .stat-card-modern .stat-icon,
+body[data-theme="dark"] .stat-card-modern .stat-icon,
+body.dark-mode .stat-card-modern .stat-icon {
+    background: linear-gradient(145deg, rgba(23, 63, 91, 0.98), rgba(7, 25, 41, 0.98));
+    border-color: rgba(138, 210, 255, 0.18);
+    box-shadow:
+        inset 2px 2px 0 rgba(138, 210, 255, 0.1),
+        0 5px 0 rgba(2, 11, 20, 0.72),
+        0 14px 22px rgba(2, 11, 20, 0.36);
+}
+
+html[data-theme="dark"] .evortix-3d-platform,
+body[data-theme="dark"] .evortix-3d-platform,
+body.dark-mode .evortix-3d-platform {
+    background:
+        linear-gradient(rgba(138, 210, 255, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(138, 210, 255, 0.1) 1px, transparent 1px),
+        linear-gradient(145deg, rgba(18, 49, 72, 0.98), rgba(5, 21, 35, 0.98));
+    background-size: 22px 22px, 22px 22px, 100% 100%;
+    box-shadow: -9px 12px 0 rgba(2, 11, 20, 0.72), -18px 25px 38px rgba(2, 11, 20, 0.42), 0 0 30px rgba(34, 211, 238, 0.11);
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .stats-grid {
@@ -1951,6 +1994,28 @@ body.dark-mode .release-feature input:checked ~ small {
         min-width: 720px;
     }
 }
+
+@media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+    .sales-dashboard-hero,
+    .stat-card-modern,
+    .chart-card,
+    .list-card {
+        --tilt-x: 0deg !important;
+        --tilt-y: 0deg !important;
+        --card-lift: 0px !important;
+        transform: none !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .evortix-3d-platform,
+    .evortix-3d-orbit {
+        animation: none !important;
+    }
+
+    .stat-overdue.has-alert {
+        animation: none !important;
+    }
+}
 </style>
 
 <div class="container-fluid px-4 py-4 sales-dashboard-shell">
@@ -1959,11 +2024,22 @@ body.dark-mode .release-feature input:checked ~ small {
         <div class="col-12">
             <div class="card border-0 shadow-sm sales-dashboard-hero">
                 <div class="card-body p-4">
-                    <div class="row align-items-center">
-                        <div class="col-12">
+                    <div class="row align-items-center g-3">
+                        <div class="col-lg-8">
                             <span class="badge sales-overview-badge mb-2 px-3 py-2">Sales Overview</span>
                             <h1 class="h3 mb-1">Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h1>
                             <p class="text-muted mb-0 small">Sales Dashboard - Track clients, manage projects, and monitor performance metrics for business growth.</p>
+                        </div>
+                        <div class="col-lg-4 d-none d-lg-flex justify-content-end">
+                            <div class="evortix-3d-scene" aria-hidden="true">
+                                <div class="evortix-3d-platform">
+                                    <span class="evortix-3d-pillar pillar-one"></span>
+                                    <span class="evortix-3d-pillar pillar-two"></span>
+                                    <span class="evortix-3d-pillar pillar-three"></span>
+                                    <span class="evortix-3d-orbit"></span>
+                                    <span class="evortix-3d-core"><i class="fas fa-chart-line"></i></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2403,6 +2479,52 @@ body.dark-mode .release-feature input:checked ~ small {
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+(() => {
+    const canTilt = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+        && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!canTilt) {
+        return;
+    }
+
+    document.querySelectorAll('.sales-dashboard-hero, .stat-card-modern').forEach((card) => {
+        let animationFrame = null;
+
+        card.addEventListener('pointermove', (event) => {
+            if (animationFrame !== null) {
+                cancelAnimationFrame(animationFrame);
+            }
+
+            animationFrame = requestAnimationFrame(() => {
+                const bounds = card.getBoundingClientRect();
+                const pointerX = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
+                const pointerY = Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height));
+                const intensity = card.classList.contains('sales-dashboard-hero') ? 2.4 : 4.5;
+
+                card.style.setProperty('--tilt-x', `${((0.5 - pointerY) * intensity).toFixed(2)}deg`);
+                card.style.setProperty('--tilt-y', `${((pointerX - 0.5) * intensity).toFixed(2)}deg`);
+                card.style.setProperty('--pointer-x', `${(pointerX * 100).toFixed(1)}%`);
+                card.style.setProperty('--pointer-y', `${(pointerY * 100).toFixed(1)}%`);
+                card.classList.add('is-tilting');
+                animationFrame = null;
+            });
+        });
+
+        card.addEventListener('pointerleave', () => {
+            if (animationFrame !== null) {
+                cancelAnimationFrame(animationFrame);
+                animationFrame = null;
+            }
+
+            card.style.setProperty('--tilt-x', '0deg');
+            card.style.setProperty('--tilt-y', '0deg');
+            card.style.setProperty('--pointer-x', '50%');
+            card.style.setProperty('--pointer-y', '50%');
+            card.classList.remove('is-tilting');
+        });
+    });
+})();
+
 document.querySelectorAll('.delete-plan-form').forEach(function (form) {
     form.addEventListener('submit', async function (event) {
         if (form.dataset.confirmedSubmit === '1') {

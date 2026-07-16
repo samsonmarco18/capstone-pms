@@ -3,12 +3,106 @@ $(function () {
     initDarkMode();
     initNotifications();
     initPageHeaderHelp();
+    initAppWide3d();
     initTooltips();
     initModalBackdropRecovery();
     initAppActionHelpers();
+    initRoleDashboard3d();
     initGenericFormDrafts();
     initFormSubmitConfirmations();
 });
+
+function initRoleDashboard3d() {
+    const canTilt = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+        && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!canTilt) {
+        return;
+    }
+
+    document.querySelectorAll('.role-dashboard-hero').forEach((card) => {
+        if (card.dataset.roleHeroTiltInitialized === '1') {
+            return;
+        }
+
+        card.dataset.roleHeroTiltInitialized = '1';
+        let animationFrame = null;
+
+        card.addEventListener('pointermove', (event) => {
+            if (animationFrame !== null) {
+                cancelAnimationFrame(animationFrame);
+            }
+
+            animationFrame = requestAnimationFrame(() => {
+                const bounds = card.getBoundingClientRect();
+                const pointerX = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
+                const pointerY = Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height));
+
+                card.style.setProperty('--role-hero-tilt-x', `${((0.5 - pointerY) * 2.4).toFixed(2)}deg`);
+                card.style.setProperty('--role-hero-tilt-y', `${((pointerX - 0.5) * 2.4).toFixed(2)}deg`);
+                card.style.setProperty('--role-hero-pointer-x', `${(pointerX * 100).toFixed(1)}%`);
+                card.style.setProperty('--role-hero-pointer-y', `${(pointerY * 100).toFixed(1)}%`);
+                card.classList.add('is-role-hero-tilting');
+                animationFrame = null;
+            });
+        });
+
+        const resetTilt = () => {
+            if (animationFrame !== null) {
+                cancelAnimationFrame(animationFrame);
+                animationFrame = null;
+            }
+
+            card.style.setProperty('--role-hero-tilt-x', '0deg');
+            card.style.setProperty('--role-hero-tilt-y', '0deg');
+            card.style.setProperty('--role-hero-pointer-x', '50%');
+            card.style.setProperty('--role-hero-pointer-y', '50%');
+            card.classList.remove('is-role-hero-tilting');
+        };
+
+        card.addEventListener('pointerleave', resetTilt);
+        card.addEventListener('pointercancel', resetTilt);
+    });
+}
+
+function initAppWide3d() {
+    const pageRoot = document.getElementById('page-content-wrapper');
+    if (!pageRoot || pageRoot.querySelector('.sales-dashboard-shell, .role-dashboard-shell')) {
+        return;
+    }
+
+    const surfaceSelector = [
+        '.card',
+        '.main-card',
+        '.info-card',
+        '.form-card',
+        '.checklist-card',
+        '.summary-card',
+        '.report-card',
+        '.calendar-card',
+        '.calendar-panel',
+        '.calendar-stat',
+        '.notification-card',
+        '.folder-tree-card',
+        '.vc-card',
+        '.process-filter-card',
+        '.settings-nav-card',
+        '.settings-card',
+        '.project-card',
+        '.task-card',
+        '.review-card',
+        '.metric-card',
+        '.client-card'
+    ].join(', ');
+
+    pageRoot.querySelectorAll(surfaceSelector).forEach((surface) => {
+        if (surface.closest('.modal, .offcanvas, .dropdown-menu, .chat-widget, .app-confirm-modal')) {
+            return;
+        }
+
+        surface.classList.add('app-3d-surface');
+    });
+}
 
 function initGenericFormDrafts() {
     $('form[method="POST"], form[method="post"]').each(function (formIndex) {

@@ -1006,13 +1006,23 @@ include '../../includes/navbar.php';
     <!-- Welcome Section -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card border-0 shadow-sm">
+            <div class="card border-0 shadow-sm role-dashboard-hero">
                 <div class="card-body p-4">
-                    <div class="row align-items-center">
-                        <div class="col-12">
+                    <div class="row align-items-center g-3">
+                        <div class="col-lg-8 role-dashboard-hero-copy">
                             <span class="badge sul-overview-badge mb-2 px-3 py-2">SUL Overview</span>
                             <h1 class="h3 mb-1">Welcome back, <?php echo htmlspecialchars($user['full_name']); ?>!</h1>
                             <p class="text-muted mb-0 small">Service Unit Leader Dashboard - Monitor resources, tasks, and team performance for optimal project delivery.</p>
+                        </div>
+                        <div class="col-lg-4 d-none d-lg-flex justify-content-end">
+                            <div class="role-3d-scene role-3d-scene--sul" aria-hidden="true">
+                                <div class="role-3d-platform">
+                                    <span class="role-3d-node role-3d-node--one"><i class="fas fa-tasks"></i></span>
+                                    <span class="role-3d-node role-3d-node--two"><i class="fas fa-project-diagram"></i></span>
+                                    <span class="role-3d-orbit"></span>
+                                    <span class="role-3d-core"><i class="fas fa-users"></i></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
