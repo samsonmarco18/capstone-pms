@@ -102,6 +102,7 @@ $totalProjects = $conn->query("SELECT COUNT(*) as count FROM projects")->fetch_a
 $activeProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status != 'completed'")->fetch_assoc()['count'];
 $completedProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status = 'completed'")->fetch_assoc()['count'];
 $overdueProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE timeline_end IS NOT NULL AND timeline_end < CURDATE() AND status NOT IN ('completed', 'cancelled')")->fetch_assoc()['count'];
+$insightProjectCount = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status != 'cancelled'")->fetch_assoc()['count'];
 
 // Get recent clients
 $recentClients = $conn->query("SELECT * FROM clients ORDER BY created_at DESC LIMIT 5");
@@ -276,14 +277,22 @@ $monthlySales = $conn->query("
 
 $projectChecklists = fetchSalesProjectChecklists($conn, 5);
 $releaseMergedTotal = 0;
+$releaseReviewTotal = 0;
 $releaseWaitingTotal = 0;
 $releaseFeatureTotal = 0;
 foreach ($projectChecklists as $projectChecklistSummary) {
     $mergedCount = (int) ($projectChecklistSummary['merged_features'] ?? 0);
     $totalCount = (int) ($projectChecklistSummary['total_features'] ?? 0);
+    $reviewCount = 0;
+    foreach (array_merge($projectChecklistSummary['features'] ?? [], $projectChecklistSummary['additional_features'] ?? []) as $checklistFeature) {
+        if (empty($checklistFeature['is_merged']) && in_array((string) ($checklistFeature['status'] ?? ''), ['in_review', 'for_review', 'qa_testing', 'qa_passed', 'architect_review'], true)) {
+            $reviewCount++;
+        }
+    }
     $releaseMergedTotal += $mergedCount;
+    $releaseReviewTotal += $reviewCount;
     $releaseFeatureTotal += $totalCount;
-    $releaseWaitingTotal += max(0, $totalCount - $mergedCount);
+    $releaseWaitingTotal += max(0, $totalCount - $mergedCount - $reviewCount);
 }
 $releaseCompletionRate = $releaseFeatureTotal > 0 ? (int) round(($releaseMergedTotal / $releaseFeatureTotal) * 100) : 0;
 
@@ -470,6 +479,14 @@ include '../../includes/navbar.php';
 
 .stat-overdue.has-alert {
     animation: overdueHeartbeat 1.8s ease-in-out infinite;
+}
+
+.stat-overdue:not(.has-alert) {
+    --stat-border: rgba(31, 99, 146, 0.14);
+    --stat-border-hover: rgba(31, 99, 146, 0.28);
+    --stat-glow: rgba(31, 99, 146, 0.10);
+    --stat-glow-hover: rgba(31, 99, 146, 0.18);
+    --stat-grid-line: rgba(31, 99, 146, 0.055);
 }
 
 .stat-overdue .stat-icon {
@@ -1325,6 +1342,10 @@ include '../../includes/navbar.php';
     background: #10b981;
 }
 
+.release-summary-pill.review::before {
+    background: #f59e0b;
+}
+
 .release-summary-pill.waiting::before {
     background: rgba(31, 99, 146, 0.35);
 }
@@ -1537,326 +1558,6 @@ include '../../includes/navbar.php';
 
 .sales-insights-column .delay-insights-wrap {
     margin-bottom: 0;
-}
-
-/* Evortix 3D surface system */
-.sales-dashboard-shell {
-    --depth-edge: rgba(15, 74, 110, 0.12);
-    --depth-shadow: rgba(15, 74, 110, 0.2);
-    --surface-highlight: rgba(255, 255, 255, 0.92);
-    perspective: 1600px;
-    isolation: isolate;
-}
-
-.sales-dashboard-shell::before,
-.sales-dashboard-shell::after {
-    content: "";
-    position: fixed;
-    z-index: -1;
-    pointer-events: none;
-    border-radius: 50%;
-    filter: blur(2px);
-}
-
-.sales-dashboard-shell::before {
-    width: 420px;
-    height: 420px;
-    top: 8%;
-    right: -180px;
-    background: radial-gradient(circle, rgba(34, 211, 238, 0.1), rgba(31, 99, 146, 0.035) 46%, transparent 72%);
-}
-
-.sales-dashboard-shell::after {
-    width: 360px;
-    height: 360px;
-    bottom: -160px;
-    left: 8%;
-    background: radial-gradient(circle, rgba(31, 99, 146, 0.09), transparent 70%);
-}
-
-.sales-dashboard-hero,
-.stat-card-modern {
-    --tilt-x: 0deg;
-    --tilt-y: 0deg;
-    --pointer-x: 50%;
-    --pointer-y: 50%;
-    transform: perspective(1100px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y)) translate3d(0, var(--card-lift, 0), 0);
-    transform-style: preserve-3d;
-    will-change: transform;
-    transition: transform 0.18s ease-out, box-shadow 0.22s ease, border-color 0.22s ease;
-}
-
-.sales-dashboard-hero {
-    box-shadow:
-        inset 0 1px 0 var(--surface-highlight),
-        0 7px 0 rgba(15, 74, 110, 0.1),
-        0 22px 42px rgba(15, 74, 110, 0.15),
-        0 0 38px rgba(34, 211, 238, 0.09) !important;
-}
-
-.sales-dashboard-hero:hover {
-    --card-lift: -4px;
-    box-shadow:
-        inset 0 1px 0 var(--surface-highlight),
-        0 9px 0 rgba(15, 74, 110, 0.1),
-        0 30px 54px rgba(15, 74, 110, 0.2),
-        0 0 42px rgba(34, 211, 238, 0.13) !important;
-}
-
-.sales-dashboard-hero::after,
-.stat-card-modern::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    opacity: 0;
-    background: radial-gradient(circle at var(--pointer-x) var(--pointer-y), rgba(255, 255, 255, 0.78), transparent 34%);
-    transition: opacity 0.2s ease;
-}
-
-.sales-dashboard-hero.is-tilting::after,
-.stat-card-modern.is-tilting::after {
-    opacity: 0.45;
-}
-
-.sales-dashboard-hero .card-body,
-.stat-card-modern > * {
-    transform: translateZ(24px);
-}
-
-.sales-dashboard-hero .sales-overview-badge {
-    transform: translateZ(38px);
-}
-
-.stat-card-modern {
-    box-shadow:
-        inset 0 1px 0 var(--surface-highlight),
-        0 6px 0 var(--stat-border),
-        0 18px 32px var(--stat-glow);
-}
-
-.stat-card-modern:hover {
-    --card-lift: -8px;
-    box-shadow:
-        inset 0 1px 0 var(--surface-highlight),
-        0 9px 0 var(--stat-border),
-        0 28px 48px var(--stat-glow-hover),
-        0 0 32px var(--stat-glow-hover);
-}
-
-.stat-card-modern .stat-icon {
-    width: 52px;
-    height: 52px;
-    display: grid;
-    place-items: center;
-    border: 1px solid color-mix(in srgb, var(--stat-color) 20%, transparent);
-    border-radius: 16px;
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), color-mix(in srgb, var(--stat-color) 9%, white));
-    box-shadow:
-        inset 2px 2px 0 rgba(255, 255, 255, 0.9),
-        0 5px 0 color-mix(in srgb, var(--stat-color) 16%, transparent),
-        0 12px 20px color-mix(in srgb, var(--stat-color) 16%, transparent);
-    transform: translateZ(52px) rotate(-4deg);
-}
-
-.stat-card-modern:hover .stat-icon {
-    transform: translateZ(66px) rotate(0deg) scale(1.04);
-}
-
-.stat-card-modern .stat-icon,
-.chart-card,
-.list-card,
-.agenda-summary,
-.agenda-date-group,
-.planner-panel,
-.plan-item {
-    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
-}
-
-.chart-card,
-.list-card {
-    transform: perspective(1400px) translateZ(0);
-    transform-style: preserve-3d;
-    box-shadow:
-        inset 0 1px 0 var(--surface-highlight),
-        0 6px 0 rgba(15, 74, 110, 0.085),
-        0 20px 38px rgba(15, 74, 110, 0.11),
-        0 0 28px rgba(34, 211, 238, 0.07);
-}
-
-.chart-card:hover,
-.list-card:hover {
-    transform: perspective(1400px) translate3d(0, -6px, 18px) rotateX(0.8deg);
-    box-shadow:
-        inset 0 1px 0 var(--surface-highlight),
-        0 9px 0 rgba(15, 74, 110, 0.085),
-        0 30px 54px rgba(15, 74, 110, 0.16),
-        0 0 34px rgba(34, 211, 238, 0.11);
-}
-
-.chart-card .card-header,
-.list-card .card-header {
-    box-shadow: 0 5px 12px rgba(15, 74, 110, 0.06);
-}
-
-.agenda-summary,
-.agenda-date-group,
-.planner-panel,
-.plan-item {
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.88),
-        0 4px 0 rgba(15, 74, 110, 0.07),
-        0 12px 24px rgba(15, 74, 110, 0.08);
-}
-
-.agenda-date-group:hover,
-.plan-item:hover {
-    transform: translate3d(0, -3px, 0);
-    border-color: rgba(31, 99, 146, 0.22);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.92),
-        0 6px 0 rgba(15, 74, 110, 0.08),
-        0 17px 28px rgba(15, 74, 110, 0.12);
-}
-
-.sales-dashboard-shell .btn-primary,
-.agenda-open-btn,
-.btn-view,
-.planner-nav a {
-    box-shadow: 0 4px 0 rgba(15, 74, 110, 0.34), 0 9px 16px rgba(15, 74, 110, 0.14);
-    transform: translateY(-2px);
-}
-
-.sales-dashboard-shell .btn-primary:active,
-.agenda-open-btn:active,
-.btn-view:active,
-.planner-nav a:active {
-    box-shadow: 0 1px 0 rgba(15, 74, 110, 0.34), 0 4px 8px rgba(15, 74, 110, 0.12);
-    transform: translateY(2px);
-}
-
-.evortix-3d-scene {
-    position: relative;
-    top: 10px;
-    width: min(100%, 300px);
-    height: 138px;
-    margin-left: auto;
-    perspective: 900px;
-    transform-style: preserve-3d;
-}
-
-.evortix-3d-platform {
-    position: absolute;
-    width: 220px;
-    height: 112px;
-    left: 50%;
-    top: 50%;
-    border: 1px solid rgba(31, 99, 146, 0.24);
-    border-radius: 28px;
-    background:
-        linear-gradient(rgba(31, 99, 146, 0.08) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(31, 99, 146, 0.08) 1px, transparent 1px),
-        linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(219, 240, 252, 0.72));
-    background-size: 22px 22px, 22px 22px, 100% 100%;
-    box-shadow:
-        -9px 12px 0 rgba(15, 74, 110, 0.1),
-        -18px 25px 38px rgba(15, 74, 110, 0.18),
-        0 0 30px rgba(34, 211, 238, 0.12);
-    transform: translate(-50%, -50%) rotateX(61deg) rotateZ(-25deg);
-    transform-style: preserve-3d;
-    animation: evortixPlatformFloat 5s ease-in-out infinite;
-}
-
-.evortix-3d-core {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 68px;
-    height: 68px;
-    display: grid;
-    place-items: center;
-    color: #ffffff;
-    font-size: 1.45rem;
-    border: 1px solid rgba(255, 255, 255, 0.7);
-    border-radius: 22px;
-    background: linear-gradient(145deg, #41a7d8, #15557f);
-    box-shadow:
-        inset 4px 4px 8px rgba(255, 255, 255, 0.3),
-        inset -5px -6px 10px rgba(7, 48, 78, 0.26),
-        -8px 13px 0 #0f4a6e,
-        -14px 24px 26px rgba(15, 74, 110, 0.28),
-        0 0 28px rgba(34, 211, 238, 0.28);
-    transform: translate(-50%, -68%) translateZ(58px) rotateZ(25deg) rotateX(-12deg);
-}
-
-.evortix-3d-pillar {
-    position: absolute;
-    bottom: 28px;
-    width: 22px;
-    border-radius: 7px 7px 4px 4px;
-    background: linear-gradient(90deg, #0f4a6e, #3a9acc 72%, #8ed9f4);
-    box-shadow: -5px 7px 0 rgba(15, 74, 110, 0.3), -8px 12px 14px rgba(15, 74, 110, 0.2);
-    transform: translateZ(24px) rotateZ(25deg) rotateX(-8deg);
-    transform-origin: bottom;
-}
-
-.evortix-3d-pillar.pillar-one {
-    left: 38px;
-    height: 34px;
-}
-
-.evortix-3d-pillar.pillar-two {
-    right: 38px;
-    height: 54px;
-}
-
-.evortix-3d-pillar.pillar-three {
-    right: 68px;
-    bottom: 16px;
-    height: 27px;
-}
-
-.evortix-3d-orbit {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 152px;
-    height: 58px;
-    border: 2px solid rgba(34, 211, 238, 0.38);
-    border-left-color: rgba(31, 99, 146, 0.08);
-    border-radius: 50%;
-    transform: translate(-50%, -72%) translateZ(74px) rotateZ(18deg);
-    animation: evortixOrbit 7s linear infinite;
-}
-
-.evortix-3d-orbit::after {
-    content: "";
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    right: 13px;
-    top: 2px;
-    border-radius: 50%;
-    background: #22d3ee;
-    box-shadow: 0 0 0 5px rgba(34, 211, 238, 0.12), 0 0 18px #22d3ee;
-}
-
-@keyframes evortixPlatformFloat {
-    0%, 100% { transform: translate(-50%, -50%) rotateX(61deg) rotateZ(-25deg) translateZ(0); }
-    50% { transform: translate(-50%, -54%) rotateX(61deg) rotateZ(-25deg) translateZ(8px); }
-}
-
-@keyframes evortixOrbit {
-    to { transform: translate(-50%, -72%) translateZ(74px) rotateZ(378deg); }
-}
-
-@keyframes overdueHeartbeat {
-    0%, 100% { filter: drop-shadow(0 0 0 rgba(220, 38, 38, 0)); }
-    32% { filter: drop-shadow(0 0 9px rgba(220, 38, 38, 0.3)); }
-    48% { filter: drop-shadow(0 0 2px rgba(220, 38, 38, 0.08)); }
-    68% { filter: drop-shadow(0 0 7px rgba(220, 38, 38, 0.24)); }
 }
 
 html[data-theme="dark"] .sales-dashboard-hero,
@@ -2488,13 +2189,13 @@ body.dark-mode .evortix-3d-platform {
                             <div class="release-chart-panel">
                                 <div class="release-chart-summary">
                                     <div class="release-summary-pill merged">
-                                        <span>Merged</span>
+                                        <span>Merged: <?php echo $releaseMergedTotal; ?></span>
+                                    </div>
+                                    <div class="release-summary-pill review">
+                                        <span>In Review: <?php echo $releaseReviewTotal; ?></span>
                                     </div>
                                     <div class="release-summary-pill waiting">
-                                        <span>Waiting</span>
-                                    </div>
-                                    <div class="release-summary-pill">
-                                        <span>Complete</span>
+                                        <span>Waiting: <?php echo $releaseWaitingTotal; ?></span>
                                     </div>
                                 </div>
                                 <canvas id="releaseChecklistChart"></canvas>
@@ -2540,11 +2241,12 @@ body.dark-mode .evortix-3d-platform {
                                             echo '<div class="release-feature-list">';
                                             foreach ($features as $feature) {
                                                 $isMerged = !empty($feature['is_merged']);
+                                                $isInReview = !$isMerged && in_array((string) ($feature['status'] ?? ''), ['in_review', 'for_review', 'qa_testing', 'qa_passed', 'architect_review'], true);
                                                 $mergedBy = trim((string) ($feature['architect_name'] ?? ''));
                                                 echo '<label class="release-feature">';
                                                 echo '<input type="checkbox" disabled ' . ($isMerged ? 'checked' : '') . '>';
                                                 echo '<span>' . htmlspecialchars((string) ($feature['title'] ?? 'Feature')) . '</span>';
-                                                echo '<small>' . ($isMerged ? 'Merged' . ($mergedBy !== '' ? ' by ' . htmlspecialchars($mergedBy) : '') : 'Waiting') . '</small>';
+                                                echo '<small>' . ($isMerged ? 'Merged' . ($mergedBy !== '' ? ' by ' . htmlspecialchars($mergedBy) : '') : ($isInReview ? 'In review' : 'Waiting')) . '</small>';
                                                 echo '</label>';
                                             }
                                             echo '</div>';
@@ -2633,9 +2335,10 @@ body.dark-mode .evortix-3d-platform {
         <div class="col-lg-6 sales-insights-column">
             <?php
             delayInsightsRenderCompactList($conn, $user, [
-                'limit' => 3,
-                'title' => 'Project Insight List',
-                'subtitle' => 'Top three project signals with direct links to the full insight page.',
+                'limit' => max(1, (int) $insightProjectCount),
+                'risk_level' => 'high',
+                'title' => 'High Risk Project Insights',
+                'subtitle' => 'All High Risk project signals with direct links to each full insight page.',
                 'button_label' => 'View Project',
             ]);
             ?>
@@ -2971,16 +2674,16 @@ new Chart(trendsCtx, {
 // Project Release Checklist Chart
 const releaseChecklistData = <?php
     echo json_encode([
-        'labels' => ['Merged', 'Waiting'],
-        'data' => [$releaseMergedTotal, $releaseWaitingTotal],
-        'colors' => ['#10b981', 'rgba(31, 99, 146, 0.22)'],
-        'hoverColors' => ['#059669', 'rgba(31, 99, 146, 0.34)'],
+        'labels' => ['Merged', 'In Review', 'Waiting'],
+        'data' => [$releaseMergedTotal, $releaseReviewTotal, $releaseWaitingTotal],
+        'colors' => ['#10b981', '#f59e0b', 'rgba(31, 99, 146, 0.22)'],
+        'hoverColors' => ['#059669', '#d97706', 'rgba(31, 99, 146, 0.34)'],
     ]);
 ?>;
 
 const releaseChecklistCanvas = document.getElementById('releaseChecklistChart');
 if (releaseChecklistCanvas) {
-    new Chart(releaseChecklistCanvas.getContext('2d'), {
+    const renderReleaseChecklistChart = () => new Chart(releaseChecklistCanvas.getContext('2d'), {
         type: 'bar',
         data: {
             labels: releaseChecklistData.labels,
@@ -2999,6 +2702,11 @@ if (releaseChecklistCanvas) {
             indexAxis: 'x',
             responsive: true,
             maintainAspectRatio: false,
+            animation: {
+                duration: 1100,
+                easing: 'easeOutQuart',
+                delay: context => context.type === 'data' ? context.dataIndex * 180 : 0
+            },
             plugins: {
                 legend: {
                     display: false
@@ -3049,6 +2757,17 @@ if (releaseChecklistCanvas) {
             }
         }
     });
+
+    if ('IntersectionObserver' in window) {
+        const releaseChartObserver = new IntersectionObserver(entries => {
+            if (!entries.some(entry => entry.isIntersecting)) return;
+            releaseChartObserver.disconnect();
+            renderReleaseChecklistChart();
+        }, { threshold: 0.25 });
+        releaseChartObserver.observe(releaseChecklistCanvas);
+    } else {
+        renderReleaseChecklistChart();
+    }
 }
 
 // Status Chart

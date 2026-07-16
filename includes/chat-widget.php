@@ -1,5 +1,37 @@
 <?php
 $isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
+$evortixProjectTeamNotification = null;
+if (function_exists('isLoggedIn') && isLoggedIn()) {
+    try {
+        $evortixUser = getCurrentUser();
+        $evortixUserId = (int) ($evortixUser['id'] ?? 0);
+        if ($evortixUserId > 0) {
+            $evortixStmt = getConnection()->prepare(
+                "SELECT id, title, message, action_url, related_id
+                 FROM notifications
+                 WHERE user_id = ?
+                   AND is_read = FALSE
+                   AND related_table = 'projects'
+                   AND title LIKE 'Project team message:%'
+                 ORDER BY created_at DESC, id DESC
+                 LIMIT 1"
+            );
+            if ($evortixStmt) {
+                $evortixStmt->bind_param('i', $evortixUserId);
+                $evortixStmt->execute();
+                $evortixProjectTeamNotification = $evortixStmt->get_result()->fetch_assoc() ?: null;
+                if ($evortixProjectTeamNotification && (int) ($evortixProjectTeamNotification['related_id'] ?? 0) > 0) {
+                    $evortixProjectTeamNotification['action_url'] = BASE_URL
+                        . 'modules/roadmap/methodology.php?project_id='
+                        . (int) $evortixProjectTeamNotification['related_id'];
+                }
+                $evortixStmt->close();
+            }
+        }
+    } catch (Throwable $e) {
+        error_log('Evortix project notification load failed: ' . $e->getMessage());
+    }
+}
 ?>
 
 <?php if ($isSulRoute): ?>
@@ -202,6 +234,7 @@ $isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
 <script src="<?php echo BASE_URL; ?>assets/js/evortix-assistant.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/evortix-assistant.js'); ?>"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const evortixProjectTeamNotification = <?php echo json_encode($evortixProjectTeamNotification, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     const widget = document.getElementById('chat-widget');
     const minimized = document.getElementById('chat-widget-minimized');
     const botWidget = document.getElementById('chat-bot-widget');
@@ -239,6 +272,11 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        const speech = botFloat.querySelector('.chat-bot-speech');
+        speech?.classList.remove('evortix-project-notification');
+        if (speech) speech.style.pointerEvents = '';
+        speech?.querySelector('.evortix-project-notification-copy')?.remove();
+        speech?.querySelector('.evortix-project-notification-action')?.remove();
         const title = botFloat.querySelector('[data-chat-bot-type="title"]');
         if (!title) {
             return;
@@ -287,6 +325,49 @@ document.addEventListener('DOMContentLoaded', function () {
 
         startTyping();
     };
+
+    window.evortixAnnounceNotification = function (heading, message, actionUrl) {
+        if (!botFloat) return;
+        const speech = botFloat.querySelector('.chat-bot-speech');
+        if (!speech) return;
+
+        speech.innerHTML = '';
+        speech.classList.add('evortix-project-notification');
+        speech.setAttribute('aria-hidden', 'false');
+        speech.style.pointerEvents = 'auto';
+        const title = document.createElement('strong');
+        title.dataset.chatBotType = 'title';
+        title.dataset.chatBotText = heading || 'Project update';
+        speech.appendChild(title);
+        const copy = document.createElement('span');
+        copy.className = 'evortix-project-notification-copy';
+        copy.textContent = message || '';
+        speech.appendChild(copy);
+        if (actionUrl) {
+            const link = document.createElement('a');
+            link.href = actionUrl;
+            link.className = 'btn btn-primary evortix-project-notification-action';
+            link.textContent = 'Open project';
+            speech.appendChild(link);
+        }
+        botFloat.hidden = false;
+        botFloat.setAttribute('aria-hidden', 'false');
+        window.chatBotWidgetRobot?.wake?.();
+        window.chatBotFloatRobot?.wink?.('right');
+        typeBotSpeech(180);
+    };
+
+    if (evortixProjectTeamNotification) {
+        const storageKey = `evortix.projectNotification.${evortixProjectTeamNotification.id}`;
+        if (!sessionStorage.getItem(storageKey)) {
+            sessionStorage.setItem(storageKey, '1');
+            window.setTimeout(() => window.evortixAnnounceNotification(
+                evortixProjectTeamNotification.title,
+                evortixProjectTeamNotification.message,
+                evortixProjectTeamNotification.action_url
+            ), 700);
+        }
+    }
 
     minimized.addEventListener('click', function () {
         openChatMessages();

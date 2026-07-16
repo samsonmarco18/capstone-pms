@@ -32,6 +32,18 @@ function salesClientsQuery($conn, string $sql)
     return (is_object($result) && method_exists($result, 'fetch_assoc')) ? $result : null;
 }
 
+function salesClientsFetchRows($conn, string $sql): array
+{
+    $result = salesClientsQuery($conn, $sql);
+    $rows = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+    }
+    return $rows;
+}
+
 function salesClientsDbError($conn): string
 {
     $error = trim((string) ($conn->error ?? ''));
@@ -396,9 +408,9 @@ function salesClientsSaveAttachments(array $files): array
     return $saved;
 }
 
-function salesClientsDownloadableRepositoryForClient(mysqli|PgsqlMysqliCompatConnection $conn, int $clientId, int $salesUserId): ?array
+function salesClientsDownloadableRepositoryForProject(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId, int $salesUserId): ?array
 {
-    if ($clientId <= 0 || $salesUserId <= 0) {
+    if ($projectId <= 0 || $salesUserId <= 0) {
         return null;
     }
 
@@ -418,7 +430,7 @@ function salesClientsDownloadableRepositoryForClient(mysqli|PgsqlMysqliCompatCon
         JOIN clients c ON c.id = p.client_id
         JOIN project_repositories pr ON pr.project_id = p.id AND pr.repository_status = 'active'
         LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
-        WHERE p.client_id = ?
+        WHERE p.id = ?
           AND p.status != 'cancelled'
         GROUP BY p.id, p.status, p.created_by, c.created_by, pr.id, pr.default_branch_name, p.updated_at, pr.updated_at
         ORDER BY p.updated_at DESC, pr.updated_at DESC, pr.id DESC
@@ -429,7 +441,7 @@ function salesClientsDownloadableRepositoryForClient(mysqli|PgsqlMysqliCompatCon
         return null;
     }
 
-    $stmt->bind_param('i', $clientId);
+    $stmt->bind_param('i', $projectId);
     $stmt->execute();
     $result = $stmt->get_result();
 
@@ -883,6 +895,33 @@ if ($clientRows) {
 $totalClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients");
 $activeClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients WHERE status = 'active'");
 $pendingClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients WHERE status = 'pending'");
+$nextActionPendingProjects = salesClientsFetchRows($conn, "
+    SELECT p.id, p.client_id, p.name AS project_name, c.name AS client_name
+    FROM projects p
+    INNER JOIN clients c ON c.id = p.client_id
+    WHERE p.status = 'pending'
+    ORDER BY p.created_at ASC, p.id ASC
+");
+$nextActionInactiveClients = salesClientsFetchRows($conn, "
+    SELECT id, name AS client_name
+    FROM clients
+    WHERE status = 'inactive'
+    ORDER BY name ASC
+");
+$nextActionOverdueDeliverables = salesClientsFetchRows($conn, "
+    SELECT p.id, p.client_id, p.name AS project_name, p.timeline_end, c.name AS client_name,
+           COUNT(t.id) AS total_features,
+           COALESCE(SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END), 0) AS merged_features
+    FROM projects p
+    INNER JOIN clients c ON c.id = p.client_id
+    LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
+    WHERE p.timeline_end IS NOT NULL
+      AND p.timeline_end < CURRENT_DATE
+      AND p.status NOT IN ('completed', 'cancelled')
+    GROUP BY p.id, p.client_id, p.name, p.timeline_end, c.name
+    HAVING COUNT(t.id) = 0 OR COALESCE(SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END), 0) < COUNT(t.id)
+    ORDER BY p.timeline_end ASC, p.id ASC
+");
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -1427,11 +1466,11 @@ include '../../includes/navbar.php';
 }
 
 .project-expansion-item {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.85rem;
-    padding: 0.75rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1rem;
     border-radius: 8px;
 }
 
@@ -1462,6 +1501,24 @@ include '../../includes/navbar.php';
     padding: 0.18rem 0.5rem;
     font-size: 0.66rem;
     font-weight: 700;
+}
+.badge-status.overdue { background:#fee2e2; color:#b42318; }
+.project-expansion-progress { display:grid; grid-template-columns:minmax(120px,1fr) auto; align-items:center; gap:.75rem; min-width:0; }
+.project-progress-track { width:100%; height:8px; overflow:hidden; border-radius:999px; background:#dceaf4; }
+.project-progress-fill { height:100%; border-radius:inherit; background:linear-gradient(90deg,#1597e5,#20b886); transition:width .3s ease; }
+.project-team-notify { display:flex; align-items:center; gap:.65rem; min-width:0; width:100%; }
+.project-team-notify.is-completed { justify-content:flex-end; }
+.project-team-notify input { flex:1 1 auto; width:100%; min-width:0; border:1px solid #cbdde9; border-radius:9px; padding:.55rem .75rem; }
+.project-team-notify button, .project-team-notify .project-download-button { white-space:nowrap; }
+
+@media (max-width: 1100px) {
+    .project-expansion-item { grid-template-columns:1fr 1fr; }
+    .project-team-notify { grid-column:1 / -1; }
+}
+
+@media (max-width: 700px) {
+    .project-expansion-item { grid-template-columns:1fr; gap:.9rem; }
+    .project-team-notify { grid-column:auto; }
 }
 
 .project-status-pill {
@@ -4552,16 +4609,6 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
     $clientId = (int) ($client['id'] ?? 0);
     $clientProjects = $projectsByClient[(int) $client['id']] ?? [];
     $projectPanelId = 'clientProjectsPanel' . $clientId;
-    $hasCompletedProject = false;
-    foreach ($clientProjects as $projectForDownload) {
-        if ((int) ($projectForDownload['progress'] ?? 0) === 100) {
-            $hasCompletedProject = true;
-            break;
-        }
-    }
-    $downloadableRepository = $hasCompletedProject
-        ? salesClientsDownloadableRepositoryForClient($conn, (int) $client['id'], (int) ($user['id'] ?? 0))
-        : null;
     ?>
     <tr class="client-row <?php echo $clientProjects ? 'has-projects' : ''; ?>" <?php echo $clientProjects ? 'data-project-row="' . $projectPanelId . '"' : ''; ?>>
         <td>
@@ -4598,15 +4645,6 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                 <button class="btn-icon add-project" title="Add project" onclick="openAddProjectModal(<?php echo (int) $client['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $client['name'])); ?>)">
                     <i class="fas fa-folder-plus"></i>
                 </button>
-                <?php if ($downloadableRepository && (int) ($downloadableRepository['repository_id'] ?? 0) > 0): ?>
-                    <a
-                        class="btn-icon download"
-                        href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . (int) $downloadableRepository['repository_id']); ?>"
-                        title="Download <?php echo htmlspecialchars((string) ($downloadableRepository['default_branch_name'] ?? 'main')); ?> branch"
-                    >
-                        <i class="fas fa-download"></i>
-                    </a>
-                <?php endif; ?>
                 <button class="btn-icon delete" onclick="openDeleteClientModal(<?php echo (int) $client['id']; ?>, <?php echo htmlspecialchars(json_encode($client['name'])); ?>)">
                     <i class="fas fa-trash"></i>
                 </button>
@@ -4624,25 +4662,51 @@ body:has(#page-content-wrapper.sidebar-collapsed #addClientModal.show) .modal-ba
                             $projectDeadline = (string) ($project['timeline_end'] ?? '');
                             $projectDeadlineTimestamp = $projectDeadline !== '' ? strtotime($projectDeadline) : false;
                             $projectDaysLeft = $projectDeadlineTimestamp !== false ? ceil(($projectDeadlineTimestamp - time()) / (60 * 60 * 24)) : null;
-                            $projectDeadlineClass = $projectDaysLeft === null ? 'normal' : ($projectDaysLeft <= 7 ? 'urgent' : ($projectDaysLeft <= 30 ? 'warning' : 'normal'));
                             $projectProgress = (int) ($project['progress'] ?? 0);
+                            $projectIsCompleted = $projectProgress >= 100 || (string) ($project['status'] ?? '') === 'completed';
+                            $projectRepository = $projectIsCompleted
+                                ? salesClientsDownloadableRepositoryForProject($conn, (int) $project['id'], (int) ($user['id'] ?? 0))
+                                : null;
+                            $projectIsOverdue = !$projectIsCompleted && $projectDaysLeft !== null && $projectDaysLeft < 0;
+                            $projectDisplayStatus = $projectIsCompleted ? 'Completed' : ($projectIsOverdue ? 'Overdue' : ucwords(str_replace('_', ' ', (string) $project['status'])));
+                            $projectDeadlineClass = $projectIsOverdue || ($projectDaysLeft !== null && $projectDaysLeft <= 7) ? 'urgent' : (($projectDaysLeft !== null && $projectDaysLeft <= 30) ? 'warning' : 'normal');
                             ?>
                             <div class="project-expansion-item">
                                 <div class="project-expansion-main">
                                     <strong><?php echo htmlspecialchars((string) $project['name']); ?></strong>
-                                    <span class="project-status-pill"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $project['status']))); ?></span>
-                                    <?php if($projectDeadlineTimestamp !== false): ?>
+                                    <span class="project-status-pill <?php echo $projectIsOverdue ? 'badge-status overdue' : ''; ?>"><?php echo htmlspecialchars($projectDisplayStatus); ?></span>
+                                    <?php if($projectDeadlineTimestamp !== false && !$projectIsCompleted): ?>
                                         <span class="deadline-days <?php echo $projectDeadlineClass; ?>">
                                             <?php echo date('M d, Y', $projectDeadlineTimestamp); ?>
                                             <?php if($projectDaysLeft !== null): ?>
-                                                (<?php echo $projectDaysLeft; ?> days left)
+                                                (<?php echo $projectIsOverdue ? abs($projectDaysLeft) . ' days overdue' : $projectDaysLeft . ' days left'; ?>)
                                             <?php endif; ?>
                                         </span>
+                                    <?php elseif($projectIsCompleted): ?>
+                                        <span class="text-muted small">Delivery completed</span>
                                     <?php else: ?>
                                         <span class="text-muted small">No deadline</span>
                                     <?php endif; ?>
                                 </div>
-                                <span class="project-progress-pill"><?php echo $projectProgress; ?>% Complete</span>
+                                <div class="project-expansion-progress">
+                                    <div class="project-progress-track" role="progressbar" aria-valuenow="<?php echo $projectProgress; ?>" aria-valuemin="0" aria-valuemax="100"><div class="project-progress-fill" style="width:<?php echo $projectProgress; ?>%"></div></div>
+                                    <span class="project-progress-pill"><?php echo $projectProgress; ?>% Complete</span>
+                                </div>
+                                <div class="project-team-notify<?php echo $projectIsCompleted ? ' is-completed' : ''; ?>">
+                                    <?php if (!$projectIsCompleted): ?>
+                                        <input type="text" maxlength="500" placeholder="Message the responsible team" aria-label="Team notification for <?php echo htmlspecialchars((string) $project['name']); ?>">
+                                        <button class="btn btn-outline-primary btn-sm" type="button" data-notify-project-team="<?php echo (int) $project['id']; ?>"><i class="fas fa-bell me-1"></i> Notify Team</button>
+                                    <?php endif; ?>
+                                    <?php if ($projectRepository && (int) ($projectRepository['repository_id'] ?? 0) > 0): ?>
+                                        <a
+                                            class="btn btn-success btn-sm project-download-button"
+                                            href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . (int) $projectRepository['repository_id']); ?>"
+                                            title="Download <?php echo htmlspecialchars((string) ($projectRepository['default_branch_name'] ?? 'main')); ?> branch for <?php echo htmlspecialchars((string) $project['name']); ?>"
+                                        >
+                                            <i class="fas fa-download me-1"></i> Download
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -5561,6 +5625,14 @@ body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:
 .sales-bot-choice:hover { transform:translateX(3px); background:#fff; }
 .sales-bot-choice strong { padding:0 !important; font-size:.76rem !important; }
 .sales-bot-choice em { flex:0 0 auto; border-radius:999px; background:#dff5ff; padding:.18rem .45rem; color:#087bb9; font-size:.66rem; font-style:normal; font-weight:800; }
+.sales-bot-action-links { position:relative; z-index:4; display:grid; gap:.42rem; max-height:275px; overflow-y:auto; padding:.1rem .15rem .1rem 0; }
+.sales-bot-action-link { display:flex; align-items:center; gap:.6rem; border:1px solid rgba(8,123,185,.2); border-radius:10px; background:rgba(255,255,255,.84); color:#0b466d; padding:.58rem .66rem; text-decoration:none; }
+.sales-bot-action-link:hover { background:#fff; color:#087bb9; transform:translateX(3px); }
+.sales-bot-action-link i { color:#087bb9; }
+.sales-bot-action-link span { display:grid; min-width:0; }
+.sales-bot-action-link strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.76rem !important; }
+.sales-bot-action-link small { color:#66839a; font-size:.66rem; }
+.client-project-item.is-evortix-target { outline:2px solid #1597e5; outline-offset:2px; background:#edf8ff; }
 #chat-bot-float.is-sad .chat-bot-speech { border-color:rgba(231,139,57,.62); box-shadow:0 16px 34px rgba(180,91,20,.22),0 0 22px rgba(255,169,74,.22); }
 .sales-lottie-head,.sales-lottie-left-hand,.sales-lottie-left-forearm,.sales-lottie-right-hand,.sales-lottie-right-forearm { transform-box:fill-box; transform-origin:center; }
 .sales-lottie-head { translate:0 7px; }
@@ -5573,6 +5645,11 @@ body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:
 <script>
 const savedClientDraftId = <?php echo json_encode($savedClientDraftId); ?>;
 const projectTemplates = <?php echo json_encode($projectTemplates, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
+const salesClientNextActions = <?php echo json_encode([
+    'pending_projects' => $nextActionPendingProjects,
+    'inactive_clients' => $nextActionInactiveClients,
+    'overdue_deliverables' => $nextActionOverdueDeliverables,
+], JSON_UNESCAPED_SLASHES); ?>;
 
 function getPriorityAdjustedTemplateWeeks(template, priorityValue = 'medium') {
     let minimumWeeks = Math.max(0, Math.round(Number(template?.duration_min_weeks || 0)));
@@ -5909,6 +5986,9 @@ const salesTemplateAssistant = (() => {
         const choices = Array.isArray(item.choices) ? `<div class="sales-bot-choice-list">${item.choices.map((choice, choiceIndex) =>
             `<button type="button" class="sales-bot-choice" data-sales-bot-choice="${choiceIndex}"><strong>${escapeClientHtml(choice.label)}</strong><em>${escapeClientHtml(choice.version)}</em></button>`
         ).join('')}</div>` : '';
+        const actionLinks = Array.isArray(item.links) ? `<div class="sales-bot-action-links">${item.links.map(link =>
+            `<a class="sales-bot-action-link" href="${escapeClientHtml(link.url)}"><i class="fas ${escapeClientHtml(link.icon || 'fa-arrow-right')}" aria-hidden="true"></i><span><strong>${escapeClientHtml(link.label)}</strong><small>${escapeClientHtml(link.context)}</small></span></a>`
+        ).join('')}</div>` : '';
         const actions = item.information || item.choices ? '' : '<div class="sales-bot-actions"><button type="button" class="sales-bot-reject" data-sales-bot-reject>Reject</button><button type="button" class="sales-bot-accept" data-sales-bot-accept>Accept</button></div>';
         const progress = item.information || item.choices || queue.length < 2 ? '' : `<span class="sales-bot-progress">Suggestion ${index + 1} of ${queue.length}</span>`;
         browsingChoices = Boolean(item.choices);
@@ -5919,14 +5999,14 @@ const salesTemplateAssistant = (() => {
         speech.innerHTML = `<div class="sales-bot-heading-row"><div class="sales-bot-head">${escapeClientHtml(item.heading || 'My suggestion')}</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div>
             ${item.version ? `<span class="sales-bot-version">${escapeClientHtml(item.version)}</span>` : ''}
             ${item.label ? `<span class="sales-bot-copy">${escapeClientHtml(item.label)}</span>` : ''}
-            ${choices}${actions}${progress}`;
+            ${choices}${actionLinks}${actions}${progress}`;
         scheduleIdleBlink();
         scheduleMessageDismiss(item.choices ? 9000 : 6000);
         if (item.choices) setEmotion('amazed', 0);
     };
     const show = (form, items) => {
         activeForm = form;
-        queue = items.filter(item => item && String(item.label || '').trim());
+        queue = items.filter(item => item && (String(item.label || '').trim() || item.links?.length));
         index = 0;
         if (queue.length) render();
     };
@@ -6133,8 +6213,85 @@ const salesTemplateAssistant = (() => {
         speech.innerHTML = '<div class="sales-bot-heading-row"><div class="sales-bot-head">Hi, good day!</div><button type="button" class="sales-bot-dismiss" data-sales-bot-dismiss title="Hide this message" aria-label="Hide this message"><i class="fas fa-arrow-left"></i></button></div><span class="sales-bot-copy">I am ready whenever you want help with another field.</span>';
         scheduleMessageDismiss(4500);
     };
-    return { forField, close };
+    const announceNextActions = actions => {
+        const pendingProjects = Array.isArray(actions?.pending_projects) ? actions.pending_projects : [];
+        const inactiveClients = Array.isArray(actions?.inactive_clients) ? actions.inactive_clients : [];
+        const overdueDeliverables = Array.isArray(actions?.overdue_deliverables) ? actions.overdue_deliverables : [];
+        const projectUrl = item => `clients.php?view=${encodeURIComponent(item.client_id)}&project=${encodeURIComponent(item.id)}`;
+        const clientUrl = item => `clients.php?view=${encodeURIComponent(item.id)}`;
+        const links = [
+            ...pendingProjects.map(item => ({
+                label: `Follow up: ${item.project_name}`,
+                context: `${item.client_name} · Pending project`,
+                icon: 'fa-clock',
+                url: projectUrl(item)
+            })),
+            ...inactiveClients.map(item => ({
+                label: `Send proposal: ${item.client_name}`,
+                context: 'Inactive client',
+                icon: 'fa-paper-plane',
+                url: clientUrl(item)
+            })),
+            ...overdueDeliverables.map(item => ({
+                label: `Review: ${item.project_name}`,
+                context: `${item.client_name} · Due ${item.timeline_end}`,
+                icon: 'fa-triangle-exclamation',
+                url: projectUrl(item)
+            }))
+        ];
+
+        show(null, [{
+            heading: 'Next best actions',
+            label: links.length
+                ? `${pendingProjects.length} pending, ${inactiveClients.length} inactive, and ${overdueDeliverables.length} overdue. Select an item to open it.`
+                : 'You are all caught up. There are no pending projects, inactive clients, or overdue deliverables requiring attention.',
+            links,
+            information: true
+        }]);
+    };
+
+    return { forField, close, announceNextActions };
 })();
+
+window.addEventListener('DOMContentLoaded', () => {
+    window.setTimeout(() => salesTemplateAssistant.announceNextActions(salesClientNextActions), 900);
+});
+
+document.addEventListener('click', async event => {
+    const button = event.target.closest('[data-notify-project-team]');
+    if (!button) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    const field = button.closest('.project-team-notify')?.querySelector('input');
+    const message = String(field?.value || '').trim();
+    if (!message) {
+        window.appToast?.('Message required', 'Enter the message Evortix should announce to the responsible team.', 'warning');
+        field?.focus();
+        return;
+    }
+
+    button.disabled = true;
+    const originalHtml = button.innerHTML;
+    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sending';
+    try {
+        const body = new URLSearchParams({ project_id: button.dataset.notifyProjectTeam, message });
+        const response = await fetch('../../api/notify-project-team.php', {
+            method: 'POST',
+            headers: { 'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8' },
+            body
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Unable to notify the project team.');
+        if (field) field.value = '';
+        window.appToast?.('Team notified', result.message, 'success');
+    } catch (error) {
+        window.appToast?.('Notification failed', error.message || 'Unable to notify the project team.', 'error');
+    } finally {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+    }
+});
 
 document.addEventListener('focusin', event => {
     const form = event.target.closest('#addClientForm, #addProjectForm');
@@ -7225,21 +7382,42 @@ function viewClient(id) {
                         let projectsHtml = '<div class="list-group">';
                         projects.forEach(project => {
                             const progress = Number(project.progress || 0);
+                            const isCompleted = progress >= 100 || project.status === 'completed';
+                            const deadline = project.timeline_end ? new Date(`${project.timeline_end}T23:59:59`) : null;
+                            const isOverdue = !isCompleted && deadline && deadline.getTime() < Date.now();
+                            const displayStatus = isCompleted ? 'Completed' : (isOverdue ? 'Overdue' : String(project.status || '').replaceAll('_', ' '));
                             projectsHtml += `
-                                <div class="client-project-item d-flex justify-content-between align-items-center">
+                                <div class="client-project-item d-flex justify-content-between align-items-center" data-client-project-id="${project.id}">
                                     <div>
                                         <strong>${project.name}</strong><br>
                                         <small class="text-muted">Created: ${new Date(project.created_at).toLocaleDateString()}</small>
                                     </div>
-                                    <div class="d-flex align-items-center gap-2">
+                                    <div class="d-grid gap-2 flex-grow-1 ms-3" style="max-width:360px">
+                                        <div class="project-progress-track" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"><div class="project-progress-fill" style="width:${progress}%"></div></div>
+                                        ${isCompleted ? '' : `
+                                            <div class="project-team-notify">
+                                                <input type="text" maxlength="500" placeholder="Message the responsible team">
+                                                <button class="btn btn-outline-primary btn-sm" type="button" data-notify-project-team="${project.id}"><i class="fas fa-bell me-1"></i> Notify Team</button>
+                                            </div>
+                                        `}
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2 ms-2">
                                         <span class="project-progress-pill">${progress}% Complete</span>
-                                        <span class="badge-status ${project.status === 'completed' ? 'active' : 'pending'}">${project.status}</span>
+                                        <span class="badge-status ${isCompleted ? 'active' : (isOverdue ? 'overdue' : 'pending')}">${displayStatus}</span>
                                     </div>
                                 </div>
                             `;
                         });
                         projectsHtml += '</div>';
                         $('#clientProjects').html(projectsHtml);
+                        const selectedProjectId = new URLSearchParams(window.location.search).get('project');
+                        const selectedProject = selectedProjectId
+                            ? document.querySelector(`[data-client-project-id="${CSS.escape(selectedProjectId)}"]`)
+                            : null;
+                        if (selectedProject) {
+                            selectedProject.classList.add('is-evortix-target');
+                            window.setTimeout(() => selectedProject.scrollIntoView({ behavior:'smooth', block:'center' }), 250);
+                        }
                     } else {
                         $('#clientProjects').html('<p class="text-muted text-center">No projects yet</p>');
                     }

@@ -124,6 +124,11 @@ function di_band_for_score(float $score, ?array $bands = null): array
     return end($bands) ?: ['min' => 0.0, 'max' => 100.0, 'label' => 'Stable', 'tone' => 'success'];
 }
 
+function di_band_for_health(float $score): array
+{
+    return di_band_for_score(100 - di_clamp($score));
+}
+
 function di_access_rule(array $user): array
 {
     $userId = (int) ($user['id'] ?? 0);
@@ -307,6 +312,7 @@ function di_empty_decision_insights(): array
             'timeline_total_days' => 1,
             'timeline_elapsed_days' => 0,
             'timeline_remaining_days' => 1,
+            'project_overdue_days' => 0,
             'planned_progress' => 0,
             'actual_progress' => 0,
             'estimated_work_days' => 1,
@@ -338,11 +344,11 @@ function di_empty_decision_insights(): array
             'risk_probability' => $zeroBand,
             'risk_impact' => $zeroBand,
             'risk_exposure' => $zeroBand,
-            'decision_confidence' => $zeroBand,
-            'resource_efficiency' => $zeroBand,
-            'planning_readiness' => $zeroBand,
-            'budget_health' => $zeroBand,
-            'schedule_stability' => $zeroBand,
+            'decision_confidence' => di_band_for_health(0),
+            'resource_efficiency' => di_band_for_health(0),
+            'planning_readiness' => di_band_for_health(0),
+            'budget_health' => di_band_for_health(100),
+            'schedule_stability' => di_band_for_health(100),
             'testing_risk' => $zeroBand,
             'deployment_risk' => $zeroBand,
             'client_risk' => $zeroBand,
@@ -501,7 +507,7 @@ function di_simulate_scenario(array $baseline, string $scenario, float $value): 
         'before' => $baseline,
         'after' => $after,
         'risk_band' => di_band_for_score($after['risk_score']),
-        'confidence_band' => di_band_for_score($after['confidence_score']),
+        'confidence_band' => di_band_for_health($after['confidence_score']),
     ];
 }
 
@@ -764,6 +770,10 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
     $timelineTotalDays = max(di_day_diff($timelineStart, $timelineEnd) + 1, 1);
     $timelineElapsedDays = (int) di_clamp((float) (di_day_diff($timelineStart, $today) + 1), 0.0, (float) $timelineTotalDays);
     $timelineRemainingDays = max($timelineTotalDays - $timelineElapsedDays, 0);
+    $projectStatus = strtolower(trim((string) ($project['status'] ?? '')));
+    $projectOverdueDays = !in_array($projectStatus, ['completed', 'cancelled'], true) && $today > $timelineEnd
+        ? max(0, di_day_diff($timelineEnd, $today))
+        : 0;
 
     $totalTasks = di_int($taskMetrics['total_tasks']);
     $completedTasks = di_int($taskMetrics['completed_tasks']);
@@ -793,7 +803,9 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
     $scheduleVariance = $earnedValue - $plannedValue;
     $deliveryVelocity = di_ratio($earnedValue, (float) max($timelineElapsedDays, 1));
     $projectedRemainingDays = max($estimatedWorkDays - $earnedValue, 0.0) / max($deliveryVelocity, 0.25);
-    $forecastDelayDays = max($projectedRemainingDays - $timelineRemainingDays, 0.0);
+    $forecastDelayDays = $projectOverdueDays > 0
+        ? $projectOverdueDays + $projectedRemainingDays
+        : max($projectedRemainingDays - $timelineRemainingDays, 0.0);
 
     $salesReportPlatformMonthly = di_float($artifactMetrics['latest_sales_report_platform_cost']);
     $salesReportDeveloperMonthly = di_float($artifactMetrics['latest_sales_report_developer_cost']);
@@ -867,6 +879,7 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
         + ($unassignedRatio * 12)
         + ($highPressureRatio * 16)
         + ($slipGap * 0.16)
+        + min($projectOverdueDays * 2.0, 35.0)
     );
     $riskImpact = di_clamp(
         ($complexityScore * 0.35)
@@ -910,6 +923,7 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
             + ($blockedRatio * 20)
             + ($stalledRatio * 15)
             + (min($forecastDelayDays, 60.0) * 0.5)
+            + (min((float) $projectOverdueDays, 30.0) * 0.8)
             + ($reviewRatio * 10)
         )
     );
@@ -956,6 +970,7 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
         'timeline_total_days' => $timelineTotalDays,
         'timeline_elapsed_days' => $timelineElapsedDays,
         'timeline_remaining_days' => $timelineRemainingDays,
+        'project_overdue_days' => $projectOverdueDays,
         'planned_progress' => $plannedProgress,
         'actual_progress' => $actualProgress,
         'estimated_work_days' => $estimatedWorkDays,
@@ -995,11 +1010,11 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
         'risk_probability' => di_band_for_score($metrics['risk_probability']),
         'risk_impact' => di_band_for_score($metrics['risk_impact']),
         'risk_exposure' => di_band_for_score($metrics['risk_exposure']),
-        'decision_confidence' => di_band_for_score($metrics['decision_confidence']),
-        'resource_efficiency' => di_band_for_score($metrics['resource_efficiency']),
-        'planning_readiness' => di_band_for_score($metrics['planning_readiness']),
-        'budget_health' => di_band_for_score($metrics['budget_health']),
-        'schedule_stability' => di_band_for_score($metrics['schedule_stability']),
+        'decision_confidence' => di_band_for_health($metrics['decision_confidence']),
+        'resource_efficiency' => di_band_for_health($metrics['resource_efficiency']),
+        'planning_readiness' => di_band_for_health($metrics['planning_readiness']),
+        'budget_health' => di_band_for_health($metrics['budget_health']),
+        'schedule_stability' => di_band_for_health($metrics['schedule_stability']),
         'testing_risk' => di_band_for_score($metrics['testing_risk']),
         'deployment_risk' => di_band_for_score($metrics['deployment_risk']),
         'client_risk' => di_band_for_score($metrics['client_risk']),
@@ -1045,6 +1060,13 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
             'direction' => 'higher',
         ],
         [
+            'label' => 'Budget Risk',
+            'target' => 20.0,
+            'actual' => round(100 - $metrics['budget_health'], 1),
+            'deviation' => round(20.0 - (100 - $metrics['budget_health']), 1),
+            'direction' => 'lower',
+        ],
+        [
             'label' => 'Git Momentum',
             'target' => 70.0,
             'actual' => $metrics['git_momentum'],
@@ -1060,6 +1082,31 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
         ],
     ];
 
+    $varianceValue = (float) $metrics['schedule_variance'];
+    if ($varianceValue < 0) {
+        $varianceExplanation = 'Completed work is ' . number_format(abs($varianceValue), 1) . ' estimated work-day(s) behind the planned progress.';
+    } elseif ($varianceValue > 0) {
+        $varianceExplanation = 'Completed work is ' . number_format($varianceValue, 1) . ' estimated work-day(s) ahead of the planned progress.';
+    } else {
+        $varianceExplanation = 'Completed work is aligned with the planned progress.';
+    }
+
+    if ($projectOverdueDays > 0) {
+        $delayExplanation = number_format((float) $metrics['forecast_delay_days'], 1)
+            . ' projected delay day(s) = '
+            . $projectOverdueDays
+            . ' day(s) already past the deadline + '
+            . number_format((float) $metrics['projected_remaining_days'], 1)
+            . ' estimated day(s) of unfinished work.';
+    } else {
+        $delayExplanation = number_format((float) $metrics['forecast_delay_days'], 1)
+            . ' projected delay day(s): '
+            . number_format((float) $metrics['projected_remaining_days'], 1)
+            . ' estimated work day(s) remain, with '
+            . number_format((float) $metrics['timeline_remaining_days'], 1)
+            . ' calendar day(s) left in the timeline.';
+    }
+
     $insights = [
         [
             'title' => 'Delivery Risk Pressure',
@@ -1071,7 +1118,7 @@ function di_load_decision_insights(mysqli|PgsqlMysqliCompatConnection $conn, int
         [
             'title' => 'Deadline Slippage Outlook',
             'score' => di_clamp($forecastDelayDays * 4),
-            'detail' => "Projected delay is {$metrics['forecast_delay_days']} day(s) with schedule variance {$metrics['schedule_variance']}.",
+            'detail' => $delayExplanation . ' ' . $varianceExplanation,
             'action' => 'Use scenario simulation to compare adding capacity, extending time, or reducing scope.',
             'band' => di_band_for_score(di_clamp($forecastDelayDays * 4)),
         ],

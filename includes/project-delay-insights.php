@@ -249,6 +249,13 @@ function delayInsightsRenderCompactList(mysqli|PgsqlMysqliCompatConnection $conn
     $moreUrl = trim((string) ($options['more_url'] ?? ''));
     $moreLabel = trim((string) ($options['more_label'] ?? 'See More'));
     $insights = delayInsightsLoadInsights($conn, $user, $options);
+    $riskLevelFilter = strtolower(trim((string) ($options['risk_level'] ?? '')));
+    if ($riskLevelFilter !== '') {
+        $insights = array_values(array_filter(
+            $insights,
+            static fn(array $insight): bool => strtolower((string) ($insight['before']['risk_level'] ?? '')) === $riskLevelFilter
+        ));
+    }
 
     if ($insights === []) {
         return;
@@ -335,7 +342,7 @@ function delayInsightsRenderDetailCards(mysqli|PgsqlMysqliCompatConnection $conn
         echo '<p>Client: ' . htmlspecialchars($insight['project']['client_name']) . ' | Status: ' . htmlspecialchars($insight['project']['status_label']) . ' | Timeline: ' . htmlspecialchars($insight['project']['timeline_label']) . '</p>';
         echo '</div>';
         echo '<div class="delay-insight-project-right">';
-        echo '<span class="delay-risk-badge ' . $riskClass . '"><i class="fas fa-signal"></i> ' . htmlspecialchars($insight['before']['risk_level']) . ' Delay Risk</span>';
+        echo '<span class="delay-risk-badge ' . $riskClass . '"><i class="fas fa-signal"></i> ' . htmlspecialchars($insight['before']['risk_level']) . ' Risk</span>';
         if ($showActionButton) {
             echo '<a class="delay-action" href="' . htmlspecialchars($projectUrl) . '"><i class="fas fa-arrow-right"></i> ' . htmlspecialchars($buttonLabel) . '</a>';
         }
@@ -606,6 +613,9 @@ function delayInsightsBuildBeforeMetrics(array $project): array
     $totalResources = (int) ($project['total_resources'] ?? 0);
     $documentCount = (int) ($project['document_count'] ?? 0);
     $tasksWithoutDeadline = (int) ($project['tasks_without_deadline'] ?? 0);
+    $overdueTasks = (int) ($project['overdue_tasks'] ?? 0);
+    $blockedTasks = (int) ($project['blocked_tasks'] ?? 0);
+    $unassignedTasks = (int) ($project['unassigned_tasks'] ?? 0);
     $totalTasks = (int) ($project['total_tasks'] ?? 0);
     $estimatedTaskDays = (int) round((float) ($project['estimated_task_days'] ?? 0));
     $scheduleDays = delayInsightsScheduleDays((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''));
@@ -648,6 +658,27 @@ function delayInsightsBuildBeforeMetrics(array $project): array
     if ($tasksWithoutDeadline > 0) {
         $delayProbability += min(10, $tasksWithoutDeadline * 2);
     }
+    if ($overdueTasks > 0) {
+        $delayProbability += min(35, 15 + ($overdueTasks * 8));
+    }
+    if ($blockedTasks > 0) {
+        $delayProbability += min(24, $blockedTasks * 12);
+    }
+    if ($unassignedTasks > 0) {
+        $delayProbability += min(18, $unassignedTasks * 6);
+    }
+
+    $status = strtolower(trim((string) ($project['status'] ?? '')));
+    $timelineEnd = trim((string) ($project['timeline_end'] ?? ''));
+    $timelineEndTs = $timelineEnd !== '' ? strtotime($timelineEnd) : false;
+    $todayTs = strtotime(date('Y-m-d'));
+    $isProjectOverdue = !in_array($status, ['completed', 'cancelled'], true)
+        && $timelineEndTs !== false
+        && $todayTs > $timelineEndTs;
+    if ($isProjectOverdue) {
+        $overdueDays = max(1, (int) floor(($todayTs - $timelineEndTs) / 86400));
+        $delayProbability += min(45, 25 + $overdueDays);
+    }
 
     $requiredPeople = null;
     $resourceGap = 0;
@@ -677,6 +708,11 @@ function delayInsightsBuildBeforeMetrics(array $project): array
     }
 
     $delayProbability = max(5, min(95, $delayProbability));
+    if ($isProjectOverdue) {
+        $delayProbability = max(75, $delayProbability);
+    } elseif ($overdueTasks > 0) {
+        $delayProbability = max(55, $delayProbability);
+    }
     $successProbability = max(5, min(95, 100 - $delayProbability + (int) round(($planningReadiness - 50) * 0.12)));
 
     $riskLevel = $delayProbability >= 70 ? 'High' : ($delayProbability >= 40 ? 'Medium' : 'Low');

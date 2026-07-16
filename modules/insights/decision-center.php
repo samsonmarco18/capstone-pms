@@ -61,11 +61,11 @@ $metricCards = [
         'icon' => 'shield-halved',
     ],
     [
-        'label' => 'Decision Confidence',
-        'value' => number_format($insights['metrics']['decision_confidence'], 1),
+        'label' => 'Decision Risk',
+        'value' => number_format(100 - $insights['metrics']['decision_confidence'], 1),
         'suffix' => '%',
-        'tone' => $insights['bands']['decision_confidence']['tone'],
-        'meta' => $insights['bands']['decision_confidence']['label'],
+        'tone' => di_band_for_score(100 - $insights['metrics']['decision_confidence'])['tone'],
+        'meta' => di_band_for_score(100 - $insights['metrics']['decision_confidence'])['label'],
         'icon' => 'chart-line',
     ],
     [
@@ -233,11 +233,11 @@ $metricCatalog = [
         'icon' => 'shield-halved',
     ],
     'decision_confidence' => [
-        'label' => 'Decision Confidence',
-        'value' => number_format($insights['metrics']['decision_confidence'], 1),
+        'label' => 'Decision Risk',
+        'value' => number_format(100 - $insights['metrics']['decision_confidence'], 1),
         'suffix' => '%',
-        'tone' => $insights['bands']['decision_confidence']['tone'],
-        'meta' => $insights['bands']['decision_confidence']['label'],
+        'tone' => di_band_for_score(100 - $insights['metrics']['decision_confidence'])['tone'],
+        'meta' => di_band_for_score(100 - $insights['metrics']['decision_confidence'])['label'],
         'icon' => 'chart-line',
     ],
     'forecast_delay_days' => [
@@ -257,11 +257,11 @@ $metricCatalog = [
         'icon' => 'coins',
     ],
     'budget_health' => [
-        'label' => 'Budget Health',
-        'value' => number_format($insights['metrics']['budget_health'], 1),
+        'label' => 'Budget Risk',
+        'value' => number_format(100 - $insights['metrics']['budget_health'], 1),
         'suffix' => '%',
-        'tone' => $insights['bands']['budget_health']['tone'],
-        'meta' => $insights['bands']['budget_health']['label'],
+        'tone' => di_band_for_score(100 - $insights['metrics']['budget_health'])['tone'],
+        'meta' => di_band_for_score(100 - $insights['metrics']['budget_health'])['label'],
         'icon' => 'wallet',
     ],
     'planning_readiness' => [
@@ -273,11 +273,11 @@ $metricCatalog = [
         'icon' => 'clipboard-check',
     ],
     'resource_efficiency' => [
-        'label' => 'Resource Efficiency',
-        'value' => number_format($insights['metrics']['resource_efficiency'], 1),
+        'label' => 'Resource Risk',
+        'value' => number_format(100 - $insights['metrics']['resource_efficiency'], 1),
         'suffix' => '%',
-        'tone' => $insights['bands']['resource_efficiency']['tone'],
-        'meta' => $insights['bands']['resource_efficiency']['label'],
+        'tone' => di_band_for_score(100 - $insights['metrics']['resource_efficiency'])['tone'],
+        'meta' => di_band_for_score(100 - $insights['metrics']['resource_efficiency'])['label'],
         'icon' => 'users-gear',
     ],
     'git_momentum' => [
@@ -343,7 +343,7 @@ $roleProfiles = [
         'kpi_title' => 'Sales Commercial Watchlist',
         'kpi_note' => 'Use these KPIs to judge whether delivery promises, budget, and client expectation management are still healthy.',
         'metric_keys' => ['budget_health', 'forecast_delay_days', 'client_risk'],
-        'kpi_labels' => ['Budget Health', 'Schedule Stability', 'Completion Rate', 'Planning Readiness'],
+        'kpi_labels' => ['Budget Risk', 'Schedule Stability', 'Completion Rate', 'Planning Readiness'],
         'insight_priority' => ['Budget Burn Exposure', 'Deadline Slippage Outlook', 'Planning Readiness', 'Delivery Risk Pressure', 'Resource Balance'],
         'priority_items' => ['Client-facing delay exposure', 'Margin and burn-rate pressure', 'Scope and approval readiness'],
         'next_actions' => ['Prepare scope or timeline tradeoffs', 'Follow up estimate and approval bottlenecks', 'Reset client expectations before trust drops'],
@@ -613,6 +613,37 @@ body,
 .section-card .card-body {
     padding: 1.4rem;
 }
+
+.sales-insight-chart-body {
+    height: 290px;
+    padding: 1rem 1.2rem 1.2rem !important;
+    display: flex;
+    flex-direction: column;
+}
+
+.sales-insight-chart-body canvas {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 225px;
+}
+
+.sales-chart-note {
+    color: var(--gray-600);
+    font-size: 0.78rem;
+    flex: 0 0 auto;
+    margin: 0.7rem 0 0;
+    line-height: 1.35;
+}
+
+.insight-balance-card { height: 620px; }
+.insight-balance-card .card-body { min-height: 0; }
+.insight-balance-card .insight-list { max-height: 520px; overflow-y: auto; padding-right: 0.35rem; }
+.budget-insight-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1rem; }
+.budget-summary-strip { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0; margin-top:1rem; border:1px solid var(--gray-200); border-radius:14px; overflow:hidden; }
+.budget-summary-item { padding:0.8rem 1rem; background:var(--gray-50); }
+.budget-summary-item + .budget-summary-item { border-left:1px solid var(--gray-200); }
+.budget-summary-item span { display:block; color:var(--gray-600); font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; }
+.budget-summary-item strong { display:block; margin-top:.2rem; color:var(--gray-900); }
 
 .filter-card {
     background: #fff;
@@ -1684,6 +1715,22 @@ body,
     border-bottom-color: var(--insight-border);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .budget-summary-strip {
+    border-color: var(--insight-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .budget-summary-item {
+    background: var(--insight-surface-soft);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .budget-summary-item + .budget-summary-item {
+    border-color: var(--insight-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .budget-summary-item strong {
+    color: var(--insight-text);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-chip {
     background: var(--insight-surface-soft);
     border-color: var(--insight-border);
@@ -1705,6 +1752,9 @@ body,
     .metric-grid {
         grid-template-columns: repeat(2, 1fr);
     }
+    .insight-balance-card { height:auto; }
+    .insight-balance-card .insight-list { max-height:none; overflow:visible; padding-right:0; }
+    .budget-insight-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 
 @media (max-width: 768px) {
@@ -1712,6 +1762,9 @@ body,
     .mini-stat-grid {
         grid-template-columns: 1fr;
     }
+    .budget-insight-grid,
+    .budget-summary-strip { grid-template-columns:1fr; }
+    .budget-summary-item + .budget-summary-item { border-left:0; border-top:1px solid var(--gray-200); }
 
     .heatmap {
         grid-template-columns: 70px repeat(3, 1fr);
@@ -1803,9 +1856,36 @@ body,
         </div>
     </div>
 
+    <?php if ($userRole === 'sales'): ?>
+        <div class="row g-4 mb-4" aria-label="Sales project insight charts">
+            <div class="col-xl-6">
+                <div class="section-card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-line"></i> Delivery Progress</h5>
+                    </div>
+                    <div class="card-body sales-insight-chart-body">
+                        <canvas id="salesDeliveryProgressChart" aria-label="Planned versus actual project progress"></canvas>
+                        <p class="sales-chart-note">Shows whether completed work is keeping pace with the project timeline.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-6">
+                <div class="section-card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-triangle-exclamation"></i> Risk Breakdown</h5>
+                    </div>
+                    <div class="card-body sales-insight-chart-body">
+                        <canvas id="salesRiskBreakdownChart" aria-label="Project risk breakdown"></canvas>
+                        <p class="sales-chart-note">Higher percentages mean more attention is required.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <div class="row g-4 mb-4">
-        <div class="col-xl-7">
-            <div class="section-card">
+        <div class="col-xl-6">
+            <div class="section-card insight-balance-card">
                 <div class="card-header">
                     <h5>
                         <i class="fas fa-lightbulb"></i>
@@ -1845,8 +1925,8 @@ body,
             </div>
         </div>
 
-        <div class="col-xl-5">
-            <div class="section-card">
+        <div class="col-xl-6">
+            <div class="section-card insight-balance-card">
                 <div class="card-header">
                     <h5>
                         <i class="fas fa-gauge-high"></i>
@@ -1871,9 +1951,10 @@ body,
                             <span class="badge-tone <?php echo $insights['metrics']['forecast_delay_days'] > 0 ? 'warning' : 'success'; ?>"><?php echo $insights['metrics']['forecast_delay_days'] > 0 ? 'Needs Attention' : 'On Track'; ?></span>
                         </div>
                         <div class="mini-stat">
-                            <div class="label">Resource Efficiency</div>
-                            <div class="value"><?php echo number_format($insights['metrics']['resource_efficiency'], 1); ?>%</div>
-                            <span class="badge-tone <?php echo htmlspecialchars($insights['bands']['resource_efficiency']['tone']); ?>"><?php echo htmlspecialchars($insights['bands']['resource_efficiency']['label']); ?></span>
+                            <?php $resourceRisk = 100 - (float) $insights['metrics']['resource_efficiency']; $resourceRiskBand = di_band_for_score($resourceRisk); ?>
+                            <div class="label">Resource Risk</div>
+                            <div class="value"><?php echo number_format($resourceRisk, 1); ?>%</div>
+                            <span class="badge-tone <?php echo htmlspecialchars($resourceRiskBand['tone']); ?>"><?php echo htmlspecialchars($resourceRiskBand['label']); ?></span>
                         </div>
                         <div class="mini-stat">
                             <div class="label">Open Tasks</div>
@@ -1881,9 +1962,10 @@ body,
                             <span class="subtext"><?php echo (int) $insights['metrics']['blocked_tasks']; ?> blocked, <?php echo (int) $insights['metrics']['overdue_tasks']; ?> overdue</span>
                         </div>
                         <div class="mini-stat">
-                            <div class="label">Decision Confidence</div>
-                            <div class="value"><?php echo number_format($insights['metrics']['decision_confidence'], 1); ?>%</div>
-                            <span class="badge-tone <?php echo htmlspecialchars($insights['bands']['decision_confidence']['tone']); ?>"><?php echo htmlspecialchars($insights['bands']['decision_confidence']['label']); ?></span>
+                            <?php $decisionRisk = 100 - (float) $insights['metrics']['decision_confidence']; $decisionRiskBand = di_band_for_score($decisionRisk); ?>
+                            <div class="label">Decision Risk</div>
+                            <div class="value"><?php echo number_format($decisionRisk, 1); ?>%</div>
+                            <span class="badge-tone <?php echo htmlspecialchars($decisionRiskBand['tone']); ?>"><?php echo htmlspecialchars($decisionRiskBand['label']); ?></span>
                         </div>
                     </div>
 
@@ -1912,58 +1994,31 @@ body,
                 </div>
             </div>
 
-            <?php if ($showBudgetInsights): ?>
-                <div class="section-card mt-4">
-                    <div class="card-header">
-                        <h5><i class="fas fa-coins"></i> Budget Insights</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mini-stat-grid mb-4">
-                            <div class="mini-stat">
-                                <div class="label">Budget Health</div>
-                                <div class="value"><?php echo number_format($insights['metrics']['budget_health'], 1); ?>%</div>
-                                <span class="badge-tone <?php echo htmlspecialchars($insights['bands']['budget_health']['tone']); ?>"><?php echo htmlspecialchars($insights['bands']['budget_health']['label']); ?></span>
-                            </div>
-                            <div class="mini-stat">
-                                <div class="label">Monthly Burn</div>
-                                <div class="value"><?php echo number_format($insights['metrics']['monthly_burn'], 2); ?></div>
-                                <span class="subtext"><?php echo htmlspecialchars((string) ($insights['metrics']['budget_baseline_source'] ?? 'Estimated budget usage')); ?></span>
-                            </div>
-                            <div class="mini-stat">
-                                <div class="label">Budget Consumed</div>
-                                <div class="value"><?php echo number_format($insights['metrics']['budget_consumed_ratio'], 1); ?>%</div>
-                                <span class="subtext">Modeled against planned budget</span>
-                            </div>
-                            <div class="mini-stat">
-                                <div class="label">Overspend Forecast</div>
-                                <div class="value"><?php echo number_format($insights['metrics']['overspend_forecast'], 2); ?></div>
-                                <span class="badge-tone <?php echo $insights['metrics']['overspend_forecast'] > 0 ? 'warning' : 'success'; ?>">
-                                    <?php echo $insights['metrics']['overspend_forecast'] > 0 ? 'Watch Spend' : 'Within Budget'; ?>
-                                </span>
-                            </div>
-                        </div>
-
-                        <table class="compare-table">
-                            <tbody>
-                                <tr>
-                                    <td>Total Budget</td>
-                                    <td><?php echo number_format($insights['metrics']['budget_total'], 2); ?></td>
-                                </tr>
-                                <tr>
-                                    <td>Budget Remaining</td>
-                                    <td><?php echo number_format(max(0, $insights['metrics']['budget_total'] * (1 - ($insights['metrics']['budget_consumed_ratio'] / 100))), 2); ?></td>
-                                </tr>
-                                <tr>
-                                    <td>Cost Pressure</td>
-                                    <td><?php echo $insights['metrics']['overspend_forecast'] > 0 ? 'Needs review' : 'Controlled'; ?></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            <?php endif; ?>
         </div>
     </div>
+
+    <?php if ($showBudgetInsights): ?>
+        <div class="section-card mb-4">
+            <div class="card-header"><h5><i class="fas fa-coins"></i> Budget Insights</h5></div>
+            <div class="card-body">
+                <div class="budget-insight-grid">
+                    <div class="mini-stat">
+                        <?php $budgetRisk = 100 - (float) $insights['metrics']['budget_health']; $budgetRiskBand = di_band_for_score($budgetRisk); ?>
+                        <div class="label">Budget Risk</div><div class="value"><?php echo number_format($budgetRisk, 1); ?>%</div>
+                        <span class="badge-tone <?php echo htmlspecialchars($budgetRiskBand['tone']); ?>"><?php echo htmlspecialchars($budgetRiskBand['label']); ?></span>
+                    </div>
+                    <div class="mini-stat"><div class="label">Monthly Burn</div><div class="value"><?php echo number_format($insights['metrics']['monthly_burn'], 2); ?></div><span class="subtext"><?php echo htmlspecialchars((string) ($insights['metrics']['budget_baseline_source'] ?? 'Estimated budget usage')); ?></span></div>
+                    <div class="mini-stat"><div class="label">Budget Consumed</div><div class="value"><?php echo number_format($insights['metrics']['budget_consumed_ratio'], 1); ?>%</div><span class="subtext">Modeled against planned budget</span></div>
+                    <div class="mini-stat"><div class="label">Overspend Forecast</div><div class="value"><?php echo number_format($insights['metrics']['overspend_forecast'], 2); ?></div><span class="badge-tone <?php echo $insights['metrics']['overspend_forecast'] > 0 ? 'warning' : 'success'; ?>"><?php echo $insights['metrics']['overspend_forecast'] > 0 ? 'Watch Spend' : 'Within Budget'; ?></span></div>
+                </div>
+                <div class="budget-summary-strip">
+                    <div class="budget-summary-item"><span>Total Budget</span><strong><?php echo number_format($insights['metrics']['budget_total'], 2); ?></strong></div>
+                    <div class="budget-summary-item"><span>Budget Remaining</span><strong><?php echo number_format(max(0, $insights['metrics']['budget_total'] * (1 - ($insights['metrics']['budget_consumed_ratio'] / 100))), 2); ?></strong></div>
+                    <div class="budget-summary-item"><span>Cost Pressure</span><strong><?php echo $insights['metrics']['overspend_forecast'] > 0 ? 'Needs review' : 'Controlled'; ?></strong></div>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
 
     <?php if (false): ?>
 
@@ -2033,7 +2088,7 @@ body,
                                 <td>Resource Efficiency</td>
                                 <td><?php echo number_format($simulation['before']['resource_efficiency'], 1); ?>%</td>
                                 <td><?php echo number_format($simulation['after']['resource_efficiency'], 1); ?>%</td>
-                                <td><span class="badge-tone <?php echo htmlspecialchars(di_band_for_score($simulation['after']['resource_efficiency'])['tone']); ?>"><?php echo htmlspecialchars(di_band_for_score($simulation['after']['resource_efficiency'])['label']); ?></span></td>
+                                <td><span class="badge-tone <?php echo htmlspecialchars(di_band_for_health($simulation['after']['resource_efficiency'])['tone']); ?>"><?php echo htmlspecialchars(di_band_for_health($simulation['after']['resource_efficiency'])['label']); ?></span></td>
                             </tr>
                             <tr>
                                 <td>Decision Confidence</td>
@@ -2521,7 +2576,7 @@ body,
                     href="<?php echo BASE_URL; ?>modules/insights/decision-center.php?project_id=<?php echo (int) $attentionProject['id']; ?>&view=statistics"
                     title="<?php echo (int) $attentionProject['issue_count']; ?> issue<?php echo (int) $attentionProject['issue_count'] === 1 ? '' : 's'; ?>"
                 >
-                    ! <?php echo htmlspecialchars((string) $attentionProject['name']); ?> (<?php echo (int) $attentionProject['issue_count']; ?>)
+                    <?php echo htmlspecialchars((string) $attentionProject['name']); ?> (<?php echo (int) $attentionProject['issue_count']; ?>)
                 </a>
             <?php endforeach; ?>
         </div>
@@ -2539,12 +2594,19 @@ body,
             $attentionIssueCount = (int) ($attentionProjectsById[$projectId] ?? 0);
             $needsAttention = $attentionIssueCount > 0;
             $createdAtTs = !empty($project['created_at']) ? (strtotime((string) $project['created_at']) ?: 0) : 0;
+            $projectStatus = strtolower(trim((string) ($project['status'] ?? '')));
+            $projectEndTs = !empty($project['timeline_end']) ? (strtotime((string) $project['timeline_end']) ?: false) : false;
+            $projectStatusLabel = !in_array($projectStatus, ['completed', 'cancelled'], true)
+                && $projectEndTs !== false
+                && strtotime(date('Y-m-d')) > $projectEndTs
+                    ? 'Overdue'
+                    : ucwords(str_replace('_', ' ', $projectStatus));
             $searchBlob = strtolower(trim(
                 $project['name']
                 . ' '
                 . ($project['client_name'] ?? '')
                 . ' '
-                . ucwords(str_replace('_', ' ', (string) ($project['status'] ?? '')))
+                . $projectStatusLabel
                 . ' '
                 . delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))
             ));
@@ -2564,7 +2626,7 @@ body,
                                 <h5><?php echo htmlspecialchars($project['name']); ?></h5>
                                 <div class="overview-project-meta">
                                     Client: <?php echo htmlspecialchars($project['client_name']); ?> |
-                                    Status: <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $project['status']))); ?> |
+                                    Status: <?php echo htmlspecialchars($projectStatusLabel); ?> |
                                     Timeline: <?php echo htmlspecialchars(delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))); ?>
                                 </div>
                             </div>
@@ -2580,7 +2642,7 @@ body,
                                 <?php endif; ?>
                                 <span class="delay-risk-badge <?php echo $riskClass; ?>">
                                     <i class="fas fa-signal"></i>
-                                    <?php echo htmlspecialchars($riskLevel); ?> Delay Risk
+                                    <?php echo htmlspecialchars($riskLevel); ?> Risk
                                 </span>
                             </div>
                         </div>
@@ -2684,6 +2746,14 @@ body,
 const radarData = <?php echo json_encode($radarChart, JSON_UNESCAPED_UNICODE); ?>;
 const strategyData = <?php echo json_encode($comparisonChart, JSON_UNESCAPED_UNICODE); ?>;
 const actionCatalog = <?php echo json_encode($actionCatalog, JSON_UNESCAPED_UNICODE); ?>;
+const salesInsightChartData = <?php echo json_encode([
+    'planned_progress' => round((float) ($insights['metrics']['planned_progress'] ?? 0) * 100, 1),
+    'actual_progress' => round((float) ($insights['metrics']['actual_progress'] ?? 0) * 100, 1),
+    'schedule_risk' => round(100 - (float) ($insights['metrics']['schedule_stability'] ?? 100), 1),
+    'resource_risk' => round(100 - (float) ($insights['metrics']['resource_efficiency'] ?? 100), 1),
+    'budget_risk' => round(100 - (float) ($insights['metrics']['budget_health'] ?? 100), 1),
+    'client_risk' => round((float) ($insights['metrics']['client_risk'] ?? 0), 1),
+], JSON_UNESCAPED_UNICODE); ?>;
 const insightDarkMode =
     document.documentElement.getAttribute('data-theme') === 'dark' ||
     document.body.getAttribute('data-theme') === 'dark' ||
@@ -2691,6 +2761,60 @@ const insightDarkMode =
 const insightChartTextColor = insightDarkMode ? '#9db6cf' : '#666';
 const insightChartGridColor = insightDarkMode ? 'rgba(157, 182, 207, 0.18)' : 'rgba(0, 0, 0, 0.08)';
 const insightStrategyGridColor = insightDarkMode ? insightChartGridColor : 'rgba(0, 0, 0, 0.06)';
+
+const compactPercentChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: 'y',
+    scales: {
+        x: {
+            beginAtZero: true,
+            max: 100,
+            ticks: { color: insightChartTextColor, callback: value => `${value}%` },
+            grid: { color: insightChartGridColor }
+        },
+        y: { ticks: { color: insightChartTextColor }, grid: { display:false } }
+    },
+    plugins: {
+        legend: { display:false },
+        tooltip: { callbacks: { label: context => `${context.raw}%` } }
+    }
+};
+
+const salesDeliveryProgressChart = document.getElementById('salesDeliveryProgressChart');
+if (salesDeliveryProgressChart) {
+    new Chart(salesDeliveryProgressChart, {
+        type: 'bar',
+        data: {
+            labels: ['Planned by today', 'Actually completed'],
+            datasets: [{
+                data: [salesInsightChartData.planned_progress, salesInsightChartData.actual_progress],
+                backgroundColor: ['#8fb8d5', salesInsightChartData.actual_progress >= salesInsightChartData.planned_progress ? '#10b981' : '#f59e0b'],
+                borderRadius: 10,
+                barThickness: 30
+            }]
+        },
+        options: compactPercentChartOptions
+    });
+}
+
+const salesRiskBreakdownChart = document.getElementById('salesRiskBreakdownChart');
+if (salesRiskBreakdownChart) {
+    const riskValues = [salesInsightChartData.schedule_risk, salesInsightChartData.resource_risk, salesInsightChartData.budget_risk, salesInsightChartData.client_risk];
+    new Chart(salesRiskBreakdownChart, {
+        type: 'bar',
+        data: {
+            labels: ['Schedule', 'Resources', 'Budget', 'Client'],
+            datasets: [{
+                data: riskValues,
+                backgroundColor: riskValues.map(value => value >= 75 ? '#dc2626' : (value >= 50 ? '#f59e0b' : (value >= 25 ? '#3b82f6' : '#10b981'))),
+                borderRadius: 10,
+                barThickness: 22
+            }]
+        },
+        options: compactPercentChartOptions
+    });
+}
 
 const actionModalEl = document.getElementById('projectActionModal');
 const actionScenarioEl = document.getElementById('actionScenario');

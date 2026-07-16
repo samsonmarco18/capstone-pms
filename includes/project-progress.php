@@ -138,7 +138,7 @@ function fetchSalesProjectChecklists(mysqli|PgsqlMysqliCompatConnection $conn, i
 
             $feature['is_merged'] = !empty($feature['merged_at'])
                 || !empty($feature['architect_reviewed_at'])
-                || (string) ($feature['status'] ?? '') === 'merged';
+                || in_array((string) ($feature['status'] ?? ''), ['merged', 'ready_for_release', 'completed'], true);
 
             if (projectProgressIsAdditionalFeature($feature)) {
                 $projects[$projectId]['additional_features'][] = $feature;
