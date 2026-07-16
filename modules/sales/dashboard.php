@@ -1338,21 +1338,6 @@ include '../../includes/navbar.php';
     letter-spacing: 0;
 }
 
-.release-summary-pill strong {
-    color: var(--gray-600);
-    font-size: 0.8rem;
-    line-height: 1;
-    font-weight: 600;
-}
-
-.release-summary-pill.merged strong {
-    color: var(--gray-600);
-}
-
-.release-summary-pill.waiting strong {
-    color: var(--gray-600);
-}
-
 .release-checklist {
     display: none;
     gap: 0.85rem;
@@ -2503,15 +2488,12 @@ body.dark-mode .evortix-3d-platform {
                                 <div class="release-chart-summary">
                                     <div class="release-summary-pill merged">
                                         <span>Merged</span>
-                                        <strong><?php echo (int) $releaseMergedTotal; ?></strong>
                                     </div>
                                     <div class="release-summary-pill waiting">
                                         <span>Waiting</span>
-                                        <strong><?php echo (int) $releaseWaitingTotal; ?></strong>
                                     </div>
                                     <div class="release-summary-pill">
                                         <span>Complete</span>
-                                        <strong><?php echo (int) $releaseCompletionRate; ?>%</strong>
                                     </div>
                                 </div>
                                 <canvas id="releaseChecklistChart"></canvas>
@@ -2654,8 +2636,6 @@ body.dark-mode .evortix-3d-platform {
                 'title' => 'Project Insight List',
                 'subtitle' => 'Top three project signals with direct links to the full insight page.',
                 'button_label' => 'View Project',
-                'more_label' => 'See More',
-                'more_url' => BASE_URL . 'modules/insights/decision-center.php',
             ]);
             ?>
         </div>
