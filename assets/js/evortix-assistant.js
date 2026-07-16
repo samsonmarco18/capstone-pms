@@ -64,6 +64,7 @@
                 <ellipse class="evx-sleep-dock-light" cx="110" cy="214" rx="39" ry="7" fill="#081111" stroke="#38cceb" stroke-width="2"/>
                 <g class="evx-sleeper" data-robot-part="sleeper">
                     <path d="M84 140 C75 148 72 161 76 176 C80 193 93 206 110 211 C127 206 140 193 144 176 C148 161 145 148 136 140 C129 135 119 132 110 132 C101 132 91 135 84 140Z" fill="url(#evx-shell-lower-${id})" stroke="#b0b6b5" stroke-width="1.7"/>
+                    <path class="evx-belly-seam" d="M76 172 Q110 184 144 172" fill="none" stroke="#aeb4b2" stroke-width="1.35" stroke-linecap="round" opacity=".72"/>
                     <ellipse cx="110" cy="134" rx="20" ry="5" fill="url(#evx-neck-light-${id})" opacity=".8"/>
                     <path class="evx-antenna evx-left-antenna" d="M41 72 C40.5 55 42 32 45 14 C48 33 50 55 49 72Z" fill="url(#evx-shell-side-${id})" stroke="#adb3b1" stroke-width="1" stroke-linejoin="round"/>
                     <path class="evx-antenna evx-right-antenna" d="M179 72 C179.5 55 178 32 175 14 C172 33 170 55 171 72Z" fill="url(#evx-shell-side-${id})" stroke="#adb3b1" stroke-width="1" stroke-linejoin="round"/>
@@ -91,8 +92,7 @@
                 <g class="evx-body" data-robot-part="body">
                     <path d="M84 140 C75 148 72 162 76 179 C80 197 93 212 110 218 C127 212 140 197 144 179 C148 162 145 148 136 140 C129 135 119 132 110 132 C101 132 91 135 84 140Z" fill="url(#evx-shell-lower-${id})" stroke="#aeb5b3" stroke-width="1.8"/>
                     <path d="M90 143 C84 155 85 178 91 194 C95 204 102 211 110 215 C99 207 96 192 96 177 C96 159 100 144 108 135 C100 135 94 138 90 143Z" fill="#ffffff" opacity=".48"/>
-                    <path d="M75 174 Q110 184 145 174" fill="none" stroke="#aeb4b2" stroke-width="1.5" opacity=".75"/>
-                    <path d="M76 178 Q110 189 144 178" fill="none" stroke="#ffffff" stroke-width="1" opacity=".65"/>
+                    <path class="evx-belly-seam" d="M75 173 Q110 185 145 173" fill="none" stroke="#aeb4b2" stroke-width="1.35" stroke-linecap="round" opacity=".72"/>
                 </g>
 
                 <ellipse class="evx-neck-glow" cx="110" cy="140" rx="23" ry="6.5" fill="#31c6ec" opacity=".34" filter="url(#evx-glow-${id})"/>
@@ -285,6 +285,7 @@
                 if (!face || !eyeTrack) return;
                 const rect = face.getBoundingClientRect();
                 if (!rect.width || !rect.height) return;
+                root.classList.add('is-pointer-looking');
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
                 const normalizedX = clamp((clientX - centerX) / Math.max(70, rect.width * .9), -1, 1);
@@ -293,8 +294,9 @@
                 eyeTrack.style.setProperty('--evx-look-y', `${(normalizedY * 3.4).toFixed(2)}px`);
             },
             resetLook() {
-                eyeTrack?.style.setProperty('--evx-look-x', '0px');
-                eyeTrack?.style.setProperty('--evx-look-y', '0px');
+                root.classList.remove('is-pointer-looking');
+                eyeTrack?.style.removeProperty('--evx-look-x');
+                eyeTrack?.style.removeProperty('--evx-look-y');
             },
             setMode(mode = 'standing') {
                 window.clearTimeout(modeTimer);

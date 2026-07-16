@@ -2475,7 +2475,11 @@ body {
 
 .evx-head {
     transform-origin: 110px 112px;
-    animation: evxAssistantHeadIdle 5.4s ease-in-out infinite;
+}
+
+.evx-assistant[data-mode="standing"]:not(.is-pointer-looking):not([data-emotion]) .evx-head,
+.evx-assistant[data-mode="standing"]:not(.is-pointer-looking)[data-emotion=""] .evx-head {
+    animation: evxAssistantHeadIdle 6.8s ease-in-out infinite;
 }
 
 .evx-left-arm {
@@ -2531,6 +2535,11 @@ body {
     transform: translate(var(--evx-look-x, 0), var(--evx-look-y, 0));
     transition: transform 145ms cubic-bezier(.2, .72, .22, 1);
     will-change: transform;
+}
+
+.evx-assistant[data-mode="standing"]:not(.is-pointer-looking):not([data-emotion]) .evx-eye-track,
+.evx-assistant[data-mode="standing"]:not(.is-pointer-looking)[data-emotion=""] .evx-eye-track {
+    animation: evxAssistantNeutralLook 6.8s ease-in-out infinite;
 }
 
 .evx-eye {
@@ -2881,9 +2890,15 @@ body {
 }
 
 @keyframes evxAssistantHeadIdle {
-    0%, 42%, 100% { transform: translateY(0); }
-    47% { transform: translateY(1.5px); }
-    52% { transform: translateY(0); }
+    0%, 10%, 40%, 52%, 82%, 100% { transform: translate(0, 0) rotate(0); }
+    18%, 32% { transform: translate(-2px, .5px) rotate(-2deg); }
+    60%, 74% { transform: translate(2px, .5px) rotate(2deg); }
+}
+
+@keyframes evxAssistantNeutralLook {
+    0%, 10%, 40%, 52%, 82%, 100% { transform: translate(0, 0); }
+    18%, 32% { transform: translate(-4.6px, .35px); }
+    60%, 74% { transform: translate(4.6px, .35px); }
 }
 
 @keyframes evxAssistantHappyBounce {
@@ -3013,6 +3028,7 @@ body {
     .evx-character,
     .evx-body,
     .evx-head,
+    .evx-eye-track,
     .evx-assistant[data-emotion] .evx-arm {
         animation: none !important;
     }
