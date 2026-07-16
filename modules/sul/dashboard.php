@@ -317,7 +317,7 @@ if ($actionRows) {
 usort($upcomingAgenda, static function (array $left, array $right): int {
     return strtotime((string) ($left['date'] ?? '')) <=> strtotime((string) ($right['date'] ?? ''));
 });
-$upcomingAgenda = array_slice($upcomingAgenda, 0, 5);
+$upcomingAgenda = array_slice($upcomingAgenda, 0, 3);
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -722,10 +722,37 @@ include '../../includes/navbar.php';
     min-height: 100%;
 }
 
+.sul-insights-column .delay-insights-wrap,
+.sul-insights-column .delay-compact-card {
+    height: 100%;
+}
+
+.sul-insights-column .delay-insights-wrap {
+    margin-bottom: 0;
+}
+
 .sul-chart-legend {
     display: grid;
     gap: 0.65rem;
     margin-top: 1rem;
+}
+
+.sul-task-status-chart {
+    position: absolute;
+    inset: 1.5rem;
+    min-height: 0;
+}
+
+.sul-task-status-chart canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.sul-task-status-card .card-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 328px;
 }
 
 .sul-chart-legend span {
@@ -1058,27 +1085,36 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
-    <?php
-    delayInsightsRenderCompactList($conn, $user, [
-        'limit' => 4,
-        'title' => 'Project Insight List',
-        'subtitle' => 'Small one-line project signals with direct links to the full insight page.',
-        'button_label' => 'View Project',
-    ]);
-    ?>
-
-    <!-- Row 1: Status/Priority + Schedule/Allocation -->
+    <!-- Row 1: Task Status Overview + Calendar -->
     <div class="row g-3 mb-4">
         <div class="col-xl-7">
-            <div class="card mb-3">
+            <div class="card h-100 sul-task-status-card">
                 <div class="card-header">
                     <h5><i class="fas fa-chart-pie"></i> Task Status Overview</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="taskStatusChart" style="height: 280px; width: 100%;"></canvas>
+                    <div class="sul-task-status-chart">
+                        <canvas id="taskStatusChart"></canvas>
+                    </div>
                 </div>
             </div>
+        </div>
 
+        <div class="col-xl-5">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
+                </div>
+                <div class="card-body p-0">
+                    <?php renderScheduleAgendaPreview([], $upcomingAgenda, 'Calendar'); ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2: Priority Distribution + Projects Needing Task Allocation -->
+    <div class="row g-3 mb-4">
+        <div class="col-xl-7">
             <div class="card">
                 <div class="card-header">
                     <h5><i class="fas fa-chart-bar"></i> Priority Distribution</h5>
@@ -1095,16 +1131,6 @@ include '../../includes/navbar.php';
         </div>
 
         <div class="col-xl-5">
-            <!-- Upcoming Schedule -->
-            <div class="card mb-3">
-                <div class="card-header">
-                    <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
-                </div>
-                <div class="card-body p-0">
-                    <?php renderScheduleAgendaPreview([], $upcomingAgenda, 'Calendar'); ?>
-                </div>
-            </div>
-
             <div class="card">
                 <div class="card-header">
                     <h5><i class="fas fa-project-diagram"></i> Projects Needing Task Allocation</h5>
@@ -1170,54 +1196,17 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
-    <!-- Row 3: Team Availability + Recent Tasks -->
+    <!-- Row 3: Project Insight List + Recent Tasks -->
     <div class="row g-3 mb-4">
-        <div class="col-xl-7">
-            <div class="card sul-table-card">
-                <div class="card-header">
-                    <h5><i class="fas fa-users"></i> Team Availability & Workload</h5>
-                </div>
-                <div class="table-container">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Role</th>
-                                <th>Active Tasks</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if($expertAvailability && $expertAvailability->num_rows > 0): ?>
-                            <?php while($expert = $expertAvailability->fetch_assoc()): ?>
-                            <?php
-                                $statusClass = $expert['active_tasks'] >= 5 ? 'overloaded' : ($expert['active_tasks'] >= 3 ? 'busy' : ($expert['active_tasks'] > 0 ? 'available' : 'free'));
-                                $statusText = $expert['active_tasks'] >= 5 ? 'Overloaded' : ($expert['active_tasks'] >= 3 ? 'Busy' : ($expert['active_tasks'] > 0 ? 'Available' : 'Free'));
-                            ?>
-                            <tr>
-                                <td class="fw-semibold"><?php echo htmlspecialchars($expert['full_name']); ?></td>
-                                <td><span class="badge-role-<?php echo $expert['role']; ?>"><?php echo strtoupper($expert['role']); ?></span></td>
-                                <td><?php echo $expert['active_tasks']; ?></td>
-                                <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
-                                <td>
-                                    <a href="task-allocation.php" class="btn-primary-modern">
-                                        <i class="fas fa-tasks"></i> Assign
-                                    </a>
-                                </td>
-                            </tr>
-                            <?php endwhile; ?>
-                            <?php else: ?>
-                            <tr>
-                                <td colspan="5" class="text-center text-muted py-4">
-                                    No active experts or developers are assigned to <?php echo htmlspecialchars($sulDepartmentLabel ?: 'your department'); ?>.
-                                </td>
-                            </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+        <div class="col-xl-7 sul-insights-column">
+            <?php
+            delayInsightsRenderCompactList($conn, $user, [
+                'limit' => 4,
+                'title' => 'Project Insight List',
+                'subtitle' => 'Small one-line project signals with direct links to the full insight page.',
+                'button_label' => 'View Project',
+            ]);
+            ?>
         </div>
 
         <div class="col-xl-5">
@@ -1279,6 +1268,57 @@ include '../../includes/navbar.php';
                             </div>
                         <?php endif; ?>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 4: Team Availability & Workload -->
+    <div class="row g-3 mb-4">
+        <div class="col-12">
+            <div class="card sul-table-card">
+                <div class="card-header">
+                    <h5><i class="fas fa-users"></i> Team Availability & Workload</h5>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Role</th>
+                                <th>Active Tasks</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if($expertAvailability && $expertAvailability->num_rows > 0): ?>
+                            <?php while($expert = $expertAvailability->fetch_assoc()): ?>
+                            <?php
+                                $statusClass = $expert['active_tasks'] >= 5 ? 'overloaded' : ($expert['active_tasks'] >= 3 ? 'busy' : ($expert['active_tasks'] > 0 ? 'available' : 'free'));
+                                $statusText = $expert['active_tasks'] >= 5 ? 'Overloaded' : ($expert['active_tasks'] >= 3 ? 'Busy' : ($expert['active_tasks'] > 0 ? 'Available' : 'Free'));
+                            ?>
+                            <tr>
+                                <td class="fw-semibold"><?php echo htmlspecialchars($expert['full_name']); ?></td>
+                                <td><span class="badge-role-<?php echo $expert['role']; ?>"><?php echo strtoupper($expert['role']); ?></span></td>
+                                <td><?php echo $expert['active_tasks']; ?></td>
+                                <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
+                                <td>
+                                    <a href="task-allocation.php" class="btn-primary-modern">
+                                        <i class="fas fa-tasks"></i> Assign
+                                    </a>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                            <?php else: ?>
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    No active experts or developers are assigned to <?php echo htmlspecialchars($sulDepartmentLabel ?: 'your department'); ?>.
+                                </td>
+                            </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -1371,7 +1411,7 @@ new Chart(taskCtx, {
     },
     options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         cutout: '60%',
         plugins: {
             legend: {

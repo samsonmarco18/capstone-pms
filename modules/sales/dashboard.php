@@ -1556,8 +1556,129 @@ include '../../includes/navbar.php';
     background: #d1fae5;
 }
 
+.sales-insights-column .delay-insights-wrap,
+.sales-insights-column .delay-compact-card {
+    height: 100%;
+}
+
 .sales-insights-column .delay-insights-wrap {
     margin-bottom: 0;
+}
+
+/* Animated 3D illustration in the Sales dashboard banner. */
+.evortix-3d-scene {
+    position: relative;
+    top: 10px;
+    width: min(100%, 300px);
+    height: 138px;
+    margin-left: auto;
+    perspective: 900px;
+    transform-style: preserve-3d;
+}
+
+.evortix-3d-platform {
+    position: absolute;
+    width: 220px;
+    height: 112px;
+    left: 50%;
+    top: 50%;
+    border: 1px solid rgba(31, 99, 146, 0.24);
+    border-radius: 28px;
+    background:
+        linear-gradient(rgba(31, 99, 146, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(31, 99, 146, 0.08) 1px, transparent 1px),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(219, 240, 252, 0.72));
+    background-size: 22px 22px, 22px 22px, 100% 100%;
+    box-shadow:
+        -9px 12px 0 rgba(15, 74, 110, 0.1),
+        -18px 25px 38px rgba(15, 74, 110, 0.18),
+        0 0 30px rgba(34, 211, 238, 0.12);
+    transform: translate(-50%, -50%) rotateX(61deg) rotateZ(-25deg);
+    transform-style: preserve-3d;
+    animation: evortixPlatformFloat 5s ease-in-out infinite;
+}
+
+.evortix-3d-core {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 68px;
+    height: 68px;
+    display: grid;
+    place-items: center;
+    color: #ffffff;
+    font-size: 1.45rem;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 22px;
+    background: linear-gradient(145deg, #41a7d8, #15557f);
+    box-shadow:
+        inset 4px 4px 8px rgba(255, 255, 255, 0.3),
+        inset -5px -6px 10px rgba(7, 48, 78, 0.26),
+        -8px 13px 0 #0f4a6e,
+        -14px 24px 26px rgba(15, 74, 110, 0.28),
+        0 0 28px rgba(34, 211, 238, 0.28);
+    transform: translate(-50%, -68%) translateZ(58px) rotateZ(25deg) rotateX(-12deg);
+}
+
+.evortix-3d-pillar {
+    position: absolute;
+    bottom: 28px;
+    width: 22px;
+    border-radius: 7px 7px 4px 4px;
+    background: linear-gradient(90deg, #0f4a6e, #3a9acc 72%, #8ed9f4);
+    box-shadow: -5px 7px 0 rgba(15, 74, 110, 0.3), -8px 12px 14px rgba(15, 74, 110, 0.2);
+    transform: translateZ(24px) rotateZ(25deg) rotateX(-8deg);
+    transform-origin: bottom;
+}
+
+.evortix-3d-pillar.pillar-one {
+    left: 38px;
+    height: 34px;
+}
+
+.evortix-3d-pillar.pillar-two {
+    right: 38px;
+    height: 54px;
+}
+
+.evortix-3d-pillar.pillar-three {
+    right: 68px;
+    bottom: 16px;
+    height: 27px;
+}
+
+.evortix-3d-orbit {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 152px;
+    height: 58px;
+    border: 2px solid rgba(34, 211, 238, 0.38);
+    border-left-color: rgba(31, 99, 146, 0.08);
+    border-radius: 50%;
+    transform: translate(-50%, -72%) translateZ(74px) rotateZ(18deg);
+    animation: evortixOrbit 7s linear infinite;
+}
+
+.evortix-3d-orbit::after {
+    content: "";
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    right: 13px;
+    top: 2px;
+    border-radius: 50%;
+    background: #22d3ee;
+    box-shadow: 0 0 0 5px rgba(34, 211, 238, 0.12), 0 0 18px #22d3ee;
+}
+
+@keyframes evortixPlatformFloat {
+    0%, 100% { transform: translate(-50%, -50%) rotateX(61deg) rotateZ(-25deg) translateZ(0); }
+    50% { transform: translate(-50%, -54%) rotateX(61deg) rotateZ(-25deg) translateZ(8px); }
+}
+
+@keyframes evortixOrbit {
+    to { transform: translate(-50%, -72%) translateZ(74px) rotateZ(378deg); }
 }
 
 html[data-theme="dark"] .sales-dashboard-hero,
@@ -2292,7 +2413,7 @@ body.dark-mode .evortix-3d-platform {
     <!-- Insights and Recent Clients Row -->
     <div class="row g-4 mb-4">
         <div class="col-lg-6">
-            <div class="list-card">
+            <div class="list-card h-100">
                 <div class="card-header">
                     <h5>
                         <i class="fas fa-user-plus"></i>
@@ -2336,9 +2457,12 @@ body.dark-mode .evortix-3d-platform {
             delayInsightsRenderCompactList($conn, $user, [
                 'limit' => max(1, (int) $insightProjectCount),
                 'risk_level' => 'high',
-                'title' => 'High Risk Project Insights',
-                'subtitle' => 'All High Risk project signals with direct links to each full insight page.',
+                'title' => 'Project Insight List',
+                'subtitle' => 'High-risk project signals with direct links to each full insight page.',
                 'button_label' => 'View Project',
+                'show_empty' => true,
+                'empty_title' => 'No high-risk project insights',
+                'empty_message' => 'Projects will appear here when a high-risk insight needs your attention.',
             ]);
             ?>
         </div>

@@ -108,7 +108,10 @@ function delayInsightsEnsureStyles(): void
         .delay-compact-more-action{min-height:44px;padding:.72rem 1rem;border-radius:12px;font-size:.86rem;box-shadow:0 10px 22px rgba(31,99,146,.14);}
         .delay-compact-more-action i{transition:transform .2s ease;}
         .delay-compact-more-action:hover i{transform:translateX(2px);}
-         .delay-compact-empty{padding:1.5rem;color:#6c757d;font-size:.85rem;text-align:center;}
+         .delay-compact-empty{min-height:220px;padding:2rem 1.5rem;display:grid;place-items:center;align-content:center;gap:.55rem;color:#6c757d;text-align:center;}
+         .delay-compact-empty i{font-size:2rem;color:#1f6392;opacity:.72;}
+         .delay-compact-empty strong{color:#212529;font-size:.95rem;font-weight:600;}
+         .delay-compact-empty span{max-width:380px;color:#6c757d;font-size:.82rem;line-height:1.5;}
          @media (max-width: 1199.98px){.delay-compact-row{grid-template-columns:1fr auto;grid-template-rows:auto auto auto;gap:.6rem;padding-top:2.5rem;}.delay-compact-main{grid-column:1;grid-row:1;}.delay-metric-delay{grid-column:1;grid-row:2;}.delay-metric-success{grid-column:1;grid-row:3;}.delay-compact-action{grid-column:2;grid-row:2 / 4;}.delay-risk-badge{position:absolute;top:.75rem;right:1rem;}}
          @media (max-width: 991.98px){.delay-panels{grid-template-columns:1fr;}}
          @media (max-width: 767.98px){.delay-insights-head,.delay-insight-item{padding:1.2rem;}.delay-compact-head{padding:1.2rem;flex-direction:column;align-items:flex-start;}.delay-compact-list{padding:1rem;}.delay-compact-footer{padding:.85rem 1rem 1rem;}.delay-metric-grid{grid-template-columns:1fr;}.delay-compact-row{grid-template-columns:1fr;grid-template-rows:auto auto auto auto;gap:.6rem;padding:2.5rem 1rem 1rem 1rem;}.delay-compact-main{grid-column:1;grid-row:1;}.delay-compact-top{flex-direction:column;align-items:flex-start;}.delay-metric-delay{grid-column:1;grid-row:2;width:100%;}.delay-metric-success{grid-column:1;grid-row:3;width:100%;}.delay-compact-action{grid-column:1;grid-row:4;width:100%;justify-self:stretch;min-height:44px;}.delay-risk-badge{position:absolute;top:.75rem;right:1rem;}.delay-insight-project-right{justify-content:flex-start;}}
@@ -125,19 +128,24 @@ function delayInsightsEnsureStyles(): void
          }
          html[data-theme="dark"] .delay-insights-head h4,
          html[data-theme="dark"] .delay-compact-head h4,
-         html[data-theme="dark"] .delay-panel-title,
-         html[data-theme="dark"] .delay-insight-project h5,
-         html[data-theme="dark"] .delay-compact-title strong{
-             color:#d8e6f3;
-         }
+          html[data-theme="dark"] .delay-panel-title,
+          html[data-theme="dark"] .delay-insight-project h5,
+          html[data-theme="dark"] .delay-compact-title strong,
+          html[data-theme="dark"] .delay-compact-empty strong{
+              color:#d8e6f3;
+          }
          html[data-theme="dark"] .delay-insights-head p,
          html[data-theme="dark"] .delay-compact-head p,
          html[data-theme="dark"] .delay-insight-project p,
          html[data-theme="dark"] .delay-copy,
-         html[data-theme="dark"] .delay-list,
-         html[data-theme="dark"] .delay-compact-note{
-             color:#a8c0d6;
-         }
+          html[data-theme="dark"] .delay-list,
+          html[data-theme="dark"] .delay-compact-note,
+          html[data-theme="dark"] .delay-compact-empty span{
+              color:#a8c0d6;
+          }
+          html[data-theme="dark"] .delay-compact-empty i{
+              color:#8cc7ff;
+          }
          html[data-theme="dark"] .delay-compact-count{
              background:rgba(12,31,49,.95);
              color:#8cc7ff;
@@ -248,6 +256,9 @@ function delayInsightsRenderCompactList(mysqli|PgsqlMysqliCompatConnection $conn
     $limit = isset($options['limit']) ? max(1, (int) $options['limit']) : 3;
     $moreUrl = trim((string) ($options['more_url'] ?? ''));
     $moreLabel = trim((string) ($options['more_label'] ?? 'See More'));
+    $showEmpty = !empty($options['show_empty']);
+    $emptyTitle = trim((string) ($options['empty_title'] ?? 'No project insights yet'));
+    $emptyMessage = trim((string) ($options['empty_message'] ?? 'Project insight signals will appear here when they become available.'));
     $insights = delayInsightsLoadInsights($conn, $user, $options);
     $riskLevelFilter = strtolower(trim((string) ($options['risk_level'] ?? '')));
     if ($riskLevelFilter !== '') {
@@ -257,7 +268,7 @@ function delayInsightsRenderCompactList(mysqli|PgsqlMysqliCompatConnection $conn
         ));
     }
 
-    if ($insights === []) {
+    if ($insights === [] && !$showEmpty) {
         return;
     }
 
@@ -273,6 +284,14 @@ function delayInsightsRenderCompactList(mysqli|PgsqlMysqliCompatConnection $conn
     echo '<span class="delay-compact-count">' . count($insights) . ' project' . (count($insights) === 1 ? '' : 's') . '</span>';
     echo '</div>';
     echo '<div class="delay-compact-list">';
+
+    if ($insights === []) {
+        echo '<div class="delay-compact-empty">';
+        echo '<i class="fas fa-chart-line" aria-hidden="true"></i>';
+        echo '<strong>' . htmlspecialchars($emptyTitle) . '</strong>';
+        echo '<span>' . htmlspecialchars($emptyMessage) . '</span>';
+        echo '</div>';
+    }
 
     foreach ($insights as $insight) {
         $riskLevel = (string) $insight['before']['risk_level'];

@@ -289,20 +289,36 @@ include '../../includes/navbar.php';
 .btn-review {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
     color: white;
-    border: none;
-    padding: 0.4rem 1rem;
-    border-radius: 8px;
-    font-size: 0.75rem;
-    transition: all 0.2s;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    min-width: 126px;
+    min-height: 44px;
+    padding: 0.7rem 1rem;
+    border-radius: 10px;
+    box-shadow: 0 5px 0 rgba(9, 55, 84, 0.55), 0 10px 20px rgba(15, 74, 110, 0.2);
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none !important;
+    white-space: nowrap;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
+    flex: 0 0 auto;
 }
 
 .btn-review:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 7px 0 rgba(9, 55, 84, 0.5), 0 14px 24px rgba(15, 74, 110, 0.28);
+    filter: brightness(1.06);
     color: white;
+    text-decoration: none !important;
+}
+
+.btn-review:focus-visible {
+    outline: 3px solid rgba(56, 189, 248, 0.3);
+    outline-offset: 3px;
 }
 
 @media (max-width: 576px) {
@@ -333,6 +349,27 @@ include '../../includes/navbar.php';
     font-size: 0.8rem;
     margin: 0;
 }
+
+.architect-project-overview-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.architect-project-overview-body {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    min-height: 360px;
+}
+
+.architect-project-overview-body canvas {
+    display: block;
+    width: 100% !important;
+    max-width: 620px;
+    max-height: 380px;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
     background: #06111e;
 }
@@ -529,24 +566,15 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
-    <?php
-    delayInsightsRenderCompactList($conn, $user, [
-        'limit' => 4,
-        'title' => 'Project Insight List',
-        'subtitle' => 'Small one-line project signals with direct links to the full insight page.',
-        'button_label' => 'View Project',
-    ]);
-    ?>
-
-    <!-- Charts Section -->
+    <!-- Row 1: Project Overview + Upcoming Schedule -->
     <div class="row g-3 mb-4">
         <div class="col-xl-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 shadow-sm h-100 architect-project-overview-card">
                 <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0 fw-semibold" style="color: #1f6392;">Projects Overview</h5>
+                    <h5 class="mb-0 fw-semibold" style="color: #1f6392;">Project Overview</h5>
                 </div>
-                <div class="card-body p-4 pt-2">
-                    <canvas id="projectsChart" style="max-height: 300px; width: 100%;"></canvas>
+                <div class="card-body p-4 architect-project-overview-body">
+                    <canvas id="projectsChart"></canvas>
                 </div>
             </div>
         </div>
@@ -562,6 +590,19 @@ include '../../includes/navbar.php';
             </div>
         </div>
     </div>
+
+    <!-- Row 2: Project Insight List -->
+    <?php
+    delayInsightsRenderCompactList($conn, $user, [
+        'limit' => 4,
+        'title' => 'Project Insight List',
+        'subtitle' => 'Small one-line project signals with direct links to the full insight page.',
+        'button_label' => 'View Project',
+        'show_empty' => true,
+        'empty_title' => 'No project insights yet',
+        'empty_message' => 'Project insight signals will appear here when they become available.',
+    ]);
+    ?>
 
     <div class="row g-3">
         <div class="col-xl-6">
@@ -607,8 +648,8 @@ include '../../includes/navbar.php';
                                     </div>
                                 </div>
                                 <a href="project-review.php?id=<?php echo (int) $project['id']; ?>" class="btn-review">
-                                    <i class="fas fa-arrow-right"></i>
-                                    <?php echo $reviewStarted ? 'Continue' : 'Start Review'; ?>
+                                    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                    <span><?php echo $reviewStarted ? 'Continue' : 'Start Review'; ?></span>
                                 </a>
                             </article>
                         <?php endwhile; ?>
