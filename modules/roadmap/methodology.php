@@ -686,7 +686,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $description = trim((string) ($_POST['task_description'] ?? ''));
             $start = roadmapParseDate($_POST['task_start'] ?? null);
             $end = roadmapParseDate($_POST['task_end'] ?? null);
-            $allowSamePhaseFeature = !empty($_POST['allow_same_phase_feature']);
             $bulkPlaceFeatures = $taskId <= 0 && !empty($_POST['bulk_place_features']);
             $bulkWorkflowTaskIds = [];
             if ($bulkPlaceFeatures) {
@@ -761,11 +760,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $duplicateFeatureIds[] = (int) ($duplicateRow['task_id'] ?? 0);
                     }
                 }
-                if ($duplicateFeatureIds !== [] && !$allowSamePhaseFeature) {
+                if ($duplicateFeatureIds !== []) {
                     roadmapReturnToEditor(
                         $postedProjectId,
                         'task',
-                        'One or more selected workflow features are already scheduled in this phase. Enable the duplicate feature option if this phase intentionally needs another department lane for them.',
+                        'One or more selected workflow features are already scheduled in this phase.',
                         $_POST
                     );
                 }
@@ -781,11 +780,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $duplicateTask = $duplicateStmt->get_result()->fetch_assoc();
                 $duplicateStmt->close();
 
-                if ($duplicateTask && !$allowSamePhaseFeature) {
+                if ($duplicateTask) {
                     roadmapReturnToEditor(
                         $postedProjectId,
                         'task',
-                        'That workflow feature is already scheduled in this phase. Enable the duplicate feature option if this phase intentionally needs another department lane for it.',
+                        'That workflow feature is already scheduled in this phase.',
                         $_POST
                     );
                 }
@@ -2982,6 +2981,21 @@ include '../../includes/navbar.php';
                                 >
                                     <i class="fas fa-plus me-1" aria-hidden="true"></i> Add Task
                                 </button>
+                                <button
+                                    class="btn btn-outline-primary btn-sm"
+                                    type="button"
+                                    <?php if ($phaseHasHeadcount): ?>
+                                        onclick="event.stopPropagation(); openBulkTaskModalForPhase(this.closest('.phase-card-roadmap'));"
+                                        title="Assign multiple workflow features"
+                                    <?php else: ?>
+                                        disabled
+                                        aria-disabled="true"
+                                        aria-label="Bulk assignment disabled. Set a positive phase headcount in Edit Phase first."
+                                        title="Set a positive headcount in Edit Phase to enable bulk assignment"
+                                    <?php endif; ?>
+                                >
+                                    <i class="fas fa-layer-group me-1" aria-hidden="true"></i> Bulk Assign
+                                </button>
                             <?php endif; ?>
                         </div>
                     </div>
@@ -3359,13 +3373,7 @@ include '../../includes/navbar.php';
                             <?php endforeach; ?>
                         </select>
                         <?php if ($canEditArchitecture): ?>
-                            <div class="form-check mt-2">
-                                <input class="form-check-input" type="checkbox" name="allow_same_phase_feature" value="1" id="allowSamePhaseFeature">
-                                <label class="form-check-label" for="allowSamePhaseFeature">
-                                    Allow this feature again in the same phase for another department
-                                </label>
-                            </div>
-                            <input type="hidden" name="bulk_place_features" value="0" id="bulkPlaceFeatures">
+                            <input class="d-none" type="checkbox" name="bulk_place_features" value="1" id="bulkPlaceFeatures" tabindex="-1" aria-hidden="true">
                             <div class="mt-2 d-none" id="bulkFeaturePickerWrap">
                                 <div class="d-flex align-items-center justify-content-between gap-2">
                                     <span class="form-label small mb-1" id="bulkFeaturePickerLabel">Features to place</span>
@@ -3754,7 +3762,6 @@ function validateTaskEditor() {
     const taskId = Number(document.getElementById('taskId')?.value || 0);
     const phaseId = String(document.getElementById('taskPhaseId')?.value || '');
     const workflowTaskId = Number(document.getElementById('workflowTaskId')?.value || 0);
-    const allowSamePhaseFeature = Boolean(document.getElementById('allowSamePhaseFeature')?.checked);
     const isBulk = Boolean(bulkPlaceFeaturesInput?.checked);
     const bulkWorkflowTaskIds = bulkWorkflowTaskInputs
         .filter((input) => input.checked)
@@ -3812,12 +3819,12 @@ function validateTaskEditor() {
             ? bulkWorkflowTaskIds.includes(scheduledWorkflowTaskId)
             : scheduledWorkflowTaskId === workflowTaskId;
     });
-    if ((isBulk || workflowTaskId > 0) && hasDuplicate && !allowSamePhaseFeature) {
+    if ((isBulk || workflowTaskId > 0) && hasDuplicate) {
         return {
             message: isBulk
-                ? 'One or more selected workflow features are already scheduled in this phase. Enable the duplicate feature option if this phase intentionally needs another department lane for them.'
-                : 'That workflow feature is already scheduled in this phase. Enable the duplicate feature option if this phase intentionally needs another department lane for it.',
-            fields: [isBulk ? 'bulkWorkflowTaskIds' : 'workflowTaskId', 'allowSamePhaseFeature']
+                ? 'One or more selected workflow features are already scheduled in this phase.'
+                : 'That workflow feature is already scheduled in this phase.',
+            fields: [isBulk ? 'bulkWorkflowTaskIds' : 'workflowTaskId']
         };
     }
 
@@ -4047,10 +4054,6 @@ function openTaskModal(task) {
     setValue('taskId', task.id || '');
     setValue('taskPhaseId', task.phase_id || '');
     setValue('workflowTaskId', task.task_id || '');
-    const allowSamePhaseFeatureInput = document.getElementById('allowSamePhaseFeature');
-    if (allowSamePhaseFeatureInput) {
-        allowSamePhaseFeatureInput.checked = Boolean(task.allow_same_phase_feature);
-    }
     if (bulkPlaceFeaturesInput) {
         bulkPlaceFeaturesInput.checked = Boolean(task.bulk_place_features);
     }
@@ -4136,7 +4139,6 @@ function restoreRoadmapEditor(state) {
             id: data.task_id || '',
             phase_id: data.phase_id || '',
             task_id: data.workflow_task_id || '',
-            allow_same_phase_feature: data.allow_same_phase_feature === '1' || data.allow_same_phase_feature === 1,
             bulk_place_features: data.bulk_place_features === '1' || data.bulk_place_features === 1,
             bulk_workflow_task_ids: Array.isArray(data.bulk_workflow_task_ids)
                 ? data.bulk_workflow_task_ids

@@ -102,6 +102,7 @@ $totalProjects = $conn->query("SELECT COUNT(*) as count FROM projects")->fetch_a
 $activeProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status != 'completed'")->fetch_assoc()['count'];
 $completedProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status = 'completed'")->fetch_assoc()['count'];
 $overdueProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE timeline_end IS NOT NULL AND timeline_end < CURDATE() AND status NOT IN ('completed', 'cancelled')")->fetch_assoc()['count'];
+$insightProjectCount = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status != 'cancelled'")->fetch_assoc()['count'];
 
 // Get recent clients
 $recentClients = $conn->query("SELECT * FROM clients ORDER BY created_at DESC LIMIT 5");
@@ -276,14 +277,22 @@ $monthlySales = $conn->query("
 
 $projectChecklists = fetchSalesProjectChecklists($conn, 5);
 $releaseMergedTotal = 0;
+$releaseReviewTotal = 0;
 $releaseWaitingTotal = 0;
 $releaseFeatureTotal = 0;
 foreach ($projectChecklists as $projectChecklistSummary) {
     $mergedCount = (int) ($projectChecklistSummary['merged_features'] ?? 0);
     $totalCount = (int) ($projectChecklistSummary['total_features'] ?? 0);
+    $reviewCount = 0;
+    foreach (array_merge($projectChecklistSummary['features'] ?? [], $projectChecklistSummary['additional_features'] ?? []) as $checklistFeature) {
+        if (empty($checklistFeature['is_merged']) && in_array((string) ($checklistFeature['status'] ?? ''), ['in_review', 'for_review', 'qa_testing', 'qa_passed', 'architect_review'], true)) {
+            $reviewCount++;
+        }
+    }
     $releaseMergedTotal += $mergedCount;
+    $releaseReviewTotal += $reviewCount;
     $releaseFeatureTotal += $totalCount;
-    $releaseWaitingTotal += max(0, $totalCount - $mergedCount);
+    $releaseWaitingTotal += max(0, $totalCount - $mergedCount - $reviewCount);
 }
 $releaseCompletionRate = $releaseFeatureTotal > 0 ? (int) round(($releaseMergedTotal / $releaseFeatureTotal) * 100) : 0;
 
@@ -470,6 +479,14 @@ include '../../includes/navbar.php';
 
 .stat-overdue.has-alert {
     animation: overdueHeartbeat 1.8s ease-in-out infinite;
+}
+
+.stat-overdue:not(.has-alert) {
+    --stat-border: rgba(31, 99, 146, 0.14);
+    --stat-border-hover: rgba(31, 99, 146, 0.28);
+    --stat-glow: rgba(31, 99, 146, 0.10);
+    --stat-glow-hover: rgba(31, 99, 146, 0.18);
+    --stat-grid-line: rgba(31, 99, 146, 0.055);
 }
 
 .stat-overdue .stat-icon {
@@ -1325,6 +1342,10 @@ include '../../includes/navbar.php';
     background: #10b981;
 }
 
+.release-summary-pill.review::before {
+    background: #f59e0b;
+}
+
 .release-summary-pill.waiting::before {
     background: rgba(31, 99, 146, 0.35);
 }
@@ -1537,6 +1558,12 @@ include '../../includes/navbar.php';
 
 .sales-insights-column .delay-insights-wrap {
     margin-bottom: 0;
+}
+
+.sales-insights-column .delay-compact-list {
+    max-height: 760px;
+    overflow-y: auto;
+    scrollbar-width: thin;
 }
 
 html[data-theme="dark"] .sales-dashboard-hero,
@@ -2086,13 +2113,13 @@ body.dark-mode .release-feature input:checked ~ small {
                             <div class="release-chart-panel">
                                 <div class="release-chart-summary">
                                     <div class="release-summary-pill merged">
-                                        <span>Merged</span>
+                                        <span>Merged: <?php echo $releaseMergedTotal; ?></span>
+                                    </div>
+                                    <div class="release-summary-pill review">
+                                        <span>In Review: <?php echo $releaseReviewTotal; ?></span>
                                     </div>
                                     <div class="release-summary-pill waiting">
-                                        <span>Waiting</span>
-                                    </div>
-                                    <div class="release-summary-pill">
-                                        <span>Complete</span>
+                                        <span>Waiting: <?php echo $releaseWaitingTotal; ?></span>
                                     </div>
                                 </div>
                                 <canvas id="releaseChecklistChart"></canvas>
@@ -2138,11 +2165,12 @@ body.dark-mode .release-feature input:checked ~ small {
                                             echo '<div class="release-feature-list">';
                                             foreach ($features as $feature) {
                                                 $isMerged = !empty($feature['is_merged']);
+                                                $isInReview = !$isMerged && in_array((string) ($feature['status'] ?? ''), ['in_review', 'for_review', 'qa_testing', 'qa_passed', 'architect_review'], true);
                                                 $mergedBy = trim((string) ($feature['architect_name'] ?? ''));
                                                 echo '<label class="release-feature">';
                                                 echo '<input type="checkbox" disabled ' . ($isMerged ? 'checked' : '') . '>';
                                                 echo '<span>' . htmlspecialchars((string) ($feature['title'] ?? 'Feature')) . '</span>';
-                                                echo '<small>' . ($isMerged ? 'Merged' . ($mergedBy !== '' ? ' by ' . htmlspecialchars($mergedBy) : '') : 'Waiting') . '</small>';
+                                                echo '<small>' . ($isMerged ? 'Merged' . ($mergedBy !== '' ? ' by ' . htmlspecialchars($mergedBy) : '') : ($isInReview ? 'In review' : 'Waiting')) . '</small>';
                                                 echo '</label>';
                                             }
                                             echo '</div>';
@@ -2231,9 +2259,10 @@ body.dark-mode .release-feature input:checked ~ small {
         <div class="col-lg-6 sales-insights-column">
             <?php
             delayInsightsRenderCompactList($conn, $user, [
-                'limit' => 3,
-                'title' => 'Project Insight List',
-                'subtitle' => 'Top three project signals with direct links to the full insight page.',
+                'limit' => max(1, (int) $insightProjectCount),
+                'risk_level' => 'high',
+                'title' => 'High Risk Project Insights',
+                'subtitle' => 'All High Risk project signals with direct links to each full insight page.',
                 'button_label' => 'View Project',
             ]);
             ?>
@@ -2523,16 +2552,16 @@ new Chart(trendsCtx, {
 // Project Release Checklist Chart
 const releaseChecklistData = <?php
     echo json_encode([
-        'labels' => ['Merged', 'Waiting'],
-        'data' => [$releaseMergedTotal, $releaseWaitingTotal],
-        'colors' => ['#10b981', 'rgba(31, 99, 146, 0.22)'],
-        'hoverColors' => ['#059669', 'rgba(31, 99, 146, 0.34)'],
+        'labels' => ['Merged', 'In Review', 'Waiting'],
+        'data' => [$releaseMergedTotal, $releaseReviewTotal, $releaseWaitingTotal],
+        'colors' => ['#10b981', '#f59e0b', 'rgba(31, 99, 146, 0.22)'],
+        'hoverColors' => ['#059669', '#d97706', 'rgba(31, 99, 146, 0.34)'],
     ]);
 ?>;
 
 const releaseChecklistCanvas = document.getElementById('releaseChecklistChart');
 if (releaseChecklistCanvas) {
-    new Chart(releaseChecklistCanvas.getContext('2d'), {
+    const renderReleaseChecklistChart = () => new Chart(releaseChecklistCanvas.getContext('2d'), {
         type: 'bar',
         data: {
             labels: releaseChecklistData.labels,
@@ -2551,6 +2580,11 @@ if (releaseChecklistCanvas) {
             indexAxis: 'x',
             responsive: true,
             maintainAspectRatio: false,
+            animation: {
+                duration: 1100,
+                easing: 'easeOutQuart',
+                delay: context => context.type === 'data' ? context.dataIndex * 180 : 0
+            },
             plugins: {
                 legend: {
                     display: false
@@ -2601,6 +2635,17 @@ if (releaseChecklistCanvas) {
             }
         }
     });
+
+    if ('IntersectionObserver' in window) {
+        const releaseChartObserver = new IntersectionObserver(entries => {
+            if (!entries.some(entry => entry.isIntersecting)) return;
+            releaseChartObserver.disconnect();
+            renderReleaseChecklistChart();
+        }, { threshold: 0.25 });
+        releaseChartObserver.observe(releaseChecklistCanvas);
+    } else {
+        renderReleaseChecklistChart();
+    }
 }
 
 // Status Chart

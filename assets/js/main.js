@@ -271,7 +271,7 @@ function initNotifications() {
     }
 
     loadNotifications();
-    setInterval(loadNotifications, 15000);
+    setInterval(loadNotifications, 5000);
 }
 
 function loadNotifications() {
@@ -285,8 +285,26 @@ function loadNotifications() {
 
             updateNotificationBadge(unreadCount);
             updateNotificationList(notifications);
+            announceProjectTeamNotification(notifications);
         }
     });
+}
+
+function announceProjectTeamNotification(notifications) {
+    const notification = notifications.find(item =>
+        !Number(item.is_read)
+        && String(item.related_table || '') === 'projects'
+        && String(item.title || '').toLowerCase().startsWith('project team message:')
+    );
+    if (!notification || typeof window.evortixAnnounceNotification !== 'function') return;
+
+    const storageKey = `evortix.projectNotification.${notification.id}`;
+    if (sessionStorage.getItem(storageKey)) return;
+    sessionStorage.setItem(storageKey, '1');
+    const projectUrl = Number(notification.related_id || 0) > 0
+        ? `${BASE_URL}modules/roadmap/methodology.php?project_id=${encodeURIComponent(notification.related_id)}`
+        : notification.action_url;
+    window.evortixAnnounceNotification(notification.title, notification.message, projectUrl);
 }
 
 function updateNotificationBadge(count) {
