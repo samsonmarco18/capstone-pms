@@ -967,7 +967,6 @@ include '../../includes/navbar.php';
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 const developerDarkMode = document.documentElement.dataset.theme === 'dark'
     || document.body.dataset.theme === 'dark'

@@ -1025,7 +1025,6 @@ unset($_SESSION['success'], $_SESSION['error']);
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 // Workload Chart
 const workloadData = <?php 

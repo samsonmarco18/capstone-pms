@@ -1392,7 +1392,6 @@ include '../../includes/navbar.php';
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 let currentTaskId = null;
 

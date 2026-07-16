@@ -319,7 +319,6 @@ html:not([data-theme="dark"]) #page-content-wrapper {
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const rootStyles = () => getComputedStyle(document.documentElement);

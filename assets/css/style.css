@@ -4269,20 +4269,66 @@ body {
     box-shadow: inset 2px 2px 0 rgba(138, 210, 255, 0.1), 0 5px 0 rgba(0, 0, 0, 0.56), 0 14px 22px rgba(0, 0, 0, 0.32) !important;
 }
 
-/* Replay dashboard data visuals from their starting state on page load. */
-:is(.role-dashboard-shell, .sales-dashboard-shell).dashboard-load-ready canvas {
-    transform-origin: center;
-    animation: dashboardChartReveal 720ms cubic-bezier(0.22, 1, 0.36, 1) var(--dashboard-chart-delay, 0ms) both;
+/* System-wide page entrance motion after authenticated navigation. */
+.chart-legend-interaction-tooltip {
+    position: fixed;
+    z-index: 10050;
+    max-width: min(280px, calc(100vw - 24px));
+    padding: 0.55rem 0.75rem;
+    border-radius: 5px;
+    background: rgba(12, 12, 14, 0.96);
+    color: #fff;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.2;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -100%) translateY(-8px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
 }
 
-:is(.role-dashboard-shell, .sales-dashboard-shell).dashboard-load-ready :is(
-    .progress-bar,
-    .progress-bar-custom,
-    .qa-progress-bar,
-    .release-progress-bar
-) {
+.chart-legend-interaction-tooltip::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -6px;
+    border: 6px solid transparent;
+    border-top-color: rgba(12, 12, 14, 0.96);
+    border-bottom: 0;
+    transform: translateX(-50%);
+}
+
+.chart-legend-interaction-tooltip.is-visible {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+}
+
+#page-content-wrapper.app-load-ready .app-load-reveal {
+    animation: appComponentReveal 680ms cubic-bezier(0.22, 1, 0.36, 1) var(--app-reveal-delay, 0ms) both;
+}
+
+#page-content-wrapper.app-load-ready .app-load-chart {
+    transform-origin: center;
+    animation: dashboardChartReveal 760ms cubic-bezier(0.22, 1, 0.36, 1) var(--app-chart-delay, 0ms) both;
+}
+
+#page-content-wrapper.app-load-ready .app-load-progress {
     transform-origin: left center;
-    animation: dashboardProgressFill 1100ms cubic-bezier(0.22, 1, 0.36, 1) var(--dashboard-progress-delay, 0ms) both;
+    animation: dashboardProgressFill 1100ms cubic-bezier(0.22, 1, 0.36, 1) var(--app-progress-delay, 0ms) both;
+}
+
+@keyframes appComponentReveal {
+    from {
+        opacity: 0;
+        transform: translate3d(0, 18px, 0) scale(0.985);
+        filter: blur(3px);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: blur(0);
+    }
 }
 
 @keyframes dashboardChartReveal {
@@ -4306,6 +4352,15 @@ body {
 }
 
 @media (hover: none), (pointer: coarse), (prefers-reduced-motion: reduce) {
+    #page-content-wrapper .app-load-reveal,
+    #page-content-wrapper .app-load-chart,
+    #page-content-wrapper .app-load-progress {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+        filter: none !important;
+    }
+
     .role-dashboard-shell.role-dashboard-shell .card.card,
     .role-dashboard-shell.role-dashboard-shell .stat-card.stat-card,
     .role-dashboard-shell.role-dashboard-shell .stat-card-modern.stat-card-modern,

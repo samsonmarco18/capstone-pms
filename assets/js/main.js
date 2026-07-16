@@ -8,7 +8,7 @@ $(function () {
     initModalBackdropRecovery();
     initAppActionHelpers();
     initRoleDashboard3d();
-    initDashboardLoadAnimations();
+    initSystemLoadAnimations();
     initGenericFormDrafts();
     initFormSubmitConfirmations();
 });
@@ -66,35 +66,69 @@ function initRoleDashboard3d() {
     });
 }
 
-function initDashboardLoadAnimations() {
-    const dashboard = document.querySelector('.role-dashboard-shell, .sales-dashboard-shell');
+function initSystemLoadAnimations() {
+    const pageRoot = document.getElementById('page-content-wrapper');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    if (!dashboard || reduceMotion || dashboard.dataset.loadAnimationInitialized === '1') {
+    if (!pageRoot || reduceMotion || pageRoot.dataset.systemAnimationInitialized === '1') {
         return;
     }
 
-    dashboard.dataset.loadAnimationInitialized = '1';
+    pageRoot.dataset.systemAnimationInitialized = '1';
 
-    const progressFills = dashboard.querySelectorAll([
+    const revealSelectors = [
+        '.role-dashboard-hero',
+        '.sales-dashboard-hero',
+        '.stat-card-modern',
+        '.stat-card',
+        '.chart-card',
+        '.list-card',
+        '.card',
+        '.main-card',
+        '.info-card',
+        '.form-card',
+        '.summary-card',
+        '.report-card',
+        '.project-card',
+        '.task-card',
+        '.review-card',
+        '.metric-card',
+        '.alert',
+        '.table-responsive',
+        '.nav-tabs',
+        '.pagination'
+    ].join(', ');
+
+    const revealElements = Array.from(pageRoot.querySelectorAll(revealSelectors))
+        .filter((element) => !element.closest('.modal') && !element.parentElement?.closest(revealSelectors));
+
+    revealElements.forEach((element, index) => {
+        element.classList.add('app-load-reveal');
+        element.style.setProperty('--app-reveal-delay', `${Math.min(index * 65, 650)}ms`);
+    });
+
+    const progressFills = pageRoot.querySelectorAll([
         '.progress-bar',
         '.progress-bar-custom',
         '.qa-progress-bar',
-        '.release-progress-bar'
+        '.release-progress-bar',
+        '.project-progress-fill'
     ].join(', '));
 
     progressFills.forEach((fill, index) => {
-        fill.style.setProperty('--dashboard-progress-delay', `${Math.min(index * 90, 450)}ms`);
+        fill.classList.add('app-load-progress');
+        fill.style.setProperty('--app-progress-delay', `${Math.min(index * 90, 540)}ms`);
     });
 
-    const chartCanvases = Array.from(dashboard.querySelectorAll('canvas'));
+    const chartCanvases = Array.from(pageRoot.querySelectorAll('canvas'));
     chartCanvases.forEach((canvas, index) => {
-        canvas.style.setProperty('--dashboard-chart-delay', `${Math.min(index * 110, 440)}ms`);
+        canvas.classList.add('app-load-chart');
+        canvas.style.setProperty('--app-chart-delay', `${Math.min(index * 110, 550)}ms`);
     });
 
     requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-            dashboard.classList.add('dashboard-load-ready');
+            pageRoot.classList.add('app-load-ready');
         });
     });
 
@@ -102,38 +136,50 @@ function initDashboardLoadAnimations() {
         return;
     }
 
-    const chartInstances = window.Chart.instances
-        ? Object.values(window.Chart.instances)
-        : [];
+    const replayCharts = (attempt = 0) => {
+        let pendingCharts = 0;
+        const chartInstances = window.Chart.instances
+            ? Object.values(window.Chart.instances)
+            : [];
 
-    chartCanvases.forEach((canvas, index) => {
-        const chart = typeof window.Chart.getChart === 'function'
-            ? window.Chart.getChart(canvas)
-            : chartInstances.find((instance) => instance && instance.canvas === canvas);
-
-        if (!chart || typeof chart.reset !== 'function' || typeof chart.update !== 'function') {
-            return;
-        }
-
-        window.setTimeout(() => {
-            try {
-                if (typeof chart.stop === 'function') {
-                    chart.stop();
-                }
-
-                const currentAnimation = chart.options.animation;
-                chart.options.animation = {
-                    ...(currentAnimation && typeof currentAnimation === 'object' ? currentAnimation : {}),
-                    duration: 1200,
-                    easing: 'easeOutQuart'
-                };
-                chart.reset();
-                chart.update();
-            } catch (error) {
-                console.warn('Dashboard chart animation could not be replayed.', error);
+        chartCanvases.forEach((canvas, index) => {
+            if (canvas.dataset.appChartAnimated === '1') {
+                return;
             }
-        }, 90 + (index * 110));
-    });
+
+            const chart = typeof window.Chart.getChart === 'function'
+                ? window.Chart.getChart(canvas)
+                : chartInstances.find((instance) => instance && instance.canvas === canvas);
+
+            if (!chart || typeof chart.reset !== 'function' || typeof chart.update !== 'function') {
+                pendingCharts++;
+                return;
+            }
+
+            canvas.dataset.appChartAnimated = '1';
+            window.setTimeout(() => {
+                try {
+                    chart.stop?.();
+                    const currentAnimation = chart.options.animation;
+                    chart.options.animation = {
+                        ...(currentAnimation && typeof currentAnimation === 'object' ? currentAnimation : {}),
+                        duration: 1200,
+                        easing: 'easeOutQuart'
+                    };
+                    chart.reset();
+                    chart.update();
+                } catch (error) {
+                    console.warn('Chart entrance animation could not be replayed.', error);
+                }
+            }, 120 + (index * 110));
+        });
+
+        if (pendingCharts > 0 && attempt < 6) {
+            window.setTimeout(() => replayCharts(attempt + 1), 180);
+        }
+    };
+
+    replayCharts();
 }
 
 function initAppWide3d() {

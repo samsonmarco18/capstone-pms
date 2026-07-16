@@ -1323,10 +1323,26 @@ include '../../includes/navbar.php';
     align-items: center;
     gap: 0.35rem;
     min-width: max-content;
-    padding: 0;
-    border: 0;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
     background: transparent;
     box-shadow: none;
+    cursor: pointer;
+    transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.release-summary-pill:hover,
+.release-summary-pill:focus-visible {
+    background: rgba(31, 99, 146, 0.06);
+    border-color: rgba(31, 99, 146, 0.14);
+    outline: none;
+    transform: translateY(-1px);
+}
+
+.release-summary-pill.is-hidden {
+    opacity: 0.42;
+    text-decoration: line-through;
 }
 
 .release-summary-pill::before {
@@ -2308,15 +2324,15 @@ body.dark-mode .evortix-3d-platform {
                         <div class="release-graph-layout">
                             <div class="release-chart-panel">
                                 <div class="release-chart-summary">
-                                    <div class="release-summary-pill merged">
-                                        <span>Merged: <?php echo $releaseMergedTotal; ?></span>
-                                    </div>
-                                    <div class="release-summary-pill review">
-                                        <span>In Review: <?php echo $releaseReviewTotal; ?></span>
-                                    </div>
-                                    <div class="release-summary-pill waiting">
-                                        <span>Waiting: <?php echo $releaseWaitingTotal; ?></span>
-                                    </div>
+                                    <button class="release-summary-pill merged" type="button" data-release-legend-index="0" aria-pressed="true" title="Show or hide Merged">
+                                        <span>Merged</span>
+                                    </button>
+                                    <button class="release-summary-pill review" type="button" data-release-legend-index="1" aria-pressed="true" title="Show or hide In Review">
+                                        <span>In Review</span>
+                                    </button>
+                                    <button class="release-summary-pill waiting" type="button" data-release-legend-index="2" aria-pressed="true" title="Show or hide Waiting">
+                                        <span>Waiting</span>
+                                    </button>
                                 </div>
                                 <canvas id="releaseChecklistChart"></canvas>
                             </div>
@@ -2600,7 +2616,6 @@ body.dark-mode .evortix-3d-platform {
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 (() => {
     const canTilt = window.matchMedia('(hover: hover) and (pointer: fine)').matches
@@ -2806,7 +2821,29 @@ const releaseChecklistData = <?php
 
 const releaseChecklistCanvas = document.getElementById('releaseChecklistChart');
 if (releaseChecklistCanvas) {
-    const renderReleaseChecklistChart = () => new Chart(releaseChecklistCanvas.getContext('2d'), {
+    let releaseChecklistChart = null;
+    const releaseLegendButtons = document.querySelectorAll('[data-release-legend-index]');
+    const releaseVisibleData = [...releaseChecklistData.data];
+
+    const bindReleaseLegendControls = () => {
+        releaseLegendButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                if (!releaseChecklistChart) return;
+
+                const index = Number(button.dataset.releaseLegendIndex);
+                const isVisible = button.getAttribute('aria-pressed') === 'true';
+                button.setAttribute('aria-pressed', isVisible ? 'false' : 'true');
+                button.classList.toggle('is-hidden', isVisible);
+                releaseChecklistChart.data.datasets[0].data[index] = isVisible ? null : releaseVisibleData[index];
+                releaseChecklistChart.update();
+            });
+        });
+    };
+
+    bindReleaseLegendControls();
+
+    const renderReleaseChecklistChart = () => {
+        releaseChecklistChart = new Chart(releaseChecklistCanvas.getContext('2d'), {
         type: 'bar',
         data: {
             labels: releaseChecklistData.labels,
@@ -2879,7 +2916,9 @@ if (releaseChecklistCanvas) {
                 }
             }
         }
-    });
+        });
+        return releaseChecklistChart;
+    };
 
     if ('IntersectionObserver' in window) {
         const releaseChartObserver = new IntersectionObserver(entries => {

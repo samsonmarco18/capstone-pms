@@ -198,7 +198,7 @@ CREATE TABLE developer_allocations (
     role VARCHAR(100) NOT NULL,
     skill_level VARCHAR(50),
     required_count INT DEFAULT 1,
-    allocated_count INT DEFAULT 0,
+    allocated_count INT DEFAULT 0,it
     complexity_level ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
