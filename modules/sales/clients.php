@@ -1958,6 +1958,150 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     color: #047857;
 }
 
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-stepper {
+    gap: 0;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 10px 24px rgba(15, 76, 129, 0.06);
+}
+
+#addClientModal.modal-modern.add-client-modal .add-client-stepper {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#addProjectModal.modal-modern.add-client-modal .add-client-stepper {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-tooltip-wrap {
+    display: flex;
+    align-items: center;
+    min-height: 54px;
+    padding: 0 0.5rem;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-tooltip-wrap:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 2.45rem;
+    right: -0.55rem;
+    z-index: 0;
+    height: 2px;
+    background: #dce8ef;
+    transform: translateY(-50%);
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-tooltip-wrap:has(.stepper-item.is-complete)::after {
+    background: linear-gradient(90deg, #0d6786, #4aa3bd);
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item {
+    position: relative;
+    z-index: 1;
+    width: auto;
+    height: auto;
+    padding: 0.42rem 2rem 0.42rem 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item span {
+    width: 34px;
+    height: 34px;
+    border: 2px solid #d8e5ed;
+    background: #f3f7f9;
+    box-shadow: 0 0 0 5px #ffffff;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item strong {
+    position: relative;
+    z-index: 1;
+    padding: 0.18rem 0.45rem 0.18rem 0;
+    background: #ffffff;
+    color: #607386;
+    font-size: 0.8rem;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item.is-active,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item.is-complete {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item.is-active strong {
+    color: #0a5b78;
+    font-weight: 800;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item.is-active span {
+    border-color: #0d6786;
+    background: #0d6786;
+    color: #ffffff;
+    box-shadow: 0 0 0 5px #ffffff, 0 0 0 7px rgba(13, 103, 134, 0.14);
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item.is-complete strong {
+    color: #176b78;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item.is-complete span {
+    border-color: #2a8798;
+    background: #2a8798;
+    color: #ffffff;
+    font-size: 0;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item.is-complete span::before {
+    content: "\f00c";
+    font-family: "Font Awesome 5 Free";
+    font-size: 0.72rem;
+    font-weight: 900;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-info {
+    top: 50%;
+    right: 0.45rem;
+    z-index: 3;
+    width: 21px;
+    height: 21px;
+    border-color: rgba(31, 99, 146, 0.16);
+    background: #ffffff;
+    box-shadow: 0 0 0 4px #ffffff;
+}
+
+@media (max-width: 650px) {
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-stepper {
+        padding-inline: 0.3rem;
+    }
+
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-tooltip-wrap {
+        min-height: 62px;
+        padding-inline: 0.25rem;
+    }
+
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.35rem;
+        padding-right: 0.25rem;
+    }
+
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item strong {
+        font-size: 0.66rem;
+        white-space: normal;
+    }
+
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-info {
+        display: none;
+    }
+}
+
 .modal-modern.add-client-modal .add-client-step[hidden] {
     display: none;
 }
@@ -2111,6 +2255,13 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     line-height: 1.45;
 }
 
+#addProjectForm textarea[name="additional_requirements"] {
+    min-height: 118px;
+    overflow-y: hidden;
+    resize: vertical;
+    line-height: 1.45;
+}
+
 .modal-modern.add-client-modal .timeline-budget-step .info-card {
     height: 100%;
 }
@@ -2193,6 +2344,141 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 .modal-modern.add-client-modal .template-field-shell {
     position: relative;
+}
+
+.modal-modern.add-client-modal .template-recommendation-shell,
+.modal-modern.add-client-modal .add-project-priority-insight-shell {
+    position: relative;
+}
+
+.modal-modern.add-client-modal .template-recommendation-insight-trigger,
+.modal-modern.add-client-modal .add-project-priority-insight-trigger {
+    position: absolute;
+    top: 1.78rem;
+    right: 0.55rem;
+    z-index: 71;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 25px;
+    height: 25px;
+    padding: 0;
+    border: 1px solid rgba(13, 103, 134, 0.28);
+    border-radius: 50%;
+    background: #e9f6fb;
+    color: #0d6786;
+    box-shadow: 0 5px 12px rgba(13, 103, 134, 0.14);
+    cursor: pointer;
+    transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.modal-modern.add-client-modal .template-recommendation-insight-trigger i,
+.modal-modern.add-client-modal .add-project-priority-insight-trigger i {
+    font-size: 0.76rem;
+}
+
+.modal-modern.add-client-modal .template-recommendation-insight-trigger:hover,
+.modal-modern.add-client-modal .template-recommendation-insight-trigger:focus-visible,
+.modal-modern.add-client-modal .template-recommendation-insight-trigger.is-open,
+.modal-modern.add-client-modal .add-project-priority-insight-trigger:hover,
+.modal-modern.add-client-modal .add-project-priority-insight-trigger:focus-visible,
+.modal-modern.add-client-modal .add-project-priority-insight-trigger.is-open {
+    background: #0d6786;
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(13, 103, 134, 0.24);
+    outline: none;
+    transform: scale(1.08);
+}
+
+.modal-modern.add-client-modal .template-recommendation-shell [data-template-picker-input] {
+    padding-right: 2.7rem !important;
+}
+
+.modal-modern.add-client-modal .add-project-priority-insight-trigger {
+    top: 1.78rem;
+    right: 0.55rem;
+}
+
+.modal-modern.add-client-modal .add-project-priority-insight-shell {
+    flex: 0 0 420px;
+    width: 420px;
+    max-width: 100%;
+}
+
+.modal-modern.add-client-modal .add-project-priority-insight-shell .form-select {
+    padding-right: 2.7rem !important;
+}
+
+#addClientForm .add-client-priority-insight-shell {
+    flex: 0 0 420px;
+    width: 420px;
+    max-width: 100%;
+}
+
+#addClientForm .priority-select-wrap .form-select {
+    padding-right: 2.7rem !important;
+}
+
+#addClientForm .priority-insight-trigger {
+    top: -0.48rem;
+    right: 0.55rem;
+    width: 25px;
+    height: 25px;
+    border-color: rgba(13, 103, 134, 0.28);
+    background: #e9f6fb;
+    color: #0d6786;
+    box-shadow: 0 5px 12px rgba(13, 103, 134, 0.14);
+    animation: none;
+}
+
+#addClientForm .priority-insight-trigger:hover,
+#addClientForm .priority-insight-trigger:focus-visible,
+#addClientForm .priority-insight-trigger.is-open {
+    background: #0d6786;
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(13, 103, 134, 0.24);
+    transform: scale(1.08);
+}
+
+#addClientForm .priority-insight-popover {
+    top: -0.68rem;
+    bottom: auto;
+    width: min(390px, calc(100vw - 3rem));
+    transform: translateY(-100%);
+}
+
+.modal-modern.add-client-modal .template-recommendation-insight-popover,
+.modal-modern.add-client-modal .add-project-priority-insight-popover {
+    position: absolute;
+    top: 1.58rem;
+    bottom: auto;
+    right: 0;
+    transform: translateY(-100%);
+    z-index: 69;
+    display: grid;
+    width: min(390px, calc(100vw - 3rem));
+    gap: 0.38rem;
+    padding: 0.82rem 0.9rem;
+    border: 1px solid rgba(31, 99, 146, 0.16);
+    border-radius: 14px;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.10), rgba(255, 255, 255, 0.92)),
+        #f8fcff;
+    color: #1e4f78;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    box-shadow: 0 18px 38px rgba(15, 76, 129, 0.18);
+}
+
+.modal-modern.add-client-modal .template-recommendation-insight-popover[hidden],
+.modal-modern.add-client-modal .add-project-priority-insight-popover[hidden] {
+    display: none;
+}
+
+.modal-modern.add-client-modal .template-recommendation-insight-popover strong,
+.modal-modern.add-client-modal .add-project-priority-insight-popover strong {
+    color: #173f61;
+    font-size: 0.86rem;
 }
 
 .modal-modern.add-client-modal .template-type-picker .form-control {
@@ -3225,6 +3511,26 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     background: #ffffff;
 }
 
+:is(#addClientForm, #addProjectForm) .add-project-intake-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 1rem;
+}
+
+:is(#addClientForm, #addProjectForm) .add-project-intake-column {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 1rem;
+}
+
+@media (max-width: 767.98px) {
+    :is(#addClientForm, #addProjectForm) .add-project-intake-columns {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 .modal-modern.add-client-modal .requested-feature-builder {
     display: grid;
     gap: 0.8rem;
@@ -3277,6 +3583,197 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 .modal-modern.add-client-modal .requested-feature-actions {
     display: flex;
     justify-content: flex-start;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-builder {
+    gap: 0.5rem;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-shell {
+    position: relative;
+    height: 54px;
+    min-height: 54px;
+    z-index: 12;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-shell.is-expanded {
+    z-index: 78;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-editor {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    align-items: center;
+    gap: 0.45rem;
+    height: 54px;
+    min-height: 54px;
+    max-height: 54px;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    padding: 0.62rem 3.45rem 0.62rem 0.62rem;
+    border: 1px solid #b8d2e4;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: inset 0 1px 2px rgba(15, 76, 129, 0.04);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(13, 103, 134, 0.38) transparent;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-shell.has-more .requested-feature-chip-editor {
+    padding-right: 8.35rem;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-shell.is-expanded .requested-feature-chip-editor {
+    height: auto;
+    max-height: 220px;
+    overflow-y: auto;
+    box-shadow: 0 18px 38px rgba(15, 76, 129, 0.20);
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-editor:focus-within {
+    border-color: #0d6786;
+    box-shadow: 0 0 0 0.2rem rgba(13, 103, 134, 0.12);
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    min-height: 34px;
+    gap: 0.38rem;
+    padding: 0.34rem 0.42rem 0.34rem 0.68rem;
+    border: 1px solid rgba(13, 103, 134, 0.32);
+    border-radius: 10px;
+    background: #e5f2f8;
+    color: #173f61;
+    font-size: 0.86rem;
+    line-height: 1.2;
+    transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip.is-duplicate {
+    border-color: #d97706;
+    background: #fff7ed;
+    transform: scale(1.03);
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-remove {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 23px;
+    height: 23px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #54758d;
+    font-size: 0.72rem;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-remove:hover,
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-remove:focus-visible {
+    background: rgba(13, 103, 134, 0.12);
+    color: #0d6786;
+    outline: none;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-input {
+    flex: 1 1 150px;
+    min-width: 120px;
+    min-height: 34px;
+    padding: 0.35rem 0.42rem;
+    border: 0;
+    background: transparent;
+    color: #17324d;
+    font: inherit;
+    outline: none;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-input::placeholder {
+    color: #7890a3;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-add {
+    position: absolute;
+    top: 0.58rem;
+    right: 0.58rem;
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid rgba(13, 103, 134, 0.22);
+    border-radius: 10px;
+    background: #f4f9fc;
+    color: #0d6786;
+    transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-add:hover,
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-add:focus-visible {
+    background: #0d6786;
+    color: #ffffff;
+    outline: none;
+    transform: translateY(-1px);
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle {
+    position: absolute;
+    top: 0.58rem;
+    right: 3.05rem;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 76px;
+    height: 34px;
+    gap: 0.36rem;
+    padding: 0 0.55rem;
+    border: 1px solid rgba(13, 103, 134, 0.18);
+    border-radius: 10px;
+    background: rgba(244, 249, 252, 0.96);
+    color: #0d6786;
+    font-size: 0.76rem;
+    font-weight: 700;
+    transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle[hidden] {
+    display: none;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle:hover,
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle:focus-visible,
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle[aria-expanded="true"] {
+    background: #e2f2f9;
+    color: #084f6a;
+    outline: none;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle i {
+    font-size: 0.68rem;
+    transition: transform 0.18s ease;
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle[aria-expanded="true"] i {
+    transform: rotate(180deg);
 }
 
 .modal-modern.add-client-modal .add-client-footer {
@@ -3539,8 +4036,14 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
         padding-right: 1rem;
     }
 
-    .modal-modern.add-client-modal .add-client-stepper {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    #addClientModal.modal-modern.add-client-modal .add-client-stepper {
+        grid-template-columns: repeat(4, minmax(145px, 1fr));
+        overflow-x: auto;
+    }
+
+    #addProjectModal.modal-modern.add-client-modal .add-client-stepper {
+        grid-template-columns: repeat(3, minmax(145px, 1fr));
+        overflow-x: auto;
     }
 
     .modal-modern.add-client-modal .review-primary-grid,
@@ -3888,6 +4391,92 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     color: #d7e4f2;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientForm, #addProjectForm) .requested-feature-chip-editor {
+    background: rgba(7, 19, 33, 0.72);
+    border-color: rgba(138, 210, 255, 0.20);
+    scrollbar-color: rgba(143, 211, 255, 0.42) transparent;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientForm, #addProjectForm) .requested-feature-chip {
+    background: rgba(13, 103, 134, 0.26);
+    border-color: rgba(138, 210, 255, 0.24);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientForm, #addProjectForm) .requested-feature-chip-input {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientForm, #addProjectForm) .requested-feature-chip-add {
+    background: rgba(13, 103, 134, 0.22);
+    border-color: rgba(138, 210, 255, 0.22);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle {
+    background: rgba(13, 103, 134, 0.28);
+    border-color: rgba(138, 210, 255, 0.20);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle[aria-expanded="true"] {
+    background: rgba(143, 211, 255, 0.22);
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-stepper {
+    background: rgba(7, 19, 33, 0.9);
+    border-color: rgba(138, 210, 255, 0.16);
+    box-shadow: 0 12px 28px rgba(3, 14, 25, 0.26);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-tooltip-wrap:not(:last-child)::after {
+    background: rgba(143, 211, 255, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-tooltip-wrap:has(.stepper-item.is-complete)::after {
+    background: linear-gradient(90deg, #2a8798, #62bed2);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item span {
+    border-color: rgba(143, 211, 255, 0.2);
+    background: #102438;
+    color: #9db6cf;
+    box-shadow: 0 0 0 5px #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item strong {
+    background: #071321;
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item.is-active strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item.is-complete strong {
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item.is-active span {
+    border-color: #8fd3ff;
+    background: #0d6786;
+    color: #ffffff;
+    box-shadow: 0 0 0 5px #071321, 0 0 0 7px rgba(143, 211, 255, 0.14);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item.is-complete span {
+    border-color: #62bed2;
+    background: #2a8798;
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-info {
+    background: #071321;
+    border-color: rgba(143, 211, 255, 0.2);
+    color: #8fd3ff;
+    box-shadow: 0 0 0 4px #071321;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .attachment-upload-button {
     background: rgba(13, 103, 134, 0.24);
     color: #8fd3ff;
@@ -3926,10 +4515,10 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger {
-    background: rgba(245, 158, 11, 0.18);
-    border-color: rgba(251, 191, 36, 0.28);
-    color: #fbbf24;
-    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.20);
+    background: rgba(13, 103, 134, 0.26);
+    border-color: rgba(138, 210, 255, 0.28);
+    color: #8fd3ff;
+    box-shadow: 0 5px 12px rgba(3, 14, 25, 0.28);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger,
@@ -3940,9 +4529,24 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     box-shadow: 0 8px 18px rgba(217, 119, 6, 0.20);
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger:hover,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger:focus-visible,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger.is-open,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .template-recommendation-insight-trigger,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .add-project-priority-insight-trigger {
+    background: rgba(13, 103, 134, 0.26);
+    border-color: rgba(138, 210, 255, 0.28);
+    color: #8fd3ff;
+    box-shadow: 0 5px 12px rgba(3, 14, 25, 0.28);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .template-recommendation-insight-trigger:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .template-recommendation-insight-trigger:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .template-recommendation-insight-trigger.is-open,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .add-project-priority-insight-trigger:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .add-project-priority-insight-trigger:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .add-project-priority-insight-trigger.is-open {
+    background: #8fd3ff;
+    color: #071321;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger:hover,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger:focus-visible,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger.is-open,
@@ -3951,6 +4555,13 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger.is-open {
     background: #d97706;
     color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger:focus-visible,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger.is-open {
+    background: #8fd3ff;
+    color: #071321;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-popover {
@@ -3976,7 +4587,9 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-popover,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-popover {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-popover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .template-recommendation-insight-popover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .add-project-priority-insight-popover {
     background:
         linear-gradient(135deg, rgba(13, 103, 134, 0.20), rgba(7, 19, 33, 0.9)),
         #091827;
@@ -3986,7 +4599,9 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-popover strong,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-popover strong {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-popover strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .template-recommendation-insight-popover strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .add-project-priority-insight-popover strong {
     color: #d7e4f2;
 }
 
@@ -4339,6 +4954,736 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .delete-confirm-target i {
     color: #66c8ff;
+}
+
+/* Shared modal polish: keep progress connectors behind labels */
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item strong {
+    padding-inline: 0.4rem;
+    border-radius: 4px;
+    box-shadow: 0 0 0 0.42rem #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .stepper-item strong {
+    background: #071321;
+    box-shadow: 0 0 0 0.42rem #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .architect-handoff-note {
+    border-color: rgba(143, 211, 255, 0.18);
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.28), rgba(7, 19, 33, 0.9)),
+        #0a1b2c;
+    color: #c4e6ff;
+    box-shadow: 0 10px 24px rgba(3, 14, 25, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .architect-handoff-note i {
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .architect-handoff-note strong {
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode):has(#addClientModal.show, #addProjectModal.show) .tooltip .tooltip-inner {
+    border: 1px solid rgba(143, 211, 255, 0.18);
+    background: #071321;
+    color: #d7e4f2;
+    box-shadow: 0 10px 24px rgba(3, 14, 25, 0.32);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode):has(#addClientModal.show, #addProjectModal.show) .bs-tooltip-bottom .tooltip-arrow::before,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode):has(#addClientModal.show, #addProjectModal.show) .bs-tooltip-auto[data-popper-placement^="bottom"] .tooltip-arrow::before {
+    border-bottom-color: #071321;
+}
+
+/* Add Client: balanced, professional review surface */
+#addClientModal.modal-modern.add-client-modal .add-client-layout {
+    background: transparent;
+    border-radius: 18px;
+}
+
+#addClientModal.modal-modern.add-client-modal .field-group.review-step {
+    --review-surface: #ffffff;
+    --review-soft-surface: #f6f9fc;
+    --review-border: #dce8f0;
+    padding: 1.15rem;
+    border: 1px solid rgba(31, 99, 146, 0.16);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 16px 34px rgba(15, 76, 129, 0.08);
+}
+
+#addClientModal.modal-modern.add-client-modal .review-step > .section-title {
+    margin-bottom: 0.85rem;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid var(--review-border);
+}
+
+#addClientModal.modal-modern.add-client-modal .review-summary {
+    gap: 0.85rem;
+}
+
+#addClientModal.modal-modern.add-client-modal .review-ready-banner {
+    padding: 0.85rem 1rem;
+    border-color: var(--review-border);
+    border-radius: 14px;
+    background: linear-gradient(135deg, #eef8fc 0%, #f9fcfe 100%);
+    box-shadow: none;
+}
+
+#addClientModal.modal-modern.add-client-modal .review-primary-grid {
+    grid-template-columns: minmax(330px, 0.72fr) minmax(0, 1.28fr);
+    align-items: start;
+    gap: 0.85rem;
+}
+
+#addClientModal.modal-modern.add-client-modal .review-card {
+    position: relative;
+    align-self: start;
+    padding: 1rem;
+    overflow: hidden;
+    border-color: var(--review-border);
+    border-radius: 14px;
+    background: var(--review-surface);
+    box-shadow: 0 8px 22px rgba(15, 76, 129, 0.055);
+}
+
+#addClientModal.modal-modern.add-client-modal .review-card::before {
+    content: none;
+}
+
+#addClientModal.modal-modern.add-client-modal .review-card-header {
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid var(--review-border);
+}
+
+#addClientModal.modal-modern.add-client-modal .review-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+}
+
+#addClientModal.modal-modern.add-client-modal .review-highlight,
+#addClientModal.modal-modern.add-client-modal .review-key-item,
+#addClientModal.modal-modern.add-client-modal .review-block,
+#addClientModal.modal-modern.add-client-modal .review-note-item {
+    border: 1px solid var(--review-border);
+    border-radius: 10px;
+    background: var(--review-soft-surface);
+}
+
+#addClientModal.modal-modern.add-client-modal .review-highlight {
+    padding: 0.65rem 0.75rem;
+}
+
+#addClientModal.modal-modern.add-client-modal .review-data-grid {
+    gap: 0.65rem 0.8rem;
+    padding: 0.1rem 0.1rem 0.15rem;
+}
+
+#addClientModal.modal-modern.add-client-modal .review-key-grid {
+    gap: 0.55rem;
+}
+
+#addClientModal.modal-modern.add-client-modal .review-handoff {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 14px;
+    box-shadow: 0 10px 24px rgba(10, 85, 112, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .field-group.review-step {
+    --review-surface: #0a1b2c;
+    --review-soft-surface: #0d2236;
+    --review-border: rgba(138, 210, 255, 0.15);
+    background: rgba(7, 19, 33, 0.96);
+    border-color: var(--review-border);
+    box-shadow: 0 18px 38px rgba(3, 14, 25, 0.3);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .review-ready-banner {
+    background: linear-gradient(135deg, rgba(13, 103, 134, 0.24), rgba(10, 27, 44, 0.92));
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card {
+    border-color: rgba(31, 99, 146, 0.15);
+    background:
+        radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.1), transparent 34%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 38%, rgba(31, 99, 146, 0.045) 100%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.5), transparent 56%),
+        #ffffff;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.94),
+        0 5px 0 rgba(15, 76, 129, 0.13),
+        0 18px 30px rgba(15, 76, 129, 0.13),
+        0 0 24px rgba(34, 211, 238, 0.055);
+    transform: translateY(0);
+    transition: transform 0.2s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    isolation: isolate;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card:hover {
+    border-color: rgba(34, 161, 190, 0.26);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.98),
+        0 7px 0 rgba(15, 76, 129, 0.15),
+        0 24px 40px rgba(15, 76, 129, 0.16),
+        0 0 30px rgba(34, 211, 238, 0.08);
+    transform: translateY(-2px);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card {
+    border-color: rgba(78, 155, 199, 0.22);
+    background:
+        radial-gradient(circle at 100% 0%, rgba(76, 184, 255, 0.14), transparent 34%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 38%, rgba(76, 184, 255, 0.09) 100%),
+        linear-gradient(180deg, rgba(138, 210, 255, 0.055), transparent 56%),
+        #0a1b2c;
+    box-shadow:
+        inset 0 1px 0 rgba(138, 210, 255, 0.1),
+        0 6px 0 rgba(2, 11, 20, 0.7),
+        0 20px 36px rgba(2, 11, 20, 0.34),
+        0 0 28px rgba(34, 211, 238, 0.06);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card:hover {
+    border-color: rgba(78, 155, 199, 0.34);
+    box-shadow:
+        inset 0 1px 0 rgba(138, 210, 255, 0.13),
+        0 8px 0 rgba(2, 11, 20, 0.72),
+        0 26px 44px rgba(2, 11, 20, 0.4),
+        0 0 34px rgba(34, 211, 238, 0.09);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card {
+        transition: none;
+    }
+
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card:hover {
+        transform: none;
+    }
+}
+
+/* Client Details: account and delivery dashboard */
+#viewClientModal .client-details-dialog {
+    width: min(1040px, calc(100vw - 2rem));
+    max-width: 1040px;
+}
+
+#viewClientModal .modal-content {
+    overflow: hidden;
+    border: 1px solid rgba(31, 99, 146, 0.16);
+    border-radius: 22px;
+    background: #f4f8fb;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.9),
+        0 8px 0 rgba(15, 76, 129, 0.12),
+        0 30px 70px rgba(15, 42, 64, 0.24);
+}
+
+#viewClientModal .modal-header {
+    padding: 1.05rem 1.3rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    background: linear-gradient(135deg, #0d6786 0%, #0a5570 62%, #083f58 100%);
+    color: #ffffff;
+}
+
+#viewClientModal .modal-header .btn-close {
+    opacity: 0.82;
+}
+
+#viewClientModal .modal-header .btn-close:hover {
+    opacity: 1;
+}
+
+#viewClientModal .client-details-modal-title {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0;
+}
+
+#viewClientModal .client-details-title-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 38px;
+    height: 38px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.13);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 8px 18px rgba(3, 29, 42, 0.2);
+}
+
+#viewClientModal .client-details-title-copy {
+    display: grid;
+    gap: 0.05rem;
+}
+
+#viewClientModal .client-details-title-copy strong {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+#viewClientModal .client-details-title-copy small {
+    color: rgba(230, 247, 255, 0.78);
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+#viewClientModal .modal-body {
+    max-height: min(76vh, 760px);
+    padding: 1.35rem;
+    overflow-y: auto;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.075), transparent 32%),
+        linear-gradient(180deg, #f8fbfd 0%, #eef5f9 100%);
+}
+
+#viewClientModal .client-details-overview {
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    align-items: start;
+    gap: 1rem;
+}
+
+#viewClientModal .client-detail-panel {
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid rgba(31, 99, 146, 0.15);
+    border-radius: 16px;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.1), transparent 34%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(31, 99, 146, 0.045)),
+        #ffffff;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.94),
+        0 5px 0 rgba(15, 76, 129, 0.11),
+        0 18px 30px rgba(15, 76, 129, 0.11);
+}
+
+#viewClientModal .client-detail-panel-header,
+#viewClientModal .client-associated-header {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+#viewClientModal .client-detail-panel-header {
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.72rem;
+    border-bottom: 1px solid rgba(31, 99, 146, 0.12);
+}
+
+#viewClientModal .client-detail-panel-header > span:last-child,
+#viewClientModal .client-associated-copy {
+    display: grid;
+    gap: 0.05rem;
+    min-width: 0;
+}
+
+#viewClientModal .client-detail-panel-header strong,
+#viewClientModal .client-associated-copy strong {
+    color: #173f61;
+    font-size: 0.86rem;
+    font-weight: 800;
+}
+
+#viewClientModal .client-detail-panel-header small,
+#viewClientModal .client-associated-copy small {
+    color: #6f879a;
+    font-size: 0.68rem;
+    line-height: 1.35;
+}
+
+#viewClientModal .client-detail-panel-icon,
+#viewClientModal .client-associated-icon,
+#viewClientModal .client-project-folder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(31, 99, 146, 0.12);
+    border-radius: 10px;
+    background: linear-gradient(145deg, #f7fbfe, #deebf3);
+    color: #0d6786;
+    box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.9), 0 4px 0 rgba(15, 76, 129, 0.1);
+}
+
+#viewClientModal .client-detail-list {
+    display: grid;
+}
+
+#viewClientModal .client-detail-row {
+    display: grid;
+    grid-template-columns: minmax(105px, 0.38fr) minmax(0, 0.62fr);
+    gap: 0.8rem;
+    padding: 0.55rem 0.25rem;
+    border-bottom: 1px solid rgba(31, 99, 146, 0.09);
+}
+
+#viewClientModal .client-detail-row:last-child {
+    border-bottom: 0;
+}
+
+#viewClientModal .client-detail-row > span,
+#viewClientModal .client-delivery-metric > span,
+#viewClientModal .client-project-progress-head > span {
+    color: #72889a;
+    font-size: 0.68rem;
+    font-weight: 750;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+}
+
+#viewClientModal .client-detail-row > strong {
+    min-width: 0;
+    color: #17324d;
+    font-size: 0.79rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+#viewClientModal .client-delivery-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+}
+
+#viewClientModal .client-delivery-metric {
+    display: grid;
+    gap: 0.35rem;
+    min-width: 0;
+    padding: 0.72rem;
+    border: 1px solid rgba(31, 99, 146, 0.11);
+    border-radius: 11px;
+    background: rgba(244, 249, 252, 0.88);
+}
+
+#viewClientModal .client-delivery-metric > strong {
+    color: #17324d;
+    font-size: 0.82rem;
+}
+
+#viewClientModal .client-details-add-project {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.8rem;
+    padding: 0.62rem 0.85rem;
+    border: 1px solid #0d6786;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #0d6786, #0a5570);
+    color: #ffffff;
+    font-size: 0.78rem;
+    font-weight: 800;
+    box-shadow: 0 4px 0 #07445d, 0 12px 20px rgba(13, 103, 134, 0.2);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+#viewClientModal .client-details-add-project:hover,
+#viewClientModal .client-details-add-project:focus-visible {
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 #07445d, 0 16px 24px rgba(13, 103, 134, 0.24);
+    outline: none;
+}
+
+#viewClientModal .client-associated-section {
+    margin-top: 1.35rem;
+    padding-top: 1.15rem;
+    border-top: 1px solid rgba(31, 99, 146, 0.15);
+}
+
+#viewClientModal .client-associated-header {
+    margin-bottom: 0.9rem;
+}
+
+#viewClientModal .client-project-count {
+    margin-left: auto;
+    padding: 0.3rem 0.58rem;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 999px;
+    background: #eaf4fa;
+    color: #0d6786;
+    font-size: 0.68rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+#viewClientModal .client-projects-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    min-height: 100px;
+    color: #6f879a;
+    font-size: 0.76rem;
+}
+
+#viewClientModal .client-project-list {
+    display: grid;
+    gap: 0.85rem;
+}
+
+#viewClientModal .client-project-item {
+    display: grid;
+    grid-template-columns: minmax(190px, 0.9fr) minmax(220px, 1.1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 15px;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.08), transparent 32%),
+        linear-gradient(135deg, #ffffff, #f1f7fb);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.95),
+        0 4px 0 rgba(15, 76, 129, 0.1),
+        0 14px 24px rgba(15, 76, 129, 0.09);
+}
+
+#viewClientModal .client-project-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
+}
+
+#viewClientModal .client-project-identity > span:last-child {
+    display: grid;
+    gap: 0.16rem;
+    min-width: 0;
+}
+
+#viewClientModal .client-project-identity strong {
+    color: #17324d;
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
+#viewClientModal .client-project-identity small {
+    color: #7890a3;
+    font-size: 0.68rem;
+}
+
+#viewClientModal .client-project-progress {
+    display: grid;
+    gap: 0.42rem;
+    min-width: 0;
+}
+
+#viewClientModal .client-project-progress-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+
+#viewClientModal .client-project-progress-head strong {
+    color: #0d6786;
+    font-size: 0.7rem;
+}
+
+#viewClientModal .client-project-state {
+    display: flex;
+    justify-content: flex-end;
+}
+
+#viewClientModal .client-project-notify {
+    grid-column: 1 / -1;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(31, 99, 146, 0.1);
+}
+
+#viewClientModal .client-project-empty {
+    display: grid;
+    justify-items: center;
+    gap: 0.3rem;
+    padding: 2rem 1rem;
+    border: 1px dashed rgba(31, 99, 146, 0.2);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.58);
+    text-align: center;
+}
+
+#viewClientModal .client-project-empty > span {
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: #eaf4fa;
+    color: #0d6786;
+}
+
+#viewClientModal .client-project-empty strong {
+    color: #17324d;
+    font-size: 0.84rem;
+}
+
+#viewClientModal .client-project-empty small {
+    color: #7890a3;
+    font-size: 0.7rem;
+}
+
+#viewClientModal .client-project-item.is-evortix-target {
+    outline: 2px solid #1597e5;
+    outline-offset: 3px;
+    background: linear-gradient(135deg, #f5fbff, #e8f6ff);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .modal-content {
+    border-color: rgba(138, 210, 255, 0.17);
+    background: #071321;
+    box-shadow:
+        inset 0 1px 0 rgba(138, 210, 255, 0.08),
+        0 8px 0 rgba(2, 11, 20, 0.72),
+        0 34px 78px rgba(2, 11, 20, 0.5);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .modal-header {
+    border-bottom-color: rgba(138, 210, 255, 0.15);
+    background: linear-gradient(135deg, #0a3f5c 0%, #082f47 62%, #061d2f 100%);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .modal-body {
+    background:
+        radial-gradient(circle at 100% 0%, rgba(76, 184, 255, 0.1), transparent 32%),
+        linear-gradient(180deg, #091827 0%, #06111d 100%);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-detail-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-item {
+    border-color: rgba(138, 210, 255, 0.15);
+    background:
+        radial-gradient(circle at 100% 0%, rgba(76, 184, 255, 0.13), transparent 34%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.035), rgba(76, 184, 255, 0.075)),
+        #0a1b2c;
+    box-shadow:
+        inset 0 1px 0 rgba(138, 210, 255, 0.09),
+        0 5px 0 rgba(2, 11, 20, 0.7),
+        0 20px 34px rgba(2, 11, 20, 0.32);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-detail-panel-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-associated-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-notify {
+    border-color: rgba(138, 210, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-detail-panel-header strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-associated-copy strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-detail-row > strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-delivery-metric > strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-identity strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-empty strong {
+    color: #e3f1fc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-detail-panel-header small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-associated-copy small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-detail-row > span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-delivery-metric > span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-progress-head > span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-identity small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-empty small {
+    color: #8eabc5;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-detail-row {
+    border-color: rgba(138, 210, 255, 0.09);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-delivery-metric,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-empty {
+    border-color: rgba(138, 210, 255, 0.13);
+    background: rgba(7, 19, 33, 0.58);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-detail-panel-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-associated-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-folder,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-empty > span {
+    border-color: rgba(138, 210, 255, 0.16);
+    background: linear-gradient(145deg, #143650, #081a2a);
+    color: #8fd3ff;
+    box-shadow: inset 1px 1px 0 rgba(138, 210, 255, 0.09), 0 4px 0 rgba(2, 11, 20, 0.72);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-count {
+    border-color: rgba(138, 210, 255, 0.15);
+    background: rgba(13, 103, 134, 0.22);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-notify input {
+    border-color: rgba(138, 210, 255, 0.16);
+    background: #071321;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-notify input::placeholder {
+    color: #7892aa;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-item.is-evortix-target {
+    outline-color: #56bfff;
+    background: linear-gradient(135deg, #0c263b, #0b3652);
+}
+
+@media (max-width: 820px) {
+    #viewClientModal .client-details-overview,
+    #viewClientModal .client-project-item {
+        grid-template-columns: 1fr;
+    }
+
+    #viewClientModal .client-project-state {
+        justify-content: flex-start;
+    }
+
+    #viewClientModal .client-project-notify {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 560px) {
+    #viewClientModal .modal-body {
+        padding: 1rem;
+    }
+
+    #viewClientModal .client-detail-row,
+    #viewClientModal .client-delivery-metrics {
+        grid-template-columns: 1fr;
+    }
+
+    #viewClientModal .client-associated-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    #viewClientModal .client-project-count {
+        margin-left: 0;
+    }
+
+    #viewClientModal .client-project-notify {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 1100px) {
+    #addClientModal.modal-modern.add-client-modal .review-primary-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Responsive */
@@ -4734,89 +6079,93 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
                         <div class="field-group add-client-step project-intake-step" data-client-step="1" hidden>
                             <div class="section-title"><i class="fas fa-clipboard-list"></i> Project Intake</div>
-                            <div class="project-intake-grid">
-                                <div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
                                     <label class="form-label">Project Name<span class="required-mark">*</span></label>
                                     <input type="text" name="project_name" class="form-control" required>
                                 </div>
-                                <div class="template-field-shell">
+                                <div class="col-md-6 template-field-shell template-recommendation-shell">
                                     <label class="form-label">Project Type<span class="required-mark">*</span></label>
                                     <div class="template-type-picker" data-template-picker>
                                         <input type="text" name="project_type" class="form-control" placeholder="e.g. E-commerce Website" required autocomplete="off" data-template-picker-input>
                                         <div class="template-suggestions-menu" data-template-picker-menu hidden></div>
                                     </div>
                                     <select name="project_template_id" class="form-select mt-2" data-template-version-select hidden aria-label="Template version"></select>
+                                    <button type="button" class="template-recommendation-insight-trigger" data-template-recommendation data-client-template-insight-trigger aria-label="Show project template details" aria-expanded="false">
+                                        <i class="fas fa-lightbulb" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="template-recommendation-insight-popover" data-client-template-recommendation hidden>
+                                        <strong>Project template search</strong>
+                                        <span>Choose a project type to apply saved template details.</span>
+                                    </div>
                                 </div>
-                                <div class="project-description-field">
-                                    <label class="form-label">Project Description<span class="required-mark">*</span></label>
-                                    <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution" required></textarea>
-                                </div>
-                            </div>
-                            <div class="project-intake-support-grid">
-                                <div>
-                                    <label class="form-label">Meeting Notes <span class="optional-label">(Optional)</span></label>
-                                    <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
-                                </div>
-                                <div>
-                                    <label class="form-label">Minutes of the Meeting (MOM) <span class="optional-label">(Optional)</span></label>
-                                    <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
-                                </div>
-                            </div>
-                            <div class="project-intake-grid project-intake-detail-grid">
-                                <div class="project-intake-column">
-                                    <div>
-                                        <label class="form-label">Requested System Features<span class="required-mark">*</span></label>
-                                        <div class="requested-feature-builder">
-                                            <input type="hidden" name="requested_features" id="requestedFeaturesField">
-                                            <div class="requested-feature-list" id="requestedFeatureList">
-                                                <div class="requested-feature-item">
-                                                    <input type="text" class="form-control" data-requested-feature-input placeholder="Feature item">
-                                                    <button type="button" class="btn btn-outline-danger" data-remove-requested-feature aria-label="Remove feature">
-                                                        <i class="fas fa-trash"></i>
-                                                    </button>
+                                <div class="col-12">
+                                    <div class="add-project-intake-columns">
+                                        <div class="add-project-intake-column">
+                                            <div>
+                                                <label class="form-label">Project Description<span class="required-mark">*</span></label>
+                                                <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution" required></textarea>
+                                            </div>
+                                            <div>
+                                                <label class="form-label">Meeting Notes <span class="optional-label">(Optional)</span></label>
+                                                <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
+                                            </div>
+                                        </div>
+                                        <div class="add-project-intake-column">
+                                            <div>
+                                                <label class="form-label">Requested System Features<span class="required-mark">*</span></label>
+                                                <div class="requested-feature-builder">
+                                                    <input type="hidden" name="requested_features" id="requestedFeaturesField">
+                                                    <div class="requested-feature-chip-shell" data-client-feature-shell>
+                                                        <div class="requested-feature-list requested-feature-chip-editor" id="requestedFeatureList" role="group" aria-label="Requested system features">
+                                                            <input type="text" class="requested-feature-chip-input" data-requested-feature-input placeholder="Type a feature" aria-label="New requested feature">
+                                                            <button type="button" class="requested-feature-chip-add" id="addRequestedFeature" aria-label="Add feature">
+                                                                <i class="fas fa-plus" aria-hidden="true"></i>
+                                                            </button>
+                                                        </div>
+                                                        <button type="button" class="requested-feature-chip-toggle" data-client-feature-toggle aria-label="See more requested features" aria-expanded="false" hidden>
+                                                            <span data-client-feature-toggle-label>More</span>
+                                                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                                                        </button>
+                                                    </div>
+                                                    <div class="mini-note">Type a feature and press Enter or click +. Select × on a tag to remove it.</div>
                                                 </div>
                                             </div>
-                                            <div class="requested-feature-actions">
-                                                <button type="button" class="btn btn-outline-primary btn-sm" id="addRequestedFeature">
-                                                    <i class="fas fa-plus me-1"></i> Add Feature Item
-                                                </button>
+                                            <div>
+                                                <label class="form-label">Minutes of the Meeting (MOM) <span class="optional-label">(Optional)</span></label>
+                                                <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
                                             </div>
-                                            <div class="mini-note">Add at least one feature the Architect can evaluate.</div>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="project-intake-column">
-                                    <div>
-                                        <label class="form-label">Additional Requirements <span class="optional-label">(Optional)</span></label>
-                                        <textarea name="additional_requirements" class="form-control" rows="3" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
+                                <div class="col-12">
+                                    <label class="form-label">Additional Requirements <span class="optional-label">(Optional)</span></label>
+                                    <textarea name="additional_requirements" class="form-control" rows="3" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
+                                </div>
+                                <div class="col-sm-6 priority-field-shell add-client-priority-insight-shell">
+                                    <label class="form-label">Priority</label>
+                                    <div class="priority-select-wrap">
+                                        <select name="priority" class="form-select">
+                                            <option value="low">Low</option>
+                                            <option value="medium" selected>Medium</option>
+                                            <option value="high">High</option>
+                                            <option value="critical">Critical</option>
+                                        </select>
+                                        <button type="button" class="priority-insight-trigger" data-priority-insight-trigger aria-label="View priority impact" aria-expanded="false">
+                                            <i class="fas fa-lightbulb" aria-hidden="true"></i>
+                                        </button>
+                                        <div class="priority-insight-popover" data-priority-insight-popover hidden></div>
                                     </div>
-                                    <div class="project-intake-inline">
-                                        <div class="priority-field-shell">
-                                            <label class="form-label">Priority</label>
-                                            <div class="priority-select-wrap">
-                                                <select name="priority" class="form-select">
-                                                    <option value="low">Low</option>
-                                                    <option value="medium" selected>Medium</option>
-                                                    <option value="high">High</option>
-                                                    <option value="critical">Critical</option>
-                                                </select>
-                                                <button type="button" class="priority-insight-trigger" data-priority-insight-trigger aria-label="View priority impact" aria-expanded="false">
-                                                    <i class="fas fa-exclamation" aria-hidden="true"></i>
-                                                </button>
-                                                <div class="priority-insight-popover" data-priority-insight-popover hidden></div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label class="form-label">Attachments <span class="optional-label">(Optional)</span></label>
-                                            <div class="attachment-upload-field">
-                                                <label for="addClientAttachments" class="attachment-upload-button">
-                                                    <i class="fas fa-paperclip" aria-hidden="true"></i>
-                                                    <span>Choose Files</span>
-                                                </label>
-                                                <span class="attachment-upload-summary" data-attachment-summary>No file chosen</span>
-                                                <input id="addClientAttachments" type="file" name="attachments[]" class="visually-hidden" multiple data-attachment-input>
-                                            </div>
-                                        </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Attachments <span class="optional-label">(Optional)</span></label>
+                                    <div class="attachment-upload-field">
+                                        <label for="addClientAttachments" class="attachment-upload-button">
+                                            <i class="fas fa-paperclip" aria-hidden="true"></i>
+                                            <span>Choose Files</span>
+                                        </label>
+                                        <span class="attachment-upload-summary" data-attachment-summary>No file chosen</span>
+                                        <input id="addClientAttachments" type="file" name="attachments[]" class="visually-hidden" multiple data-attachment-input>
                                     </div>
                                 </div>
                             </div>
@@ -5130,55 +6479,65 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                     <label class="form-label">Project Name<span class="required-mark">*</span></label>
                                     <input type="text" name="project_name" class="form-control" required>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-6 template-recommendation-shell">
                                     <label class="form-label">Project Type<span class="required-mark">*</span></label>
                                     <div class="template-type-picker" data-template-picker>
                                         <input type="text" name="project_type" class="form-control" placeholder="e.g. E-commerce Website" required autocomplete="off" data-template-picker-input>
                                         <div class="template-suggestions-menu" data-template-picker-menu hidden></div>
                                     </div>
                                     <select name="project_template_id" class="form-select mt-2" data-template-version-select hidden aria-label="Template version"></select>
-                                    <div class="calculation-note" data-add-project-template-recommendation hidden>
+                                    <button type="button" class="template-recommendation-insight-trigger" data-add-project-template-insight-trigger aria-label="Show project template details" aria-expanded="false">
+                                        <i class="fas fa-lightbulb" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="template-recommendation-insight-popover" data-add-project-template-recommendation hidden>
                                         <strong>Project template search</strong>
                                         <span>Choose a project type to apply saved template details.</span>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Project Description<span class="required-mark">*</span></label>
-                                    <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution" required></textarea>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Requested System Features<span class="required-mark">*</span></label>
-                                    <div class="requested-feature-builder">
-                                        <input type="hidden" name="requested_features" id="addProjectRequestedFeaturesField">
-                                        <div class="requested-feature-list" id="addProjectRequestedFeatureList">
-                                            <div class="requested-feature-item">
-                                                <input type="text" class="form-control" data-add-project-feature-input placeholder="Feature item">
-                                                <button type="button" class="btn btn-outline-danger" data-remove-add-project-feature aria-label="Remove feature">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
+                                <div class="col-12">
+                                    <div class="add-project-intake-columns">
+                                        <div class="add-project-intake-column">
+                                            <div>
+                                                <label class="form-label">Project Description<span class="required-mark">*</span></label>
+                                                <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution" required></textarea>
+                                            </div>
+                                            <div>
+                                                <label class="form-label">Meeting Notes <span class="optional-label">(Optional)</span></label>
+                                                <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
                                             </div>
                                         </div>
-                                        <div class="requested-feature-actions">
-                                            <button type="button" class="btn btn-outline-primary btn-sm" id="addProjectRequestedFeature">
-                                                <i class="fas fa-plus me-1"></i> Add Feature Item
-                                            </button>
+                                        <div class="add-project-intake-column">
+                                            <div>
+                                                <label class="form-label">Requested System Features<span class="required-mark">*</span></label>
+                                                <div class="requested-feature-builder">
+                                                    <input type="hidden" name="requested_features" id="addProjectRequestedFeaturesField">
+                                                    <div class="requested-feature-chip-shell" data-add-project-feature-shell>
+                                                        <div class="requested-feature-list requested-feature-chip-editor" id="addProjectRequestedFeatureList" role="group" aria-label="Requested system features">
+                                                            <input type="text" class="requested-feature-chip-input" data-add-project-feature-input placeholder="Type a feature" aria-label="New requested feature">
+                                                            <button type="button" class="requested-feature-chip-add" id="addProjectRequestedFeature" aria-label="Add feature">
+                                                                <i class="fas fa-plus" aria-hidden="true"></i>
+                                                            </button>
+                                                        </div>
+                                                        <button type="button" class="requested-feature-chip-toggle" data-add-project-feature-toggle aria-label="See more requested features" aria-expanded="false" hidden>
+                                                            <span data-add-project-feature-toggle-label>More</span>
+                                                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                                                        </button>
+                                                    </div>
+                                                    <div class="mini-note">Type a feature and press Enter or click +. Select × on a tag to remove it.</div>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label class="form-label">Minutes of the Meeting (MOM) <span class="optional-label">(Optional)</span></label>
+                                                <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
+                                            </div>
                                         </div>
-                                        <div class="mini-note">Add at least one feature the Architect can evaluate.</div>
                                     </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Meeting Notes <span class="optional-label">(Optional)</span></label>
-                                    <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">Minutes of the Meeting (MOM) <span class="optional-label">(Optional)</span></label>
-                                    <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
                                 </div>
                                 <div class="col-12">
                                     <label class="form-label">Additional Requirements <span class="optional-label">(Optional)</span></label>
                                     <textarea name="additional_requirements" class="form-control" rows="3" placeholder="Constraints, integrations, priorities, compliance needs, or extra requests"></textarea>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-sm-6 add-project-priority-insight-shell">
                                     <label class="form-label">Priority</label>
                                     <select name="priority" class="form-select">
                                         <option value="low">Low</option>
@@ -5186,7 +6545,10 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                         <option value="high">High</option>
                                         <option value="critical">Critical</option>
                                     </select>
-                                    <div class="calculation-note" data-add-project-priority-markup-preview>
+                                    <button type="button" class="add-project-priority-insight-trigger" data-add-project-priority-insight-trigger aria-label="Show priority impact" aria-expanded="false">
+                                        <i class="fas fa-lightbulb" aria-hidden="true"></i>
+                                    </button>
+                                    <div class="add-project-priority-insight-popover" data-add-project-priority-markup-preview hidden>
                                         <strong>Medium priority adds +10%</strong>
                                         <span>Requires more planning, testing, and attention than the standard development process.</span>
                                     </div>
@@ -5437,13 +6799,17 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 <!-- View Client Modal -->
 <div class="modal fade modal-modern" id="viewClientModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-lg modal-dialog-centered client-details-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">
-                    <i class="fas fa-building me-2"></i> Client Details
+                <h5 class="modal-title client-details-modal-title">
+                    <span class="client-details-title-icon"><i class="fas fa-building"></i></span>
+                    <span class="client-details-title-copy">
+                        <strong>Client Details</strong>
+                        <small>Account, delivery, and project overview</small>
+                    </span>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="viewClientContent">
                 <div class="text-center py-4">
@@ -5522,6 +6888,7 @@ body.sales-assistant-open #chat-bot-float .chat-bot-speech { width:330px; min-wi
 body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:salesRobotFloat 3.2s ease-in-out infinite; will-change:transform; }
 #addClientForm .template-type-picker::after, #addProjectForm .template-type-picker::after { display:none !important; }
 #addClientForm [data-template-picker-input], #addProjectForm [data-template-picker-input] { padding-right:.9rem !important; }
+:is(#addClientForm, #addProjectForm) .template-recommendation-shell [data-template-picker-input] { padding-right:2.7rem !important; }
 #addClientForm [data-template-version-select], #addProjectForm [data-template-version-select] { display:none !important; }
 .sales-bot-head { padding-left:.75rem; font-weight:800; color:#083a5d; }
 .sales-bot-heading-row { position:relative; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:.6rem; }
@@ -5547,6 +6914,51 @@ body.sales-assistant-open #chat-bot-float .chat-bot-float-animation { animation:
 .sales-bot-action-link span { display:grid; min-width:0; }
 .sales-bot-action-link strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.76rem !important; }
 .sales-bot-action-link small { color:#66839a; font-size:.66rem; }
+html[data-theme="dark"] body.sales-assistant-open #chat-bot-float .chat-bot-speech,
+body[data-theme="dark"].sales-assistant-open #chat-bot-float .chat-bot-speech,
+body.dark-mode.sales-assistant-open #chat-bot-float .chat-bot-speech { background:radial-gradient(circle at 14% 12%,rgba(86,191,255,.16),transparent 34%),linear-gradient(145deg,#0b2940,#0a3854 58%,#071827);border-color:rgba(143,211,255,.28);box-shadow:inset 0 1px 0 rgba(143,211,255,.1),0 7px 0 rgba(2,11,20,.62),0 22px 42px rgba(2,11,20,.44),0 0 28px rgba(34,211,238,.11); }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-head,
+body[data-theme="dark"].sales-assistant-open .sales-bot-head,
+body.dark-mode.sales-assistant-open .sales-bot-head { color:#e7f8ff; }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-copy,
+body[data-theme="dark"].sales-assistant-open .sales-bot-copy,
+body.dark-mode.sales-assistant-open .sales-bot-copy { color:#bfe6ff !important; }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-dismiss,
+body[data-theme="dark"].sales-assistant-open .sales-bot-dismiss,
+body.dark-mode.sales-assistant-open .sales-bot-dismiss { border:1px solid rgba(143,211,255,.18);background:rgba(7,25,41,.72);color:#8fd3ff;box-shadow:0 4px 0 rgba(2,11,20,.62); }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-dismiss:hover,
+body[data-theme="dark"].sales-assistant-open .sales-bot-dismiss:hover,
+body.dark-mode.sales-assistant-open .sales-bot-dismiss:hover { background:#123d59;color:#fff; }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-choice,
+body[data-theme="dark"].sales-assistant-open .sales-bot-choice,
+body.dark-mode.sales-assistant-open .sales-bot-choice { border-color:rgba(143,211,255,.18);background:linear-gradient(145deg,rgba(16,52,77,.96),rgba(7,25,41,.96));color:#dff4ff;box-shadow:inset 0 1px 0 rgba(143,211,255,.07),0 3px 0 rgba(2,11,20,.6),0 9px 16px rgba(2,11,20,.2); }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-choice strong,
+body[data-theme="dark"].sales-assistant-open .sales-bot-choice strong,
+body.dark-mode.sales-assistant-open .sales-bot-choice strong { color:#e7f8ff !important; }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-choice em,
+body[data-theme="dark"].sales-assistant-open .sales-bot-choice em,
+body.dark-mode.sales-assistant-open .sales-bot-choice em { border:1px solid rgba(143,211,255,.13);background:rgba(13,103,134,.3);color:#8fd3ff; }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-choice:hover,
+body[data-theme="dark"].sales-assistant-open .sales-bot-choice:hover,
+body.dark-mode.sales-assistant-open .sales-bot-choice:hover { border-color:rgba(143,211,255,.34);background:linear-gradient(145deg,#164967,#0b2d45);box-shadow:inset 0 1px 0 rgba(143,211,255,.1),0 4px 0 rgba(2,11,20,.66),0 12px 20px rgba(2,11,20,.28); }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-choice-list,
+body[data-theme="dark"].sales-assistant-open .sales-bot-choice-list,
+body.dark-mode.sales-assistant-open .sales-bot-choice-list { scrollbar-color:rgba(143,211,255,.48) rgba(7,25,41,.55); }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-version,
+body[data-theme="dark"].sales-assistant-open .sales-bot-version,
+body.dark-mode.sales-assistant-open .sales-bot-version { border:1px solid rgba(143,211,255,.14);background:rgba(7,25,41,.68);color:#8fd3ff !important; }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-reject,
+body[data-theme="dark"].sales-assistant-open .sales-bot-reject,
+body.dark-mode.sales-assistant-open .sales-bot-reject { border:1px solid rgba(143,211,255,.15);background:rgba(7,25,41,.72);color:#bfe6ff; }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-action-link,
+body[data-theme="dark"].sales-assistant-open .sales-bot-action-link,
+body.dark-mode.sales-assistant-open .sales-bot-action-link { border-color:rgba(143,211,255,.18);background:rgba(7,25,41,.82);color:#dff4ff; }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-action-link strong,
+body[data-theme="dark"].sales-assistant-open .sales-bot-action-link strong,
+body.dark-mode.sales-assistant-open .sales-bot-action-link strong { color:#e7f8ff !important; }
+html[data-theme="dark"] body.sales-assistant-open .sales-bot-action-link small,
+body[data-theme="dark"].sales-assistant-open .sales-bot-action-link small,
+body.dark-mode.sales-assistant-open .sales-bot-action-link small { color:#8eabc5; }
 .client-project-item.is-evortix-target { outline:2px solid #1597e5; outline-offset:2px; background:#edf8ff; }
 #chat-bot-float.is-sad .chat-bot-speech { border-color:rgba(231,139,57,.62); box-shadow:0 16px 34px rgba(180,91,20,.22),0 0 22px rgba(255,169,74,.22); }
 .sales-lottie-head,.sales-lottie-left-hand,.sales-lottie-left-forearm,.sales-lottie-right-hand,.sales-lottie-right-forearm { transform-box:fill-box; transform-origin:center; }
@@ -5887,7 +7299,15 @@ const salesTemplateAssistant = (() => {
         field.dispatchEvent(new Event('change', { bubbles:true }));
     };
     const addFeature = (value) => {
-        const selector = activeForm?.id === 'addProjectForm' ? '[data-add-project-feature-input]' : '[data-requested-feature-input]';
+        if (activeForm?.id === 'addProjectForm') {
+            addAddProjectFeatureValue(value, false);
+            return;
+        }
+        if (activeForm?.id === 'addClientForm' && typeof window.addClientRequestedFeatureValue === 'function') {
+            window.addClientRequestedFeatureValue(value, false);
+            return;
+        }
+        const selector = '[data-requested-feature-input]';
         const inputs = Array.from(activeForm?.querySelectorAll(selector) || []);
         let input = inputs.find(item => !String(item.value || '').trim());
         if (!input && inputs.length) {
@@ -5986,9 +7406,12 @@ const salesTemplateAssistant = (() => {
         const template = templateFor(form);
         if (field === 'project_type') return projectTypes(form);
         if (!template) return show(form, [{ heading:'Choose a project type first', label:'I will suggest this field after you choose a matching project type.', information:true }]);
-        const featureSelector = form.id === 'addProjectForm' ? '[data-add-project-feature-input]' : '[data-requested-feature-input]';
-        const existingFeatures = new Set(Array.from(form.querySelectorAll(featureSelector))
-            .map(input => normalizeSalesTemplateType(input.value)).filter(Boolean));
+        const existingFeatureValues = form.id === 'addProjectForm'
+            ? getAddProjectFeatureValues()
+            : (form.id === 'addClientForm'
+                ? Array.from(form.querySelectorAll('[data-requested-feature-value]')).map((chip) => chip.dataset.requestedFeatureValue || '')
+                : Array.from(form.querySelectorAll('[data-requested-feature-input]')).map((input) => input.value));
+        const existingFeatures = new Set(existingFeatureValues.map((value) => normalizeSalesTemplateType(value)).filter(Boolean));
         const availableFeatureSuggestions = (template.feature_items || [])
             .filter(value => !existingFeatures.has(normalizeSalesTemplateType(value)));
         if (field === 'requested_features') {
@@ -6369,6 +7792,92 @@ function toggleComplexityInsight(trigger, scope = document) {
     trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
 }
 
+function closeAddProjectTemplateInsight(returnFocus = false) {
+    const form = document.getElementById('addProjectForm');
+    const shell = form?.querySelector('.template-recommendation-shell');
+    const panel = shell?.querySelector('[data-add-project-template-recommendation]');
+    const trigger = shell?.querySelector('[data-add-project-template-insight-trigger]');
+    if (!panel || panel.hidden) {
+        return;
+    }
+
+    panel.hidden = true;
+    trigger?.classList.remove('is-open');
+    trigger?.setAttribute('aria-expanded', 'false');
+    if (returnFocus) {
+        trigger?.focus();
+    }
+}
+
+function toggleAddProjectTemplateInsight(trigger) {
+    const shell = trigger?.closest('.template-recommendation-shell');
+    const panel = shell?.querySelector('[data-add-project-template-recommendation]');
+    if (!panel) {
+        return;
+    }
+
+    const shouldOpen = panel.hidden;
+    closeAddProjectTemplateInsight(false);
+    panel.hidden = !shouldOpen;
+    trigger.classList.toggle('is-open', shouldOpen);
+    trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
+function setAddProjectTemplateRecommendation(panel, content) {
+    const isOpen = !panel.hidden;
+    panel.innerHTML = content;
+    panel.hidden = !isOpen;
+}
+
+function closeAddProjectPriorityInsight(returnFocus = false) {
+    const form = document.getElementById('addProjectForm');
+    const shell = form?.querySelector('.add-project-priority-insight-shell');
+    const panel = shell?.querySelector('[data-add-project-priority-markup-preview]');
+    const trigger = shell?.querySelector('[data-add-project-priority-insight-trigger]');
+    if (!panel || panel.hidden) {
+        return;
+    }
+
+    panel.hidden = true;
+    trigger?.classList.remove('is-open');
+    trigger?.setAttribute('aria-expanded', 'false');
+    if (returnFocus) {
+        trigger?.focus();
+    }
+}
+
+function toggleAddProjectPriorityInsight(trigger) {
+    const shell = trigger?.closest('.add-project-priority-insight-shell');
+    const panel = shell?.querySelector('[data-add-project-priority-markup-preview]');
+    if (!panel) {
+        return;
+    }
+
+    const shouldOpen = panel.hidden;
+    closeAddProjectPriorityInsight(false);
+    panel.hidden = !shouldOpen;
+    trigger.classList.toggle('is-open', shouldOpen);
+    trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
+function setAddProjectPriorityInsight(panel, content) {
+    const isOpen = !panel.hidden;
+    panel.innerHTML = content;
+    panel.hidden = !isOpen;
+}
+
+function resetAddProjectPriorityInsight() {
+    const form = document.getElementById('addProjectForm');
+    const panel = form?.querySelector('[data-add-project-priority-markup-preview]');
+    const trigger = form?.querySelector('[data-add-project-priority-insight-trigger]');
+    if (panel) {
+        panel.hidden = true;
+        panel.innerHTML = '<strong>Medium priority adds +10%</strong><span>Requires more planning, testing, and attention than the standard development process.</span>';
+    }
+    trigger?.classList.remove('is-open');
+    trigger?.setAttribute('aria-expanded', 'false');
+}
+
 const projectTemplateTypeNames = Array.from(new Set(
     (Array.isArray(projectTemplates) ? projectTemplates : [])
         .map((template) => String(template.project_type || '').trim())
@@ -6594,6 +8103,24 @@ function syncAddProjectBudgetWithPriority() {
     form.elements.sales_budget.value = (Number(addProjectAutoBudgetBase) * (1 + markup.rate)).toFixed(2);
 }
 
+function resizeAddProjectAdditionalRequirements() {
+    const field = document.querySelector('#addProjectForm textarea[name="additional_requirements"]');
+    if (!field || field.offsetParent === null) {
+        return;
+    }
+
+    field.style.height = 'auto';
+    field.style.height = `${Math.max(118, field.scrollHeight + 2)}px`;
+    field.scrollTop = 0;
+}
+
+function queueAddProjectAdditionalRequirementsResize() {
+    window.requestAnimationFrame(() => {
+        resizeAddProjectAdditionalRequirements();
+        window.requestAnimationFrame(resizeAddProjectAdditionalRequirements);
+    });
+}
+
 function resetAddProjectTemplateState() {
     appliedAddProjectTemplateType = '';
     addProjectAutoBudgetBase = null;
@@ -6603,6 +8130,10 @@ function resetAddProjectTemplateState() {
         panel.hidden = true;
         panel.innerHTML = '<strong>Project template search</strong><span>Choose a project type to apply saved template details.</span>';
     }
+    const trigger = document.querySelector('#addProjectForm [data-add-project-template-insight-trigger]');
+    trigger?.classList.remove('is-open');
+    trigger?.setAttribute('aria-expanded', 'false');
+    resetAddProjectPriorityInsight();
 }
 
 function applyAddProjectTemplate(template, options = {}) {
@@ -6646,6 +8177,7 @@ function applyAddProjectTemplate(template, options = {}) {
             template.third_party_services ? 'Third-party services/APIs: ' + template.third_party_services : '',
             template.payment_terms ? 'Suggested payment terms: ' + template.payment_terms : ''
         ].filter(Boolean).join("\n");
+        queueAddProjectAdditionalRequirementsResize();
     }
     if (form.elements.sales_notes && (force || !form.elements.sales_notes.value.trim())) {
         form.elements.sales_notes.value = [
@@ -6672,13 +8204,11 @@ function updateAddProjectTemplateRecommendation() {
     const projectType = String(form.elements.project_type?.value || '').trim();
     const template = findSalesProjectTemplate(projectType);
     if (!projectType) {
-        panel.hidden = false;
-        panel.innerHTML = '<strong>Project template search</strong><span>Choose a project type to apply saved template details.</span>';
+        setAddProjectTemplateRecommendation(panel, '<strong>Project template search</strong><span>Choose a project type to apply saved template details.</span>');
         return;
     }
     if (!template) {
-        panel.hidden = false;
-        panel.innerHTML = `<strong>New project type</strong><span>No saved template matches "${escapeClientHtml(projectType)}". Fill the project details manually.</span>`;
+        setAddProjectTemplateRecommendation(panel, `<strong>New project type</strong><span>No saved template matches "${escapeClientHtml(projectType)}". Fill the project details manually.</span>`);
         return;
     }
 
@@ -6692,37 +8222,120 @@ function updateAddProjectTemplateRecommendation() {
     const appliedStatus = appliedAddProjectTemplateType === templateType
         ? '<span class="template-apply-status"><i class="fas fa-check-circle"></i>Template suggestions applied.</span>'
         : '';
-    panel.hidden = false;
-    panel.innerHTML = `
+    setAddProjectTemplateRecommendation(panel, `
         <strong>Recommended template: ${escapeClientHtml(template.project_type)}</strong>
         <span>${escapeClientHtml(template.duration_label || 'Timeline TBD')} | ${escapeClientHtml(budgetRange)} | ${escapeClientHtml(template.methodology || 'Methodology TBD')}</span>
         <span>Features: ${escapeClientHtml(template.core_features || 'No feature list saved yet.')}</span>
         ${appliedStatus}
         <button type="button" class="btn btn-outline-primary btn-sm" data-apply-add-project-template>Apply template suggestions</button>
-    `;
+    `);
 }
 
-function createAddProjectFeatureRow(value = '') {
-    const item = document.createElement('div');
-    item.className = 'requested-feature-item';
-    item.innerHTML = `
-        <input type="text" class="form-control" data-add-project-feature-input placeholder="Feature item">
-        <button type="button" class="btn btn-outline-danger" data-remove-add-project-feature aria-label="Remove feature">
-            <i class="fas fa-trash"></i>
-        </button>
-    `;
-
-    const input = item.querySelector('[data-add-project-feature-input]');
-    if (input) {
-        input.value = value;
+function setAddProjectFeatureEditorExpanded(expanded, focusInput = false) {
+    const shell = document.querySelector('#addProjectForm [data-add-project-feature-shell]');
+    const toggle = shell?.querySelector('[data-add-project-feature-toggle]');
+    const toggleLabel = toggle?.querySelector('[data-add-project-feature-toggle-label]');
+    if (!shell || !toggle) {
+        return;
     }
 
-    return item;
+    const shouldExpand = Boolean(expanded && !toggle.hidden);
+    shell.classList.toggle('is-expanded', shouldExpand);
+    toggle.setAttribute('aria-expanded', shouldExpand ? 'true' : 'false');
+    toggle.setAttribute('aria-label', shouldExpand ? 'Show fewer requested features' : 'See more requested features');
+    if (toggleLabel) {
+        toggleLabel.textContent = shouldExpand ? 'Less' : 'More';
+    }
+
+    if (focusInput) {
+        window.requestAnimationFrame(() => {
+            const input = shell.querySelector('[data-add-project-feature-input]');
+            const editor = shell.querySelector('#addProjectRequestedFeatureList');
+            input?.focus();
+            if (editor && shouldExpand) editor.scrollTop = editor.scrollHeight;
+        });
+    }
+}
+
+function updateAddProjectFeatureEditorAvailability() {
+    const shell = document.querySelector('#addProjectForm [data-add-project-feature-shell]');
+    const editor = shell?.querySelector('#addProjectRequestedFeatureList');
+    const toggle = shell?.querySelector('[data-add-project-feature-toggle]');
+    if (!shell || !editor || !toggle || editor.offsetParent === null) {
+        return false;
+    }
+
+    const wasExpanded = shell.classList.contains('is-expanded');
+    shell.classList.remove('is-expanded', 'has-more');
+    toggle.hidden = true;
+    const flowItems = Array.from(editor.children).filter((item) => !item.matches('.requested-feature-chip-add'));
+    const firstRowTop = flowItems.length ? Math.min(...flowItems.map((item) => item.offsetTop)) : 0;
+    const hasMore = flowItems.some((item) => item.offsetTop > firstRowTop + 4);
+    shell.classList.toggle('has-more', hasMore);
+    toggle.hidden = !hasMore;
+    setAddProjectFeatureEditorExpanded(hasMore && wasExpanded, false);
+    return hasMore;
+}
+
+function queueAddProjectFeatureEditorAvailability() {
+    window.requestAnimationFrame(() => {
+        updateAddProjectFeatureEditorAvailability();
+        window.requestAnimationFrame(updateAddProjectFeatureEditorAvailability);
+    });
+}
+
+function toggleAddProjectFeatureEditor() {
+    const shell = document.querySelector('#addProjectForm [data-add-project-feature-shell]');
+    if (shell?.querySelector('[data-add-project-feature-toggle]')?.hidden) {
+        return;
+    }
+    setAddProjectFeatureEditorExpanded(!shell?.classList.contains('is-expanded'), true);
+}
+
+function createAddProjectFeatureChip(value) {
+    const chip = document.createElement('span');
+    const label = document.createElement('span');
+    const removeButton = document.createElement('button');
+    const normalizedValue = String(value || '').trim();
+
+    chip.className = 'requested-feature-chip';
+    chip.dataset.addProjectFeatureValue = normalizedValue;
+    chip.setAttribute('role', 'listitem');
+    label.textContent = normalizedValue;
+
+    removeButton.type = 'button';
+    removeButton.className = 'requested-feature-chip-remove';
+    removeButton.dataset.removeAddProjectFeature = '';
+    removeButton.setAttribute('aria-label', `Remove ${normalizedValue}`);
+    removeButton.innerHTML = '<i class="fas fa-times" aria-hidden="true"></i>';
+
+    chip.append(label, removeButton);
+    return chip;
+}
+
+function createAddProjectFeatureInput() {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'requested-feature-chip-input';
+    input.dataset.addProjectFeatureInput = '';
+    input.placeholder = 'Type a feature';
+    input.setAttribute('aria-label', 'New requested feature');
+    return input;
+}
+
+function createAddProjectFeatureButton() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'addProjectRequestedFeature';
+    button.className = 'requested-feature-chip-add';
+    button.setAttribute('aria-label', 'Add feature');
+    button.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i>';
+    return button;
 }
 
 function getAddProjectFeatureValues() {
-    return Array.from(document.querySelectorAll('#addProjectRequestedFeatureList [data-add-project-feature-input]'))
-        .map((input) => String(input.value || '').trim())
+    return Array.from(document.querySelectorAll('#addProjectRequestedFeatureList [data-add-project-feature-value]'))
+        .map((chip) => String(chip.dataset.addProjectFeatureValue || '').trim())
         .filter((value) => value !== '');
 }
 
@@ -6733,19 +8346,42 @@ function syncAddProjectFeatureField() {
     }
 }
 
-function updateAddProjectFeatureRemoveButtons() {
+function addAddProjectFeatureValue(value, focusInput = true) {
     const featureList = document.getElementById('addProjectRequestedFeatureList');
-    if (!featureList) {
-        return;
+    const input = featureList?.querySelector('[data-add-project-feature-input]');
+    const normalizedValue = String(value || '').trim().replace(/\s+/g, ' ');
+    if (!featureList || !input || !normalizedValue) {
+        return false;
     }
 
-    const items = Array.from(featureList.querySelectorAll('.requested-feature-item'));
-    items.forEach((item) => {
-        const button = item.querySelector('[data-remove-add-project-feature]');
-        if (button) {
-            button.disabled = items.length <= 1;
-        }
-    });
+    const duplicate = Array.from(featureList.querySelectorAll('[data-add-project-feature-value]'))
+        .find((chip) => normalizeSalesTemplateType(chip.dataset.addProjectFeatureValue) === normalizeSalesTemplateType(normalizedValue));
+    input.value = '';
+    input.setCustomValidity('');
+
+    if (duplicate) {
+        duplicate.classList.add('is-duplicate');
+        duplicate.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        window.setTimeout(() => duplicate.classList.remove('is-duplicate'), 650);
+        if (focusInput) setAddProjectFeatureEditorExpanded(true, true);
+        return false;
+    }
+
+    featureList.insertBefore(createAddProjectFeatureChip(normalizedValue), input);
+    syncAddProjectFeatureField();
+    featureList.scrollTop = featureList.scrollHeight;
+    updateAddProjectFeatureEditorAvailability();
+    if (focusInput) setAddProjectFeatureEditorExpanded(true, true);
+    return true;
+}
+
+function commitAddProjectFeatureInput(focusInput = true) {
+    const input = document.querySelector('#addProjectRequestedFeatureList [data-add-project-feature-input]');
+    if (!input || !String(input.value || '').trim()) {
+        if (focusInput) setAddProjectFeatureEditorExpanded(true, true);
+        return false;
+    }
+    return addAddProjectFeatureValue(input.value, focusInput);
 }
 
 function renderAddProjectFeatureRows(rawValue = '') {
@@ -6754,18 +8390,24 @@ function renderAddProjectFeatureRows(rawValue = '') {
         return;
     }
 
+    const seen = new Set();
     const features = String(rawValue || '')
         .split(/\r?\n/)
         .map((feature) => feature.trim())
-        .filter((feature) => feature !== '');
+        .filter((feature) => {
+            const normalized = normalizeSalesTemplateType(feature);
+            if (!normalized || seen.has(normalized)) return false;
+            seen.add(normalized);
+            return true;
+        });
 
-    featureList.innerHTML = '';
-    (features.length > 0 ? features : ['']).forEach((feature) => {
-        featureList.appendChild(createAddProjectFeatureRow(feature));
-    });
+    featureList.replaceChildren();
+    features.forEach((feature) => featureList.appendChild(createAddProjectFeatureChip(feature)));
+    featureList.append(createAddProjectFeatureInput(), createAddProjectFeatureButton());
 
-    updateAddProjectFeatureRemoveButtons();
     syncAddProjectFeatureField();
+    setAddProjectFeatureEditorExpanded(false, false);
+    queueAddProjectFeatureEditorAvailability();
 }
 
 function getAddProjectValue(name) {
@@ -6901,7 +8543,7 @@ function updateAddProjectGeneratedComplexity() {
 
     const priorityMarkupPreview = form.querySelector('[data-add-project-priority-markup-preview]');
     if (priorityMarkupPreview) {
-        priorityMarkupPreview.innerHTML = `<strong>${escapeClientHtml(priorityMarkup.label)} priority adds +${priorityMarkup.percent}%</strong><span>${escapeClientHtml(priorityMarkup.reason)}</span>`;
+        setAddProjectPriorityInsight(priorityMarkupPreview, `<strong>${escapeClientHtml(priorityMarkup.label)} priority adds +${priorityMarkup.percent}%</strong><span>${escapeClientHtml(priorityMarkup.reason)}</span>`);
     }
 
     const priorityPricePreview = form.querySelector('[data-add-project-priority-price-preview]');
@@ -6994,18 +8636,18 @@ function renderAddProjectSummary() {
 }
 
 function prepareAddProjectFeatureValidation(shouldReport = true) {
-    const featureInputs = Array.from(document.querySelectorAll('#addProjectRequestedFeatureList [data-add-project-feature-input]'));
-    featureInputs.forEach((input) => input.setCustomValidity(''));
+    const input = document.querySelector('#addProjectRequestedFeatureList [data-add-project-feature-input]');
+    input?.setCustomValidity('');
+    commitAddProjectFeatureInput(false);
 
     if (getAddProjectFeatureValues().length > 0) {
         return true;
     }
 
-    const firstInput = featureInputs[0];
-    if (firstInput) {
-        firstInput.setCustomValidity('Add at least one requested feature before sending the project to Architect.');
+    if (input) {
+        input.setCustomValidity('Add at least one requested feature before sending the project to Architect.');
         if (shouldReport) {
-            firstInput.reportValidity();
+            input.reportValidity();
         }
     }
     return false;
@@ -7108,10 +8750,20 @@ function showAddProjectStep(stepIndex) {
     if (handoffNote) {
         handoffNote.hidden = currentAddProjectStep === panels.length - 1;
     }
+    if (currentAddProjectStep === 0) {
+        queueAddProjectAdditionalRequirementsResize();
+        queueAddProjectFeatureEditorAvailability();
+    }
 }
 
 const addProjectFormElement = document.getElementById('addProjectForm');
 if (addProjectFormElement) {
+    addProjectFormElement.addEventListener('focusin', function (event) {
+        if (event.target?.matches('[data-add-project-feature-input]')) {
+            setAddProjectFeatureEditorExpanded(true, false);
+        }
+    });
+
     addProjectFormElement.addEventListener('input', function (event) {
         if (event.target?.name === 'project_type') {
             if (addProjectAutoBudgetFromTemplate && addProjectFormElement.elements.sales_budget) {
@@ -7125,6 +8777,9 @@ if (addProjectFormElement) {
         if (event.target?.name === 'sales_budget') {
             addProjectAutoBudgetBase = null;
             addProjectAutoBudgetFromTemplate = false;
+        }
+        if (event.target?.name === 'additional_requirements') {
+            resizeAddProjectAdditionalRequirements();
         }
         if (event.target?.name === 'timeline_end') {
             delete event.target.dataset.templateDurationAuto;
@@ -7152,18 +8807,53 @@ if (addProjectFormElement) {
             syncAddProjectBudgetWithPriority();
             syncAddProjectTimelineWithPriority(false);
             updateAddProjectTemplateRecommendation();
+            updateAddProjectGeneratedComplexity();
         }
     });
 
     addProjectFormElement.addEventListener('click', function (event) {
+        const featureToggleButton = event.target.closest('[data-add-project-feature-toggle]');
+        if (featureToggleButton) {
+            toggleAddProjectFeatureEditor();
+            return;
+        }
+
+        const templateInsightButton = event.target.closest('[data-add-project-template-insight-trigger]');
+        if (templateInsightButton) {
+            closeComplexityInsight(addProjectFormElement, false);
+            closeAddProjectPriorityInsight(false);
+            closeTemplatePickers();
+            toggleAddProjectTemplateInsight(templateInsightButton);
+            return;
+        }
+
+        const priorityInsightButton = event.target.closest('[data-add-project-priority-insight-trigger]');
+        if (priorityInsightButton) {
+            closeComplexityInsight(addProjectFormElement, false);
+            closeAddProjectTemplateInsight(false);
+            toggleAddProjectPriorityInsight(priorityInsightButton);
+            return;
+        }
+
         const complexityInsightButton = event.target.closest('[data-complexity-insight-trigger]');
         if (complexityInsightButton) {
+            closeAddProjectTemplateInsight(false);
+            closeAddProjectPriorityInsight(false);
             toggleComplexityInsight(complexityInsightButton, addProjectFormElement);
             return;
         }
 
         if (!event.target.closest('.complexity-field-shell')) {
             closeComplexityInsight(addProjectFormElement, false);
+        }
+        if (!event.target.closest('.template-recommendation-shell')) {
+            closeAddProjectTemplateInsight(false);
+        }
+        if (!event.target.closest('.add-project-priority-insight-shell')) {
+            closeAddProjectPriorityInsight(false);
+        }
+        if (!event.target.closest('[data-add-project-feature-shell]')) {
+            setAddProjectFeatureEditorExpanded(false, false);
         }
 
         const nextButton = event.target.closest('[data-add-project-next]');
@@ -7182,19 +8872,16 @@ if (addProjectFormElement) {
 
         const addFeatureButton = event.target.closest('#addProjectRequestedFeature');
         if (addFeatureButton) {
-            const featureList = document.getElementById('addProjectRequestedFeatureList');
-            featureList?.appendChild(createAddProjectFeatureRow(''));
-            updateAddProjectFeatureRemoveButtons();
-            featureList?.querySelector('.requested-feature-item:last-child [data-add-project-feature-input]')?.focus();
-            syncAddProjectFeatureField();
+            commitAddProjectFeatureInput(true);
             return;
         }
 
         const removeFeatureButton = event.target.closest('[data-remove-add-project-feature]');
         if (removeFeatureButton) {
-            removeFeatureButton.closest('.requested-feature-item')?.remove();
-            updateAddProjectFeatureRemoveButtons();
+            removeFeatureButton.closest('[data-add-project-feature-value]')?.remove();
             syncAddProjectFeatureField();
+            updateAddProjectFeatureEditorAvailability();
+            document.querySelector('#addProjectRequestedFeatureList [data-add-project-feature-input]')?.focus();
             return;
         }
 
@@ -7207,8 +8894,36 @@ if (addProjectFormElement) {
     });
 
     addProjectFormElement.addEventListener('keydown', function (event) {
+        if (event.target?.matches('[data-add-project-feature-input]') && event.key === 'Enter') {
+            event.preventDefault();
+            commitAddProjectFeatureInput(true);
+            return;
+        }
+        if (event.target?.matches('[data-add-project-feature-input]') && event.key === 'Backspace' && !event.target.value) {
+            const chips = document.querySelectorAll('#addProjectRequestedFeatureList [data-add-project-feature-value]');
+            chips[chips.length - 1]?.remove();
+            syncAddProjectFeatureField();
+            updateAddProjectFeatureEditorAvailability();
+            return;
+        }
         if (event.key === 'Escape') {
+            const featureShell = addProjectFormElement.querySelector('[data-add-project-feature-shell]');
+            if (featureShell?.classList.contains('is-expanded')) {
+                setAddProjectFeatureEditorExpanded(false, false);
+                featureShell.querySelector('[data-add-project-feature-toggle]')?.focus();
+                return;
+            }
             closeComplexityInsight(addProjectFormElement, true);
+            closeAddProjectTemplateInsight(true);
+            closeAddProjectPriorityInsight(true);
+        }
+    });
+
+    window.addEventListener('resize', function () {
+        const modal = document.getElementById('addProjectModal');
+        if (modal?.classList.contains('show') && currentAddProjectStep === 0) {
+            queueAddProjectAdditionalRequirementsResize();
+            queueAddProjectFeatureEditorAvailability();
         }
     });
 
@@ -7290,37 +9005,69 @@ function viewClient(id) {
                 window.appToast?.('Unable to load client', client.error, 'error');
                 return;
             }
+            const clientStatus = String(client.status || 'pending').toLowerCase();
+            const clientStatusLabel = clientStatus.replaceAll('_', ' ');
+            const clientDeadline = client.deadline ? new Date(client.deadline).toLocaleDateString() : 'Not set';
             let html = `
-                <div class="row g-4">
-                    <div class="col-md-6">
-                        <div class="client-detail-panel">
-                            <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-info-circle me-2"></i>Contact Information</h6>
-                            <p><strong>Company Name:</strong> ${client.name}</p>
-                            <p><strong>Contact Person:</strong> ${client.contact_person}</p>
-                            <p><strong>Email:</strong> ${client.email}</p>
-                            <p><strong>Phone:</strong> ${client.phone}</p>
-                            <p><strong>Address:</strong> ${client.address || '—'}</p>
+                <div class="client-details-overview">
+                    <section class="client-detail-panel" aria-labelledby="clientContactHeading">
+                        <header class="client-detail-panel-header">
+                            <span class="client-detail-panel-icon"><i class="fas fa-address-card"></i></span>
+                            <span>
+                                <strong id="clientContactHeading">Contact Information</strong>
+                                <small>Primary account and communication details</small>
+                            </span>
+                        </header>
+                        <div class="client-detail-list">
+                            <div class="client-detail-row"><span>Company</span><strong>${escapeClientHtml(client.name || 'Not provided')}</strong></div>
+                            <div class="client-detail-row"><span>Contact person</span><strong>${escapeClientHtml(client.contact_person || 'Not provided')}</strong></div>
+                            <div class="client-detail-row"><span>Email</span><strong>${escapeClientHtml(client.email || 'Not provided')}</strong></div>
+                            <div class="client-detail-row"><span>Phone</span><strong>${escapeClientHtml(client.phone || 'Not provided')}</strong></div>
+                            <div class="client-detail-row"><span>Address</span><strong>${escapeClientHtml(client.address || 'Not provided')}</strong></div>
                         </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="client-detail-panel">
-                            <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-chart-line me-2"></i>Project Status</h6>
-                            <p><strong>Status:</strong> <span class="badge-status ${client.status}">${client.status}</span></p>
-                            <p><strong>Project Deadline:</strong> ${client.deadline ? new Date(client.deadline).toLocaleDateString() : 'Not set'}</p>
-                            <button type="button" class="btn btn-outline-primary btn-sm" id="viewAddProjectButton">
-                                <i class="fas fa-folder-plus me-1"></i> Add Project
-                            </button>
+                    </section>
+
+                    <section class="client-detail-panel client-delivery-panel" aria-labelledby="clientDeliveryHeading">
+                        <header class="client-detail-panel-header">
+                            <span class="client-detail-panel-icon"><i class="fas fa-chart-line"></i></span>
+                            <span>
+                                <strong id="clientDeliveryHeading">Delivery Overview</strong>
+                                <small>Current account and project readiness</small>
+                            </span>
+                        </header>
+                        <div class="client-delivery-metrics">
+                            <div class="client-delivery-metric">
+                                <span>Client status</span>
+                                <strong><span class="badge-status ${escapeClientHtml(clientStatus)}">${escapeClientHtml(clientStatusLabel)}</span></strong>
+                            </div>
+                            <div class="client-delivery-metric">
+                                <span>Nearest deadline</span>
+                                <strong>${escapeClientHtml(clientDeadline)}</strong>
+                            </div>
                         </div>
-                    </div>
+                        <button type="button" class="client-details-add-project" id="viewAddProjectButton">
+                            <i class="fas fa-folder-plus"></i>
+                            <span>Add Project</span>
+                        </button>
+                    </section>
                 </div>
-                <hr>
-                <h6 class="mb-3" style="color: var(--theme-primary);"><i class="fas fa-project-diagram me-2"></i>Associated Projects</h6>
-                <div id="clientProjects" class="text-center py-3">
-                    <div class="spinner-border text-primary spinner-border-sm" role="status">
-                        <span class="visually-hidden">Loading...</span>
+
+                <section class="client-associated-section" aria-labelledby="clientProjectsHeading">
+                    <header class="client-associated-header">
+                        <span class="client-associated-icon"><i class="fas fa-diagram-project"></i></span>
+                        <span class="client-associated-copy">
+                            <strong id="clientProjectsHeading">Associated Projects</strong>
+                            <small>Delivery progress and team communication</small>
+                        </span>
+                        <span class="client-project-count" id="clientProjectsCount">Loading</span>
+                    </header>
+                    <div id="clientProjects" class="client-projects-loading">
+                        <div class="spinner-border text-primary spinner-border-sm" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <span>Loading projects...</span>
                     </div>
-                    <p class="mt-2 text-muted small">Loading projects...</p>
-                </div>
+                </section>
             `;
             $('#viewClientContent').html(html);
             const viewAddProjectButton = document.getElementById('viewAddProjectButton');
@@ -7336,34 +9083,46 @@ function viewClient(id) {
                 data: { client_id: id },
                 success: function(projectsResponse) {
                     const projects = typeof projectsResponse === 'string' ? JSON.parse(projectsResponse) : projectsResponse;
+                    const projectCount = document.getElementById('clientProjectsCount');
+                    if (projectCount) {
+                        projectCount.textContent = `${projects.length} ${projects.length === 1 ? 'project' : 'projects'}`;
+                    }
                     if(projects.length > 0) {
-                        let projectsHtml = '<div class="list-group">';
+                        let projectsHtml = '<div class="client-project-list">';
                         projects.forEach(project => {
-                            const progress = Number(project.progress || 0);
+                            const projectId = Number(project.id || 0);
+                            const progress = Math.max(0, Math.min(100, Number(project.progress || 0)));
                             const isCompleted = progress >= 100 || project.status === 'completed';
                             const deadline = project.timeline_end ? new Date(`${project.timeline_end}T23:59:59`) : null;
                             const isOverdue = !isCompleted && deadline && deadline.getTime() < Date.now();
                             const displayStatus = isCompleted ? 'Completed' : (isOverdue ? 'Overdue' : String(project.status || '').replaceAll('_', ' '));
+                            const createdDate = project.created_at ? new Date(project.created_at).toLocaleDateString() : 'Date unavailable';
                             projectsHtml += `
-                                <div class="client-project-item d-flex justify-content-between align-items-center" data-client-project-id="${project.id}">
-                                    <div>
-                                        <strong>${project.name}</strong><br>
-                                        <small class="text-muted">Created: ${new Date(project.created_at).toLocaleDateString()}</small>
+                                <article class="client-project-item" data-client-project-id="${projectId}">
+                                    <div class="client-project-identity">
+                                        <span class="client-project-folder"><i class="fas fa-folder"></i></span>
+                                        <span>
+                                            <strong>${escapeClientHtml(project.name || 'Untitled project')}</strong>
+                                            <small>Created ${escapeClientHtml(createdDate)}</small>
+                                        </span>
                                     </div>
-                                    <div class="d-grid gap-2 flex-grow-1 ms-3" style="max-width:360px">
+                                    <div class="client-project-progress">
+                                        <div class="client-project-progress-head">
+                                            <span>Delivery progress</span>
+                                            <strong>${progress}%</strong>
+                                        </div>
                                         <div class="project-progress-track" role="progressbar" aria-valuenow="${progress}" aria-valuemin="0" aria-valuemax="100"><div class="project-progress-fill" style="width:${progress}%"></div></div>
-                                        ${isCompleted ? '' : `
-                                            <div class="project-team-notify">
-                                                <input type="text" maxlength="500" placeholder="Message the responsible team">
-                                                <button class="btn btn-outline-primary btn-sm" type="button" data-notify-project-team="${project.id}"><i class="fas fa-bell me-1"></i> Notify Team</button>
-                                            </div>
-                                        `}
                                     </div>
-                                    <div class="d-flex align-items-center gap-2 ms-2">
-                                        <span class="project-progress-pill">${progress}% Complete</span>
-                                        <span class="badge-status ${isCompleted ? 'active' : (isOverdue ? 'overdue' : 'pending')}">${displayStatus}</span>
+                                    <div class="client-project-state">
+                                        <span class="badge-status ${isCompleted ? 'active' : (isOverdue ? 'overdue' : 'pending')}">${escapeClientHtml(displayStatus)}</span>
                                     </div>
-                                </div>
+                                    ${isCompleted ? '' : `
+                                        <div class="project-team-notify client-project-notify">
+                                            <input type="text" maxlength="500" placeholder="Message the responsible team" aria-label="Team message for ${escapeClientHtml(project.name || 'project')}">
+                                            <button class="btn btn-outline-primary btn-sm" type="button" data-notify-project-team="${projectId}"><i class="fas fa-bell me-1"></i> Notify Team</button>
+                                        </div>
+                                    `}
+                                </article>
                             `;
                         });
                         projectsHtml += '</div>';
@@ -7377,7 +9136,13 @@ function viewClient(id) {
                             window.setTimeout(() => selectedProject.scrollIntoView({ behavior:'smooth', block:'center' }), 250);
                         }
                     } else {
-                        $('#clientProjects').html('<p class="text-muted text-center">No projects yet</p>');
+                        $('#clientProjects').html(`
+                            <div class="client-project-empty">
+                                <span><i class="fas fa-folder-open"></i></span>
+                                <strong>No associated projects yet</strong>
+                                <small>Use Add Project above to create the first delivery record.</small>
+                            </div>
+                        `);
                     }
                 }
             });
@@ -7483,7 +9248,6 @@ if (addClientModalElement && addClientForm) {
     const draftIdField = addClientModalElement.querySelector('[data-client-draft-id]');
     const requestedFeaturesField = document.getElementById('requestedFeaturesField');
     const requestedFeatureList = document.getElementById('requestedFeatureList');
-    const addRequestedFeatureButton = document.getElementById('addRequestedFeature');
     let currentStep = 0;
     let formTouched = false;
     let activeDraftLoaded = false;
@@ -7631,23 +9395,107 @@ if (addClientModalElement && addClientForm) {
         return data;
     }
 
-    function createRequestedFeatureRow(value = '') {
-        const item = document.createElement('div');
-        item.className = 'requested-feature-item';
-        item.innerHTML = `
-            <input type="text" class="form-control" data-requested-feature-input placeholder="Feature item">
-            <button type="button" class="btn btn-outline-danger" data-remove-requested-feature aria-label="Remove feature">
-                <i class="fas fa-trash"></i>
-            </button>
-        `;
-
-        const input = item.querySelector('[data-requested-feature-input]');
-        if (input) {
-            input.value = value;
-            input.dataset.templateRecommended = isRecommendedFeature(value) ? '1' : '0';
+    function setClientFeatureEditorExpanded(expanded, focusInput = false) {
+        const shell = addClientForm.querySelector('[data-client-feature-shell]');
+        const toggle = shell?.querySelector('[data-client-feature-toggle]');
+        const toggleLabel = toggle?.querySelector('[data-client-feature-toggle-label]');
+        if (!shell || !toggle) {
+            return;
         }
 
-        return item;
+        const shouldExpand = Boolean(expanded && !toggle.hidden);
+        shell.classList.toggle('is-expanded', shouldExpand);
+        toggle.setAttribute('aria-expanded', shouldExpand ? 'true' : 'false');
+        toggle.setAttribute('aria-label', shouldExpand ? 'Show fewer requested features' : 'See more requested features');
+        if (toggleLabel) {
+            toggleLabel.textContent = shouldExpand ? 'Less' : 'More';
+        }
+
+        if (focusInput) {
+            window.requestAnimationFrame(() => {
+                const input = shell.querySelector('[data-requested-feature-input]');
+                input?.focus();
+                if (requestedFeatureList && shouldExpand) {
+                    requestedFeatureList.scrollTop = requestedFeatureList.scrollHeight;
+                }
+            });
+        }
+    }
+
+    function updateClientFeatureEditorAvailability() {
+        const shell = addClientForm.querySelector('[data-client-feature-shell]');
+        const toggle = shell?.querySelector('[data-client-feature-toggle]');
+        if (!shell || !requestedFeatureList || !toggle || requestedFeatureList.offsetParent === null) {
+            return false;
+        }
+
+        const wasExpanded = shell.classList.contains('is-expanded');
+        shell.classList.remove('is-expanded', 'has-more');
+        toggle.hidden = true;
+        const flowItems = Array.from(requestedFeatureList.children).filter((item) => !item.matches('.requested-feature-chip-add'));
+        const firstRowTop = flowItems.length ? Math.min(...flowItems.map((item) => item.offsetTop)) : 0;
+        const hasMore = flowItems.some((item) => item.offsetTop > firstRowTop + 4);
+        shell.classList.toggle('has-more', hasMore);
+        toggle.hidden = !hasMore;
+        setClientFeatureEditorExpanded(hasMore && wasExpanded, false);
+        return hasMore;
+    }
+
+    function queueClientFeatureEditorAvailability() {
+        window.requestAnimationFrame(() => {
+            updateClientFeatureEditorAvailability();
+            window.requestAnimationFrame(updateClientFeatureEditorAvailability);
+        });
+    }
+
+    function toggleClientFeatureEditor() {
+        const shell = addClientForm.querySelector('[data-client-feature-shell]');
+        if (shell?.querySelector('[data-client-feature-toggle]')?.hidden) {
+            return;
+        }
+        setClientFeatureEditorExpanded(!shell?.classList.contains('is-expanded'), true);
+    }
+
+    function createRequestedFeatureChip(value) {
+        const chip = document.createElement('span');
+        const label = document.createElement('span');
+        const removeButton = document.createElement('button');
+        const normalizedValue = String(value || '').trim().replace(/\s+/g, ' ');
+
+        chip.className = 'requested-feature-chip';
+        chip.dataset.requestedFeatureValue = normalizedValue;
+        chip.dataset.templateRecommended = isRecommendedFeature(normalizedValue) ? '1' : '0';
+        chip.setAttribute('role', 'listitem');
+        label.textContent = normalizedValue;
+
+        removeButton.type = 'button';
+        removeButton.className = 'requested-feature-chip-remove';
+        removeButton.dataset.removeRequestedFeature = '';
+        removeButton.setAttribute('aria-label', `Remove ${normalizedValue}`);
+        removeButton.innerHTML = '<i class="fas fa-times" aria-hidden="true"></i>';
+
+        chip.append(label, removeButton);
+        return chip;
+    }
+
+    function createRequestedFeatureInput() {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'requested-feature-chip-input';
+        input.dataset.requestedFeatureInput = '';
+        input.placeholder = 'Type a feature';
+        input.setAttribute('aria-label', 'New requested feature');
+        return input;
+    }
+
+    function createRequestedFeatureButton() {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.id = 'addRequestedFeature';
+        button.className = 'requested-feature-chip-add';
+        button.setAttribute('aria-label', 'Add feature');
+        button.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i>';
+        return button;
     }
 
     function getRequestedFeatureValues() {
@@ -7655,8 +9503,8 @@ if (addClientModalElement && addClientForm) {
             return [];
         }
 
-        return Array.from(requestedFeatureList.querySelectorAll('[data-requested-feature-input]'))
-            .map((input) => String(input.value || '').trim())
+        return Array.from(requestedFeatureList.querySelectorAll('[data-requested-feature-value]'))
+            .map((chip) => String(chip.dataset.requestedFeatureValue || '').trim())
             .filter((value) => value !== '');
     }
 
@@ -7665,6 +9513,51 @@ if (addClientModalElement && addClientForm) {
             requestedFeaturesField.value = getRequestedFeatureValues().join("\n");
         }
     }
+
+    function addRequestedFeatureValue(value, focusInput = true) {
+        const input = requestedFeatureList?.querySelector('[data-requested-feature-input]');
+        const normalizedValue = String(value || '').trim().replace(/\s+/g, ' ');
+        if (!requestedFeatureList || !input || !normalizedValue) {
+            return false;
+        }
+
+        const duplicate = Array.from(requestedFeatureList.querySelectorAll('[data-requested-feature-value]'))
+            .find((chip) => normalizeTemplateType(chip.dataset.requestedFeatureValue) === normalizeTemplateType(normalizedValue));
+        input.value = '';
+        input.setCustomValidity('');
+
+        if (duplicate) {
+            duplicate.classList.add('is-duplicate');
+            duplicate.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            window.setTimeout(() => duplicate.classList.remove('is-duplicate'), 650);
+            if (focusInput) {
+                setClientFeatureEditorExpanded(true, true);
+            }
+            return false;
+        }
+
+        requestedFeatureList.insertBefore(createRequestedFeatureChip(normalizedValue), input);
+        syncRequestedFeaturesField();
+        requestedFeatureList.scrollTop = requestedFeatureList.scrollHeight;
+        updateClientFeatureEditorAvailability();
+        if (focusInput) {
+            setClientFeatureEditorExpanded(true, true);
+        }
+        return true;
+    }
+
+    function commitRequestedFeatureInput(focusInput = true) {
+        const input = requestedFeatureList?.querySelector('[data-requested-feature-input]');
+        if (!input || !String(input.value || '').trim()) {
+            if (focusInput) {
+                setClientFeatureEditorExpanded(true, true);
+            }
+            return false;
+        }
+        return addRequestedFeatureValue(input.value, focusInput);
+    }
+
+    window.addClientRequestedFeatureValue = addRequestedFeatureValue;
 
     function addDaysToDateInput(dateValue, daysToAdd) {
         const baseDate = dateValue ? new Date(dateValue + 'T00:00:00') : new Date();
@@ -7708,7 +9601,7 @@ if (addClientModalElement && addClientForm) {
         if (addClientForm.elements.project_description && (force || !getFormValue('project_description'))) {
             addClientForm.elements.project_description.value = template.project_description || `${template.project_type} based on the ${template.methodology || 'recommended'} project template.`;
         }
-        if (Array.isArray(template.feature_items) && template.feature_items.length > 0) {
+        if (Array.isArray(template.feature_items) && template.feature_items.length > 0 && (force || !getRequestedFeatureValues().length)) {
             renderRequestedFeatureRows(template.feature_items.join("\n"));
         }
         if (addClientForm.elements.sales_budget && Number(template.budget_min || 0) > 0 && (force || !getFormValue('sales_budget') || autoBudgetFromTemplate)) {
@@ -7901,6 +9794,34 @@ if (addClientModalElement && addClientForm) {
         templateReviewReturnFocus = null;
     }
 
+    function closeClientTemplateInsight(returnFocus = false) {
+        const trigger = addClientForm.querySelector('[data-client-template-insight-trigger]');
+        const panel = addClientForm.querySelector('[data-client-template-recommendation]');
+        if (!trigger || !panel || panel.hidden) {
+            return;
+        }
+
+        panel.hidden = true;
+        trigger.classList.remove('is-open');
+        trigger.setAttribute('aria-expanded', 'false');
+        if (returnFocus) {
+            trigger.focus();
+        }
+    }
+
+    function toggleClientTemplateInsight() {
+        const trigger = addClientForm.querySelector('[data-client-template-insight-trigger]');
+        const panel = addClientForm.querySelector('[data-client-template-recommendation]');
+        if (!trigger || !panel) {
+            return;
+        }
+
+        const shouldOpen = panel.hidden;
+        panel.hidden = !shouldOpen;
+        trigger.classList.toggle('is-open', shouldOpen);
+        trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    }
+
     function closePriorityInsight(returnFocus = false) {
         const trigger = addClientForm.querySelector('[data-priority-insight-trigger]');
         const popover = addClientForm.querySelector('[data-priority-insight-popover]');
@@ -7953,37 +9874,50 @@ if (addClientModalElement && addClientForm) {
 
     function updateTemplateRecommendation() {
         const trigger = addClientForm.querySelector('[data-template-recommendation]');
-        if (!trigger) {
+        const panel = addClientForm.querySelector('[data-client-template-recommendation]');
+        if (!trigger || !panel) {
             return;
         }
 
-        trigger.hidden = true;
         trigger.dataset.templateType = '';
         trigger.classList.remove('is-applied');
-        trigger.innerHTML = '<i class="fas fa-magic" aria-hidden="true"></i>';
+        trigger.innerHTML = '<i class="fas fa-lightbulb" aria-hidden="true"></i>';
 
         const projectType = getFormValue('project_type');
         const template = findProjectTemplate(projectType);
         if (!projectType) {
             templateApplyMessage = '';
+            panel.innerHTML = '<strong>Project template search</strong><span>Choose a project type to apply saved template details.</span>';
+            trigger.setAttribute('aria-label', 'Show project template search information');
             return;
         }
         if (!template) {
             templateApplyMessage = '';
+            panel.innerHTML = `<strong>New project type</strong><span>No saved template matches "${escapeHtml(projectType)}". Fill the project details manually.</span>`;
+            trigger.setAttribute('aria-label', 'Show project template information');
             return;
         }
 
         const templateType = normalizeTemplateType(template.project_type);
-        const isApplied = templateApplyMessage && appliedProjectTemplateType === templateType;
+        if (normalizeTemplateType(projectType) === templateType && appliedProjectTemplateType !== templateType) {
+            applyProjectTemplate(template);
+            return;
+        }
+
+        const isApplied = appliedProjectTemplateType === templateType;
         const triggerLabel = isApplied
             ? `${template.project_type} template applied. Click to review details.`
             : `${template.project_type} recommendation available. Click to review before applying.`;
-        trigger.hidden = false;
         trigger.dataset.templateType = template.project_type || '';
         trigger.classList.toggle('is-applied', Boolean(isApplied));
         trigger.removeAttribute('title');
         trigger.setAttribute('aria-label', triggerLabel);
-        trigger.innerHTML = `<i class="fas ${isApplied ? 'fa-check-circle' : 'fa-magic'}" aria-hidden="true"></i>`;
+        panel.innerHTML = `
+            <strong>Recommended template: ${escapeHtml(template.project_type)}</strong>
+            <span>${escapeHtml(template.duration_label || 'Timeline TBD')} | ${escapeHtml(formatPeso(template.budget_min || 0))} - ${escapeHtml(formatPeso(template.budget_max || 0))}</span>
+            <span>Features: ${escapeHtml(template.core_features || 'Saved template features are ready.')}</span>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-review-project-template data-template-type="${escapeHtml(template.project_type)}">Review template details</button>
+        `;
     }
 
     function getPriorityMarkup(priorityValue = getFormValue('priority') || 'medium') {
@@ -8129,32 +10063,25 @@ if (addClientModalElement && addClientForm) {
             return;
         }
 
+        const seen = new Set();
         const features = String(rawValue || '')
             .split(/\r?\n/)
             .map((feature) => feature.trim())
-            .filter((feature) => feature !== '');
+            .filter((feature) => {
+                const normalized = normalizeTemplateType(feature);
+                if (!normalized || seen.has(normalized)) {
+                    return false;
+                }
+                seen.add(normalized);
+                return true;
+            });
 
-        requestedFeatureList.innerHTML = '';
-        (features.length > 0 ? features : ['']).forEach((feature) => {
-            requestedFeatureList.appendChild(createRequestedFeatureRow(feature));
-        });
-
-        updateRequestedFeatureRemoveButtons();
+        requestedFeatureList.replaceChildren();
+        features.forEach((feature) => requestedFeatureList.appendChild(createRequestedFeatureChip(feature)));
+        requestedFeatureList.append(createRequestedFeatureInput(), createRequestedFeatureButton());
         syncRequestedFeaturesField();
-    }
-
-    function updateRequestedFeatureRemoveButtons() {
-        if (!requestedFeatureList) {
-            return;
-        }
-
-        const items = Array.from(requestedFeatureList.querySelectorAll('.requested-feature-item'));
-        items.forEach((item) => {
-            const button = item.querySelector('[data-remove-requested-feature]');
-            if (button) {
-                button.disabled = items.length <= 1;
-            }
-        });
+        setClientFeatureEditorExpanded(false, false);
+        queueClientFeatureEditorAvailability();
     }
 
     function isMeaningfulDraftValue(key, value) {
@@ -8681,6 +10608,7 @@ if (addClientModalElement && addClientForm) {
     }
 
     function prepareRequestedFeatureValidation() {
+        commitRequestedFeatureInput(false);
         const featureInputs = Array.from(requestedFeatureList?.querySelectorAll('[data-requested-feature-input]') || []);
         featureInputs.forEach((input) => input.setCustomValidity(''));
 
@@ -8776,6 +10704,7 @@ if (addClientModalElement && addClientForm) {
         }
         if (currentStep === 1) {
             window.requestAnimationFrame(resizeAdditionalRequirementsField);
+            queueClientFeatureEditorAvailability();
         }
         if (currentStep === 2) {
             queueResizeSalesNotesField();
@@ -8840,9 +10769,33 @@ if (addClientModalElement && addClientForm) {
     });
 
     addClientForm.addEventListener('click', (event) => {
+        const featureToggleButton = event.target.closest('[data-client-feature-toggle]');
+        if (featureToggleButton) {
+            toggleClientFeatureEditor();
+            return;
+        }
+
+        if (!event.target.closest('[data-client-feature-shell]')) {
+            setClientFeatureEditorExpanded(false, false);
+        }
+
+        const templateInsightButton = event.target.closest('[data-client-template-insight-trigger]');
+        if (templateInsightButton) {
+            closePriorityInsight(false);
+            closeComplexityInsight(addClientForm, false);
+            closeTemplatePickers();
+            toggleClientTemplateInsight();
+            return;
+        }
+
+        if (!event.target.closest('.template-recommendation-shell')) {
+            closeClientTemplateInsight(false);
+        }
+
         const complexityInsightButton = event.target.closest('[data-complexity-insight-trigger]');
         if (complexityInsightButton) {
             closePriorityInsight(false);
+            closeClientTemplateInsight(false);
             toggleComplexityInsight(complexityInsightButton, addClientForm);
             return;
         }
@@ -8854,6 +10807,7 @@ if (addClientModalElement && addClientForm) {
         const priorityInsightButton = event.target.closest('[data-priority-insight-trigger]');
         if (priorityInsightButton) {
             closeComplexityInsight(addClientForm, false);
+            closeClientTemplateInsight(false);
             togglePriorityInsight();
             return;
         }
@@ -8866,6 +10820,7 @@ if (addClientModalElement && addClientForm) {
         if (reviewButton) {
             const template = findProjectTemplate(reviewButton.dataset.templateType || getFormValue('project_type'));
             if (template) {
+                closeClientTemplateInsight(false);
                 openProjectTemplateReview(template, reviewButton);
             }
             return;
@@ -8911,15 +10866,55 @@ if (addClientModalElement && addClientForm) {
     });
 
     addClientForm.addEventListener('keydown', (event) => {
+        const featureInput = event.target.closest('[data-requested-feature-input]');
+        if (featureInput && event.key === 'Enter') {
+            event.preventDefault();
+            if (commitRequestedFeatureInput(true)) {
+                formTouched = true;
+                hideUnsavedClosePanel();
+                updateDraftStatus(false);
+            }
+            return;
+        }
+
+        if (featureInput && event.key === 'Backspace' && !featureInput.value) {
+            const chips = requestedFeatureList?.querySelectorAll('[data-requested-feature-value]') || [];
+            const lastChip = chips[chips.length - 1];
+            const removeButton = lastChip?.querySelector('[data-remove-requested-feature]');
+            if (removeButton) {
+                event.preventDefault();
+                removeButton.click();
+            }
+            return;
+        }
+
         if (event.key === 'Escape' && templateReviewOverlay && !templateReviewOverlay.hidden) {
             event.preventDefault();
             closeProjectTemplateReview(true);
             return;
         }
 
+        if (event.key === 'Escape' && !addClientForm.querySelector('[data-client-template-recommendation]')?.hidden) {
+            event.preventDefault();
+            closeClientTemplateInsight(true);
+            return;
+        }
+
         if (event.key === 'Escape') {
+            const featureShell = addClientForm.querySelector('[data-client-feature-shell]');
+            if (featureShell?.classList.contains('is-expanded')) {
+                event.preventDefault();
+                setClientFeatureEditorExpanded(false, true);
+                return;
+            }
             closePriorityInsight(true);
             closeComplexityInsight(addClientForm, true);
+        }
+    });
+
+    addClientForm.addEventListener('focusin', (event) => {
+        if (event.target.matches('[data-requested-feature-input]')) {
+            setClientFeatureEditorExpanded(true, false);
         }
     });
 
@@ -8927,23 +10922,30 @@ if (addClientModalElement && addClientForm) {
         requestedFeatureList.addEventListener('input', (event) => {
             if (event.target.matches('[data-requested-feature-input]')) {
                 event.target.setCustomValidity('');
-                syncRequestedFeaturesField();
             }
         });
 
         requestedFeatureList.addEventListener('click', async (event) => {
+            const addButton = event.target.closest('#addRequestedFeature');
+            if (addButton) {
+                if (commitRequestedFeatureInput(true)) {
+                    formTouched = true;
+                    hideUnsavedClosePanel();
+                    updateDraftStatus(false);
+                }
+                return;
+            }
+
             const removeButton = event.target.closest('[data-remove-requested-feature]');
             if (!removeButton) {
                 return;
             }
 
-            const item = removeButton.closest('.requested-feature-item');
-            const items = requestedFeatureList.querySelectorAll('.requested-feature-item');
-            if (!item) {
+            const chip = removeButton.closest('[data-requested-feature-value]');
+            if (!chip) {
                 return;
             }
-            const input = item.querySelector('[data-requested-feature-input]');
-            const featureName = String(input?.value || '').trim();
+            const featureName = String(chip.dataset.requestedFeatureValue || '').trim();
             const isRecommended = featureName !== '' && isRecommendedFeature(featureName);
             if (featureName !== '') {
                 const shouldRemove = typeof window.appConfirm === 'function'
@@ -8969,19 +10971,13 @@ if (addClientModalElement && addClientForm) {
                 recommendedFeatureTitles.delete(normalizeTemplateType(featureName));
             }
 
-            if (items.length <= 1) {
-                if (input) {
-                    input.value = '';
-                    input.dataset.templateRecommended = '0';
-                }
-            } else {
-                item.remove();
-            }
+            chip.remove();
 
             formTouched = true;
             hideUnsavedClosePanel();
-            updateRequestedFeatureRemoveButtons();
             syncRequestedFeaturesField();
+            updateClientFeatureEditorAvailability();
+            requestedFeatureList.querySelector('[data-requested-feature-input]')?.focus();
             updateDraftStatus(false);
         });
     }
@@ -8992,22 +10988,6 @@ if (addClientModalElement && addClientForm) {
             addClientForm.elements.timeline_end_time?.setCustomValidity('');
         });
     });
-
-    if (addRequestedFeatureButton && requestedFeatureList) {
-        addRequestedFeatureButton.addEventListener('click', () => {
-            requestedFeatureList.appendChild(createRequestedFeatureRow(''));
-            updateRequestedFeatureRemoveButtons();
-            formTouched = true;
-            hideUnsavedClosePanel();
-            updateDraftStatus(false);
-
-            const inputs = requestedFeatureList.querySelectorAll('[data-requested-feature-input]');
-            const lastInput = inputs[inputs.length - 1];
-            if (lastInput) {
-                lastInput.focus();
-            }
-        });
-    }
 
     closeButtons.forEach((button) => {
         button.addEventListener('click', requestAddClientClose);
@@ -9185,13 +11165,19 @@ if (addClientModalElement && addClientForm) {
     window.addEventListener('resize', () => {
         if (addClientModalElement.classList.contains('show')) {
             syncAddClientPageBounds();
+            if (currentStep === 1) {
+                queueClientFeatureEditorAvailability();
+                window.requestAnimationFrame(resizeAdditionalRequirementsField);
+            }
         }
     });
 
     addClientModalElement.addEventListener('hidden.bs.modal', () => {
         showClientStep(0);
         closeProjectTemplateReview(false);
+        closeClientTemplateInsight(false);
         closePriorityInsight(false);
+        setClientFeatureEditorExpanded(false, false);
         hideUnsavedClosePanel();
         activeDraftLoaded = false;
         activeDraftId = null;
