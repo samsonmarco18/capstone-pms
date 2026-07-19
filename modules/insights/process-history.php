@@ -442,7 +442,7 @@ include '../../includes/navbar.php';
 }
 </style>
 
-<div class="container-fluid px-4 py-4">
+<div class="container-fluid px-4 py-4" id="project-process-history">
         <section class="process-hero" data-page-header>
             <div>
                 <h2><i class="fas fa-clock-rotate-left me-2"></i>Process History</h2>

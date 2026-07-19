@@ -4,6 +4,7 @@ require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
 
 require_once '../../includes/project-estimation.php';
+require_once '../../includes/project-compilation.php';
 
 require_once '../../includes/project-workflow.php';
 requireRole('expert');
@@ -118,7 +119,7 @@ function featureEstimationApplyDurationWindow(array &$plan): void
 
     $executionRows = array_values(array_filter($validRows, static function (array $row): bool {
         $phaseOrder = (int) ($row['phase_order'] ?? 0);
-        return $phaseOrder === 2 || $phaseOrder === 3;
+        return in_array($phaseOrder, [2, 3, 4], true);
     }));
     $basisRows = $executionRows !== [] ? $executionRows : $validRows;
     $usesExecutionWindow = $executionRows !== [];
@@ -513,6 +514,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
     $additionalCosts = max(0.0, (float) ($_POST['additional_costs'] ?? 0));
 
     if (projectEstimationSave($conn, $projectId, (int) $user['id'], $allocations, $durationMonths, $techMonthlyCost, $additionalCosts, $complexity, $postedAllocations)) {
+        projectCompilationRecord($conn, $projectId, (int) $user['id'], 'estimates');
         workflowNotifyRoles(
             $conn,
             ['sul'],
@@ -580,9 +582,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['project_setup'])) {
 // Handle task estimation save (draft)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($_POST['submit_all'])) {
     $taskId = (int) ($_POST['task_id'] ?? 0);
-    $minDays = 0;
-    $likelyDays = 0;
-    $maxDays = 0;
+    $minDays = max(0, (int) ($_POST['min_days'] ?? 0));
+    $likelyDays = max(0, (int) ($_POST['likely_days'] ?? 0));
+    $maxDays = max(0, (int) ($_POST['max_days'] ?? 0));
     $expectation = trim((string) ($_POST['expectation'] ?? ''));
     $phaseName = null;
     $plannedStart = !empty($_POST['planned_start']) ? $_POST['planned_start'] : null;
@@ -631,7 +633,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     $projectTimelineEnd = trim((string) ($durationWindow['end'] ?? ''));
     $architectPlannedStart = trim((string) ($architectPlan['planned_start'] ?? ''));
     $architectDeadline = trim((string) ($architectPlan['planned_end'] ?? ''));
-    $postedEstimateDurationDays = max(0, (int) ($_POST['estimate_duration_days'] ?? 0));
     if ($architectDeadline === '') {
         $architectDeadline = $projectTimelineEnd;
     }
@@ -679,12 +680,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     }
 
     $deadlineDuration = max(1, (int) $plannedStartDate->diff($plannedEndDate)->days + 1);
-    $estimateDuration = $postedEstimateDurationDays > 0
-        ? min($postedEstimateDurationDays, $deadlineDuration)
-        : $deadlineDuration;
-    $minDays = max(1, (int) ceil($estimateDuration * 0.70));
-    $likelyDays = max($minDays, (int) ceil($estimateDuration * 0.85));
-    $maxDays = $estimateDuration;
+    if ($minDays < 1 || $likelyDays < 1 || $maxDays < 1) {
+        $_SESSION['error'] = 'Accept the Evortix feature estimate or enter all three day values before saving.';
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId . '&workspace=features');
+        exit();
+    }
+    if ($minDays > $likelyDays || $likelyDays > $maxDays) {
+        $_SESSION['error'] = 'Feature estimates must follow Minimum <= Most Likely <= Maximum.';
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId . '&workspace=features');
+        exit();
+    }
+    if ($maxDays > $deadlineDuration) {
+        $_SESSION['error'] = 'The maximum feature estimate cannot exceed its Architect-planned window of ' . $deadlineDuration . ' day(s).';
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId . '&workspace=features');
+        exit();
+    }
     if (!empty($architectPlan['involvement_plan'])) {
         $involvementPlan = $architectPlan['involvement_plan'];
     }
@@ -989,10 +999,23 @@ while ($row = $tasks->fetch_assoc()) {
 }
 
 $roadmapPhasesByProject = [];
+$featureCountByProject = [];
 $roadmapProjectIds = array_values(array_unique(array_filter(array_map(static function (array $taskRow): int {
     return (int) ($taskRow['project_id'] ?? 0);
 }, $taskRows))));
 if (!empty($roadmapProjectIds)) {
+    $featureCountResult = $conn->query("
+        SELECT project_id, COUNT(*) AS feature_count
+        FROM tasks
+        WHERE task_type = 'feature' AND project_id IN (" . implode(',', $roadmapProjectIds) . ")
+        GROUP BY project_id
+    ");
+    if ($featureCountResult) {
+        while ($featureCountRow = $featureCountResult->fetch_assoc()) {
+            $featureCountByProject[(int) ($featureCountRow['project_id'] ?? 0)] = max(1, (int) ($featureCountRow['feature_count'] ?? 1));
+        }
+    }
+
     $phaseResult = $conn->query("
         SELECT project_id, name
         FROM methodology_phases
@@ -2509,14 +2532,43 @@ textarea.form-control-custom {
                 $featureWindowStart = trim((string) ($featureDurationWindow['start'] ?? ($task['timeline_start'] ?? '')));
                 $featureWindowEnd = trim((string) ($featureDurationWindow['end'] ?? ($task['timeline_end'] ?? '')));
                 $featureWindowLabel = (string) ($featureDurationWindow['label'] ?? 'Project timeline');
+                $projectFeatureCount = max(1, (int) ($featureCountByProject[(int) $task['project_id']] ?? 1));
                 $featureEstimateDurationDays = max(0, (int) ($architectPlan['estimate_duration_days'] ?? 0));
                 $featureEstimateBasisLabel = trim((string) ($architectPlan['duration_basis_label'] ?? ''));
                 if ($featureEstimateDurationDays <= 0) {
-                    $featureEstimateDurationDays = featureEstimationInclusiveDays($featureWindowStart, $featureWindowEnd);
+                    $projectWindowDays = featureEstimationInclusiveDays($featureWindowStart, $featureWindowEnd);
+                    $featureEstimateDurationDays = max(1, (int) ceil($projectWindowDays / $projectFeatureCount));
                 }
                 if ($featureEstimateBasisLabel === '') {
-                    $featureEstimateBasisLabel = $featureWindowLabel;
+                    $featureEstimateBasisLabel = $featureWindowLabel . ' divided across ' . $projectFeatureCount . ' feature(s)';
                 }
+                $evortixMaxDays = max(1, $featureEstimateDurationDays);
+                $evortixLikelyDays = max(1, (int) ceil($evortixMaxDays * 0.85));
+                $evortixMinDays = max(1, (int) ceil($evortixMaxDays * 0.70));
+                $evortixEstimateSource = 'Architect roadmap duration';
+                foreach ($taskRecommendations as $taskRecommendation) {
+                    $historyPayload = is_array($taskRecommendation['payload'] ?? null) ? $taskRecommendation['payload'] : [];
+                    $historyMin = max(0, (int) ($historyPayload['min_days'] ?? 0));
+                    $historyLikely = max(0, (int) ($historyPayload['likely_days'] ?? 0));
+                    $historyMax = max(0, (int) ($historyPayload['max_days'] ?? 0));
+                    if ($historyMin < 1 || $historyLikely < $historyMin || $historyMax < $historyLikely) {
+                        continue;
+                    }
+
+                    $evortixMaxDays = min($evortixMaxDays, $historyMax);
+                    $evortixLikelyDays = min($evortixMaxDays, max(1, $historyLikely));
+                    $evortixMinDays = min($evortixLikelyDays, max(1, $historyMin));
+                    $evortixEstimateSource = 'Similar completed feature: ' . (string) ($taskRecommendation['label'] ?? 'past estimate');
+                    break;
+                }
+                $evortixEstimatePayload = [
+                    'min_days' => $evortixMinDays,
+                    'likely_days' => $evortixLikelyDays,
+                    'max_days' => $evortixMaxDays,
+                    'basis' => $featureEstimateBasisLabel,
+                    'source' => $evortixEstimateSource,
+                    'phase_name' => $featurePhaseName,
+                ];
                 $architectPlanStartValue = trim((string) ($architectPlan['planned_start'] ?? ''));
                 $architectPlanEndValue = trim((string) ($architectPlan['planned_end'] ?? ''));
                 $architectDeadlineValue = $architectPlanEndValue !== '' ? $architectPlanEndValue : $featureWindowEnd;
@@ -2534,7 +2586,7 @@ textarea.form-control-custom {
                     : 'not set';
             ?>
             <?php $isReadonly = $task['status'] !== 'todo'; ?>
-            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars($featureWindowStart, ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars($featureWindowEnd, ENT_QUOTES, 'UTF-8'); ?>" data-duration-label="<?php echo htmlspecialchars($featureWindowLabel, ENT_QUOTES, 'UTF-8'); ?>" data-estimate-duration-days="<?php echo (int) $featureEstimateDurationDays; ?>" style="display:none;">
+            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-task-title="<?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-saved-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars($featureWindowStart, ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars($featureWindowEnd, ENT_QUOTES, 'UTF-8'); ?>" data-duration-label="<?php echo htmlspecialchars($featureWindowLabel, ENT_QUOTES, 'UTF-8'); ?>" data-estimate-duration-days="<?php echo (int) $featureEstimateDurationDays; ?>" data-evortix-estimate="<?php echo htmlspecialchars(json_encode($evortixEstimatePayload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>" style="display:none;">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                     <div>
                         <div class="feature-title"><?php echo htmlspecialchars($task['title']); ?></div>
@@ -2558,9 +2610,10 @@ textarea.form-control-custom {
                     <input type="hidden" name="accepted_recommendation_id" value="">
                     <input type="hidden" name="rejected_recommendations_json" value="[]">
                     <input type="hidden" name="estimate_duration_days" value="<?php echo (int) $featureEstimateDurationDays; ?>">
+                    <input type="hidden" class="evortix-feature-estimate-decision" value="">
 
                     <?php if (!empty($taskRecommendations)): ?>
-                    <div class="recommendation-panel mb-4">
+                    <div class="recommendation-panel mb-4 d-none" aria-hidden="true">
                         <div class="recommendation-panel-header">
                             <div>
                                 <h6><i class="fas fa-lightbulb me-2"></i>Feature Recommendation</h6>
@@ -2629,20 +2682,20 @@ textarea.form-control-custom {
                     
                     <div class="row g-3 mb-4">
                         <div class="col-md-4">
-                            <label class="form-label">Minimum Days (70%)</label>
-                            <input type="number" name="min_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
+                            <label class="form-label">Minimum Days</label>
+                            <input type="number" name="min_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
                                    value="<?php echo $estimation['min_days'] ?? ''; ?>" required placeholder="1">
-                            <small class="text-muted d-block mt-1">Auto-generated from <?php echo (int) $featureEstimateDurationDays; ?> day(s): <?php echo htmlspecialchars($featureEstimateBasisLabel); ?></small>
+                            <small class="text-muted d-block mt-1">Accept Evortix's per-feature recommendation or enter your own value.</small>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Most Likely Days (85%)</label>
-                            <input type="number" name="likely_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
+                            <label class="form-label">Most Likely Days</label>
+                            <input type="number" name="likely_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
                                    value="<?php echo $estimation['likely_days'] ?? ''; ?>" required placeholder="1">
-                            <small class="text-muted d-block mt-1">Auto-generated from <?php echo (int) $featureEstimateDurationDays; ?> day(s): <?php echo htmlspecialchars($featureEstimateBasisLabel); ?></small>
+                            <small class="text-muted d-block mt-1">The expected delivery effort for this feature.</small>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Maximum Days (100%)</label>
-                            <input type="number" name="max_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : 'readonly'; ?>
+                            <label class="form-label">Maximum Days</label>
+                            <input type="number" name="max_days" class="form-control-custom estimate-input" min="1" step="1" <?php echo $isReadonly ? 'disabled' : ''; ?>
                                    value="<?php echo $estimation['max_days'] ?? ''; ?>" required placeholder="3">
                             <small class="text-muted d-block mt-1">Uses the task estimate duration, never beyond the selected deadline</small>
                         </div>
@@ -2722,13 +2775,22 @@ textarea.form-control-custom {
     </section>
 </div>
 
+<button type="button" class="evortix-dss-replay-trigger" id="evortixFeatureEstimateReplay" hidden>
+    <i class="fas fa-rotate-left" aria-hidden="true"></i>
+    <span>Ask Evortix again</span>
+</button>
+
 <script>
 let currentProjectId = null;
 const existingDepartments = <?php echo json_encode($availableDepartments, JSON_UNESCAPED_UNICODE); ?>;
 const architectPlanningByTask = <?php echo json_encode($architectPlanningByTask, JSON_UNESCAPED_UNICODE); ?>;
+const currentExpertId = <?php echo (int) ($user['id'] ?? 0); ?>;
 const expertWorkspaceStorageKey = 'expert-estimation-active-workspace';
 const selectedFeatureProjectId = <?php echo json_encode((string) max(0, (int) ($_GET['project_estimation_id'] ?? 0))); ?>;
 const featureSubmittedMessage = <?php echo json_encode((string) ($_SESSION['feature_estimation_submitted'] ?? '')); unset($_SESSION['feature_estimation_submitted']); ?>;
+const evortixFeatureEstimateReplay = document.getElementById('evortixFeatureEstimateReplay');
+let evortixFeatureReview = { projectId: '', items: [], index: 0, accepted: 0, skipped: 0, state: {} };
+let evortixFeatureReviewTimer = null;
 
 function updateFeatureProjectView(hasProject) {
     const sections = document.getElementById('projectSections');
@@ -2759,6 +2821,7 @@ function setExpertWorkspace(workspace, persist = true) {
         window.requestAnimationFrame(() => {
             renderProjectManagementTable();
             renderExpertGantt();
+            if (currentProjectId) scheduleEvortixFeatureReview(currentProjectId);
         });
     }
 }
@@ -2796,6 +2859,7 @@ function loadProjectSetup() {
     
     if (!projectId) {
         currentProjectId = null;
+        if (evortixFeatureEstimateReplay) evortixFeatureEstimateReplay.hidden = true;
         const editTaskStaffingBtn = document.getElementById('editTaskStaffingBtn');
         if (editTaskStaffingBtn) editTaskStaffingBtn.hidden = true;
         updateFeatureProjectView(false);
@@ -2817,6 +2881,9 @@ function loadProjectSetup() {
 
     updateFeatureProjectView(true);
     filterFeatureList();
+    if (!document.getElementById('featureEstimationWorkspace')?.hidden) {
+        scheduleEvortixFeatureReview(projectId);
+    }
 }
 
 function escapeHtml(text) {
@@ -2929,16 +2996,6 @@ function syncEstimateFromDeadline(card) {
         if (endDate && architectDate && endDate > architectDate) {
             endInput.value = architectDeadline;
         }
-    }
-
-    const selectedDuration = inclusiveDurationDays(startInput?.value || '', endInput?.value || '');
-    const duration = basisDuration > 0
-        ? Math.min(basisDuration, selectedDuration > 0 ? selectedDuration : basisDuration)
-        : selectedDuration;
-    if (duration > 0 && minInput && likelyInput && maxInput) {
-        minInput.value = Math.max(1, Math.ceil(duration * 0.70));
-        likelyInput.value = Math.max(parseInt(minInput.value || '1', 10), Math.ceil(duration * 0.85));
-        maxInput.value = duration;
     }
 
     updateGanttPreview(card);
@@ -3189,7 +3246,9 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
     const acceptedTypeInput = card.querySelector('input[name="accepted_recommendation_type"]');
     const acceptedIdInput = card.querySelector('input[name="accepted_recommendation_id"]');
 
-    if (expectationInput) expectationInput.value = payload.expectation || '';
+    if (expectationInput && String(payload.expectation || '').trim() !== '') {
+        expectationInput.value = payload.expectation;
+    }
     if (minInput) minInput.value = payload.min_days || '';
     if (likelyInput) likelyInput.value = payload.likely_days || '';
     if (maxInput) maxInput.value = payload.max_days || '';
@@ -3207,6 +3266,7 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
 
     if (acceptedTypeInput) acceptedTypeInput.value = sourceType || '';
     if (acceptedIdInput) acceptedIdInput.value = String(sourceId || '');
+    card.setAttribute('data-evortix-estimate-accepted', sourceType === 'evortix' ? '1' : '0');
 
     const rejectedEntries = getRejectedRecommendations(taskId).filter(entry => {
         return !(entry?.source_type === sourceType && String(entry?.source_id) === String(sourceId));
@@ -3229,6 +3289,186 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
     renderExpertGantt();
     filterFeatureList();
 }
+
+function evortixFeatureStateKey(projectId) {
+    return `evortix.dss.expert.${currentExpertId}.feature-estimation.project.${projectId}`;
+}
+
+function evortixFeaturePayload(card) {
+    return safeJsonParse(card?.getAttribute('data-evortix-estimate') || '{}', {});
+}
+
+function evortixFeatureSignature(card, payload) {
+    return `${card?.getAttribute('data-task-id') || ''}|${JSON.stringify(payload || {})}`;
+}
+
+function saveEvortixFeatureState() {
+    if (!evortixFeatureReview.projectId) return;
+    try {
+        window.localStorage.setItem(
+            evortixFeatureStateKey(evortixFeatureReview.projectId),
+            JSON.stringify(evortixFeatureReview.state || {})
+        );
+    } catch (error) {
+        // The review still works when browser storage is unavailable.
+    }
+}
+
+function loadEvortixFeatureState(projectId) {
+    try {
+        const saved = JSON.parse(window.localStorage.getItem(evortixFeatureStateKey(projectId)) || '{}');
+        return saved && typeof saved === 'object' ? saved : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function closeEvortixFeatureSpeech() {
+    const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
+    if (!speech) return;
+    speech.hidden = true;
+    speech.setAttribute('aria-hidden', 'true');
+    speech.style.pointerEvents = 'none';
+}
+
+function showEvortixFeatureDecision() {
+    const item = evortixFeatureReview.items[evortixFeatureReview.index] || null;
+    if (!item) {
+        const total = evortixFeatureReview.accepted + evortixFeatureReview.skipped;
+        if (total > 0) {
+            window.evortixAnnounceNotification?.(
+                'Feature estimates reviewed',
+                `I reviewed ${total} feature${total === 1 ? '' : 's'} with you: ${evortixFeatureReview.accepted} accepted and ${evortixFeatureReview.skipped} skipped.`,
+                ''
+            );
+        }
+        return;
+    }
+
+    const bot = document.getElementById('chat-bot-float');
+    const speech = bot?.querySelector('.chat-bot-speech');
+    if (!bot || !speech) {
+        evortixFeatureReviewTimer = window.setTimeout(showEvortixFeatureDecision, 300);
+        return;
+    }
+
+    const payload = item.payload;
+    const phasePoint = String(payload.phase_name || '').trim() !== ''
+        ? `<li>Phase: ${escapeHtml(payload.phase_name)}</li>`
+        : '';
+    speech.className = 'chat-bot-speech evortix-project-notification evortix-architect-dss';
+    speech.hidden = false;
+    speech.setAttribute('aria-hidden', 'false');
+    speech.style.pointerEvents = 'auto';
+    speech.innerHTML = `
+        <strong class="evortix-dss-heading"><i class="fas fa-robot me-1"></i>Feature ${evortixFeatureReview.index + 1} of ${evortixFeatureReview.items.length}: ${escapeHtml(item.title)}</strong>
+        <span class="evortix-dss-copy">I recommend <strong>${payload.min_days} minimum</strong>, <strong>${payload.likely_days} likely</strong>, and <strong>${payload.max_days} maximum</strong> working days for this feature.</span>
+        <ul class="evortix-dss-points">
+            <li>Basis: ${escapeHtml(payload.basis || 'Architect roadmap')}</li>
+            <li>Source: ${escapeHtml(payload.source || 'Project planning data')}</li>
+            ${phasePoint}
+        </ul>
+        <div class="evortix-dss-actions">
+            <button type="button" class="btn btn-light btn-sm" data-evortix-feature-choice="skip">Skip this</button>
+            <button type="button" class="btn btn-primary btn-sm" data-evortix-feature-choice="accept">Accept estimate</button>
+        </div>`;
+    bot.hidden = false;
+    bot.setAttribute('aria-hidden', 'false');
+    bot.classList.remove('is-returning-bed', 'is-preparing-speech');
+    bot.classList.add('is-speaking');
+    window.chatBotFloatRobot?.wake?.();
+    window.chatBotFloatRobot?.setEmotion?.('thinking', 0);
+}
+
+function startEvortixFeatureReview(projectId, replay = false) {
+    const normalizedProjectId = String(projectId || '');
+    if (!normalizedProjectId) return;
+    if (evortixFeatureReviewTimer) window.clearTimeout(evortixFeatureReviewTimer);
+
+    const cards = Array.from(document.querySelectorAll(`.estimation-card[data-project-id="${normalizedProjectId}"]`))
+        .filter((card) => card.getAttribute('data-readonly') !== '1' && card.getAttribute('data-saved-estimated') !== '1');
+    const state = replay ? {} : loadEvortixFeatureState(normalizedProjectId);
+
+    cards.forEach((card) => {
+        const taskId = String(card.getAttribute('data-task-id') || '');
+        const payload = evortixFeaturePayload(card);
+        const decision = state[taskId] || null;
+        if (decision?.status === 'accepted' && decision.signature === evortixFeatureSignature(card, payload)) {
+            applyRecommendationToCard(card, decision.payload || payload, 'evortix', taskId);
+        }
+    });
+
+    const items = cards.map((card) => {
+        const taskId = String(card.getAttribute('data-task-id') || '');
+        const payload = evortixFeaturePayload(card);
+        return {
+            card,
+            taskId,
+            title: String(card.getAttribute('data-task-title') || 'Feature'),
+            payload,
+            signature: evortixFeatureSignature(card, payload)
+        };
+    }).filter((item) => {
+        const decision = state[item.taskId] || null;
+        return !decision || decision.signature !== item.signature;
+    });
+
+    evortixFeatureReview = {
+        projectId: normalizedProjectId,
+        items,
+        index: 0,
+        accepted: 0,
+        skipped: 0,
+        state
+    };
+    if (evortixFeatureEstimateReplay) evortixFeatureEstimateReplay.hidden = cards.length === 0;
+    if (items.length === 0) {
+        closeEvortixFeatureSpeech();
+        return;
+    }
+
+    evortixFeatureReviewTimer = window.setTimeout(showEvortixFeatureDecision, 650);
+}
+
+function scheduleEvortixFeatureReview(projectId) {
+    if (evortixFeatureReviewTimer) window.clearTimeout(evortixFeatureReviewTimer);
+    evortixFeatureReviewTimer = window.setTimeout(() => startEvortixFeatureReview(projectId), 450);
+}
+
+document.addEventListener('click', (event) => {
+    const replayButton = event.target.closest('#evortixFeatureEstimateReplay');
+    if (replayButton) {
+        event.preventDefault();
+        if (!currentProjectId) return;
+        try { window.localStorage.removeItem(evortixFeatureStateKey(currentProjectId)); } catch (error) {}
+        startEvortixFeatureReview(currentProjectId, true);
+        return;
+    }
+
+    const choice = event.target.closest('[data-evortix-feature-choice]');
+    if (!choice) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const item = evortixFeatureReview.items[evortixFeatureReview.index] || null;
+    if (!item) return;
+
+    const accepted = choice.getAttribute('data-evortix-feature-choice') === 'accept';
+    if (accepted) {
+        applyRecommendationToCard(item.card, item.payload, 'evortix', item.taskId);
+        evortixFeatureReview.accepted++;
+    } else {
+        evortixFeatureReview.skipped++;
+    }
+    evortixFeatureReview.state[item.taskId] = {
+        status: accepted ? 'accepted' : 'skipped',
+        signature: item.signature,
+        payload: item.payload
+    };
+    saveEvortixFeatureState();
+    evortixFeatureReview.index++;
+    window.chatBotFloatRobot?.setEmotion?.(accepted ? 'happy' : 'thinking', 650);
+    window.setTimeout(showEvortixFeatureDecision, 260);
+}, true);
 
 async function persistRejectedRecommendation(taskId, sourceType, sourceId) {
     const response = await fetch(`${window.BASE_URL}api/save-feature-recommendation-feedback.php`, {
@@ -3716,5 +3956,10 @@ if (featureSubmittedMessage) {
     }, 150);
 }
 </script>
+
+<?php
+$architectDssAssistantConfig = ['items' => []];
+include '../../includes/architect-dss-assistant.php';
+?>
 
 <?php include '../../includes/footer.php'; ?>

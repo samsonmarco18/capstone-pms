@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/methodology-roadmap.php';
+require_once '../../includes/project-compilation.php';
 require_once '../../includes/project-workflow.php';
 require_once '../../includes/project-template.php';
 
@@ -439,6 +440,18 @@ function roadmapReturnToEditor(int $projectId, string $editor, string $message, 
     exit();
 }
 
+function roadmapPostedTaskIds(mixed $values): array
+{
+    if (!is_array($values)) {
+        $values = [$values];
+    }
+
+    return array_values(array_unique(array_filter(
+        array_map('intval', $values),
+        static fn(int $taskId): bool => $taskId > 0
+    )));
+}
+
 function roadmapGetProject(mysqli|PgsqlMysqliCompatConnection $conn, int $projectId, array $user): ?array
 {
     if ($projectId <= 0) {
@@ -524,12 +537,7 @@ $selectedProjectTemplate = null;
 $suggestedMethodologyLabel = '';
 $suggestedMethodologyKey = '';
 if ($selectedProject) {
-    $selectedProjectTemplate = !empty($selectedProject['project_template_snapshot'])
-        ? json_decode((string) $selectedProject['project_template_snapshot'], true)
-        : null;
-    if (!is_array($selectedProjectTemplate)) {
-        $selectedProjectTemplate = projectTemplateFindByType($conn, (string) ($selectedProject['project_type'] ?? ''));
-    }
+    $selectedProjectTemplate = projectTemplateResolveForProject($conn, $selectedProject);
     if (is_array($selectedProjectTemplate)) {
         $suggestedMethodologyLabel = trim((string) ($selectedProjectTemplate['methodology'] ?? ''));
         $suggestedMethodologyKey = roadmapMethodologyTemplateKeyFromLabel($methodologyTemplates, $suggestedMethodologyLabel);
@@ -575,11 +583,183 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'methodology_template' => $templateKey,
                 'replace_existing' => $replaceExisting,
             ]);
+            projectCompilationRecord($conn, $postedProjectId, $userId, 'roadmap_template');
         } else {
             $_SESSION['error'] = (string) $applyResult['message'];
         }
 
         header('Location: methodology.php?project_id=' . $postedProjectId);
+        exit();
+    }
+
+    if (isset($_POST['bulk_edit_tasks'])) {
+        if (!$canEditArchitecture) {
+            $_SESSION['error'] = 'Only architects can bulk edit roadmap tasks.';
+            header('Location: methodology.php?project_id=' . $postedProjectId);
+            exit();
+        }
+
+        $taskIds = roadmapPostedTaskIds($_POST['bulk_task_ids'] ?? []);
+        $targetPhaseId = (int) ($_POST['bulk_phase_id'] ?? 0);
+        $start = roadmapParseDate($_POST['bulk_task_start'] ?? null);
+        $end = roadmapParseDate($_POST['bulk_task_end'] ?? null);
+
+        if ($taskIds === []) {
+            $_SESSION['error'] = 'Select at least one roadmap task to edit.';
+            header('Location: methodology.php?project_id=' . $postedProjectId . '#roadmap-task-plan');
+            exit();
+        }
+
+        $targetPhase = $conn->query("SELECT * FROM methodology_phases WHERE id = {$targetPhaseId} AND project_id = {$postedProjectId} LIMIT 1")->fetch_assoc();
+        if (!$targetPhase || (int) ($targetPhase['developer_count'] ?? 0) < 1) {
+            $_SESSION['error'] = 'Select a valid phase with a positive planned headcount.';
+            header('Location: methodology.php?project_id=' . $postedProjectId . '#roadmap-task-plan');
+            exit();
+        }
+
+        if (!$start || !$end) {
+            $_SESSION['error'] = 'A shared start date and end date are required for bulk editing.';
+            header('Location: methodology.php?project_id=' . $postedProjectId . '#roadmap-task-plan');
+            exit();
+        }
+
+        $validation = roadmapValidateTask($targetPhase, $start, $end);
+        if ($validation !== null) {
+            $_SESSION['error'] = $validation;
+            header('Location: methodology.php?project_id=' . $postedProjectId . '#roadmap-task-plan');
+            exit();
+        }
+
+        $taskIdList = implode(',', $taskIds);
+        $selectedRows = $conn->query("
+            SELECT id, task_id
+            FROM methodology_tasks
+            WHERE project_id = {$postedProjectId} AND id IN ({$taskIdList})
+        ");
+        $selectedCount = 0;
+        $selectedWorkflowTaskIds = [];
+        if ($selectedRows) {
+            while ($selectedRow = $selectedRows->fetch_assoc()) {
+                $selectedCount++;
+                $workflowTaskId = (int) ($selectedRow['task_id'] ?? 0);
+                if ($workflowTaskId > 0) {
+                    $selectedWorkflowTaskIds[] = $workflowTaskId;
+                }
+            }
+        }
+
+        if ($selectedCount !== count($taskIds)) {
+            $_SESSION['error'] = 'One or more selected roadmap tasks are no longer available.';
+            header('Location: methodology.php?project_id=' . $postedProjectId . '#roadmap-task-plan');
+            exit();
+        }
+
+        if ($selectedWorkflowTaskIds !== []) {
+            $workflowIdList = implode(',', array_values(array_unique($selectedWorkflowTaskIds)));
+            $duplicate = $conn->query("
+                SELECT id
+                FROM methodology_tasks
+                WHERE project_id = {$postedProjectId}
+                  AND phase_id = {$targetPhaseId}
+                  AND id NOT IN ({$taskIdList})
+                  AND task_id IN ({$workflowIdList})
+                LIMIT 1
+            ")->fetch_assoc();
+            if ($duplicate) {
+                $_SESSION['error'] = 'A selected workflow feature is already scheduled in the target phase.';
+                header('Location: methodology.php?project_id=' . $postedProjectId . '#roadmap-task-plan');
+                exit();
+            }
+        }
+
+        $startValue = roadmapDateString($start);
+        $endValue = roadmapDateString($end);
+        $stmt = $conn->prepare("
+            UPDATE methodology_tasks
+            SET phase_id = ?, start_date = ?, end_date = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE project_id = ? AND id IN ({$taskIdList})
+        ");
+        $stmt->bind_param('issii', $targetPhaseId, $startValue, $endValue, $userId, $postedProjectId);
+        $stmt->execute();
+        $updatedCount = max(0, (int) $conn->affected_rows);
+        $stmt->close();
+
+        $_SESSION['success'] = count($taskIds) . ' roadmap task' . (count($taskIds) === 1 ? '' : 's') . ' updated for the selected phase.';
+        $_SESSION['evortix_roadmap_notice'] = [
+            'title' => 'Roadmap tasks updated',
+            'message' => count($taskIds) . ' selected task' . (count($taskIds) === 1 ? ' now uses' : 's now use') . ' the new phase and shared timeline.',
+        ];
+        logActivity($userId, 'bulk_edit_methodology_tasks', 'methodology_tasks', $taskIds[0], null, [
+            'task_ids' => $taskIds,
+            'phase_id' => $targetPhaseId,
+            'start_date' => $startValue,
+            'end_date' => $endValue,
+            'updated_count' => $updatedCount,
+        ]);
+        projectCompilationRecord($conn, $postedProjectId, $userId, 'roadmap_bulk_edit');
+        header('Location: methodology.php?project_id=' . $postedProjectId . '#roadmap-task-plan');
+        exit();
+    }
+
+    if (isset($_POST['delete_roadmap_tasks'])) {
+        if (!$canEditArchitecture) {
+            $_SESSION['error'] = 'Only architects can delete roadmap tasks.';
+            header('Location: methodology.php?project_id=' . $postedProjectId);
+            exit();
+        }
+
+        $taskIds = roadmapPostedTaskIds($_POST['delete_task_ids'] ?? []);
+        if ($taskIds === []) {
+            $_SESSION['error'] = 'Select at least one roadmap task to delete.';
+            header('Location: methodology.php?project_id=' . $postedProjectId . '#roadmap-task-plan');
+            exit();
+        }
+
+        $taskIdList = implode(',', $taskIds);
+        $existingResult = $conn->query("
+            SELECT COUNT(*) AS task_count
+            FROM methodology_tasks
+            WHERE project_id = {$postedProjectId} AND id IN ({$taskIdList})
+        ");
+        $existingCount = $existingResult ? (int) ($existingResult->fetch_assoc()['task_count'] ?? 0) : 0;
+        if ($existingCount !== count($taskIds)) {
+            $_SESSION['error'] = 'One or more selected roadmap tasks are no longer available.';
+            header('Location: methodology.php?project_id=' . $postedProjectId . '#roadmap-task-plan');
+            exit();
+        }
+
+        $conn->begin_transaction();
+        try {
+            $conn->query("
+                DELETE FROM methodology_task_departments
+                WHERE project_id = {$postedProjectId} AND methodology_task_id IN ({$taskIdList})
+            ");
+            if (!$conn->query("
+                DELETE FROM methodology_tasks
+                WHERE project_id = {$postedProjectId} AND id IN ({$taskIdList})
+            ")) {
+                throw new RuntimeException('Unable to delete the selected roadmap tasks.');
+            }
+            $deletedCount = max(0, (int) $conn->affected_rows);
+            $conn->commit();
+        } catch (Throwable $exception) {
+            $conn->rollback();
+            $_SESSION['error'] = $exception->getMessage();
+            header('Location: methodology.php?project_id=' . $postedProjectId . '#roadmap-task-plan');
+            exit();
+        }
+
+        $_SESSION['success'] = $deletedCount . ' roadmap task' . ($deletedCount === 1 ? '' : 's') . ' deleted.';
+        $_SESSION['evortix_roadmap_notice'] = [
+            'title' => 'Roadmap tasks deleted',
+            'message' => 'I removed ' . $deletedCount . ' selected task' . ($deletedCount === 1 ? '' : 's') . ' and refreshed the phase plan.',
+        ];
+        logActivity($userId, 'delete_methodology_tasks', 'methodology_tasks', $taskIds[0], null, [
+            'task_ids' => $taskIds,
+            'deleted_count' => $deletedCount,
+        ]);
+        projectCompilationRecord($conn, $postedProjectId, $userId, 'roadmap_task_delete');
+        header('Location: methodology.php?project_id=' . $postedProjectId . '#roadmap-task-plan');
         exit();
     }
 
@@ -659,6 +839,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         logActivity($userId, 'save_methodology_phase', 'methodology_phases', $phaseId, null, $_POST);
+        projectCompilationRecord($conn, $postedProjectId, $userId, 'roadmap_phase');
         header('Location: methodology.php?project_id=' . $postedProjectId);
         exit();
     }
@@ -792,56 +973,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $selectedDepartmentValues = $_POST['task_departments'] ?? [];
             $postedDepartmentCounts = $_POST['task_department_counts'] ?? [];
-            $departmentRequirements = [];
-            if (!is_array($selectedDepartmentValues) || !is_array($postedDepartmentCounts)) {
-                $selectedDepartmentValues = [];
-                $postedDepartmentCounts = [];
-            }
-
-            $selectedFeatureCount = $bulkPlaceFeatures ? max(1, count($bulkWorkflowTaskIds)) : 1;
-            foreach (array_unique($selectedDepartmentValues) as $selectedDepartment) {
-                $department = projectWorkflowDepartmentLabel((string) $selectedDepartment);
-                if (!array_key_exists($department, $postedDepartmentAllocations)) {
-                    $_SESSION['error'] = 'Every task department must come from this project\'s Developer Allocation.';
-                    header('Location: methodology.php?project_id=' . $postedProjectId);
-                    exit();
-                }
-
-                $usedByOtherTasks = 0;
-                $usageStmt = $conn->prepare("
-                    SELECT COALESCE(SUM(mtd.required_count), 0) AS used_count
-                    FROM methodology_task_departments mtd
-                    WHERE mtd.project_id = ?
-                      AND mtd.department = ?
-                      AND mtd.methodology_task_id <> ?
-                ");
-                if ($usageStmt) {
-                    $usageStmt->bind_param('isi', $postedProjectId, $department, $taskId);
-                    $usageStmt->execute();
-                    $usedByOtherTasks = max(0, (int) ($usageStmt->get_result()->fetch_assoc()['used_count'] ?? 0));
-                    $usageStmt->close();
-                }
-                $availableCount = max(0, (int) $postedDepartmentAllocations[$department] - $usedByOtherTasks);
-                $requiredCount = max(0, (int) ($postedDepartmentCounts[$department] ?? 0));
-                $totalRequiredForSave = $requiredCount * $selectedFeatureCount;
-                if ($availableCount <= 0 || $requiredCount < 1 || $totalRequiredForSave > $availableCount) {
-                    $_SESSION['error'] = $department . ' task headcount must be between 1 and its remaining Developer Allocation limit of ' . $availableCount . '.';
-                    header('Location: methodology.php?project_id=' . $postedProjectId);
-                    exit();
-                }
-                $departmentRequirements[$department] = $requiredCount;
-            }
-
-            if ($departmentRequirements === []) {
-                $_SESSION['error'] = 'Select at least one department staffing requirement for this roadmap task.';
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
-            }
-
-            if (array_sum($departmentRequirements) > $postedDeveloperCapacity) {
-                $_SESSION['error'] = 'Task headcount cannot exceed the project Developer Allocation capacity of ' . $postedDeveloperCapacity . '.';
-                header('Location: methodology.php?project_id=' . $postedProjectId);
-                exit();
+            $departmentError = null;
+            $departmentRequirements = roadmapCollectDepartmentRequirements(
+                $selectedDepartmentValues,
+                $postedDepartmentCounts,
+                $postedDepartmentAllocations,
+                $postedDeveloperCapacity,
+                $departmentError
+            );
+            if ($departmentError !== null) {
+                roadmapReturnToEditor($postedProjectId, 'task', $departmentError, $_POST);
             }
 
             $department = (string) array_key_first($departmentRequirements);
@@ -1043,11 +1184,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         logActivity($userId, 'save_methodology_task', 'methodology_tasks', $taskId, null, $_POST);
+        projectCompilationRecord($conn, $postedProjectId, $userId, 'roadmap_task');
         header('Location: methodology.php?project_id=' . $postedProjectId);
         exit();
     }
 }
 
+$roadmapEvortixNotice = is_array($_SESSION['evortix_roadmap_notice'] ?? null)
+    ? $_SESSION['evortix_roadmap_notice']
+    : null;
+unset($_SESSION['evortix_roadmap_notice']);
 $roadmapEditorState = $_SESSION['roadmap_editor_state'] ?? null;
 unset($_SESSION['roadmap_editor_state']);
 if (
@@ -1321,19 +1467,11 @@ if ($selectedProject && $canEditArchitecture) {
     }
 }
 $finalPhaseId = $phases !== [] ? (int) array_key_last($phases) : 0;
-$departmentUsedCounts = [];
-foreach ($allTasks as $task) {
-    foreach (($task['department_requirements'] ?? []) as $requirement) {
-        $department = projectWorkflowDepartmentLabel((string) ($requirement['department'] ?? ''));
-        if ($department === '') {
-            continue;
-        }
-        $departmentUsedCounts[$department] = ($departmentUsedCounts[$department] ?? 0) + max(0, (int) ($requirement['required_count'] ?? 0));
-    }
-}
 $projectDepartmentRemainingAllocations = [];
 foreach ($projectDepartmentAllocations as $department => $capacity) {
-    $projectDepartmentRemainingAllocations[$department] = max(0, (int) $capacity - (int) ($departmentUsedCounts[$department] ?? 0));
+    // Allocation is a per-task concurrency limit, not a consumable total.
+    // The same role can participate in multiple roadmap tasks.
+    $projectDepartmentRemainingAllocations[$department] = max(0, (int) $capacity);
 }
 $phaseDateRanges = [];
 $phaseHeadcountUsage = [];
@@ -2151,6 +2289,46 @@ include '../../includes/navbar.php';
     overflow: hidden;
 }
 
+.roadmap-bulk-toolbar {
+    align-items: center;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 12px;
+    display: flex;
+    gap: .75rem;
+    justify-content: space-between;
+    margin: .9rem .9rem 0;
+    padding: .75rem .9rem;
+}
+
+.roadmap-bulk-toolbar[hidden] {
+    display: none !important;
+}
+
+.roadmap-bulk-toolbar__summary {
+    color: #1e3a5f;
+    min-width: 0;
+}
+
+.roadmap-bulk-toolbar__summary span {
+    color: #64748b;
+    display: block;
+    font-size: .78rem;
+    margin-top: .1rem;
+}
+
+.roadmap-task-select-cell {
+    text-align: center;
+    width: 46px;
+}
+
+.roadmap-task-select {
+    cursor: pointer;
+    height: 1.05rem;
+    margin: 0;
+    width: 1.05rem;
+}
+
 .roadmap-table-wrap .table {
     margin-bottom: 0;
 }
@@ -2163,6 +2341,24 @@ include '../../includes/navbar.php';
 .roadmap-table-wrap tr.roadmap-task-row:hover {
     background: rgba(37, 99, 235, .08);
     outline: none;
+}
+
+.roadmap-table-wrap tr.roadmap-task-row.is-bulk-selected {
+    background: rgba(37, 99, 235, .13);
+    box-shadow: inset 3px 0 #2563eb;
+}
+
+@media (max-width: 767.98px) {
+    .roadmap-bulk-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .roadmap-bulk-toolbar .btn-group {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        width: 100%;
+    }
 }
 
 .monitoring-task-summary {
@@ -2714,7 +2910,7 @@ include '../../includes/navbar.php';
 
         <?php if ($canEditArchitecture && $selectedProject): ?>
             <?php if (is_array($selectedProjectTemplate) && $suggestedMethodologyLabel !== ''): ?>
-                <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-3 mt-2 mb-0">
+                <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-3 mt-2 mb-0 architect-dss-source-card">
                     <div>
                         <strong>Suggested methodology:</strong>
                         <?php echo htmlspecialchars($suggestedMethodologyLabel); ?>
@@ -2737,7 +2933,7 @@ include '../../includes/navbar.php';
                 <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
                 <div class="col-lg-7">
                     <label class="form-label">Methodology Template</label>
-                    <select class="form-select" name="methodology_template" required>
+                    <select class="form-select" id="methodologyTemplateSelect" name="methodology_template" required>
                         <option value="" disabled <?php echo empty($selectedProject['methodology_template']) ? 'selected' : ''; ?>>Select Agile, Waterfall, Scrum, etc.</option>
                         <?php foreach ($methodologyTemplates as $templateKey => $template): ?>
                             <option value="<?php echo htmlspecialchars((string) $templateKey); ?>" <?php echo (string) ($selectedProject['methodology_template'] ?? '') === (string) $templateKey ? 'selected' : ''; ?>>
@@ -2947,7 +3143,8 @@ include '../../includes/navbar.php';
                             </span>
                         </div>
                         <div class="phase-meta">
-                            <span><i class="fas fa-calendar-day"></i> <?php echo htmlspecialchars((string) $phase['start_date']); ?> to <?php echo htmlspecialchars((string) $phase['end_date']); ?></span>
+                            <?php $phaseDurationPercent = [1 => 15, 2 => 20, 3 => 35, 4 => 15, 5 => 15][(int) ($phase['sequence_no'] ?? 0)] ?? 0; ?>
+                            <span><i class="fas fa-calendar-day"></i> <?php echo htmlspecialchars((string) $phase['start_date']); ?> to <?php echo htmlspecialchars((string) $phase['end_date']); ?> · <?php echo roadmapDaysBetween((string) $phase['start_date'], (string) $phase['end_date']); ?> days<?php echo $phaseDurationPercent > 0 ? ' · target ' . $phaseDurationPercent . '%' : ''; ?></span>
                             <span>
                                 <i class="fas fa-users" aria-hidden="true"></i>
                                 <strong>Headcount:</strong>
@@ -3129,11 +3326,35 @@ include '../../includes/navbar.php';
             </div>
         </div>
 
-        <div class="roadmap-table-wrap">
+        <div class="roadmap-table-wrap" id="roadmap-task-plan">
+            <?php if ($canEditArchitecture && count($allTasks) > 0): ?>
+                <div class="roadmap-bulk-toolbar" id="roadmapBulkToolbar" hidden aria-live="polite">
+                    <div class="roadmap-bulk-toolbar__summary">
+                        <strong id="roadmapBulkSelectionCount">0 tasks selected</strong>
+                        <span id="roadmapBulkSelectionPhase">Select tasks from the phase you want to update.</span>
+                    </div>
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Selected roadmap task actions">
+                        <button type="button" class="btn btn-outline-secondary" id="clearRoadmapTaskSelection">
+                            Clear
+                        </button>
+                        <button type="button" class="btn btn-primary" id="bulkEditRoadmapTasks">
+                            <i class="fas fa-pen me-1" aria-hidden="true"></i>Edit selected
+                        </button>
+                        <button type="button" class="btn btn-danger" id="bulkDeleteRoadmapTasks">
+                            <i class="fas fa-trash me-1" aria-hidden="true"></i>Delete selected
+                        </button>
+                    </div>
+                </div>
+            <?php endif; ?>
             <div class="table-responsive">
                 <table class="table align-middle">
                     <thead>
                         <tr>
+                            <?php if ($canEditArchitecture): ?>
+                                <th class="roadmap-task-select-cell">
+                                    <input class="form-check-input roadmap-task-select" type="checkbox" id="selectAllRoadmapTasks" aria-label="Select all roadmap tasks">
+                                </th>
+                            <?php endif; ?>
                             <th>Phase</th>
                             <th>Task</th>
                             <th>Department Staffing</th>
@@ -3143,7 +3364,7 @@ include '../../includes/navbar.php';
                     </thead>
                     <tbody>
                         <?php if (count($allTasks) === 0): ?>
-                            <tr><td colspan="5" class="text-center text-muted py-4">No roadmap tasks yet.</td></tr>
+                            <tr><td colspan="<?php echo $canEditArchitecture ? 6 : 5; ?>" class="text-center text-muted py-4">No roadmap tasks yet.</td></tr>
                         <?php endif; ?>
                         <?php if ($isSulMonitoring && count($allTasks) > 0): ?>
                             <tr id="monitoringFilterEmpty" hidden>
@@ -3153,6 +3374,7 @@ include '../../includes/navbar.php';
                         <?php if ($finalPhaseId > 0 && isset($phases[$finalPhaseId])): ?>
                             <?php $finalPhase = $phases[$finalPhaseId]; ?>
                             <tr class="roadmap-task-row">
+                                <?php if ($canEditArchitecture): ?><td class="roadmap-task-select-cell"></td><?php endif; ?>
                                 <td><?php echo htmlspecialchars((string) ($finalPhase['name'] ?? 'Final Phase')); ?></td>
                                 <td><strong>Merge to Main Tracking</strong><div class="small text-muted">Automatically updated when Architect merges QA-passed features.</div></td>
                                 <td><span class="text-muted">No manual staffing</span></td>
@@ -3177,6 +3399,22 @@ include '../../includes/navbar.php';
                                 onclick="openTaskModalFromTask(this)"
                                 onkeydown="if((event.key === 'Enter' || event.key === ' ') && !event.target.closest('button, a, input, select, textarea')){ event.preventDefault(); openTaskModalFromTask(this); }"
                             >
+                                <?php if ($canEditArchitecture): ?>
+                                    <td class="roadmap-task-select-cell">
+                                        <input
+                                            class="form-check-input roadmap-task-select roadmap-task-select-item"
+                                            type="checkbox"
+                                            value="<?php echo (int) $task['id']; ?>"
+                                            data-task-title="<?php echo htmlspecialchars((string) $task['title']); ?>"
+                                            data-phase-id="<?php echo (int) $task['phase_id']; ?>"
+                                            data-phase-name="<?php echo htmlspecialchars((string) ($phases[(int) $task['phase_id']]['name'] ?? 'Phase')); ?>"
+                                            data-start-date="<?php echo htmlspecialchars((string) $task['start_date']); ?>"
+                                            data-end-date="<?php echo htmlspecialchars((string) $task['end_date']); ?>"
+                                            aria-label="Select <?php echo htmlspecialchars((string) $task['title']); ?>"
+                                            onclick="event.stopPropagation()"
+                                        >
+                                    </td>
+                                <?php endif; ?>
                                 <td><?php echo htmlspecialchars((string) ($phases[(int) $task['phase_id']]['name'] ?? 'Phase')); ?></td>
                                 <td>
                                     <strong><?php echo htmlspecialchars((string) $task['title']); ?></strong>
@@ -3493,13 +3731,85 @@ include '../../includes/navbar.php';
         </form>
     </div>
 </div>
+
+<?php if ($canEditArchitecture): ?>
+<div class="modal fade" id="bulkTaskEditModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form method="POST" class="modal-content" id="bulkTaskEditForm" data-generic-draft-disabled="1" data-app-loading data-loading-title="Updating tasks" data-loading-text="Please wait while the selected roadmap tasks are updated.">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title">Edit Selected Tasks</h5>
+                    <div class="small text-muted" id="bulkTaskEditSummary">Update the selected tasks together.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="bulk_edit_tasks" value="1">
+                <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
+                <div id="bulkTaskEditIds"></div>
+
+                <div class="mb-3">
+                    <label class="form-label" for="bulkTaskPhaseId">Phase</label>
+                    <select class="form-select" name="bulk_phase_id" id="bulkTaskPhaseId" required>
+                        <?php foreach ($phases as $phase): ?>
+                            <?php
+                                $bulkPhaseId = (int) ($phase['id'] ?? 0);
+                                $bulkPhaseHasHeadcount = (int) ($phase['developer_count'] ?? 0) > 0;
+                                $bulkPhaseDisabled = !$bulkPhaseHasHeadcount || $bulkPhaseId === $finalPhaseId;
+                            ?>
+                            <option value="<?php echo $bulkPhaseId; ?>" <?php echo $bulkPhaseDisabled ? 'disabled' : ''; ?>>
+                                <?php echo htmlspecialchars((string) $phase['name']); ?><?php echo !$bulkPhaseHasHeadcount ? ' — set headcount first' : ($bulkPhaseId === $finalPhaseId ? ' — reserved final phase' : ''); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="form-text" id="bulkTaskPhaseHelp">All selected tasks will be placed in this phase.</div>
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label" for="bulkTaskStart">Shared Start Date</label>
+                        <input type="date" class="form-control" name="bulk_task_start" id="bulkTaskStart" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="bulkTaskEnd">Shared End Date</label>
+                        <input type="date" class="form-control" name="bulk_task_end" id="bulkTaskEnd" required>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-3 mb-0 small">
+                    <i class="fas fa-circle-info me-1" aria-hidden="true"></i>
+                    Task titles, workflow links, staffing requirements, and status will stay unchanged.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="editor-validation-alert d-none" id="bulkTaskFormError" role="alert" aria-live="assertive">
+                    <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
+                    <span></span>
+                </div>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-1" aria-hidden="true"></i>Update selected
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<form method="POST" id="deleteTaskForm" class="d-none" data-generic-draft-disabled="1" data-app-loading data-loading-title="Deleting tasks" data-loading-text="Please wait while the selected roadmap tasks are removed.">
+    <input type="hidden" name="delete_roadmap_tasks" value="1">
+    <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
+    <div id="deleteTaskIds"></div>
+</form>
+<?php endif; ?>
 <?php endif; ?>
 
 <script>
 const phaseModalElement = document.getElementById('phaseModal');
 const taskModalElement = document.getElementById('taskModal');
+const bulkTaskEditModalElement = document.getElementById('bulkTaskEditModal');
 const phaseModal = phaseModalElement ? new bootstrap.Modal(phaseModalElement) : null;
 const taskModal = taskModalElement ? new bootstrap.Modal(taskModalElement) : null;
+const bulkTaskEditModal = bulkTaskEditModalElement ? new bootstrap.Modal(bulkTaskEditModalElement) : null;
 const canEditArchitecture = <?php echo json_encode($canEditArchitecture); ?>;
 const canEditExpertInput = <?php echo json_encode($canEditExpertInput); ?>;
 const isSulMonitoring = <?php echo json_encode($isSulMonitoring); ?>;
@@ -3525,6 +3835,20 @@ const bulkFeaturePickerWrap = document.getElementById('bulkFeaturePickerWrap');
 const bulkWorkflowTaskInputs = Array.from(document.querySelectorAll('.bulk-workflow-task-checkbox'));
 const bulkSelectAllFeatures = document.getElementById('bulkSelectAllFeatures');
 const bulkClearFeatures = document.getElementById('bulkClearFeatures');
+const roadmapTaskSelectionInputs = Array.from(document.querySelectorAll('.roadmap-task-select-item'));
+const selectAllRoadmapTasks = document.getElementById('selectAllRoadmapTasks');
+const roadmapBulkToolbar = document.getElementById('roadmapBulkToolbar');
+const roadmapBulkSelectionCount = document.getElementById('roadmapBulkSelectionCount');
+const roadmapBulkSelectionPhase = document.getElementById('roadmapBulkSelectionPhase');
+const clearRoadmapTaskSelection = document.getElementById('clearRoadmapTaskSelection');
+const bulkEditRoadmapTasks = document.getElementById('bulkEditRoadmapTasks');
+const bulkDeleteRoadmapTasks = document.getElementById('bulkDeleteRoadmapTasks');
+const bulkTaskEditForm = document.getElementById('bulkTaskEditForm');
+const bulkTaskEditIds = document.getElementById('bulkTaskEditIds');
+const bulkTaskPhaseId = document.getElementById('bulkTaskPhaseId');
+const bulkTaskStart = document.getElementById('bulkTaskStart');
+const bulkTaskEnd = document.getElementById('bulkTaskEnd');
+const deleteTaskIds = document.getElementById('deleteTaskIds');
 
 function showRoadmapInlineError(message) {
     if (!roadmapInlineError) {
@@ -3623,6 +3947,9 @@ async function requestDeleteRoadmapTask(source) {
     const taskId = Number(task.id || 0);
     if (!taskId) return;
 
+    await requestDeleteTaskIds([{ id: taskId, title: String(task.title || 'this task') }]);
+    return;
+
     const taskTitle = String(task.title || 'this task');
     const confirmed = typeof window.appConfirm === 'function'
         ? await window.appConfirm({
@@ -3643,7 +3970,214 @@ async function requestDeleteRoadmapTask(source) {
     deleteTaskForm.requestSubmit();
 }
 
-deleteTaskButton?.addEventListener('click', () => requestDeleteRoadmapTask(deleteTaskButton));
+function selectedRoadmapTasks() {
+    return roadmapTaskSelectionInputs
+        .filter((input) => input.checked)
+        .map((input) => ({
+            id: Number(input.value || 0),
+            title: String(input.dataset.taskTitle || 'Roadmap task'),
+            phaseId: String(input.dataset.phaseId || ''),
+            phaseName: String(input.dataset.phaseName || 'Phase'),
+            startDate: String(input.dataset.startDate || ''),
+            endDate: String(input.dataset.endDate || '')
+        }))
+        .filter((task) => task.id > 0);
+}
+
+function updateRoadmapTaskSelection() {
+    const selected = selectedRoadmapTasks();
+    const selectedIds = new Set(selected.map((task) => task.id));
+    const phaseNames = [...new Set(selected.map((task) => task.phaseName))];
+
+    roadmapTaskSelectionInputs.forEach((input) => {
+        input.closest('tr')?.classList.toggle('is-bulk-selected', selectedIds.has(Number(input.value || 0)));
+    });
+
+    if (roadmapBulkToolbar) roadmapBulkToolbar.hidden = selected.length === 0;
+    if (roadmapBulkSelectionCount) {
+        roadmapBulkSelectionCount.textContent = `${selected.length} task${selected.length === 1 ? '' : 's'} selected`;
+    }
+    if (roadmapBulkSelectionPhase) {
+        roadmapBulkSelectionPhase.textContent = phaseNames.length === 1
+            ? `Phase: ${phaseNames[0]}`
+            : `${phaseNames.length} phases selected; choose one target phase when editing.`;
+    }
+    if (selectAllRoadmapTasks) {
+        selectAllRoadmapTasks.checked = roadmapTaskSelectionInputs.length > 0 && selected.length === roadmapTaskSelectionInputs.length;
+        selectAllRoadmapTasks.indeterminate = selected.length > 0 && selected.length < roadmapTaskSelectionInputs.length;
+    }
+}
+
+function writeTaskIdInputs(container, fieldName, taskIds) {
+    if (!container) return;
+    container.replaceChildren();
+    taskIds.forEach((taskId) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = fieldName;
+        input.value = String(taskId);
+        container.appendChild(input);
+    });
+}
+
+function syncBulkTaskDateLimits(resetToPhase = false) {
+    if (!bulkTaskPhaseId || !bulkTaskStart || !bulkTaskEnd) return;
+    const range = phaseDateRanges[String(bulkTaskPhaseId.value || '')] || {};
+    bulkTaskStart.min = range.start || projectStart || '';
+    bulkTaskStart.max = range.end || projectEnd || '';
+    bulkTaskEnd.min = range.start || projectStart || '';
+    bulkTaskEnd.max = range.end || projectEnd || '';
+
+    if (resetToPhase) {
+        bulkTaskStart.value = range.start || '';
+        bulkTaskEnd.value = range.end || range.start || '';
+    }
+
+    const help = document.getElementById('bulkTaskPhaseHelp');
+    if (help) {
+        help.textContent = range.start && range.end
+            ? `All selected tasks will move to this phase. Dates must stay between ${range.start} and ${range.end}.`
+            : 'All selected tasks will be placed in this phase.';
+    }
+}
+
+function showBulkTaskFormError(message) {
+    const alert = document.getElementById('bulkTaskFormError');
+    const textElement = alert?.querySelector('span');
+    if (textElement) textElement.textContent = message;
+    alert?.classList.remove('d-none');
+}
+
+function openBulkTaskEditor() {
+    const selected = selectedRoadmapTasks();
+    if (!bulkTaskEditModal || !bulkTaskPhaseId || selected.length === 0) return;
+
+    writeTaskIdInputs(bulkTaskEditIds, 'bulk_task_ids[]', selected.map((task) => task.id));
+    const phaseIds = [...new Set(selected.map((task) => task.phaseId))];
+    const commonPhaseId = phaseIds.length === 1 ? phaseIds[0] : '';
+    const commonOption = commonPhaseId
+        ? Array.from(bulkTaskPhaseId.options).find((option) => option.value === commonPhaseId && !option.disabled)
+        : null;
+    const targetOption = commonOption || Array.from(bulkTaskPhaseId.options).find((option) => !option.disabled);
+    if (!targetOption) {
+        showRoadmapInlineError('Add a positive planned headcount to a non-final phase before bulk editing tasks.');
+        return;
+    }
+
+    bulkTaskPhaseId.value = targetOption.value;
+    syncBulkTaskDateLimits(false);
+
+    if (commonOption) {
+        const starts = selected.map((task) => task.startDate).filter(Boolean).sort();
+        const ends = selected.map((task) => task.endDate).filter(Boolean).sort();
+        bulkTaskStart.value = starts[0] || phaseDateRanges[commonPhaseId]?.start || '';
+        bulkTaskEnd.value = ends[ends.length - 1] || phaseDateRanges[commonPhaseId]?.end || '';
+    } else {
+        syncBulkTaskDateLimits(true);
+    }
+
+    const summary = document.getElementById('bulkTaskEditSummary');
+    if (summary) {
+        summary.textContent = `${selected.length} task${selected.length === 1 ? '' : 's'} will share the phase and timeline below.`;
+    }
+    document.getElementById('bulkTaskFormError')?.classList.add('d-none');
+    bulkTaskEditModal.show();
+}
+
+async function confirmRoadmapTaskDeletion(tasks) {
+    const count = tasks.length;
+    const singleTitle = String(tasks[0]?.title || 'this task');
+    const title = count === 1 ? `Delete ${singleTitle}?` : `Delete ${count} roadmap tasks?`;
+    const message = count === 1
+        ? 'I will remove this roadmap task and its department staffing requirements.'
+        : `I will remove all ${count} selected tasks and their department staffing requirements.`;
+
+    if (typeof window.evortixConfirm === 'function') {
+        return window.evortixConfirm({
+            title,
+            message,
+            cancelLabel: count === 1 ? 'Keep task' : 'Keep tasks',
+            confirmLabel: count === 1 ? 'Delete task' : 'Delete tasks'
+        });
+    }
+
+    if (typeof window.appConfirm === 'function') {
+        return window.appConfirm({
+            title: 'Delete Roadmap Tasks',
+            titleIcon: 'fas fa-robot',
+            subject: title,
+            message,
+            icon: 'fas fa-trash',
+            confirmIcon: 'fas fa-trash',
+            confirmText: count === 1 ? 'Delete Task' : 'Delete Tasks',
+            cancelText: count === 1 ? 'Keep Task' : 'Keep Tasks',
+            variant: 'danger'
+        });
+    }
+
+    return window.confirm(`${title}\n\n${message}`);
+}
+
+async function requestDeleteTaskIds(tasks) {
+    if (!canEditArchitecture || !deleteTaskForm || !deleteTaskIds || tasks.length === 0) return;
+    if (!await confirmRoadmapTaskDeletion(tasks)) return;
+    writeTaskIdInputs(deleteTaskIds, 'delete_task_ids[]', tasks.map((task) => task.id));
+    deleteTaskForm.requestSubmit();
+}
+
+async function requestDeleteRoadmapTaskWithEvortix(source) {
+    const task = source?.dataset?.task
+        ? parseData(source, 'task')
+        : {
+            id: source?.dataset?.taskId || '',
+            title: source?.dataset?.taskTitle || 'this task'
+        };
+    const taskId = Number(task.id || 0);
+    if (!taskId) return;
+    await requestDeleteTaskIds([{ id: taskId, title: String(task.title || 'this task') }]);
+}
+
+deleteTaskButton?.addEventListener('click', () => requestDeleteRoadmapTaskWithEvortix(deleteTaskButton));
+roadmapTaskSelectionInputs.forEach((input) => input.addEventListener('change', updateRoadmapTaskSelection));
+selectAllRoadmapTasks?.addEventListener('change', () => {
+    roadmapTaskSelectionInputs.forEach((input) => {
+        input.checked = Boolean(selectAllRoadmapTasks.checked);
+    });
+    updateRoadmapTaskSelection();
+});
+clearRoadmapTaskSelection?.addEventListener('click', () => {
+    roadmapTaskSelectionInputs.forEach((input) => {
+        input.checked = false;
+    });
+    updateRoadmapTaskSelection();
+});
+bulkEditRoadmapTasks?.addEventListener('click', openBulkTaskEditor);
+bulkDeleteRoadmapTasks?.addEventListener('click', () => requestDeleteTaskIds(selectedRoadmapTasks()));
+bulkTaskPhaseId?.addEventListener('change', () => syncBulkTaskDateLimits(true));
+bulkTaskEditForm?.addEventListener('submit', (event) => {
+    const selected = selectedRoadmapTasks();
+    const start = String(bulkTaskStart?.value || '');
+    const end = String(bulkTaskEnd?.value || '');
+    const range = phaseDateRanges[String(bulkTaskPhaseId?.value || '')] || {};
+    let message = '';
+    if (selected.length === 0) {
+        message = 'Select at least one roadmap task.';
+    } else if (!bulkTaskPhaseId?.value || !start || !end) {
+        message = 'Choose a phase, start date, and end date.';
+    } else if (end < start) {
+        message = 'The shared end date must be on or after the start date.';
+    } else if ((range.start && start < range.start) || (range.end && end > range.end)) {
+        message = `Keep the shared dates between ${range.start} and ${range.end}.`;
+    }
+
+    if (message !== '') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        showBulkTaskFormError(message);
+    }
+});
+
+updateRoadmapTaskSelection();
 
 function clearEditorValidation(editor) {
     const form = editor === 'phase' ? phaseForm : taskForm;
@@ -3804,7 +4338,7 @@ function validateTaskEditor() {
         const count = Number(countInput?.value || 0);
         if (count < 1 || count > capacity) {
             return {
-                message: `${toggle.dataset.department || 'Department'} task headcount must be between 1 and its remaining Developer Allocation limit of ${capacity}.`,
+                message: `${toggle.dataset.department || 'Department'} task headcount must be between 1 and its Developer Allocation limit of ${capacity}.`,
                 fields: countInput?.id ? [countInput.id] : ['taskDepartmentRequirements']
             };
         }
@@ -4154,5 +4688,49 @@ function restoreRoadmapEditor(state) {
 
 restoreRoadmapEditor(roadmapEditorState);
 </script>
+
+<?php if ($canEditArchitecture && $selectedProject):
+    $architectDssAssistantConfig = ['items' => []];
+    if ($suggestedMethodologyKey !== '') {
+        $methodologyDetail = $suggestedMethodologyLabel . ' fits this project baseline. Accept it to generate the roadmap phases.';
+        $suggestedTotalDays = roadmapDaysBetween((string) ($selectedProject['timeline_start'] ?? ''), (string) ($selectedProject['timeline_end'] ?? ''));
+        $suggestedPhaseDays = methodologyRoadmapPhaseDurationPlan($suggestedTotalDays, 5);
+        $architectDssAssistantConfig = [
+            'title' => 'Methodology recommendation ready',
+            'message' => $methodologyDetail,
+            'stateKey' => 'evortix.dss.methodology.project.' . (int) ($selectedProject['id'] ?? 0),
+            'items' => [[
+                'label' => $suggestedMethodologyLabel,
+                'detail' => $methodologyDetail,
+                'points' => [
+                    'Phase 1: ' . (int) ($suggestedPhaseDays[0] ?? 0) . ' days (15%)',
+                    'Phase 2: ' . (int) ($suggestedPhaseDays[1] ?? 0) . ' days (20%)',
+                    'Phase 3: ' . (int) ($suggestedPhaseDays[2] ?? 0) . ' days (35%)',
+                    'Phase 4: ' . (int) ($suggestedPhaseDays[3] ?? 0) . ' days (15%)',
+                    'Phase 5: ' . (int) ($suggestedPhaseDays[4] ?? 0) . ' days (15%)',
+                ],
+                'selector' => '#methodologyTemplateSelect',
+                'value' => $suggestedMethodologyKey,
+                'submitSelector' => '#methodologyTemplateForm',
+            ]],
+            'completedTitle' => 'Methodology review complete',
+        ];
+    }
+    include '../../includes/architect-dss-assistant.php';
+endif; ?>
+
+<?php if ($canEditArchitecture && is_array($roadmapEvortixNotice)): ?>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    window.setTimeout(() => {
+        window.evortixAnnounceNotification?.(
+            <?php echo json_encode((string) ($roadmapEvortixNotice['title'] ?? 'Roadmap updated')); ?>,
+            <?php echo json_encode((string) ($roadmapEvortixNotice['message'] ?? 'The roadmap changes were saved.')); ?>,
+            ''
+        );
+    }, 850);
+});
+</script>
+<?php endif; ?>
 
 <?php include '../../includes/footer.php'; ?>

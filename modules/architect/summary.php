@@ -5,6 +5,7 @@ require_once '../../includes/workflow.php';
 require_once '../../includes/methodology-roadmap.php';
 require_once '../../includes/project-workflow.php';
 require_once '../../includes/project-template.php';
+require_once '../../includes/project-compilation.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -189,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    projectTemplateCaptureProject($conn, $projectId);
+    $submittedCompilationNo = projectCompilationRecord($conn, $projectId, (int) $user['id'], 'architect_submission');
 
     projectWorkflowNotifyDepartmentSuls(
         $conn,
@@ -201,7 +202,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     );
     
     logActivity($user['id'], 'submit_architecture', 'projects', $projectId);
-    $_SESSION['success'] = 'Architecture plan submitted successfully. The Expert Department SUL has been notified for estimation assignment.';
+    $_SESSION['success'] = 'Architecture compilation #' . $submittedCompilationNo . ' submitted successfully. The Expert Department SUL has been notified for estimation assignment.';
     
     header('Location: projects.php?submitted=' . $projectId);
     exit();

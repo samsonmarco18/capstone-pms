@@ -29,6 +29,64 @@ function delayInsightsRenderSection(mysqli|PgsqlMysqliCompatConnection $conn, ar
     delayInsightsRenderDetailCards($conn, $user, $options);
 }
 
+function delayInsightsProblemAction(array $insight, array $user): ?array
+{
+    $project = (array) ($insight['project'] ?? []);
+    $counts = (array) ($project['issue_counts'] ?? []);
+    $projectId = (int) ($project['id'] ?? 0);
+    $clientId = (int) ($project['client_id'] ?? 0);
+    $role = (string) ($user['role'] ?? '');
+    if ($projectId <= 0) return null;
+
+    $issue = '';
+    $count = 0;
+    $target = '';
+    $anchor = '';
+    if ((int) ($counts['unassigned_tasks'] ?? 0) > 0 || (int) ($counts['tasks_without_deadline'] ?? 0) > 0) {
+        $issue = 'task_planning';
+        $count = max((int) ($counts['unassigned_tasks'] ?? 0), (int) ($counts['tasks_without_deadline'] ?? 0));
+        if ($role === 'sul') {
+            $target = BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId;
+            $anchor = 'expert-unassigned-panel';
+        } elseif ($role === 'sales') {
+            $target = BASE_URL . 'modules/sales/release-status.php?client_id=' . $clientId . '&project_id=' . $projectId;
+            $anchor = 'insight-task-problems';
+        } elseif ($role === 'architect') {
+            $target = BASE_URL . 'modules/roadmap/methodology.php?project_id=' . $projectId;
+            $anchor = 'roadmap-task-plan';
+        }
+    } elseif ((int) ($counts['feature_count'] ?? 0) === 0) {
+        $issue = 'missing_features';
+        $target = $role === 'architect' ? BASE_URL . 'modules/architect/features.php?id=' . $projectId : '';
+    } elseif ((int) ($counts['tech_count'] ?? 0) === 0) {
+        $issue = 'missing_technology';
+        $target = $role === 'architect' ? BASE_URL . 'modules/architect/tech-recommendation.php?id=' . $projectId : '';
+    } elseif ((int) ($counts['allocation_count'] ?? 0) === 0 || (int) ($counts['total_resources'] ?? 0) === 0) {
+        $issue = 'missing_allocation';
+        $target = $role === 'architect' ? BASE_URL . 'modules/architect/developer-allocation.php?id=' . $projectId : '';
+    } elseif ((int) ($counts['document_count'] ?? 0) === 0) {
+        $issue = 'missing_documents';
+        $target = $role === 'architect' ? BASE_URL . 'modules/architect/upload-diagram.php?id=' . $projectId : '';
+    } elseif ((int) ($counts['overdue_tasks'] ?? 0) > 0 || (int) ($counts['blocked_tasks'] ?? 0) > 0) {
+        $issue = 'delayed_tasks';
+        $count = (int) ($counts['overdue_tasks'] ?? 0) + (int) ($counts['blocked_tasks'] ?? 0);
+    }
+
+    if ($issue === '') return null;
+    if ($target === '') {
+        $target = BASE_URL . 'modules/insights/process-history.php?project_id=' . $projectId;
+        $anchor = 'project-process-history';
+    }
+    $target .= (str_contains($target, '?') ? '&' : '?') . http_build_query([
+        'evortix_issue' => $issue,
+        'evortix_count' => $count,
+        'evortix_project' => (string) ($project['name'] ?? 'Project'),
+    ]);
+    if ($anchor !== '') $target .= '#' . rawurlencode($anchor);
+
+    return ['url' => $target, 'label' => 'Go to problem'];
+}
+
 function delayInsightsEnsureStyles(): void
 {
     static $stylesPrinted = false;
@@ -76,6 +134,7 @@ function delayInsightsEnsureStyles(): void
         .delay-note{display:inline-flex;align-items:center;gap:.45rem;padding:.6rem .75rem;border-radius:14px;background:#f8fafc;border:1px solid #e2e8f0;color:#475569;font-size:.76rem;margin-top:.8rem;}
         .delay-action{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;padding:.62rem .95rem;border:none;border-radius:999px;background:#1f6392;color:#fff;text-decoration:none;font-size:.78rem;font-weight:600;transition:background .2s ease,box-shadow .2s ease;}
         .delay-action:hover{color:#fff;background:#184f73;box-shadow:0 6px 16px rgba(31,99,146,.25);}
+        .delay-fix-action{margin-top:.85rem;width:max-content;max-width:100%;}
         .delay-insight-project-right{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;justify-content:flex-end;}
         .delay-compact-card{background:#fff;border:1px solid rgba(31,99,146,.14);border-radius:24px;box-shadow:0 12px 28px rgba(15,76,129,.08);overflow:hidden;margin-bottom:0;display:flex;flex-direction:column;}
         .delay-compact-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.35rem 1.5rem;border-bottom:1px solid rgba(31,99,146,.10);background:#f8fcff;}
@@ -349,6 +408,7 @@ function delayInsightsRenderDetailCards(mysqli|PgsqlMysqliCompatConnection $conn
     echo '</div>';
 
     foreach ($insights as $insight) {
+        $problemAction = delayInsightsProblemAction($insight, $user);
         $riskClass = $insight['before']['risk_level'] === 'High' ? 'delay-risk-high' : ($insight['before']['risk_level'] === 'Medium' ? 'delay-risk-medium' : 'delay-risk-low');
         $projectUrl = $customActionUrl !== ''
             ? $customActionUrl
@@ -403,6 +463,9 @@ function delayInsightsRenderDetailCards(mysqli|PgsqlMysqliCompatConnection $conn
             echo '</div>';
         }
         echo '<div class="delay-note"><i class="fas fa-info-circle"></i> ' . htmlspecialchars($insight['after']['note']) . '</div>';
+        if ($problemAction !== null) {
+            echo '<a class="delay-action delay-fix-action" href="' . htmlspecialchars((string) $problemAction['url']) . '"><i class="fas fa-location-arrow"></i> ' . htmlspecialchars((string) $problemAction['label']) . '</a>';
+        }
         echo '</div>';
         echo '</div>';
         echo '</div>';
@@ -531,6 +594,7 @@ function delayInsightsBuildProjectInsight(mysqli|PgsqlMysqliCompatConnection $co
     $projectSql = "
         SELECT
             p.id,
+            p.client_id,
             p.name,
             p.status,
             p.timeline_start,
@@ -614,10 +678,22 @@ function delayInsightsBuildProjectInsight(mysqli|PgsqlMysqliCompatConnection $co
     return [
         'project' => [
             'id' => (int) $project['id'],
+            'client_id' => (int) ($project['client_id'] ?? 0),
             'name' => (string) $project['name'],
             'client_name' => (string) $project['client_name'],
             'status_label' => ucwords(str_replace('_', ' ', (string) $project['status'])),
             'timeline_label' => delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? '')),
+            'issue_counts' => [
+                'feature_count' => (int) ($project['feature_count'] ?? 0),
+                'tech_count' => (int) ($project['tech_count'] ?? 0),
+                'allocation_count' => (int) ($project['allocation_count'] ?? 0),
+                'total_resources' => (int) ($project['total_resources'] ?? 0),
+                'document_count' => (int) ($project['document_count'] ?? 0),
+                'tasks_without_deadline' => (int) ($project['tasks_without_deadline'] ?? 0),
+                'unassigned_tasks' => (int) ($project['unassigned_tasks'] ?? 0),
+                'overdue_tasks' => (int) ($project['overdue_tasks'] ?? 0),
+                'blocked_tasks' => (int) ($project['blocked_tasks'] ?? 0),
+            ],
         ],
         'before' => $before,
         'after' => $after,

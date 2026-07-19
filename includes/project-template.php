@@ -75,6 +75,158 @@ function projectTemplateComplexityForRange(int $weeksMax, float $budgetMax, stri
     return 'low';
 }
 
+function projectTemplateRecommendedTeam(string $type, string $features, string $techStack, int $maxWeeks, float $maxBudget): string
+{
+    $featureCount = max(1, count(projectTemplateListFromCsv($features)));
+    $scope = strtolower($type . ' ' . $features . ' ' . $techStack);
+    $isMobile = preg_match('/\b(app|mobile|flutter|kotlin|firebase)\b/i', $scope) === 1;
+    $isSensitive = preg_match('/\b(patient|medical|health|payroll|accounting|finance|voting|payment|bank|security|audit)\b/i', $scope) === 1;
+    $isDataHeavy = preg_match('/\b(inventory|warehouse|analytics|report|tracking|erp|crm|records|management)\b/i', $scope) === 1;
+    $hasIntegrations = preg_match('/\b(payment|notification|sms|email|gps|map|tracking|import|export|integration|push)\b/i', $scope) === 1;
+    $deliveryWeeks = max(1, $maxWeeks);
+    $featuresPerWeek = $featureCount / $deliveryWeeks;
+    $schedulePressure = $featuresPerWeek >= 1.25 ? 2 : ($featuresPerWeek >= 0.75 ? 1 : 0);
+    $frontendWorkload = max(1, (int) ceil($featureCount / max(5, 8 - $schedulePressure)));
+    $backendWorkload = max(1, (int) ceil($featureCount / max(4, 7 - $schedulePressure)));
+    $qaWorkload = max(1, (int) ceil($featureCount / max(8, 12 - ($schedulePressure * 2))));
+
+    $roles = [
+        'Expert Department' => 1,
+        'UI/UX' => max(1, (int) ceil($frontendWorkload / 2)),
+        'Frontend' => min(5, $frontendWorkload),
+        'Backend' => min(5, $backendWorkload + ($hasIntegrations ? 1 : 0)),
+        'QA' => min(3, $qaWorkload + ($isSensitive ? 1 : 0)),
+    ];
+    if ($isMobile) $roles['Mobile'] = min(4, max(1, (int) ceil($featureCount / max(5, 8 - $schedulePressure))));
+    if ($isDataHeavy || $featureCount >= 12) $roles['Database'] = $featureCount >= 20 ? 2 : 1;
+    if ($hasIntegrations || $schedulePressure > 0) $roles['DevOps'] = $schedulePressure >= 2 ? 2 : 1;
+    if ($isSensitive) $roles['Security'] = 1;
+
+    $parts = [];
+    foreach ($roles as $role => $count) $parts[] = $count . ' ' . $role;
+    return implode(', ', $parts);
+}
+
+function projectTemplateRecommendedMethodology(string $type, string $features, int $maxWeeks, float $maxBudget, string $fallback): string
+{
+    $scope = strtolower($type . ' ' . $features);
+    $regulated = preg_match('/\b(hospital|clinic|medical|patient|payroll|accounting|finance|voting)\b/i', $scope) === 1;
+    $largeProduct = $maxWeeks >= 12 || $maxBudget >= 300000 || count(projectTemplateListFromCsv($features)) >= 12;
+    if ($regulated) return 'V-Model';
+    if ($largeProduct) return 'Scrum';
+    return trim($fallback) !== '' ? $fallback : 'Agile';
+}
+
+function projectTemplatePhaseFlow(string $methodology): string
+{
+    return match (strtolower(trim($methodology))) {
+        'scrum' => 'Backlog refinement; Sprint setup; Sprint development; Sprint QA and review; Release retrospective',
+        'v-model', 'v model' => 'Requirements and acceptance planning; Architecture and test design; Implementation; Integration and system testing; Acceptance and deployment',
+        'waterfall' => 'Requirements approval; System design; Implementation; Verification and testing; Deployment and handover',
+        default => 'Discovery and backlog; Iteration planning; Iterative development; QA and stakeholder review; Release and retrospective',
+    };
+}
+
+function projectTemplateDeveloperWorkPlan(string $type, string $features, string $techStack, string $team): array
+{
+    $featureItems = projectTemplateListFromCsv($features);
+    $featureCount = count($featureItems);
+    $featureScope = implode(', ', array_slice($featureItems, 0, 3));
+    if ($featureCount > 3) $featureScope .= ' +' . ($featureCount - 3) . ' more';
+    if ($featureScope === '') $featureScope = $type . ' scope';
+
+    $taskCatalog = [
+        'Expert Department' => [
+            "Define acceptance criteria for {$featureCount} planned features",
+            'Break requirements into estimable work',
+            'Validate architecture and department handoffs',
+        ],
+        'UI/UX' => [
+            "Design user flows for {$featureScope}",
+            'Prepare responsive screens and component states',
+            'Review usability and accessibility',
+        ],
+        'Frontend' => [
+            "Build responsive interfaces for {$featureScope}",
+            'Implement client validation and application state',
+            'Integrate screens with backend APIs',
+        ],
+        'Backend' => [
+            "Implement APIs and business rules for {$featureScope}",
+            'Build authentication, roles, and integrations',
+            'Add server validation, logging, and error handling',
+        ],
+        'Mobile' => [
+            "Build mobile flows for {$featureScope}",
+            'Integrate APIs, notifications, and device services',
+            'Validate mobile states, errors, and offline behavior',
+        ],
+        'Database' => [
+            "Model and migrate data for {$featureScope}",
+            'Add indexes, constraints, and audit fields',
+            'Prepare backup and recovery checks',
+        ],
+        'DevOps' => [
+            'Prepare development, staging, and production environments',
+            'Configure automated build and deployment checks',
+            'Set up monitoring, logs, and rollback steps',
+        ],
+        'Security' => [
+            'Review threats, permissions, and sensitive data handling',
+            'Validate authentication and access controls',
+            'Run security checks before release',
+        ],
+        'QA' => [
+            "Create acceptance tests for {$featureCount} planned features",
+            'Run functional, integration, and regression testing',
+            'Verify fixes and support user acceptance testing',
+        ],
+        'AI' => [
+            'Prepare and validate model inputs and outputs',
+            'Integrate the AI service with application workflows',
+            'Measure accuracy, safety, and fallback behavior',
+        ],
+        'Other Departments' => [
+            'Complete the specialist work defined during planning',
+            'Document dependencies and handoff requirements',
+            'Validate specialist outputs before release',
+        ],
+    ];
+
+    $counts = [];
+    foreach (explode(',', $team) as $part) {
+        if (!preg_match('/(\d+)\s+(.+)/', trim($part), $matches)) continue;
+        $count = max(0, (int) $matches[1]);
+        $roleText = strtolower(trim((string) $matches[2]));
+        $roles = match (true) {
+            str_contains($roleText, 'expert') => ['Expert Department'],
+            str_contains($roleText, 'full') => ['Frontend', 'Backend'],
+            str_contains($roleText, 'ui'), str_contains($roleText, 'ux') => ['UI/UX'],
+            str_contains($roleText, 'front') => ['Frontend'],
+            str_contains($roleText, 'back') => ['Backend'],
+            str_contains($roleText, 'mobile') => ['Mobile'],
+            str_contains($roleText, 'database') => ['Database'],
+            str_contains($roleText, 'devops') => ['DevOps'],
+            str_contains($roleText, 'security') => ['Security'],
+            str_contains($roleText, 'qa'), str_contains($roleText, 'test') => ['QA'],
+            str_contains($roleText, 'ai') => ['AI'],
+            default => ['Other Departments'],
+        };
+        foreach ($roles as $role) $counts[$role] = ($counts[$role] ?? 0) + $count;
+    }
+
+    $plan = [];
+    foreach ($counts as $role => $count) {
+        if ($count <= 0) continue;
+        $plan[] = [
+            'role' => $role,
+            'count' => $count,
+            'tasks' => $taskCatalog[$role] ?? $taskCatalog['Other Departments'],
+        ];
+    }
+    return $plan;
+}
+
 function projectTemplateDefaultDetails(string $type, string $features, string $techStack, string $team, string $methodology, string $durationLabel): array
 {
     $hasPayments = stripos($features, 'Payment') !== false || stripos($features, 'Checkout') !== false || stripos($features, 'Cart') !== false;
@@ -96,7 +248,7 @@ function projectTemplateDefaultDetails(string $type, string $features, string $t
     return [
         'project_description' => "{$type} template covering common discovery, design, development, testing, deployment, and handoff needs.",
         'suggested_milestones' => 'Discovery and requirements; UI/UX and architecture; Core module development; Integration and testing; Deployment and client acceptance',
-        'default_project_phases' => "{$methodology} planning; Design; Development; Quality assurance; Deployment; Support handoff",
+        'default_project_phases' => projectTemplatePhaseFlow($methodology),
         'functional_requirements' => $features,
         'non_functional_requirements' => 'Responsive interface, usability, maintainability, performance, audit-friendly activity records, and scalable data structure.',
         'third_party_services' => implode(', ', $thirdParty) ?: 'Email/SMS notifications and analytics as needed',
@@ -110,7 +262,7 @@ function projectTemplateDefaultDetails(string $type, string $features, string $t
         'documentation_requirements' => 'Architecture notes, setup guide, user guide, deployment notes, and administrator handoff documentation.',
         'maintenance_support' => 'Post-deployment monitoring, bug fixes, minor adjustments, and support window based on contract terms.',
         'risk_assessment' => 'Scope changes, third-party service delays, integration complexity, data migration issues, and timeline compression may affect delivery.',
-        'implementation_notes' => "Use {$durationLabel} as a planning baseline. Adjust milestones, stack, and staffing after validating client-specific scope.",
+        'implementation_notes' => "Use {$durationLabel} as a planning baseline. Department handoff: Expert Department for requirements and estimation; UI/UX for interaction design; Frontend, Backend, Mobile, and Database as selected for implementation; Security and DevOps for assurance and deployment; QA for final verification. Adjust only after validating client-specific scope.",
     ];
 }
 
@@ -126,15 +278,48 @@ function projectTemplatePayload(array $template): array
         projectTemplateListFromCsv((string) ($template['auth_method'] ?? ''))
     )));
 
+    $team = (string) (($template['developer_roles_allocation'] ?? '') ?: ($template['team_composition'] ?? ''));
+    $developerWorkPlan = projectTemplateDeveloperWorkPlan(
+        (string) ($template['project_type'] ?? ''),
+        (string) ($template['core_features'] ?? ''),
+        (string) ($template['tech_stack'] ?? ''),
+        $team
+    );
+    $plannedDeveloperCount = 0;
+    foreach (explode(',', $team) as $teamPart) {
+        if (preg_match('/\b(\d+)\b/', trim($teamPart), $teamCountMatch)) {
+            $plannedDeveloperCount += max(0, (int) $teamCountMatch[1]);
+        }
+    }
+    $plannedDeveloperCount = max(1, $plannedDeveloperCount);
+    $professionalDeveloperMonthlySalary = 60000.0;
+    // Sales creates a preliminary budget before the detailed roadmap exists.
+    // Roles participate in different phases, so do not price every recommended
+    // person as full-time for the entire project. The Expert estimate later
+    // replaces this baseline with each developer's actual roadmap contribution.
+    $planningUtilizationRate = 0.30;
+    $minimumSalaryBudget = $plannedDeveloperCount * $professionalDeveloperMonthlySalary
+        * max(1.0, (int) ($template['duration_min_weeks'] ?? 0) / 4.345)
+        * $planningUtilizationRate;
+    $maximumSalaryBudget = $plannedDeveloperCount * $professionalDeveloperMonthlySalary
+        * max(1.0, (int) ($template['duration_max_weeks'] ?? 0) / 4.345)
+        * $planningUtilizationRate;
+    $budgetMin = max((float) ($template['budget_min'] ?? 0), ceil($minimumSalaryBudget / 1000) * 1000);
+    $budgetMax = max($budgetMin, (float) ($template['budget_max'] ?? 0), ceil($maximumSalaryBudget / 1000) * 1000);
+
     return [
+        'planning_model_version' => 3,
         'id' => (int) ($template['id'] ?? 0),
         'template_version' => max(1, (int) ($template['template_version'] ?? 1)),
         'project_type' => (string) ($template['project_type'] ?? ''),
         'duration_label' => (string) ($template['duration_label'] ?? ''),
         'duration_min_weeks' => (int) ($template['duration_min_weeks'] ?? 0),
         'duration_max_weeks' => (int) ($template['duration_max_weeks'] ?? 0),
-        'budget_min' => (float) ($template['budget_min'] ?? 0),
-        'budget_max' => (float) ($template['budget_max'] ?? 0),
+        'budget_min' => $budgetMin,
+        'budget_max' => $budgetMax,
+        'budget_basis' => 'Planned team × Professional Developer monthly salary × project duration × 30% phased utilization',
+        'budget_planning_utilization_percent' => 30,
+        'planned_developer_count' => $plannedDeveloperCount,
         'methodology' => (string) ($template['methodology'] ?? ''),
         'core_features' => (string) ($template['core_features'] ?? ''),
         'feature_items' => $features,
@@ -160,6 +345,7 @@ function projectTemplatePayload(array $template): array
         'auth_method' => (string) ($template['auth_method'] ?? ''),
         'backup_recovery_strategy' => (string) ($template['backup_recovery_strategy'] ?? ''),
         'developer_roles_allocation' => (string) ($template['developer_roles_allocation'] ?? ''),
+        'developer_work_plan' => $developerWorkPlan,
         'testing_requirements' => (string) ($template['testing_requirements'] ?? ''),
         'documentation_requirements' => (string) ($template['documentation_requirements'] ?? ''),
         'maintenance_support' => (string) ($template['maintenance_support'] ?? ''),
@@ -268,6 +454,8 @@ function projectTemplateEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): 
 
     foreach (PROJECT_TEMPLATE_DEFAULTS as $seed) {
         [$type, $minWeeks, $maxWeeks, $minBudget, $maxBudget, $methodology, $features, $techStack, $team] = $seed;
+        $methodology = projectTemplateRecommendedMethodology((string) $type, (string) $features, (int) $maxWeeks, (float) $maxBudget, (string) $methodology);
+        $team = projectTemplateRecommendedTeam((string) $type, (string) $features, (string) $techStack, (int) $maxWeeks, (float) $maxBudget);
         $complexity = projectTemplateComplexityForRange((int) $maxWeeks, (float) $maxBudget, (string) $team);
         $durationLabel = $minWeeks . '-' . $maxWeeks . ' weeks';
         $paymentTerms = 'Recommended terms: 40% down payment, 40% development milestone, 20% upon acceptance.';
@@ -406,6 +594,26 @@ function projectTemplateEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): 
         $stmt->execute();
         $stmt->close();
     }
+}
+
+function projectTemplateResolveForProject(mysqli|PgsqlMysqliCompatConnection $conn, array $project): ?array
+{
+    $snapshot = !empty($project['project_template_snapshot'])
+        ? json_decode((string) $project['project_template_snapshot'], true)
+        : null;
+    if (is_array($snapshot) && (int) ($snapshot['planning_model_version'] ?? 0) >= 2) {
+        if (empty($snapshot['developer_work_plan']) || !is_array($snapshot['developer_work_plan'])) {
+            $snapshot['developer_work_plan'] = projectTemplateDeveloperWorkPlan(
+                (string) ($snapshot['project_type'] ?? ($project['project_type'] ?? '')),
+                (string) ($snapshot['core_features'] ?? ($project['requested_features'] ?? '')),
+                (string) ($snapshot['tech_stack'] ?? ''),
+                (string) (($snapshot['developer_roles_allocation'] ?? '') ?: ($snapshot['team_composition'] ?? ''))
+            );
+        }
+        $snapshot['planning_model_version'] = 3;
+        return $snapshot;
+    }
+    return projectTemplateFindByType($conn, (string) ($project['project_type'] ?? ''));
 }
 
 function projectTemplateAll(mysqli|PgsqlMysqliCompatConnection $conn): array

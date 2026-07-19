@@ -2,6 +2,7 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/file-storage.php';
 require_once '../../includes/methodology-roadmap.php';
+require_once '../../includes/project-compilation.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -151,6 +152,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
+    projectCompilationRecord($conn, $projectId, (int) $user['id'], 'documents');
     header('Location: upload-diagram.php?id=' . $projectId);
     exit();
 }

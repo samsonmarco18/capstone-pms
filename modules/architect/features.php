@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-template.php';
+require_once '../../includes/project-compilation.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -74,12 +75,7 @@ if (!$project && $pageError === null) {
 $projectTemplate = null;
 $templateFeatureLookup = [];
 if ($project) {
-    $projectTemplate = !empty($project['project_template_snapshot'])
-        ? json_decode((string) $project['project_template_snapshot'], true)
-        : null;
-    if (!is_array($projectTemplate)) {
-        $projectTemplate = projectTemplateFindByType($conn, (string) ($project['project_type'] ?? ''));
-    }
+    $projectTemplate = projectTemplateResolveForProject($conn, $project);
     if (is_array($projectTemplate)) {
         foreach (($projectTemplate['feature_items'] ?? []) as $templateFeature) {
             $normalizedFeature = architectFeatureNormalizeTitle((string) $templateFeature);
@@ -260,6 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $project) {
             'skipped_duplicate_count' => $skippedCount,
         ]);
         $conn->commit();
+        $compilationNo = projectCompilationRecord($conn, $projectId, (int) $user['id'], 'features');
         $changes = [];
         if ($savedCount > 0) {
             $changes[] = $savedCount . ' new';
@@ -861,6 +858,13 @@ a.progress-step:hover {
 
     <?php include '../../includes/architect-project-review-panel.php'; ?>
 
+    <?php if (count($salesRequestedFeatures) > 0): ?>
+    <div class="architect-dss-source-controls">
+        <div><strong><i class="fas fa-robot me-1"></i> DSS feature review</strong><br><span>The assistant found <?php echo count($salesRequestedFeatures); ?> intake feature(s). Accept or skip them before saving; none are added automatically.</span></div>
+        <div class="d-flex gap-2"><button type="button" class="btn btn-primary btn-sm" data-dss-feature-decision="accept">Accept suggestions</button><button type="button" class="btn btn-outline-secondary btn-sm" data-dss-feature-decision="skip">Skip suggestions</button></div>
+    </div>
+    <?php endif; ?>
+
     <form method="POST" class="card p-4">
         <?php if (count($existingFeatures) > 0): ?>
             <div class="feature-section-title">
@@ -889,7 +893,7 @@ a.progress-step:hover {
                                 id="existingFeature<?php echo $featureId; ?>"
                                 data-existing-feature-toggle
                                 data-recommended-feature="<?php echo $isRecommendedFeature ? htmlspecialchars($featureTitle) : ''; ?>"
-                                checked
+                                <?php echo isset($existingFeatureLookup[architectFeatureNormalizeTitle($salesFeature)]) ? 'checked' : ''; ?>
                                 <?php echo $isFeatureEditable ? '' : 'disabled'; ?>
                             >
                         </div>
@@ -955,14 +959,14 @@ a.progress-step:hover {
                             name="new_features[<?php echo $index; ?>][title]"
                             value="<?php echo htmlspecialchars($salesFeature); ?>"
                             data-sales-feature-field
-                            disabled
+                                <?php echo isset($existingFeatureLookup[architectFeatureNormalizeTitle($salesFeature)]) ? '' : 'disabled'; ?>
                         >
                         <input
                             type="hidden"
                             name="new_features[<?php echo $index; ?>][description]"
                             value="Requested by Sales during client intake."
                             data-sales-feature-field
-                            disabled
+                                <?php echo isset($existingFeatureLookup[architectFeatureNormalizeTitle($salesFeature)]) ? '' : 'disabled'; ?>
                         >
                     </div>
                 <?php endforeach; ?>
@@ -1092,6 +1096,16 @@ function updateRemoveButtons() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-dss-feature-decision]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const accept = button.dataset.dssFeatureDecision === 'accept';
+            document.querySelectorAll('[data-sales-feature-toggle]').forEach((checkbox) => {
+                checkbox.checked = accept;
+                checkbox.closest('[data-sales-requested-feature]')?.querySelectorAll('[data-sales-feature-field]').forEach((field) => { field.disabled = !accept; });
+            });
+            window.appToast?.(accept ? 'Feature suggestions accepted' : 'Feature suggestions skipped', accept ? 'Review the selected features before continuing.' : 'No intake feature will be added.', accept ? 'success' : 'info');
+        });
+    });
     document.querySelectorAll('[data-existing-feature-toggle]').forEach((checkbox) => {
         const wrapper = checkbox.closest('[data-existing-feature]');
         const fields = wrapper ? Array.from(wrapper.querySelectorAll('[data-existing-feature-field]')) : [];
@@ -1102,10 +1116,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        checkbox.addEventListener('change', () => {
-            if (!checkbox.checked && checkbox.dataset.recommendedFeature) {
+        checkbox.addEventListener('change', async () => {
+            if (!checkbox.checked && checkbox.dataset.recommendedFeature && checkbox.dataset.evortixDecision !== '1') {
                 const suggestionName = checkbox.dataset.recommendedFeature || 'this feature';
-                const shouldRemove = window.confirm(`The selected project template recommends adding "${suggestionName}" based on similar completed projects. Are you sure you want to remove or skip this recommendation?`);
+                const shouldRemove = await window.evortixConfirm?.({
+                    title: `Remove ${suggestionName}?`,
+                    message: `I recommend this feature from the selected project template. Removing it may change the requirements and estimate.`,
+                    cancelLabel: 'Keep feature',
+                    confirmLabel: 'Remove feature'
+                });
                 if (!shouldRemove) {
                     checkbox.checked = true;
                 }
@@ -1126,10 +1145,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        checkbox.addEventListener('change', () => {
-            if (!checkbox.checked) {
+        checkbox.addEventListener('change', async () => {
+            if (!checkbox.checked && checkbox.dataset.evortixDecision !== '1') {
                 const suggestionName = checkbox.dataset.recommendedFeature || 'this feature';
-                const shouldRemove = window.confirm(`The selected project template recommends adding "${suggestionName}" based on similar completed projects. Are you sure you want to remove or skip this recommendation?`);
+                const shouldRemove = await window.evortixConfirm?.({
+                    title: `Skip ${suggestionName}?`,
+                    message: `Sales requested this feature during intake. Skipping it may leave the Architect plan incomplete.`,
+                    cancelLabel: 'Keep feature',
+                    confirmLabel: 'Skip feature'
+                });
                 if (!shouldRemove) {
                     checkbox.checked = true;
                 }
@@ -1142,5 +1166,25 @@ document.addEventListener('DOMContentLoaded', () => {
     updateRemoveButtons();
 });
 </script>
+
+<?php if (count($salesRequestedFeatures) > 0):
+    $architectDssItems = [];
+    foreach ($salesRequestedFeatures as $index => $salesFeature) {
+        if (isset($existingFeatureLookup[architectFeatureNormalizeTitle((string) $salesFeature)])) continue;
+        $architectDssItems[] = [
+            'label' => (string) $salesFeature,
+            'detail' => 'Sales requested this feature during client intake. Include it in the Architect feature plan?',
+            'selector' => '#salesFeature' . $index,
+        ];
+    }
+    $architectDssAssistantConfig = [
+        'title' => 'Feature recommendations ready',
+        'message' => 'I found ' . count($salesRequestedFeatures) . ' feature suggestions from the Sales intake. Would you like me to include them for Architect review?',
+        'stateKey' => 'evortix.dss.features.project.' . (int) $projectId,
+        'items' => $architectDssItems,
+        'completedTitle' => 'Feature review complete',
+    ];
+    include '../../includes/architect-dss-assistant.php';
+endif; ?>
 
 <?php include '../../includes/footer.php'; ?>

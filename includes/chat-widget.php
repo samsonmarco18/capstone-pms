@@ -1,6 +1,12 @@
 <?php
 $isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
 $evortixProjectTeamNotification = null;
+$evortixCompilationImpact = is_array($_SESSION['evortix_change_impact'] ?? null) ? $_SESSION['evortix_change_impact'] : null;
+$evortixDecisionRoute = preg_match('#/modules/(architect/tech-recommendation|architect/developer-allocation|roadmap/methodology)\.php#', (string) ($_SERVER['REQUEST_URI'] ?? '')) === 1;
+$evortixDeferredCompilationImpact = $evortixDecisionRoute ? $evortixCompilationImpact : null;
+if ($evortixDecisionRoute) $evortixCompilationImpact = null;
+if ($evortixCompilationImpact) unset($_SESSION['evortix_change_impact']);
+if ($evortixDeferredCompilationImpact) unset($_SESSION['evortix_change_impact']);
 if (function_exists('isLoggedIn') && isLoggedIn()) {
     try {
         $evortixUser = getCurrentUser();
@@ -82,6 +88,31 @@ if (function_exists('isLoggedIn') && isLoggedIn()) {
     }
 </style>
 <?php endif; ?>
+<?php if ($evortixDeferredCompilationImpact): ?>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const compilationNo = <?php echo json_encode((int) ($evortixDeferredCompilationImpact['compilation_no'] ?? 0)); ?>;
+    window.setTimeout(() => window.appToast?.(
+        `Compilation #${compilationNo} saved`,
+        'Evortix recorded the change-impact analysis. Continue reviewing the active recommendations.',
+        'info'
+    ), 1200);
+});
+</script>
+<?php endif; ?>
+
+<style>
+.evortix-guidance-target {
+    outline: 3px solid rgba(14, 165, 233, .72) !important;
+    outline-offset: 5px;
+    border-radius: 14px;
+    animation: evortixGuidancePulse 1.1s ease-in-out 3;
+}
+@keyframes evortixGuidancePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
+    50% { box-shadow: 0 0 0 10px rgba(14, 165, 233, .16); }
+}
+</style>
 
 <div id="chat-widget" class="chat-widget">
     <div class="chat-header">
@@ -366,6 +397,50 @@ document.addEventListener('DOMContentLoaded', function () {
         window.chatBotFloatRobot?.wink?.('right');
         typeBotSpeech(180);
     };
+
+    const evortixGuidanceParams = new URLSearchParams(window.location.search);
+    const evortixGuidanceIssue = evortixGuidanceParams.get('evortix_issue') || '';
+    if (evortixGuidanceIssue) {
+        const issueCount = Math.max(0, Number(evortixGuidanceParams.get('evortix_count') || 0));
+        const projectName = evortixGuidanceParams.get('evortix_project') || 'this project';
+        const issueGuidance = {
+            task_planning: {
+                heading: 'Task planning needs attention',
+                message: `${issueCount || 'Some'} task${issueCount === 1 ? '' : 's'} in ${projectName} need an owner, a deadline, or both. Review the highlighted tasks; the SUL must assign each task to the correct role and set a deadline inside its roadmap window.`
+            },
+            missing_features: {
+                heading: 'Features are missing',
+                message: `${projectName} has no usable feature breakdown. Add the required features and acceptance details, then save them before continuing.`
+            },
+            missing_technology: {
+                heading: 'Technology plan is missing',
+                message: `Select and save the stack required by ${projectName}. Confirm that every selected technology supports the approved features and integrations.`
+            },
+            missing_allocation: {
+                heading: 'Developer allocation is missing',
+                message: `Add the developer roles and headcount required by ${projectName}, then save the allocation so roadmap staffing can use it.`
+            },
+            missing_documents: {
+                heading: 'Architecture documents are missing',
+                message: `Upload the required architecture plan and workflow diagram for ${projectName}, then verify both documents before submission.`
+            },
+            delayed_tasks: {
+                heading: 'Delivery tasks need attention',
+                message: `${issueCount || 'Some'} task${issueCount === 1 ? '' : 's'} in ${projectName} are overdue or blocked. Review the owner, deadline, blocker, and next action for each highlighted task.`
+            }
+        }[evortixGuidanceIssue];
+
+        window.setTimeout(() => {
+            const targetId = window.location.hash ? decodeURIComponent(window.location.hash.slice(1)) : '';
+            const target = targetId ? document.getElementById(targetId) : null;
+            if (target) {
+                target.classList.add('evortix-guidance-target');
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                window.setTimeout(() => target.classList.remove('evortix-guidance-target'), 6500);
+            }
+            if (issueGuidance) window.evortixAnnounceNotification(issueGuidance.heading, issueGuidance.message, '');
+        }, 850);
+    }
 
     if (evortixProjectTeamNotification) {
         const storageKey = `evortix.projectNotification.${evortixProjectTeamNotification.id}`;
@@ -944,3 +1019,19 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
+<?php if ($evortixCompilationImpact): ?>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const impact = <?php echo json_encode($evortixCompilationImpact, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    const items = Object.entries(impact.items || {}).filter(([, message]) => message !== 'No recalculation required.');
+    const message = items.length
+        ? items.map(([area, detail]) => `${area}: ${detail}`).join(' ')
+        : 'The saved plan did not require downstream recalculation.';
+    window.setTimeout(() => window.evortixAnnounceNotification?.(
+        `New compilation #${impact.compilation_no}`,
+        message,
+        ''
+    ), 900);
+});
+</script>
+<?php endif; ?>
