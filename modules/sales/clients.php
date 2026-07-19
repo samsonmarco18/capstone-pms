@@ -1121,8 +1121,8 @@ include '../../includes/navbar.php';
 
 /* Filter Section */
 .filter-section {
-    padding: 1.5rem 2rem;
-    background: var(--gray-50);
+    padding: 0.85rem 2rem 1rem;
+    background: #ffffff;
     border-bottom: 1px solid var(--gray-200);
 }
 
@@ -1259,42 +1259,48 @@ include '../../includes/navbar.php';
 }
 
 .filter-group {
-    display: flex;
-    gap: 1rem;
-    flex-wrap: wrap;
-    align-items: flex-end;
+    display: grid;
+    grid-template-columns: minmax(0, 520px) 190px;
+    gap: 1.25rem;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .filter-input {
-    flex: 1;
-    min-width: 200px;
+    position: relative;
+    min-width: 0;
 }
 
-.filter-input label {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    font-weight: 600;
-    color: var(--gray-600);
-    letter-spacing: 0.5px;
-    margin-bottom: 0.25rem;
-    display: block;
+.filter-input > i {
+    position: absolute;
+    top: 50%;
+    left: 0.15rem;
+    z-index: 1;
+    color: #668096;
+    font-size: 0.84rem;
+    transform: translateY(-50%);
+    pointer-events: none;
 }
 
 .filter-input input,
 .filter-input select {
     width: 100%;
-    padding: 0.6rem 1rem;
-    border: 1px solid var(--gray-300);
-    border-radius: 12px;
-    font-size: 0.85rem;
-    transition: all 0.2s;
+    min-height: 42px;
+    padding: 0.52rem 1.8rem 0.52rem 1.65rem;
+    border: 0;
+    border-bottom: 1px solid #cbd8e3;
+    border-radius: 0;
+    outline: 0;
+    background: transparent;
+    color: #344b61;
+    font-size: 0.82rem;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .filter-input input:focus,
 .filter-input select:focus {
-    outline: none;
     border-color: var(--theme-primary);
-    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
+    box-shadow: 0 2px 0 rgba(31, 99, 146, 0.12);
 }
 
 .btn-apply {
@@ -1344,8 +1350,13 @@ include '../../includes/navbar.php';
     border-bottom: 1px solid var(--gray-200);
 }
 
-.client-table tr:hover {
-    background: var(--gray-50);
+.client-table tbody .client-row {
+    transition: background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.client-table tbody .client-row:hover {
+    background: #f6fbfe;
+    box-shadow: inset 3px 0 0 #4b94ba;
 }
 
 .client-name {
@@ -4875,6 +4886,26 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     color: rgba(157, 182, 207, 0.65);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section .filter-input input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section .filter-input select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section .filter-input input:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section .filter-input select:focus {
+    background: transparent;
+    border-color: #29435a;
+    box-shadow: none;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section .filter-input input:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section .filter-input select:focus {
+    border-color: #5a9fc4;
+    box-shadow: 0 2px 0 rgba(90, 159, 196, 0.14);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table tbody .client-row:hover {
+    background: #102235;
+    box-shadow: inset 3px 0 0 #4b94ba;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tab-btn.is-active,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-summary span {
     color: var(--theme-primary) !important;
@@ -4997,8 +5028,8 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     border-bottom-color: #071321;
 }
 
-/* Add Client: balanced, professional review surface */
-#addClientModal.modal-modern.add-client-modal .add-client-layout {
+/* Add Client and Add Project: keep rounded cards clear of the layout background */
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-layout {
     background: transparent;
     border-radius: 18px;
 }
@@ -5168,26 +5199,26 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 /* Client Details: account and delivery dashboard */
 #viewClientModal .client-details-dialog {
-    width: min(1040px, calc(100vw - 2rem));
-    max-width: 1040px;
+    width: min(1100px, calc(100vw - 2rem));
+    max-width: 1100px;
 }
 
-#viewClientModal .modal-content {
+#page-content-wrapper #viewClientModal .modal-content {
     overflow: hidden;
     border: 1px solid rgba(31, 99, 146, 0.16);
-    border-radius: 22px;
+    border-radius: 20px;
     background: #f4f8fb;
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.9),
-        0 8px 0 rgba(15, 76, 129, 0.12),
-        0 30px 70px rgba(15, 42, 64, 0.24);
+        0 24px 60px rgba(15, 42, 64, 0.22);
 }
 
-#viewClientModal .modal-header {
-    padding: 1.05rem 1.3rem;
+#page-content-wrapper #viewClientModal .modal-header {
+    padding: 1rem 1.25rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.14);
     background: linear-gradient(135deg, #0d6786 0%, #0a5570 62%, #083f58 100%);
     color: #ffffff;
+    box-shadow: 0 8px 22px rgba(8, 63, 88, 0.18);
 }
 
 #viewClientModal .modal-header .btn-close {
@@ -5237,7 +5268,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 #viewClientModal .modal-body {
     max-height: min(76vh, 760px);
-    padding: 1.35rem;
+    padding: 1.25rem;
     overflow-y: auto;
     background:
         radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.075), transparent 32%),
@@ -5246,7 +5277,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 #viewClientModal .client-details-overview {
     display: grid;
-    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
     gap: 1rem;
 }
@@ -5262,8 +5293,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
         #ffffff;
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.94),
-        0 5px 0 rgba(15, 76, 129, 0.11),
-        0 18px 30px rgba(15, 76, 129, 0.11);
+        0 12px 28px rgba(15, 76, 129, 0.1);
 }
 
 #viewClientModal .client-detail-panel-header,
@@ -5384,7 +5414,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     color: #ffffff;
     font-size: 0.78rem;
     font-weight: 800;
-    box-shadow: 0 4px 0 #07445d, 0 12px 20px rgba(13, 103, 134, 0.2);
+    box-shadow: 0 8px 18px rgba(13, 103, 134, 0.22);
     transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -5392,14 +5422,17 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 #viewClientModal .client-details-add-project:focus-visible {
     color: #ffffff;
     transform: translateY(-2px);
-    box-shadow: 0 6px 0 #07445d, 0 16px 24px rgba(13, 103, 134, 0.24);
+    box-shadow: 0 12px 24px rgba(13, 103, 134, 0.26);
     outline: none;
 }
 
 #viewClientModal .client-associated-section {
-    margin-top: 1.35rem;
-    padding-top: 1.15rem;
-    border-top: 1px solid rgba(31, 99, 146, 0.15);
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid rgba(31, 99, 146, 0.15);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.76);
+    box-shadow: 0 12px 28px rgba(15, 76, 129, 0.08);
 }
 
 #viewClientModal .client-associated-header {
@@ -5431,6 +5464,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 #viewClientModal .client-project-list {
     display: grid;
     gap: 0.85rem;
+    width: 100%;
 }
 
 #viewClientModal .client-project-item {
@@ -5446,8 +5480,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
         linear-gradient(135deg, #ffffff, #f1f7fb);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.95),
-        0 4px 0 rgba(15, 76, 129, 0.1),
-        0 14px 24px rgba(15, 76, 129, 0.09);
+        0 10px 22px rgba(15, 76, 129, 0.09);
 }
 
 #viewClientModal .client-project-identity {
@@ -5562,6 +5595,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-detail-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-associated-section,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #viewClientModal .client-project-item {
     border-color: rgba(138, 210, 255, 0.15);
     background:
@@ -5706,7 +5740,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     }
     
     .filter-group {
-        flex-direction: column;
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .client-tabs {
@@ -5719,10 +5753,6 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     }
     
     .filter-input {
-        width: 100%;
-    }
-    
-    .btn-apply {
         width: 100%;
     }
     
@@ -5833,20 +5863,19 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
         <div class="filter-section">
             <div class="filter-group">
                 <div class="filter-input">
-                    <label>Search</label>
-                    <input type="text" id="searchInput" placeholder="Name, email, or contact person..." value="<?php echo htmlspecialchars($search); ?>">
+                    <label class="visually-hidden" for="searchInput">Search clients</label>
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input type="search" id="searchInput" placeholder="Search by name, email, or contact person" value="<?php echo htmlspecialchars($search); ?>" autocomplete="off">
                 </div>
                 <div class="filter-input">
-                    <label>Status</label>
+                    <label class="visually-hidden" for="statusFilter">Filter clients by status</label>
+                    <i class="fas fa-filter" aria-hidden="true"></i>
                     <select id="statusFilter">
-                        <option value="">All Status</option>
+                        <option value="">All statuses</option>
                         <option value="active" <?php echo $statusFilter == 'active' ? 'selected' : ''; ?>>Active</option>
                         <option value="inactive" <?php echo $statusFilter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
                         <option value="pending" <?php echo $statusFilter == 'pending' ? 'selected' : ''; ?>>Pending</option>
                     </select>
-                </div>
-                <div>
-                    <button class="btn-apply" onclick="applyFilters()">Apply Filters</button>
                 </div>
             </div>
         </div>
@@ -6430,7 +6459,6 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                 <h5 class="modal-title">
                     <i class="fas fa-folder-plus me-2"></i> Add Project
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" id="addProjectForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Adding project" data-loading-text="Please wait while the project is added and sent to Architect review.">
                 <input type="hidden" name="add_project" value="1">
@@ -7697,14 +7725,15 @@ document.addEventListener('keydown', event => {
 document.querySelectorAll('#addClientModal, #addProjectModal').forEach(modal => modal.addEventListener('hidden.bs.modal', () => salesTemplateAssistant.close()));
 
 function applyFilters() {
-    const search = document.getElementById('searchInput').value;
-    const status = document.getElementById('statusFilter').value;
-    
-    let url = 'clients.php?';
-    if (search) url += 'search=' + encodeURIComponent(search) + '&';
-    if (status) url += 'status=' + encodeURIComponent(status);
-    
-    window.location.href = url;
+    const search = document.getElementById('searchInput')?.value.trim() || '';
+    const status = document.getElementById('statusFilter')?.value || '';
+    const params = new URLSearchParams();
+
+    if (search) params.set('search', search);
+    if (status) params.set('status', status);
+
+    const query = params.toString();
+    window.location.href = 'clients.php' + (query ? '?' + query : '');
 }
 
 function editClient(client) {
@@ -9083,6 +9112,8 @@ function viewClient(id) {
                 data: { client_id: id },
                 success: function(projectsResponse) {
                     const projects = typeof projectsResponse === 'string' ? JSON.parse(projectsResponse) : projectsResponse;
+                    const projectsContainer = $('#clientProjects');
+                    projectsContainer.removeClass('client-projects-loading');
                     const projectCount = document.getElementById('clientProjectsCount');
                     if (projectCount) {
                         projectCount.textContent = `${projects.length} ${projects.length === 1 ? 'project' : 'projects'}`;
@@ -9126,7 +9157,7 @@ function viewClient(id) {
                             `;
                         });
                         projectsHtml += '</div>';
-                        $('#clientProjects').html(projectsHtml);
+                        projectsContainer.html(projectsHtml);
                         const selectedProjectId = new URLSearchParams(window.location.search).get('project');
                         const selectedProject = selectedProjectId
                             ? document.querySelector(`[data-client-project-id="${CSS.escape(selectedProjectId)}"]`)
@@ -9136,7 +9167,7 @@ function viewClient(id) {
                             window.setTimeout(() => selectedProject.scrollIntoView({ behavior:'smooth', block:'center' }), 250);
                         }
                     } else {
-                        $('#clientProjects').html(`
+                        projectsContainer.html(`
                             <div class="client-project-empty">
                                 <span><i class="fas fa-folder-open"></i></span>
                                 <strong>No associated projects yet</strong>
@@ -9144,6 +9175,21 @@ function viewClient(id) {
                             </div>
                         `);
                     }
+                },
+                error: function() {
+                    const projectCount = document.getElementById('clientProjectsCount');
+                    if (projectCount) {
+                        projectCount.textContent = 'Unavailable';
+                    }
+                    $('#clientProjects')
+                        .removeClass('client-projects-loading')
+                        .html(`
+                            <div class="client-project-empty">
+                                <span><i class="fas fa-triangle-exclamation"></i></span>
+                                <strong>Projects could not be loaded</strong>
+                                <small>Close this window and try opening the client again.</small>
+                            </div>
+                        `);
                 }
             });
             
@@ -11191,11 +11237,26 @@ if (addClientModalElement && addClientForm) {
     updateDraftStatus(hasStoredDraft());
 }
 
-// Auto-submit on enter in search
-document.getElementById('searchInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
+const clientSearchInput = document.getElementById('searchInput');
+const clientStatusFilter = document.getElementById('statusFilter');
+let clientFilterTimer = null;
+
+clientSearchInput?.addEventListener('input', function() {
+    window.clearTimeout(clientFilterTimer);
+    clientFilterTimer = window.setTimeout(applyFilters, 500);
+});
+
+clientSearchInput?.addEventListener('keydown', function(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        window.clearTimeout(clientFilterTimer);
         applyFilters();
     }
+});
+
+clientStatusFilter?.addEventListener('change', function() {
+    window.clearTimeout(clientFilterTimer);
+    applyFilters();
 });
 
 document.addEventListener('DOMContentLoaded', function() {

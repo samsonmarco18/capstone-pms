@@ -271,6 +271,7 @@ include __DIR__ . '/includes/navbar.php';
 .calendar-shell {
     display: grid;
     gap: 1.1rem;
+    min-width: 0;
     color: #172033;
     --calendar-primary: #1f6392;
     --calendar-primary-dark: #184f73;
@@ -289,6 +290,13 @@ include __DIR__ . '/includes/navbar.php';
         linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.82) 58%, rgba(31, 99, 146, 0.035) 100%);
     --calendar-grid-bg:
         linear-gradient(180deg, rgba(248, 252, 255, 0.94) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+
+.calendar-shell > *,
+.calendar-card,
+.calendar-side {
+    min-width: 0;
+    max-width: 100%;
 }
 
 .calendar-hero {
@@ -404,6 +412,15 @@ include __DIR__ . '/includes/navbar.php';
     font-weight: 800;
 }
 
+.calendar-scroll-hint {
+    display: none;
+}
+
+.calendar-scroll {
+    max-width: 100%;
+    overflow-x: clip;
+}
+
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -476,6 +493,11 @@ include __DIR__ . '/includes/navbar.php';
 
 .calendar-day.is-selected .calendar-date {
     background: rgba(31, 99, 146, 0.14);
+}
+
+.calendar-day.is-today.is-selected .calendar-date {
+    background: #1f6392;
+    color: #fff;
 }
 
 .calendar-dots {
@@ -567,6 +589,21 @@ include __DIR__ . '/includes/navbar.php';
     font-weight: 800;
 }
 
+.calendar-count-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.8rem;
+    min-height: 1.8rem;
+    padding: 0.25rem 0.55rem !important;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 999px !important;
+    background: #e8f3f9 !important;
+    color: #184f73 !important;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
 .calendar-panel__body {
     padding: 1rem 1.25rem 1.15rem;
 }
@@ -654,20 +691,89 @@ include __DIR__ . '/includes/navbar.php';
 
 @media (max-width: 575.98px) {
     .calendar-stats {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.7rem;
     }
 
-    .calendar-grid {
+    .calendar-hero {
+        padding: 1.15rem;
+        border-radius: 15px;
+    }
+
+    .calendar-hero h1 {
+        font-size: 1.4rem;
+    }
+
+    .calendar-stat {
+        padding: 0.85rem 0.9rem;
+    }
+
+    .calendar-stat strong {
+        font-size: 1.35rem;
+    }
+
+    .calendar-card__header {
+        padding: 1rem;
+    }
+
+    .calendar-panel__header,
+    .calendar-panel__body {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .calendar-scroll-hint {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        padding: 0.55rem 1rem 0;
+        color: #6c757d;
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
+
+    .calendar-scroll {
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        overscroll-behavior-x: contain;
+        scroll-behavior: smooth;
+        scrollbar-color: rgba(31, 99, 146, 0.45) rgba(31, 99, 146, 0.08);
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .calendar-scroll::-webkit-scrollbar {
+        height: 8px;
+    }
+
+    .calendar-scroll::-webkit-scrollbar-track {
+        background: rgba(31, 99, 146, 0.08);
+    }
+
+    .calendar-scroll::-webkit-scrollbar-thumb {
+        border: 2px solid transparent;
+        border-radius: 999px;
+        background: rgba(31, 99, 146, 0.45);
+        background-clip: padding-box;
+    }
+
+    .calendar-scroll .calendar-grid {
+        width: 46rem;
+        min-width: 46rem;
         padding: 1rem;
     }
 
     .calendar-day,
     .calendar-blank {
-        min-height: 5.2rem;
+        min-height: 5.75rem;
     }
 
     .calendar-mini-event {
-        display: none;
+        font-size: 0.66rem;
     }
 }
 
@@ -814,6 +920,12 @@ html[data-theme="dark"] .calendar-panel .badge.text-bg-light {
     border: 1px solid rgba(138, 210, 255, 0.10);
 }
 
+html[data-theme="dark"] .calendar-count-badge {
+    border-color: rgba(138, 210, 255, 0.15);
+    background: rgba(31, 99, 146, 0.22) !important;
+    color: #8cc7ff !important;
+}
+
 html[data-theme="dark"] .btn-outline-primary.calendar-today-btn {
     color: #8cc7ff;
     border-color: rgba(140, 199, 255, 0.35);
@@ -847,7 +959,7 @@ html[data-theme="dark"] .btn-outline-primary.calendar-today-btn:hover {
         </div>
     </div>
 
-    <div class="calendar-stats mb-4">
+    <div class="calendar-stats">
         <div class="calendar-stat">
             <span>Today</span>
             <strong><?php echo $todayEventCount; ?></strong>
@@ -878,56 +990,63 @@ html[data-theme="dark"] .btn-outline-primary.calendar-today-btn:hover {
                     </a>
                 </div>
 
-                <div class="calendar-grid" aria-label="Monthly calendar">
-                    <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $weekday): ?>
-                        <div class="calendar-weekday"><?php echo $weekday; ?></div>
-                    <?php endforeach; ?>
+                <div class="calendar-scroll-hint" aria-hidden="true">
+                    <i class="fas fa-arrows-left-right"></i>
+                    <span>Swipe sideways to view the full week</span>
+                </div>
 
-                    <?php for ($blank = 0; $blank < $leadingBlanks; $blank++): ?>
-                        <div class="calendar-blank" aria-hidden="true"></div>
-                    <?php endfor; ?>
+                <div class="calendar-scroll" role="region" aria-label="Monthly calendar. Scroll horizontally to view all days on smaller screens." tabindex="0">
+                    <div class="calendar-grid">
+                        <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $weekday): ?>
+                            <div class="calendar-weekday"><?php echo $weekday; ?></div>
+                        <?php endforeach; ?>
 
-                    <?php
-                    for ($day = 1; $day <= (int) $calendarStart->format('t'); $day++):
-                        $dateKey = $calendarStart->format('Y-m-') . str_pad((string) $day, 2, '0', STR_PAD_LEFT);
-                        $dayEvents = $eventsByDate[$dateKey] ?? [];
-                        $classes = ['calendar-day'];
-                        if ($dateKey < $today->format('Y-m-d') && $calendarMonth === $today->format('Y-m') && empty($dayEvents)) {
-                            $classes[] = 'is-muted';
-                        }
-                        if ($dateKey === $today->format('Y-m-d')) {
-                            $classes[] = 'is-today';
-                        }
-                        if ($dateKey === $selectedDayKey) {
-                            $classes[] = 'is-selected';
-                        }
-                    ?>
-                        <a class="<?php echo implode(' ', $classes); ?>" href="calendar.php?calendar_month=<?php echo urlencode($calendarMonth); ?>&day=<?php echo urlencode($dateKey); ?>">
-                            <span class="calendar-day__top">
-                                <span class="calendar-date"><?php echo $day; ?></span>
-                                <?php if (!empty($dayEvents)): ?>
-                                    <span class="calendar-event-count"><?php echo count($dayEvents); ?></span>
-                                <?php endif; ?>
-                            </span>
-                            <?php if (!empty($dayEvents)): ?>
-                                <span class="calendar-day__events" aria-hidden="true">
-                                    <?php foreach (array_slice($dayEvents, 0, 2) as $event): ?>
-                                        <span class="calendar-mini-event" style="--event-color: <?php echo htmlspecialchars($event['color']); ?>;">
-                                            <?php echo htmlspecialchars($event['time_label'] . ' ' . $event['title']); ?>
-                                        </span>
-                                    <?php endforeach; ?>
-                                    <?php if (count($dayEvents) > 2): ?>
-                                        <span class="calendar-more">+<?php echo count($dayEvents) - 2; ?> more</span>
+                        <?php for ($blank = 0; $blank < $leadingBlanks; $blank++): ?>
+                            <div class="calendar-blank" aria-hidden="true"></div>
+                        <?php endfor; ?>
+
+                        <?php
+                        for ($day = 1; $day <= (int) $calendarStart->format('t'); $day++):
+                            $dateKey = $calendarStart->format('Y-m-') . str_pad((string) $day, 2, '0', STR_PAD_LEFT);
+                            $dayEvents = $eventsByDate[$dateKey] ?? [];
+                            $classes = ['calendar-day'];
+                            if ($dateKey < $today->format('Y-m-d') && $calendarMonth === $today->format('Y-m') && empty($dayEvents)) {
+                                $classes[] = 'is-muted';
+                            }
+                            if ($dateKey === $today->format('Y-m-d')) {
+                                $classes[] = 'is-today';
+                            }
+                            if ($dateKey === $selectedDayKey) {
+                                $classes[] = 'is-selected';
+                            }
+                        ?>
+                            <a class="<?php echo implode(' ', $classes); ?>" href="calendar.php?calendar_month=<?php echo urlencode($calendarMonth); ?>&day=<?php echo urlencode($dateKey); ?>">
+                                <span class="calendar-day__top">
+                                    <span class="calendar-date"><?php echo $day; ?></span>
+                                    <?php if (!empty($dayEvents)): ?>
+                                        <span class="calendar-event-count"><?php echo count($dayEvents); ?></span>
                                     <?php endif; ?>
                                 </span>
-                                <span class="calendar-dots" aria-hidden="true">
-                                    <?php foreach (array_slice($dayEvents, 0, 4) as $event): ?>
-                                        <span class="calendar-dot" style="background: <?php echo htmlspecialchars($event['color']); ?>;"></span>
-                                    <?php endforeach; ?>
-                                </span>
-                            <?php endif; ?>
-                        </a>
-                    <?php endfor; ?>
+                                <?php if (!empty($dayEvents)): ?>
+                                    <span class="calendar-day__events" aria-hidden="true">
+                                        <?php foreach (array_slice($dayEvents, 0, 2) as $event): ?>
+                                            <span class="calendar-mini-event" style="--event-color: <?php echo htmlspecialchars($event['color']); ?>;">
+                                                <?php echo htmlspecialchars($event['time_label'] . ' ' . $event['title']); ?>
+                                            </span>
+                                        <?php endforeach; ?>
+                                        <?php if (count($dayEvents) > 2): ?>
+                                            <span class="calendar-more">+<?php echo count($dayEvents) - 2; ?> more</span>
+                                        <?php endif; ?>
+                                    </span>
+                                    <span class="calendar-dots" aria-hidden="true">
+                                        <?php foreach (array_slice($dayEvents, 0, 4) as $event): ?>
+                                            <span class="calendar-dot" style="background: <?php echo htmlspecialchars($event['color']); ?>;"></span>
+                                        <?php endforeach; ?>
+                                    </span>
+                                <?php endif; ?>
+                            </a>
+                        <?php endfor; ?>
+                    </div>
                 </div>
             </div>
         </div>
@@ -937,7 +1056,7 @@ html[data-theme="dark"] .btn-outline-primary.calendar-today-btn:hover {
                 <div class="calendar-panel">
                     <div class="calendar-panel__header">
                         <h3><?php echo htmlspecialchars($selectedDay->format('F j, Y')); ?></h3>
-                        <span class="badge rounded-pill text-bg-primary"><?php echo count($selectedEvents); ?></span>
+                        <span class="badge calendar-count-badge"><?php echo count($selectedEvents); ?></span>
                     </div>
                     <div class="calendar-panel__body">
                         <?php if (!empty($selectedEvents)): ?>
@@ -972,7 +1091,7 @@ html[data-theme="dark"] .btn-outline-primary.calendar-today-btn:hover {
                 <div class="calendar-panel">
                     <div class="calendar-panel__header">
                         <h3>Upcoming Deadlines</h3>
-                        <span class="badge rounded-pill text-bg-light"><?php echo count($deadlineEvents); ?></span>
+                        <span class="badge calendar-count-badge"><?php echo count($deadlineEvents); ?></span>
                     </div>
                     <div class="calendar-panel__body">
                         <?php if (!empty($deadlineEvents)): ?>
@@ -1004,6 +1123,30 @@ html[data-theme="dark"] .btn-outline-primary.calendar-today-btn:hover {
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const calendarScroll = document.querySelector('.calendar-scroll');
+    const selectedDay = calendarScroll?.querySelector('.calendar-day.is-selected');
+
+    if (!calendarScroll || !selectedDay || !window.matchMedia('(max-width: 767.98px)').matches) {
+        return;
+    }
+
+    window.requestAnimationFrame(function () {
+        const selectedStart = selectedDay.offsetLeft;
+        const selectedEnd = selectedStart + selectedDay.offsetWidth;
+        const visibleEnd = calendarScroll.scrollLeft + calendarScroll.clientWidth;
+
+        if (selectedStart < calendarScroll.scrollLeft || selectedEnd > visibleEnd) {
+            calendarScroll.scrollLeft = Math.max(
+                0,
+                selectedStart - ((calendarScroll.clientWidth - selectedDay.offsetWidth) / 2)
+            );
+        }
+    });
+});
+</script>
 
 <?php
 $scheduleStatement->close();

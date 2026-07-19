@@ -130,6 +130,7 @@ $readyTasks = $conn->query("
     WHERE t.status = 'qa_passed'{$projectFilterSql}
     ORDER BY t.qa_reviewed_at ASC, t.updated_at ASC
 ");
+$readyTaskCount = $readyTasks ? (int) $readyTasks->num_rows : 0;
 
 $recentMerges = $conn->query("
     SELECT t.id, t.title, t.completed_at, p.name AS project_name, u.full_name AS developer_name
@@ -147,199 +148,721 @@ include '../../includes/navbar.php';
 ?>
 
 <style>
+.approval-page {
+    --approval-primary: #1f6392;
+    --approval-dark: #174f73;
+    --approval-text: #20364d;
+    --approval-muted: #6f8499;
+    --approval-border: #dce7ef;
+    --approval-surface: #ffffff;
+    --approval-soft: #f6f9fc;
+}
+
+.approval-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+    padding: 1.2rem 4.5rem 1.25rem 1.3rem;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--approval-primary) 0%, var(--approval-dark) 100%);
+    box-shadow: 0 12px 28px rgba(31, 99, 146, 0.17);
+}
+
+.approval-header::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 32%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08));
+    pointer-events: none;
+}
+
+.approval-title {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+}
+
+.approval-title-icon {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 46px;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 1.15rem;
+}
+
+.approval-title h2 {
+    margin: 0;
+    color: #fff;
+    font-size: clamp(1.45rem, 2vw, 1.85rem);
+    font-weight: 700;
+}
+
+.approval-title p {
+    margin: 0.28rem 0 0;
+    color: rgba(255, 255, 255, 0.84);
+    font-size: 0.84rem;
+}
+
+.approval-header.page-help-host .page-header-help-btn {
+    border-color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.94);
+    color: #15567f;
+    box-shadow: 0 8px 20px rgba(5, 32, 55, 0.22);
+}
+
+.approval-header.page-help-host .page-header-help-btn:hover,
+.approval-header.page-help-host .page-header-help-btn:focus-visible {
+    background: #fff;
+    color: #0f496e;
+}
+
+.approval-project-picker,
+.approval-panel {
+    border: 1px solid var(--approval-border);
+    border-radius: 16px;
+    background: var(--approval-surface);
+    box-shadow: 0 11px 28px rgba(15, 42, 64, 0.055);
+}
+
+.approval-project-picker {
+    display: grid;
+    grid-template-columns: auto minmax(280px, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+    padding: 1rem 1.15rem;
+}
+
+.project-picker-copy {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 190px;
+}
+
+.project-picker-copy > i {
+    display: inline-grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    background: #edf6fb;
+    color: var(--approval-primary);
+}
+
+.project-picker-copy strong {
+    display: block;
+    color: var(--approval-text);
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+.project-picker-copy small {
+    display: block;
+    margin-top: 0.12rem;
+    color: var(--approval-muted);
+    font-size: 0.68rem;
+}
+
+.approval-project-select {
+    min-height: 44px;
+    border: 1px solid #d5e2ec;
+    border-radius: 11px;
+    color: #344b61;
+    font-size: 0.84rem;
+    box-shadow: none;
+}
+
+.approval-project-select:focus {
+    border-color: var(--approval-primary);
+    box-shadow: 0 0 0 0.16rem rgba(31, 99, 146, 0.12);
+}
+
+.approval-open-button,
+.merge-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 42px;
+    padding: 0.65rem 0.9rem;
+    border: 0;
+    border-radius: 10px;
+    background: var(--approval-primary);
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 650;
+    white-space: nowrap;
+    transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.approval-open-button:hover,
+.merge-button:hover {
+    background: var(--approval-dark);
+    color: #fff;
+    box-shadow: 0 7px 16px rgba(31, 99, 146, 0.2);
+    transform: translateY(-1px);
+}
+
+.approval-panel {
+    overflow: hidden;
+}
+
+.approval-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 60px;
+    padding: 0.85rem 1.05rem;
+    border-bottom: 1px solid var(--approval-border);
+    background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+}
+
+.approval-panel-title {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+    color: var(--approval-text);
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.approval-panel-title > i {
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    background: #edf6fb;
+    color: var(--approval-primary);
+    font-size: 0.78rem;
+}
+
+.panel-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0.28rem 0.55rem;
+    border-radius: 999px;
+    background: #eef4f8;
+    color: #496479;
+    font-size: 0.68rem;
+    font-weight: 650;
+}
+
+.panel-count.warning {
+    background: #fff3cd;
+    color: #996200;
+}
+
+.panel-count.success {
+    background: #e4f7ed;
+    color: #18794a;
+}
+
+.approval-panel-body {
+    padding: 1rem;
+}
+
+.reopen-panel {
+    margin-bottom: 1.25rem;
+}
+
+.approval-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.8rem;
+    min-height: 190px;
+    padding: 1.4rem;
+    color: var(--approval-muted);
+    text-align: center;
+}
+
+.approval-empty.compact {
+    justify-content: flex-start;
+    min-height: 0;
+    padding: 0.15rem 0;
+    text-align: left;
+}
+
+.approval-empty-icon {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 46px;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    background: #edf4f8;
+    color: #7894aa;
+    font-size: 1rem;
+}
+
+.approval-empty strong {
+    display: block;
+    color: var(--approval-text);
+    font-size: 0.84rem;
+    font-weight: 650;
+}
+
+.approval-empty p {
+    margin: 0.18rem 0 0;
+    font-size: 0.76rem;
+}
+
+.approval-content-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(290px, 0.9fr);
+    gap: 1.25rem;
+    align-items: start;
+}
+
+.merge-task-list {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    background: var(--approval-soft);
+}
+
+.merge-task-card,
+.reopen-request-card {
+    border: 1px solid var(--approval-border);
+    border-radius: 13px;
+    background: #fff;
+}
+
+.merge-task-card {
+    padding: 1rem;
+}
+
+.merge-task-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.merge-task-head h5,
+.reopen-request-card h5 {
+    margin: 0;
+    color: var(--approval-text);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.merge-task-meta,
+.reopen-request-meta {
+    margin-top: 0.28rem;
+    color: var(--approval-muted);
+    font-size: 0.74rem;
+}
+
+.qa-ready-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.34rem 0.55rem;
+    border-radius: 999px;
+    background: #e4f7ed;
+    color: #18794a;
+    font-size: 0.66rem;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.git-reference-list {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+}
+
+.git-reference {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-height: 30px;
+    padding: 0.32rem 0.55rem;
+    border: 1px solid #d8e5ee;
+    border-radius: 8px;
+    background: #f8fbfd;
+    color: #526b80;
+    font-size: 0.68rem;
+    text-decoration: none;
+}
+
+a.git-reference:hover {
+    border-color: #a8c9dc;
+    color: var(--approval-primary);
+}
+
+.merge-task-action {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    align-items: stretch;
+    margin-top: 0.8rem;
+}
+
+.merge-task-action textarea,
+.reopen-request-card textarea {
+    min-height: 42px;
+    resize: vertical;
+    border-color: #d5e2ec;
+    border-radius: 10px;
+    font-size: 0.78rem;
+}
+
+.merge-button {
+    background: #198754;
+}
+
+.merge-button:hover {
+    background: #146c43;
+    box-shadow: 0 7px 16px rgba(25, 135, 84, 0.2);
+}
+
+.recent-merge-list {
+    display: grid;
+    gap: 0;
+}
+
+.recent-merge-item {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 0.65rem;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid #e7eef4;
+}
+
+.recent-merge-item:first-child { padding-top: 0; }
+.recent-merge-item:last-child { padding-bottom: 0; border-bottom: 0; }
+
+.recent-merge-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: #e4f7ed;
+    color: #198754;
+    font-size: 0.74rem;
+}
+
+.recent-merge-item strong {
+    display: block;
+    color: var(--approval-text);
+    font-size: 0.78rem;
+    font-weight: 650;
+}
+
+.recent-merge-item small,
+.recent-merge-item time {
+    display: block;
+    margin-top: 0.15rem;
+    color: var(--approval-muted);
+    font-size: 0.68rem;
+}
+
+.reopen-request-card {
+    padding: 1rem;
+}
+
+.reopen-request-card + .reopen-request-card {
+    margin-top: 0.75rem;
+}
+
+.reopen-reason {
+    margin: 0.8rem 0;
+    padding: 0.75rem;
+    border-left: 3px solid #e6a700;
+    border-radius: 0 9px 9px 0;
+    background: #fffaf0;
+    color: #4c5e70;
+    font-size: 0.76rem;
+}
+
+.reopen-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.7rem;
+}
+
+@media (max-width: 1100px) {
+    .approval-project-picker {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .project-picker-copy {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .approval-content-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 767.98px) {
+    .approval-page {
+        padding-right: 0.8rem !important;
+        padding-left: 0.8rem !important;
+    }
+    .approval-project-picker,
+    .merge-task-action {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .approval-open-button,
+    .merge-button {
+        width: 100%;
+    }
+    .merge-task-head {
+        flex-direction: column;
+    }
+    .reopen-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    .reopen-actions .btn {
+        width: 100%;
+    }
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
     background: #06111e;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card {
-    background: #071321 !important;
-    border-color: rgba(31, 99, 146, 0.24) !important;
-    box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26) !important;
-    color: #d7e4f2 !important;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-page {
+    --approval-text: #d7e4f2;
+    --approval-muted: #90a9c0;
+    --approval-border: #20384d;
+    --approval-surface: #0b1b2b;
+    --approval-soft: #071522;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge.bg-light {
-    background: #0a1b2c !important;
-    border-color: rgba(31, 99, 146, 0.24) !important;
-    color: #d7e4f2 !important;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-title-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-copy > i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-panel-title > i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-empty-icon {
+    background: #102f45;
+    color: #7fc3e8;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h2,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold {
-    color: #d7e4f2 !important;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-header .approval-title-icon {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
-    color: #9db6cf !important;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-panel-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .merge-task-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .reopen-request-card {
+    background: #0b1b2b;
+    border-color: #20384d;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) textarea {
-    background: #071321 !important;
-    border-color: rgba(31, 99, 146, 0.24) !important;
-    color: #d7e4f2 !important;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .approval-project-select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .merge-task-action textarea,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .reopen-request-card textarea {
+    background-color: #0d2133;
+    border-color: #29465e;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-reference {
+    background: #0d2133;
+    border-color: #29465e;
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .reopen-reason {
+    background: #2b2413;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-merge-item {
+    border-color: #20384d;
 }
 </style>
 
-<div class="container-fluid py-4">
+<div class="container-fluid px-4 py-4 approval-page">
     <?php di_render_project_attention_banner($conn, $user, $selectedProjectId); ?>
 
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
-        <div>
-            <h2 class="mb-1"><i class="fas fa-code-merge me-2 text-primary"></i>Final Approval & Merge</h2>
-            <p class="text-muted mb-0">Architect can only merge features that passed QA testing.</p>
+    <header class="approval-header" data-page-header>
+        <div class="approval-title">
+            <span class="approval-title-icon" aria-hidden="true"><i class="fas fa-code-merge"></i></span>
+            <div>
+                <h2>Final Approval &amp; Merge</h2>
+                <p>Review QA-passed features and approve them for the main branch.</p>
+            </div>
         </div>
-        <div class="d-flex gap-2 flex-wrap">
-            <span class="badge bg-warning text-dark fs-6"><?php echo $reopenRequestCount; ?> Reopen Requests</span>
-            <span class="badge bg-success fs-6"><?php echo $readyTasks ? (int) $readyTasks->num_rows : 0; ?> QA Passed</span>
-        </div>
-    </div>
+    </header>
 
     <?php if(isset($_SESSION['success'])): ?><div class="alert alert-success"><?php echo $_SESSION['success']; unset($_SESSION['success']); ?></div><?php endif; ?>
     <?php if(isset($_SESSION['error'])): ?><div class="alert alert-danger"><?php echo $_SESSION['error']; unset($_SESSION['error']); ?></div><?php endif; ?>
 
-    <form method="GET" class="card border-0 shadow-sm mb-4">
-        <div class="card-body d-flex flex-wrap align-items-end gap-3">
-            <div class="flex-grow-1">
-                <label class="form-label">Project</label>
-                <select class="form-select" name="project_id" onchange="this.form.submit()">
-                    <option value="0">Select a project to view merge-ready features</option>
-                    <?php if ($approvalProjects): while ($approvalProject = $approvalProjects->fetch_assoc()): ?>
-                        <option value="<?php echo (int) $approvalProject['id']; ?>" <?php echo (int) $approvalProject['id'] === $selectedProjectId ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars((string) $approvalProject['name'] . ' - ' . (string) $approvalProject['client_name']); ?>
-                        </option>
-                    <?php endwhile; endif; ?>
-                </select>
-            </div>
-            <button class="btn btn-primary" type="submit"><i class="fas fa-folder-open me-1"></i> Open Project</button>
+    <form method="GET" class="approval-project-picker">
+        <div class="project-picker-copy">
+            <i class="fas fa-folder-tree" aria-hidden="true"></i>
+            <div><strong>Project workspace</strong><small>Choose a project with QA-passed work.</small></div>
         </div>
+        <label class="visually-hidden" for="approvalProjectId">Project</label>
+        <select class="form-select approval-project-select" id="approvalProjectId" name="project_id">
+            <option value="0">Select a project to view merge-ready features</option>
+            <?php if ($approvalProjects): while ($approvalProject = $approvalProjects->fetch_assoc()): ?>
+                <option value="<?php echo (int) $approvalProject['id']; ?>" <?php echo (int) $approvalProject['id'] === $selectedProjectId ? 'selected' : ''; ?>>
+                    <?php echo htmlspecialchars((string) $approvalProject['name'] . ' - ' . (string) $approvalProject['client_name']); ?>
+                </option>
+            <?php endwhile; endif; ?>
+        </select>
+        <button class="approval-open-button" type="submit"><i class="fas fa-folder-open"></i> Open Project</button>
     </form>
 
-    <div class="card border-0 shadow-sm mb-4" id="reopen-requests">
-        <div class="card-header bg-white fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <span><i class="fas fa-rotate-left me-2 text-warning"></i>Task Reopen Requests</span>
-            <span class="badge bg-warning text-dark"><?php echo $reopenRequestCount; ?> pending</span>
-        </div>
-        <div class="card-body">
+    <section class="approval-panel reopen-panel" id="reopen-requests">
+        <header class="approval-panel-header">
+            <div class="approval-panel-title"><i class="fas fa-rotate-left" aria-hidden="true"></i><span>Task Reopen Requests</span></div>
+            <span class="panel-count warning"><?php echo $reopenRequestCount; ?> pending</span>
+        </header>
+        <div class="approval-panel-body">
             <?php if($reopenRequestCount > 0): ?>
                 <?php foreach($reopenRequests as $request): ?>
                     <?php $severity = strtolower((string) ($request['severity'] ?? 'minor')) === 'major' ? 'major' : 'minor'; ?>
-                    <form method="POST" class="border-bottom pb-3 mb-3">
+                    <form method="POST" class="reopen-request-card">
                         <input type="hidden" name="reopen_request_id" value="<?php echo (int) $request['id']; ?>">
-                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-                            <div class="flex-grow-1">
-                                <div class="d-flex align-items-center gap-2 mb-1">
-                                    <span class="badge <?php echo $severity === 'major' ? 'bg-danger' : 'bg-info text-dark'; ?>">
-                                        <?php echo htmlspecialchars(taskReopenSeverityLabel($severity)); ?>
-                                    </span>
-                                    <h5 class="mb-0"><?php echo htmlspecialchars((string) $request['task_title']); ?></h5>
-                                </div>
-                                <div class="text-muted small mb-3">
-                                    <?php echo htmlspecialchars((string) $request['project_name']); ?> &middot;
-                                    Developer: <?php echo htmlspecialchars((string) ($request['requester_name'] ?? 'Developer')); ?> &middot;
-                                    SUL: <?php echo htmlspecialchars((string) ($request['sul_name'] ?? 'SUL')); ?>
-                                </div>
-                                <div class="alert alert-light border mb-3">
-                                    <div class="fw-semibold mb-1">Developer reason</div>
-                                    <div><?php echo nl2br(htmlspecialchars((string) ($request['reason'] ?? ''))); ?></div>
-                                </div>
-                                <?php if (!empty($request['sul_comment'])): ?>
-                                    <div class="small mb-3"><strong>SUL note:</strong> <?php echo nl2br(htmlspecialchars((string) $request['sul_comment'])); ?></div>
-                                <?php endif; ?>
-                                <div class="small text-muted mb-3">
-                                    <?php if($severity === 'major'): ?>
-                                        Approval will reopen this task and reset later roadmap phases/tasks so affected downstream work can be redone.
-                                    <?php else: ?>
-                                        Approval will reopen only this task and send it back to developer revision.
-                                    <?php endif; ?>
-                                </div>
-                                <textarea name="architect_comment" class="form-control" rows="2" placeholder="Architect decision note"></textarea>
-                            </div>
-                            <div class="d-flex gap-2 flex-wrap">
-                                <button type="submit" name="architect_approve_reopen" class="btn btn-warning">
-                                    <i class="fas fa-rotate-left me-1"></i> Approve Reopen
-                                </button>
-                                <button type="submit" name="architect_reject_reopen" class="btn btn-outline-danger">
-                                    <i class="fas fa-ban me-1"></i> Reject
-                                </button>
-                            </div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="badge <?php echo $severity === 'major' ? 'bg-danger' : 'bg-info text-dark'; ?>"><?php echo htmlspecialchars(taskReopenSeverityLabel($severity)); ?></span>
+                            <h5><?php echo htmlspecialchars((string) $request['task_title']); ?></h5>
+                        </div>
+                        <div class="reopen-request-meta">
+                            <?php echo htmlspecialchars((string) $request['project_name']); ?> &middot;
+                            Developer: <?php echo htmlspecialchars((string) ($request['requester_name'] ?? 'Developer')); ?> &middot;
+                            SUL: <?php echo htmlspecialchars((string) ($request['sul_name'] ?? 'SUL')); ?>
+                        </div>
+                        <div class="reopen-reason">
+                            <strong>Developer reason</strong>
+                            <div><?php echo nl2br(htmlspecialchars((string) ($request['reason'] ?? ''))); ?></div>
+                        </div>
+                        <?php if (!empty($request['sul_comment'])): ?>
+                            <div class="small mb-2"><strong>SUL note:</strong> <?php echo nl2br(htmlspecialchars((string) $request['sul_comment'])); ?></div>
+                        <?php endif; ?>
+                        <div class="small text-muted mb-2">
+                            <?php if($severity === 'major'): ?>
+                                Approval will reopen this task and reset later roadmap phases/tasks so affected downstream work can be redone.
+                            <?php else: ?>
+                                Approval will reopen only this task and send it back to developer revision.
+                            <?php endif; ?>
+                        </div>
+                        <textarea name="architect_comment" class="form-control" rows="2" placeholder="Architect decision note"></textarea>
+                        <div class="reopen-actions">
+                            <button type="submit" name="architect_approve_reopen" class="btn btn-warning"><i class="fas fa-rotate-left me-1"></i> Approve Reopen</button>
+                            <button type="submit" name="architect_reject_reopen" class="btn btn-outline-danger"><i class="fas fa-ban me-1"></i> Reject</button>
                         </div>
                     </form>
                 <?php endforeach; ?>
             <?php else: ?>
-                <p class="text-muted mb-0">No SUL-accepted reopen requests are waiting for Architect decision.</p>
+                <div class="approval-empty compact">
+                    <span class="approval-empty-icon" aria-hidden="true"><i class="fas fa-check"></i></span>
+                    <div><strong>No reopen decisions pending</strong><p>No SUL-accepted reopen requests are waiting for Architect review.</p></div>
+                </div>
             <?php endif; ?>
         </div>
-    </div>
+    </section>
 
-    <div class="row g-4">
-        <div class="col-lg-8">
+    <div class="approval-content-grid">
+        <section class="approval-panel merge-workspace">
+            <header class="approval-panel-header">
+                <div class="approval-panel-title"><i class="fas fa-code-merge" aria-hidden="true"></i><span>Merge-ready Features</span></div>
+                <span class="panel-count success"><?php echo $selectedProjectId > 0 ? $readyTaskCount : 0; ?> ready</span>
+            </header>
             <?php if($selectedProjectId <= 0): ?>
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body text-center py-5 text-muted">
-                        <i class="fas fa-folder-open fa-3x mb-3"></i>
-                        <p class="mb-0">Select a project first to view features ready to merge.</p>
+                <div class="approval-empty">
+                    <span class="approval-empty-icon" aria-hidden="true"><i class="fas fa-folder-open"></i></span>
+                    <div>
+                        <strong>Select a project to begin</strong>
+                        <p>Choose a project above to review its QA-passed features.</p>
                     </div>
                 </div>
-            <?php elseif($readyTasks && $readyTasks->num_rows > 0): ?>
-                <?php while($task = $readyTasks->fetch_assoc()): ?>
-                    <div class="card border-0 shadow-sm mb-3">
-                        <div class="card-body">
-                            <form method="POST">
-                                <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
-                                <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
-                                <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-                                    <div class="flex-grow-1">
-                                        <h5 class="mb-1"><?php echo htmlspecialchars((string) $task['title']); ?></h5>
-                                        <div class="text-muted small mb-2">
-                                            <?php echo htmlspecialchars((string) $task['project_name']); ?> · Developer: <?php echo htmlspecialchars((string) ($task['developer_name'] ?? 'Unassigned')); ?>
-                                        </div>
-                                        <div class="d-flex gap-2 flex-wrap mb-3">
-                                            <?php if (!empty($task['branch_name'])): ?><span class="badge bg-light text-dark border">Branch: <?php echo htmlspecialchars((string) $task['branch_name']); ?></span><?php endif; ?>
-                                            <?php if (!empty($task['commit_hash'])): ?><span class="badge bg-light text-dark border">Commit: <?php echo htmlspecialchars(substr((string) $task['commit_hash'], 0, 7)); ?></span><?php endif; ?>
-                                            <?php if (!empty($task['pull_request_url'])): ?><a class="btn btn-sm btn-outline-primary" href="<?php echo htmlspecialchars((string) $task['pull_request_url']); ?>" target="_blank" rel="noopener">Pull Request</a><?php endif; ?>
-                                            <?php if (!empty($task['repository_url'])): ?><a class="btn btn-sm btn-outline-primary" href="<?php echo htmlspecialchars((string) $task['repository_url']); ?>" target="_blank" rel="noopener">Repository</a><?php endif; ?>
-                                        </div>
-                                        <textarea name="merge_notes" class="form-control" rows="2" placeholder="Final technical review / merge notes"></textarea>
-                                    </div>
-                                    <button type="submit" name="merge_task" class="btn btn-success">
-                                        <i class="fas fa-code-merge me-1"></i> Merge to Main
-                                    </button>
+            <?php elseif($readyTasks && $readyTaskCount > 0): ?>
+                <div class="merge-task-list">
+                    <?php while($task = $readyTasks->fetch_assoc()): ?>
+                        <form method="POST" class="merge-task-card">
+                            <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
+                            <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
+                            <div class="merge-task-head">
+                                <div>
+                                    <h5><?php echo htmlspecialchars((string) $task['title']); ?></h5>
+                                    <div class="merge-task-meta"><?php echo htmlspecialchars((string) $task['project_name']); ?> &middot; Developer: <?php echo htmlspecialchars((string) ($task['developer_name'] ?? 'Unassigned')); ?></div>
                                 </div>
-                            </form>
-                        </div>
-                    </div>
-                <?php endwhile; ?>
+                                <span class="qa-ready-badge"><i class="fas fa-shield-check" aria-hidden="true"></i> QA passed</span>
+                            </div>
+                            <div class="git-reference-list">
+                                <?php if (!empty($task['branch_name'])): ?><span class="git-reference"><i class="fas fa-code-branch"></i> Branch: <?php echo htmlspecialchars((string) $task['branch_name']); ?></span><?php endif; ?>
+                                <?php if (!empty($task['commit_hash'])): ?><span class="git-reference"><i class="fas fa-code-commit"></i> Commit: <?php echo htmlspecialchars(substr((string) $task['commit_hash'], 0, 7)); ?></span><?php endif; ?>
+                                <?php if (!empty($task['pull_request_url'])): ?><a class="git-reference" href="<?php echo htmlspecialchars((string) $task['pull_request_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Pull Request</a><?php endif; ?>
+                                <?php if (!empty($task['repository_url'])): ?><a class="git-reference" href="<?php echo htmlspecialchars((string) $task['repository_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-database"></i> Repository</a><?php endif; ?>
+                            </div>
+                            <div class="merge-task-action">
+                                <textarea name="merge_notes" class="form-control" rows="2" placeholder="Final technical review or merge notes"></textarea>
+                                <button type="submit" name="merge_task" class="merge-button"><i class="fas fa-code-merge"></i> Merge to Main</button>
+                            </div>
+                        </form>
+                    <?php endwhile; ?>
+                </div>
             <?php else: ?>
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body text-center py-5 text-muted">
-                        <i class="fas fa-shield-check fa-3x mb-3"></i>
-                        <p class="mb-0">No QA-passed tasks are waiting for Architect merge.</p>
+                <div class="approval-empty">
+                    <span class="approval-empty-icon" aria-hidden="true"><i class="fas fa-shield-check"></i></span>
+                    <div>
+                        <strong>No features awaiting merge</strong>
+                        <p>This project has no QA-passed features waiting for Architect approval.</p>
                     </div>
                 </div>
             <?php endif; ?>
-        </div>
-        <div class="col-lg-4">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white fw-semibold">Recent Merges</div>
-                <div class="card-body">
+        </section>
+
+        <aside class="approval-panel recent-merges-panel">
+            <header class="approval-panel-header">
+                <div class="approval-panel-title"><i class="fas fa-clock-rotate-left" aria-hidden="true"></i><span>Recent Merges</span></div>
+            </header>
+            <div class="approval-panel-body">
                     <?php if($recentMerges && $recentMerges->num_rows > 0): ?>
+                        <div class="recent-merge-list">
                         <?php while($merge = $recentMerges->fetch_assoc()): ?>
-                            <div class="border-bottom pb-2 mb-2">
-                                <div class="fw-semibold"><?php echo htmlspecialchars((string) $merge['title']); ?></div>
-                                <small class="text-muted"><?php echo htmlspecialchars((string) $merge['project_name']); ?> · <?php echo htmlspecialchars((string) ($merge['developer_name'] ?? 'Developer')); ?></small>
-                            </div>
+                            <?php $mergedAt = !empty($merge['completed_at']) ? strtotime((string) $merge['completed_at']) : false; ?>
+                            <article class="recent-merge-item">
+                                <span class="recent-merge-icon" aria-hidden="true"><i class="fas fa-code-merge"></i></span>
+                                <div>
+                                    <strong><?php echo htmlspecialchars((string) $merge['title']); ?></strong>
+                                    <small><?php echo htmlspecialchars((string) $merge['project_name']); ?> &middot; <?php echo htmlspecialchars((string) ($merge['developer_name'] ?? 'Developer')); ?></small>
+                                    <?php if ($mergedAt): ?><time datetime="<?php echo htmlspecialchars(date('c', $mergedAt)); ?>"><?php echo htmlspecialchars(date('M d, Y', $mergedAt)); ?></time><?php endif; ?>
+                                </div>
+                            </article>
                         <?php endwhile; ?>
+                        </div>
                     <?php else: ?>
-                        <p class="text-muted mb-0">No architect merges yet.</p>
+                        <div class="approval-empty compact">
+                            <span class="approval-empty-icon" aria-hidden="true"><i class="fas fa-code-merge"></i></span>
+                            <div><strong>No recent merges</strong><p>Approved merges will appear here.</p></div>
+                        </div>
                     <?php endif; ?>
-                </div>
             </div>
-        </div>
+        </aside>
     </div>
 </div>
 

@@ -288,15 +288,15 @@ include '../../includes/navbar.php';
 /* Main Card */
 .main-card {
     background: white;
-    border-radius: 24px;
+    border-radius: 18px;
     border: 1px solid var(--gray-200);
     overflow: hidden;
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 12px 30px rgba(15, 42, 64, 0.06);
 }
 
 .card-header-modern {
-    padding: 1.5rem 2rem;
-    background: #ffffff;
+    padding: 1.15rem 1.5rem;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
     border-bottom: 1px solid var(--gray-200);
     display: flex;
     justify-content: space-between;
@@ -306,8 +306,8 @@ include '../../includes/navbar.php';
 }
 
 .card-header-modern h5 {
-    font-size: 1.1rem;
-    font-weight: 600;
+    font-size: 1rem;
+    font-weight: 700;
     color: var(--gray-900);
     margin: 0;
     display: flex;
@@ -316,7 +316,106 @@ include '../../includes/navbar.php';
 }
 
 .card-header-modern h5 i {
+    display: inline-grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: #eaf4f9;
     color: var(--theme-primary);
+    font-size: 0.88rem;
+}
+
+.directory-tools {
+    display: flex;
+    align-items: flex-end;
+    gap: 1.25rem;
+    min-width: 0;
+}
+
+.project-search {
+    position: relative;
+    display: block;
+    width: clamp(250px, 30vw, 390px);
+}
+
+.project-search > i {
+    position: absolute;
+    left: 0.15rem;
+    top: 50%;
+    color: #668096;
+    font-size: 0.86rem;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.project-search input {
+    width: 100%;
+    min-height: 40px;
+    padding: 0.5rem 1.9rem 0.5rem 1.65rem;
+    border: 0;
+    border-bottom: 1px solid #cbd8e3;
+    border-radius: 0;
+    outline: 0;
+    background: transparent;
+    color: #23384c;
+    font-size: 0.84rem;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.project-search input::placeholder {
+    color: #8a9aaa;
+}
+
+.project-search input:focus {
+    border-color: var(--theme-primary);
+    box-shadow: 0 2px 0 rgba(31, 99, 146, 0.12);
+}
+
+.project-status-filter {
+    position: relative;
+    display: block;
+    flex: 0 0 180px;
+    width: 180px;
+}
+
+.project-status-filter > i {
+    position: absolute;
+    left: 0.15rem;
+    top: 50%;
+    z-index: 1;
+    color: #668096;
+    font-size: 0.82rem;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.project-status-filter select {
+    width: 100%;
+    min-height: 40px;
+    padding: 0.5rem 1.75rem 0.5rem 1.55rem;
+    border: 0;
+    border-bottom: 1px solid #cbd8e3;
+    border-radius: 0;
+    outline: 0;
+    background-color: transparent;
+    color: #41566b;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.project-status-filter select:focus {
+    border-color: var(--theme-primary);
+    box-shadow: 0 2px 0 rgba(31, 99, 146, 0.12);
+}
+
+.directory-count {
+    flex: 0 0 auto;
+    padding-bottom: 0.55rem;
+    color: #718096;
+    font-size: 0.76rem;
+    white-space: nowrap;
 }
 
 /* Table Styles */
@@ -327,6 +426,8 @@ include '../../includes/navbar.php';
 
 .project-table {
     width: 100%;
+    min-width: 880px;
+    table-layout: fixed;
     border-collapse: collapse;
 }
 
@@ -335,24 +436,74 @@ include '../../includes/navbar.php';
 }
 
 .project-table th {
-    padding: 1rem 1.5rem;
+    padding: 0.78rem 1.25rem;
     text-align: left;
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: 0.68rem;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.045em;
     color: var(--gray-600);
     border-bottom: 1px solid var(--gray-200);
 }
 
 .project-table td {
-    padding: 1rem 1.5rem;
+    padding: 1rem 1.25rem;
     vertical-align: middle;
     border-bottom: 1px solid var(--gray-200);
+    color: #41566b;
+    font-size: 0.84rem;
 }
 
-.project-table tr:hover {
-    background: var(--gray-50);
+.project-table tbody tr {
+    transition: background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.project-table tbody tr:not(.project-search-empty):hover {
+    background: #f6fbfe;
+    box-shadow: inset 3px 0 0 #4b94ba;
+}
+
+.project-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.project-table th:nth-child(1) { width: 29%; }
+.project-table th:nth-child(2) { width: 20%; }
+.project-table th:nth-child(3) { width: 18%; }
+.project-table th:nth-child(4) { width: 33%; }
+
+.project-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.project-mark {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    background: #edf6fb;
+    color: var(--theme-primary);
+    font-size: 0.88rem;
+}
+
+.project-cell-copy {
+    min-width: 0;
+}
+
+.project-cell-copy small {
+    display: block;
+    margin-top: 0.2rem;
+    color: #8091a2;
+    font-size: 0.7rem;
+}
+
+.client-name {
+    line-height: 1.45;
 }
 
 .project-table tr.is-submitted-highlight {
@@ -361,18 +512,29 @@ include '../../includes/navbar.php';
 }
 
 .project-name {
-    font-weight: 600;
+    font-weight: 700;
     color: var(--gray-900);
-    margin-bottom: 0.25rem;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
 }
 
 /* Badges */
 .badge-status {
     display: inline-block;
-    padding: 0.25rem 0.75rem;
+    max-width: 100%;
+    padding: 0.35rem 0.7rem;
     border-radius: 20px;
-    font-size: 0.7rem;
-    font-weight: 600;
+    background: #edf3f7;
+    color: #3f6179;
+    font-size: 0.68rem;
+    font-weight: 650;
+    line-height: 1.25;
+    text-align: center;
+}
+
+.badge-status.requirements_gathering {
+    background: #e0f2fe;
+    color: #0369a1;
 }
 
 .badge-status.pending {
@@ -405,9 +567,11 @@ include '../../includes/navbar.php';
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
     color: white;
     border: none;
-    padding: 0.4rem 1rem;
-    border-radius: 8px;
-    font-size: 0.75rem;
+    min-height: 36px;
+    padding: 0.42rem 0.78rem;
+    border-radius: 9px;
+    font-size: 0.72rem;
+    font-weight: 600;
     transition: all 0.2s;
     display: inline-flex;
     align-items: center;
@@ -425,9 +589,11 @@ include '../../includes/navbar.php';
     background: white;
     color: var(--theme-primary);
     border: 1px solid rgba(31, 99, 146, 0.2);
-    padding: 0.4rem 0.9rem;
-    border-radius: 8px;
-    font-size: 0.75rem;
+    min-height: 36px;
+    padding: 0.42rem 0.75rem;
+    border-radius: 9px;
+    font-size: 0.72rem;
+    font-weight: 600;
     transition: all 0.2s;
     display: inline-flex;
     align-items: center;
@@ -440,11 +606,60 @@ include '../../includes/navbar.php';
     color: var(--theme-dark);
 }
 
+.project-action-buttons {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
 .progress-meta {
-    display: block;
-    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.55rem;
     color: var(--gray-600);
-    margin-top: 0.35rem;
+    margin-top: 0.55rem;
+    font-size: 0.67rem;
+}
+
+.progress-meta span {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.2rem;
+    white-space: nowrap;
+}
+
+.progress-meta span + span {
+    padding-left: 0.55rem;
+    border-left: 1px solid #d8e2eb;
+}
+
+.progress-meta strong {
+    color: #334e65;
+    font-weight: 700;
+}
+
+.progress-meta .progress-step {
+    color: var(--theme-primary);
+    font-weight: 650;
+}
+
+.project-search-empty td {
+    padding: 2.4rem 1rem;
+    color: #718096;
+    text-align: center;
+}
+
+.project-search-empty i {
+    display: block;
+    margin-bottom: 0.55rem;
+    color: #8fb3ca;
+    font-size: 1.4rem;
+}
+
+.project-table tr[hidden] {
+    display: none;
 }
 
 /* Empty State */
@@ -469,6 +684,17 @@ include '../../includes/navbar.php';
 }
 
 /* Responsive */
+@media (max-width: 1100px) {
+    .directory-tools {
+        width: 100%;
+    }
+
+    .project-search {
+        flex: 1 1 auto;
+        width: auto;
+    }
+}
+
 @media (max-width: 768px) {
     .page-header-modern {
         padding: 1.5rem;
@@ -485,6 +711,25 @@ include '../../includes/navbar.php';
     .card-header-modern {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    .directory-tools {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 0.45rem;
+    }
+
+    .project-search {
+        width: 100%;
+    }
+
+    .project-status-filter {
+        flex-basis: auto;
+        width: 100%;
+    }
+
+    .directory-count {
+        padding: 0;
     }
 
     .workflow-flash {
@@ -564,6 +809,35 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-table tr.is-submitted-highlight {
     background: #08251f;
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-search input {
+    border-color: #29435a;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-status-filter select {
+    border-color: #29435a;
+    background-color: #0a1b2c;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-search input::placeholder,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .directory-count {
+    color: #8ea8c0;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-mark {
+    background: #102f45;
+    color: #7fc3e8;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-meta span + span {
+    border-color: #29435a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-meta strong {
+    color: #d7e4f2;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -632,12 +906,25 @@ include '../../includes/navbar.php';
     <!-- Main Content Card -->
     <div class="main-card">
         <div class="card-header-modern">
-            <h5>
-                <i class="fas fa-list"></i>
-                Project Directory
-            </h5>
-            <div>
-                <span class="text-muted small">Showing <?php echo $totalProjects; ?> projects</span>
+            <div class="directory-heading">
+                <h5>
+                    <i class="fas fa-list"></i>
+                    Project Directory
+                </h5>
+            </div>
+            <div class="directory-tools">
+                <label class="project-search" for="projectDirectorySearch">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input type="search" id="projectDirectorySearch" placeholder="Search project, client, or status" autocomplete="off">
+                    <span class="visually-hidden">Search projects</span>
+                </label>
+                <label class="project-status-filter" for="projectStatusFilter">
+                    <i class="fas fa-filter" aria-hidden="true"></i>
+                    <select id="projectStatusFilter" aria-label="Filter projects by status">
+                        <option value="">All statuses</option>
+                    </select>
+                </label>
+                <span class="directory-count" id="projectDirectoryCount" aria-live="polite">Showing <?php echo $totalProjects; ?> projects</span>
             </div>
         </div>
         
@@ -650,42 +937,38 @@ include '../../includes/navbar.php';
                         <th>Project Name</th>
                         <th>Client</th>
                         <th>Status</th>
-                        <th>Timeline</th>
-                        <th>Created</th>
                         <th>Actions</th>
+                    </tr>
                     </thead>
-                <tbody>
+                <tbody id="projectDirectoryBody">
                     <?php while($project = $projects->fetch_assoc()): ?>
                     <?php
                         $isAwaitingSul = trim((string) ($project['workflow_status'] ?? '')) === 'architect_submitted'
                             && (int) ($project['expert_assignment_count'] ?? 0) === 0
                             && trim((string) ($project['status'] ?? '')) === 'in_progress';
-                        $statusClass = $isAwaitingSul ? 'awaiting_sul_review' : preg_replace('/[^a-z0-9_-]/', '', strtolower((string) ($project['status'] ?? 'pending')));
+                        $statusClass = $isAwaitingSul
+                            ? 'awaiting_sul_review'
+                            : trim((string) preg_replace('/[^a-z0-9]+/', '_', strtolower(trim((string) ($project['status'] ?? 'pending')))), '_');
                         $statusLabel = $isAwaitingSul ? 'Awaiting SUL Review' : ucfirst(str_replace('_', ' ', (string) ($project['status'] ?? 'pending')));
                     ?>
-                    <tr class="<?php echo $submittedProjectId === (int) $project['id'] ? 'is-submitted-highlight' : ''; ?>">
+                    <tr class="project-directory-row <?php echo $submittedProjectId === (int) $project['id'] ? 'is-submitted-highlight' : ''; ?>" data-status="<?php echo htmlspecialchars((string) $statusClass); ?>" data-status-label="<?php echo htmlspecialchars($statusLabel); ?>">
                         <td>
-                            <div class="project-name"><?php echo htmlspecialchars($project['name']); ?></div>
+                            <div class="project-cell">
+                                <span class="project-mark" aria-hidden="true"><i class="fas fa-folder"></i></span>
+                                <div class="project-cell-copy">
+                                    <div class="project-name"><?php echo htmlspecialchars($project['name']); ?></div>
+                                    <small>Technical evaluation</small>
+                                </div>
+                            </div>
                         </td>
-                        <td><?php echo htmlspecialchars($project['client_name']); ?></td>
+                        <td><span class="client-name"><?php echo htmlspecialchars($project['client_name']); ?></span></td>
                         <td>
                             <span class="badge-status <?php echo htmlspecialchars((string) $statusClass); ?>">
                                 <?php echo htmlspecialchars($statusLabel); ?>
                             </span>
                         </td>
                         <td>
-                            <?php 
-                            if($project['timeline_start'] && $project['timeline_end']) {
-                                echo date('M d', strtotime((string) $project['timeline_start'])) . ' - ' . 
-                                     date('M d, Y', strtotime((string) $project['timeline_end']));
-                            } else {
-                                echo '<span class="text-muted">Not set</span>';
-                            }
-                            ?>
-                        </td>
-                        <td><?php echo !empty($project['created_at']) ? date('M d, Y', strtotime((string) $project['created_at'])) : 'No date'; ?></td>
-                        <td>
-                            <div class="d-flex flex-wrap gap-2">
+                            <div class="project-action-buttons">
                             <?php $nextStep = architectProjectNextStep($project); ?>
                             <a href="<?php echo htmlspecialchars($nextStep['url']); ?>" class="btn-review">
                                 <i class="fas fa-eye"></i> <?php echo htmlspecialchars($nextStep['label']); ?>
@@ -694,16 +977,22 @@ include '../../includes/navbar.php';
                                 <i class="fas fa-code-branch"></i> Version Control
                             </a>
                             </div>
-                            <span class="progress-meta">
-                                Features: <?php echo (int) $project['feature_count']; ?> |
-                                Tech: <?php echo (int) $project['tech_count']; ?> |
-                                Devs: <?php echo (int) $project['allocation_count']; ?> |
-                                Docs: <?php echo (int) $project['document_count']; ?> |
-                                <?php echo htmlspecialchars($nextStep['step']); ?>
-                            </span>
+                            <div class="progress-meta">
+                                <span>Features <strong><?php echo (int) $project['feature_count']; ?></strong></span>
+                                <span>Tech <strong><?php echo (int) $project['tech_count']; ?></strong></span>
+                                <span>Devs <strong><?php echo (int) $project['allocation_count']; ?></strong></span>
+                                <span>Docs <strong><?php echo (int) $project['document_count']; ?></strong></span>
+                                <span class="progress-step"><?php echo htmlspecialchars($nextStep['step']); ?></span>
+                            </div>
                         </td>
                     </tr>
                     <?php endwhile; ?>
+                    <tr class="project-search-empty" id="projectDirectoryEmpty" hidden>
+                        <td colspan="4">
+                            <i class="fas fa-search" aria-hidden="true"></i>
+                            No projects match the current filters.
+                        </td>
+                    </tr>
                 </tbody>
             </table>
             <?php else: ?>
@@ -716,5 +1005,66 @@ include '../../includes/navbar.php';
         </div>
     </div>
 </div>
+
+<script>
+(() => {
+    const searchInput = document.getElementById('projectDirectorySearch');
+    const statusFilter = document.getElementById('projectStatusFilter');
+    const countLabel = document.getElementById('projectDirectoryCount');
+    const emptyRow = document.getElementById('projectDirectoryEmpty');
+    const projectRows = Array.from(document.querySelectorAll('#projectDirectoryBody .project-directory-row'));
+
+    if (!searchInput || !statusFilter || !countLabel || projectRows.length === 0) {
+        return;
+    }
+
+    const availableStatuses = new Map();
+    projectRows.forEach((row) => {
+        const statusValue = row.dataset.status || '';
+        const statusLabel = row.dataset.statusLabel || '';
+        if (statusValue && statusLabel) {
+            availableStatuses.set(statusValue, statusLabel);
+        }
+    });
+
+    Array.from(availableStatuses.entries())
+        .sort((first, second) => first[1].localeCompare(second[1]))
+        .forEach(([value, label]) => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = label;
+            statusFilter.appendChild(option);
+        });
+
+    const updateDirectory = () => {
+        const query = searchInput.value.trim().toLocaleLowerCase();
+        const selectedStatus = statusFilter.value;
+        let visibleCount = 0;
+
+        projectRows.forEach((row) => {
+            const matchesSearch = query === '' || row.textContent.toLocaleLowerCase().includes(query);
+            const matchesStatus = selectedStatus === '' || row.dataset.status === selectedStatus;
+            const matches = matchesSearch && matchesStatus;
+            row.hidden = !matches;
+            if (matches) {
+                visibleCount += 1;
+            }
+        });
+
+        const projectWord = visibleCount === 1 ? 'project' : 'projects';
+        countLabel.textContent = query === '' && selectedStatus === ''
+            ? `Showing ${visibleCount} ${projectWord}`
+            : `${visibleCount} of ${projectRows.length} projects`;
+
+        if (emptyRow) {
+            emptyRow.hidden = visibleCount !== 0;
+        }
+    };
+
+    searchInput.addEventListener('input', updateDirectory);
+    statusFilter.addEventListener('change', updateDirectory);
+    updateDirectory();
+})();
+</script>
 
 <?php include '../../includes/footer.php'; ?>

@@ -751,9 +751,29 @@ body,
 
 .overview-search-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 0.7rem;
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
+}
+
+.overview-search-field {
+    position: relative;
+    min-width: 0;
+}
+
+.overview-search-field > i {
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    left: 0.3rem;
+    color: var(--gray-500);
+    font-size: 0.88rem;
+    pointer-events: none;
+    transform: translateY(-50%);
+    transition: color 0.18s ease;
+}
+
+.overview-search-field:focus-within > i {
+    color: var(--insight-primary);
 }
 
 .overview-search-input,
@@ -767,6 +787,15 @@ body,
     background: #fff;
 }
 
+.overview-search-field .overview-search-input {
+    border-width: 0 0 1px;
+    border-color: var(--gray-300);
+    border-radius: 0;
+    padding: 0.72rem 0.25rem 0.72rem 2rem;
+    background: transparent;
+    box-shadow: none;
+}
+
 .overview-search-input:focus,
 .overview-sort-select:focus {
     outline: none;
@@ -774,17 +803,10 @@ body,
     box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
 }
 
-.overview-search-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.45rem;
-    border-radius: 14px;
-    padding: 0.78rem 1rem;
-    border: none;
-    background: linear-gradient(135deg, var(--insight-primary) 0%, var(--insight-dark) 100%);
-    color: #fff;
-    font-weight: 700;
+.overview-search-field .overview-search-input:focus {
+    border-color: var(--insight-primary);
+    background: transparent;
+    box-shadow: 0 2px 0 rgba(31, 99, 146, 0.12);
 }
 
 .overview-results-note {
@@ -827,20 +849,33 @@ body,
 .overview-project-card {
     background: #fff;
     border: 1px solid var(--gray-200);
-    border-radius: 28px;
-    box-shadow: var(--shadow-sm);
+    border-radius: 20px;
+    box-shadow: 0 14px 32px rgba(15, 74, 110, 0.09);
     overflow: hidden;
 }
 
 .overview-project-card summary {
+    position: relative;
     list-style: none;
     cursor: pointer;
-    padding: 1.35rem 1.5rem;
+    padding: 1.15rem 1.35rem;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 1rem;
+    border-bottom: 1px solid transparent;
     background: #fff;
+    color: var(--gray-900);
+    transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.overview-project-card summary:hover {
+    background: #f8fbfd;
+}
+
+.overview-project-card[open] summary {
+    border-bottom-color: rgba(31, 99, 146, 0.12);
+    background: #f8fbfd;
 }
 
 .overview-project-card summary::-webkit-details-marker {
@@ -856,6 +891,8 @@ body,
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .overview-project-toggle {
@@ -866,21 +903,27 @@ body,
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    border: 1px solid rgba(31, 99, 146, 0.12);
     background: rgba(31, 99, 146, 0.08);
     color: var(--insight-primary);
-    transition: transform 0.2s ease, background 0.2s ease;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
 }
 
 .overview-project-card[open] .overview-project-toggle {
     transform: rotate(180deg);
+    border-color: rgba(31, 99, 146, 0.2);
     background: rgba(31, 99, 146, 0.14);
 }
 
 .overview-project-body {
-    padding: 0 1.5rem 1.5rem;
+    position: relative;
+    padding: 1.25rem 1.35rem 1.35rem;
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 1rem;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.08), transparent 32%),
+        linear-gradient(180deg, #f8fbfd 0%, #ffffff 100%);
 }
 
 .overview-project-card.risk-low {
@@ -915,21 +958,38 @@ body,
     display: flex;
     justify-content: space-between;
     gap: 1.15rem;
-    align-items: flex-start;
-    padding-bottom: 0.2rem;
+    align-items: center;
 }
 
-.overview-project-head h5 {
+.overview-project-card summary .overview-project-head h5 {
     margin: 0 0 0.35rem;
-    font-size: 1rem;
-    font-weight: 700;
     color: var(--gray-900);
+    font-size: 1.05rem;
+    font-weight: 700;
 }
 
-.overview-project-meta {
+.overview-project-card summary .overview-project-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     font-size: 0.76rem;
     color: var(--gray-600);
     line-height: 1.5;
+}
+
+.overview-project-meta > span + span::before {
+    margin: 0 0.38rem;
+    color: var(--gray-400);
+    content: '|';
+}
+
+.overview-project-meta strong {
+    color: inherit;
+    font-weight: 600;
+}
+
+.overview-project-card summary .overview-summary {
+    color: var(--gray-700);
 }
 
 .overview-project-badges {
@@ -1042,31 +1102,165 @@ body,
 
 .overview-metric-grid {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.7rem;
-    margin-bottom: 0.9rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.1rem;
+    width: min(100%, 20rem);
 }
 
 .overview-mini-card {
-    border: 1px solid var(--gray-200);
-    border-radius: 18px;
-    padding: 0.75rem 0.85rem;
-    background: #fff;
+    --overview-metric-color: var(--insight-primary);
+    --overview-metric-track: #dce6ec;
+    --overview-gauge-center: #f9fcfe;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: 0.45rem;
+    min-width: 0;
 }
 
-.overview-mini-card span {
-    display: block;
-    font-size: 0.67rem;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--gray-600);
-    margin-bottom: 0.2rem;
+.overview-mini-card.is-delay {
+    --overview-metric-color: #dc2626;
 }
 
-.overview-mini-card strong {
-    font-size: 1.35rem;
-    color: var(--insight-primary);
+.overview-mini-card.is-success {
+    --overview-metric-color: #15803d;
+}
+
+.overview-mini-gauge {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 6.25rem;
+    height: 6.25rem;
+    border-radius: 50%;
+    background: conic-gradient(
+        from 220deg,
+        var(--overview-metric-color) 0 var(--overview-metric-value, 0%),
+        var(--overview-metric-track) var(--overview-metric-value, 0%) 100%
+    );
+    box-shadow: 0 8px 18px rgba(15, 74, 110, 0.08);
+}
+
+.overview-mini-gauge::before {
+    position: absolute;
+    inset: 0.55rem;
+    border-radius: inherit;
+    background: var(--overview-gauge-center);
+    content: '';
+}
+
+.overview-mini-gauge strong {
+    position: relative;
+    z-index: 1;
+    color: var(--overview-metric-color);
+    font-size: 1.3rem;
     line-height: 1;
+}
+
+.overview-mini-icon {
+    position: absolute;
+    z-index: 2;
+    top: -0.1rem;
+    right: 0.05rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.65rem;
+    height: 1.65rem;
+    border: 3px solid var(--overview-gauge-center);
+    border-radius: 50%;
+    background: var(--overview-metric-color);
+    color: #fff;
+    box-sizing: content-box;
+    box-shadow: 0 4px 10px rgba(15, 74, 110, 0.12);
+    font-size: 0.68rem;
+}
+
+.overview-mini-label {
+    color: var(--gray-700);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.overview-signal-layout {
+    display: grid;
+    grid-template-columns: minmax(240px, 20rem) minmax(260px, 1fr);
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.overview-signal-copy {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    padding: 0.35rem 0 3.5rem 1.5rem;
+    border-left: 1px solid var(--gray-200);
+    background: transparent;
+}
+
+.overview-assessment-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+.overview-assessment-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 2.15rem;
+    height: 2.15rem;
+    border-radius: 50%;
+    background: rgba(31, 99, 146, 0.1);
+    color: var(--insight-primary);
+    font-size: 0.82rem;
+}
+
+.overview-project-card.risk-high .overview-assessment-icon {
+    background: rgba(220, 38, 38, 0.1);
+    color: #dc2626;
+}
+
+.overview-project-card.risk-medium .overview-assessment-icon {
+    background: rgba(217, 119, 6, 0.1);
+    color: #b45309;
+}
+
+.overview-project-card.risk-low .overview-assessment-icon {
+    background: rgba(22, 163, 74, 0.1);
+    color: #15803d;
+}
+
+.overview-assessment-copy {
+    display: grid;
+    gap: 0.08rem;
+    min-width: 0;
+}
+
+.overview-assessment-kicker {
+    color: var(--gray-600);
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.overview-assessment-title {
+    color: var(--gray-900);
+    font-size: 0.9rem;
+    font-weight: 800;
+}
+
+.overview-signal-copy > .overview-summary {
+    max-width: 42rem;
+    margin-top: 0.65rem;
+    font-size: 0.84rem;
+    line-height: 1.55;
 }
 
 .overview-summary {
@@ -1123,10 +1317,25 @@ body,
 }
 
 .overview-footer {
+    position: absolute;
+    right: 1.35rem;
+    bottom: 1.35rem;
     display: flex;
+    justify-content: flex-end;
     gap: 0.75rem;
     flex-wrap: wrap;
-    margin-top: 0.1rem;
+    padding-top: 0.1rem;
+}
+
+.overview-project-body.has-no-insight {
+    min-height: 7.5rem;
+}
+
+.overview-project-body .overview-footer .toolbar-button {
+    padding: 0.65rem 0.9rem;
+    border-radius: 10px;
+    font-size: 0.78rem;
+    box-shadow: 0 10px 20px rgba(31, 99, 146, 0.18);
 }
 
 .action-modal-note {
@@ -1553,18 +1762,30 @@ body,
     color: var(--insight-text);
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card summary,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-body {
     background: var(--insight-surface);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card summary {
+    background: var(--insight-surface);
+    box-shadow: none;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card summary:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card[open] summary {
+    border-bottom-color: rgba(138, 210, 255, 0.12);
+    background: var(--insight-surface-soft);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-toggle {
-    background: rgba(157, 182, 207, 0.1);
-    color: var(--insight-text);
+    border-color: rgba(138, 210, 255, 0.17);
+    background: rgba(138, 210, 255, 0.1);
+    color: #e3f1fc;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card[open] .overview-project-toggle {
-    background: rgba(157, 182, 207, 0.16);
+    border-color: rgba(138, 210, 255, 0.26);
+    background: rgba(138, 210, 255, 0.18);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-card .card-header,
@@ -1577,6 +1798,7 @@ body,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .section-card .card-header h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-head h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-panel-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-assessment-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .metric-card .value,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-brief-card h6,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .mini-stat .value,
@@ -1623,10 +1845,29 @@ body,
     box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-search-field > i {
+    color: var(--insight-muted);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-search-field:focus-within > i {
+    color: #8cc7ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-search-field .overview-search-input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-search-field .overview-search-input:focus {
+    background: transparent;
+    box-shadow: none;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-search-field .overview-search-input:focus {
+    border-color: #8cc7ff;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-control-label,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-results-note,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-meta,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-mini-card span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-mini-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-assessment-kicker,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-summary,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-list,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .action-modal-note,
@@ -1656,13 +1897,21 @@ body,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-low .overview-panel.after,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-medium .overview-panel.after,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-high .overview-panel.after,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-mini-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-note,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .role-brief-block,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .mini-stat,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .scenario-note {
     background: var(--insight-surface-soft);
     border-color: var(--insight-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-signal-copy {
+    border-color: var(--insight-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-mini-card {
+    --overview-metric-track: #263b4d;
+    --overview-gauge-center: var(--insight-surface);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-project-card.risk-low,
@@ -1757,6 +2006,22 @@ body,
     .budget-insight-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 
+@media (max-width: 991.98px) {
+    .overview-signal-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .overview-signal-copy {
+        padding: 1rem 0 0;
+        border-top: 1px solid var(--gray-200);
+        border-left: 0;
+    }
+
+    .overview-footer {
+        position: static;
+    }
+}
+
 @media (max-width: 768px) {
     .metric-grid,
     .mini-stat-grid {
@@ -1780,6 +2045,7 @@ body,
 
     .overview-project-head {
         flex-direction: column;
+        align-items: flex-start;
     }
 
     .overview-project-head .overview-project-badges {
@@ -1796,11 +2062,46 @@ body,
     }
 
 }
+
+@media (max-width: 575.98px) {
+    .overview-project-card summary {
+        align-items: flex-start;
+        padding: 1rem;
+    }
+
+    .overview-project-body {
+        padding: 1rem;
+    }
+
+    .overview-metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+    }
+
+    .overview-mini-card {
+        padding: 0;
+    }
+
+    .overview-mini-card.is-success {
+        padding: 0;
+        border-top: 0;
+        border-left: 0;
+    }
+
+    .overview-mini-gauge {
+        width: 5.5rem;
+        height: 5.5rem;
+    }
+
+    .overview-footer .toolbar-button {
+        width: 100%;
+        justify-content: center;
+    }
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
     <div class="insights-hero">
-        <span class="badge-tone info mb-3">Project Insights</span>
         <h1><?php echo htmlspecialchars($currentView === 'statistics' ? $projectTitle : 'Project Insights Overview'); ?></h1>
         <p>
             <?php if ($currentView === 'statistics'): ?>
@@ -1809,17 +2110,13 @@ body,
                 Project activity is monitored continuously. Open a project to review the latest generated insights and response signals.
             <?php endif; ?>
         </p>
-        <div class="project-meta">
-            <?php if ($currentView === 'statistics'): ?>
+        <?php if ($currentView === 'statistics'): ?>
+            <div class="project-meta">
                 <div class="project-chip"><strong>Client:</strong> <?php echo htmlspecialchars($projectClient); ?></div>
                 <div class="project-chip"><strong>Status:</strong> <?php echo htmlspecialchars($projectStatus); ?></div>
                 <div class="project-chip"><strong>Complexity:</strong> <?php echo htmlspecialchars($projectComplexity); ?></div>
-            <?php else: ?>
-                <div class="project-chip"><strong>Projects:</strong> <?php echo count($projects); ?></div>
-                <div class="project-chip"><strong>Role:</strong> <?php echo htmlspecialchars(getRoleDisplayName($userRole)); ?></div>
-                <div class="project-chip"><strong>Focus:</strong> Delay, confidence, and delivery signals</div>
-            <?php endif; ?>
-        </div>
+            </div>
+        <?php endif; ?>
     </div>
 
     <?php if ($currentView === 'statistics'): ?>
@@ -2537,16 +2834,15 @@ body,
         <div class="overview-control-card">
             <label class="overview-control-label" for="overviewSearch">Search Projects</label>
             <div class="overview-search-row">
-                <input
-                    type="text"
-                    id="overviewSearch"
-                    class="overview-search-input"
-                    placeholder="Search by project, client, status, or timeline"
-                >
-                <button type="button" class="overview-search-button" id="overviewSearchButton">
-                    <i class="fas fa-search"></i>
-                    Search
-                </button>
+                <div class="overview-search-field">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input
+                        type="text"
+                        id="overviewSearch"
+                        class="overview-search-input"
+                        placeholder="Search by project, client, status, or timeline"
+                    >
+                </div>
             </div>
         </div>
         <div class="overview-control-card">
@@ -2591,6 +2887,11 @@ body,
             $riskLevel = $overviewInsight['before']['risk_level'] ?? 'Low';
             $riskClass = $riskLevel === 'High' ? 'delay-risk-high' : ($riskLevel === 'Medium' ? 'delay-risk-medium' : 'delay-risk-low');
             $riskOrder = $riskLevel === 'High' ? 3 : ($riskLevel === 'Medium' ? 2 : 1);
+            $riskAssessmentTitle = $riskLevel === 'High'
+                ? 'High delivery risk detected'
+                : ($riskLevel === 'Medium' ? 'Moderate delivery risk detected' : 'Healthy delivery outlook');
+            $delayChance = max(0, min(100, (int) ($overviewInsight['before']['delay_probability'] ?? 0)));
+            $successChance = max(0, min(100, (int) ($overviewInsight['before']['success_probability'] ?? 0)));
             $attentionIssueCount = (int) ($attentionProjectsById[$projectId] ?? 0);
             $needsAttention = $attentionIssueCount > 0;
             $createdAtTs = !empty($project['created_at']) ? (strtotime((string) $project['created_at']) ?: 0) : 0;
@@ -2625,9 +2926,9 @@ body,
                             <div>
                                 <h5><?php echo htmlspecialchars($project['name']); ?></h5>
                                 <div class="overview-project-meta">
-                                    Client: <?php echo htmlspecialchars($project['client_name']); ?> |
-                                    Status: <?php echo htmlspecialchars($projectStatusLabel); ?> |
-                                    Timeline: <?php echo htmlspecialchars(delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))); ?>
+                                    <span><strong>Client:</strong> <?php echo htmlspecialchars($project['client_name']); ?></span>
+                                    <span><strong>Status:</strong> <?php echo htmlspecialchars($projectStatusLabel); ?></span>
+                                    <span><strong>Timeline:</strong> <?php echo htmlspecialchars(delayInsightsTimelineLabel((string) ($project['timeline_start'] ?? ''), (string) ($project['timeline_end'] ?? ''))); ?></span>
                                 </div>
                             </div>
                             <div class="overview-project-badges">
@@ -2646,33 +2947,49 @@ body,
                                 </span>
                             </div>
                         </div>
-                        <div class="overview-summary">Important delivery signals for this project.</div>
                     </div>
                     <span class="overview-project-toggle" aria-hidden="true">
                         <i class="fas fa-chevron-down"></i>
                     </span>
                 </summary>
 
-                <div class="overview-project-body">
+                <div class="overview-project-body <?php echo $overviewInsight === null ? 'has-no-insight' : ''; ?>">
                     <?php if ($overviewInsight !== null): ?>
-                        <div class="overview-metric-grid mb-3">
-                            <div class="overview-mini-card">
-                                <span>Delay Chance</span>
-                                <strong><?php echo (int) $overviewInsight['before']['delay_probability']; ?>%</strong>
+                        <div class="overview-signal-layout">
+                            <div class="overview-metric-grid">
+                                <div class="overview-mini-card is-delay" style="--overview-metric-value: <?php echo $delayChance; ?>%;">
+                                    <div class="overview-mini-gauge" role="img" aria-label="Delay chance: <?php echo $delayChance; ?> percent">
+                                        <strong><?php echo $delayChance; ?>%</strong>
+                                        <span class="overview-mini-icon" aria-hidden="true"><i class="fas fa-clock-rotate-left"></i></span>
+                                    </div>
+                                    <span class="overview-mini-label">Delay Chance</span>
+                                </div>
+                                <div class="overview-mini-card is-success" style="--overview-metric-value: <?php echo $successChance; ?>%;">
+                                    <div class="overview-mini-gauge" role="img" aria-label="Success chance: <?php echo $successChance; ?> percent">
+                                        <strong><?php echo $successChance; ?>%</strong>
+                                        <span class="overview-mini-icon" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
+                                    </div>
+                                    <span class="overview-mini-label">Success Chance</span>
+                                </div>
                             </div>
-                            <div class="overview-mini-card">
-                                <span>Success Chance</span>
-                                <strong><?php echo (int) $overviewInsight['before']['success_probability']; ?>%</strong>
+                            <div class="overview-signal-copy">
+                                <div class="overview-assessment-heading">
+                                    <span class="overview-assessment-icon" aria-hidden="true"><i class="fas fa-chart-line"></i></span>
+                                    <span class="overview-assessment-copy">
+                                        <span class="overview-assessment-kicker">Risk Assessment</span>
+                                        <strong class="overview-assessment-title"><?php echo htmlspecialchars($riskAssessmentTitle); ?></strong>
+                                    </span>
+                                </div>
+                                <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['before']['summary']); ?></p>
+                                <?php if (!empty($overviewInsight['after']['reasons'])): ?>
+                                    <div class="overview-tags">
+                                        <?php foreach (array_slice($overviewInsight['after']['reasons'], 0, 2) as $reason): ?>
+                                            <span class="overview-tag"><?php echo htmlspecialchars($reason); ?></span>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                         </div>
-                        <p class="overview-summary"><?php echo htmlspecialchars($overviewInsight['after']['summary'] ?: $overviewInsight['before']['summary']); ?></p>
-                        <?php if (!empty($overviewInsight['after']['reasons'])): ?>
-                            <div class="overview-tags">
-                                <?php foreach (array_slice($overviewInsight['after']['reasons'], 0, 2) as $reason): ?>
-                                    <span class="overview-tag"><?php echo htmlspecialchars($reason); ?></span>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
                     <?php else: ?>
                         <p class="overview-summary">Insight details are not available yet for this project.</p>
                     <?php endif; ?>
@@ -2879,7 +3196,6 @@ if (actionScenarioEl) {
 
 const overviewGridEl = document.querySelector('.overview-card-grid');
 const overviewSearchEl = document.getElementById('overviewSearch');
-const overviewSearchButtonEl = document.getElementById('overviewSearchButton');
 const overviewSortEl = document.getElementById('overviewSort');
 const overviewResultsNoteEl = document.getElementById('overviewResultsNote');
 
@@ -2932,10 +3248,6 @@ function applyOverviewFilters() {
 
 if (overviewSearchEl) {
     overviewSearchEl.addEventListener('input', applyOverviewFilters);
-}
-
-if (overviewSearchButtonEl) {
-    overviewSearchButtonEl.addEventListener('click', applyOverviewFilters);
 }
 
 if (overviewSortEl) {

@@ -99,8 +99,8 @@ include '../../includes/navbar.php';
 .process-tab-shell {
     background: #fff;
     border: 1px solid #dfe8f1;
-    border-radius: 8px;
-    box-shadow: 0 8px 20px rgba(15, 42, 64, 0.04);
+    border-radius: 16px;
+    box-shadow: 0 12px 30px rgba(15, 42, 64, 0.06);
 }
 .process-filter-card { padding: 1.05rem; margin-bottom: 1rem; }
 .process-filter-card .row { min-width: 0; }
@@ -119,104 +119,168 @@ include '../../includes/navbar.php';
 .process-filter-card label { color: #64748b; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
 .process-tabs {
     display: flex;
-    gap: 0.35rem;
+    gap: 0.25rem;
     margin-bottom: 1rem;
-    padding: 0.3rem;
+    padding: 0.35rem;
     width: fit-content;
     max-width: 100%;
     border: 1px solid #dfe8f1;
-    border-radius: 8px;
+    border-radius: 14px;
     background: #fff;
     overflow-x: auto;
-    box-shadow: 0 8px 20px rgba(15, 42, 64, 0.035);
+    box-shadow: 0 8px 22px rgba(15, 42, 64, 0.05);
 }
 .process-tabs .nav-link {
     border: 0;
-    border-radius: 6px;
+    border-radius: 10px;
     background: transparent;
     color: #475569;
-    font-weight: 800;
-    min-height: 44px;
-    padding: 0.6rem 1rem;
+    font-weight: 650;
+    min-height: 46px;
+    padding: 0.65rem 0.9rem;
     white-space: nowrap;
+    transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+.process-tabs .nav-link:hover {
+    background: #f2f7fb;
+    color: #155f88;
 }
 .process-tabs .nav-link.active {
-    background: #1f6392;
-    color: #fff;
+    background: #e8f3f9;
+    color: #155f88;
+    box-shadow: inset 0 0 0 1px #cde2ef;
 }
 .process-tabs .badge {
-    min-width: 32px;
-    border-radius: 6px;
+    min-width: 30px;
+    padding: 0.38rem 0.5rem;
+    border-radius: 999px;
+    background: #fff !important;
+    color: #31516a !important;
+    font-weight: 650;
 }
 .process-tab-shell { overflow: hidden; }
 .process-tab-head {
     display: flex;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1.05rem 1.2rem;
+    padding: 1.15rem 1.3rem;
     border-bottom: 1px solid #e5edf5;
-    background: #fff;
+    background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
 }
 .process-tab-head > div { min-width: 0; }
-.process-tab-head h5 { margin: 0; color: #172033; font-size: 1rem; font-weight: 750; }
-.process-tab-head p { margin: 0.2rem 0 0; color: #64748b; font-size: 0.82rem; overflow-wrap: anywhere; }
+.process-tab-head h5 {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin: 0;
+    color: #172033;
+    font-size: 1rem;
+    font-weight: 700;
+}
+.process-tab-head h5 i {
+    display: inline-grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    margin-right: 0 !important;
+    border-radius: 10px;
+    background: #e8f3f9;
+    color: #17658e;
+    font-size: 0.88rem;
+}
+.process-tab-head p { margin: 0.35rem 0 0 2.65rem; color: #64748b; font-size: 0.82rem; overflow-wrap: anywhere; }
 .process-metric-strip {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 0.8rem;
-    padding: 1rem 1.2rem;
+    gap: 0;
+    padding: 0.65rem 1.2rem;
     border-bottom: 1px solid #eef3f7;
-    background: #f8fbfd;
+    background: #fff;
 }
 .process-metric {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    align-items: center;
+    gap: 0.75rem;
     min-width: 0;
-    padding: 0.9rem;
-    border: 1px solid #e5edf5;
-    border-radius: 8px;
-    background: #fff;
-    box-shadow: 0 6px 16px rgba(15, 42, 64, 0.03);
+    padding: 0.75rem 1rem;
+    border: 0;
+    background: transparent;
 }
-.process-metric span { display: block; color: #64748b; font-size: 0.68rem; font-weight: 850; text-transform: uppercase; }
-.process-metric strong { display: block; margin-top: 0.2rem; color: #172033; font-size: 1.12rem; overflow-wrap: anywhere; }
-.process-metric small { display: block; margin-top: 0.2rem; color: #64748b; overflow-wrap: anywhere; }
+.process-metric + .process-metric { border-left: 1px solid #e5edf5; }
+.process-metric-icon {
+    display: inline-grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: #edf6fb;
+    color: #17658e;
+    font-size: 0.95rem;
+}
+.process-metric-copy { min-width: 0; }
+.process-metric-copy > span { display: block; color: #64748b; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.035em; text-transform: uppercase; }
+.process-metric strong { display: block; margin-top: 0.12rem; color: #172033; font-size: 1.08rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.process-metric small { display: block; margin-top: 0.14rem; color: #64748b; font-size: 0.76rem; overflow-wrap: anywhere; }
 .process-list-header {
     display: grid;
-    grid-template-columns: minmax(128px, 0.58fr) minmax(0, 1.75fr) minmax(220px, 0.9fr) minmax(132px, 0.58fr);
+    grid-template-columns: minmax(128px, 0.55fr) minmax(0, 1.7fr) minmax(220px, 0.95fr) minmax(150px, 0.62fr);
     gap: 1rem;
-    padding: 0.7rem 1.2rem;
+    padding: 0.72rem 1.35rem;
     border-bottom: 1px solid #e5edf5;
-    background: #f8fbfd;
+    background: #f5f9fc;
     color: #61758a;
-    font-size: 0.7rem;
-    font-weight: 850;
-    letter-spacing: 0.02em;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
     text-transform: uppercase;
 }
 .process-scroll-list {
     display: grid;
-    gap: 0;
+    gap: 0.7rem;
     max-height: min(680px, 64vh);
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 1rem 1.2rem;
+    padding: 1rem;
+    background: #f6f9fc;
     scrollbar-gutter: stable;
 }
 .process-event {
     display: grid;
-    grid-template-columns: minmax(128px, 0.58fr) minmax(0, 1.75fr) minmax(220px, 0.9fr) minmax(132px, 0.58fr);
+    grid-template-columns: minmax(128px, 0.55fr) minmax(0, 1.7fr) minmax(220px, 0.95fr) minmax(150px, 0.62fr);
     gap: 1rem;
     align-items: center;
+    position: relative;
     min-width: 0;
-    padding: 0.95rem 0;
-    border: 0;
-    border-bottom: 1px solid #e5edf5;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    transition: background 0.2s ease;
+    padding: 1rem 1rem 1rem 1.15rem;
+    border: 1px solid #e2eaf1;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 5px 14px rgba(15, 42, 64, 0.035);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.process-event::before {
+    content: "";
+    position: absolute;
+    top: 14px;
+    bottom: 14px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: #4b94ba;
+    opacity: 0;
+    transform: scaleY(0.45);
+    transition: opacity 0.18s ease, transform 0.18s ease;
 }
 .process-event:hover {
-    background: #f8fbfd;
+    background: #f6fbfe;
+    border-color: #cbdde9;
+    box-shadow: 0 9px 22px rgba(15, 42, 64, 0.07);
+    transform: translateY(-1px);
+}
+.process-event:hover::before {
+    opacity: 1;
+    transform: scaleY(1);
 }
 .process-event-time {
     min-width: 0;
@@ -224,10 +288,11 @@ include '../../includes/navbar.php';
     font-size: 0.78rem;
     overflow-wrap: anywhere;
 }
-.process-event-time strong { display: block; color: #172033; font-size: 0.86rem; }
+.process-event-time strong { display: block; color: #172033; font-size: 0.84rem; font-weight: 700; }
+.process-event-time span { display: block; margin-top: 0.2rem; font-size: 0.74rem; }
 .process-event-main { min-width: 0; }
-.process-event-title { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
-.process-event-title strong { min-width: 0; color: #172033; font-size: 0.95rem; overflow-wrap: anywhere; }
+.process-event-title { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.42rem; }
+.process-event-title strong { min-width: 0; color: #172033; font-size: 0.91rem; font-weight: 700; overflow-wrap: anywhere; }
 .process-pill {
     display: inline-flex;
     align-items: center;
@@ -238,7 +303,7 @@ include '../../includes/navbar.php';
     background: #edf6fb;
     color: #1f6392;
     font-size: 0.68rem;
-    font-weight: 800;
+    font-weight: 650;
     white-space: normal;
     overflow-wrap: anywhere;
     line-height: 1.25;
@@ -252,7 +317,7 @@ include '../../includes/navbar.php';
 .process-pill.revision { background: #fee2e2; color: #b91c1c; }
 .process-pill.version { background: #e2e8f0; color: #334155; }
 .process-pill.release { background: #cffafe; color: #0e7490; }
-.process-meta { display: flex; flex-direction: column; gap: 0.38rem; color: #64748b; font-size: 0.78rem; }
+.process-meta { display: flex; flex-direction: column; gap: 0.42rem; color: #64748b; font-size: 0.78rem; }
 .process-meta span {
     display: inline-flex;
     align-items: center;
@@ -265,6 +330,12 @@ include '../../includes/navbar.php';
     background: transparent;
     overflow-wrap: anywhere;
     word-break: break-word;
+}
+.process-meta i {
+    width: 16px;
+    margin-right: 0 !important;
+    color: #4f7d9b;
+    text-align: center;
 }
 .process-status-flow { margin-top: 0.45rem; color: #475569; font-size: 0.82rem; overflow-wrap: anywhere; }
 .process-note {
@@ -279,12 +350,14 @@ include '../../includes/navbar.php';
 }
 .process-duration {
     min-width: 0;
+    padding-left: 1rem;
+    border-left: 1px solid #e5edf5;
     text-align: right;
     overflow-wrap: anywhere;
 }
-.process-duration strong { display: block; color: #172033; font-size: 1rem; }
-.process-duration span { color: #64748b; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; overflow-wrap: anywhere; }
-.process-duration small { display: block; overflow-wrap: anywhere; }
+.process-duration strong { display: block; margin-top: 0.14rem; color: #172033; font-size: 0.96rem; font-weight: 700; }
+.process-duration span { color: #64748b; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; overflow-wrap: anywhere; }
+.process-duration small { display: block; margin-top: 0.15rem; color: #7b8b9b; font-size: 0.72rem; overflow-wrap: anywhere; }
 .process-duration.is-slow strong { color: #b45309; }
 .process-empty { padding: 2rem; text-align: center; color: #64748b; }
 .process-empty i { display: block; margin-bottom: 0.7rem; color: #1f6392; font-size: 1.8rem; }
@@ -292,41 +365,59 @@ include '../../includes/navbar.php';
     display: grid;
     grid-template-columns: minmax(230px, 1.35fr) minmax(150px, 0.85fr) minmax(150px, 0.85fr) minmax(150px, 0.85fr) minmax(150px, 0.8fr) minmax(140px, 0.75fr);
     gap: 1rem;
-    padding: 0.7rem 1.2rem;
+    padding: 0.72rem 1.35rem;
     border-bottom: 1px solid #e5edf5;
-    background: #f8fbfd;
+    background: #f5f9fc;
     color: #61758a;
-    font-size: 0.7rem;
-    font-weight: 850;
-    letter-spacing: 0.02em;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
     text-transform: uppercase;
 }
 .developer-duration-list {
     display: grid;
-    gap: 0;
-    padding-top: 0.25rem;
-    padding-bottom: 0.25rem;
+    gap: 0.7rem;
+    padding: 1rem;
 }
 .developer-duration-card {
     display: grid;
     grid-template-columns: minmax(230px, 1.35fr) minmax(150px, 0.85fr) minmax(150px, 0.85fr) minmax(150px, 0.85fr) minmax(150px, 0.8fr) minmax(140px, 0.75fr);
     align-items: center;
     gap: 1rem;
+    position: relative;
     min-width: 0;
-    padding: 0.95rem 0;
-    border: 0;
-    border-bottom: 1px solid #e5edf5;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: none;
-    transition: background 0.2s ease;
+    padding: 1rem 1rem 1rem 1.15rem;
+    border: 1px solid #e2eaf1;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 5px 14px rgba(15, 42, 64, 0.035);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.developer-duration-card::before {
+    content: "";
+    position: absolute;
+    top: 14px;
+    bottom: 14px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: #4b94ba;
+    opacity: 0;
+    transform: scaleY(0.45);
+    transition: opacity 0.18s ease, transform 0.18s ease;
 }
 .developer-duration-card:hover {
-    background: #f8fbfd;
+    background: #f6fbfe;
+    border-color: #cbdde9;
+    box-shadow: 0 9px 22px rgba(15, 42, 64, 0.07);
+    transform: translateY(-1px);
 }
-.developer-duration-card:last-child { border-bottom: 0; }
+.developer-duration-card:hover::before {
+    opacity: 1;
+    transform: scaleY(1);
+}
 .task-duration-name { min-width: 0; }
-.task-duration-name strong { display: block; color: #172033; font-size: 0.95rem; overflow-wrap: anywhere; }
+.task-duration-name strong { display: block; color: #172033; font-size: 0.91rem; font-weight: 700; overflow-wrap: anywhere; }
 .task-duration-meta {
     display: flex;
     flex-wrap: wrap;
@@ -351,12 +442,12 @@ include '../../includes/navbar.php';
     color: #172033;
     overflow-wrap: anywhere;
 }
-.task-duration-value strong { display: block; color: #172033; font-size: 0.92rem; overflow-wrap: anywhere; }
+.task-duration-value strong { display: block; color: #172033; font-size: 0.88rem; font-weight: 650; overflow-wrap: anywhere; }
 .task-duration-value small {
     display: none;
     color: #64748b;
     font-size: 0.7rem;
-    font-weight: 800;
+    font-weight: 700;
     text-transform: uppercase;
     overflow-wrap: anywhere;
 }
@@ -399,18 +490,42 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tabs .nav-link {
     color: #b9cee2;
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tabs .nav-link:hover {
+    background: #10283c;
+    color: #d9ebf8;
+}
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tabs .nav-link.active {
     color: #fff;
+    background: #174d70;
+    box-shadow: inset 0 0 0 1px #28688e;
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-head { background: #0d1b2a; border-color: #20364a; }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric-strip { background: #081727; border-color: #20364a; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-head h5 i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric-icon {
+    background: #102f45;
+    color: #7fc3e8;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric-strip { background: #0d1b2a; border-color: #20364a; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric {
+    background: transparent;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric + .process-metric,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-duration {
+    border-color: #20364a;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-list-header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-duration-header {
     background: #081727;
     border-color: #20364a;
     color: #90aeca;
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-scroll-list {
+    background: #081727;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-event:hover,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-duration-card:hover {
     background: #102235;
+    border-color: #2b506e;
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-meta,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-value span,
@@ -431,7 +546,13 @@ include '../../includes/navbar.php';
     .developer-duration-header { display: none; }
     .process-event { grid-template-columns: minmax(0, 1fr); gap: 0.7rem; }
     .developer-duration-card { grid-template-columns: minmax(0, 1fr); gap: 0.7rem; }
-    .process-duration { text-align: left; }
+    .process-duration {
+        padding-top: 0.75rem;
+        padding-left: 0;
+        border-top: 1px solid #e5edf5;
+        border-left: 0;
+        text-align: left;
+    }
     .process-meta { flex-direction: row; flex-wrap: wrap; }
     .task-duration-value small { display: block; margin-bottom: 0.15rem; }
 }
@@ -439,6 +560,35 @@ include '../../includes/navbar.php';
     .process-event { grid-template-columns: 1fr; }
     .developer-duration-card { grid-template-columns: 1fr; }
     .process-duration { text-align: left; }
+}
+@media (max-width: 767.98px) {
+    .process-tabs {
+        width: 100%;
+    }
+    .process-tabs .nav-item {
+        flex: 1 0 auto;
+    }
+    .process-tabs .nav-link {
+        width: 100%;
+    }
+    .process-tab-head {
+        padding: 1rem;
+    }
+    .process-tab-head p {
+        margin-left: 0;
+    }
+    .process-metric-strip {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 0.4rem 1rem;
+    }
+    .process-metric + .process-metric {
+        border-top: 1px solid #e5edf5;
+        border-left: 0;
+    }
+    .process-scroll-list,
+    .developer-duration-list {
+        padding: 0.75rem;
+    }
 }
 </style>
 
@@ -506,19 +656,28 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="process-metric-strip">
                     <div class="process-metric">
-                        <span>Movements</span>
-                        <strong><?php echo (int) $summary['event_count']; ?></strong>
-                        <small>Filtered timeline entries</small>
+                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-route"></i></span>
+                        <div class="process-metric-copy">
+                            <span>Movements</span>
+                            <strong><?php echo (int) $summary['event_count']; ?></strong>
+                            <small>Filtered timeline entries</small>
+                        </div>
                     </div>
                     <div class="process-metric">
-                        <span>Projects shown</span>
-                        <strong><?php echo (int) $summary['project_count']; ?></strong>
-                        <small><?php echo $selectedProjectId > 0 ? 'Selected project only' : 'Across accessible projects'; ?></small>
+                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-diagram-project"></i></span>
+                        <div class="process-metric-copy">
+                            <span>Projects shown</span>
+                            <strong><?php echo (int) $summary['project_count']; ?></strong>
+                            <small><?php echo $selectedProjectId > 0 ? 'Selected project only' : 'Across accessible projects'; ?></small>
+                        </div>
                     </div>
                     <div class="process-metric">
-                        <span>Longest gap</span>
-                        <strong><?php echo $slowestEvent ? htmlspecialchars(processHistoryFormatDuration((int) $slowestEvent['gap_seconds'])) : 'None'; ?></strong>
-                        <small><?php echo $slowestEvent ? htmlspecialchars($projectNames[(int) $slowestEvent['project_id']] ?? 'Project') : 'No movement gap yet'; ?></small>
+                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-hourglass-half"></i></span>
+                        <div class="process-metric-copy">
+                            <span>Longest gap</span>
+                            <strong><?php echo $slowestEvent ? htmlspecialchars(processHistoryFormatDuration((int) $slowestEvent['gap_seconds'])) : 'None'; ?></strong>
+                            <small><?php echo $slowestEvent ? htmlspecialchars($projectNames[(int) $slowestEvent['project_id']] ?? 'Project') : 'No movement gap yet'; ?></small>
+                        </div>
                     </div>
                 </div>
                 <?php if (!$events): ?>
@@ -589,19 +748,28 @@ include '../../includes/navbar.php';
                 </div>
                 <div class="process-metric-strip">
                     <div class="process-metric">
-                        <span>Developer task rows</span>
-                        <strong><?php echo (int) $taskSummary['task_count']; ?></strong>
-                        <small>Developer-specific assignments</small>
+                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-list-check"></i></span>
+                        <div class="process-metric-copy">
+                            <span>Developer task rows</span>
+                            <strong><?php echo (int) $taskSummary['task_count']; ?></strong>
+                            <small>Developer-specific assignments</small>
+                        </div>
                     </div>
                     <div class="process-metric">
-                        <span>Completed developer work</span>
-                        <strong><?php echo (int) $taskSummary['completed_count']; ?></strong>
-                        <small>Average: <?php echo $taskSummary['average_completed_seconds'] !== null ? htmlspecialchars(processHistoryFormatDuration((int) $taskSummary['average_completed_seconds'])) : 'No completed work yet'; ?></small>
+                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
+                        <div class="process-metric-copy">
+                            <span>Completed developer work</span>
+                            <strong><?php echo (int) $taskSummary['completed_count']; ?></strong>
+                            <small>Average: <?php echo $taskSummary['average_completed_seconds'] !== null ? htmlspecialchars(processHistoryFormatDuration((int) $taskSummary['average_completed_seconds'])) : 'No completed work yet'; ?></small>
+                        </div>
                     </div>
                     <div class="process-metric">
-                        <span>Longest developer duration</span>
-                        <strong><?php echo $slowestTask ? htmlspecialchars(processHistoryFormatDuration((int) $slowestTask['workflow_seconds'])) : 'None'; ?></strong>
-                        <small><?php echo $slowestTask ? htmlspecialchars((string) $slowestTask['assigned_to'] . ' - ' . (string) $slowestTask['title']) : 'No tasks found'; ?></small>
+                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-stopwatch"></i></span>
+                        <div class="process-metric-copy">
+                            <span>Longest developer duration</span>
+                            <strong><?php echo $slowestTask ? htmlspecialchars(processHistoryFormatDuration((int) $slowestTask['workflow_seconds'])) : 'None'; ?></strong>
+                            <small><?php echo $slowestTask ? htmlspecialchars((string) $slowestTask['assigned_to'] . ' - ' . (string) $slowestTask['title']) : 'No tasks found'; ?></small>
+                        </div>
                     </div>
                 </div>
                 <?php if (!$taskDurations): ?>

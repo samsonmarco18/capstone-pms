@@ -737,11 +737,11 @@ function delayInsightsBuildBeforeMetrics(array $project): array
     $riskLevel = $delayProbability >= 70 ? 'High' : ($delayProbability >= 40 ? 'Medium' : 'Low');
 
     if ($riskLevel === 'High') {
-        $summary = 'This plan has a high chance of delay. Tighten the scope, add realistic buffer, and fix missing planning items before handoff.';
+        $summary = 'Delivery risk is high. Revalidate the scope, close planning gaps, and add a realistic schedule buffer before handoff.';
     } elseif ($riskLevel === 'Medium') {
-        $summary = 'This plan is workable but still exposed to delay. Small timeline, staffing, or documentation adjustments can raise the success rate.';
+        $summary = 'Delivery risk is moderate. Confirm capacity, dependencies, and milestone dates to improve schedule confidence.';
     } else {
-        $summary = 'The current plan looks healthy. Keep the timeline, owners, and documents aligned so the success rate stays strong.';
+        $summary = 'Delivery outlook is healthy. Maintain clear ownership, milestone reviews, and timely documentation to keep the project on track.';
     }
 
     $tips = [];
