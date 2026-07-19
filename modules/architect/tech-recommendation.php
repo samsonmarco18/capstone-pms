@@ -1,6 +1,7 @@
 <?php
 require_once '../../includes/auth.php';
 require_once '../../includes/project-template.php';
+require_once '../../includes/project-compilation.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -18,12 +19,7 @@ if (!$project) {
     header('Location: projects.php');
     exit();
 }
-$projectTemplate = !empty($project['project_template_snapshot'])
-    ? json_decode((string) $project['project_template_snapshot'], true)
-    : null;
-if (!is_array($projectTemplate)) {
-    $projectTemplate = projectTemplateFindByType($conn, (string) ($project['project_type'] ?? ''));
-}
+$projectTemplate = projectTemplateResolveForProject($conn, $project);
 
 function architectTechNormalize(string $value): string
 {
@@ -45,24 +41,133 @@ function architectTechIsTemplateRecommended(array $template = null, string $tech
             return true;
         }
 
-        $isDatabaseRecommendation = preg_match('/\b(mysql|mariadb|postgres|postgresql|sql|database|firestore|firebase)\b/i', (string) $item) === 1;
-        $isDatabaseService = str_contains($haystack, 'database') || str_contains($haystack, 'sql');
-        if ($isDatabaseRecommendation && $isDatabaseService) {
-            return true;
-        }
-
-        $isHostingRecommendation = preg_match('/\b(hosting|vps|cloud|aws|azure|web app|managed application)\b/i', (string) $item) === 1;
-        $isHostingService = str_contains($haystack, 'cloud') || str_contains($haystack, 'hosting') || str_contains($haystack, 'web app');
-        if ($isHostingRecommendation && $isHostingService) {
-            return true;
+        $technologyFamilies = [
+            '/\b(html|css|javascript|js)\b/i', '/\breact/i', '/\bvue/i', '/\bangular/i',
+            '/\b(php|laravel)\b/i', '/\bnode/i', '/\b(asp\.net|\.net)\b/i', '/\bdjango/i',
+            '/\bflutter/i', '/\bkotlin/i', '/\bmysql/i', '/\b(postgres|postgresql)\b/i',
+            '/\b(sql server|azure sql)\b/i', '/\b(firebase|firestore)\b/i',
+            '/\bazure/i', '/\baws/i', '/\bgoogle cloud|\bgcp\b/i', '/\b(vps|shared hosting)\b/i',
+            '/\b(oauth|openid|oidc)\b/i', '/\b(payment|gateway)\b/i', '/\b(email|sms)\b/i',
+            '/\bpush notification/i', '/\b(map|gps)\b/i', '/\b(report|export)\b/i',
+        ];
+        foreach ($technologyFamilies as $familyPattern) {
+            if (preg_match($familyPattern, (string) $item) === 1 && preg_match($familyPattern, $haystack) === 1) {
+                return true;
+            }
         }
     }
 
     return false;
 }
+
+function architectTechFeatureList(array $project, ?array $template): array
+{
+    $source = trim((string) ($template['features'] ?? $project['requested_features'] ?? ''));
+    $features = preg_split('/[\r\n,;]+/', $source) ?: [];
+    return array_values(array_filter(array_map('trim', $features), static fn(string $feature): bool => $feature !== ''));
+}
+
+function architectTechRelevantFeatures(array $features, string $category): string
+{
+    $patterns = [
+        'Frontend' => '/dashboard|portal|form|screen|interface|catalog|cart|search|registration|scheduling/i',
+        'Backend' => '/workflow|processing|management|transaction|notification|report|checkout|rules|api/i',
+        'Database' => '/record|profile|history|catalog|inventory|report|transaction|patient|account/i',
+        'Hosting' => '/portal|web|dashboard|online|upload|notification|integration|api/i',
+        'Security' => '/login|account|role|payment|patient|medical|record|admin|audit/i',
+        'Integrations' => '/payment|export|email|sms|notification|integration|third.party|api/i',
+    ];
+    $matches = array_values(array_filter($features, static fn(string $feature): bool => preg_match($patterns[$category] ?? '/./', $feature) === 1));
+    $selected = array_slice($matches !== [] ? $matches : $features, 0, 4);
+    return $selected !== [] ? implode(', ', $selected) : 'The approved core project features';
+}
+
+function architectTechEvortixBrief(array $project, ?array $template): array
+{
+    $features = architectTechFeatureList($project, $template);
+    $stack = (string) ($template['tech_stack'] ?? '');
+    $stackItems = array_values(array_filter(array_map('trim', preg_split('/[,|]+/', $stack) ?: [])));
+    $findStack = static function (string $pattern, string $fallback) use ($stackItems): string {
+        foreach ($stackItems as $item) {
+            if (preg_match($pattern, $item) === 1) return $item;
+        }
+        return $fallback;
+    };
+
+    $frontend = $findStack('/html|css|javascript|\bjs\b|react|vue|angular|frontend|bootstrap|tailwind|flutter|kotlin/i', 'HTML/CSS + JavaScript');
+    $backend = $findStack('/node|php|laravel|django|rails|spring|\.net|backend/i', 'PHP/Laravel');
+    $database = trim((string) ($template['database_technology'] ?? $project['database_server'] ?? '')) ?: $findStack('/mysql|maria|postgres|sql|mongo|firebase/i', 'MySQL');
+    $hosting = trim((string) ($template['hosting_platform'] ?? $project['cloud_platform'] ?? '')) ?: 'Managed VPS Hosting';
+    $security = trim((string) ($template['auth_method'] ?? '')) ?: 'OAuth / OpenID Connect with role-based access';
+    $integrations = trim((string) ($template['third_party_services'] ?? $template['integrations'] ?? '')) ?: 'Email/SMS Notification API as needed';
+
+    return [
+        ['category' => 'Frontend', 'recommendation' => $frontend, 'why' => 'Matches the user-facing experience and can reuse the project’s selected web stack.', 'features' => architectTechRelevantFeatures($features, 'Frontend'), 'impact' => 'Low to medium complexity; open-source frameworks usually have no license cost.', 'alternatives' => 'Vue, Angular, or server-rendered templates with Bootstrap.'],
+        ['category' => 'Backend', 'recommendation' => $backend, 'why' => 'Supports business rules, APIs, authentication, and maintainable feature workflows.', 'features' => architectTechRelevantFeatures($features, 'Backend'), 'impact' => 'Medium complexity; cost is mainly engineering and application hosting.', 'alternatives' => 'Laravel/PHP, Node.js, ASP.NET Core, Django, or Spring Boot.'],
+        ['category' => 'Database', 'recommendation' => $database, 'why' => 'Provides structured, reliable storage for the approved operational data.', 'features' => architectTechRelevantFeatures($features, 'Database'), 'impact' => 'Medium complexity; managed backups and high availability may add monthly cost.', 'alternatives' => 'PostgreSQL, MySQL/MariaDB, SQL Server, or MongoDB when document storage is justified.'],
+        ['category' => 'Hosting', 'recommendation' => $hosting, 'why' => 'Provides a deployable environment with scaling, monitoring, and backup options.', 'features' => architectTechRelevantFeatures($features, 'Hosting'), 'impact' => 'Adds recurring infrastructure cost; managed hosting reduces operational complexity.', 'alternatives' => 'Azure App Service, AWS, Google Cloud, a managed VPS, or compatible shared hosting.'],
+        ['category' => 'Security', 'recommendation' => $security, 'why' => 'Protects project data and enforces the access boundaries implied by the requirements.', 'features' => architectTechRelevantFeatures($features, 'Security'), 'impact' => 'Adds testing and implementation effort; managed identity or security services may add cost.', 'alternatives' => 'Application-native RBAC, OAuth/OIDC providers, cloud identity services, or a managed WAF.'],
+        ['category' => 'Integrations', 'recommendation' => $integrations, 'why' => 'Connects the system to external services required by approved workflows.', 'features' => architectTechRelevantFeatures($features, 'Integrations'), 'impact' => 'Complexity depends on vendor APIs, rate limits, testing environments, and usage fees.', 'alternatives' => 'Direct REST APIs, webhooks, queued adapters, or an integration platform.'],
+    ];
+}
+
+function architectTechEnsureRelevantCatalog(mysqli|PgsqlMysqliCompatConnection $conn, int $createdBy): void
+{
+    $catalog = [
+        ['HTML/CSS', 'Frontend', 0, 'Standards-based responsive web interface'],
+        ['JavaScript', 'Frontend', 0, 'Browser application language'],
+        ['React', 'Frontend', 0, 'Component-based web interface library'],
+        ['Vue.js', 'Frontend', 0, 'Progressive web interface framework'],
+        ['Angular', 'Frontend', 0, 'Enterprise frontend framework'],
+        ['Bootstrap', 'Frontend', 0, 'Responsive interface component toolkit'],
+        ['PHP/Laravel', 'Backend', 0, 'PHP application framework and runtime'],
+        ['Laravel', 'Backend', 0, 'PHP web application framework'],
+        ['Node.js', 'Backend', 0, 'JavaScript server runtime'],
+        ['ASP.NET Core', 'Backend', 0, 'Cross-platform .NET application framework'],
+        ['Django', 'Backend', 0, 'Python web application framework'],
+        ['Flutter', 'Mobile', 0, 'Cross-platform mobile application framework'],
+        ['Kotlin', 'Mobile', 0, 'Native Android development language'],
+        ['Kotlin/Flutter', 'Mobile', 0, 'Native or cross-platform mobile delivery option'],
+        ['MySQL', 'Database', 0, 'Relational application database'],
+        ['PostgreSQL', 'Database', 0, 'Advanced open-source relational database'],
+        ['SQL Server', 'Database', 500, 'Microsoft relational database platform'],
+        ['Firebase / Firestore', 'Database', 0, 'Managed realtime document database'],
+        ['Azure App Service', 'Hosting', 100, 'Managed Azure application hosting'],
+        ['AWS Application Hosting', 'Hosting', 150, 'Managed AWS application hosting baseline'],
+        ['Google Cloud Run', 'Hosting', 100, 'Managed container application hosting'],
+        ['Managed VPS Hosting', 'Hosting', 100, 'Managed virtual server hosting'],
+        ['OAuth / OpenID Connect', 'Security', 0, 'Standards-based authentication and authorization'],
+        ['Managed Web Application Firewall', 'Security', 100, 'Managed application traffic protection'],
+        ['Payment Gateway API', 'Integration', 0, 'Online payment service integration'],
+        ['Email/SMS Notification API', 'Integration', 0, 'Transactional notification integration'],
+        ['Push Notification Service', 'Integration', 0, 'Mobile and web push messaging'],
+        ['Maps and GPS API', 'Integration', 0, 'Mapping, geocoding, and location services'],
+        ['Reporting and Export Service', 'Integration', 0, 'Document, spreadsheet, and analytics export support'],
+    ];
+    $exists = $conn->prepare('SELECT id FROM technologies WHERE LOWER(name) = LOWER(?) LIMIT 1');
+    $insert = $conn->prepare("INSERT INTO technologies (name, category, price, status, renewal_cost, description, created_by) VALUES (?, ?, ?, 'active', ?, ?, ?)");
+    if (!$exists || !$insert) return;
+    foreach ($catalog as [$name, $category, $price, $description]) {
+        $exists->bind_param('s', $name);
+        $exists->execute();
+        if ($exists->get_result()->fetch_assoc()) continue;
+        $renewalCost = (float) $price;
+        $insert->bind_param('ssddsi', $name, $category, $price, $renewalCost, $description, $createdBy);
+        $insert->execute();
+    }
+    $exists->close();
+    $insert->close();
+}
+architectTechEnsureRelevantCatalog($conn, (int) $user['id']);
+$evortixTechnologyBrief = architectTechEvortixBrief($project, is_array($projectTemplate) ? $projectTemplate : null);
+$evortixBriefByCategory = [];
+foreach ($evortixTechnologyBrief as $briefItem) {
+    $evortixBriefByCategory[(string) ($briefItem['category'] ?? '')] = $briefItem;
+}
 $technologies = $conn->query("SELECT * FROM technologies WHERE status = 'active'");
 
 $existingRecommendations = [];
+$architectTechDssItems = [];
 $existingRecommendationResult = $conn->query("
     SELECT tech_id, service_type, estimated_cost, notes
     FROM tech_recommendations
@@ -141,6 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
     
     logActivity($user['id'], 'tech_recommendation', 'projects', $projectId, null, $_POST);
+    projectCompilationRecord($conn, $projectId, (int) $user['id'], 'technology');
     
     header('Location: developer-allocation.php?id=' . $projectId);
     exit();
@@ -740,7 +846,7 @@ a.progress-step:hover {
     <?php include '../../includes/architect-project-review-panel.php'; ?>
 
     <?php if (is_array($projectTemplate)): ?>
-    <div class="info-card mb-4">
+    <div class="info-card mb-4 architect-dss-source-card">
         <div class="card-header">
             <h5><i class="fas fa-lightbulb"></i> Template Technology Recommendation</h5>
         </div>
@@ -749,6 +855,11 @@ a.progress-step:hover {
             <p class="mb-2"><strong>Suggested stack:</strong> <?php echo htmlspecialchars((string) ($projectTemplate['tech_stack'] ?? 'Not specified')); ?></p>
             <p class="mb-2"><strong>Methodology:</strong> <?php echo htmlspecialchars((string) ($projectTemplate['methodology'] ?? 'Not specified')); ?></p>
             <p class="mb-0 text-muted"><?php echo htmlspecialchars((string) ($projectTemplate['architecture_notes'] ?? 'Use this template as a starting point and adjust the selected technologies for the client.')); ?></p>
+            <div class="architect-dss-source-controls">
+                <button type="button" class="btn btn-primary btn-sm" data-dss-tech-decision="accept"><i class="fas fa-robot me-1"></i> Accept suggested stack</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-dss-tech-decision="skip">Skip suggestions</button>
+            </div>
+            <small class="d-block mt-2 text-muted">The DSS assistant will not select anything until you accept.</small>
         </div>
     </div>
     <?php endif; ?>
@@ -767,7 +878,29 @@ a.progress-step:hover {
                             <?php
                                 $savedRecommendation = $existingRecommendations[(int) $tech['id']] ?? null;
                                 $templateRecommended = architectTechIsTemplateRecommended($projectTemplate, (string) ($tech['name'] ?? ''), (string) ($tech['category'] ?? ''));
-                                $isChecked = $savedRecommendation || $templateRecommended;
+                                if ($templateRecommended && !$savedRecommendation) {
+                                    $catalogCategory = strtolower((string) ($tech['category'] ?? ''));
+                                    $briefCategory = str_contains($catalogCategory, 'front') || str_contains($catalogCategory, 'mobile') ? 'Frontend'
+                                        : (str_contains($catalogCategory, 'back') ? 'Backend'
+                                        : (str_contains($catalogCategory, 'database') || str_contains($catalogCategory, 'sql') ? 'Database'
+                                        : (str_contains($catalogCategory, 'cloud') || str_contains($catalogCategory, 'host') ? 'Hosting'
+                                        : (str_contains($catalogCategory, 'security') ? 'Security'
+                                        : (str_contains($catalogCategory, 'integration') ? 'Integrations' : '')))));
+                                    $brief = $evortixBriefByCategory[$briefCategory] ?? [];
+                                    $architectTechDssItems[] = [
+                                        'label' => (string) ($tech['name'] ?? 'Technology'),
+                                        'detail' => 'Evortix recommends this ' . strtolower($briefCategory !== '' ? $briefCategory : 'technology') . ' stack item for the approved project features.',
+                                        'points' => array_values(array_filter([
+                                            !empty($brief['why']) ? 'Why it fits: ' . $brief['why'] : '',
+                                            !empty($brief['features']) ? 'Required by: ' . $brief['features'] : '',
+                                            !empty($brief['impact']) ? 'Cost/complexity: ' . $brief['impact'] : '',
+                                            !empty($brief['alternatives']) ? 'Alternatives: ' . $brief['alternatives'] : '',
+                                        ])),
+                                        'selector' => '#tech_' . (int) $tech['id'],
+                                    ];
+                                }
+                                // DSS recommendations remain suggestions until the architect explicitly accepts them.
+                                $isChecked = (bool) $savedRecommendation;
                             ?>
                             <div class="tech-item">
                                 <div class="row g-2">
@@ -881,14 +1014,14 @@ a.progress-step:hover {
             
             <div class="info-card">
                 <div class="card-header">
-                    <h5><i class="fas fa-lightbulb"></i> Recommendation Tips</h5>
+                    <h5><i class="fas fa-robot"></i> Evortix Review Guidance</h5>
                 </div>
                 <div class="card-body">
                     <ul class="tips-list">
-                        <li><i class="fas fa-lightbulb"></i> Choose technologies that align with project requirements</li>
-                        <li><i class="fas fa-lightbulb"></i> Consider scalability for future growth</li>
-                        <li><i class="fas fa-lightbulb"></i> Balance cost vs performance</li>
-                        <li><i class="fas fa-lightbulb"></i> Ensure compatibility with existing systems</li>
+                        <li><i class="fas fa-check-circle"></i> Evortix generates the category recommendations and rationale</li>
+                        <li><i class="fas fa-check-circle"></i> Confirm that cited features match the approved scope</li>
+                        <li><i class="fas fa-check-circle"></i> Review recurring costs and delivery complexity</li>
+                        <li><i class="fas fa-check-circle"></i> The Architect approves or adjusts the final stack</li>
                     </ul>
                 </div>
             </div>
@@ -899,10 +1032,22 @@ a.progress-step:hover {
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 $(document).ready(function() {
-    $('.tech-checkbox').change(function() {
-        if (!$(this).is(':checked') && String($(this).data('template-recommended')) === '1') {
+    $('[data-dss-tech-decision]').on('click', function() {
+        const accept = $(this).data('dss-tech-decision') === 'accept';
+        $('.tech-checkbox[data-template-recommended="1"]').each(function() {
+            $(this).prop('checked', accept).trigger('change');
+        });
+        window.appToast?.(accept ? 'Suggestions accepted' : 'Suggestions skipped', accept ? 'Template technologies are now selected for your review.' : 'No template technology was selected.', accept ? 'success' : 'info');
+    });
+    $('.tech-checkbox').change(async function() {
+        if (!$(this).is(':checked') && String($(this).data('template-recommended')) === '1' && String(this.dataset.evortixDecision || '') !== '1') {
             const suggestionName = $(this).data('template-name') || 'this technology';
-            const shouldRemove = window.confirm(`The selected project template recommends adding "${suggestionName}" based on similar completed projects. Are you sure you want to remove or skip this recommendation?`);
+            const shouldRemove = await window.evortixConfirm?.({
+                title: `Remove ${suggestionName}?`,
+                message: `I recommend this technology for the selected project template. Removing it may affect compatibility, cost, or the delivery plan.`,
+                cancelLabel: 'Keep technology',
+                confirmLabel: 'Remove technology'
+            });
             if (!shouldRemove) {
                 $(this).prop('checked', true);
             }
@@ -933,5 +1078,16 @@ $(document).ready(function() {
     updateCostSummary();
 });
 </script>
+
+<?php if (is_array($projectTemplate)):
+    $architectDssAssistantConfig = [
+        'title' => 'Technology recommendations ready',
+        'message' => 'I prepared the frontend, backend, database, hosting, security, and integration recommendations with feature, cost, complexity, and alternative guidance. Review my proposed stack one item at a time.',
+        'stateKey' => 'evortix.dss.technology.v2.project.' . (int) $projectId,
+        'items' => $architectTechDssItems,
+        'completedTitle' => 'Technology review complete',
+    ];
+    include '../../includes/architect-dss-assistant.php';
+endif; ?>
 
 <?php include '../../includes/footer.php'; ?>

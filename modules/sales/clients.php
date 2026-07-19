@@ -130,6 +130,15 @@ function salesClientsProjectComplexityValue(string $complexity): string
     return $value;
 }
 
+function salesClientsScopeAdjustedComplexity(?string $timelineStart, ?string $timelineEnd, ?float $budget, string $priority, string $requestedFeatures): string
+{
+    $base = strtolower(projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $budget, $priority));
+    $featureCount = count(array_filter(array_map('trim', preg_split('/\R/', $requestedFeatures) ?: [])));
+    if ($featureCount >= 13) $base = 'high';
+    elseif ($featureCount >= 8 && in_array($base, ['low', 'simple'], true)) $base = 'medium';
+    return salesClientsProjectComplexityValue($base);
+}
+
 function salesClientsFormatProjectStartEmailDate(?string $date, ?string $time = null): string
 {
     $date = trim((string) $date);
@@ -517,9 +526,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ''));
         $timelineStartTime = parseSalesTimeInput($timelineStartTimeInput);
         $timelineEndTime = parseSalesTimeInput($timelineEndTimeInput);
-        $generatedComplexity = salesClientsProjectComplexityValue(
-            projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $salesBudget, $priority)
-        );
+        $generatedComplexity = salesClientsScopeAdjustedComplexity($timelineStart, $timelineEnd, $salesBudget, $priority, $requestedFeatures);
         $requirementsSummary = $requestedFeatures;
         if ($additionalRequirements !== '') {
             $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Additional Requirements:' . "\n" . $additionalRequirements;
@@ -668,9 +675,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ''));
         $timelineStartTime = parseSalesTimeInput($timelineStartTimeInput);
         $timelineEndTime = parseSalesTimeInput($timelineEndTimeInput);
-        $generatedComplexity = salesClientsProjectComplexityValue(
-            projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $salesBudget, $priority)
-        );
+        $generatedComplexity = salesClientsScopeAdjustedComplexity($timelineStart, $timelineEnd, $salesBudget, $priority, $requestedFeatures);
         $requirementsSummary = $requestedFeatures;
         if ($additionalRequirements !== '') {
             $requirementsSummary .= ($requirementsSummary !== '' ? "\n\n" : '') . 'Additional Requirements:' . "\n" . $additionalRequirements;
@@ -2885,6 +2890,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     padding: 1.25rem;
     background: rgba(8, 37, 57, 0.34);
     backdrop-filter: blur(5px);
+    animation: dssAssistantFadeIn 180ms ease-out both;
 }
 
 .modal-modern.add-client-modal .dss-template-review-overlay[hidden] {
@@ -2903,7 +2909,52 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     border-radius: 20px;
     background: #ffffff;
     box-shadow: 0 28px 70px rgba(5, 38, 60, 0.28);
+    animation: dssAssistantDialogIn 220ms cubic-bezier(.2,.8,.2,1) both;
 }
+
+.modal-modern.add-client-modal .dss-template-review-overlay.is-leaving {
+    animation: dssAssistantFadeOut 160ms ease-in both;
+}
+
+.modal-modern.add-client-modal .dss-template-review-overlay.is-leaving .dss-template-review-dialog {
+    animation: dssAssistantDialogOut 160ms ease-in both;
+}
+
+.chat-bot-speech.evortix-decision-warning {
+    width: min(390px, calc(100vw - 190px));
+    min-width: 320px;
+    padding: 1rem 1.05rem;
+    pointer-events: auto;
+}
+
+.chat-bot-speech .evortix-decision-actions {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem;
+    margin-top: 0.85rem;
+}
+
+.chat-bot-speech .evortix-decision-actions .btn {
+    min-height: 40px;
+    border-radius: 11px;
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+@media (max-width: 600px) {
+    .chat-bot-speech.evortix-decision-warning {
+        width: min(285px, calc(100vw - 135px));
+        min-width: 235px;
+    }
+    .chat-bot-speech .evortix-decision-actions { grid-template-columns: 1fr; }
+}
+
+@keyframes dssAssistantFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dssAssistantFadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes dssAssistantDialogIn { from { opacity: 0; transform: translateY(14px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes dssAssistantDialogOut { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(8px) scale(.98); } }
 
 .modal-modern.add-client-modal .dss-review-header {
     display: flex;
@@ -3597,13 +3648,14 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 }
 
 :is(#addClientForm, #addProjectForm) .requested-feature-builder {
-    gap: 0.5rem;
+    gap: 0.75rem;
+    margin-top: 0.2rem;
 }
 
 :is(#addClientForm, #addProjectForm) .requested-feature-chip-shell {
     position: relative;
-    height: 54px;
-    min-height: 54px;
+    height: 108px;
+    min-height: 108px;
     z-index: 12;
 }
 
@@ -3621,13 +3673,13 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     flex-wrap: wrap;
     align-content: flex-start;
     align-items: center;
-    gap: 0.45rem;
-    height: 54px;
-    min-height: 54px;
-    max-height: 54px;
+    gap: 0.6rem;
+    height: 108px;
+    min-height: 108px;
+    max-height: 108px;
     overflow-x: hidden;
     overflow-y: hidden;
-    padding: 0.62rem 3.45rem 0.62rem 0.62rem;
+    padding: 0.75rem 3.75rem 0.75rem 0.75rem;
     border: 1px solid #b8d2e4;
     border-radius: 12px;
     background: #ffffff;
@@ -3638,12 +3690,12 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 }
 
 :is(#addClientForm, #addProjectForm) .requested-feature-chip-shell.has-more .requested-feature-chip-editor {
-    padding-right: 8.35rem;
+    padding-right: 8.75rem;
 }
 
 :is(#addClientForm, #addProjectForm) .requested-feature-chip-shell.is-expanded .requested-feature-chip-editor {
     height: auto;
-    max-height: 220px;
+    max-height: 280px;
     overflow-y: auto;
     box-shadow: 0 18px 38px rgba(15, 76, 129, 0.20);
 }
@@ -3657,7 +3709,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     display: inline-flex;
     align-items: center;
     max-width: 100%;
-    min-height: 34px;
+    min-height: 36px;
     gap: 0.38rem;
     padding: 0.34rem 0.42rem 0.34rem 0.68rem;
     border: 1px solid rgba(13, 103, 134, 0.32);
@@ -3721,7 +3773,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 :is(#addClientForm, #addProjectForm) .requested-feature-chip-add {
     position: absolute;
-    top: 0.58rem;
+    top: 0.72rem;
     right: 0.58rem;
     z-index: 3;
     display: inline-flex;
@@ -3785,6 +3837,30 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 :is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle[aria-expanded="true"] i {
     transform: rotate(180deg);
+}
+
+:is(#addClientForm, #addProjectForm) .requested-feature-builder .mini-note {
+    margin-top: 0.15rem;
+    line-height: 1.45;
+}
+
+@media (max-width: 575.98px) {
+    :is(#addClientForm, #addProjectForm) .requested-feature-chip-shell,
+    :is(#addClientForm, #addProjectForm) .requested-feature-chip-editor {
+        height: 124px;
+        min-height: 124px;
+        max-height: 124px;
+    }
+
+    :is(#addClientForm, #addProjectForm) .requested-feature-chip-shell.has-more .requested-feature-chip-editor {
+        padding-right: 3.75rem;
+        padding-top: 3.65rem;
+    }
+
+    :is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle {
+        left: 0.75rem;
+        right: auto;
+    }
 }
 
 .modal-modern.add-client-modal .add-client-footer {
@@ -7319,12 +7395,46 @@ const salesTemplateAssistant = (() => {
             || projectTemplates.find(item => normalizeSalesTemplateType(item.project_type) === type)
             || null;
     };
-    const setField = (name, value) => {
+    const setField = async (name, value) => {
         const field = activeForm?.elements?.[name];
-        if (!field) return;
+        if (!field) return false;
+        if (name === 'project_type') {
+            const currentTypedType = String(field.value || '').trim();
+            const previousType = String(field.dataset.previousProjectType || currentTypedType).trim();
+            const nextType = String(value || '').trim();
+            const hadPreviousType = normalizeSalesTemplateType(previousType) !== '';
+            const trackedNames = ['project_description', 'meeting_notes', 'mom', 'additional_requirements', 'sales_notes', 'sales_budget', 'timeline_start', 'timeline_start_time', 'timeline_end', 'timeline_end_time'];
+            const hasProgress = trackedNames.some((fieldName) => String(activeForm.elements[fieldName]?.value || '').trim() !== '')
+                || (activeForm.id === 'addProjectForm' ? getAddProjectFeatureValues().length > 0 : activeForm.querySelectorAll('[data-requested-feature-value]').length > 0);
+            let clearedProgress = false;
+            if (normalizeSalesTemplateType(previousType) && normalizeSalesTemplateType(previousType) !== normalizeSalesTemplateType(nextType) && hasProgress) {
+                const shouldChange = await showSalesAssistantProjectTypeWarning(activeForm.closest('.modal'), previousType, nextType);
+                if (!shouldChange) return false;
+                if (activeForm.id === 'addProjectForm') clearAddProjectTemplateValues();
+                else window.clearSalesClientProjectTypeProgress?.();
+                clearedProgress = true;
+            }
+            field.dataset.previousProjectType = previousType;
+            field.dataset.evortixClearedProgress = clearedProgress ? '1' : '0';
+            field.dataset.evortixHadPreviousType = hadPreviousType ? '1' : '0';
+        }
         field.value = value;
         field.dispatchEvent(new Event('input', { bubbles:true }));
         field.dispatchEvent(new Event('change', { bubbles:true }));
+        if (name === 'project_type') {
+            field.dataset.previousProjectType = field.value;
+            const clearedProgress = field.dataset.evortixClearedProgress === '1';
+            const hadPreviousType = field.dataset.evortixHadPreviousType === '1';
+            delete field.dataset.evortixClearedProgress;
+            delete field.dataset.evortixHadPreviousType;
+            window.setTimeout(() => announceSalesAssistant(
+                hadPreviousType ? 'Project type changed' : 'Project type selected',
+                clearedProgress
+                    ? `${field.value} is ready. I deleted the previous project progress and prepared new suggestions.`
+                    : `${field.value} is ready. You can now review its suggestions.`
+            ), 220);
+        }
+        return true;
     };
     const addFeature = (value) => {
         if (activeForm?.id === 'addProjectForm') {
@@ -7416,10 +7526,12 @@ const salesTemplateAssistant = (() => {
             label:template.project_type,
             field:'project_type',
             version:`V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...projectTemplates.filter(item => item.project_type === template.project_type).map(item => Number(item.template_version || 1))) ? ' · Latest' : ''}`,
-            apply:() => {
-                setField('project_type', template.project_type);
+            apply:async () => {
+                const changed = await setField('project_type', template.project_type);
+                if (changed === false) return false;
                 const select = activeForm.querySelector('[data-template-version-select]');
                 if (select) { select.value = String(template.id); select.dispatchEvent(new Event('change', { bubbles:true })); }
+                return true;
             }
         }));
         show(form, [{
@@ -7490,7 +7602,7 @@ const salesTemplateAssistant = (() => {
         event.stopImmediatePropagation();
         restore();
     }, true);
-    document.addEventListener('click', event => {
+    document.addEventListener('click', async event => {
         const actionLink = event.target.closest('.sales-bot-action-link');
         if (actionLink) {
             markVisibleNextActionsHandled();
@@ -7535,7 +7647,12 @@ const salesTemplateAssistant = (() => {
             const choice = queue[index]?.choices?.[Number(choiceButton.dataset.salesBotChoice)];
             browsingChoices = false;
             window.chatBotFloatRobot?.resetLook?.();
-            choice?.apply?.();
+            const applied = await choice?.apply?.();
+            if (applied === false) {
+                render();
+                restore();
+                return;
+            }
             showFeedback(choice || { field:'project_type', label:'Project type' }, 'accepted', close);
             restore();
             return;
@@ -8124,9 +8241,15 @@ function syncAddProjectTimelineWithPriority(force = false) {
 
 function syncAddProjectBudgetWithPriority() {
     const form = document.getElementById('addProjectForm');
-    if (!form || !addProjectAutoBudgetFromTemplate || !Number.isFinite(Number(addProjectAutoBudgetBase)) || Number(addProjectAutoBudgetBase) <= 0) {
+    if (!form) {
         return;
     }
+
+    if (!Number.isFinite(Number(addProjectAutoBudgetBase)) || Number(addProjectAutoBudgetBase) <= 0) {
+        const currentBudget = Number(String(form.elements.sales_budget?.value || '').replace(/,/g, ''));
+        addProjectAutoBudgetBase = Number.isFinite(currentBudget) && currentBudget > 0 ? currentBudget : null;
+    }
+    if (!Number.isFinite(Number(addProjectAutoBudgetBase)) || Number(addProjectAutoBudgetBase) <= 0) return;
 
     const markup = getAddProjectPriorityMarkup(form.elements.priority?.value || 'medium');
     form.elements.sales_budget.value = (Number(addProjectAutoBudgetBase) * (1 + markup.rate)).toFixed(2);
@@ -8163,6 +8286,129 @@ function resetAddProjectTemplateState() {
     trigger?.classList.remove('is-open');
     trigger?.setAttribute('aria-expanded', 'false');
     resetAddProjectPriorityInsight();
+}
+
+function announceSalesAssistant(heading, message) {
+    if (typeof window.evortixAnnounceNotification === 'function') {
+        window.evortixAnnounceNotification(heading, message, '');
+    } else {
+        window.appToast?.(heading, message, 'info');
+    }
+}
+
+function showSalesAssistantProjectTypeWarning(modalElement, previousType, nextType) {
+    return new Promise((resolve) => {
+        const botFloat = document.getElementById('chat-bot-float');
+        const speech = botFloat?.querySelector('.chat-bot-speech');
+        if (!botFloat || !speech) {
+            resolve(false);
+            return;
+        }
+
+        speech.className = 'chat-bot-speech evortix-project-notification evortix-decision-warning';
+        speech.hidden = false;
+        speech.setAttribute('role', 'alertdialog');
+        speech.setAttribute('aria-hidden', 'false');
+        speech.style.pointerEvents = 'auto';
+        speech.innerHTML = `
+            <strong><i class="fas fa-triangle-exclamation me-1"></i> Should I change the project type?</strong>
+            <span class="evortix-project-notification-copy">Changing from ${escapeClientHtml(previousType || 'the current type')} to ${escapeClientHtml(nextType || 'the new type')} will delete your current project progress.</span>
+            <div class="evortix-decision-actions">
+                <button type="button" class="btn btn-light btn-sm" data-assistant-warning-cancel>Keep progress</button>
+                <button type="button" class="btn btn-danger btn-sm" data-assistant-warning-confirm>Delete &amp; change</button>
+            </div>`;
+        botFloat.hidden = false;
+        botFloat.setAttribute('aria-hidden', 'false');
+        botFloat.classList.remove('is-returning-bed', 'is-preparing-speech');
+        botFloat.classList.add('is-speaking');
+        window.chatBotFloatRobot?.wake?.();
+        window.chatBotFloatRobot?.setEmotion?.('thinking');
+
+        const finish = (confirmed) => {
+            speech.querySelectorAll('button').forEach((button) => { button.disabled = true; });
+            document.removeEventListener('click', warningClickHandler, true);
+            if (!confirmed) announceSalesAssistant('Progress kept', 'Okay, I kept your current project type and all existing progress.');
+            resolve(confirmed);
+        };
+        const warningClickHandler = (event) => {
+            if (event.target.closest('[data-assistant-warning-cancel]')) {
+                event.preventDefault(); finish(false);
+            } else if (event.target.closest('[data-assistant-warning-confirm]')) {
+                event.preventDefault(); finish(true);
+            }
+        };
+        document.addEventListener('click', warningClickHandler, true);
+        speech.querySelector('[data-assistant-warning-cancel]')?.focus();
+    });
+}
+
+function showSalesAssistantFeatureRemoval(featureName) {
+    return new Promise((resolve) => {
+        const botFloat = document.getElementById('chat-bot-float');
+        const speech = botFloat?.querySelector('.chat-bot-speech');
+        if (!botFloat || !speech) {
+            resolve(false);
+            return;
+        }
+
+        speech.className = 'chat-bot-speech evortix-project-notification evortix-decision-warning';
+        speech.hidden = false;
+        speech.setAttribute('role', 'alertdialog');
+        speech.setAttribute('aria-hidden', 'false');
+        speech.style.pointerEvents = 'auto';
+        speech.innerHTML = `
+            <strong><i class="fas fa-robot me-1"></i> Remove ${escapeClientHtml(featureName)}?</strong>
+            <span class="evortix-project-notification-copy">I recommended this feature from the selected project template. Removing it may reduce the requirements and Architect handoff context.</span>
+            <div class="evortix-decision-actions">
+                <button type="button" class="btn btn-light btn-sm" data-assistant-feature-keep>Keep feature</button>
+                <button type="button" class="btn btn-danger btn-sm" data-assistant-feature-remove>Remove feature</button>
+            </div>`;
+        botFloat.hidden = false;
+        botFloat.setAttribute('aria-hidden', 'false');
+        botFloat.classList.remove('is-returning-bed', 'is-preparing-speech');
+        botFloat.classList.add('is-speaking');
+        window.chatBotFloatRobot?.wake?.();
+        window.chatBotFloatRobot?.setEmotion?.('thinking');
+
+        const finish = (confirmed) => {
+            speech.querySelectorAll('button').forEach((button) => { button.disabled = true; });
+            document.removeEventListener('click', featureRemovalHandler, true);
+            window.chatBotFloatRobot?.setEmotion?.(confirmed ? 'sad' : 'happy', 700);
+            resolve(confirmed);
+        };
+        const featureRemovalHandler = (event) => {
+            if (event.target.closest('[data-assistant-feature-keep]')) {
+                event.preventDefault();
+                finish(false);
+            } else if (event.target.closest('[data-assistant-feature-remove]')) {
+                event.preventDefault();
+                finish(true);
+            }
+        };
+        document.addEventListener('click', featureRemovalHandler, true);
+        speech.querySelector('[data-assistant-feature-keep]')?.focus();
+    });
+}
+
+function clearAddProjectTemplateValues() {
+    const form = document.getElementById('addProjectForm');
+    if (!form) return;
+    if (form.elements.project_description) form.elements.project_description.value = '';
+    renderAddProjectFeatureRows('');
+    if (form.elements.sales_budget) form.elements.sales_budget.value = '';
+    if (form.elements.timeline_start) form.elements.timeline_start.value = '';
+    if (form.elements.timeline_end) {
+        form.elements.timeline_end.value = '';
+        delete form.elements.timeline_end.dataset.templateDurationAuto;
+        delete form.elements.timeline_end.dataset.templateDurationWeeks;
+    }
+    if (form.elements.additional_requirements) form.elements.additional_requirements.value = '';
+    if (form.elements.sales_notes) form.elements.sales_notes.value = '';
+    addProjectAutoBudgetBase = null;
+    addProjectAutoBudgetFromTemplate = false;
+    appliedAddProjectTemplateType = '';
+    syncAddProjectFeatureField();
+    queueAddProjectAdditionalRequirementsResize();
 }
 
 function applyAddProjectTemplate(template, options = {}) {
@@ -8242,11 +8488,6 @@ function updateAddProjectTemplateRecommendation() {
     }
 
     const templateType = normalizeSalesTemplateType(template.project_type);
-    if (normalizeSalesTemplateType(projectType) === templateType && appliedAddProjectTemplateType !== templateType) {
-        applyAddProjectTemplate(template);
-        return;
-    }
-
     const budgetRange = `${formatProjectPeso(template.budget_min || 0)} - ${formatProjectPeso(template.budget_max || 0)}`;
     const appliedStatus = appliedAddProjectTemplateType === templateType
         ? '<span class="template-apply-status"><i class="fas fa-check-circle"></i>Template suggestions applied.</span>'
@@ -8510,6 +8751,7 @@ function getAddProjectComplexityAssessment() {
     const endValue = getAddProjectValue('timeline_end');
     const budgetRaw = getAddProjectValue('sales_budget').replace(/,/g, '');
     const priorityValue = getAddProjectValue('priority') || 'medium';
+    const featureCount = getAddProjectFeatureValues().length;
     const budget = Number(budgetRaw);
     let days = 0;
 
@@ -8531,12 +8773,13 @@ function getAddProjectComplexityAssessment() {
         ({ low: 0, medium: 1, high: 2 }[budgetBand] ?? 1)
         + ({ long: 0, moderate: 1, short: 2 }[timelineBand] ?? 1)
         + ({ low: 0, medium: 1, high: 2, critical: 2 }[String(priorityValue).toLowerCase()] ?? 1)
+        + (featureCount >= 13 ? 2 : (featureCount >= 8 ? 1 : 0))
     );
-    const level = score >= 4 ? 'High' : (score >= 2 ? 'Medium' : 'Low');
+    const level = featureCount >= 13 || score >= 6 ? 'High' : (score >= 3 ? 'Medium' : 'Low');
     const budgetLabel = ({ low: 'Low budget', medium: 'Medium budget', high: 'High budget' }[budgetBand] || 'Medium budget');
     const timelineLabel = ({ long: 'Long timeline', moderate: 'Moderate timeline', short: 'Short timeline' }[timelineBand] || 'Moderate timeline');
     const priorityLabel = getAddProjectPriorityMarkup(priorityValue).label + ' priority';
-    const reason = `${level} complexity because the intake combines ${budgetLabel.toLowerCase()}, ${timelineLabel.toLowerCase()}, and ${priorityLabel.toLowerCase()} for a score of ${score}/6.`;
+    const reason = `${level} complexity based on ${featureCount} requested features, ${budgetLabel.toLowerCase()}, ${timelineLabel.toLowerCase()}, and ${priorityLabel.toLowerCase()} for a score of ${score}/8.`;
 
     return { level, reason, score };
 }
@@ -8547,13 +8790,12 @@ function updateAddProjectGeneratedComplexity() {
         return;
     }
 
-    syncAddProjectBudgetWithPriority();
     const assessment = getAddProjectComplexityAssessment();
     const priorityMarkup = getAddProjectPriorityMarkup(form.elements.priority?.value || 'medium');
     const budgetRaw = getAddProjectValue('sales_budget').replace(/,/g, '');
     const budget = Number(budgetRaw);
     const hasBudget = budgetRaw !== '' && Number.isFinite(budget);
-    const baseBudget = addProjectAutoBudgetFromTemplate && Number.isFinite(Number(addProjectAutoBudgetBase)) && Number(addProjectAutoBudgetBase) > 0
+    const baseBudget = Number.isFinite(Number(addProjectAutoBudgetBase)) && Number(addProjectAutoBudgetBase) > 0
         ? Number(addProjectAutoBudgetBase)
         : budget;
     const previewAmount = hasBudget ? baseBudget * priorityMarkup.rate : 0;
@@ -8606,7 +8848,7 @@ function renderAddProjectSummary() {
     const budgetRaw = getAddProjectValue('sales_budget').replace(/,/g, '');
     const budget = Number(budgetRaw);
     const hasBudget = budgetRaw !== '' && Number.isFinite(budget);
-    const summaryBaseBudget = addProjectAutoBudgetFromTemplate && Number.isFinite(Number(addProjectAutoBudgetBase)) && Number(addProjectAutoBudgetBase) > 0
+    const summaryBaseBudget = Number.isFinite(Number(addProjectAutoBudgetBase)) && Number(addProjectAutoBudgetBase) > 0
         ? Number(addProjectAutoBudgetBase)
         : budget;
     const priorityMarkupAmount = hasBudget ? summaryBaseBudget * priorityMarkup.rate : 0;
@@ -8788,6 +9030,9 @@ function showAddProjectStep(stepIndex) {
 const addProjectFormElement = document.getElementById('addProjectForm');
 if (addProjectFormElement) {
     addProjectFormElement.addEventListener('focusin', function (event) {
+        if (event.target?.name === 'project_type' && !event.target.dataset.previousProjectType) {
+            event.target.dataset.previousProjectType = event.target.value;
+        }
         if (event.target?.matches('[data-add-project-feature-input]')) {
             setAddProjectFeatureEditorExpanded(true, false);
         }
@@ -8795,16 +9040,11 @@ if (addProjectFormElement) {
 
     addProjectFormElement.addEventListener('input', function (event) {
         if (event.target?.name === 'project_type') {
-            if (addProjectAutoBudgetFromTemplate && addProjectFormElement.elements.sales_budget) {
-                addProjectFormElement.elements.sales_budget.value = '';
-            }
-            addProjectAutoBudgetBase = null;
-            addProjectAutoBudgetFromTemplate = false;
-            appliedAddProjectTemplateType = '';
             updateAddProjectTemplateRecommendation();
         }
         if (event.target?.name === 'sales_budget') {
-            addProjectAutoBudgetBase = null;
+            const enteredBudget = Number(String(event.target.value || '').replace(/,/g, ''));
+            addProjectAutoBudgetBase = Number.isFinite(enteredBudget) && enteredBudget > 0 ? enteredBudget : null;
             addProjectAutoBudgetFromTemplate = false;
         }
         if (event.target?.name === 'additional_requirements') {
@@ -8828,14 +9068,34 @@ if (addProjectFormElement) {
         }
     });
 
-    addProjectFormElement.addEventListener('change', function (event) {
+    addProjectFormElement.addEventListener('change', async function (event) {
         if (event.target?.name === 'project_type') {
+            const previousType = String(event.target.dataset.previousProjectType || '').trim();
+            const previousNormalized = normalizeSalesTemplateType(previousType) || appliedAddProjectTemplateType;
+            const nextNormalized = normalizeSalesTemplateType(event.target.value);
+            const trackedNames = ['project_description', 'additional_requirements', 'sales_notes', 'sales_budget', 'timeline_start', 'timeline_start_time', 'timeline_end', 'timeline_end_time'];
+            const hasProgress = trackedNames.some((name) => String(addProjectFormElement.elements[name]?.value || '').trim() !== '') || getAddProjectFeatureValues().length > 0;
+            if (previousNormalized && nextNormalized !== previousNormalized && hasProgress) {
+                const shouldChange = await showSalesAssistantProjectTypeWarning(document.getElementById('addProjectModal'), previousType, event.target.value);
+                if (!shouldChange) {
+                    event.target.value = previousType;
+                    updateAddProjectTemplateRecommendation();
+                    return;
+                }
+                clearAddProjectTemplateValues();
+                window.setTimeout(() => announceSalesAssistant('Project type changed', `${event.target.value} is ready. Review the new DSS recommendation before applying it.`), 220);
+            }
+            event.target.dataset.previousProjectType = event.target.value;
             updateAddProjectTemplateRecommendation();
         }
         if (event.target?.name === 'priority') {
             syncAddProjectBudgetWithPriority();
             syncAddProjectTimelineWithPriority(false);
             updateAddProjectTemplateRecommendation();
+            updateAddProjectGeneratedComplexity();
+        }
+        if (event.target?.name === 'sales_budget') {
+            syncAddProjectBudgetWithPriority();
             updateAddProjectGeneratedComplexity();
         }
     });
@@ -9302,6 +9562,7 @@ if (addClientModalElement && addClientForm) {
     let appliedProjectTemplateType = '';
     let recommendedFeatureTitles = new Set();
     let templateApplyMessage = '';
+    let acceptedTemplateSections = new Set();
     let autoBudgetBase = null;
     let autoBudgetFromTemplate = false;
 
@@ -9760,6 +10021,14 @@ if (addClientModalElement && addClientForm) {
 
     function renderProjectTemplateReview(template) {
         const preview = getProjectTemplatePreviewData(template);
+        const steps = [
+            ['Project brief', template.project_description || `${template.project_type} project baseline.`, 'brief'],
+            ['Requested features', Array.isArray(template.feature_items) ? template.feature_items.join(', ') : template.core_features, 'features'],
+            ['Timeline', template.duration_label || 'Timeline TBD', 'timeline'],
+            ['Budget baseline', preview.budgetRange, 'budget'],
+            ['Requirements', template.functional_requirements || template.non_functional_requirements || 'No saved requirements.', 'requirements'],
+            ['Sales notes', template.sales_notes || preview.paymentTerms, 'notes']
+        ];
 
         return `
             <div class="dss-template-review-dialog" role="dialog" aria-modal="true" aria-labelledby="projectTemplateReviewTitle">
@@ -9777,30 +10046,19 @@ if (addClientModalElement && addClientForm) {
                         <span><strong>Preview only.</strong> This saved baseline will not change the form until you apply it.</span>
                         <span><i class="fas fa-shield-alt me-1"></i> Safe to review</span>
                     </div>
-                    <div class="dss-metric-grid">
-                        ${renderDecisionMetric('Timeline', template.duration_label || 'Timeline TBD')}
-                        ${renderDecisionMetric('Budget Range', preview.budgetRange)}
-                        ${renderDecisionMetric('Method', template.methodology || 'Methodology TBD')}
-                        ${renderDecisionMetric('Complexity', `${template.complexity_level || 'Medium'} level`)}
-                    </div>
-                    <div class="dss-section">
-                        <div class="dss-section-title"><i class="fas fa-tasks"></i> Suggested Features</div>
-                        ${renderDecisionInsightChips(preview.featureSource, 'No feature list saved yet.', 8)}
-                    </div>
-                    <div class="dss-section">
-                        <div class="dss-section-title"><i class="fas fa-project-diagram"></i> Architect Preview</div>
-                        ${renderDecisionInsightChips(preview.architectureSource, 'No stack or team preview saved yet.', 4)}
-                    </div>
-                    <div class="dss-section">
-                        <div class="dss-section-title"><i class="fas fa-file-signature"></i> Recommended Terms</div>
-                        <span class="dss-muted">${escapeHtml(preview.paymentTerms)}</span>
+                    <div class="dss-section" data-dss-guided-step>
+                        <div class="dss-section-title"><i class="fas fa-route"></i> Step 1 of ${steps.length}: ${escapeHtml(steps[0][0])}</div>
+                        <p class="dss-muted mb-3">${escapeHtml(steps[0][1] || 'No saved value.')}</p>
+                        <div class="dss-review-actions">
+                            <button type="button" class="btn btn-light btn-sm" data-dss-step-decision="skip">Skip</button>
+                            <button type="button" class="btn btn-primary btn-sm" data-dss-step-decision="accept">Accept this suggestion</button>
+                        </div>
                     </div>
                 </div>
                 <div class="dss-review-footer">
-                    <span>This will fill the description, features, requirements, notes, budget baseline, and timeline. You can still edit everything afterward.</span>
+                    <span>Nothing is inserted automatically. Accept or skip each recommendation one at a time.</span>
                     <div class="dss-review-actions">
                         <button type="button" class="btn btn-light btn-sm" data-cancel-template-apply>Keep Current</button>
-                        <button type="button" class="btn btn-primary btn-sm" data-confirm-template-apply>Apply Template</button>
                     </div>
                 </div>
             </div>
@@ -9817,10 +10075,83 @@ if (addClientModalElement && addClientForm) {
         templateReviewReturnFocus = trigger || document.activeElement;
         templateReviewOverlay.classList.remove('is-applying');
         templateReviewOverlay.dataset.templateType = template.project_type || '';
+        templateReviewOverlay.dataset.guidedStep = '0';
         templateReviewOverlay.innerHTML = renderProjectTemplateReview(template);
         templateReviewOverlay.hidden = false;
         templateReviewOverlay.setAttribute('aria-hidden', 'false');
         templateReviewOverlay.querySelector('[data-confirm-template-apply]')?.focus();
+    }
+
+    function applyGuidedTemplateStep(template, key) {
+        const force = true;
+        if (key === 'brief' && addClientForm.elements.project_description) addClientForm.elements.project_description.value = template.project_description || `${template.project_type} project baseline.`;
+        if (key === 'features' && Array.isArray(template.feature_items)) {
+            recommendedFeatureTitles = new Set(template.feature_items.map((item) => normalizeTemplateType(item)));
+            renderRequestedFeatureRows(template.feature_items.join("\n"));
+        }
+        if (key === 'timeline') {
+            if (addClientForm.elements.timeline_start && !getFormValue('timeline_start')) addClientForm.elements.timeline_start.value = addDaysToDateInput('', 0);
+            syncClientTimelineWithPriority(force);
+        }
+        if (key === 'budget' && addClientForm.elements.sales_budget) {
+            autoBudgetBase = Number(template.budget_min || 0); autoBudgetFromTemplate = true; syncAutoBudgetWithPriority();
+        }
+        if (key === 'requirements' && addClientForm.elements.additional_requirements) {
+            addClientForm.elements.additional_requirements.value = [template.functional_requirements, template.non_functional_requirements, template.integrations].filter(Boolean).join("\n"); resizeAdditionalRequirementsField();
+        }
+        if (key === 'notes' && addClientForm.elements.sales_notes) {
+            addClientForm.elements.sales_notes.value = [template.sales_notes, template.payment_terms, template.suggested_milestones].filter(Boolean).join("\n"); queueResizeSalesNotesField();
+        }
+        appliedProjectTemplateType = normalizeTemplateType(template.project_type);
+        acceptedTemplateSections.add(key);
+        formTouched = true; syncRequestedFeaturesField(); updateGeneratedComplexity(); updateDraftStatus(false);
+    }
+
+    function clearProjectTypeProgress() {
+        ['project_description', 'meeting_notes', 'mom', 'additional_requirements', 'sales_notes', 'sales_budget', 'timeline_start', 'timeline_start_time', 'timeline_end', 'timeline_end_time'].forEach((name) => {
+            if (addClientForm.elements[name]) addClientForm.elements[name].value = '';
+        });
+        renderRequestedFeatureRows('');
+        if (addClientForm.elements.timeline_end) {
+            delete addClientForm.elements.timeline_end.dataset.templateDurationAuto;
+            delete addClientForm.elements.timeline_end.dataset.templateDurationWeeks;
+        }
+        acceptedTemplateSections = new Set();
+        recommendedFeatureTitles = new Set();
+        appliedProjectTemplateType = '';
+        autoBudgetBase = null;
+        autoBudgetFromTemplate = false;
+        syncRequestedFeaturesField();
+        resizeAdditionalRequirementsField();
+        queueResizeSalesNotesField();
+    }
+    window.clearSalesClientProjectTypeProgress = clearProjectTypeProgress;
+
+    function hasProjectTypeProgress() {
+        const trackedFields = ['project_description', 'meeting_notes', 'mom', 'additional_requirements', 'sales_notes', 'sales_budget', 'timeline_start', 'timeline_start_time', 'timeline_end', 'timeline_end_time'];
+        return trackedFields.some((name) => String(addClientForm.elements[name]?.value || '').trim() !== '')
+            || getRequestedFeatureValues().length > 0;
+    }
+
+    function advanceGuidedTemplateReview(template, accepted) {
+        const steps = [
+            ['Project brief', template.project_description || `${template.project_type} project baseline.`, 'brief'],
+            ['Requested features', (template.feature_items || []).join(', ') || template.core_features, 'features'],
+            ['Timeline', template.duration_label || 'Timeline TBD', 'timeline'],
+            ['Budget baseline', getProjectTemplatePreviewData(template).budgetRange, 'budget'],
+            ['Requirements', template.functional_requirements || template.non_functional_requirements || 'No saved requirements.', 'requirements'],
+            ['Sales notes', template.sales_notes || template.payment_terms || 'No saved notes.', 'notes']
+        ];
+        let index = Number(templateReviewOverlay.dataset.guidedStep || 0);
+        if (accepted) applyGuidedTemplateStep(template, steps[index][2]);
+        index += 1;
+        if (index >= steps.length) {
+            templateApplyMessage = `${template.project_type} DSS review completed step by step.`;
+            closeProjectTemplateReview(false); updateTemplateRecommendation(); return;
+        }
+        templateReviewOverlay.dataset.guidedStep = String(index);
+        const panel = templateReviewOverlay.querySelector('[data-dss-guided-step]');
+        panel.innerHTML = `<div class="dss-section-title"><i class="fas fa-route"></i> Step ${index + 1} of ${steps.length}: ${escapeHtml(steps[index][0])}</div><p class="dss-muted mb-3">${escapeHtml(steps[index][1] || 'No saved value.')}</p><div class="dss-review-actions"><button type="button" class="btn btn-light btn-sm" data-dss-step-decision="skip">Skip</button><button type="button" class="btn btn-primary btn-sm" data-dss-step-decision="accept">Accept this suggestion</button></div>`;
     }
 
     function closeProjectTemplateReview(returnFocus = true) {
@@ -9945,11 +10276,6 @@ if (addClientModalElement && addClientForm) {
         }
 
         const templateType = normalizeTemplateType(template.project_type);
-        if (normalizeTemplateType(projectType) === templateType && appliedProjectTemplateType !== templateType) {
-            applyProjectTemplate(template);
-            return;
-        }
-
         const isApplied = appliedProjectTemplateType === templateType;
         const triggerLabel = isApplied
             ? `${template.project_type} template applied. Click to review details.`
@@ -10002,9 +10328,15 @@ if (addClientModalElement && addClientForm) {
 
     function syncAutoBudgetWithPriority() {
         const budgetField = addClientForm.elements.sales_budget;
-        if (!budgetField || !autoBudgetFromTemplate || !Number.isFinite(Number(autoBudgetBase)) || Number(autoBudgetBase) <= 0) {
+        if (!budgetField) {
             return;
         }
+
+        if (!Number.isFinite(Number(autoBudgetBase)) || Number(autoBudgetBase) <= 0) {
+            const currentBudget = Number(String(budgetField.value || '').replace(/,/g, ''));
+            autoBudgetBase = Number.isFinite(currentBudget) && currentBudget > 0 ? currentBudget : null;
+        }
+        if (!Number.isFinite(Number(autoBudgetBase)) || Number(autoBudgetBase) <= 0) return;
 
         const priorityMarkup = getPriorityMarkup();
         const adjustedBudget = Number(autoBudgetBase) * (1 + priorityMarkup.rate);
@@ -10016,6 +10348,7 @@ if (addClientModalElement && addClientForm) {
         const endValue = addClientForm.elements.timeline_end?.value || '';
         const budgetValue = String(addClientForm.elements.sales_budget?.value || '').replace(/,/g, '').trim();
         const priorityValue = String(addClientForm.elements.priority?.value || 'medium').toLowerCase();
+        const featureCount = getRequestedFeatureValues().length;
         const budget = Number(budgetValue);
         let days = 0;
 
@@ -10037,12 +10370,13 @@ if (addClientModalElement && addClientForm) {
             ({ low: 0, medium: 1, high: 2 }[budgetBand] ?? 1)
             + ({ long: 0, moderate: 1, short: 2 }[timelineBand] ?? 1)
             + ({ low: 0, medium: 1, high: 2, critical: 2 }[priorityValue] ?? 1)
+            + (featureCount >= 13 ? 2 : (featureCount >= 8 ? 1 : 0))
         );
-        const level = score >= 4 ? 'High' : (score >= 2 ? 'Medium' : 'Low');
+        const level = featureCount >= 13 || score >= 6 ? 'High' : (score >= 3 ? 'Medium' : 'Low');
         const budgetLabel = ({ low: 'Low budget', medium: 'Medium budget', high: 'High budget' }[budgetBand] || 'Medium budget');
         const timelineLabel = ({ long: 'Long timeline', moderate: 'Moderate timeline', short: 'Short timeline' }[timelineBand] || 'Moderate timeline');
         const priorityLabel = getPriorityMarkup(priorityValue).label + ' priority';
-        const reason = `${level} complexity because the intake combines ${budgetLabel.toLowerCase()}, ${timelineLabel.toLowerCase()}, and ${priorityLabel.toLowerCase()} for a score of ${score}/6. ${
+        const reason = `${level} complexity based on ${featureCount} requested features, ${budgetLabel.toLowerCase()}, ${timelineLabel.toLowerCase()}, and ${priorityLabel.toLowerCase()} for a score of ${score}/8. ${
             level === 'High'
                 ? 'Tighter deadline pressure, higher budget scope, or urgent priority increases delivery coordination and effort.'
                 : (level === 'Medium'
@@ -10058,13 +10392,12 @@ if (addClientModalElement && addClientForm) {
     }
 
     function updateGeneratedComplexity() {
-        syncAutoBudgetWithPriority();
         const assessment = getComplexityAssessment();
         const priorityMarkup = getPriorityMarkup();
         const budgetRaw = String(addClientForm.elements.sales_budget?.value || '').replace(/,/g, '').trim();
         const budget = Number(budgetRaw);
         const hasBudget = budgetRaw !== '' && Number.isFinite(budget);
-        const baseBudget = autoBudgetFromTemplate && Number.isFinite(Number(autoBudgetBase)) && Number(autoBudgetBase) > 0
+        const baseBudget = Number.isFinite(Number(autoBudgetBase)) && Number(autoBudgetBase) > 0
             ? Number(autoBudgetBase)
             : budget;
         const previewAmount = hasBudget ? baseBudget * priorityMarkup.rate : 0;
@@ -10591,7 +10924,7 @@ if (addClientModalElement && addClientForm) {
         const budgetRaw = String(getFormValue('sales_budget') || '').replace(/,/g, '').trim();
         const budget = Number(budgetRaw);
         const hasBudget = budgetRaw !== '' && Number.isFinite(budget);
-        const summaryBaseBudget = autoBudgetFromTemplate && Number.isFinite(Number(autoBudgetBase)) && Number(autoBudgetBase) > 0
+        const summaryBaseBudget = Number.isFinite(Number(autoBudgetBase)) && Number(autoBudgetBase) > 0
             ? Number(autoBudgetBase)
             : budget;
         const priorityMarkupAmount = hasBudget ? summaryBaseBudget * priorityMarkup.rate : 0;
@@ -10770,18 +11103,12 @@ if (addClientModalElement && addClientForm) {
     addClientForm.addEventListener('input', (event) => {
         if (event.target?.name === 'project_type') {
             closeProjectTemplateReview(false);
-            if (autoBudgetFromTemplate && addClientForm.elements.sales_budget) {
-                addClientForm.elements.sales_budget.value = '';
-            }
-            appliedProjectTemplateType = '';
-            recommendedFeatureTitles = new Set();
             templateApplyMessage = '';
-            autoBudgetBase = null;
-            autoBudgetFromTemplate = false;
             updateTemplateRecommendation();
         }
         if (event.target?.name === 'sales_budget') {
-            autoBudgetBase = null;
+            const enteredBudget = Number(String(event.target.value || '').replace(/,/g, ''));
+            autoBudgetBase = Number.isFinite(enteredBudget) && enteredBudget > 0 ? enteredBudget : null;
             autoBudgetFromTemplate = false;
         }
         if (event.target?.name === 'additional_requirements') {
@@ -10802,12 +11129,42 @@ if (addClientModalElement && addClientForm) {
         updateDraftStatus(false);
     });
 
+    addClientForm.addEventListener('focusin', (event) => {
+        if (event.target?.name === 'project_type' && !event.target.dataset.previousProjectType) {
+            event.target.dataset.previousProjectType = event.target.value;
+        }
+    });
+
+    addClientForm.addEventListener('change', async (event) => {
+        if (event.target?.name === 'project_type') {
+            const nextType = normalizeTemplateType(event.target.value);
+            const previousType = String(event.target.dataset.previousProjectType || '').trim();
+            const previousNormalized = normalizeTemplateType(previousType) || appliedProjectTemplateType;
+            if (previousNormalized && nextType !== previousNormalized && hasProjectTypeProgress()) {
+                const shouldChange = await showSalesAssistantProjectTypeWarning(addClientModalElement, previousType, event.target.value);
+                if (!shouldChange) {
+                    event.target.value = previousType;
+                    updateTemplateRecommendation();
+                    return;
+                }
+                clearProjectTypeProgress();
+                window.setTimeout(() => announceSalesAssistant('Project type changed', `${event.target.value} is ready. I found a new template recommendation for you to review.`), 220);
+            }
+            event.target.dataset.previousProjectType = event.target.value;
+            updateTemplateRecommendation();
+        }
+    });
+
     addClientForm.addEventListener('change', (event) => {
         if (event.target?.matches('[data-attachment-input]')) {
             updateAttachmentSummary();
         }
         if (event.target?.name === 'priority') {
+            syncAutoBudgetWithPriority();
             syncClientTimelineWithPriority(false);
+        }
+        if (event.target?.name === 'sales_budget') {
+            syncAutoBudgetWithPriority();
         }
         formTouched = true;
         hideUnsavedClosePanel();
@@ -10878,6 +11235,13 @@ if (addClientModalElement && addClientForm) {
                 return;
             }
             closeProjectTemplateReview(true);
+            return;
+        }
+
+        const decisionButton = event.target.closest('[data-dss-step-decision]');
+        if (decisionButton) {
+            const template = findProjectTemplate(templateReviewOverlay?.dataset.templateType || getFormValue('project_type'));
+            if (template) advanceGuidedTemplateReview(template, decisionButton.dataset.dssStepDecision === 'accept');
             return;
         }
 
@@ -10994,20 +11358,20 @@ if (addClientModalElement && addClientForm) {
             const featureName = String(chip.dataset.requestedFeatureValue || '').trim();
             const isRecommended = featureName !== '' && isRecommendedFeature(featureName);
             if (featureName !== '') {
-                const shouldRemove = typeof window.appConfirm === 'function'
-                    ? await window.appConfirm({
-                        title: 'Remove Feature',
-                        titleIcon: 'fas fa-layer-group',
-                        subject: `Remove "${featureName}"?`,
-                        message: isRecommended
-                            ? 'This feature is recommended by the selected project template. Removing it may reduce the Architect handoff context.'
-                            : 'This feature will be removed from the client intake draft.',
-                        icon: 'fas fa-trash-can fa-lg',
-                        confirmIcon: 'fas fa-trash',
-                        confirmText: 'Remove Feature',
-                        variant: 'danger'
-                    })
-                    : false;
+                const shouldRemove = isRecommended
+                    ? await showSalesAssistantFeatureRemoval(featureName)
+                    : (typeof window.appConfirm === 'function'
+                        ? await window.appConfirm({
+                            title: 'Remove Feature',
+                            titleIcon: 'fas fa-layer-group',
+                            subject: `Remove "${featureName}"?`,
+                            message: 'This feature will be removed from the client intake draft.',
+                            icon: 'fas fa-trash-can fa-lg',
+                            confirmIcon: 'fas fa-trash',
+                            confirmText: 'Remove Feature',
+                            variant: 'danger'
+                        })
+                        : false);
                 if (!shouldRemove) {
                     return;
                 }

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/project-template.php';
 
 function workflowStatuses(): array
 {
@@ -503,14 +504,17 @@ function workflowMaybeCompleteProject(mysqli|PgsqlMysqliCompatConnection $conn, 
     $stmt->close();
 
     if ((int) ($row['open_count'] ?? 0) === 0) {
-        $updateStmt = $conn->prepare("UPDATE projects SET status = 'completed' WHERE id = ?");
+        $projectJustCompleted = false;
+        $updateStmt = $conn->prepare("UPDATE projects SET status = 'completed' WHERE id = ? AND status != 'completed'");
         if ($updateStmt !== false) {
             $updateStmt->bind_param('i', $projectId);
             $updateStmt->execute();
+            $projectJustCompleted = $updateStmt->affected_rows > 0;
             $updateStmt->close();
         }
 
         workflowEnsureFinalReceiptForProject($conn, $projectId, $completedByUserId);
+        if ($projectJustCompleted) projectTemplateCaptureProject($conn, $projectId);
     }
 }
 ?>

@@ -111,8 +111,8 @@ function projectEstimationDurationWindow(mysqli|PgsqlMysqliCompatConnection $con
         $phases[] = $phase;
     }
 
-    $executionPhases = array_slice($phases, 1, 2);
-    if (count($executionPhases) < 2) {
+    $executionPhases = array_slice($phases, 1, 3);
+    if (count($executionPhases) < 3) {
         return $window;
     }
 
@@ -136,7 +136,7 @@ function projectEstimationDurationWindow(mysqli|PgsqlMysqliCompatConnection $con
     return [
         'start' => $starts[0],
         'end' => end($ends) ?: $ends[0],
-        'label' => implode(' + ', array_filter($phaseNames)) ?: 'Phases 2 and 3',
+        'label' => implode(' + ', array_filter($phaseNames)) ?: 'Phases 2, 3, and 4',
         'phase_names' => $phaseNames,
         'uses_phase_window' => true,
     ];
@@ -177,6 +177,22 @@ function projectEstimationComplexityScore(int $durationMonths, int $headcount, i
     $score += $techCount >= 8 ? 3 : ($techCount >= 4 ? 2 : 1);
 
     return $score;
+}
+
+function projectEstimationSuggestedDeveloperLevel(array $project, string $department, int $position = 1): array
+{
+    $complexity = strtolower(trim((string) ($project['complexity_level'] ?? 'medium')));
+    $priority = strtolower(trim((string) ($project['priority'] ?? 'medium')));
+    $specializedDepartment = in_array($department, ['AI', 'Security', 'DevOps', 'Database', 'Expert Department'], true);
+
+    if ($priority === 'critical' || $complexity === 'critical' || (in_array($complexity, ['high', 'complex'], true) && ($position === 1 || $specializedDepartment))) {
+        return ['level' => 'Senior Dev', 'reason' => 'Recommended for the project’s risk, complexity, priority, or specialized technical ownership.'];
+    }
+    if (in_array($complexity, ['high', 'complex'], true) || in_array($priority, ['high', 'urgent'], true) || $position === 1) {
+        return ['level' => 'Professional Dev', 'reason' => 'Recommended to provide independent delivery and reliable feature ownership.'];
+    }
+
+    return ['level' => 'Junior Dev', 'reason' => 'Suitable for lower-complexity work with normal team review and supervision.'];
 }
 
 function projectEstimationComplexity(int $durationMonths, int $headcount, int $techCount): string
@@ -298,21 +314,32 @@ function projectEstimationFetchContext(mysqli|PgsqlMysqliCompatConnection $conn,
     $allocationRows = [];
     if (dbTableExists($conn, 'methodology_tasks') && dbTableExists($conn, 'methodology_task_departments')) {
         $involvementDaysExpression = DB_DRIVER === 'pgsql'
-            ? "SUM(GREATEST(1, (mt.end_date::date - mt.start_date::date) + 1))"
-            : "SUM(GREATEST(1, DATEDIFF(mt.end_date, mt.start_date) + 1))";
+            ? "GREATEST(1, (mt.end_date::date - mt.start_date::date) + 1)"
+            : "GREATEST(1, DATEDIFF(mt.end_date, mt.start_date) + 1)";
         $roadmapHeadcountResult = $conn->query("
             SELECT
-                mtd.department,
-                SUM(COALESCE(mtd.required_count, 0)) AS required_count,
-                {$involvementDaysExpression} AS involvement_days
-            FROM methodology_task_departments mtd
-            JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
-            WHERE mtd.project_id = {$projectId}
-            GROUP BY mtd.department
-            ORDER BY mtd.department ASC
+                roadmap_entities.department,
+                SUM(roadmap_entities.required_count) AS required_count,
+                SUM(roadmap_entities.involvement_days) AS involvement_days
+            FROM (
+                SELECT
+                    mtd.department,
+                    COALESCE(NULLIF(mt.developer_entity_key, ''), CONCAT('task-', mt.id)) AS developer_entity_key,
+                    MAX(COALESCE(mtd.required_count, 0)) AS required_count,
+                    MAX({$involvementDaysExpression}) * MAX(COALESCE(mtd.required_count, 0)) AS involvement_days
+                FROM methodology_task_departments mtd
+                JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+                JOIN methodology_phases mp ON mp.id = mt.phase_id
+                WHERE mtd.project_id = {$projectId}
+                  AND COALESCE(NULLIF(mp.sequence_no, 0), mp.id) IN (2, 3, 4)
+                GROUP BY
+                    mtd.department,
+                    COALESCE(NULLIF(mt.developer_entity_key, ''), CONCAT('task-', mt.id))
+            ) roadmap_entities
+            GROUP BY roadmap_entities.department
+            ORDER BY roadmap_entities.department ASC
         ");
         $rawRows = [];
-        $totalInvolvementDays = 0;
         if ($roadmapHeadcountResult) {
             while ($row = $roadmapHeadcountResult->fetch_assoc()) {
                 $department = projectEstimationDepartmentLabel((string) ($row['department'] ?? ''));
@@ -326,18 +353,24 @@ function projectEstimationFetchContext(mysqli|PgsqlMysqliCompatConnection $conn,
                     'required_count' => $requiredCount,
                     'involvement_days' => $involvementDays,
                 ];
-                $totalInvolvementDays += $involvementDays;
             }
         }
 
+        $durationWindow = projectEstimationDurationWindow($conn, $project);
+        $executionWindowDays = max(1, projectEstimationMonths(
+            $durationWindow['start'] ?? null,
+            $durationWindow['end'] ?? null
+        ) * 30);
         foreach ($rawRows as $row) {
             $department = (string) $row['department'];
+            $requiredCount = max(1, (int) $row['required_count']);
+            $averageDeveloperInvolvementDays = (int) ceil((int) $row['involvement_days'] / $requiredCount);
             $allocationRows[$department] = [
                 'department' => $department,
-                'required_count' => (int) $row['required_count'],
+                'required_count' => $requiredCount,
                 'complexity_level' => 'medium',
                 'source' => 'roadmap_department_headcount',
-                'contribution_percent' => $totalInvolvementDays > 0 ? (int) round(((int) $row['involvement_days'] / $totalInvolvementDays) * 100) : 100,
+                'contribution_percent' => min(100, max(1, (int) round(($averageDeveloperInvolvementDays / $executionWindowDays) * 100))),
             ];
         }
     }
@@ -797,7 +830,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="technologyCostDetails">
-                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-layer-group"></i></span><span>Technology Stack Cost<small>Software cost across phases 2 and 3 when available</small></span></h5>
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-layer-group"></i></span><span>Technology Stack Cost<small>Software cost across phases 2, 3, and 4 when available</small></span></h5>
                             <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                         </button>
                         <div class="estimation-panel-body estimation-scroll" id="technologyCostDetails" hidden>
@@ -839,7 +872,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                             <tbody>
                                             <?php if ($required <= 0): ?>
                                                 <tr><td colspan="3" class="text-muted">This roadmap entry has no required headcount.</td></tr>
-                                            <?php else: for ($i = 1; $i <= $required; $i++): $saved = $savedRows[$department][$i] ?? []; $savedType = projectEstimationDeveloperLevel((string) ($saved['developer_type'] ?? 'Professional Dev')); $savedContribution = $derivedContribution; ?>
+                                            <?php else: for ($i = 1; $i <= $required; $i++): $saved = $savedRows[$department][$i] ?? []; $levelSuggestion = projectEstimationSuggestedDeveloperLevel($project, $department, $i); $savedType = projectEstimationDeveloperLevel((string) ($saved['developer_type'] ?? $levelSuggestion['level'])); $savedContribution = $derivedContribution; ?>
                                                 <tr class="allocation-input-row" data-department="<?php echo htmlspecialchars($department); ?>">
                                                     <td>
                                                         <select class="form-control-custom developer-type-input" name="allocations[<?php echo htmlspecialchars($department); ?>][<?php echo $i; ?>][developer_type]" <?php echo $estimationLockedForReview ? 'disabled' : ''; ?>>
@@ -847,6 +880,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                                                 <option value="<?php echo htmlspecialchars($type); ?>" data-salary="<?php echo $salary; ?>" <?php echo $savedType === $type ? 'selected' : ''; ?>><?php echo htmlspecialchars($type); ?></option>
                                                             <?php endforeach; ?>
                                                         </select>
+                                                        <small class="text-muted d-block mt-1"><i class="fas fa-robot me-1"></i>Evortix suggests <strong><?php echo htmlspecialchars((string) $levelSuggestion['level']); ?></strong>: <?php echo htmlspecialchars((string) $levelSuggestion['reason']); ?></small>
                                                     </td>
                                                     <td class="monthly-salary-cell"></td>
                                                     <td>

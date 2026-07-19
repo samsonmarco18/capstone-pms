@@ -172,6 +172,7 @@ $selectedProjectReceipt = null;
 $canDownloadSelectedProjectRepository = false;
 
 if ($selectedProject) {
+    $projectJustCompleted = false;
     $additionalRequirementsText = trim((string) ($selectedProject['requested_features'] ?? ''));
 
     $taskStmt = $conn->prepare("
@@ -182,6 +183,7 @@ if ($selectedProject) {
             t.task_type,
             t.status,
             t.priority,
+            t.deadline,
             t.completed_at,
             t.merged_at,
             t.architect_reviewed_at,
@@ -244,6 +246,7 @@ if ($selectedProject) {
         if ($completeProjectStmt !== false) {
             $completeProjectStmt->bind_param('i', $selectedProjectId);
             $completeProjectStmt->execute();
+            $projectJustCompleted = $completeProjectStmt->affected_rows > 0;
             $completeProjectStmt->close();
             $selectedProject['status'] = 'completed';
         }
@@ -251,6 +254,7 @@ if ($selectedProject) {
 
     if ($isProjectReleaseComplete) {
         $selectedProjectReceipt = workflowEnsureFinalReceiptForProject($conn, $selectedProjectId, $currentUserId);
+        if ($projectJustCompleted) projectTemplateCaptureProject($conn, $selectedProjectId);
     }
 
     $canDownloadSelectedProjectRepository = (string) ($selectedProject['status'] ?? '') === 'completed'
@@ -870,7 +874,7 @@ include '../../includes/navbar.php';
             </div>
         </div>
 
-        <div class="checklist-card">
+        <div class="checklist-card" id="insight-task-problems">
             <div class="card-head">
                 <div>
                     <h5><i class="fas fa-list-check me-2 text-primary"></i><?php echo htmlspecialchars((string) $selectedProject['name']); ?></h5>
@@ -943,7 +947,13 @@ include '../../includes/navbar.php';
                                                     <i class="fas fa-user"></i>
                                                     <?php echo htmlspecialchars((string) $feature['developer_name']); ?>
                                                 </span>
+                                            <?php else: ?>
+                                                <span class="pill pending"><i class="fas fa-user-slash"></i> Unassigned</span>
                                             <?php endif; ?>
+                                            <span class="pill <?php echo empty($feature['deadline']) ? 'pending' : ''; ?>">
+                                                <i class="fas fa-calendar-day"></i>
+                                                <?php echo !empty($feature['deadline']) ? htmlspecialchars(date('M d, Y', strtotime((string) $feature['deadline']))) : 'No deadline'; ?>
+                                            </span>
                                         </div>
                                     </div>
                                     <span class="pill <?php echo $feature['is_complete'] ? 'complete' : 'pending'; ?>">
@@ -984,6 +994,15 @@ include '../../includes/navbar.php';
                                             <span class="pill architect">
                                                 <i class="fas fa-user-gear"></i>
                                                 <?php echo htmlspecialchars((string) $feature['source_label']); ?>
+                                            </span>
+                                            <?php if (!empty($feature['developer_name'])): ?>
+                                                <span class="pill"><i class="fas fa-user"></i> <?php echo htmlspecialchars((string) $feature['developer_name']); ?></span>
+                                            <?php else: ?>
+                                                <span class="pill pending"><i class="fas fa-user-slash"></i> Unassigned</span>
+                                            <?php endif; ?>
+                                            <span class="pill <?php echo empty($feature['deadline']) ? 'pending' : ''; ?>">
+                                                <i class="fas fa-calendar-day"></i>
+                                                <?php echo !empty($feature['deadline']) ? htmlspecialchars(date('M d, Y', strtotime((string) $feature['deadline']))) : 'No deadline'; ?>
                                             </span>
                                         </div>
                                     </div>

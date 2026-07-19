@@ -387,7 +387,27 @@ function methodologyRoadmapTemplateLabel(string $templateKey): string
     return (string) ($templates[$templateKey]['name'] ?? 'Custom');
 }
 
-function methodologyRoadmapDistributeTemplatePhases(array $project, string $templateKey): array
+function methodologyRoadmapPhaseDurationPlan(int $totalDays, int $phaseCount = 5): array
+{
+    $percentages = [15, 20, 35, 15, 15];
+    $remainingDays = max($phaseCount, $totalDays);
+    $durations = [];
+    for ($index = 0; $index < $phaseCount; $index++) {
+        $remainingPhases = $phaseCount - $index;
+        if ($remainingPhases === 1) {
+            $duration = $remainingDays;
+        } else {
+            $percentage = (int) ($percentages[$index] ?? round(100 / max(1, $phaseCount)));
+            $duration = max(1, (int) round($totalDays * ($percentage / 100)));
+            $duration = min($duration, $remainingDays - ($remainingPhases - 1));
+        }
+        $durations[] = $duration;
+        $remainingDays -= $duration;
+    }
+    return $durations;
+}
+
+function methodologyRoadmapDistributeTemplatePhases(array $project, string $templateKey, int $developerCapacity = 0): array
 {
     $templates = methodologyRoadmapTemplates();
     if (!isset($templates[$templateKey])) {
@@ -403,7 +423,9 @@ function methodologyRoadmapDistributeTemplatePhases(array $project, string $temp
     $phaseDefinitions = $templates[$templateKey]['phases'];
     $totalWeight = max(1, array_sum(array_map(static fn(array $phase): int => max(1, (int) ($phase['weight'] ?? 1)), $phaseDefinitions)));
     $totalDays = ((int) $projectStart->diff($projectEnd)->format('%a')) + 1;
+    $phaseDurationPlan = methodologyRoadmapPhaseDurationPlan($totalDays, count($phaseDefinitions));
     $remainingDays = $totalDays;
+    $remainingCapacity = max(0, $developerCapacity);
     $phaseCount = count($phaseDefinitions);
     $cursor = $projectStart;
     $phases = [];
@@ -413,7 +435,7 @@ function methodologyRoadmapDistributeTemplatePhases(array $project, string $temp
         if ($remainingPhases === 1) {
             $duration = $remainingDays;
         } else {
-            $duration = max(1, (int) round($totalDays * (max(1, (int) ($phase['weight'] ?? 1)) / $totalWeight)));
+            $duration = max(1, (int) ($phaseDurationPlan[$index] ?? 1));
             $duration = min($duration, $remainingDays - ($remainingPhases - 1));
         }
 
@@ -422,12 +444,25 @@ function methodologyRoadmapDistributeTemplatePhases(array $project, string $temp
             $end = $projectEnd;
         }
 
+        $phaseDeveloperCount = 0;
+        if ($remainingCapacity > 0) {
+            $remainingPhaseSlots = $phaseCount - $index;
+            if ($remainingPhaseSlots === 1) {
+                $phaseDeveloperCount = $remainingCapacity;
+            } else {
+                $weightedCount = (int) round($developerCapacity * (max(1, (int) ($phase['weight'] ?? 1)) / $totalWeight));
+                $minimumForLater = max(0, min($remainingCapacity, $remainingPhaseSlots - 1));
+                $phaseDeveloperCount = max(1, min(max(1, $weightedCount), $remainingCapacity - $minimumForLater));
+            }
+            $remainingCapacity -= $phaseDeveloperCount;
+        }
+
         $phases[] = [
             'name' => (string) ($phase['name'] ?? 'Phase'),
             'description' => (string) ($phase['description'] ?? ''),
             'start_date' => $cursor->format('Y-m-d'),
             'end_date' => $end->format('Y-m-d'),
-            'developer_count' => 0,
+            'developer_count' => $phaseDeveloperCount,
             'sequence_no' => $index + 1,
             'status' => 'planned',
         ];
@@ -452,7 +487,9 @@ function methodologyRoadmapApplyTemplate(mysqli|PgsqlMysqliCompatConnection $con
         return ['success' => false, 'message' => 'This project already has phases. Choose replace existing phases to apply a template again.'];
     }
 
-    $templatePhases = methodologyRoadmapDistributeTemplatePhases($project, $templateKey);
+    $capacityResult = $conn->query("SELECT COALESCE(SUM(required_count), 0) AS total FROM developer_allocations WHERE project_id = {$projectId}");
+    $developerCapacity = $capacityResult ? max(0, (int) ($capacityResult->fetch_assoc()['total'] ?? 0)) : 0;
+    $templatePhases = methodologyRoadmapDistributeTemplatePhases($project, $templateKey, $developerCapacity);
     if ($templatePhases === []) {
         return ['success' => false, 'message' => 'Project start and end dates are required before applying a methodology template.'];
     }

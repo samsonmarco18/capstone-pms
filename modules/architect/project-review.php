@@ -61,12 +61,7 @@ if (!$project) {
 }
 
 $requestedFeatureItems = projectReviewParseRequestedFeatures($project['requested_features'] ?? '');
-$projectTemplate = !empty($project['project_template_snapshot'])
-    ? json_decode((string) $project['project_template_snapshot'], true)
-    : null;
-if (!is_array($projectTemplate)) {
-    $projectTemplate = projectTemplateFindByType($conn, (string) ($project['project_type'] ?? ''));
-}
+$projectTemplate = projectTemplateResolveForProject($conn, $project);
 $salesAttachments = [];
 if (!empty($project['sales_attachments'])) {
     $decodedAttachments = json_decode((string) $project['sales_attachments'], true);

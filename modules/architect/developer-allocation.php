@@ -2,6 +2,7 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/project-workflow.php';
 require_once '../../includes/project-template.php';
+require_once '../../includes/project-compilation.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -109,13 +110,38 @@ if (!$project) {
     header('Location: projects.php');
     exit();
 }
-$projectTemplate = !empty($project['project_template_snapshot'])
-    ? json_decode((string) $project['project_template_snapshot'], true)
-    : null;
-if (!is_array($projectTemplate)) {
-    $projectTemplate = projectTemplateFindByType($conn, (string) ($project['project_type'] ?? ''));
+$projectTemplate = projectTemplateResolveForProject($conn, $project);
+$workloadRecommendedTeam = is_array($projectTemplate)
+    ? projectTemplateRecommendedTeam(
+        (string) ($projectTemplate['project_type'] ?? $project['project_type'] ?? ''),
+        (string) ($projectTemplate['core_features'] ?? $project['requested_features'] ?? ''),
+        (string) ($projectTemplate['tech_stack'] ?? ''),
+        max(1, (int) ($projectTemplate['duration_max_weeks'] ?? 1)),
+        (float) ($projectTemplate['budget_max'] ?? $project['sales_budget'] ?? 0)
+    )
+    : '';
+$allocationRecommendationTemplate = is_array($projectTemplate) ? $projectTemplate : [];
+if ($workloadRecommendedTeam !== '') {
+    $allocationRecommendationTemplate['developer_roles_allocation'] = $workloadRecommendedTeam;
+    $allocationRecommendationTemplate['developer_work_plan'] = projectTemplateDeveloperWorkPlan(
+        (string) ($projectTemplate['project_type'] ?? $project['project_type'] ?? ''),
+        (string) ($projectTemplate['core_features'] ?? $project['requested_features'] ?? ''),
+        (string) ($projectTemplate['tech_stack'] ?? ''),
+        $workloadRecommendedTeam
+    );
 }
-$templateRoleCounts = allocationTemplateRoleCounts($projectTemplate);
+$templateRoleCounts = allocationTemplateRoleCounts($allocationRecommendationTemplate);
+$allocationFeatureCount = count((array) ($projectTemplate['feature_items'] ?? []));
+if ($allocationFeatureCount <= 0) {
+    $allocationFeatureCount = count(array_filter(array_map('trim', preg_split('/[\r\n,;]+/', (string) ($project['requested_features'] ?? '')) ?: [])));
+}
+$allocationScheduleWeeks = max(1, (int) ($projectTemplate['duration_max_weeks'] ?? 0));
+$templateRoleTasks = [];
+foreach ((array) ($allocationRecommendationTemplate['developer_work_plan'] ?? []) as $workItem) {
+    $workRole = projectWorkflowDepartmentLabel((string) ($workItem['role'] ?? ''));
+    if ($workRole === '') continue;
+    $templateRoleTasks[$workRole] = array_values(array_filter(array_map('strval', (array) ($workItem['tasks'] ?? []))));
+}
 
 if (!dbColumnExists($conn, 'projects', 'included_departments')) {
     $conn->query("ALTER TABLE projects ADD COLUMN included_departments " . (DB_DRIVER === 'pgsql' ? 'TEXT' : 'LONGTEXT') . " NULL");
@@ -148,11 +174,9 @@ if (count($includedDepartments) === 0 && count($existingAllocations) > 0) {
 }
 
 if (count($includedDepartments) === 0) {
-    foreach ($allocationRoles as $role => $limits) {
-        if ((int) ($limits['min'] ?? 0) > 0) {
-            $includedDepartments[] = $role;
-        }
-    }
+    // Only workflow-mandatory departments start selected. Every DSS/template
+    // department must be accepted by the Architect through Evortix first.
+    $includedDepartments = $mandatoryDepartments;
 }
 
 $includedDepartmentLookup = array_fill_keys($includedDepartments, true);
@@ -224,6 +248,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $departmentStmt->close();
     }
     logActivity($user['id'], 'developer_allocation', 'projects', $projectId, null, $_POST);
+    projectCompilationRecord($conn, $projectId, (int) $user['id'], 'developer_allocation');
     header('Location: ../roadmap/methodology.php?project_id=' . $projectId);
     exit();
 }
@@ -892,14 +917,19 @@ a.progress-step:hover {
         <!-- Main Form Column -->
         <div class="col-lg-8">
             <?php if (is_array($projectTemplate)): ?>
-            <div class="info-card mb-4">
+            <div class="info-card mb-4 architect-dss-source-card">
                 <div class="card-header">
                     <h5><i class="fas fa-lightbulb"></i> Template Team Recommendation</h5>
                 </div>
                 <div class="card-body">
                     <p class="mb-2"><strong><?php echo htmlspecialchars((string) ($projectTemplate['project_type'] ?? 'Matched template')); ?></strong></p>
-                    <p class="mb-2"><strong>Suggested team:</strong> <?php echo htmlspecialchars((string) (($projectTemplate['developer_roles_allocation'] ?? '') ?: ($projectTemplate['team_composition'] ?? 'Not specified'))); ?></p>
+                    <p class="mb-2"><strong>Suggested team:</strong> <?php echo htmlspecialchars($workloadRecommendedTeam !== '' ? $workloadRecommendedTeam : (string) (($projectTemplate['developer_roles_allocation'] ?? '') ?: ($projectTemplate['team_composition'] ?? 'Not specified'))); ?></p>
                     <p class="mb-0 text-muted"><?php echo htmlspecialchars((string) ($projectTemplate['implementation_notes'] ?? 'Adjust role counts based on actual client scope and available team capacity.')); ?></p>
+                    <div class="architect-dss-source-controls">
+                        <button type="button" class="btn btn-primary btn-sm" data-dss-team-decision="accept"><i class="fas fa-robot me-1"></i> Accept suggested team</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-dss-team-decision="skip">Skip suggestions</button>
+                    </div>
+                    <small class="d-block mt-2 text-muted">Recommended departments and counts remain unchanged until you accept.</small>
                 </div>
             </div>
             <?php endif; ?>
@@ -937,19 +967,19 @@ foreach($allocationRoles as $role => $limits):
     $isMandatory = in_array($role, $mandatoryDepartments, true);
     $templateRecommendedCount = (int) ($templateRoleCounts[$role] ?? 0);
     $isTemplateRecommended = $templateRecommendedCount > 0;
-    $isIncluded = isset($includedDepartmentLookup[$role]) || (count($existingAllocations) === 0 && $isTemplateRecommended);
+    $isIncluded = isset($includedDepartmentLookup[$role]);
     if ($isMandatory) {
         $isIncluded = true;
     }
     $existing = array_key_exists($role, $existingAllocations)
         ? (int) ($existingAllocations[$role]['required_count'] ?? 0)
-        : ($isIncluded ? max((int) ($limits['min'] ?? 0), $templateRecommendedCount) : 0);
+        : ($isIncluded ? (int) ($limits['min'] ?? 0) : 0);
                                         if ($isMandatory) {
                                             $existing = max((int) ($limits['min'] ?? 0), $existing);
                                         }
                                         $existingComplexity = $selectedComplexity;
                                         $available = allocationAvailableForRole($availableDevs, $role);
-                                        $inputMax = max($available, (int) ($limits['min'] ?? 0));
+                                        $inputMax = max($available, (int) ($limits['min'] ?? 0), $templateRecommendedCount);
                                         $isShortage = $existing > $available;
                                     ?>
                                     <tr>
@@ -960,6 +990,7 @@ foreach($allocationRoles as $role => $limits):
                                             <label class="department-toggle-wrap">
                                                 <input
                                                     type="checkbox"
+                                                    id="allocation_toggle_<?php echo md5($role); ?>"
                                                     class="department-toggle"
                                                     name="allocations[<?php echo $role; ?>][included]"
                                                     value="1"
@@ -976,9 +1007,13 @@ foreach($allocationRoles as $role => $limits):
                                             <?php endif; ?>
                                             </label>
                                             <span class="department-role-note"><?php echo $isMandatory ? 'First handoff for expert estimation.' : 'SUL and team members are matched by this department.'; ?></span>
+                                            <?php if (!empty($templateRoleTasks[$role])): ?>
+                                                <span class="department-role-note"><strong>Template tasks:</strong> <?php echo htmlspecialchars(implode(' · ', $templateRoleTasks[$role])); ?></span>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
                                             <input type="number" name="allocations[<?php echo $role; ?>][required]" 
+                                                   id="allocation_count_<?php echo md5($role); ?>"
                                                    class="form-control-modern form-control-sm required-count" 
                                                    value="<?php echo $existing; ?>" 
                                                    min="<?php echo $isMandatory ? (int) ($limits['min'] ?? 0) : 0; ?>"
@@ -1055,35 +1090,39 @@ function initAllocationTooltips() {
     });
 }
 
+document.querySelectorAll('[data-dss-team-decision]').forEach((button) => {
+    button.addEventListener('click', () => {
+        const accept = button.dataset.dssTeamDecision === 'accept';
+        document.querySelectorAll('.department-toggle[data-template-recommended="1"]').forEach((toggle) => {
+            if (!toggle.disabled) toggle.checked = accept;
+            const input = toggle.closest('tr')?.querySelector('.required-count');
+            if (input) input.value = accept ? (input.dataset.templateCount || input.dataset.minRecommended || '0') : '0';
+        });
+        checkAllAvailability();
+        window.appToast?.(accept ? 'Team suggestion accepted' : 'Team suggestion skipped', accept ? 'Review the selected departments and counts before continuing.' : 'No optional template departments were selected.', accept ? 'success' : 'info');
+    });
+});
+
 function updateAllocation() {
     const complexity = document.getElementById('complexityLevel').value;
-    const recommendations = {
-        low: {'Expert Department':1,'UI/UX':1,'Frontend':1,'Backend':1,'Mobile':0,'Database':0,'DevOps':0,'AI':0,'Security':0,'QA':1,'Other Departments':0},
-        medium: {'Expert Department':1,'UI/UX':1,'Frontend':2,'Backend':2,'Mobile':1,'Database':1,'DevOps':1,'AI':0,'Security':0,'QA':1,'Other Departments':0},
-        high: {'Expert Department':2,'UI/UX':2,'Frontend':3,'Backend':3,'Mobile':2,'Database':1,'DevOps':2,'AI':1,'Security':1,'QA':2,'Other Departments':0},
-        critical: {'Expert Department':2,'UI/UX':2,'Frontend':4,'Backend':4,'Mobile':3,'Database':2,'DevOps':3,'AI':2,'Security':2,'QA':3,'Other Departments':0}
-    };
-    const rec = recommendations[complexity];
-    if (rec) {
-        for (const [role, count] of Object.entries(rec)) {
-            const input = document.querySelector(`input[name="allocations[${role}][required]"]`);
-            const toggle = document.querySelector(`input[name="allocations[${role}][included]"]`);
-            if (input && toggle?.checked && (!input.value || input.value === '0')) input.value = count;
-        }
-    }
     document.querySelectorAll('input[name$="[complexity]"]').forEach(input => input.value = complexity);
     checkAllAvailability();
 }
 
-function toggleDepartmentRow(checkbox) {
+async function toggleDepartmentRow(checkbox) {
     const row = checkbox.closest('tr');
     const input = row.querySelector('.required-count');
     const statusCell = row.querySelector('.status-cell');
 
     if (!checkbox.checked) {
-        if (String(checkbox.dataset.templateRecommended || '0') === '1') {
+        if (String(checkbox.dataset.templateRecommended || '0') === '1' && String(checkbox.dataset.evortixDecision || '') !== '1') {
             const role = checkbox.dataset.role || row.cells[0].textContent.trim();
-            const shouldRemove = window.confirm(`The selected project template recommends adding "${role}" based on similar completed projects. Are you sure you want to remove or skip this recommendation?`);
+            const shouldRemove = await window.evortixConfirm?.({
+                title: `Skip ${role}?`,
+                message: `I recommend including ${role} based on this project's template. Skipping it may leave part of the planned work unassigned.`,
+                cancelLabel: 'Keep recommendation',
+                confirmLabel: 'Skip this'
+            });
             if (!shouldRemove) {
                 checkbox.checked = true;
                 return;
@@ -1103,7 +1142,7 @@ function toggleDepartmentRow(checkbox) {
     checkAvailability(input, checkbox.dataset.role || row.cells[0].textContent.trim());
 }
 
-function checkAvailability(input, role) {
+async function checkAvailability(input, role) {
     const toggle = input.closest('tr').querySelector('.department-toggle');
     if (toggle && !toggle.checked) {
         input.closest('tr').querySelector('.status-cell').innerHTML = '<span class="text-muted">Not included</span>';
@@ -1113,11 +1152,30 @@ function checkAvailability(input, role) {
 
     let required = parseInt(input.value) || 0;
     const templateCount = parseInt(input.dataset.templateCount || '0', 10);
-    if (String(input.dataset.templateRecommended || '0') === '1' && templateCount > 0 && required < templateCount) {
-        const shouldReduce = window.confirm(`The selected project template recommends adding ${templateCount} ${role} resource${templateCount === 1 ? '' : 's'} based on similar completed projects. Are you sure you want to reduce or skip this recommendation?`);
+    if (String(input.dataset.templateRecommended || '0') === '1' && templateCount > 0 && required < templateCount && String(input.dataset.evortixDecision || '') !== '1') {
+        const shouldReduce = await window.evortixConfirm?.({
+            title: `Reduce ${role} allocation?`,
+            message: `I recommend ${templateCount} ${role} resource${templateCount === 1 ? '' : 's'} for this project. Reducing it may affect the current estimate and delivery plan.`,
+            cancelLabel: 'Keep recommendation',
+            confirmLabel: 'Reduce allocation',
+            resumeDelay: 1800
+        });
         if (!shouldReduce) {
             input.value = templateCount;
             required = templateCount;
+        } else if (required === 0 && toggle && !toggle.disabled) {
+            toggle.dataset.evortixDecision = '1';
+            toggle.checked = false;
+            input.value = '0';
+            delete toggle.dataset.evortixDecision;
+            input.closest('tr').querySelector('.status-cell').innerHTML = '<span class="text-muted">Not included</span>';
+            checkAllAvailability();
+            window.evortixAnnounceNotification?.(
+                `${role} removed`,
+                `Done. I reduced the ${role} allocation from ${templateCount} to 0 and removed the department from this project.`,
+                ''
+            );
+            return;
         }
     }
     const available = parseInt(input.closest('tr').querySelector('.badge-available').textContent) || 0;
@@ -1126,6 +1184,13 @@ function checkAvailability(input, role) {
         statusCell.innerHTML = required > available ? '<span class="badge-danger">Need ' + (required - available) + ' more</span>' : '<span class="badge-success">Sufficient</span>';
     } else { statusCell.innerHTML = ''; }
     checkAllAvailability();
+    if (required < templateCount && String(input.dataset.evortixDecision || '') !== '1') {
+        window.evortixAnnounceNotification?.(
+            `${role} allocation reduced`,
+            `Done. I updated the ${role} allocation from ${templateCount} to ${required}.`,
+            ''
+        );
+    }
 }
 
 function checkAllAvailability() {
@@ -1156,9 +1221,39 @@ function checkAllAvailability() {
     summaryDiv.innerHTML = `<div class="mb-3"><strong>Included Departments:</strong> ${includedCount}</div><div class="mb-3"><strong>Total Required:</strong> ${totalRequired} people</div><div class="mb-3"><strong>Total Available:</strong> ${totalAvailable} people</div><div class="mb-3"><strong>Utilization:</strong> ${utilization}%<div class="progress-modern"><div class="progress-bar-modern ${isOverUtilized ? 'danger' : 'success'}" style="width: ${Math.min(utilization, 100)}%"></div></div></div>${includedCount === 0 ? '<div class="alert-warning-modern mb-0"><i class="fas fa-exclamation-triangle me-2"></i>No department selected yet.</div>' : (totalRequired > totalAvailable ? '<div class="alert-warning-modern mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Resource shortage detected! Total required exceeds available resources.</div>' : '<div class="alert-success-modern mb-0"><i class="fas fa-check-circle me-2"></i>Department allocation looks good!</div>')}`;
 }
 
-document.querySelectorAll('.department-toggle').forEach(toggleDepartmentRow);
+document.querySelectorAll('.department-toggle').forEach((toggle) => {
+    const countInput = toggle.closest('tr')?.querySelector('.required-count');
+    toggle.dataset.evortixDecision = '1';
+    if (countInput) countInput.dataset.evortixDecision = '1';
+    toggleDepartmentRow(toggle);
+    delete toggle.dataset.evortixDecision;
+    if (countInput) delete countInput.dataset.evortixDecision;
+});
 updateAllocation();
 initAllocationTooltips();
 </script>
+
+<?php if (is_array($projectTemplate)):
+    $architectDssItems = [];
+    foreach ($templateRoleCounts as $role => $count) {
+        if ((int) $count <= 0 || !isset($allocationRoles[$role])) continue;
+        $architectDssItems[] = [
+            'label' => (string) $role,
+            'detail' => 'Based on ' . $allocationFeatureCount . ' planned feature' . ($allocationFeatureCount === 1 ? '' : 's') . ' across about ' . $allocationScheduleWeeks . ' weeks, Evortix recommends ' . (int) $count . ' ' . $role . ' resource' . ((int) $count === 1 ? '' : 's') . '.',
+            'points' => array_slice($templateRoleTasks[$role] ?? [], 0, 3),
+            'selector' => '#allocation_toggle_' . md5((string) $role),
+            'countSelector' => '#allocation_count_' . md5((string) $role),
+            'count' => (int) $count,
+        ];
+    }
+    $architectDssAssistantConfig = [
+        'title' => 'Team recommendations ready',
+        'message' => 'I calculated role headcounts from the feature workload, delivery schedule, specialist needs, and the tasks each role must handle. Review each allocation recommendation.',
+        'stateKey' => 'evortix.dss.team.project.' . (int) $projectId,
+        'items' => $architectDssItems,
+        'completedTitle' => 'Team review complete',
+    ];
+    include '../../includes/architect-dss-assistant.php';
+endif; ?>
 
 <?php include '../../includes/footer.php'; ?>
