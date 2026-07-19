@@ -342,6 +342,61 @@ function projectWorkflowClassifyComplexity(?string $timelineStart, ?string $time
     return 'Low';
 }
 
+function projectWorkflowExtractLegacySalesBudget(?string $requestedFeatures): ?float
+{
+    $raw = trim((string) $requestedFeatures);
+    if ($raw === '') {
+        return null;
+    }
+
+    if (!preg_match('/(?:^|\R)\s*Budget\s*:\s*(?:\R\s*)?(?:PHP|₱)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)/iu', $raw, $matches)) {
+        return null;
+    }
+
+    $budget = (float) str_replace(',', '', (string) ($matches[1] ?? ''));
+    return $budget > 0 ? $budget : null;
+}
+
+function projectWorkflowBackfillLegacySalesBudgets(mysqli|PgsqlMysqliCompatConnection $conn): void
+{
+    if (!dbColumnExists($conn, 'projects', 'sales_budget')) {
+        return;
+    }
+
+    $result = $conn->query("
+        SELECT id, requested_features
+        FROM projects
+        WHERE (sales_budget IS NULL OR sales_budget = 0)
+          AND requested_features IS NOT NULL
+    ");
+    if (!$result || !method_exists($result, 'fetch_assoc')) {
+        return;
+    }
+
+    $update = $conn->prepare('UPDATE projects SET sales_budget = ? WHERE id = ? AND (sales_budget IS NULL OR sales_budget = 0)');
+    if ($update === false) {
+        return;
+    }
+
+    while ($project = $result->fetch_assoc()) {
+        $budget = projectWorkflowExtractLegacySalesBudget($project['requested_features'] ?? null);
+        if ($budget === null) {
+            continue;
+        }
+
+        $formattedBudget = number_format($budget, 2, '.', '');
+        $projectId = (int) ($project['id'] ?? 0);
+        if ($projectId <= 0) {
+            continue;
+        }
+
+        $update->bind_param('si', $formattedBudget, $projectId);
+        $update->execute();
+    }
+
+    $update->close();
+}
+
 function projectWorkflowEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
 {
     static $done = false;
@@ -360,6 +415,7 @@ function projectWorkflowEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): 
         'priority' => 'VARCHAR(30) NULL',
         'sales_notes' => 'TEXT NULL',
         'sales_attachments' => "{$textType} NULL",
+        'sales_budget' => 'DECIMAL(15, 2) NULL',
         'workflow_status' => 'VARCHAR(60) NULL',
     ];
 
@@ -368,6 +424,8 @@ function projectWorkflowEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): 
             $conn->query("ALTER TABLE projects ADD COLUMN {$column} {$definition}");
         }
     }
+
+    projectWorkflowBackfillLegacySalesBudgets($conn);
 
     projectWorkflowEnsureExpertDepartmentSeed($conn);
 }

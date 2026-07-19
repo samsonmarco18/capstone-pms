@@ -1760,11 +1760,34 @@ body {
     color: #3a5674;
     border: none;
     background: transparent;
+    position: relative;
+    transition: transform 180ms ease, background-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+
+#sidebar-wrapper .menu-item::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    bottom: 7px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 999px 999px 0;
+    background: #1387c4;
+    opacity: 0;
+    transform: scaleY(0.55);
+    transition: opacity 180ms ease, transform 180ms ease;
 }
 
 #sidebar-wrapper .menu-item:hover {
     background: #eef8ff;
     color: #1387c4;
+}
+
+#sidebar-wrapper .menu-item:hover::before,
+#sidebar-wrapper .menu-item:focus-visible::before,
+#sidebar-wrapper .menu-item.active::before {
+    opacity: 1;
+    transform: scaleY(1);
 }
 
 #sidebar-wrapper .menu-item.active {
@@ -1951,6 +1974,7 @@ body {
     border: 0;
     box-shadow: none;
     color: #1691cd !important;
+    transition: transform 180ms ease, background-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
 }
 
 .nav-icon-link:hover {
@@ -1979,6 +2003,51 @@ body {
 .nav-user-link {
     padding-left: 8px !important;
     padding-right: 8px !important;
+    border-radius: 14px;
+    transition: transform 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    #sidebar-wrapper .menu-item:hover,
+    .app-navbar .nav-icon-link:hover,
+    .app-navbar .nav-user-link:hover {
+        transform: translateY(-2px);
+    }
+
+    .app-navbar .nav-user-link:hover {
+        background: #eef7fd;
+    }
+}
+
+#sidebar-wrapper .menu-item:focus-visible,
+.app-navbar .nav-icon-link:focus-visible,
+.app-navbar .nav-user-link:focus-visible {
+    transform: translateY(-2px);
+}
+
+#sidebar-wrapper .menu-item:active,
+.app-navbar .nav-icon-link:active,
+.app-navbar .nav-user-link:active {
+    transform: translateY(0);
+    transition-duration: 80ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #sidebar-wrapper .menu-item,
+    #sidebar-wrapper .menu-item::before,
+    .app-navbar .nav-icon-link,
+    .app-navbar .nav-user-link {
+        transition: none;
+    }
+
+    #sidebar-wrapper .menu-item:hover,
+    #sidebar-wrapper .menu-item:focus-visible,
+    .app-navbar .nav-icon-link:hover,
+    .app-navbar .nav-icon-link:focus-visible,
+    .app-navbar .nav-user-link:hover,
+    .app-navbar .nav-user-link:focus-visible {
+        transform: none;
+    }
 }
 
 .nav-user-name {

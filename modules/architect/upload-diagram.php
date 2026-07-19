@@ -92,6 +92,16 @@ $hasArchitecturePlan = in_array('architecture_plan', $uploadedDocumentTypes, tru
 $hasWorkflowDiagram = in_array('workflow_diagram', $uploadedDocumentTypes, true);
 $hasSupportingTechnicalDoc = count(array_diff(array_unique($uploadedDocumentTypes), $requiredDocumentTypes)) > 0;
 $checklistReadyForSummary = $hasArchitecturePlan && $hasWorkflowDiagram;
+$submissionChecklistItems = [
+    ['label' => 'Architecture Plan', 'note' => 'Required for Summary', 'complete' => $hasArchitecturePlan],
+    ['label' => 'Workflow Diagram', 'note' => 'Required for Summary', 'complete' => $hasWorkflowDiagram],
+    ['label' => 'Supporting Technical Document', 'note' => 'Optional supporting evidence', 'complete' => $hasSupportingTechnicalDoc],
+    ['label' => 'Ready for Summary', 'note' => 'All required documents are uploaded', 'complete' => $checklistReadyForSummary],
+];
+$submissionChecklistCompleted = count(array_filter(
+    $submissionChecklistItems,
+    static fn(array $item): bool => (bool) $item['complete']
+));
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $docType = normalizeArchitectureDocumentType($_POST['document_type'] ?? '');
@@ -411,18 +421,191 @@ a.progress-step:hover {
     box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
 }
 
+.document-upload-field {
+    align-items: stretch;
+    background: linear-gradient(135deg, rgba(31, 99, 146, 0.05), #ffffff 58%);
+    border: 1px dashed rgba(31, 99, 146, 0.28);
+    border-radius: 12px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: 46px;
+    overflow: hidden;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.document-upload-field:hover,
+.document-upload-field:focus-within {
+    border-color: rgba(31, 99, 146, 0.58);
+    box-shadow: 0 8px 20px rgba(31, 99, 146, 0.11);
+}
+
+.document-upload-button {
+    align-items: center;
+    background: #e8f4fa;
+    border-right: 1px solid rgba(31, 99, 146, 0.14);
+    color: var(--theme-primary);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.86rem;
+    font-weight: 700;
+    gap: 0.45rem;
+    justify-content: center;
+    margin: 0;
+    min-height: 44px;
+    padding: 0 0.9rem;
+    transition: background-color 0.18s ease, color 0.18s ease;
+    white-space: nowrap;
+}
+
+.document-upload-button:hover {
+    background: var(--theme-primary);
+    color: #ffffff;
+}
+
+.document-upload-summary {
+    align-self: center;
+    color: var(--gray-700);
+    font-size: 0.88rem;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 0.9rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Document Item */
 .document-item {
-    padding: 1rem;
+    align-items: center;
+    background: #ffffff;
     border: 1px solid var(--gray-200);
+    border-left: 3px solid transparent;
     border-radius: 16px;
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: 46px minmax(0, 1fr) auto;
     margin-bottom: 0.75rem;
-    transition: all 0.2s;
+    padding: 0.9rem 1rem;
+    transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .document-item:hover {
+    background: #f2f8fc;
+    border-color: #d8e8f1;
+    border-left-color: var(--theme-primary);
+    box-shadow: 0 8px 20px rgba(31, 99, 146, 0.09);
+}
+
+.document-item:last-child {
+    margin-bottom: 0;
+}
+
+.document-item__icon {
+    align-items: center;
+    align-self: start;
+    background: #e9f5fb;
+    border-radius: 12px;
+    color: var(--theme-primary);
+    display: inline-flex;
+    font-size: 1rem;
+    height: 44px;
+    justify-content: center;
+    width: 44px;
+}
+
+.document-item__content {
+    min-width: 0;
+}
+
+.document-item__heading {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.document-item__title {
+    color: var(--gray-900);
+    font-size: 0.95rem;
+    font-weight: 650;
+    line-height: 1.25;
+}
+
+.document-item__format {
+    background: #edf4f8;
+    border-radius: 999px;
+    color: #537089;
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 0.22rem 0.48rem;
+}
+
+.document-item__description {
+    color: var(--gray-600);
+    font-size: 0.82rem;
+    line-height: 1.4;
+    margin: 0.32rem 0 0;
+    overflow-wrap: anywhere;
+}
+
+.document-item__meta {
+    align-items: center;
+    color: #71869b;
+    display: flex;
+    font-size: 0.74rem;
+    gap: 0.35rem;
+    margin-top: 0.42rem;
+}
+
+.document-item__actions {
+    align-items: center;
+    display: flex;
+    gap: 0.45rem;
+}
+
+.document-item__action {
+    align-items: center;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 38px;
+    justify-content: center;
+    padding: 0;
+    text-decoration: none;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+    width: 38px;
+}
+
+.document-item__action--view {
+    background: #e8f4fa;
+    border-color: #cfe4ef;
+    color: var(--theme-primary);
+}
+
+.document-item__action--view:hover {
+    background: var(--theme-primary);
     border-color: var(--theme-primary);
-    background: var(--gray-50);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.document-item__action--delete {
+    background: #fff0f1;
+    border-color: #ffdadd;
+    color: #dc2f3b;
+}
+
+.document-item__action--delete:hover {
+    background: #dc2f3b;
+    border-color: #dc2f3b;
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.document-item__action:focus-visible {
+    outline: 3px solid rgba(31, 99, 146, 0.2);
+    outline-offset: 2px;
 }
 
 /* Document form actions */
@@ -532,75 +715,195 @@ a.progress-step:hover {
     display: block;
 }
 
-.btn-review {
-    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
-    color: white;
-    border: none;
-    padding: 0.4rem 1rem;
-    border-radius: 8px;
-    font-size: 0.75rem;
-    transition: all 0.2s;
-    text-decoration: none;
+/* Submission checklist control */
+.document-upload-card-header {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
 }
 
-.btn-review:hover {
+.submission-checklist-trigger {
+    align-items: center;
+    background: #edf7fb;
+    border: 1px solid rgba(31, 99, 146, 0.22);
+    border-radius: 12px;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 42px;
+    justify-content: center;
+    padding: 0;
+    position: relative;
+    transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+    width: 42px;
+}
+
+.submission-checklist-trigger:hover {
+    background: #dff0f8;
+    border-color: rgba(31, 99, 146, 0.5);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
-    color: white;
 }
 
-.btn-danger-modern {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    color: white;
-    border: none;
-    padding: 0.4rem 0.8rem;
-    border-radius: 8px;
-    font-size: 0.75rem;
-    transition: all 0.2s;
+.submission-checklist-trigger.needs-attention {
+    background: #fff8df;
+    border-color: #f0c75e;
+    color: #a86600;
+    animation: submissionChecklistAttention 2.2s ease-in-out infinite;
 }
 
-.btn-danger-modern:hover {
-    transform: translateY(-1px);
-    color: white;
+.submission-checklist-trigger__status {
+    align-items: center;
+    background: #e11d48;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    color: #ffffff;
+    display: inline-flex;
+    font-size: 0.46rem;
+    height: 17px;
+    justify-content: center;
+    position: absolute;
+    right: -5px;
+    top: -5px;
+    width: 17px;
 }
 
-/* Checklist Card */
-.checklist-card {
-    background: white;
-    border-radius: 20px;
-    border: 1px solid var(--gray-200);
-    overflow: hidden;
-    margin-top: 1.5rem;
+.submission-checklist-trigger.is-complete .submission-checklist-trigger__status {
+    background: #129568;
 }
 
-.checklist-card .card-header {
-    padding: 1rem 1.5rem;
-    background: var(--gray-50);
+@keyframes submissionChecklistAttention {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(217, 146, 17, 0); }
+    50% { box-shadow: 0 0 0 6px rgba(217, 146, 17, 0.13); }
+}
+
+.submission-checklist-panel {
+    --bs-offcanvas-width: min(400px, 100vw);
+}
+
+.submission-checklist-panel .offcanvas-header {
     border-bottom: 1px solid var(--gray-200);
+    padding: 1.1rem 1.25rem;
 }
 
-.checklist-card .card-header h5 {
-    font-size: 0.9rem;
-    font-weight: 600;
-    margin: 0;
+.submission-checklist-panel__heading {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+}
+
+.submission-checklist-panel__heading-icon {
+    align-items: center;
+    background: #e9f5fb;
+    border-radius: 11px;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 40px;
+    justify-content: center;
+    width: 40px;
+}
+
+.submission-checklist-panel__heading h5 {
     color: var(--gray-900);
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
 }
 
-.checklist-card .card-body {
-    padding: 1.25rem 1.5rem;
+.submission-checklist-panel__heading small {
+    color: var(--gray-500);
+    display: block;
+    margin-top: 0.12rem;
 }
 
-.checklist-item {
-    margin-bottom: 0.75rem;
+.submission-checklist-progress {
+    background: #f6f9fb;
+    border: 1px solid var(--gray-200);
+    border-radius: 14px;
+    margin-bottom: 1rem;
+    padding: 0.9rem;
 }
 
-.checklist-item:last-child {
-    margin-bottom: 0;
+.submission-checklist-progress__meta {
+    align-items: center;
+    color: var(--gray-700);
+    display: flex;
+    font-size: 0.82rem;
+    justify-content: space-between;
+    margin-bottom: 0.55rem;
 }
 
-.form-check-input:checked {
-    background-color: var(--theme-primary);
-    border-color: var(--theme-primary);
+.submission-checklist-progress .progress {
+    background: #dfe9ef;
+    height: 7px;
+}
+
+.submission-checklist-progress .progress-bar {
+    background: #16835b;
+}
+
+.submission-checklist-list {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.submission-checklist-item {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 13px;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 0.85rem;
+}
+
+.submission-checklist-item__icon {
+    align-items: center;
+    background: #f1f5f8;
+    border-radius: 50%;
+    color: #8092a3;
+    display: inline-flex;
+    height: 32px;
+    justify-content: center;
+    width: 32px;
+}
+
+.submission-checklist-item.is-complete .submission-checklist-item__icon {
+    background: #def7eb;
+    color: #12865e;
+}
+
+.submission-checklist-item strong {
+    color: var(--gray-900);
+    display: block;
+    font-size: 0.88rem;
+}
+
+.submission-checklist-item small {
+    color: var(--gray-500);
+    display: block;
+    margin-top: 0.12rem;
+}
+
+.submission-checklist-guidance {
+    background: #fff8df;
+    border: 1px solid #f2d47d;
+    border-radius: 13px;
+    color: #76500c;
+    display: flex;
+    font-size: 0.84rem;
+    gap: 0.6rem;
+    line-height: 1.45;
+    margin-top: 1rem;
+    padding: 0.85rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .submission-checklist-trigger.needs-attention {
+        animation: none;
+    }
 }
 
 /* Responsive */
@@ -610,6 +913,24 @@ a.progress-step:hover {
     .progress-indicator { padding: 0.75rem; }
     .progress-step .step-label { font-size: 0.6rem; }
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
+}
+
+@media (max-width: 575.98px) {
+    .document-item {
+        align-items: start;
+        grid-template-columns: 42px minmax(0, 1fr);
+        padding: 0.8rem;
+    }
+
+    .document-item__icon {
+        height: 40px;
+        width: 40px;
+    }
+
+    .document-item__actions {
+        grid-column: 2;
+        justify-content: flex-start;
+    }
 }
 
 @media (max-width: 575.98px) {
@@ -638,7 +959,6 @@ a.progress-step:hover {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .documents-card,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .upload-area {
@@ -650,7 +970,6 @@ a.progress-step:hover {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-card .card-header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .documents-card .card-header,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .checklist-card .card-header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-white {
     background: #0a1b2c !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
@@ -673,6 +992,68 @@ a.progress-step:hover {
     background: #071321 !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
     color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-upload-field {
+    background: #071321;
+    border-color: rgba(138, 210, 255, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-upload-button {
+    background: rgba(31, 99, 146, 0.24);
+    border-color: rgba(138, 210, 255, 0.14);
+    color: #8fd3ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-upload-button:hover {
+    background: #1f6392;
+    color: #ffffff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-upload-summary {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-progress {
+    background: #071321;
+    border-color: rgba(138, 210, 255, 0.18);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-panel .offcanvas-header {
+    border-color: rgba(138, 210, 255, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-item strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-panel__heading h5 {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .submission-checklist-trigger__status {
+    border-color: #0a1b2c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item:hover {
+    background: #0b1d2e !important;
+    border-color: rgba(113, 178, 224, 0.35) !important;
+    border-left-color: #55b5e8 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item__title {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item__format,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item__icon {
+    background: rgba(31, 99, 146, 0.24);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item__description,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-item__meta {
+    color: #9db6cf;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-actions [data-generic-save-draft] {
@@ -743,8 +1124,22 @@ a.progress-step:hover {
     <div class="row g-4">
         <div class="col-lg-6">
             <div class="form-card">
-                <div class="card-header">
+                <div class="card-header document-upload-card-header">
                     <h5><i class="fas fa-plus-circle"></i> Upload New Document</h5>
+                    <button
+                        type="button"
+                        class="submission-checklist-trigger <?php echo $checklistReadyForSummary ? 'is-complete' : 'needs-attention'; ?>"
+                        data-bs-toggle="offcanvas"
+                        data-bs-target="#submissionChecklistPanel"
+                        aria-controls="submissionChecklistPanel"
+                        aria-label="Open submission checklist"
+                        title="Submission checklist"
+                    >
+                        <i class="fas fa-list-check" aria-hidden="true"></i>
+                        <span class="submission-checklist-trigger__status" aria-hidden="true">
+                            <i class="fas <?php echo $checklistReadyForSummary ? 'fa-check' : 'fa-exclamation'; ?>"></i>
+                        </span>
+                    </button>
                 </div>
                 <div class="card-body">
                     <form method="POST" enctype="multipart/form-data" data-app-loading data-loading-title="Uploading document" data-loading-text="Please wait while the architecture document is uploaded.">
@@ -766,7 +1161,22 @@ a.progress-step:hover {
                         
                         <div class="mb-3">
                             <label class="form-label">File (PDF, Image, or Document)</label>
-                            <input type="file" name="diagram" class="form-control-modern" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" required>
+                            <div class="document-upload-field">
+                                <label for="architectDocumentFile" class="document-upload-button">
+                                    <i class="fas fa-paperclip" aria-hidden="true"></i>
+                                    <span>Choose File</span>
+                                </label>
+                                <span class="document-upload-summary" id="architectDocumentFileSummary">No file chosen</span>
+                                <input
+                                    id="architectDocumentFile"
+                                    type="file"
+                                    name="diagram"
+                                    class="visually-hidden"
+                                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                                    aria-describedby="architectDocumentFileSummary"
+                                    required
+                                >
+                            </div>
                             <small class="text-muted d-block mt-1">Accepted formats: PDF, PNG, JPG, DOC, DOCX (Max 10MB)</small>
                         </div>
                         
@@ -787,24 +1197,48 @@ a.progress-step:hover {
                 <div class="card-body">
                     <?php if($documents->num_rows > 0): ?>
                         <?php while($doc = $documents->fetch_assoc()): ?>
+                        <?php
+                            $documentType = (string) ($doc['document_type'] ?? 'document');
+                            $documentLabel = ucwords(str_replace('_', ' ', $documentType));
+                            $documentIcon = $documentType === 'architecture_plan'
+                                ? 'fa-file-code'
+                                : ($documentType === 'workflow_diagram' ? 'fa-project-diagram' : 'fa-file-lines');
+                            $documentExtension = strtoupper(pathinfo((string) ($doc['file_path'] ?? ''), PATHINFO_EXTENSION));
+                            $documentDescription = trim((string) ($doc['description'] ?? ''));
+                        ?>
                         <div class="document-item">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <i class="fas fa-file-<?php 
-                                        echo $doc['document_type'] == 'architecture_plan' ? 'code' : 
-                                            ($doc['document_type'] == 'workflow_diagram' ? 'project-diagram' : 'file');
-                                    ?> fa-lg text-primary me-2"></i>
-                                    <strong><?php echo str_replace('_', ' ', ucfirst($doc['document_type'])); ?></strong>
-                                    <br>
-                                    <small class="text-muted"><?php echo htmlspecialchars($doc['description']); ?></small>
-                                    <div class="mt-1">
-                                        <small class="text-muted"><i class="far fa-clock me-1"></i> Uploaded: <?php echo !empty($doc['created_at']) ? date('M d, Y H:i', strtotime((string) $doc['created_at'])) : 'No date'; ?></small>
-                                    </div>
+                            <span class="document-item__icon" aria-hidden="true">
+                                <i class="fas <?php echo htmlspecialchars($documentIcon); ?>"></i>
+                            </span>
+                            <div class="document-item__content">
+                                <div class="document-item__heading">
+                                    <strong class="document-item__title"><?php echo htmlspecialchars($documentLabel); ?></strong>
+                                    <?php if ($documentExtension !== ''): ?>
+                                        <span class="document-item__format"><?php echo htmlspecialchars($documentExtension); ?></span>
+                                    <?php endif; ?>
                                 </div>
-                                <div class="d-flex gap-2">
-                                    <a href="<?php echo BASE_URL; ?>/<?php echo $doc['file_path']; ?>" class="btn-review" target="_blank"><i class="fas fa-eye"></i></a>
-                                    <button type="button" class="btn-danger-modern" onclick="deleteDocument(<?php echo $doc['id']; ?>)"><i class="fas fa-trash"></i></button>
+                                <p class="document-item__description"><?php echo htmlspecialchars($documentDescription !== '' ? $documentDescription : 'No description provided.'); ?></p>
+                                <div class="document-item__meta">
+                                    <i class="far fa-clock" aria-hidden="true"></i>
+                                    <span>Uploaded <?php echo !empty($doc['created_at']) ? date('M d, Y \a\t g:i A', strtotime((string) $doc['created_at'])) : 'with no recorded date'; ?></span>
                                 </div>
+                            </div>
+                            <div class="document-item__actions">
+                                <a
+                                    href="<?php echo BASE_URL; ?>/<?php echo htmlspecialchars((string) $doc['file_path']); ?>"
+                                    class="document-item__action document-item__action--view"
+                                    target="_blank"
+                                    rel="noopener"
+                                    aria-label="View <?php echo htmlspecialchars($documentLabel); ?>"
+                                    title="View document"
+                                ><i class="fas fa-eye" aria-hidden="true"></i></a>
+                                <button
+                                    type="button"
+                                    class="document-item__action document-item__action--delete"
+                                    onclick="deleteDocument(<?php echo (int) $doc['id']; ?>)"
+                                    aria-label="Delete <?php echo htmlspecialchars($documentLabel); ?>"
+                                    title="Delete document"
+                                ><i class="fas fa-trash" aria-hidden="true"></i></button>
                             </div>
                         </div>
                         <?php endwhile; ?>
@@ -820,33 +1254,72 @@ a.progress-step:hover {
         </div>
     </div>
 
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="checklist-card">
-                <div class="card-header">
-                    <h5><i class="fas fa-check-circle"></i> Submission Checklist</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check1" <?php echo $hasArchitecturePlan ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check1">Architecture Plan Uploaded</label></div></div></div>
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check2" <?php echo $hasWorkflowDiagram ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check2">Workflow Diagram Uploaded</label></div></div></div>
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check3" <?php echo $hasSupportingTechnicalDoc ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check3">Supporting Technical Doc Uploaded</label></div></div></div>
-                        <div class="col-md-3"><div class="checklist-item"><div class="form-check"><input class="form-check-input" type="checkbox" id="check4" <?php echo $checklistReadyForSummary ? 'checked' : ''; ?> disabled><label class="form-check-label" for="check4">Ready for Summary</label></div></div></div>
-                    </div>
-                    <?php if (!$checklistReadyForSummary): ?>
-                        <div class="alert alert-warning small mb-0 mt-3">
-                            Upload both an Architecture Plan and a Workflow Diagram before proceeding to Summary.
-                        </div>
-                    <?php endif; ?>
-                </div>
+</div>
+
+<div class="offcanvas offcanvas-end submission-checklist-panel" tabindex="-1" id="submissionChecklistPanel" aria-labelledby="submissionChecklistPanelTitle">
+    <div class="offcanvas-header">
+        <div class="submission-checklist-panel__heading">
+            <span class="submission-checklist-panel__heading-icon"><i class="fas fa-list-check" aria-hidden="true"></i></span>
+            <span>
+                <h5 id="submissionChecklistPanelTitle">Submission Checklist</h5>
+                <small>Documents required before Summary</small>
+            </span>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="submission-checklist-progress">
+            <div class="submission-checklist-progress__meta">
+                <span>Completion</span>
+                <strong><?php echo (int) $submissionChecklistCompleted; ?> of <?php echo count($submissionChecklistItems); ?></strong>
+            </div>
+            <div class="progress" role="progressbar" aria-label="Submission checklist completion" aria-valuenow="<?php echo (int) $submissionChecklistCompleted; ?>" aria-valuemin="0" aria-valuemax="<?php echo count($submissionChecklistItems); ?>">
+                <div class="progress-bar" style="width: <?php echo count($submissionChecklistItems) > 0 ? (int) round(($submissionChecklistCompleted / count($submissionChecklistItems)) * 100) : 0; ?>%"></div>
             </div>
         </div>
+
+        <div class="submission-checklist-list">
+            <?php foreach ($submissionChecklistItems as $checklistItem): ?>
+                <div class="submission-checklist-item <?php echo $checklistItem['complete'] ? 'is-complete' : ''; ?>">
+                    <span class="submission-checklist-item__icon">
+                        <i class="fas <?php echo $checklistItem['complete'] ? 'fa-check' : 'fa-minus'; ?>" aria-hidden="true"></i>
+                    </span>
+                    <span>
+                        <strong><?php echo htmlspecialchars((string) $checklistItem['label']); ?></strong>
+                        <small><?php echo htmlspecialchars((string) $checklistItem['note']); ?></small>
+                    </span>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <?php if (!$checklistReadyForSummary): ?>
+            <div class="submission-checklist-guidance">
+                <i class="fas fa-triangle-exclamation mt-1" aria-hidden="true"></i>
+                <span>Upload both an Architecture Plan and a Workflow Diagram before proceeding to Summary.</span>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 
 <script>
 const summaryGateLink = document.querySelector('[data-summary-gate]');
 const documentInlineError = document.getElementById('documentInlineError');
+const architectDocumentFile = document.getElementById('architectDocumentFile');
+const architectDocumentFileSummary = document.getElementById('architectDocumentFileSummary');
+
+architectDocumentFile?.addEventListener('change', () => {
+    const selectedFile = architectDocumentFile.files?.[0];
+    const fileName = selectedFile?.name || 'No file chosen';
+
+    if (architectDocumentFileSummary) {
+        architectDocumentFileSummary.textContent = fileName;
+        if (selectedFile) {
+            architectDocumentFileSummary.title = fileName;
+        } else {
+            architectDocumentFileSummary.removeAttribute('title');
+        }
+    }
+});
 
 summaryGateLink?.addEventListener('click', (event) => {
     const message = String(summaryGateLink.dataset.summaryGate || '').trim();

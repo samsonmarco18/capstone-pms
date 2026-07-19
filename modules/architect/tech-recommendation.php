@@ -164,7 +164,14 @@ $evortixBriefByCategory = [];
 foreach ($evortixTechnologyBrief as $briefItem) {
     $evortixBriefByCategory[(string) ($briefItem['category'] ?? '')] = $briefItem;
 }
-$technologies = $conn->query("SELECT * FROM technologies WHERE status = 'active'");
+$technologies = $conn->query("SELECT * FROM technologies WHERE status = 'active' ORDER BY category ASC, name ASC");
+$technologyCategories = [];
+$technologyCategoryResult = $conn->query("SELECT DISTINCT category FROM technologies WHERE status = 'active' AND category IS NOT NULL AND category <> '' ORDER BY category ASC");
+if ($technologyCategoryResult) {
+    while ($categoryRow = $technologyCategoryResult->fetch_assoc()) {
+        $technologyCategories[] = trim((string) ($categoryRow['category'] ?? ''));
+    }
+}
 
 $existingRecommendations = [];
 $architectTechDssItems = [];
@@ -479,48 +486,132 @@ a.progress-step:hover {
 #technologiesContainer {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: 0.65rem;
+}
+
+.technology-column-headings {
+    padding: 0 1rem 0.1rem;
+}
+
+.technology-column-headings > .row {
+    align-items: center;
+}
+
+.technology-column-headings span {
+    display: block;
+    color: #677b8d;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.055em;
+    line-height: 24px;
+    text-transform: uppercase;
+}
+
+.technology-notes-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 24px;
+}
+
+.technology-category-filter {
+    width: min(150px, 72%);
+    height: 24px;
+    min-height: 24px;
+    padding: 0 1.65rem 0 0.35rem;
+    border: 0;
+    border-bottom: 1px solid #b9cddd;
+    border-radius: 0;
+    background-color: transparent;
+    color: #31536f;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 24px;
+    outline: none;
+}
+
+.technology-category-filter:focus {
+    border-bottom-color: var(--theme-primary);
+    box-shadow: 0 2px 0 rgba(31, 99, 146, 0.12);
+}
+
+.technology-category-empty {
+    padding: 1.5rem;
+    border: 1px dashed #c9d9e5;
+    border-radius: 12px;
+    color: #687d90;
+    font-size: 0.86rem;
+    text-align: center;
 }
 
 .tech-item {
-    background:
-        radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.12), transparent 34%),
-        linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0) 38%, rgba(31, 99, 146, 0.055) 100%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 56%),
-        rgba(255, 255, 255, 0.94);
-    border: 1px solid rgba(31, 99, 146, 0.14);
-    border-radius: 20px;
-    padding: 1rem 1.15rem;
+    position: relative;
+    background: #ffffff;
+    border: 1px solid #dbe7ef;
+    border-radius: 14px;
+    padding: 0.85rem 1rem;
     margin-bottom: 0;
     transition: border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
-    box-shadow: 0 10px 24px rgba(15, 76, 129, 0.07), 0 0 18px rgba(34, 211, 238, 0.05);
+    box-shadow: 0 4px 12px rgba(15, 76, 129, 0.045);
     overflow: hidden;
 }
 
+.tech-item::before {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: transparent;
+    content: "";
+    transition: background-color 0.2s ease;
+}
+
 .tech-item:hover {
-    border-color: rgba(34, 211, 238, 0.24);
-    box-shadow: 0 14px 30px rgba(15, 76, 129, 0.10), 0 0 24px rgba(34, 211, 238, 0.08);
+    border-color: rgba(31, 99, 146, 0.3);
+    background: #f5fafd;
+    box-shadow: 0 8px 18px rgba(15, 76, 129, 0.08);
+}
+
+.tech-item:hover::before {
+    background: var(--theme-primary);
+}
+
+.tech-item:has(.tech-checkbox:checked) {
+    border-color: rgba(31, 99, 146, 0.34);
+    background: #f2f8fc;
+    box-shadow: 0 6px 16px rgba(15, 76, 129, 0.07);
+}
+
+.tech-item:has(.tech-checkbox:checked):hover {
+    background: #edf6fb;
 }
 
 .tech-checkbox {
     width: 18px;
     height: 18px;
-    margin-top: 0.12rem;
+    margin: 0;
     cursor: pointer;
     flex: 0 0 auto;
 }
 
 .tech-item .row {
-    align-items: end;
+    align-items: center;
 }
 
 .tech-item .form-check {
-    display: grid;
-    grid-template-columns: 20px minmax(0, 1fr);
-    column-gap: 0.6rem;
-    align-items: start;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
     margin: 0;
-    min-height: 72px;
+    min-height: 48px;
+    padding-left: 0;
+}
+
+.tech-item .tech-field-label {
+    display: none;
 }
 
 .tech-item .form-check > .form-check-input {
@@ -528,6 +619,9 @@ a.progress-step:hover {
 }
 
 .tech-title-wrap {
+    display: grid;
+    align-content: center;
+    gap: 0.25rem;
     min-width: 0;
 }
 
@@ -554,7 +648,7 @@ a.progress-step:hover {
 
 .tech-category {
     display: block;
-    margin-top: 0.45rem;
+    margin-top: 0;
     color: #5f7898;
     font-size: 0.82rem;
     line-height: 1.35;
@@ -789,6 +883,18 @@ a.progress-step:hover {
         rgba(10, 22, 35, 0.88) !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-item:hover {
+    background: #0b2033 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-item:has(.tech-checkbox:checked) {
+    background: #0a1c2d !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-item:has(.tech-checkbox:checked):hover {
+    background: #0d2539 !important;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-template-badge {
     background: rgba(76, 184, 255, 0.14);
     border-color: rgba(138, 210, 255, 0.18);
@@ -801,6 +907,358 @@ a.progress-step:hover {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-table td {
     border-bottom-color: rgba(138, 210, 255, 0.12) !important;
+}
+
+/* Compact review tools replace the permanent right sidebar. */
+.technology-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.tech-review-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: 0 0 auto;
+}
+
+.tech-review-tool {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    gap: 0.55rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid rgba(31, 99, 146, 0.2);
+    border-radius: 11px;
+    background: #f7fbfd;
+    color: #174769;
+    box-shadow: 0 5px 14px rgba(15, 76, 129, 0.06);
+    cursor: pointer;
+    transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.tech-review-tool:hover,
+.tech-review-tool:focus-visible,
+.tech-review-tool[aria-expanded="true"] {
+    border-color: rgba(13, 103, 134, 0.42);
+    background: #eef7fb;
+    box-shadow: 0 8px 18px rgba(15, 76, 129, 0.12);
+    outline: none;
+    transform: translateY(-1px);
+}
+
+.tech-review-tool-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: transparent;
+    color: #0d6786;
+    font-size: 0.9rem;
+    transform-origin: 50% 88%;
+}
+
+.technology-card-header .tech-review-tool-icon > i {
+    color: #0d6786 !important;
+    font-weight: 900;
+}
+
+.tech-review-tool-copy {
+    display: grid;
+    gap: 0.02rem;
+    min-width: 0;
+    text-align: left;
+}
+
+.tech-review-tool-label {
+    color: #5f7487;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.tech-review-tool-value {
+    color: #174769;
+    font-size: 0.76rem;
+    font-weight: 750;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.tech-review-notification {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 7px;
+    height: 7px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    background: #f59e0b;
+}
+
+.tech-review-tool.is-reviewed .tech-review-notification {
+    display: none;
+}
+
+@keyframes techReviewToolAttention {
+    0%, 100% { transform: rotate(0deg) scale(1); }
+    25% { transform: rotate(-7deg) scale(1.04); }
+    55% { transform: rotate(6deg) scale(1.04); }
+    78% { transform: rotate(-3deg) scale(1.02); }
+}
+
+.tech-review-tool.is-attention .tech-review-tool-icon {
+    animation: techReviewToolAttention 0.72s ease-in-out 2;
+}
+
+.tech-review-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10540;
+    background: rgba(6, 17, 30, 0.42);
+    opacity: 0;
+    backdrop-filter: blur(2px);
+    transition: opacity 0.2s ease;
+}
+
+.tech-review-drawer-backdrop[hidden] {
+    display: none;
+}
+
+.tech-review-drawer-backdrop.is-visible {
+    opacity: 1;
+}
+
+.tech-review-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 10550;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: min(430px, 100vw);
+    height: 100dvh;
+    border-left: 1px solid #d6e4ed;
+    background: #ffffff;
+    box-shadow: -24px 0 54px rgba(6, 17, 30, 0.22);
+    transform: translateX(104%);
+    visibility: hidden;
+    transition: transform 0.24s ease, visibility 0.24s ease;
+}
+
+.tech-review-drawer.is-open {
+    transform: translateX(0);
+    visibility: visible;
+}
+
+.tech-review-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid #dce7ef;
+    background: #f5f9fc;
+}
+
+.tech-review-drawer-title {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
+}
+
+.tech-review-drawer-title > i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: #0d6786;
+    color: #ffffff;
+}
+
+.tech-review-drawer-title-copy {
+    display: grid;
+    gap: 0.08rem;
+}
+
+.tech-review-drawer-title-copy strong {
+    color: #17324d;
+    font-size: 0.9rem;
+}
+
+.tech-review-drawer-title-copy span {
+    color: #6a7f91;
+    font-size: 0.7rem;
+}
+
+.tech-review-drawer-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid #d6e4ed;
+    border-radius: 9px;
+    background: #ffffff;
+    color: #526b80;
+}
+
+.tech-review-drawer-close:hover,
+.tech-review-drawer-close:focus-visible {
+    border-color: #0d6786;
+    color: #0d6786;
+    outline: none;
+}
+
+.tech-review-drawer-body {
+    min-height: 0;
+    padding: 1rem 1.1rem 1.25rem;
+    overflow-y: auto;
+}
+
+.tech-review-drawer-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1rem;
+    padding: 0.85rem 0;
+    border-top: 1px solid #dce7ef;
+}
+
+.tech-review-drawer-total span {
+    color: #536b7f;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.tech-review-drawer-total strong {
+    color: #0d6786;
+    font-size: 1.05rem;
+}
+
+body.tech-review-drawer-open {
+    overflow: hidden;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-review-tool {
+    border-color: rgba(138, 210, 255, 0.18);
+    background: #0d2236;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-card-header .tech-review-tool-icon > i {
+    color: #69b9ec !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-category-filter {
+    border-bottom-color: rgba(138, 210, 255, 0.26);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-category-filter option {
+    background: #0a1b2c;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(.tech-review-tool-label, .tech-review-drawer-title-copy span) {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(.tech-review-tool-value, .tech-review-drawer-title-copy strong) {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-review-notification {
+    border-color: #0d2236;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-review-drawer {
+    border-left-color: rgba(138, 210, 255, 0.15);
+    background: #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-review-drawer-header {
+    border-bottom-color: rgba(138, 210, 255, 0.15);
+    background: #0a1b2c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-review-drawer-close {
+    border-color: rgba(138, 210, 255, 0.18);
+    background: #0d2236;
+    color: #b9d6e8;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-review-drawer-total {
+    border-top-color: rgba(138, 210, 255, 0.15);
+}
+
+@media (max-width: 767.98px) {
+    .technology-card-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .tech-review-tools {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+    }
+
+    .tech-review-tool {
+        width: 100%;
+    }
+
+    .technology-column-headings {
+        padding: 0;
+    }
+
+    .technology-column-headings .row > div {
+        display: none;
+    }
+
+    .technology-column-headings .row > div:last-child {
+        display: block;
+    }
+
+    .technology-notes-heading > span {
+        display: none;
+    }
+
+    .technology-category-filter {
+        width: 100%;
+        min-height: 40px;
+    }
+
+    .tech-item .tech-field-label {
+        display: block;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tech-review-tool.is-attention .tech-review-tool-icon {
+        animation: none;
+    }
+
+    .tech-review-drawer,
+    .tech-review-drawer-backdrop {
+        transition: none;
+    }
 }
 </style>
 
@@ -866,14 +1324,52 @@ a.progress-step:hover {
 
     <div class="row g-4">
         <!-- Main Form Column -->
-        <div class="col-lg-8">
+        <div class="col-12">
             <form method="POST" id="techForm">
                 <div class="form-card">
-                    <div class="card-header">
+                    <div class="card-header technology-card-header">
                         <h5><i class="fas fa-server"></i> Select Technologies/Services</h5>
+                        <div class="tech-review-tools" aria-label="Technology review tools">
+                            <button type="button" class="tech-review-tool" data-review-drawer-open="cost" aria-controls="costReviewDrawer" aria-expanded="false">
+                                <span class="tech-review-tool-icon"><i class="fas fa-chart-line" aria-hidden="true"></i></span>
+                                <span class="tech-review-tool-copy">
+                                    <span class="tech-review-tool-label">Monthly cost</span>
+                                    <strong class="tech-review-tool-value" id="costToolTotal">PHP 0.00</strong>
+                                </span>
+                            </button>
+                            <button type="button" class="tech-review-tool is-attention" data-review-drawer-open="guidance" aria-controls="guidanceReviewDrawer" aria-expanded="false">
+                                <span class="tech-review-tool-icon"><i class="fas fa-robot" aria-hidden="true"></i></span>
+                                <span class="tech-review-tool-copy">
+                                    <span class="tech-review-tool-label">Evortix</span>
+                                    <strong class="tech-review-tool-value">Review guidance</strong>
+                                </span>
+                                <span class="tech-review-notification" aria-hidden="true"></span>
+                            </button>
+                        </div>
                     </div>
                     <div class="card-body">
                         <div id="technologiesContainer">
+                            <div class="technology-column-headings" aria-hidden="true">
+                                <div class="row g-2">
+                                    <div class="col-md-4"><span>Technology</span></div>
+                                    <div class="col-md-3"><span>Service type</span></div>
+                                    <div class="col-md-2"><span>Monthly cost (PHP)</span></div>
+                                    <div class="col-md-3">
+                                        <div class="technology-notes-heading">
+                                            <span>Notes</span>
+                                            <label class="visually-hidden" for="technologyCategoryFilter">Filter technologies by category</label>
+                                            <select id="technologyCategoryFilter" class="technology-category-filter" aria-label="Filter technologies by category">
+                                                <option value="">All categories</option>
+                                                <?php foreach ($technologyCategories as $technologyCategory): ?>
+                                                    <?php if ($technologyCategory !== ''): ?>
+                                                        <option value="<?php echo htmlspecialchars($technologyCategory); ?>"><?php echo htmlspecialchars($technologyCategory); ?></option>
+                                                    <?php endif; ?>
+                                                <?php endforeach; ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             <?php while($tech = $technologies->fetch_assoc()): ?>
                             <?php
                                 $savedRecommendation = $existingRecommendations[(int) $tech['id']] ?? null;
@@ -902,7 +1398,7 @@ a.progress-step:hover {
                                 // DSS recommendations remain suggestions until the architect explicitly accepts them.
                                 $isChecked = (bool) $savedRecommendation;
                             ?>
-                            <div class="tech-item">
+                            <div class="tech-item" data-tech-category="<?php echo htmlspecialchars((string) ($tech['category'] ?? '')); ?>">
                                 <div class="row g-2">
                                     <div class="col-md-4">
                                         <div class="form-check">
@@ -915,7 +1411,7 @@ a.progress-step:hover {
                                                    <?php echo $isChecked ? 'checked' : ''; ?>>
                                             <div class="tech-title-wrap">
                                                 <div class="tech-title-line">
-                                                    <label class="form-check-label fw-bold" for="tech_<?php echo $tech['id']; ?>">
+                                                    <label class="form-check-label" for="tech_<?php echo $tech['id']; ?>">
                                                         <?php echo htmlspecialchars($tech['name']); ?>
                                                     </label>
                                                     <?php if ($templateRecommended): ?>
@@ -927,8 +1423,8 @@ a.progress-step:hover {
                                         </div>
                                     </div>
                                     <div class="col-md-3">
-                                        <label class="form-label">Service Type</label>
-                                        <select name="technologies[<?php echo $tech['id']; ?>][service_type]" class="form-select-modern" <?php echo $isChecked ? '' : 'disabled'; ?>>
+                                        <label class="form-label tech-field-label" for="tech_service_type_<?php echo $tech['id']; ?>">Service Type</label>
+                                        <select id="tech_service_type_<?php echo $tech['id']; ?>" name="technologies[<?php echo $tech['id']; ?>][service_type]" class="form-select-modern" <?php echo $isChecked ? '' : 'disabled'; ?>>
                                             <option value="Development" <?php echo (($savedRecommendation['service_type'] ?? '') === 'Development') ? 'selected' : ''; ?>>Development</option>
                                             <option value="Testing" <?php echo (($savedRecommendation['service_type'] ?? '') === 'Testing') ? 'selected' : ''; ?>>Testing</option>
                                             <option value="Production" <?php echo (($savedRecommendation['service_type'] ?? '') === 'Production') ? 'selected' : ''; ?>>Production</option>
@@ -936,19 +1432,22 @@ a.progress-step:hover {
                                         </select>
                                     </div>
                                     <div class="col-md-2">
-                                        <label class="form-label">Monthly Cost (PHP)</label>
-                                        <input type="number" name="technologies[<?php echo $tech['id']; ?>][cost]" 
+                                        <label class="form-label tech-field-label" for="tech_cost_<?php echo $tech['id']; ?>">Monthly Cost (PHP)</label>
+                                        <input type="number" id="tech_cost_<?php echo $tech['id']; ?>" name="technologies[<?php echo $tech['id']; ?>][cost]"
                                                class="form-control-modern" step="0.01" 
                                                value="<?php echo htmlspecialchars((string) ($savedRecommendation['estimated_cost'] ?? $tech['price'])); ?>" <?php echo $isChecked ? '' : 'disabled'; ?>>
                                     </div>
                                     <div class="col-md-3">
-                                        <label class="form-label">Notes</label>
-                                        <input type="text" name="technologies[<?php echo $tech['id']; ?>][notes]" 
+                                        <label class="form-label tech-field-label" for="tech_notes_<?php echo $tech['id']; ?>">Notes</label>
+                                        <input type="text" id="tech_notes_<?php echo $tech['id']; ?>" name="technologies[<?php echo $tech['id']; ?>][notes]"
                                                class="form-control-modern" placeholder="Optional" value="<?php echo htmlspecialchars((string) ($savedRecommendation['notes'] ?? ($templateRecommended ? 'Recommended by selected project template.' : ''))); ?>" <?php echo $isChecked ? '' : 'disabled'; ?>>
                                     </div>
                                 </div>
                             </div>
                             <?php endwhile; ?>
+                            <div class="technology-category-empty" id="technologyCategoryEmpty" hidden>
+                                No technologies are available in this category.
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -996,37 +1495,58 @@ a.progress-step:hover {
             </form>
         </div>
         
-        <!-- Sidebar Column -->
-        <div class="col-lg-4">
-            <div class="info-card">
-                <div class="card-header">
-                    <h5><i class="fas fa-chart-line"></i> Cost Summary</h5>
-                </div>
-                <div class="card-body">
-                    <div id="costSummary"><p class="text-muted text-center py-3">Select technologies to see cost summary</p></div>
-                    <hr>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <strong>Total Monthly Cost:</strong>
-                        <h4 class="text-primary mb-0" id="totalCost">&#8369;0.00</h4>
-                    </div>
-                </div>
+    </div>
+
+    <div class="tech-review-drawer-backdrop" data-review-drawer-backdrop hidden></div>
+
+    <aside class="tech-review-drawer" id="costReviewDrawer" data-review-drawer="cost"
+           role="dialog" aria-modal="true" aria-labelledby="costReviewDrawerTitle" aria-hidden="true">
+        <div class="tech-review-drawer-header">
+            <div class="tech-review-drawer-title">
+                <i class="fas fa-chart-line" aria-hidden="true"></i>
+                <span class="tech-review-drawer-title-copy">
+                    <strong id="costReviewDrawerTitle">Cost Summary</strong>
+                    <span>Selected recurring technology costs</span>
+                </span>
             </div>
-            
-            <div class="info-card">
-                <div class="card-header">
-                    <h5><i class="fas fa-robot"></i> Evortix Review Guidance</h5>
-                </div>
-                <div class="card-body">
-                    <ul class="tips-list">
-                        <li><i class="fas fa-check-circle"></i> Evortix generates the category recommendations and rationale</li>
-                        <li><i class="fas fa-check-circle"></i> Confirm that cited features match the approved scope</li>
-                        <li><i class="fas fa-check-circle"></i> Review recurring costs and delivery complexity</li>
-                        <li><i class="fas fa-check-circle"></i> The Architect approves or adjusts the final stack</li>
-                    </ul>
-                </div>
+            <button type="button" class="tech-review-drawer-close" data-review-drawer-close aria-label="Close cost summary">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="tech-review-drawer-body">
+            <div id="costSummary">
+                <p class="text-muted text-center py-3">Select technologies to see cost summary</p>
+            </div>
+            <div class="tech-review-drawer-total">
+                <span>Total monthly cost</span>
+                <strong id="totalCost">PHP 0.00</strong>
             </div>
         </div>
-    </div>
+    </aside>
+
+    <aside class="tech-review-drawer" id="guidanceReviewDrawer" data-review-drawer="guidance"
+           role="dialog" aria-modal="true" aria-labelledby="guidanceReviewDrawerTitle" aria-hidden="true">
+        <div class="tech-review-drawer-header">
+            <div class="tech-review-drawer-title">
+                <i class="fas fa-robot" aria-hidden="true"></i>
+                <span class="tech-review-drawer-title-copy">
+                    <strong id="guidanceReviewDrawerTitle">Evortix Review Guidance</strong>
+                    <span>Checks before approving the final stack</span>
+                </span>
+            </div>
+            <button type="button" class="tech-review-drawer-close" data-review-drawer-close aria-label="Close review guidance">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="tech-review-drawer-body">
+            <ul class="tips-list">
+                <li><i class="fas fa-check-circle"></i> Evortix generates the category recommendations and rationale</li>
+                <li><i class="fas fa-check-circle"></i> Confirm that cited features match the approved scope</li>
+                <li><i class="fas fa-check-circle"></i> Review recurring costs and delivery complexity</li>
+                <li><i class="fas fa-check-circle"></i> The Architect approves or adjusts the final stack</li>
+            </ul>
+        </div>
+    </aside>
 </div>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -1058,6 +1578,125 @@ $(document).ready(function() {
         else { inputs.prop('disabled', true); }
         updateCostSummary();
     });
+
+    $('#technologyCategoryFilter').on('change', function() {
+        const selectedCategory = String($(this).val() || '').trim().toLowerCase();
+        let visibleCount = 0;
+
+        $('.tech-item').each(function() {
+            const itemCategory = String($(this).data('tech-category') || '').trim().toLowerCase();
+            const matchesCategory = selectedCategory === '' || itemCategory === selectedCategory;
+            $(this).prop('hidden', !matchesCategory);
+            if (matchesCategory) {
+                visibleCount += 1;
+            }
+        });
+
+        $('#technologyCategoryEmpty').prop('hidden', visibleCount !== 0);
+    });
+
+    $('input[type="number"][name^="technologies"]').on('input change', updateCostSummary);
+
+    const drawerButtons = Array.from(document.querySelectorAll('[data-review-drawer-open]'));
+    const drawerBackdrop = document.querySelector('[data-review-drawer-backdrop]');
+    let lastDrawerTrigger = null;
+    let backdropTimer = null;
+
+    function closeReviewDrawer(returnFocus = true) {
+        const openDrawer = document.querySelector('[data-review-drawer].is-open');
+        if (!openDrawer) {
+            return;
+        }
+
+        openDrawer.classList.remove('is-open');
+        openDrawer.setAttribute('aria-hidden', 'true');
+        drawerButtons.forEach(button => button.setAttribute('aria-expanded', 'false'));
+        drawerBackdrop?.classList.remove('is-visible');
+        document.body.classList.remove('tech-review-drawer-open');
+
+        window.clearTimeout(backdropTimer);
+        backdropTimer = window.setTimeout(() => {
+            if (drawerBackdrop && !document.querySelector('[data-review-drawer].is-open')) {
+                drawerBackdrop.hidden = true;
+            }
+        }, 240);
+
+        if (returnFocus) {
+            lastDrawerTrigger?.focus();
+        }
+    }
+
+    function openReviewDrawer(name, trigger) {
+        closeReviewDrawer(false);
+        const drawer = document.querySelector(`[data-review-drawer="${name}"]`);
+        if (!drawer) {
+            return;
+        }
+
+        window.clearTimeout(backdropTimer);
+        if (drawerBackdrop) {
+            drawerBackdrop.hidden = false;
+            window.requestAnimationFrame(() => drawerBackdrop.classList.add('is-visible'));
+        }
+
+        drawer.classList.add('is-open');
+        drawer.setAttribute('aria-hidden', 'false');
+        trigger.setAttribute('aria-expanded', 'true');
+        trigger.classList.remove('is-attention');
+        if (name === 'guidance') {
+            trigger.classList.add('is-reviewed');
+        }
+        document.body.classList.add('tech-review-drawer-open');
+        lastDrawerTrigger = trigger;
+        drawer.querySelector('[data-review-drawer-close]')?.focus();
+    }
+
+    drawerButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const drawerName = String(button.dataset.reviewDrawerOpen || '');
+            const isOpen = document.querySelector(`[data-review-drawer="${drawerName}"]`)?.classList.contains('is-open');
+            if (isOpen) {
+                closeReviewDrawer();
+            } else {
+                openReviewDrawer(drawerName, button);
+            }
+        });
+    });
+
+    document.querySelectorAll('[data-review-drawer-close]').forEach(button => {
+        button.addEventListener('click', () => closeReviewDrawer());
+    });
+    drawerBackdrop?.addEventListener('click', () => closeReviewDrawer());
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            closeReviewDrawer();
+            return;
+        }
+
+        if (event.key === 'Tab') {
+            const openDrawer = document.querySelector('[data-review-drawer].is-open');
+            if (!openDrawer) {
+                return;
+            }
+
+            const focusableElements = Array.from(openDrawer.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+                .filter(element => !element.disabled && element.offsetParent !== null);
+            if (focusableElements.length === 0) {
+                event.preventDefault();
+                return;
+            }
+
+            const firstFocusable = focusableElements[0];
+            const lastFocusable = focusableElements[focusableElements.length - 1];
+            if (event.shiftKey && document.activeElement === firstFocusable) {
+                event.preventDefault();
+                lastFocusable.focus();
+            } else if (!event.shiftKey && document.activeElement === lastFocusable) {
+                event.preventDefault();
+                firstFocusable.focus();
+            }
+        }
+    });
     
     function updateCostSummary() {
         let total = 0;
@@ -1073,6 +1712,18 @@ $(document).ready(function() {
         if($('.tech-checkbox:checked').length > 0) { $('#costSummary').html(summaryHtml); } 
         else { $('#costSummary').html('<p class="text-muted text-center py-3">Select technologies to see cost summary</p>'); }
         $('#totalCost').text('PHP ' + total.toFixed(2));
+        $('#costToolTotal').text('PHP ' + total.toFixed(2));
+
+        const costTool = document.querySelector('[data-review-drawer-open="cost"]');
+        const previousTotal = Number(costTool?.dataset.total);
+        if (costTool && costTool.dataset.total !== undefined && Number.isFinite(previousTotal) && Math.abs(previousTotal - total) > 0.001) {
+            costTool.classList.remove('is-attention');
+            window.requestAnimationFrame(() => costTool.classList.add('is-attention'));
+            window.setTimeout(() => costTool.classList.remove('is-attention'), 1600);
+        }
+        if (costTool) {
+            costTool.dataset.total = String(total);
+        }
     }
 
     updateCostSummary();

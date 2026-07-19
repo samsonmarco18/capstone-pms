@@ -24,6 +24,19 @@ $allocationRoles = [
     'QA' => ['min' => 1, 'max' => 3],
     'Other Departments' => ['min' => 0, 'max' => 5],
 ];
+$allocationDepartmentIcons = [
+    'Expert Department' => 'fa-user-tie',
+    'UI/UX' => 'fa-palette',
+    'Frontend' => 'fa-code',
+    'Backend' => 'fa-cogs',
+    'Mobile' => 'fa-mobile-alt',
+    'Database' => 'fa-database',
+    'DevOps' => 'fa-infinity',
+    'AI' => 'fa-brain',
+    'Security' => 'fa-shield-alt',
+    'QA' => 'fa-clipboard-check',
+    'Other Departments' => 'fa-users-cog',
+];
 $mandatoryDepartments = ['Expert Department'];
 
 function normalizeAllocationComplexity(?string $value): string
@@ -39,13 +52,13 @@ function normalizeAllocationComplexity(?string $value): string
     };
 }
 
-function allocationComplexityDescription(string $complexity): string
+function allocationComplexityDetail(string $complexity): string
 {
     return match ($complexity) {
-        'low' => 'Low - Simple application with basic features',
-        'high' => 'High - Complex system with advanced features',
-        'critical' => 'Critical - Enterprise-grade solution',
-        default => 'Medium - Standard web/mobile application'
+        'low' => 'Simple application with basic features',
+        'high' => 'Complex system with advanced features',
+        'critical' => 'Enterprise-grade solution',
+        default => 'Standard web/mobile application'
     };
 }
 
@@ -499,7 +512,7 @@ a.progress-step:hover {
 }
 
 .allocation-table th:nth-child(1) {
-    width: 44%;
+    width: 52%;
 }
 
 .allocation-table th:nth-child(2),
@@ -509,13 +522,99 @@ a.progress-step:hover {
 }
 
 .allocation-table th:nth-child(4) {
-    width: 24%;
+    width: 16%;
+    text-align: center;
 }
 
 .department-toggle-wrap {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
+}
+
+.department-cell-layout {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.department-visual {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 62px;
+    height: 62px;
+    border: 0;
+    background: transparent;
+    color: #496d82;
+    font-size: 1.7rem;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.department-visual::before {
+    position: absolute;
+    inset: 9px;
+    border: 1px dashed rgba(31, 99, 146, 0.28);
+    border-radius: 14px 8px 14px 8px;
+    background: rgba(225, 241, 249, 0.5);
+    content: "";
+    transform: rotate(-5deg);
+    transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+}
+
+.department-visual::after {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 8px;
+    height: 8px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    background: #77b9a6;
+    box-shadow: -37px 38px 0 -1px #8fa9bb;
+    content: "";
+}
+
+.department-visual > i {
+    position: relative;
+    z-index: 1;
+}
+
+.department-cell-copy {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.allocation-table tbody tr:hover .department-visual {
+    color: #1f6392;
+    transform: translateY(-2px) rotate(-2deg);
+}
+
+.allocation-table tbody tr:hover .department-visual::before {
+    border-color: rgba(31, 99, 146, 0.46);
+    background: rgba(215, 237, 248, 0.72);
+    transform: rotate(1deg);
+}
+
+@keyframes departmentIconSelected {
+    0% { transform: scale(0.86); }
+    62% { transform: scale(1.12); }
+    100% { transform: scale(1); }
+}
+
+.allocation-table tbody tr:has(.department-toggle:checked) .department-visual {
+    color: #155a86;
+}
+
+.allocation-table tbody tr:has(.department-toggle:checked) .department-visual::before {
+    border-color: rgba(31, 99, 146, 0.4);
+    background: rgba(209, 235, 248, 0.82);
+}
+
+.allocation-table tbody tr:has(.department-toggle:checked) .department-visual > i {
+    animation: departmentIconSelected 0.42s ease-out;
 }
 
 .department-toggle-wrap input {
@@ -548,10 +647,40 @@ a.progress-step:hover {
 
 .allocation-table td:nth-child(4) {
     min-width: 180px;
+    text-align: center;
 }
 
-.allocation-table tr:hover {
-    background: var(--gray-50);
+.allocation-table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.allocation-table tbody tr:has(.department-toggle:checked) {
+    background: #f2f8fc;
+}
+
+.allocation-table tbody tr:hover,
+.allocation-table tbody tr:has(.department-toggle:checked):hover {
+    background: #edf6fb;
+}
+
+.allocation-table tbody td:first-child {
+    position: relative;
+}
+
+.allocation-table tbody td:first-child::before {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: transparent;
+    content: "";
+    transition: background-color 0.2s ease;
+}
+
+.allocation-table tbody tr:hover td:first-child::before {
+    background: var(--theme-primary);
 }
 
 /* Form Elements */
@@ -583,21 +712,72 @@ a.progress-step:hover {
     box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
 }
 
-.readonly-complexity-field {
-    width: 100%;
-    padding: 0.7rem 0.9rem;
-    border: 1px solid var(--gray-300);
-    border-radius: 10px;
-    font-size: 0.9rem;
-    background: var(--gray-50);
-    color: var(--gray-900);
+.allocation-complexity-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--gray-200);
 }
 
-.readonly-complexity-source {
+.allocation-complexity-main {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 0.75rem;
+}
+
+.allocation-complexity-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    border-radius: 9px;
+    background: #edf7fc;
+    color: var(--theme-primary);
+}
+
+.allocation-complexity-copy {
+    display: grid;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.allocation-complexity-label {
+    color: var(--gray-600);
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.055em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.allocation-complexity-value {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    color: var(--gray-900);
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+
+.allocation-complexity-level {
+    color: #165f86;
+    font-weight: 700;
+}
+
+.allocation-complexity-separator {
+    color: var(--gray-400);
+}
+
+.allocation-complexity-source {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    margin-top: 0.45rem;
+    flex: 0 0 auto;
     color: var(--gray-600);
     font-size: 0.75rem;
 }
@@ -862,10 +1042,380 @@ a.progress-step:hover {
     color: #fca5a5;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .readonly-complexity-field {
-    background: #0a1b2c !important;
-    border-color: rgba(31, 99, 146, 0.24) !important;
-    color: #d7e4f2 !important;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-complexity-summary {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-complexity-icon {
+    background: #0d2236;
+    color: #8ad2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-complexity-value {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-complexity-level {
+    color: #8ad2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-visual {
+    border: 0;
+    background: transparent;
+    color: #69b9ec;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-table tbody tr:hover .department-visual,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-table tbody tr:has(.department-toggle:checked) .department-visual {
+    color: #8ad2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-visual::before {
+    border-color: rgba(138, 210, 255, 0.24);
+    background: rgba(18, 48, 74, 0.55);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-table tbody tr:hover .department-visual::before,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-table tbody tr:has(.department-toggle:checked) .department-visual::before {
+    border-color: rgba(138, 210, 255, 0.42);
+    background: rgba(21, 59, 88, 0.78);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-visual::after {
+    border-color: #0a1c2d;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-table tbody tr:has(.department-toggle:checked) {
+    background: #0a1c2d !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-table tbody tr:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-table tbody tr:has(.department-toggle:checked):hover {
+    background: #0d2539 !important;
+}
+
+/* Compact allocation review tools replace the permanent right sidebar. */
+.allocation-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.allocation-review-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex: 0 0 auto;
+}
+
+.allocation-review-tool {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    gap: 0.55rem;
+    padding: 0.45rem 0.72rem;
+    border: 1px solid rgba(31, 99, 146, 0.2);
+    border-radius: 11px;
+    background: #f7fbfd;
+    color: #174769;
+    box-shadow: 0 5px 14px rgba(15, 76, 129, 0.06);
+    cursor: pointer;
+    transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.allocation-review-tool:hover,
+.allocation-review-tool:focus-visible,
+.allocation-review-tool[aria-expanded="true"] {
+    border-color: rgba(13, 103, 134, 0.42);
+    background: #eef7fb;
+    box-shadow: 0 8px 18px rgba(15, 76, 129, 0.12);
+    outline: none;
+    transform: translateY(-1px);
+}
+
+.allocation-review-tool-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    color: #0d6786;
+    font-size: 0.9rem;
+}
+
+.allocation-resource-shortage-count {
+    position: absolute;
+    top: -9px;
+    right: -11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border: 2px solid #f7fbfd;
+    border-radius: 999px;
+    background: #dc3545;
+    color: #ffffff;
+    font-size: 0.58rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.allocation-resource-shortage-count[hidden] {
+    display: none;
+}
+
+.allocation-review-tool.has-shortage {
+    border-color: rgba(217, 119, 6, 0.3);
+    background: #fffaf0;
+}
+
+.allocation-card-header .allocation-review-tool.has-shortage .allocation-review-tool-icon > i,
+.allocation-review-tool.has-shortage .allocation-review-tool-value {
+    color: #a85d08 !important;
+}
+
+.allocation-card-header .allocation-review-tool-icon > i {
+    color: #0d6786 !important;
+    font-weight: 900;
+}
+
+.allocation-review-tool-copy {
+    display: grid;
+    gap: 0.02rem;
+    min-width: 0;
+    text-align: left;
+}
+
+.allocation-review-tool-label {
+    color: #5f7487;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.allocation-review-tool-value {
+    color: #174769;
+    font-size: 0.76rem;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.allocation-review-notification {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 7px;
+    height: 7px;
+    border: 2px solid #f7fbfd;
+    border-radius: 50%;
+    background: #f59e0b;
+}
+
+.allocation-review-tool.is-reviewed .allocation-review-notification {
+    display: none;
+}
+
+.allocation-review-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10540;
+    background: rgba(6, 17, 30, 0.42);
+    opacity: 0;
+    backdrop-filter: blur(2px);
+    transition: opacity 0.2s ease;
+}
+
+.allocation-review-drawer-backdrop[hidden] {
+    display: none;
+}
+
+.allocation-review-drawer-backdrop.is-visible {
+    opacity: 1;
+}
+
+.allocation-review-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 10550;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: min(430px, 100vw);
+    height: 100dvh;
+    border-left: 1px solid #d6e4ed;
+    background: #ffffff;
+    box-shadow: -24px 0 54px rgba(6, 17, 30, 0.22);
+    transform: translateX(104%);
+    visibility: hidden;
+    transition: transform 0.24s ease, visibility 0.24s ease;
+}
+
+.allocation-review-drawer.is-open {
+    transform: translateX(0);
+    visibility: visible;
+}
+
+.allocation-review-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid #dce7ef;
+    background: #f5f9fc;
+}
+
+.allocation-review-drawer-title {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
+}
+
+.allocation-review-drawer-title > i {
+    color: #0d6786;
+    font-size: 1rem;
+}
+
+.allocation-review-drawer-title-copy {
+    display: grid;
+    gap: 0.08rem;
+}
+
+.allocation-review-drawer-title-copy strong {
+    color: #17324d;
+    font-size: 0.9rem;
+}
+
+.allocation-review-drawer-title-copy span {
+    color: #6a7f91;
+    font-size: 0.7rem;
+}
+
+.allocation-review-drawer-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid #d6e4ed;
+    border-radius: 9px;
+    background: #ffffff;
+    color: #526b80;
+}
+
+.allocation-review-drawer-close:hover,
+.allocation-review-drawer-close:focus-visible {
+    border-color: #0d6786;
+    color: #0d6786;
+    outline: none;
+}
+
+.allocation-review-drawer-body {
+    min-height: 0;
+    padding: 1rem 1.1rem 1.25rem;
+    overflow-y: auto;
+}
+
+body.allocation-review-drawer-open {
+    overflow: hidden;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-review-tool {
+    border-color: rgba(138, 210, 255, 0.18);
+    background: #0d2236;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-review-tool.has-shortage {
+    border-color: rgba(251, 191, 36, 0.3);
+    background: #2a2112;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-resource-shortage-count {
+    border-color: #2a2112;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(.allocation-review-tool-label, .allocation-review-drawer-title-copy span) {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(.allocation-review-tool-value, .allocation-review-drawer-title-copy strong) {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-card-header .allocation-review-tool-icon > i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-review-drawer-title > i {
+    color: #69b9ec !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-card-header .allocation-review-tool.has-shortage .allocation-review-tool-icon > i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-review-tool.has-shortage .allocation-review-tool-value {
+    color: #fbbf24 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-review-drawer {
+    border-left-color: rgba(138, 210, 255, 0.15);
+    background: #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-review-drawer-header {
+    border-bottom-color: rgba(138, 210, 255, 0.15);
+    background: #0a1b2c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-review-drawer-close {
+    border-color: rgba(138, 210, 255, 0.18);
+    background: #0d2236;
+    color: #b9d6e8;
+}
+
+@media (max-width: 767.98px) {
+    .allocation-complexity-summary {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.65rem;
+    }
+
+    .allocation-complexity-source {
+        margin-left: 2.95rem;
+    }
+
+    .allocation-card-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .allocation-review-tools {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+    }
+
+    .allocation-review-tool {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .department-visual,
+    .allocation-table tbody tr:has(.department-toggle:checked) .department-visual > i {
+        animation: none;
+        transition: none;
+    }
+
+    .allocation-review-drawer,
+    .allocation-review-drawer-backdrop {
+        transition: none;
+    }
 }
 </style>
 
@@ -915,7 +1465,7 @@ a.progress-step:hover {
 
     <div class="row g-4">
         <!-- Main Form Column -->
-        <div class="col-lg-8">
+        <div class="col-12">
             <?php if (is_array($projectTemplate)): ?>
             <div class="info-card mb-4 architect-dss-source-card">
                 <div class="card-header">
@@ -934,21 +1484,48 @@ a.progress-step:hover {
             </div>
             <?php endif; ?>
             <div class="form-card">
-                <div class="card-header">
+                <div class="card-header allocation-card-header">
                     <h5><i class="fas fa-user-plus"></i> Team Requirements</h5>
+                    <div class="allocation-review-tools" aria-label="Allocation review tools">
+                        <button type="button" class="allocation-review-tool" data-allocation-drawer-open="resources" aria-controls="resourceAllocationDrawer" aria-expanded="false">
+                            <span class="allocation-review-tool-icon">
+                                <i class="fas fa-chart-pie" id="resourceToolIcon" aria-hidden="true"></i>
+                                <span class="allocation-resource-shortage-count" id="resourceShortageCount" hidden>0</span>
+                            </span>
+                            <span class="allocation-review-tool-copy">
+                                <span class="allocation-review-tool-label">Resources</span>
+                                <strong class="allocation-review-tool-value" id="resourceToolValue">0 included / 0 required</strong>
+                            </span>
+                        </button>
+                        <button type="button" class="allocation-review-tool" data-allocation-drawer-open="guidelines" aria-controls="allocationGuidelinesDrawer" aria-expanded="false">
+                            <span class="allocation-review-tool-icon"><i class="fas fa-circle-info" aria-hidden="true"></i></span>
+                            <span class="allocation-review-tool-copy">
+                                <span class="allocation-review-tool-label">Allocation</span>
+                                <strong class="allocation-review-tool-value">View guidelines</strong>
+                            </span>
+                            <span class="allocation-review-notification" aria-hidden="true"></span>
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <form method="POST" id="allocationForm">
-                        <div class="mb-4">
-                            <label class="form-label">
-                                Project Complexity Level
-                                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Complexity is generated by Sales and cannot be changed during architect allocation."></i>
-                            </label>
-                            <div class="readonly-complexity-field" aria-readonly="true">
-                                <?php echo htmlspecialchars(allocationComplexityDescription($selectedComplexity)); ?>
+                        <div class="allocation-complexity-summary mb-4" aria-readonly="true">
+                            <div class="allocation-complexity-main">
+                                <span class="allocation-complexity-icon" aria-hidden="true"><i class="fas fa-layer-group"></i></span>
+                                <span class="allocation-complexity-copy">
+                                    <span class="allocation-complexity-label">
+                                        Project Complexity
+                                        <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Complexity is generated by Sales and cannot be changed during architect allocation."></i>
+                                    </span>
+                                    <span class="allocation-complexity-value">
+                                        <strong class="allocation-complexity-level"><?php echo htmlspecialchars(ucfirst($selectedComplexity)); ?></strong>
+                                        <span class="allocation-complexity-separator" aria-hidden="true">&middot;</span>
+                                        <span><?php echo htmlspecialchars(allocationComplexityDetail($selectedComplexity)); ?></span>
+                                    </span>
+                                </span>
                             </div>
                             <input type="hidden" id="complexityLevel" value="<?php echo htmlspecialchars($selectedComplexity); ?>">
-                            <span class="readonly-complexity-source"><i class="fas fa-lock"></i> Generated by Sales</span>
+                            <span class="allocation-complexity-source"><i class="fas fa-lock"></i> Generated by Sales</span>
                         </div>
                         
                         <div class="table-responsive">
@@ -979,11 +1556,17 @@ foreach($allocationRoles as $role => $limits):
                                         }
                                         $existingComplexity = $selectedComplexity;
                                         $available = allocationAvailableForRole($availableDevs, $role);
-                                        $inputMax = max($available, (int) ($limits['min'] ?? 0), $templateRecommendedCount);
-                                        $isShortage = $existing > $available;
-                                    ?>
-                                    <tr>
-                                        <td class="fw-semibold">
+                                         $inputMax = max($available, (int) ($limits['min'] ?? 0), $templateRecommendedCount);
+                                         $isShortage = $existing > $available;
+                                         $departmentIcon = $allocationDepartmentIcons[$role] ?? 'fa-users';
+                                     ?>
+                                     <tr>
+                                         <td class="fw-semibold">
+                                             <div class="department-cell-layout">
+                                                 <span class="department-visual" aria-hidden="true">
+                                                     <i class="fas <?php echo htmlspecialchars($departmentIcon); ?>"></i>
+                                                 </span>
+                                                 <div class="department-cell-copy">
                                             <?php if ($isMandatory): ?>
                                                 <input type="hidden" name="allocations[<?php echo $role; ?>][included]" value="1">
                                             <?php endif; ?>
@@ -1009,9 +1592,11 @@ foreach($allocationRoles as $role => $limits):
                                             <span class="department-role-note"><?php echo $isMandatory ? 'First handoff for expert estimation.' : 'SUL and team members are matched by this department.'; ?></span>
                                             <?php if (!empty($templateRoleTasks[$role])): ?>
                                                 <span class="department-role-note"><strong>Template tasks:</strong> <?php echo htmlspecialchars(implode(' · ', $templateRoleTasks[$role])); ?></span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
+                                             <?php endif; ?>
+                                                 </div>
+                                             </div>
+                                         </td>
+                                         <td>
                                             <input type="number" name="allocations[<?php echo $role; ?>][required]" 
                                                    id="allocation_count_<?php echo md5($role); ?>"
                                                    class="form-control-modern form-control-sm required-count" 
@@ -1038,9 +1623,7 @@ foreach($allocationRoles as $role => $limits):
                                 </tbody>
                             </table>
                         </div>
-                        
-                        <div id="alertMessages" class="mt-3"></div>
-                        
+
                         <div class="mt-4 text-end">
                             <button type="submit" class="btn-primary-modern">
                                 <i class="fas fa-arrow-right"></i> Proceed to Roadmap
@@ -1051,33 +1634,55 @@ foreach($allocationRoles as $role => $limits):
             </div>
         </div>
         
-        <!-- Sidebar Column -->
-        <div class="col-lg-4">
-            <div class="info-card">
-                <div class="card-header">
-                    <h5><i class="fas fa-chart-pie"></i> Resource Summary</h5>
-                </div>
-                <div class="card-body">
-                    <div id="resourceSummary"><p class="text-muted text-center py-3">Select complexity level to see recommendations</p></div>
-                </div>
+    </div>
+
+    <div class="allocation-review-drawer-backdrop" data-allocation-drawer-backdrop hidden></div>
+
+    <aside class="allocation-review-drawer" id="resourceAllocationDrawer" data-allocation-drawer="resources"
+           role="dialog" aria-modal="true" aria-labelledby="resourceAllocationDrawerTitle" aria-hidden="true">
+        <div class="allocation-review-drawer-header">
+            <div class="allocation-review-drawer-title">
+                <i class="fas fa-chart-pie" aria-hidden="true"></i>
+                <span class="allocation-review-drawer-title-copy">
+                    <strong id="resourceAllocationDrawerTitle">Resource Summary</strong>
+                    <span>Live department capacity and utilization</span>
+                </span>
             </div>
-            
-            <div class="info-card">
-                <div class="card-header">
-                    <h5><i class="fas fa-info-circle"></i> Allocation Guidelines</h5>
-                </div>
-                <div class="card-body">
-                    <ul class="guidelines-list">
-                        <li><i class="fas fa-info-circle"></i> Low complexity: 2-3 developers</li>
-                        <li><i class="fas fa-info-circle"></i> Medium complexity: 4-5 developers</li>
-                        <li><i class="fas fa-info-circle"></i> High complexity: 6-8 developers</li>
-                        <li><i class="fas fa-info-circle"></i> Critical: 8+ developers</li>
-                        <li><i class="fas fa-exclamation-triangle"></i> Red alerts indicate resource shortage</li>
-                    </ul>
-                </div>
+            <button type="button" class="allocation-review-drawer-close" data-allocation-drawer-close aria-label="Close resource summary">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="allocation-review-drawer-body">
+            <div id="resourceSummary">
+                <p class="text-muted text-center py-3">Select departments to see the resource summary</p>
             </div>
         </div>
-    </div>
+    </aside>
+
+    <aside class="allocation-review-drawer" id="allocationGuidelinesDrawer" data-allocation-drawer="guidelines"
+           role="dialog" aria-modal="true" aria-labelledby="allocationGuidelinesDrawerTitle" aria-hidden="true">
+        <div class="allocation-review-drawer-header">
+            <div class="allocation-review-drawer-title">
+                <i class="fas fa-circle-info" aria-hidden="true"></i>
+                <span class="allocation-review-drawer-title-copy">
+                    <strong id="allocationGuidelinesDrawerTitle">Allocation Guidelines</strong>
+                    <span>Recommended staffing by complexity</span>
+                </span>
+            </div>
+            <button type="button" class="allocation-review-drawer-close" data-allocation-drawer-close aria-label="Close allocation guidelines">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="allocation-review-drawer-body">
+            <ul class="guidelines-list">
+                <li><i class="fas fa-info-circle"></i> Low complexity: 2-3 developers</li>
+                <li><i class="fas fa-info-circle"></i> Medium complexity: 4-5 developers</li>
+                <li><i class="fas fa-info-circle"></i> High complexity: 6-8 developers</li>
+                <li><i class="fas fa-info-circle"></i> Critical: 8+ developers</li>
+                <li><i class="fas fa-exclamation-triangle"></i> Red alerts indicate resource shortage</li>
+            </ul>
+        </div>
+    </aside>
 </div>
 
 <script>
@@ -1089,6 +1694,106 @@ function initAllocationTooltips() {
         bootstrap.Tooltip.getOrCreateInstance(element);
     });
 }
+
+const allocationDrawerButtons = Array.from(document.querySelectorAll('[data-allocation-drawer-open]'));
+const allocationDrawerBackdrop = document.querySelector('[data-allocation-drawer-backdrop]');
+let lastAllocationDrawerTrigger = null;
+let allocationBackdropTimer = null;
+
+function closeAllocationDrawer(returnFocus = true) {
+    const openDrawer = document.querySelector('[data-allocation-drawer].is-open');
+    if (!openDrawer) {
+        return;
+    }
+
+    openDrawer.classList.remove('is-open');
+    openDrawer.setAttribute('aria-hidden', 'true');
+    allocationDrawerButtons.forEach(button => button.setAttribute('aria-expanded', 'false'));
+    allocationDrawerBackdrop?.classList.remove('is-visible');
+    document.body.classList.remove('allocation-review-drawer-open');
+
+    window.clearTimeout(allocationBackdropTimer);
+    allocationBackdropTimer = window.setTimeout(() => {
+        if (allocationDrawerBackdrop && !document.querySelector('[data-allocation-drawer].is-open')) {
+            allocationDrawerBackdrop.hidden = true;
+        }
+    }, 240);
+
+    if (returnFocus) {
+        lastAllocationDrawerTrigger?.focus();
+    }
+}
+
+function openAllocationDrawer(name, trigger) {
+    closeAllocationDrawer(false);
+    const drawer = document.querySelector(`[data-allocation-drawer="${name}"]`);
+    if (!drawer) {
+        return;
+    }
+
+    window.clearTimeout(allocationBackdropTimer);
+    if (allocationDrawerBackdrop) {
+        allocationDrawerBackdrop.hidden = false;
+        window.requestAnimationFrame(() => allocationDrawerBackdrop.classList.add('is-visible'));
+    }
+
+    drawer.classList.add('is-open');
+    drawer.setAttribute('aria-hidden', 'false');
+    trigger.setAttribute('aria-expanded', 'true');
+    if (name === 'guidelines') {
+        trigger.classList.add('is-reviewed');
+    }
+    document.body.classList.add('allocation-review-drawer-open');
+    lastAllocationDrawerTrigger = trigger;
+    drawer.querySelector('[data-allocation-drawer-close]')?.focus();
+}
+
+allocationDrawerButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        const drawerName = String(button.dataset.allocationDrawerOpen || '');
+        const isOpen = document.querySelector(`[data-allocation-drawer="${drawerName}"]`)?.classList.contains('is-open');
+        if (isOpen) {
+            closeAllocationDrawer();
+        } else {
+            openAllocationDrawer(drawerName, button);
+        }
+    });
+});
+
+document.querySelectorAll('[data-allocation-drawer-close]').forEach(button => {
+    button.addEventListener('click', () => closeAllocationDrawer());
+});
+allocationDrawerBackdrop?.addEventListener('click', () => closeAllocationDrawer());
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+        closeAllocationDrawer();
+        return;
+    }
+
+    if (event.key === 'Tab') {
+        const openDrawer = document.querySelector('[data-allocation-drawer].is-open');
+        if (!openDrawer) {
+            return;
+        }
+
+        const focusableElements = Array.from(openDrawer.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
+            .filter(element => !element.disabled && element.offsetParent !== null);
+        if (focusableElements.length === 0) {
+            event.preventDefault();
+            return;
+        }
+
+        const firstFocusable = focusableElements[0];
+        const lastFocusable = focusableElements[focusableElements.length - 1];
+        if (event.shiftKey && document.activeElement === firstFocusable) {
+            event.preventDefault();
+            lastFocusable.focus();
+        } else if (!event.shiftKey && document.activeElement === lastFocusable) {
+            event.preventDefault();
+            firstFocusable.focus();
+        }
+    }
+});
 
 document.querySelectorAll('[data-dss-team-decision]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -1209,16 +1914,43 @@ function checkAllAvailability() {
         totalRequired += required; totalAvailable += available;
         if (required > available) shortages.push(`${role}: Need ${required - available} more (${available} available)`);
     });
-    const alertDiv = document.getElementById('alertMessages');
     const summaryDiv = document.getElementById('resourceSummary');
+    let allocationStateHtml = '';
     if (includedCount === 0) {
-        alertDiv.innerHTML = `<div class="alert-warning-modern"><i class="fas fa-exclamation-triangle me-2"></i><strong>Select at least one department</strong><div class="small mt-1">Architect must identify which departments are included before moving to diagram upload.</div></div>`;
+        allocationStateHtml = `<div class="alert-warning-modern mb-0"><i class="fas fa-exclamation-triangle me-2"></i><strong>Select at least one department</strong><div class="small mt-1">Identify the departments included before continuing to the roadmap.</div></div>`;
     } else if (shortages.length > 0) {
-        alertDiv.innerHTML = `<div class="alert-warning-modern"><i class="fas fa-exclamation-triangle me-2"></i><strong>Resource Shortages Detected:</strong><ul class="mb-0 mt-2 ps-3">${shortages.map(s => `<li>${s}</li>`).join('')}</ul><small class="d-block mt-2">Consider adjusting allocation or requesting additional resources.</small></div>`;
-    } else { alertDiv.innerHTML = ''; }
-    const utilization = totalRequired > 0 ? ((totalRequired / totalAvailable) * 100).toFixed(1) : 0;
-    const isOverUtilized = utilization > 100;
-    summaryDiv.innerHTML = `<div class="mb-3"><strong>Included Departments:</strong> ${includedCount}</div><div class="mb-3"><strong>Total Required:</strong> ${totalRequired} people</div><div class="mb-3"><strong>Total Available:</strong> ${totalAvailable} people</div><div class="mb-3"><strong>Utilization:</strong> ${utilization}%<div class="progress-modern"><div class="progress-bar-modern ${isOverUtilized ? 'danger' : 'success'}" style="width: ${Math.min(utilization, 100)}%"></div></div></div>${includedCount === 0 ? '<div class="alert-warning-modern mb-0"><i class="fas fa-exclamation-triangle me-2"></i>No department selected yet.</div>' : (totalRequired > totalAvailable ? '<div class="alert-warning-modern mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Resource shortage detected! Total required exceeds available resources.</div>' : '<div class="alert-success-modern mb-0"><i class="fas fa-check-circle me-2"></i>Department allocation looks good!</div>')}`;
+        allocationStateHtml = `<div class="alert-warning-modern mb-0"><i class="fas fa-exclamation-triangle me-2"></i><strong>Resource Shortages Detected</strong><ul class="mb-0 mt-2 ps-3">${shortages.map(shortage => `<li>${shortage}</li>`).join('')}</ul><small class="d-block mt-2">Consider adjusting allocation or requesting additional resources.</small></div>`;
+    } else {
+        allocationStateHtml = '<div class="alert-success-modern mb-0"><i class="fas fa-check-circle me-2"></i>Department allocation looks good!</div>';
+    }
+
+    const utilization = totalRequired > 0 && totalAvailable > 0 ? Number(((totalRequired / totalAvailable) * 100).toFixed(1)) : 0;
+    const utilizationLabel = totalRequired > 0 && totalAvailable === 0 ? 'No capacity' : `${utilization}%`;
+    const isOverUtilized = totalRequired > totalAvailable;
+    summaryDiv.innerHTML = `${allocationStateHtml}<div class="mt-4 mb-3"><strong>Included Departments:</strong> ${includedCount}</div><div class="mb-3"><strong>Total Required:</strong> ${totalRequired} people</div><div class="mb-3"><strong>Total Available:</strong> ${totalAvailable} people</div><div class="mb-0"><strong>Utilization:</strong> ${utilizationLabel}<div class="progress-modern"><div class="progress-bar-modern ${isOverUtilized ? 'danger' : 'success'}" style="width: ${Math.min(utilization, 100)}%"></div></div></div>`;
+    const resourceToolValue = document.getElementById('resourceToolValue');
+    const resourceTool = document.querySelector('[data-allocation-drawer-open="resources"]');
+    const resourceToolIcon = document.getElementById('resourceToolIcon');
+    const resourceShortageCount = document.getElementById('resourceShortageCount');
+    if (resourceToolValue) {
+        resourceToolValue.textContent = shortages.length > 0
+            ? `${shortages.length} shortages / ${totalRequired} required`
+            : `${includedCount} included / ${totalRequired} required`;
+    }
+    if (resourceTool) {
+        resourceTool.classList.toggle('has-shortage', shortages.length > 0);
+        resourceTool.setAttribute('aria-label', shortages.length > 0
+            ? `Open resource summary. ${shortages.length} shortages detected.`
+            : 'Open resource summary. No shortages detected.');
+    }
+    if (resourceToolIcon) {
+        resourceToolIcon.classList.toggle('fa-chart-pie', shortages.length === 0);
+        resourceToolIcon.classList.toggle('fa-exclamation-triangle', shortages.length > 0);
+    }
+    if (resourceShortageCount) {
+        resourceShortageCount.hidden = shortages.length === 0;
+        resourceShortageCount.textContent = String(shortages.length);
+    }
 }
 
 document.querySelectorAll('.department-toggle').forEach((toggle) => {

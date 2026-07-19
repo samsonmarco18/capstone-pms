@@ -383,9 +383,22 @@ include '../../includes/navbar.php';
     margin-bottom: 1.25rem;
 }
 
+.saved-feature-columns {
+    display: grid;
+    grid-template-columns: 18px minmax(180px, 1fr) minmax(220px, 1.4fr);
+    gap: 0.75rem;
+    padding: 0 1rem;
+    color: var(--gray-600);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    line-height: 1.3;
+    text-transform: uppercase;
+}
+
 .saved-feature {
     display: grid;
-    grid-template-columns: auto minmax(180px, 1fr) minmax(220px, 1.4fr);
+    grid-template-columns: 18px minmax(180px, 1fr) minmax(220px, 1.4fr);
     gap: 0.75rem;
     align-items: start;
     background: #ffffff;
@@ -399,7 +412,21 @@ include '../../includes/navbar.php';
 }
 
 .saved-feature-check {
-    padding-top: 2.1rem;
+    display: flex;
+    align-items: center;
+    min-height: 38px;
+    padding-top: 0;
+    padding-left: 0;
+}
+
+.saved-feature-check .form-check-input {
+    float: none;
+    margin: 0;
+}
+
+.saved-feature-field-label,
+.additional-feature-field-label {
+    display: none;
 }
 
 .saved-feature-title {
@@ -418,8 +445,19 @@ include '../../includes/navbar.php';
     grid-column: 2 / -1;
 }
 
+.additional-feature-columns {
+    padding: 0 1rem 0.45rem;
+    color: var(--gray-600);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    line-height: 1.3;
+    text-transform: uppercase;
+}
+
 .sales-requested-list {
     display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.75rem;
     margin-bottom: 1.25rem;
 }
@@ -427,35 +465,38 @@ include '../../includes/navbar.php';
 .sales-requested-feature {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 0.85rem;
+    gap: 0.5rem;
     align-items: center;
-    background: #f8fbfd;
+    min-height: 56px;
+    background: #ffffff;
     border: 1px solid var(--gray-200);
-    border-radius: 12px;
-    padding: 0.9rem 1rem;
+    border-radius: 10px;
+    padding: 0.7rem 0.8rem;
+    box-shadow: 0 4px 12px rgba(15, 76, 129, 0.035);
 }
 
 .sales-requested-feature .form-check {
     display: flex;
-    gap: 0.65rem;
-    align-items: flex-start;
+    align-items: center;
+    gap: 0.55rem;
+    width: 100%;
     margin: 0;
 }
 
 .sales-requested-feature .form-check-input {
-    margin-top: 0.15rem;
+    flex: 0 0 auto;
+    margin-top: 0;
 }
 
 .sales-requested-title {
     color: var(--gray-900);
-    font-weight: 700;
+    font-size: 0.86rem;
+    font-weight: 600;
     word-break: break-word;
 }
 
 .sales-requested-meta {
-    color: var(--gray-600);
-    font-size: 0.78rem;
-    margin-top: 0.2rem;
+    display: none !important;
 }
 
 .additional-features {
@@ -722,6 +763,20 @@ a.progress-step:hover {
     .progress-step .step-label { font-size: 0.6rem; }
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
     .saved-feature { grid-template-columns: 1fr; }
+    .saved-feature-columns,
+    .additional-feature-columns {
+        display: none;
+    }
+    .saved-feature-field-label,
+    .additional-feature-field-label {
+        display: block;
+    }
+    .saved-feature-check {
+        min-height: auto;
+    }
+    .saved-feature-status-note {
+        grid-column: 1;
+    }
     .sales-requested-feature { grid-template-columns: 1fr; }
     .feature-action-bar {
         align-items: stretch;
@@ -742,6 +797,24 @@ a.progress-step:hover {
     .feature-action-primary [data-generic-save-draft],
     .feature-action-primary .btn-save {
         width: 100%;
+    }
+}
+
+@media (max-width: 1199.98px) {
+    .sales-requested-list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 991.98px) {
+    .sales-requested-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575.98px) {
+    .sales-requested-list {
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
@@ -775,6 +848,8 @@ a.progress-step:hover {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .saved-feature-description,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .saved-feature-columns,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .additional-feature-columns,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
     color: #9db6cf !important;
 }
@@ -872,6 +947,11 @@ a.progress-step:hover {
                 Saved Features
             </div>
             <div class="saved-feature-list">
+                <div class="saved-feature-columns" aria-hidden="true">
+                    <span></span>
+                    <span>Feature Title</span>
+                    <span>Description</span>
+                </div>
                 <?php foreach ($existingFeatures as $feature): ?>
                     <?php
                         $featureId = (int) ($feature['id'] ?? 0);
@@ -898,7 +978,7 @@ a.progress-step:hover {
                             >
                         </div>
                         <div>
-                            <label class="form-label" for="existingFeatureTitle<?php echo $featureId; ?>">Feature Title</label>
+                            <label class="form-label saved-feature-field-label" for="existingFeatureTitle<?php echo $featureId; ?>">Feature Title</label>
                             <input
                                 type="text"
                                 class="form-control"
@@ -910,7 +990,7 @@ a.progress-step:hover {
                             >
                         </div>
                         <div>
-                            <label class="form-label" for="existingFeatureDescription<?php echo $featureId; ?>">Description</label>
+                            <label class="form-label saved-feature-field-label" for="existingFeatureDescription<?php echo $featureId; ?>">Description</label>
                             <input
                                 type="text"
                                 class="form-control"
@@ -922,9 +1002,9 @@ a.progress-step:hover {
                                 <?php echo $isFeatureEditable ? '' : 'disabled'; ?>
                             >
                         </div>
-                        <small class="saved-feature-description saved-feature-status-note">
-                            <?php echo $isFeatureEditable ? 'Editable until assigned or passed forward.' : 'Locked after assignment or progress.'; ?>
-                        </small>
+                        <?php if (!$isFeatureEditable): ?>
+                            <small class="saved-feature-description saved-feature-status-note">Locked after assignment or progress.</small>
+                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -978,16 +1058,23 @@ a.progress-step:hover {
                 <i class="fas fa-plus-circle"></i>
                 Additional Features
             </div>
+            <div class="additional-feature-columns" aria-hidden="true">
+                <div class="row g-3">
+                    <div class="col-md-5">Feature Title</div>
+                    <div class="col-md-6">Description</div>
+                    <div class="col-md-1 text-center">Action</div>
+                </div>
+            </div>
             <div id="featuresContainer">
                 <div class="feature-item">
                     <div class="row g-3 align-items-end">
                         <div class="col-md-5">
-                            <label class="form-label">Feature Title</label>
-                            <input type="text" name="new_features[<?php echo count($salesRequestedFeatures); ?>][title]" class="form-control" <?php echo count($existingFeatures) === 0 && count($salesRequestedFeatures) === 0 ? 'required' : ''; ?>>
+                            <label class="form-label additional-feature-field-label">Feature Title</label>
+                            <input type="text" name="new_features[<?php echo count($salesRequestedFeatures); ?>][title]" class="form-control" aria-label="Feature title" <?php echo count($existingFeatures) === 0 && count($salesRequestedFeatures) === 0 ? 'required' : ''; ?>>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">Description</label>
-                            <input type="text" name="new_features[<?php echo count($salesRequestedFeatures); ?>][description]" class="form-control">
+                            <label class="form-label additional-feature-field-label">Description</label>
+                            <input type="text" name="new_features[<?php echo count($salesRequestedFeatures); ?>][description]" class="form-control" aria-label="Feature description">
                         </div>
                         <div class="col-md-1">
                             <button type="button" class="btn-remove" onclick="removeFeature(this)" aria-label="Remove feature">
@@ -1025,12 +1112,12 @@ function addFeature() {
     item.innerHTML = `
         <div class="row g-3 align-items-end">
             <div class="col-md-5">
-                <label class="form-label">Feature Title</label>
-                <input type="text" name="new_features[${featureIndex}][title]" class="form-control">
+                <label class="form-label additional-feature-field-label">Feature Title</label>
+                <input type="text" name="new_features[${featureIndex}][title]" class="form-control" aria-label="Feature title">
             </div>
             <div class="col-md-6">
-                <label class="form-label">Description</label>
-                <input type="text" name="new_features[${featureIndex}][description]" class="form-control">
+                <label class="form-label additional-feature-field-label">Description</label>
+                <input type="text" name="new_features[${featureIndex}][description]" class="form-control" aria-label="Feature description">
             </div>
             <div class="col-md-1">
                 <button type="button" class="btn-remove" onclick="removeFeature(this)" aria-label="Remove feature">

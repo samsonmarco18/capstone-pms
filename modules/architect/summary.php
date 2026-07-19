@@ -67,6 +67,8 @@ $documents = $conn->query("
 $techRecommendationCount = (int) $techRecommendations->num_rows;
 $allocationCount = (int) $allocations->num_rows;
 $documentCount = (int) $documents->num_rows;
+$totalDevelopersNeededRow = $conn->query("SELECT COALESCE(SUM(required_count), 0) AS total FROM developer_allocations WHERE project_id = $projectId")->fetch_assoc();
+$totalDevelopersNeeded = (int) ($totalDevelopersNeededRow['total'] ?? 0);
 $documentTypesResult = $conn->query("SELECT DISTINCT document_type FROM architecture_documents WHERE project_id = $projectId");
 $documentTypes = [];
 while ($documentTypeRow = $documentTypesResult->fetch_assoc()) {
@@ -83,6 +85,17 @@ $isSubmittedToSul = trim((string) ($project['workflow_status'] ?? '')) === 'arch
 $isAwaitingSulReview = $isSubmittedToSul
     && $expertAssignmentCount === 0
     && trim((string) ($project['status'] ?? '')) === 'in_progress';
+$summaryStatusLabel = $isSubmittedToSul
+    ? ($isAwaitingSulReview ? 'Awaiting SUL Review' : 'Submitted to SUL')
+    : ($summaryReadyForSubmit ? 'Ready for SUL Review' : 'Requirements Incomplete');
+$summaryTimelineDays = null;
+if (!empty($project['timeline_start']) && !empty($project['timeline_end'])) {
+    $summaryTimelineStart = strtotime((string) $project['timeline_start']);
+    $summaryTimelineEnd = strtotime((string) $project['timeline_end']);
+    if ($summaryTimelineStart !== false && $summaryTimelineEnd !== false && $summaryTimelineEnd >= $summaryTimelineStart) {
+        $summaryTimelineDays = (int) floor(($summaryTimelineEnd - $summaryTimelineStart) / 86400) + 1;
+    }
+}
 
 // Handle submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -675,6 +688,799 @@ a.progress-step:hover {
     .progress-step .step-label { font-size: 0.6rem; }
     .progress-step .step-number { width: 24px; height: 24px; font-size: 0.7rem; }
 }
+
+/* Summary-only project insight notification */
+.summary-insight-notification {
+    --summary-insight-border: #d8e7ef;
+    --summary-insight-track: #dce6ec;
+    --summary-insight-center: #ffffff;
+    background: #ffffff;
+    border: 1px solid var(--summary-insight-border);
+    border-radius: 18px;
+    box-shadow: 0 12px 28px rgba(31, 99, 146, 0.08);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.summary-insight-notification[hidden] {
+    display: none !important;
+}
+
+.summary-insight-notification__header {
+    align-items: center;
+    border-bottom: 1px solid var(--summary-insight-border);
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    padding: 0.82rem 1rem;
+}
+
+.summary-insight-notification__heading {
+    align-items: center;
+    display: flex;
+    gap: 0.65rem;
+    min-width: 0;
+}
+
+.summary-insight-notification__heading-icon {
+    align-items: center;
+    background: #e9f5fb;
+    border-radius: 9px;
+    color: #0d6786;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 34px;
+    justify-content: center;
+    width: 34px;
+}
+
+.summary-insight-notification__heading h3 {
+    color: #17324d;
+    font-size: 0.92rem;
+    font-weight: 650;
+    margin: 0;
+}
+
+.summary-insight-notification__heading p {
+    color: #6c7f90;
+    font-size: 0.74rem;
+    line-height: 1.4;
+    margin: 0.12rem 0 0;
+}
+
+.summary-insight-notification__close {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    color: #75899a;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 34px;
+    justify-content: center;
+    padding: 0;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    width: 34px;
+}
+
+.summary-insight-notification__close:hover {
+    background: #f2f7fa;
+    border-color: #d8e7ef;
+    color: #17324d;
+}
+
+.summary-insight-notification__body {
+    background: linear-gradient(180deg, #f8fbfd 0%, #ffffff 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.1rem 1.25rem;
+}
+
+.summary-insight-project-head {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+}
+
+.summary-insight-project-head h4 {
+    color: #17324d;
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 0.28rem;
+}
+
+.summary-insight-project-meta {
+    color: #687b8d;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.74rem;
+    line-height: 1.5;
+}
+
+.summary-insight-project-meta > span + span::before {
+    color: #9aa9b6;
+    content: '|';
+    margin: 0 0.38rem;
+}
+
+.summary-insight-project-meta strong {
+    font-weight: 650;
+}
+
+.summary-insight-signal-layout {
+    align-items: center;
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: minmax(250px, 330px) minmax(0, 1fr);
+}
+
+.summary-insight-metrics {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(100%, 20rem);
+}
+
+.summary-insight-metric {
+    --summary-insight-color: #0d6786;
+    align-content: center;
+    display: grid;
+    gap: 0.45rem;
+    justify-items: center;
+    min-width: 0;
+}
+
+.summary-insight-metric.is-delay {
+    --summary-insight-color: #dc2626;
+}
+
+.summary-insight-metric.is-success {
+    --summary-insight-color: #15803d;
+}
+
+.summary-insight-gauge {
+    background: conic-gradient(
+        from 220deg,
+        var(--summary-insight-color) 0 var(--summary-insight-value, 0%),
+        var(--summary-insight-track) var(--summary-insight-value, 0%) 100%
+    );
+    border-radius: 50%;
+    display: grid;
+    height: 6.25rem;
+    place-items: center;
+    position: relative;
+    width: 6.25rem;
+}
+
+.summary-insight-gauge::before {
+    background: var(--summary-insight-center);
+    border-radius: inherit;
+    content: '';
+    inset: 0.55rem;
+    position: absolute;
+}
+
+.summary-insight-gauge strong {
+    color: var(--summary-insight-color);
+    font-size: 1.3rem;
+    line-height: 1;
+    position: relative;
+    z-index: 1;
+}
+
+.summary-insight-gauge__icon {
+    align-items: center;
+    background: var(--summary-insight-color);
+    border: 3px solid var(--summary-insight-center);
+    border-radius: 50%;
+    box-sizing: content-box;
+    color: #ffffff;
+    display: inline-flex;
+    font-size: 0.65rem;
+    height: 1.55rem;
+    justify-content: center;
+    position: absolute;
+    right: 0.04rem;
+    top: -0.08rem;
+    width: 1.55rem;
+    z-index: 2;
+}
+
+.summary-insight-metric__label {
+    color: #4d5d6b;
+    font-size: 0.67rem;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.summary-insight-copy {
+    border-left: 1px solid var(--summary-insight-border);
+    min-width: 0;
+    padding-left: 1.5rem;
+}
+
+.summary-insight-assessment {
+    align-items: center;
+    display: flex;
+    gap: 0.65rem;
+}
+
+.summary-insight-assessment__icon {
+    align-items: center;
+    background: #e9f5fb;
+    border-radius: 50%;
+    color: #0d6786;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 34px;
+    justify-content: center;
+    width: 34px;
+}
+
+.summary-insight-assessment__copy {
+    display: grid;
+    gap: 0.05rem;
+}
+
+.summary-insight-assessment__copy span {
+    color: #6c7f90;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.summary-insight-assessment__copy strong {
+    color: #17324d;
+    font-size: 0.88rem;
+    font-weight: 750;
+}
+
+.summary-insight-copy__top {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-bottom: 0.65rem;
+}
+
+.summary-insight-copy__top strong {
+    color: #17324d;
+    font-size: 0.9rem;
+    font-weight: 650;
+}
+
+.summary-insight-risk {
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.67rem;
+    font-weight: 700;
+    padding: 0.28rem 0.55rem;
+}
+
+.summary-insight-risk.is-low { background: #dff7ec; color: #087653; }
+.summary-insight-risk.is-medium { background: #fff4d6; color: #966300; }
+.summary-insight-risk.is-high { background: #ffe5e7; color: #b4232c; }
+
+.summary-insight-copy p {
+    color: #536474;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    margin: 0;
+}
+
+.summary-insight-assessment + p {
+    margin-top: 0.65rem;
+}
+
+.summary-insight-tips {
+    color: #536474;
+    display: grid;
+    font-size: 0.75rem;
+    gap: 0.28rem;
+    line-height: 1.45;
+    margin: 0.65rem 0 0;
+    padding-left: 1rem;
+}
+
+.summary-insight-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.65rem;
+}
+
+.summary-insight-tag {
+    background: #fff4e5;
+    border: 1px solid #f6d29d;
+    border-radius: 999px;
+    color: #8a5310;
+    font-size: 0.67rem;
+    font-weight: 650;
+    padding: 0.28rem 0.52rem;
+}
+
+.summary-insight-review-guidance {
+    align-items: flex-start;
+    border-left: 3px solid #83b7ce;
+    color: #5b6d7d;
+    display: flex;
+    font-size: 0.74rem;
+    gap: 0.5rem;
+    line-height: 1.5;
+    margin-top: 0.7rem;
+    padding: 0.25rem 0.65rem;
+}
+
+.summary-insight-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    justify-content: flex-end;
+    margin-top: 0;
+}
+
+.summary-insight-action {
+    align-items: center;
+    background: #0d6786;
+    border: 1px solid #0d6786;
+    border-radius: 9px;
+    color: #ffffff;
+    display: inline-flex;
+    font-size: 0.74rem;
+    font-weight: 650;
+    gap: 0.4rem;
+    min-height: 36px;
+    padding: 0.48rem 0.72rem;
+    text-decoration: none;
+}
+
+.summary-insight-action:hover {
+    background: #09536d;
+    color: #ffffff;
+}
+
+.summary-insight-action.is-secondary {
+    background: #ffffff;
+    border-color: #cfe1eb;
+    color: #0d6786;
+}
+
+.summary-insight-action.is-secondary:hover {
+    background: #edf7fb;
+}
+
+@media (max-width: 767.98px) {
+    .summary-insight-signal-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .summary-insight-copy {
+        border-left: 0;
+        border-top: 1px solid var(--summary-insight-border);
+        padding-left: 0;
+        padding-top: 1rem;
+    }
+
+    .summary-insight-project-head {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
+/* Final architecture review sheet */
+.architecture-summary-sheet {
+    --summary-sheet-border: #dce7ef;
+    --summary-sheet-label: #64788a;
+    --summary-sheet-value: #17324d;
+    background: #ffffff;
+    border: 1px solid var(--summary-sheet-border);
+    border-radius: 18px;
+    box-shadow: 0 14px 34px rgba(31, 99, 146, 0.08);
+    overflow: hidden;
+}
+
+.architecture-summary-section + .architecture-summary-section {
+    border-top: 10px solid #eef5f9;
+}
+
+.architecture-summary-section__header {
+    align-items: center;
+    background: linear-gradient(135deg, #0d6786 0%, #0a5570 100%);
+    color: #ffffff;
+    display: flex;
+    gap: 0.65rem;
+    min-height: 46px;
+    padding: 0.7rem 1rem;
+}
+
+.architecture-summary-section__icon {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 28px;
+    justify-content: center;
+    width: 28px;
+}
+
+.architecture-summary-section__icon i {
+    color: #ffffff !important;
+    opacity: 1;
+}
+
+.architecture-summary-section__header h2 {
+    color: #ffffff;
+    font-size: 0.8rem;
+    font-weight: 750;
+    letter-spacing: 0.045em;
+    margin: 0;
+    text-transform: uppercase;
+}
+
+.summary-review-rows--overview {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.summary-review-rows--overview .summary-review-row {
+    grid-template-columns: minmax(150px, 225px) minmax(0, 1fr);
+}
+
+.summary-review-rows--overview .summary-review-row:nth-child(odd) {
+    border-right: 1px solid var(--summary-sheet-border);
+}
+
+.summary-review-rows--overview .summary-review-row:nth-last-child(-n + 2) {
+    border-bottom: 0;
+}
+
+.summary-review-rows {
+    background: #ffffff;
+}
+
+.summary-review-row {
+    align-items: start;
+    border-bottom: 1px solid var(--summary-sheet-border);
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(190px, 280px) minmax(0, 1fr);
+    padding: 0.72rem 1rem;
+}
+
+.summary-review-row:last-child {
+    border-bottom: 0;
+}
+
+.summary-review-label {
+    color: var(--summary-sheet-label);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.045em;
+    line-height: 1.45;
+    text-transform: uppercase;
+}
+
+.summary-review-value {
+    color: var(--summary-sheet-value);
+    font-size: 0.84rem;
+    font-weight: 550;
+    line-height: 1.5;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.summary-review-status {
+    background: #e9f5fb;
+    border-radius: 999px;
+    color: #0d6786;
+    display: inline-flex;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.28rem 0.58rem;
+}
+
+.summary-review-status.is-incomplete {
+    background: #fff4d6;
+    color: #966300;
+}
+
+.summary-review-table-wrap {
+    overflow-x: auto;
+}
+
+.summary-review-table {
+    border-collapse: collapse;
+    min-width: 680px;
+    width: 100%;
+}
+
+.summary-review-table--technology {
+    table-layout: fixed;
+}
+
+.summary-review-table--technology col:nth-child(1) { width: 32%; }
+.summary-review-table--technology col:nth-child(2) { width: 23%; }
+.summary-review-table--technology col:nth-child(3) { width: 23%; }
+.summary-review-table--technology col:nth-child(4) { width: 22%; }
+
+.summary-review-table--technology :is(th, td):last-child {
+    text-align: left;
+}
+
+.summary-review-table th {
+    background: #f7fafc;
+    border-bottom: 1px solid var(--summary-sheet-border);
+    color: var(--summary-sheet-label);
+    font-size: 0.67rem;
+    font-weight: 700;
+    letter-spacing: 0.045em;
+    padding: 0.65rem 1rem;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.summary-review-table td {
+    background: #ffffff;
+    border-bottom: 1px solid var(--summary-sheet-border);
+    color: var(--summary-sheet-value);
+    font-size: 0.82rem;
+    padding: 0.72rem 1rem;
+    vertical-align: middle;
+}
+
+.summary-review-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.summary-review-table .summary-review-total td {
+    background: #f7fafc;
+    font-weight: 700;
+}
+
+.summary-document-list {
+    background: #ffffff;
+}
+
+.summary-document-row {
+    align-items: center;
+    border-bottom: 1px solid var(--summary-sheet-border);
+    border-left: 3px solid transparent;
+    display: grid;
+    gap: 0.8rem;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    padding: 0.72rem 1rem 0.72rem 0.85rem;
+    transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.summary-document-row:last-child {
+    border-bottom: 0;
+}
+
+.summary-document-row:hover {
+    background: #f2f8fc;
+    border-left-color: #2b8ab8;
+}
+
+.summary-document-row__icon {
+    align-items: center;
+    background: #e9f5fb;
+    border-radius: 9px;
+    color: #0d6786;
+    display: inline-flex;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+}
+
+.summary-document-row__copy {
+    min-width: 0;
+}
+
+.summary-document-row__copy strong {
+    color: var(--summary-sheet-value);
+    display: block;
+    font-size: 0.84rem;
+    font-weight: 650;
+}
+
+.summary-document-row__copy span,
+.summary-document-row__copy small {
+    color: var(--summary-sheet-label);
+    display: block;
+    font-size: 0.74rem;
+    line-height: 1.45;
+    margin-top: 0.14rem;
+}
+
+.summary-document-row__action {
+    align-items: center;
+    background: #e8f4fa;
+    border: 1px solid #cfe4ef;
+    border-radius: 9px;
+    color: #0d6786;
+    display: inline-flex;
+    height: 36px;
+    justify-content: center;
+    text-decoration: none;
+    transition: background-color 0.18s ease, color 0.18s ease;
+    width: 36px;
+}
+
+.summary-document-row__action:hover {
+    background: #0d6786;
+    color: #ffffff;
+}
+
+.summary-document-empty {
+    color: var(--summary-sheet-label);
+    font-size: 0.82rem;
+    margin: 0;
+    padding: 1rem;
+    text-align: center;
+}
+
+.summary-submission-panel {
+    border-top: 1px solid var(--summary-sheet-border);
+    padding: 1rem;
+}
+
+.summary-submission-layout {
+    align-items: start;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr) minmax(500px, 0.9fr);
+}
+
+.summary-submission-notices {
+    display: grid;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.summary-submission-notice {
+    align-items: flex-start;
+    background: transparent;
+    border: 0;
+    border-left: 3px solid #69a9c8;
+    border-radius: 0;
+    color: #315d78;
+    display: flex;
+    font-size: 0.8rem;
+    gap: 0.6rem;
+    line-height: 1.5;
+    margin: 0;
+    padding: 0.35rem 0.7rem;
+}
+
+.summary-submission-notice.is-warning {
+    background: transparent;
+    border-left-color: #d79a20;
+    color: #76500c;
+}
+
+.summary-submission-notice > i {
+    color: #1f6392 !important;
+    flex: 0 0 auto;
+    margin-top: 0.2rem !important;
+}
+
+.summary-submission-notice.is-warning > i {
+    color: #b7790c !important;
+}
+
+.summary-submission-notice a {
+    color: inherit;
+    font-weight: 700;
+}
+
+.architecture-summary-sheet .submission-confirmation {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--summary-sheet-border);
+    border-radius: 10px;
+    margin: 0;
+    min-height: 44px;
+    padding: 0.55rem 0.7rem;
+}
+
+.architecture-summary-sheet .btn-submit {
+    align-items: center;
+    background: #0d6786;
+    border-radius: 11px;
+    display: inline-flex;
+    gap: 0.45rem;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 154px;
+    padding: 0.65rem 1rem;
+    white-space: nowrap;
+    width: auto;
+}
+
+.architecture-summary-sheet .btn-submit:hover:not(:disabled) {
+    background: #09536d;
+    box-shadow: 0 6px 14px rgba(13, 103, 134, 0.22);
+}
+
+.architecture-summary-sheet .btn-submit:disabled {
+    background: #dfe8ed;
+    color: #718497;
+    opacity: 1;
+}
+
+.architecture-summary-sheet .btn-submit i {
+    color: #ffffff !important;
+    opacity: 1;
+}
+
+.architecture-summary-sheet .btn-submit:disabled i {
+    color: #718497 !important;
+}
+
+.summary-submission-form {
+    align-items: stretch;
+    display: grid;
+    gap: 0.7rem;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.summary-submission-form .btn-submit {
+    justify-self: end;
+}
+
+.architecture-summary-sheet .submission-state {
+    border-radius: 12px;
+    box-shadow: none;
+    margin: 0;
+}
+
+@media (max-width: 767.98px) {
+    .summary-review-row {
+        gap: 0.3rem;
+        grid-template-columns: 1fr;
+    }
+
+    .summary-document-row {
+        grid-template-columns: 36px minmax(0, 1fr) auto;
+    }
+
+    .summary-review-rows--overview {
+        grid-template-columns: 1fr;
+    }
+
+    .summary-review-rows--overview .summary-review-row {
+        border-bottom: 1px solid var(--summary-sheet-border);
+        border-right: 0;
+        grid-template-columns: 1fr;
+    }
+
+    .summary-review-rows--overview .summary-review-row:last-child {
+        border-bottom: 0;
+    }
+
+    .summary-submission-form {
+        grid-template-columns: 1fr;
+    }
+
+    .architecture-summary-sheet .btn-submit {
+        justify-self: stretch;
+        width: 100%;
+    }
+}
+
+@media (max-width: 1199.98px) {
+    .summary-submission-layout {
+        align-items: stretch;
+        grid-template-columns: 1fr;
+    }
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
     background: #06111e;
 }
@@ -743,6 +1549,97 @@ a.progress-step:hover {
     border-color: rgba(52, 211, 153, 0.38);
     color: #a7f3d0;
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architecture-summary-sheet {
+    --summary-sheet-border: rgba(138, 210, 255, 0.15);
+    --summary-sheet-label: #8eabc1;
+    --summary-sheet-value: #d7e4f2;
+    background: #071321;
+    border-color: var(--summary-sheet-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architecture-summary-section + .architecture-summary-section {
+    border-top-color: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(.summary-review-rows, .summary-review-table td, .summary-document-list) {
+    background: #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(.summary-review-table th, .summary-review-table .summary-review-total td, .architecture-summary-sheet .submission-confirmation) {
+    background: #0a1b2c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-document-row:hover {
+    background: #0b1d2e;
+    border-left-color: #55b5e8;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-document-row__icon {
+    background: rgba(31, 99, 146, 0.24);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-submission-notice {
+    background: transparent;
+    border-left-color: #69a9c8;
+    color: #b9d2e5;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-submission-notice.is-warning {
+    background: transparent;
+    border-left-color: #d79a20;
+    color: #f5d58a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-notification {
+    --summary-insight-border: rgba(138, 210, 255, 0.15);
+    --summary-insight-track: #183246;
+    --summary-insight-center: #071321;
+    background: #071321;
+    border-color: var(--summary-insight-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-notification__body {
+    background: #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-notification__heading h3,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-copy__top strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-project-head h4,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-assessment__copy strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-notification__heading p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-copy p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-metric__label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-project-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-assessment__copy span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-tips,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-review-guidance {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-notification__heading-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-action.is-secondary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-assessment__icon {
+    background: rgba(31, 99, 146, 0.24);
+    border-color: rgba(138, 210, 255, 0.18);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-notification__close:hover {
+    background: #0d2236;
+    border-color: rgba(138, 210, 255, 0.18);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-insight-tag {
+    background: rgba(146, 77, 0, 0.18);
+    border-color: rgba(253, 186, 116, 0.24);
+    color: #fdba74;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -805,164 +1702,243 @@ a.progress-step:hover {
     <?php include '../../includes/architect-project-review-panel.php'; ?>
 
     <?php
-    delayInsightsRenderSection($conn, $user, [
-        'project_id' => $projectId,
-        'title' => 'Project Insight Notifications',
-        'subtitle' => 'Before submission, review the predicted delay percentage, success rate, recommended adjustments, and the delay causes or owners that already need attention for this project.',
-    ]);
+    $summaryProjectInsights = delayInsightsLoadInsights($conn, $user, ['project_id' => $projectId]);
+    $summaryProjectInsight = $summaryProjectInsights[0] ?? null;
+    if (is_array($summaryProjectInsight)):
+        $summaryInsightBefore = (array) ($summaryProjectInsight['before'] ?? []);
+        $summaryInsightAfter = (array) ($summaryProjectInsight['after'] ?? []);
+        $summaryInsightProject = (array) ($summaryProjectInsight['project'] ?? []);
+        $summaryInsightDelay = max(0, min(100, (int) ($summaryInsightBefore['delay_probability'] ?? 0)));
+        $summaryInsightSuccess = max(0, min(100, (int) ($summaryInsightBefore['success_probability'] ?? 0)));
+        $summaryInsightRiskLevel = (string) ($summaryInsightBefore['risk_level'] ?? 'Low');
+        $summaryInsightRiskClass = $summaryInsightRiskLevel === 'High' ? 'is-high' : ($summaryInsightRiskLevel === 'Medium' ? 'is-medium' : 'is-low');
+        $summaryInsightAssessmentTitle = $summaryInsightRiskLevel === 'High'
+            ? 'High delivery risk detected'
+            : ($summaryInsightRiskLevel === 'Medium' ? 'Moderate delivery risk detected' : 'Healthy delivery outlook');
+        $summaryInsightProblemAction = delayInsightsProblemAction($summaryProjectInsight, $user);
+        $summaryInsightUrl = BASE_URL . 'modules/insights/decision-center.php?project_id=' . $projectId;
     ?>
-
-    <div class="row g-4">
-        <div class="col-lg-8">
-            <!-- Project Information -->
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0 fw-semibold" style="color: var(--theme-primary);"><i class="fas fa-info-circle me-2"></i>Project Information</h5>
+        <section class="summary-insight-notification" id="summaryProjectInsightNotification" aria-labelledby="summaryProjectInsightTitle">
+            <header class="summary-insight-notification__header">
+                <div class="summary-insight-notification__heading">
+                    <span class="summary-insight-notification__heading-icon"><i class="fas fa-lightbulb" aria-hidden="true"></i></span>
+                    <span>
+                        <h3 id="summaryProjectInsightTitle">Project Insight Notifications</h3>
+                        <p>Before submission, review the predicted delay percentage, success rate, recommended adjustments, and the delay causes or owners that already need attention for this project.</p>
+                    </span>
                 </div>
-                <div class="card-body p-4">
-                    <table class="info-table">
-                        <tr><td>Project Name:</td><td class="fw-semibold"><?php echo htmlspecialchars($project['name']); ?></td></tr>
-                        <tr><td>Client:</td><td><?php echo htmlspecialchars($project['client_name']); ?></td></tr>
-                        <tr><td>Timeline:</td><td><?php echo !empty($project['timeline_start']) ? date('M d, Y', strtotime((string) $project['timeline_start'])) : 'No start date'; ?> - <?php echo !empty($project['timeline_end']) ? date('M d, Y', strtotime((string) $project['timeline_end'])) : 'No end date'; ?></td></tr>
-                        <tr><td>Status:</td><td><span class="badge-status pending">Ready for SUL Review</span></td></tr>
-                        <?php if ($hasSalesBudget && !empty($project['sales_budget'])): ?>
-                        <tr><td>Budget:</td><td><?php echo number_format((float) $project['sales_budget'], 2); ?></td></tr>
-                        <?php endif; ?>
-                        <?php if ($hasCloudPlatform && !empty($project['cloud_platform'])): ?>
-                        <tr><td>Cloud Platform:</td><td><?php echo htmlspecialchars($project['cloud_platform']); ?></td></tr>
-                        <?php endif; ?>
-                        <?php if ($hasDatabaseServer && !empty($project['database_server'])): ?>
-                        <tr><td>Database Server:</td><td><?php echo htmlspecialchars($project['database_server']); ?></td></tr>
-                        <?php endif; ?>
-                        <?php if ($hasStorageRequirements && !empty($project['storage_requirements'])): ?>
-                        <tr><td>Storage:</td><td><?php echo htmlspecialchars($project['storage_requirements']); ?></td></tr>
-                        <?php endif; ?>
-                        <?php if ($hasAdditionalServices && !empty($project['additional_services'])): ?>
-                        <tr><td>Additional Services:</td><td><?php echo htmlspecialchars($project['additional_services']); ?></td></tr>
-                        <?php endif; ?>
-                    </table>
-                </div>
-            </div>
-            
-            <!-- Technology Stack -->
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0 fw-semibold" style="color: var(--theme-primary);"><i class="fas fa-microchip me-2"></i>Technology Stack Recommendations</h5>
-                </div>
-                <div class="card-body p-4">
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead><tr><th>Technology</th><th>Category</th><th>Service Type</th><th class="text-end">Monthly Cost</th></tr></thead>
-                            <tbody>
-                                <?php $totalCost = 0; while($tech = $techRecommendations->fetch_assoc()): $totalCost += $tech['estimated_cost']; ?>
-                                <tr><td class="fw-semibold"><?php echo htmlspecialchars($tech['tech_name']); ?></td><td><?php echo htmlspecialchars($tech['category']); ?></td><td><?php echo htmlspecialchars($tech['service_type']); ?></td><td class="text-end">&#8369;<?php echo number_format($tech['estimated_cost'], 2); ?></td></tr>
-                                <?php endwhile; ?>
-                                <tr class="total-row"><td colspan="3"><strong>Total Monthly Cost</strong></td><td class="text-end"><strong>&#8369;<?php echo number_format($totalCost, 2); ?></strong></td></tr>
-                            </tbody>
-                        </table>
+                <button type="button" class="summary-insight-notification__close" data-summary-insight-dismiss aria-label="Dismiss project insight notification" title="Dismiss notification">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </header>
+            <div class="summary-insight-notification__body">
+                <div class="summary-insight-project-head">
+                    <div>
+                        <h4><?php echo htmlspecialchars((string) ($summaryInsightProject['name'] ?? $project['name'])); ?></h4>
+                        <div class="summary-insight-project-meta">
+                            <span><strong>Client:</strong> <?php echo htmlspecialchars((string) ($summaryInsightProject['client_name'] ?? $project['client_name'])); ?></span>
+                            <span><strong>Status:</strong> <?php echo htmlspecialchars((string) ($summaryInsightProject['status_label'] ?? $summaryStatusLabel)); ?></span>
+                            <span><strong>Timeline:</strong> <?php echo htmlspecialchars((string) ($summaryInsightProject['timeline_label'] ?? 'No timeline')); ?></span>
+                        </div>
                     </div>
+                    <span class="summary-insight-risk <?php echo $summaryInsightRiskClass; ?>"><i class="fas fa-signal me-1" aria-hidden="true"></i><?php echo htmlspecialchars($summaryInsightRiskLevel); ?> Risk</span>
                 </div>
-            </div>
-            
-            <!-- Developer Allocation -->
-            <div class="card border-0 shadow-sm mb-4">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0 fw-semibold" style="color: var(--theme-primary);"><i class="fas fa-users me-2"></i>Developer Allocation</h5>
-                </div>
-                <div class="card-body p-4">
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead><tr><th>Role</th><th class="text-center">Required Count</th><th>Complexity Level</th></tr></thead>
-                            <tbody>
-                                <?php while($alloc = $allocations->fetch_assoc()): ?>
-                                <tr><td class="fw-semibold"><?php echo htmlspecialchars($alloc['role']); ?></td><td class="text-center"><?php echo $alloc['required_count']; ?></td><td><span class="badge-complexity <?php echo $alloc['complexity_level']; ?>"><?php echo ucfirst($alloc['complexity_level']); ?></span></td></tr>
-                                <?php endwhile; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Architecture Documents -->
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0 fw-semibold" style="color: var(--theme-primary);"><i class="fas fa-file-alt me-2"></i>Architecture Documents</h5>
-                </div>
-                <div class="card-body p-4">
-                    <?php if($documents->num_rows > 0): ?>
-                        <?php while($doc = $documents->fetch_assoc()): ?>
-                        <div class="document-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <i class="fas fa-file-pdf text-danger me-2"></i>
-                                    <strong><?php echo str_replace('_', ' ', ucfirst($doc['document_type'])); ?></strong>
-                                    <br><small class="text-muted"><?php echo htmlspecialchars($doc['description']); ?></small>
-                                    <div class="mt-1"><small class="text-muted"><i class="far fa-clock me-1"></i> Uploaded: <?php echo !empty($doc['created_at']) ? date('M d, Y H:i', strtotime((string) $doc['created_at'])) : 'No date'; ?></small></div>
-                                </div>
-                                <a href="<?php echo BASE_URL; ?>/<?php echo $doc['file_path']; ?>" class="btn-review" target="_blank"><i class="fas fa-eye"></i> View</a>
+                <div class="summary-insight-signal-layout">
+                    <div class="summary-insight-metrics" aria-label="Project delivery probabilities">
+                        <div class="summary-insight-metric is-delay">
+                            <div class="summary-insight-gauge" role="img" aria-label="Delay chance: <?php echo $summaryInsightDelay; ?> percent" style="--summary-insight-value: <?php echo $summaryInsightDelay; ?>%;">
+                                <strong><?php echo $summaryInsightDelay; ?>%</strong>
+                                <span class="summary-insight-gauge__icon"><i class="fas fa-history" aria-hidden="true"></i></span>
                             </div>
+                            <span class="summary-insight-metric__label">Delay Chance</span>
                         </div>
-                        <?php endwhile; ?>
-                    <?php else: ?>
-                        <p class="text-muted text-center py-4">No documents uploaded yet</p>
+                        <div class="summary-insight-metric is-success">
+                            <div class="summary-insight-gauge" role="img" aria-label="Success chance: <?php echo $summaryInsightSuccess; ?> percent" style="--summary-insight-value: <?php echo $summaryInsightSuccess; ?>%;">
+                                <strong><?php echo $summaryInsightSuccess; ?>%</strong>
+                                <span class="summary-insight-gauge__icon"><i class="fas fa-check" aria-hidden="true"></i></span>
+                            </div>
+                            <span class="summary-insight-metric__label">Success Chance</span>
+                        </div>
+                    </div>
+                    <div class="summary-insight-copy">
+                        <div class="summary-insight-assessment">
+                            <span class="summary-insight-assessment__icon"><i class="fas fa-chart-line" aria-hidden="true"></i></span>
+                            <span class="summary-insight-assessment__copy">
+                                <span>Risk Assessment</span>
+                                <strong><?php echo htmlspecialchars($summaryInsightAssessmentTitle); ?></strong>
+                            </span>
+                        </div>
+                        <p><?php echo htmlspecialchars((string) ($summaryInsightBefore['summary'] ?? 'Review the current planning signals before submission.')); ?></p>
+                        <?php if (!empty($summaryInsightBefore['tips'])): ?>
+                            <ul class="summary-insight-tips">
+                                <?php foreach (array_slice((array) $summaryInsightBefore['tips'], 0, 3) as $summaryInsightTip): ?>
+                                    <li><?php echo htmlspecialchars((string) $summaryInsightTip); ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        <?php endif; ?>
+                        <?php if (!empty($summaryInsightAfter['reasons'])): ?>
+                            <div class="summary-insight-tags">
+                                <?php foreach (array_slice((array) $summaryInsightAfter['reasons'], 0, 3) as $summaryInsightReason): ?>
+                                    <span class="summary-insight-tag"><?php echo htmlspecialchars((string) $summaryInsightReason); ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                        <?php if (!empty($summaryInsightAfter['summary']) || !empty($summaryInsightAfter['note'])): ?>
+                            <div class="summary-insight-review-guidance">
+                                <i class="fas fa-circle-info mt-1" aria-hidden="true"></i>
+                                <span><?php echo htmlspecialchars(trim((string) ($summaryInsightAfter['summary'] ?? '') . ' ' . (string) ($summaryInsightAfter['note'] ?? ''))); ?></span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="summary-insight-actions">
+                    <?php if (is_array($summaryInsightProblemAction)): ?>
+                        <a class="summary-insight-action is-secondary" href="<?php echo htmlspecialchars((string) $summaryInsightProblemAction['url']); ?>"><i class="fas fa-location-arrow" aria-hidden="true"></i> <?php echo htmlspecialchars((string) $summaryInsightProblemAction['label']); ?></a>
                     <?php endif; ?>
+                    <a class="summary-insight-action" href="<?php echo htmlspecialchars($summaryInsightUrl); ?>"><i class="fas fa-arrows-rotate" aria-hidden="true"></i> Live Insights</a>
                 </div>
             </div>
-        </div>
-        
-        <div class="col-lg-4">
-            <div class="card border-0 shadow-sm">
-                <div class="card-header bg-white border-0 pt-4 px-4">
-                    <h5 class="mb-0 fw-semibold" style="color: var(--theme-primary);"><i class="fas fa-chart-simple me-2"></i>Submission Summary</h5>
-                </div>
-                <div class="card-body p-4">
-                    <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Features</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $featureCount; ?></h3></div>
-                    <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Scheduled in Roadmap</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo (int) ($methodologyCompletion['scheduled_feature_count'] ?? 0); ?>/<?php echo (int) ($methodologyCompletion['feature_count'] ?? 0); ?></h3></div>
-                    <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Technologies Recommended</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $techRecommendationCount; ?></h3></div>
-                    <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Total Developers Needed</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php $totalDevs = 0; $allocations->data_seek(0); while($alloc = $allocations->fetch_assoc()) { $totalDevs += $alloc['required_count']; } echo $totalDevs; ?></h3></div>
-                    <div class="mb-3"><label class="text-muted small text-uppercase fw-semibold">Documents Uploaded</label><h3 class="mb-0" style="color: var(--theme-primary);"><?php echo $documentCount; ?></h3></div>
-                    <hr>
-                    <?php if ($isSubmittedToSul): ?>
-                        <div class="submission-state" role="status">
-                            <span class="submission-state__icon"><i class="fas fa-check" aria-hidden="true"></i></span>
-                            <span class="submission-state__label">Submitted to SUL</span>
-                            <h6><?php echo $isAwaitingSulReview ? 'Awaiting SUL Review' : 'Handoff Complete'; ?></h6>
-                            <p><?php echo $isAwaitingSulReview
-                                ? 'This summary is now read-only. The Service Unit Leader has been notified and can review the plan for the next assignment step.'
-                                : 'This submitted summary is read-only. The Service Unit Leader has already moved the project into the next workflow step.'; ?></p>
-                            <a href="projects.php" class="submission-state__action"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Projects</a>
+        </section>
+    <?php endif; ?>
+
+    <article class="architecture-summary-sheet" aria-label="Architecture plan final review">
+        <section class="architecture-summary-section architecture-summary-section--overview">
+            <header class="architecture-summary-section__header">
+                <span class="architecture-summary-section__icon"><i class="fas fa-circle-info" aria-hidden="true"></i></span>
+                <h2>Project Overview</h2>
+            </header>
+            <div class="summary-review-rows summary-review-rows--overview">
+                <div class="summary-review-row"><span class="summary-review-label">Project Name</span><span class="summary-review-value"><?php echo htmlspecialchars((string) $project['name']); ?></span></div>
+                <div class="summary-review-row"><span class="summary-review-label">Timeline</span><span class="summary-review-value"><?php echo !empty($project['timeline_start']) ? date('M d, Y', strtotime((string) $project['timeline_start'])) : 'Not set'; ?> &ndash; <?php echo !empty($project['timeline_end']) ? date('M d, Y', strtotime((string) $project['timeline_end'])) : 'Not set'; ?></span></div>
+                <div class="summary-review-row"><span class="summary-review-label">Planning Basis</span><span class="summary-review-value"><?php echo $featureCount; ?> requested feature<?php echo $featureCount === 1 ? '' : 's'; ?><?php if ($summaryTimelineDays !== null): ?> | <?php echo $summaryTimelineDays; ?> day<?php echo $summaryTimelineDays === 1 ? '' : 's'; ?><?php endif; ?></span></div>
+                <div class="summary-review-row"><span class="summary-review-label">Generated Complexity</span><span class="summary-review-value"><?php echo htmlspecialchars(ucwords(strtolower((string) ($project['complexity_level'] ?? 'Medium')))); ?></span></div>
+                <div class="summary-review-row"><span class="summary-review-label">Priority</span><span class="summary-review-value"><?php echo htmlspecialchars(ucwords(strtolower((string) ($project['priority'] ?? 'Medium')))); ?></span></div>
+                <div class="summary-review-row"><span class="summary-review-label">Budget</span><span class="summary-review-value"><?php echo $hasSalesBudget && !empty($project['sales_budget']) ? '&#8369;' . number_format((float) $project['sales_budget'], 2) : 'Not provided'; ?></span></div>
+            </div>
+        </section>
+
+        <section class="architecture-summary-section">
+            <header class="architecture-summary-section__header">
+                <span class="architecture-summary-section__icon"><i class="fas fa-microchip" aria-hidden="true"></i></span>
+                <h2>Technology Stack</h2>
+            </header>
+            <div class="summary-review-table-wrap">
+                <table class="summary-review-table summary-review-table--technology">
+                    <colgroup><col><col><col><col></colgroup>
+                    <thead><tr><th>Technology</th><th>Category</th><th>Service Type</th><th>Monthly Cost</th></tr></thead>
+                    <tbody>
+                        <?php $totalCost = 0.0; while ($tech = $techRecommendations->fetch_assoc()): $totalCost += (float) $tech['estimated_cost']; ?>
+                            <tr><td><?php echo htmlspecialchars((string) $tech['tech_name']); ?></td><td><?php echo htmlspecialchars((string) $tech['category']); ?></td><td><?php echo htmlspecialchars((string) $tech['service_type']); ?></td><td>&#8369;<?php echo number_format((float) $tech['estimated_cost'], 2); ?></td></tr>
+                        <?php endwhile; ?>
+                        <tr class="summary-review-total"><td colspan="3">Total Monthly Cost</td><td>&#8369;<?php echo number_format($totalCost, 2); ?></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="architecture-summary-section">
+            <header class="architecture-summary-section__header">
+                <span class="architecture-summary-section__icon"><i class="fas fa-users" aria-hidden="true"></i></span>
+                <h2>Developer Allocation</h2>
+            </header>
+            <div class="summary-review-table-wrap">
+                <table class="summary-review-table">
+                    <thead><tr><th>Role</th><th>Required Count</th><th>Complexity Level</th></tr></thead>
+                    <tbody>
+                        <?php while ($alloc = $allocations->fetch_assoc()): ?>
+                            <?php $complexityLevel = strtolower(trim((string) ($alloc['complexity_level'] ?? 'medium'))); ?>
+                            <tr><td><?php echo htmlspecialchars((string) $alloc['role']); ?></td><td><?php echo (int) $alloc['required_count']; ?></td><td><span class="badge-complexity <?php echo htmlspecialchars($complexityLevel); ?>"><?php echo htmlspecialchars(ucfirst($complexityLevel)); ?></span></td></tr>
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="architecture-summary-section">
+            <header class="architecture-summary-section__header">
+                <span class="architecture-summary-section__icon"><i class="fas fa-file-lines" aria-hidden="true"></i></span>
+                <h2>Architecture Documents</h2>
+            </header>
+            <?php if ($documents->num_rows > 0): ?>
+                <div class="summary-document-list">
+                    <?php while ($doc = $documents->fetch_assoc()): ?>
+                        <?php $documentLabel = ucwords(str_replace('_', ' ', (string) ($doc['document_type'] ?? 'document'))); ?>
+                        <div class="summary-document-row">
+                            <span class="summary-document-row__icon"><i class="fas fa-file-code" aria-hidden="true"></i></span>
+                            <span class="summary-document-row__copy">
+                                <strong><?php echo htmlspecialchars($documentLabel); ?></strong>
+                                <span><?php echo htmlspecialchars(trim((string) ($doc['description'] ?? '')) ?: 'No description provided.'); ?></span>
+                                <small><i class="far fa-clock me-1" aria-hidden="true"></i>Uploaded <?php echo !empty($doc['created_at']) ? date('M d, Y \a\t g:i A', strtotime((string) $doc['created_at'])) : 'with no recorded date'; ?></small>
+                            </span>
+                            <a href="<?php echo BASE_URL; ?>/<?php echo htmlspecialchars((string) $doc['file_path']); ?>" class="summary-document-row__action" target="_blank" rel="noopener" aria-label="View <?php echo htmlspecialchars($documentLabel); ?>" title="View document"><i class="fas fa-eye" aria-hidden="true"></i></a>
                         </div>
-                    <?php else: ?>
-                        <?php if (!$summaryReadyForSubmit): ?>
-                        <div class="alert alert-warning small">
-                            Complete Features, Technology, Developer Allocation, Methodology Roadmap, Architecture Plan, and Workflow Diagram before final submission.
-                            <?php if (!(bool) ($methodologyCompletion['is_complete'] ?? false)): ?>
-                                <div class="mt-2">
-                                    <a href="../roadmap/methodology.php?project_id=<?php echo $projectId; ?>" class="alert-link">
-                                        Schedule <?php echo (int) ($methodologyCompletion['unscheduled_count'] ?? 0); ?> unscheduled feature task<?php echo (int) ($methodologyCompletion['unscheduled_count'] ?? 0) === 1 ? '' : 's'; ?>.
-                                    </a>
+                    <?php endwhile; ?>
+                </div>
+            <?php else: ?>
+                <p class="summary-document-empty">No documents uploaded yet.</p>
+            <?php endif; ?>
+        </section>
+
+        <section class="architecture-summary-section">
+            <header class="architecture-summary-section__header">
+                <span class="architecture-summary-section__icon"><i class="fas fa-paper-plane" aria-hidden="true"></i></span>
+                <h2>Submission Summary</h2>
+            </header>
+            <div class="summary-review-rows">
+                <div class="summary-review-row"><span class="summary-review-label">Total Features</span><span class="summary-review-value"><?php echo $featureCount; ?></span></div>
+                <div class="summary-review-row"><span class="summary-review-label">Scheduled in Roadmap</span><span class="summary-review-value"><?php echo (int) ($methodologyCompletion['scheduled_feature_count'] ?? 0); ?> of <?php echo (int) ($methodologyCompletion['feature_count'] ?? 0); ?></span></div>
+                <div class="summary-review-row"><span class="summary-review-label">Technologies Recommended</span><span class="summary-review-value"><?php echo $techRecommendationCount; ?></span></div>
+                <div class="summary-review-row"><span class="summary-review-label">Developers Needed</span><span class="summary-review-value"><?php echo $totalDevelopersNeeded; ?></span></div>
+                <div class="summary-review-row"><span class="summary-review-label">Documents Uploaded</span><span class="summary-review-value"><?php echo $documentCount; ?></span></div>
+            </div>
+            <div class="summary-submission-panel">
+                <?php if ($isSubmittedToSul): ?>
+                    <div class="submission-state" role="status">
+                        <span class="submission-state__icon"><i class="fas fa-check" aria-hidden="true"></i></span>
+                        <span class="submission-state__label">Submitted to SUL</span>
+                        <h6><?php echo $isAwaitingSulReview ? 'Awaiting SUL Review' : 'Handoff Complete'; ?></h6>
+                        <p><?php echo $isAwaitingSulReview ? 'This summary is read-only while the Service Unit Leader reviews the plan.' : 'The Service Unit Leader has moved this project into the next workflow step.'; ?></p>
+                        <a href="projects.php" class="submission-state__action"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Projects</a>
+                    </div>
+                <?php else: ?>
+                    <div class="summary-submission-layout">
+                        <div class="summary-submission-notices">
+                            <?php if (!$summaryReadyForSubmit): ?>
+                                <div class="summary-submission-notice is-warning">
+                                    <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
+                                    <span>
+                                        Complete Features, Technology, Developer Allocation, Methodology Roadmap, Architecture Plan, and Workflow Diagram before submission.
+                                        <?php if (!(bool) ($methodologyCompletion['is_complete'] ?? false)): ?>
+                                            <a href="../roadmap/methodology.php?project_id=<?php echo $projectId; ?>">Schedule <?php echo (int) ($methodologyCompletion['unscheduled_count'] ?? 0); ?> remaining feature task<?php echo (int) ($methodologyCompletion['unscheduled_count'] ?? 0) === 1 ? '' : 's'; ?>.</a>
+                                        <?php endif; ?>
+                                    </span>
                                 </div>
                             <?php endif; ?>
+                            <div class="summary-submission-notice"><i class="fas fa-circle-info" aria-hidden="true"></i><span>Submission sends this plan to the Service Unit Leader for review and task allocation.</span></div>
                         </div>
-                        <?php endif; ?>
-                        <div class="alert-info-modern"><i class="fas fa-info-circle"></i><span>Once submitted, this plan will be sent to the Service Unit Leader for review and task allocation.</span></div>
-                        <form method="POST" id="summaryForm" data-generic-draft-disabled="true" data-app-loading data-loading-title="Sending to SUL" data-loading-text="Please wait while the architecture plan is submitted and the Service Unit Leader is notified.">
-                            <div class="submission-confirmation"><input class="form-check-input" type="checkbox" id="confirmCheck" name="confirmCheck" value="1" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete</label></div>
-                            <button type="submit" class="btn-submit" id="submitBtn" <?php echo $summaryReadyForSubmit ? 'disabled' : 'disabled title="Complete all required architect steps first"'; ?>><i class="fas fa-paper-plane"></i> Submit to SUL</button>
+                        <form method="POST" id="summaryForm" class="summary-submission-form" data-generic-draft-disabled="true" data-app-loading data-loading-title="Sending to SUL" data-loading-text="Please wait while the architecture plan is submitted and the Service Unit Leader is notified.">
+                            <div class="submission-confirmation"><input class="form-check-input" type="checkbox" id="confirmCheck" name="confirmCheck" value="1" required><label class="form-check-label" for="confirmCheck">I confirm that all information is accurate and complete.</label></div>
+                            <button type="submit" class="btn-submit" id="submitBtn" <?php echo $summaryReadyForSubmit ? 'disabled' : 'disabled title="Complete all required architect steps first"'; ?>><i class="fas fa-paper-plane" aria-hidden="true"></i><span>Submit to SUL</span></button>
                         </form>
-                    <?php endif; ?>
-                </div>
+                    </div>
+                <?php endif; ?>
             </div>
-        </div>
-    </div>
+        </section>
+    </article>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const summaryInsightNotification = document.getElementById('summaryProjectInsightNotification');
+    const summaryInsightDismiss = summaryInsightNotification?.querySelector('[data-summary-insight-dismiss]');
     const confirmCheck = document.getElementById('confirmCheck');
     const submitBtn = document.getElementById('submitBtn');
     const summaryForm = document.getElementById('summaryForm');
     const summaryReady = <?php echo json_encode($summaryReadyForSubmit); ?>;
+
+    summaryInsightDismiss?.addEventListener('click', () => {
+        summaryInsightNotification.hidden = true;
+    });
 
     if (!confirmCheck || !submitBtn || !summaryForm) {
         return;

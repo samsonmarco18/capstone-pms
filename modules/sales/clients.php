@@ -2279,7 +2279,8 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 }
 
 .modal-modern.add-client-modal .timeline-budget-step .info-card {
-    height: 100%;
+    height: auto;
+    margin-top: 0;
 }
 
 .modal-modern.add-client-modal .complexity-field-shell {
@@ -2288,37 +2289,36 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 .modal-modern.add-client-modal .complexity-insight-trigger {
     position: absolute;
-    top: -0.48rem;
-    right: -0.36rem;
+    top: 0.55rem;
+    right: 0.55rem;
     z-index: 4;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border: 1px solid rgba(245, 158, 11, 0.35);
+    width: 25px;
+    height: 25px;
+    padding: 0;
+    border: 1px solid rgba(13, 103, 134, 0.28);
     border-radius: 50%;
-    background: #fff7ed;
-    color: #d97706;
-    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.18);
-    transform-origin: 50% 88%;
-    animation: priorityAttentionSway 1.6s ease-in-out infinite;
+    background: #e9f6fb;
+    color: #0d6786;
+    box-shadow: 0 5px 12px rgba(13, 103, 134, 0.14);
     cursor: pointer;
+    transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
 }
 
 .modal-modern.add-client-modal .complexity-insight-trigger i {
-    font-size: 0.82rem;
+    font-size: 0.76rem;
 }
 
 .modal-modern.add-client-modal .complexity-insight-trigger:hover,
 .modal-modern.add-client-modal .complexity-insight-trigger:focus-visible,
 .modal-modern.add-client-modal .complexity-insight-trigger.is-open {
-    background: #d97706;
+    background: #0d6786;
     color: #ffffff;
-    box-shadow: 0 10px 22px rgba(217, 119, 6, 0.26);
+    box-shadow: 0 8px 18px rgba(13, 103, 134, 0.24);
     outline: none;
-    animation-play-state: paused;
-    transform: rotate(0deg) scale(1.06);
+    transform: scale(1.08);
 }
 
 .modal-modern.add-client-modal .complexity-insight-popover {
@@ -2431,13 +2431,19 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     max-width: 100%;
 }
 
+#addClientForm .add-client-attachment-shell {
+    flex: 0 0 420px;
+    width: 420px;
+    max-width: 100%;
+}
+
 #addClientForm .priority-select-wrap .form-select {
     padding-right: 2.7rem !important;
 }
 
 #addClientForm .priority-insight-trigger {
-    top: -0.48rem;
-    right: 0.55rem;
+    top: 0.45rem;
+    right: 0.5rem;
     width: 25px;
     height: 25px;
     border-color: rgba(13, 103, 134, 0.28);
@@ -2642,7 +2648,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     align-items: stretch;
-    min-height: 52px;
+    min-height: 42px;
     border: 1px dashed rgba(31, 99, 146, 0.2);
     border-radius: 12px;
     background:
@@ -2663,9 +2669,9 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    min-height: 50px;
+    min-height: 40px;
     margin: 0;
-    padding: 0 0.95rem;
+    padding: 0 0.75rem;
     border-right: 1px solid rgba(31, 99, 146, 0.12);
     background: rgba(226, 244, 250, 0.92);
     color: #0d6786;
@@ -2684,7 +2690,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 .modal-modern.add-client-modal .attachment-upload-summary {
     align-self: center;
     min-width: 0;
-    padding: 0 0.95rem;
+    padding: 0 0.75rem;
     color: #17324d;
     font-size: 0.88rem;
     overflow: hidden;
@@ -3654,8 +3660,8 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 :is(#addClientForm, #addProjectForm) .requested-feature-chip-shell {
     position: relative;
-    height: 108px;
-    min-height: 108px;
+    height: 362px;
+    min-height: 362px;
     z-index: 12;
 }
 
@@ -3674,12 +3680,12 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     align-content: flex-start;
     align-items: center;
     gap: 0.6rem;
-    height: 108px;
-    min-height: 108px;
-    max-height: 108px;
+    height: 362px;
+    min-height: 362px;
+    max-height: 362px;
     overflow-x: hidden;
-    overflow-y: hidden;
-    padding: 0.75rem 3.75rem 0.75rem 0.75rem;
+    overflow-y: auto;
+    padding: 0.75rem;
     border: 1px solid #b8d2e4;
     border-radius: 12px;
     background: #ffffff;
@@ -3689,15 +3695,10 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-:is(#addClientForm, #addProjectForm) .requested-feature-chip-shell.has-more .requested-feature-chip-editor {
-    padding-right: 8.75rem;
-}
-
 :is(#addClientForm, #addProjectForm) .requested-feature-chip-shell.is-expanded .requested-feature-chip-editor {
-    height: auto;
-    max-height: 280px;
+    height: 362px;
+    max-height: 362px;
     overflow-y: auto;
-    box-shadow: 0 18px 38px rgba(15, 76, 129, 0.20);
 }
 
 :is(#addClientForm, #addProjectForm) .requested-feature-chip-editor:focus-within {
@@ -3771,32 +3772,6 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     color: #7890a3;
 }
 
-:is(#addClientForm, #addProjectForm) .requested-feature-chip-add {
-    position: absolute;
-    top: 0.72rem;
-    right: 0.58rem;
-    z-index: 3;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    border: 1px solid rgba(13, 103, 134, 0.22);
-    border-radius: 10px;
-    background: #f4f9fc;
-    color: #0d6786;
-    transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
-}
-
-:is(#addClientForm, #addProjectForm) .requested-feature-chip-add:hover,
-:is(#addClientForm, #addProjectForm) .requested-feature-chip-add:focus-visible {
-    background: #0d6786;
-    color: #ffffff;
-    outline: none;
-    transform: translateY(-1px);
-}
-
 :is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle {
     position: absolute;
     top: 0.58rem;
@@ -3839,27 +3814,12 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     transform: rotate(180deg);
 }
 
-:is(#addClientForm, #addProjectForm) .requested-feature-builder .mini-note {
-    margin-top: 0.15rem;
-    line-height: 1.45;
-}
-
 @media (max-width: 575.98px) {
     :is(#addClientForm, #addProjectForm) .requested-feature-chip-shell,
     :is(#addClientForm, #addProjectForm) .requested-feature-chip-editor {
-        height: 124px;
-        min-height: 124px;
-        max-height: 124px;
-    }
-
-    :is(#addClientForm, #addProjectForm) .requested-feature-chip-shell.has-more .requested-feature-chip-editor {
-        padding-right: 3.75rem;
-        padding-top: 3.65rem;
-    }
-
-    :is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle {
-        left: 0.75rem;
-        right: auto;
+        height: 220px;
+        min-height: 220px;
+        max-height: 220px;
     }
 }
 
@@ -4062,7 +4022,12 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 }
 
 :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-actions > :is([data-client-next], [data-add-project-next]) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-width: 88px;
+    text-align: center;
+    line-height: 1;
 }
 
 #addProjectModal.modal-modern.add-client-modal .add-client-footer {
@@ -4494,12 +4459,6 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     color: #d7e4f2;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientForm, #addProjectForm) .requested-feature-chip-add {
-    background: rgba(13, 103, 134, 0.22);
-    border-color: rgba(138, 210, 255, 0.22);
-    color: #8fd3ff;
-}
-
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientForm, #addProjectForm) .requested-feature-chip-toggle {
     background: rgba(13, 103, 134, 0.28);
     border-color: rgba(138, 210, 255, 0.20);
@@ -4610,10 +4569,10 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .complexity-insight-trigger,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger {
-    background: rgba(245, 158, 11, 0.18);
-    border-color: rgba(251, 191, 36, 0.28);
-    color: #fbbf24;
-    box-shadow: 0 8px 18px rgba(217, 119, 6, 0.20);
+    background: rgba(13, 103, 134, 0.26);
+    border-color: rgba(138, 210, 255, 0.28);
+    color: #8fd3ff;
+    box-shadow: 0 5px 12px rgba(3, 14, 25, 0.28);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .template-recommendation-insight-trigger,
@@ -4640,8 +4599,8 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger:hover,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger:focus-visible,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addProjectModal.modal-modern.add-client-modal .complexity-insight-trigger.is-open {
-    background: #d97706;
-    color: #ffffff;
+    background: #8fd3ff;
+    color: #071321;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #addClientModal.modal-modern.add-client-modal .priority-insight-trigger:hover,
@@ -5270,6 +5229,318 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
     :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card:hover {
         transform: none;
+    }
+}
+
+/* Keep the intake fields and actions on one continuous surface. */
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-layout {
+    overflow: visible;
+    border: 1px solid rgba(31, 99, 146, 0.16);
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 18px 38px rgba(15, 76, 129, 0.09);
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-layout > .field-group {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-layout > .modal-footer.add-client-footer {
+    padding: 0.85rem 1.15rem;
+    border-top: 1px solid rgba(31, 99, 146, 0.13);
+    border-radius: 0 0 17px 17px;
+    background: #fbfdff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-layout {
+    border-color: rgba(138, 210, 255, 0.15);
+    background: rgba(7, 19, 33, 0.96);
+    box-shadow: 0 18px 38px rgba(3, 14, 25, 0.3);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-client-layout > .modal-footer.add-client-footer {
+    border-top-color: rgba(138, 210, 255, 0.13);
+    background: rgba(10, 27, 44, 0.9);
+}
+
+/* Final Review: clean document-style summary with one information row per line. */
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-step {
+    --review-sheet-surface: #ffffff;
+    --review-sheet-soft: #f8fbfd;
+    --review-sheet-border: #dce7ef;
+    --review-sheet-label: #64788a;
+    --review-sheet-value: #17324d;
+    --review-label-width: 185px;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-step > .section-title {
+    margin: 0 0 0.8rem;
+    padding: 0 0 0.75rem;
+    border-bottom: 1px solid var(--review-sheet-border);
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-summary {
+    gap: 0.8rem;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-ready-banner {
+    padding: 0.7rem 0.8rem;
+    border-color: var(--review-sheet-border);
+    border-radius: 10px;
+    background: #f2f8fc;
+    box-shadow: none;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-ready-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    box-shadow: none;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-primary-grid,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-project-review-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.8rem;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card:hover {
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    isolation: auto;
+    border: 1px solid var(--review-sheet-border);
+    border-radius: 10px;
+    background: var(--review-sheet-surface);
+    box-shadow: none;
+    transform: none;
+    transition: border-color 0.18s ease;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0;
+    padding: 0.62rem 0.85rem;
+    border: 0;
+    background: linear-gradient(135deg, #0d6786 0%, #0a5570 100%);
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    font-size: 0.7rem;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card-heading h6 {
+    color: #ffffff;
+    font-size: 0.78rem;
+    font-weight: 750;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card-heading > span {
+    display: none;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-highlight,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-data-item,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-key-item,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-block,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-note-item {
+    display: grid;
+    grid-template-columns: minmax(130px, var(--review-label-width)) minmax(0, 1fr);
+    align-content: start;
+    align-items: start;
+    gap: 1rem;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0.68rem 0.85rem;
+    border: 0;
+    border-bottom: 1px solid var(--review-sheet-border);
+    border-radius: 0;
+    background: var(--review-sheet-surface);
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-highlight {
+    margin: 0;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-highlight > span,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-data-label,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-key-label,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-block-label,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-note-label {
+    align-self: start;
+    color: var(--review-sheet-label);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+    text-transform: uppercase;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-highlight strong,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-summary-value,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-key-value {
+    color: var(--review-sheet-value);
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-data-grid,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-key-grid,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-requirements-grid,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .add-project-review-requirements,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-notes-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 0;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal :is(.review-data-item--wide, .review-key-item--wide, .review-block--wide),
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card--client-profile .review-data-item--wide,
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-card--client-profile .review-data-item:last-child {
+    grid-column: auto;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-chip-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0.58rem 0.85rem;
+    border-bottom: 1px solid var(--review-sheet-border);
+    background: var(--review-sheet-soft);
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-chip-row::before {
+    content: "Delivery signals";
+    flex: 0 0 var(--review-label-width);
+    color: var(--review-sheet-label);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-chip {
+    padding: 0.28rem 0.5rem;
+    border-radius: 7px;
+    font-size: 0.68rem;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-feature-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    margin: -0.18rem 0;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-feature-list li {
+    padding: 0.28rem 0 0.28rem 1rem;
+    border-bottom: 1px solid var(--review-sheet-border);
+    border-radius: 0;
+    background: transparent;
+    color: var(--review-sheet-value);
+    font-size: 0.78rem;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-feature-list li:last-child {
+    border-bottom: 0;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-feature-list li::before {
+    top: 0.72rem;
+    left: 0.18rem;
+    width: 4px;
+    height: 4px;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal :is(.review-data-grid, .review-key-grid, .review-requirements-grid, .review-notes-grid) > :last-child {
+    border-bottom: 0;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-handoff {
+    gap: 0.65rem;
+    padding: 0.7rem 0.85rem;
+    border: 1px solid #cfe2ee;
+    border-radius: 10px;
+    background: #eef7fb;
+    color: #0d6786;
+    box-shadow: none;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-handoff-copy strong {
+    color: #174769;
+    font-size: 0.76rem;
+}
+
+:is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-handoff-copy span {
+    color: #5f7487;
+    font-size: 0.72rem;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-step {
+    --review-sheet-surface: #0a1b2c;
+    --review-sheet-soft: #0d2236;
+    --review-sheet-border: rgba(138, 210, 255, 0.15);
+    --review-sheet-label: #8eabc1;
+    --review-sheet-value: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-ready-banner,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-handoff {
+    border-color: rgba(138, 210, 255, 0.15);
+    background: #0d2236;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-handoff-copy strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-handoff-copy span {
+    color: #9db4c7;
+}
+
+@media (max-width: 640px) {
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-step {
+        --review-label-width: 100%;
+    }
+
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-highlight,
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-data-item,
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-key-item,
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-block,
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-note-item {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.25rem;
+    }
+
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-chip-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-chip-row::before {
+        flex-basis: auto;
+    }
+
+    :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .review-ready-badge {
+        display: none;
     }
 }
 
@@ -6176,7 +6447,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                     <input type="text" name="phone" class="form-control" required>
                                 </div>
                                 <div class="col-12">
-                                    <label class="form-label">Address <span class="optional-label">(Optional)</span></label>
+                                    <label class="form-label">Address</label>
                                     <textarea name="address" class="form-control" rows="2"></textarea>
                                 </div>
                             </div>
@@ -6211,11 +6482,15 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                                 <label class="form-label">Project Description<span class="required-mark">*</span></label>
                                                 <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution" required></textarea>
                                             </div>
-                                            <div>
-                                                <label class="form-label">Meeting Notes <span class="optional-label">(Optional)</span></label>
-                                                <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
-                                            </div>
-                                        </div>
+                                             <div>
+                                                 <label class="form-label">Meeting Notes</label>
+                                                 <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
+                                             </div>
+                                             <div>
+                                                 <label class="form-label">Minutes of the Meeting (MOM)</label>
+                                                 <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
+                                             </div>
+                                         </div>
                                         <div class="add-project-intake-column">
                                             <div>
                                                 <label class="form-label">Requested System Features<span class="required-mark">*</span></label>
@@ -6224,23 +6499,11 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                                     <div class="requested-feature-chip-shell" data-client-feature-shell>
                                                         <div class="requested-feature-list requested-feature-chip-editor" id="requestedFeatureList" role="group" aria-label="Requested system features">
                                                             <input type="text" class="requested-feature-chip-input" data-requested-feature-input placeholder="Type a feature" aria-label="New requested feature">
-                                                            <button type="button" class="requested-feature-chip-add" id="addRequestedFeature" aria-label="Add feature">
-                                                                <i class="fas fa-plus" aria-hidden="true"></i>
-                                                            </button>
                                                         </div>
-                                                        <button type="button" class="requested-feature-chip-toggle" data-client-feature-toggle aria-label="See more requested features" aria-expanded="false" hidden>
-                                                            <span data-client-feature-toggle-label>More</span>
-                                                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
-                                                        </button>
                                                     </div>
-                                                    <div class="mini-note">Type a feature and press Enter or click +. Select × on a tag to remove it.</div>
                                                 </div>
                                             </div>
-                                            <div>
-                                                <label class="form-label">Minutes of the Meeting (MOM) <span class="optional-label">(Optional)</span></label>
-                                                <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
-                                            </div>
-                                        </div>
+                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-12">
@@ -6262,7 +6525,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                         <div class="priority-insight-popover" data-priority-insight-popover hidden></div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-sm-6 add-client-attachment-shell">
                                     <label class="form-label">Attachments <span class="optional-label">(Optional)</span></label>
                                     <div class="attachment-upload-field">
                                         <label for="addClientAttachments" class="attachment-upload-button">
@@ -6307,7 +6570,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                 </div>
                                 <div class="timeline-budget-card complexity-field-shell">
                                     <button type="button" class="complexity-insight-trigger" data-complexity-insight-trigger aria-label="Show generated complexity explanation" aria-expanded="false">
-                                        <i class="fas fa-exclamation" aria-hidden="true"></i>
+                                        <i class="fas fa-lightbulb" aria-hidden="true"></i>
                                     </button>
                                     <div class="complexity-insight-popover" data-complexity-popover hidden>
                                         <strong>Low complexity</strong>
@@ -6605,11 +6868,15 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                                 <label class="form-label">Project Description<span class="required-mark">*</span></label>
                                                 <textarea name="project_description" class="form-control" rows="3" placeholder="Short overview of the requested system or solution" required></textarea>
                                             </div>
-                                            <div>
-                                                <label class="form-label">Meeting Notes <span class="optional-label">(Optional)</span></label>
-                                                <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
-                                            </div>
-                                        </div>
+                                             <div>
+                                                 <label class="form-label">Meeting Notes</label>
+                                                 <textarea name="meeting_notes" class="form-control" rows="3" placeholder="Important notes from discovery meetings"></textarea>
+                                             </div>
+                                             <div>
+                                                 <label class="form-label">Minutes of the Meeting (MOM)</label>
+                                                 <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
+                                             </div>
+                                         </div>
                                         <div class="add-project-intake-column">
                                             <div>
                                                 <label class="form-label">Requested System Features<span class="required-mark">*</span></label>
@@ -6618,23 +6885,11 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                                     <div class="requested-feature-chip-shell" data-add-project-feature-shell>
                                                         <div class="requested-feature-list requested-feature-chip-editor" id="addProjectRequestedFeatureList" role="group" aria-label="Requested system features">
                                                             <input type="text" class="requested-feature-chip-input" data-add-project-feature-input placeholder="Type a feature" aria-label="New requested feature">
-                                                            <button type="button" class="requested-feature-chip-add" id="addProjectRequestedFeature" aria-label="Add feature">
-                                                                <i class="fas fa-plus" aria-hidden="true"></i>
-                                                            </button>
                                                         </div>
-                                                        <button type="button" class="requested-feature-chip-toggle" data-add-project-feature-toggle aria-label="See more requested features" aria-expanded="false" hidden>
-                                                            <span data-add-project-feature-toggle-label>More</span>
-                                                            <i class="fas fa-chevron-down" aria-hidden="true"></i>
-                                                        </button>
                                                     </div>
-                                                    <div class="mini-note">Type a feature and press Enter or click +. Select × on a tag to remove it.</div>
                                                 </div>
                                             </div>
-                                            <div>
-                                                <label class="form-label">Minutes of the Meeting (MOM) <span class="optional-label">(Optional)</span></label>
-                                                <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
-                                            </div>
-                                        </div>
+                                         </div>
                                     </div>
                                 </div>
                                 <div class="col-12">
@@ -6690,7 +6945,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                 </div>
                                 <div class="col-md-6 complexity-field-shell">
                                     <button type="button" class="complexity-insight-trigger" data-complexity-insight-trigger aria-label="Show generated complexity explanation" aria-expanded="false">
-                                        <i class="fas fa-exclamation" aria-hidden="true"></i>
+                                        <i class="fas fa-lightbulb" aria-hidden="true"></i>
                                     </button>
                                     <div class="complexity-insight-popover" data-complexity-popover hidden>
                                         <strong>Low complexity</strong>
@@ -6831,16 +7086,16 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-                <div class="modal-footer add-client-footer">
-                    <div class="add-client-actions add-project-actions">
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-outline-secondary" data-add-project-prev hidden>Previous</button>
-                        <button type="button" class="btn-add-modern" data-add-project-next>Next</button>
-                        <button type="submit" name="add_project" class="btn-add-modern" data-add-project-submit hidden>
-                            <i class="fas fa-paper-plane me-1"></i> Add Project
-                        </button>
+                        <div class="modal-footer add-client-footer">
+                            <div class="add-client-actions add-project-actions">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-outline-secondary" data-add-project-prev hidden>Previous</button>
+                                <button type="button" class="btn-add-modern" data-add-project-next>Next</button>
+                                <button type="submit" name="add_project" class="btn-add-modern" data-add-project-submit hidden>
+                                    <i class="fas fa-paper-plane me-1"></i> Add Project
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -8593,16 +8848,6 @@ function createAddProjectFeatureInput() {
     return input;
 }
 
-function createAddProjectFeatureButton() {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.id = 'addProjectRequestedFeature';
-    button.className = 'requested-feature-chip-add';
-    button.setAttribute('aria-label', 'Add feature');
-    button.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i>';
-    return button;
-}
-
 function getAddProjectFeatureValues() {
     return Array.from(document.querySelectorAll('#addProjectRequestedFeatureList [data-add-project-feature-value]'))
         .map((chip) => String(chip.dataset.addProjectFeatureValue || '').trim())
@@ -8673,7 +8918,7 @@ function renderAddProjectFeatureRows(rawValue = '') {
 
     featureList.replaceChildren();
     features.forEach((feature) => featureList.appendChild(createAddProjectFeatureChip(feature)));
-    featureList.append(createAddProjectFeatureInput(), createAddProjectFeatureButton());
+    featureList.append(createAddProjectFeatureInput());
 
     syncAddProjectFeatureField();
     setAddProjectFeatureEditorExpanded(false, false);
@@ -9156,12 +9401,6 @@ if (addProjectFormElement) {
         const previousButton = event.target.closest('[data-add-project-prev]');
         if (previousButton) {
             showAddProjectStep(currentAddProjectStep - 1);
-            return;
-        }
-
-        const addFeatureButton = event.target.closest('#addProjectRequestedFeature');
-        if (addFeatureButton) {
-            commitAddProjectFeatureInput(true);
             return;
         }
 
@@ -9793,16 +10032,6 @@ if (addClientModalElement && addClientForm) {
         input.placeholder = 'Type a feature';
         input.setAttribute('aria-label', 'New requested feature');
         return input;
-    }
-
-    function createRequestedFeatureButton() {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.id = 'addRequestedFeature';
-        button.className = 'requested-feature-chip-add';
-        button.setAttribute('aria-label', 'Add feature');
-        button.innerHTML = '<i class="fas fa-plus" aria-hidden="true"></i>';
-        return button;
     }
 
     function getRequestedFeatureValues() {
@@ -10457,7 +10686,7 @@ if (addClientModalElement && addClientForm) {
 
         requestedFeatureList.replaceChildren();
         features.forEach((feature) => requestedFeatureList.appendChild(createRequestedFeatureChip(feature)));
-        requestedFeatureList.append(createRequestedFeatureInput(), createRequestedFeatureButton());
+        requestedFeatureList.append(createRequestedFeatureInput());
         syncRequestedFeaturesField();
         setClientFeatureEditorExpanded(false, false);
         queueClientFeatureEditorAvailability();
@@ -11336,16 +11565,6 @@ if (addClientModalElement && addClientForm) {
         });
 
         requestedFeatureList.addEventListener('click', async (event) => {
-            const addButton = event.target.closest('#addRequestedFeature');
-            if (addButton) {
-                if (commitRequestedFeatureInput(true)) {
-                    formTouched = true;
-                    hideUnsavedClosePanel();
-                    updateDraftStatus(false);
-                }
-                return;
-            }
-
             const removeButton = event.target.closest('[data-remove-requested-feature]');
             if (!removeButton) {
                 return;

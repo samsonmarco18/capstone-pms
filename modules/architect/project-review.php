@@ -479,6 +479,345 @@ a.progress-step:hover {
     border-color: rgba(31, 99, 146, 0.24) !important;
     color: #d7e4f2 !important;
 }
+
+/* Project Overview: compact document-style summary. */
+.project-overview-card {
+    border-color: #d6e4ed;
+    border-radius: 14px;
+    box-shadow: 0 12px 28px rgba(15, 76, 129, 0.07);
+}
+
+.project-overview-card > .card-header {
+    padding: 0.85rem 1.15rem;
+    background: #f5f9fc;
+}
+
+.project-overview-card > .card-body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    padding: 0 !important;
+    background: #e1ebf1;
+}
+
+.project-overview-card .detail-row {
+    display: grid;
+    grid-template-columns: minmax(130px, 180px) minmax(0, 1fr);
+    align-items: start;
+    justify-content: initial;
+    gap: 0.85rem;
+    padding: 0.72rem 1.15rem;
+    border: 0;
+    background: #ffffff;
+}
+
+.project-overview-card .detail-label {
+    color: #64788a;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    line-height: 1.45;
+    text-transform: uppercase;
+}
+
+.project-overview-card .detail-value {
+    min-width: 0;
+    color: #17324d;
+    font-size: 0.84rem;
+    font-weight: 500;
+    line-height: 1.5;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-overview-card .detail-row {
+    background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-overview-card > .card-body {
+    background: rgba(138, 210, 255, 0.12) !important;
+}
+
+/* Requested Features: compact cards that use the available width efficiently. */
+.requested-features-card {
+    border-color: #d6e4ed;
+    border-radius: 14px;
+    box-shadow: 0 12px 28px rgba(15, 76, 129, 0.07);
+}
+
+.requested-features-card > .card-body {
+    padding: 1rem !important;
+    background: #f7fafc;
+}
+
+.requested-features-card .requested-features-content {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.requested-features-card .requested-feature-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+.requested-features-card .requested-feature-list li {
+    align-items: center;
+    min-height: 46px;
+    gap: 0.5rem;
+    padding: 0.62rem 0.72rem;
+    border-color: #dce7ef;
+    border-radius: 9px;
+    box-shadow: 0 4px 12px rgba(15, 76, 129, 0.035);
+}
+
+.requested-features-card .requested-feature-list i {
+    flex: 0 0 auto;
+    margin-top: 0;
+    font-size: 0.78rem;
+}
+
+.requested-features-card .requested-feature-list span {
+    min-width: 0;
+    color: #2f465b;
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.requested-features-card .additional-requirements-panel {
+    margin-top: 0.85rem;
+    padding: 0.8rem 0.85rem;
+    border: 1px solid #dce7ef;
+    border-radius: 9px;
+    background: #ffffff;
+    color: #40586d;
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.requested-features-card .additional-requirements-panel .section-title {
+    margin: 0 0 0.35rem;
+    color: #174769;
+    font-size: 0.72rem;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requested-features-card > .card-body {
+    background: #071321 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requested-features-card .requested-features-content {
+    border: 0 !important;
+    background: transparent !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requested-features-card .requested-feature-list span {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .requested-features-card .additional-requirements-panel {
+    border-color: rgba(138, 210, 255, 0.15);
+    background: #0a1b2c;
+    color: #b8cadd;
+}
+
+/* Architect recommendations: structured review sheet with readable value rows. */
+.architect-recommendations-card {
+    border-color: #d6e4ed;
+    border-radius: 14px;
+    box-shadow: 0 12px 28px rgba(15, 76, 129, 0.07);
+}
+
+.architect-recommendations-card > .card-header {
+    padding: 0.9rem 1.15rem;
+    background: linear-gradient(135deg, #0d6786 0%, #0a5570 100%);
+    border-bottom: 0;
+}
+
+.architect-recommendations-card > .card-header h5,
+.architect-recommendations-card > .card-header h5 i {
+    color: #ffffff;
+}
+
+.architect-recommendations-body {
+    display: grid;
+    gap: 0.9rem;
+    padding: 1rem !important;
+    background: #f7fafc;
+}
+
+.architect-review-section {
+    overflow: hidden;
+    border: 1px solid #dce7ef;
+    border-radius: 10px;
+    background: #ffffff;
+}
+
+.architect-review-section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.48rem;
+    margin: 0;
+    padding: 0.58rem 0.85rem;
+    border-bottom: 1px solid #dce7ef;
+    background: #eef6fb;
+    color: #174769;
+    font-size: 0.74rem;
+    font-weight: 750;
+    letter-spacing: 0.035em;
+    text-transform: uppercase;
+}
+
+.architect-review-section-title i {
+    color: #0d6786;
+    font-size: 0.72rem;
+}
+
+.architect-review-rows {
+    display: grid;
+}
+
+.architect-recommendations-card .detail-row {
+    display: grid;
+    grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+    align-items: start;
+    justify-content: initial;
+    gap: 1.25rem;
+    padding: 0.7rem 0.85rem;
+    border-bottom: 1px solid #e4edf3;
+    background: #ffffff;
+}
+
+.architect-recommendations-card .detail-row:nth-child(even) {
+    background: #ffffff;
+}
+
+.architect-recommendations-card .detail-row:last-child {
+    border-bottom: 0;
+}
+
+.architect-recommendations-card .detail-label {
+    color: #64788a;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    line-height: 1.45;
+    text-transform: uppercase;
+}
+
+.architect-recommendations-card .detail-value {
+    min-width: 0;
+    color: #17324d;
+    font-size: 0.84rem;
+    font-weight: 500;
+    line-height: 1.55;
+    text-align: left;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+.architect-guidance {
+    padding: 0.8rem;
+    background: #ffffff;
+}
+
+.architect-recommendations-card .architect-guidance .content-box,
+.architect-recommendations-card--empty .content-box {
+    padding: 0.8rem 0.9rem;
+    border-color: #dce7ef;
+    border-radius: 8px;
+    background: #f7fafc;
+    color: #40586d;
+    font-size: 0.82rem;
+    line-height: 1.55;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-recommendations-card > .card-header {
+    background: linear-gradient(135deg, #0b5878 0%, #083f58 100%) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-recommendations-body {
+    background: #071321 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-section {
+    border-color: rgba(138, 210, 255, 0.15);
+    background: #0a1b2c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-section-title {
+    border-bottom-color: rgba(138, 210, 255, 0.15);
+    background: #0d2236;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-section-title i {
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-recommendations-card .detail-row {
+    border-bottom-color: rgba(138, 210, 255, 0.12) !important;
+    background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-recommendations-card .detail-row:nth-child(even) {
+    background: #0b1f32 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-recommendations-card .detail-value {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-guidance {
+    background: #0a1b2c;
+}
+
+@media (max-width: 768px) {
+    .project-overview-card > .card-body {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .project-overview-card .detail-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.22rem;
+        padding: 0.7rem 0.85rem;
+    }
+
+    .architect-recommendations-card .detail-row {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.22rem;
+        padding: 0.7rem 0.75rem;
+    }
+
+    .architect-recommendations-body {
+        padding: 0.75rem !important;
+    }
+}
+
+@media (max-width: 1199.98px) {
+    .requested-features-card .requested-feature-list {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 991.98px) {
+    .requested-features-card .requested-feature-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575.98px) {
+    .requested-features-card .requested-feature-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .requested-features-card > .card-body {
+        padding: 0.75rem !important;
+    }
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -524,7 +863,7 @@ a.progress-step:hover {
     <div class="row g-4">
         <!-- Main Column -->
         <div class="col-12">
-            <div class="info-card">
+            <div class="info-card project-overview-card">
                 <div class="card-header">
                     <h5><i class="fas fa-info-circle"></i> Project Overview</h5>
                 </div>
@@ -561,93 +900,143 @@ a.progress-step:hover {
                     </div>
                     <div class="detail-row">
                         <div class="detail-label">Generated Complexity</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($project['complexity_level'] ?? 'Medium')); ?></div>
+                        <div class="detail-value"><?php echo htmlspecialchars(ucwords(strtolower((string) ($project['complexity_level'] ?? 'Medium')))); ?></div>
                     </div>
                     <div class="detail-row">
                         <div class="detail-label">Priority</div>
-                        <div class="detail-value"><?php echo htmlspecialchars(ucfirst((string) ($project['priority'] ?? 'medium'))); ?></div>
+                        <div class="detail-value"><?php echo htmlspecialchars(ucwords(strtolower((string) ($project['priority'] ?? 'medium')))); ?></div>
                     </div>
-                    <?php if ($hasSalesBudget && !empty($project['sales_budget'])): ?>
                     <div class="detail-row">
                         <div class="detail-label">Budget</div>
-                        <div class="detail-value"><?php echo number_format((float) $project['sales_budget'], 2); ?></div>
+                        <div class="detail-value">
+                            <?php
+                            echo $hasSalesBudget && !empty($project['sales_budget'])
+                                ? '₱' . number_format((float) $project['sales_budget'], 2)
+                                : 'Not provided';
+                            ?>
+                        </div>
                     </div>
-                    <?php endif; ?>
                 </div>
             </div>
 
             <?php if (is_array($projectTemplate)): ?>
-            <div class="info-card">
+            <div class="info-card architect-recommendations-card">
                 <div class="card-header">
                     <h5><i class="fas fa-lightbulb"></i> Template-Based Architect Recommendations</h5>
                 </div>
-                <div class="card-body">
-                    <div class="detail-row">
-                        <div class="detail-label">Template Match</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['project_type'] ?? 'Matched template')); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Recommended Methodology</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['methodology'] ?? 'Not specified')); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Technology Stack</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['tech_stack'] ?? 'Not specified')); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Developer Roles / Team</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['team_composition'] ?? 'Not specified')); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Milestones / Phases</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['suggested_milestones'] ?? ($projectTemplate['default_project_phases'] ?? 'Not specified'))); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Estimated Workload</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['workload_estimate'] ?? ($projectTemplate['duration_label'] ?? 'Not specified'))); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Infrastructure</div>
-                        <div class="detail-value"><?php echo htmlspecialchars(trim((string) ($projectTemplate['hosting_platform'] ?? '') . ' | ' . (string) ($projectTemplate['deployment_environment'] ?? '') . ' | ' . (string) ($projectTemplate['database_technology'] ?? ''), ' |') ?: 'Not specified'); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Authentication</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['auth_method'] ?? 'Not specified')); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Integrations</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['integrations'] ?? 'Confirm during technical planning.')); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Third-Party Services / APIs</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['third_party_services'] ?? 'Confirm during technical planning.')); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Security Requirements</div>
-                        <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['security_requirements'] ?? 'Confirm during technical planning.')); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Testing / Documentation</div>
-                        <div class="detail-value"><?php echo htmlspecialchars(trim((string) ($projectTemplate['testing_requirements'] ?? '') . ' ' . (string) ($projectTemplate['documentation_requirements'] ?? '')) ?: 'Not specified'); ?></div>
-                    </div>
-                    <div class="detail-row">
-                        <div class="detail-label">Backup / Support</div>
-                        <div class="detail-value"><?php echo htmlspecialchars(trim((string) ($projectTemplate['backup_recovery_strategy'] ?? '') . ' ' . (string) ($projectTemplate['maintenance_support'] ?? '')) ?: 'Not specified'); ?></div>
-                    </div>
-                    <div class="content-box">
-                        <?php echo htmlspecialchars(trim((string) ($projectTemplate['architecture_notes'] ?? '') . "\n" . (string) ($projectTemplate['risk_assessment'] ?? '') . "\n" . (string) ($projectTemplate['implementation_notes'] ?? '')) ?: 'Use this template as a starting point and customize it according to client requirements.'); ?>
-                    </div>
+                <div class="card-body architect-recommendations-body">
+                    <section class="architect-review-section" aria-labelledby="architectFoundationHeading">
+                        <h6 class="architect-review-section-title" id="architectFoundationHeading">
+                            <i class="fas fa-clipboard-list" aria-hidden="true"></i> Project Foundation
+                        </h6>
+                        <div class="architect-review-rows">
+                            <div class="detail-row">
+                                <div class="detail-label">Template Match</div>
+                                <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['project_type'] ?? 'Matched template')); ?></div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Recommended Methodology</div>
+                                <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['methodology'] ?? 'Not specified')); ?></div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Estimated Workload</div>
+                                <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['workload_estimate'] ?? ($projectTemplate['duration_label'] ?? 'Not specified'))); ?></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="architect-review-section" aria-labelledby="architectDeliveryHeading">
+                        <h6 class="architect-review-section-title" id="architectDeliveryHeading">
+                            <i class="fas fa-users" aria-hidden="true"></i> Delivery Plan
+                        </h6>
+                        <div class="architect-review-rows">
+                            <div class="detail-row">
+                                <div class="detail-label">Developer Roles / Team</div>
+                                <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['team_composition'] ?? 'Not specified')); ?></div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Milestones / Phases</div>
+                                <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['suggested_milestones'] ?? ($projectTemplate['default_project_phases'] ?? 'Not specified'))); ?></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="architect-review-section" aria-labelledby="architectTechnicalHeading">
+                        <h6 class="architect-review-section-title" id="architectTechnicalHeading">
+                            <i class="fas fa-sitemap" aria-hidden="true"></i> Technical Architecture
+                        </h6>
+                        <div class="architect-review-rows">
+                            <div class="detail-row">
+                                <div class="detail-label">Technology Stack</div>
+                                <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['tech_stack'] ?? 'Not specified')); ?></div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Infrastructure</div>
+                                <div class="detail-value"><?php echo htmlspecialchars(trim((string) ($projectTemplate['hosting_platform'] ?? '') . ' | ' . (string) ($projectTemplate['deployment_environment'] ?? '') . ' | ' . (string) ($projectTemplate['database_technology'] ?? ''), ' |') ?: 'Not specified'); ?></div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Authentication</div>
+                                <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['auth_method'] ?? 'Not specified')); ?></div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Integrations</div>
+                                <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['integrations'] ?? 'Confirm during technical planning.')); ?></div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Third-Party Services / APIs</div>
+                                <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['third_party_services'] ?? 'Confirm during technical planning.')); ?></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="architect-review-section" aria-labelledby="architectQualityHeading">
+                        <h6 class="architect-review-section-title" id="architectQualityHeading">
+                            <i class="fas fa-shield-alt" aria-hidden="true"></i> Quality &amp; Operations
+                        </h6>
+                        <div class="architect-review-rows">
+                            <div class="detail-row">
+                                <div class="detail-label">Security Requirements</div>
+                                <div class="detail-value"><?php echo htmlspecialchars((string) ($projectTemplate['security_requirements'] ?? 'Confirm during technical planning.')); ?></div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Testing / Documentation</div>
+                                <div class="detail-value"><?php echo htmlspecialchars(trim((string) ($projectTemplate['testing_requirements'] ?? '') . ' ' . (string) ($projectTemplate['documentation_requirements'] ?? '')) ?: 'Not specified'); ?></div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">Backup / Support</div>
+                                <div class="detail-value"><?php echo htmlspecialchars(trim((string) ($projectTemplate['backup_recovery_strategy'] ?? '') . ' ' . (string) ($projectTemplate['maintenance_support'] ?? '')) ?: 'Not specified'); ?></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="architect-review-section" aria-labelledby="architectGuidanceHeading">
+                        <h6 class="architect-review-section-title" id="architectGuidanceHeading">
+                            <i class="fas fa-compass" aria-hidden="true"></i> Architect Guidance
+                        </h6>
+                        <div class="architect-guidance">
+                            <div class="content-box">
+                                <?php echo htmlspecialchars(trim((string) ($projectTemplate['architecture_notes'] ?? '') . "\n" . (string) ($projectTemplate['risk_assessment'] ?? '') . "\n" . (string) ($projectTemplate['implementation_notes'] ?? '')) ?: 'Use this template as a starting point and customize it according to client requirements.'); ?>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
             <?php else: ?>
-            <div class="info-card">
+            <div class="info-card architect-recommendations-card architect-recommendations-card--empty">
                 <div class="card-header">
                     <h5><i class="fas fa-lightbulb"></i> Template-Based Architect Recommendations</h5>
                 </div>
-                <div class="card-body">
-                    <div class="content-box">
-                        No matching project template was found. Complete the technical planning manually; once finalized, this project type can be learned as a new template.
-                    </div>
+                <div class="card-body architect-recommendations-body">
+                    <section class="architect-review-section" aria-labelledby="architectTemplateAvailabilityHeading">
+                        <h6 class="architect-review-section-title" id="architectTemplateAvailabilityHeading">
+                            <i class="fas fa-search" aria-hidden="true"></i> Template Availability
+                        </h6>
+                        <div class="architect-guidance">
+                            <div class="content-box">
+                                No matching project template was found. Complete the technical planning manually; once finalized, this project type can be learned as a new template.
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
             <?php endif; ?>
@@ -663,12 +1052,12 @@ a.progress-step:hover {
                 </div>
             </div>
 
-            <div class="info-card">
+            <div class="info-card requested-features-card">
                 <div class="card-header">
                     <h5><i class="fas fa-list-check"></i> Requested Features</h5>
                 </div>
                 <div class="card-body">
-                    <div class="content-box">
+                    <div class="content-box requested-features-content">
                         <?php if (count($requestedFeatureItems) > 0): ?>
                             <ul class="requested-feature-list">
                                 <?php foreach ($requestedFeatureItems as $featureItem): ?>
@@ -682,8 +1071,10 @@ a.progress-step:hover {
                             No requested features provided.
                         <?php endif; ?>
                         <?php if ($additionalRequirementsText !== ''): ?>
-                            <div class="section-title mt-3">Additional Requirements</div>
-                            <div><?php echo htmlspecialchars($additionalRequirementsText); ?></div>
+                            <div class="additional-requirements-panel">
+                                <div class="section-title">Additional Requirements</div>
+                                <div><?php echo htmlspecialchars($additionalRequirementsText); ?></div>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>

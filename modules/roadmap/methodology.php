@@ -154,6 +154,23 @@ function roadmapDateString(?DateTimeImmutable $date): ?string
     return $date ? $date->format('Y-m-d') : null;
 }
 
+function roadmapDepartmentIcon(string $department): string
+{
+    return match (strtolower(trim($department))) {
+        'expert department' => 'fa-user-tie',
+        'ui/ux' => 'fa-palette',
+        'frontend' => 'fa-code',
+        'backend' => 'fa-cogs',
+        'mobile' => 'fa-mobile-alt',
+        'database' => 'fa-database',
+        'devops' => 'fa-infinity',
+        'ai' => 'fa-brain',
+        'security' => 'fa-shield-alt',
+        'qa' => 'fa-clipboard-check',
+        default => 'fa-users-cog',
+    };
+}
+
 function roadmapDeveloperEntityKey(int $projectId, string $scope): string
 {
     try {
@@ -1708,8 +1725,111 @@ include '../../includes/navbar.php';
 }
 
 .roadmap-toolbar {
-    padding: 1rem;
+    padding: 1.1rem 1.2rem;
     margin-bottom: 1rem;
+    border-radius: 12px;
+}
+
+.roadmap-project-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.roadmap-project-identity {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: .75rem;
+}
+
+.roadmap-project-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    border-radius: 10px;
+    background: #edf7fc;
+    color: var(--roadmap-primary);
+}
+
+.roadmap-project-copy {
+    display: grid;
+    min-width: 0;
+    gap: .15rem;
+}
+
+.roadmap-project-eyebrow {
+    color: var(--roadmap-muted);
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .055em;
+    text-transform: uppercase;
+}
+
+.roadmap-project-title-line {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: .35rem .65rem;
+}
+
+.roadmap-project-name {
+    color: var(--roadmap-ink);
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.roadmap-project-client {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    color: var(--roadmap-muted);
+    font-size: .82rem;
+}
+
+.roadmap-methodology-form {
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) auto auto;
+    align-items: end;
+    gap: .9rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--roadmap-line);
+}
+
+.roadmap-methodology-field {
+    min-width: 0;
+}
+
+.roadmap-methodology-field .form-label {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    margin-bottom: .4rem;
+}
+
+.roadmap-methodology-field .form-label i {
+    color: var(--roadmap-primary);
+}
+
+.roadmap-methodology-option {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    padding-bottom: .1rem;
+    white-space: nowrap;
+}
+
+.roadmap-methodology-option .form-check {
+    margin: 0;
+}
+
+.roadmap-methodology-apply {
+    min-width: 132px;
 }
 
 .roadmap-toolbar-actions {
@@ -1727,15 +1847,133 @@ include '../../includes/navbar.php';
     min-height: 38px;
 }
 
+.roadmap-task-plan-trigger {
+    gap: .15rem;
+}
+
+.roadmap-task-plan-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    margin-left: .35rem;
+    padding: 0 .4rem;
+    border-radius: 999px;
+    background: rgba(31, 99, 146, .1);
+    color: var(--roadmap-primary);
+    font-size: .7rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.roadmap-task-plan-modal .modal-dialog {
+    max-width: min(1420px, calc(100vw - 2rem));
+}
+
+.roadmap-task-plan-modal .modal-content {
+    overflow: hidden;
+    border: 1px solid var(--roadmap-line);
+    border-radius: 14px;
+}
+
+.roadmap-task-plan-modal-header {
+    padding: .9rem 1.1rem;
+}
+
+.roadmap-task-plan-modal-title {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: .65rem;
+}
+
+.roadmap-task-plan-modal-title > span:last-child {
+    display: grid;
+    min-width: 0;
+    gap: .1rem;
+}
+
+.roadmap-task-plan-modal-title .modal-title {
+    color: var(--roadmap-ink);
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.roadmap-task-plan-modal-title small {
+    color: var(--roadmap-muted);
+    font-size: .75rem;
+}
+
+.roadmap-task-plan-modal-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    border-radius: 9px;
+    background: #edf7fc;
+    color: var(--roadmap-primary);
+}
+
+.roadmap-task-plan-table {
+    margin-top: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.roadmap-task-plan-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8fafc;
+}
+
 .roadmap-stats {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: .75rem;
     margin-bottom: 1rem;
 }
 
 .roadmap-stat {
-    padding: .9rem 1rem;
+    padding: .85rem 1rem;
+}
+
+.roadmap-stat--with-icon {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+
+.roadmap-stat .roadmap-stat-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    border-radius: 9px;
+    background: #edf7fc;
+    color: var(--roadmap-primary);
+    font-size: .9rem;
+    text-transform: none;
+}
+
+.roadmap-stat .roadmap-stat-copy {
+    display: block;
+    min-width: 0;
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    text-transform: none;
+}
+
+.roadmap-stat .roadmap-stat-template {
+    font-size: 1rem;
 }
 
 .roadmap-stat span {
@@ -1962,6 +2200,67 @@ include '../../includes/navbar.php';
     font-size: .98rem;
     font-weight: 700;
     margin: 0;
+}
+
+.phase-card-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .65rem;
+}
+
+.phase-card-heading-actions {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: .4rem;
+}
+
+.phase-fold-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid rgba(31, 99, 146, .2);
+    border-radius: 8px;
+    background: #f7fbfd;
+    color: var(--roadmap-primary);
+    cursor: pointer;
+    transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+}
+
+.phase-fold-toggle:hover,
+.phase-fold-toggle:focus-visible {
+    border-color: rgba(31, 99, 146, .42);
+    background: #edf7fc;
+    outline: none;
+}
+
+.phase-fold-toggle i {
+    transition: transform .2s ease;
+}
+
+.phase-card-details {
+    display: block;
+}
+
+.phase-card-roadmap.is-collapsed {
+    padding-block: .8rem;
+    transform: none;
+}
+
+.phase-card-roadmap.is-collapsed .phase-card-details {
+    display: none;
+}
+
+.phase-card-roadmap.is-collapsed .phase-fold-toggle i {
+    transform: rotate(180deg);
+}
+
+.gantt-row.is-phase-collapsed {
+    display: none !important;
 }
 
 .phase-meta,
@@ -2317,6 +2616,27 @@ include '../../includes/navbar.php';
     margin-top: .1rem;
 }
 
+.roadmap-bulk-toolbar__actions {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: .5rem;
+    justify-content: flex-end;
+}
+
+.roadmap-bulk-toolbar__actions .btn {
+    align-items: center;
+    border-radius: 9px;
+    display: inline-flex;
+    font-size: .82rem;
+    font-weight: 600;
+    justify-content: center;
+    min-height: 36px;
+    padding: .45rem .75rem;
+    white-space: nowrap;
+}
+
 .roadmap-task-select-cell {
     text-align: center;
     width: 46px;
@@ -2337,15 +2657,40 @@ include '../../includes/navbar.php';
     cursor: pointer;
 }
 
+.roadmap-table-wrap tr.roadmap-task-row > * {
+    background-color: transparent;
+    transition: background-color .18s ease, border-color .18s ease;
+}
+
+.roadmap-table-wrap tr.roadmap-task-row > *:first-child {
+    border-left: 3px solid transparent;
+}
+
 .roadmap-table-wrap tr.roadmap-task-row:focus,
 .roadmap-table-wrap tr.roadmap-task-row:hover {
-    background: rgba(37, 99, 235, .08);
     outline: none;
 }
 
+.roadmap-table-wrap tr.roadmap-task-row:focus > *,
+.roadmap-table-wrap tr.roadmap-task-row:hover > * {
+    background-color: #f2f8fc;
+}
+
+.roadmap-table-wrap tr.roadmap-task-row:focus > *:first-child,
+.roadmap-table-wrap tr.roadmap-task-row:hover > *:first-child {
+    border-left-color: #2b8ab8;
+}
+
 .roadmap-table-wrap tr.roadmap-task-row.is-bulk-selected {
-    background: rgba(37, 99, 235, .13);
-    box-shadow: inset 3px 0 #2563eb;
+    box-shadow: none;
+}
+
+.roadmap-table-wrap tr.roadmap-task-row.is-bulk-selected > * {
+    background-color: #eaf5fb;
+}
+
+.roadmap-table-wrap tr.roadmap-task-row.is-bulk-selected > *:first-child {
+    border-left-color: #166a96;
 }
 
 @media (max-width: 767.98px) {
@@ -2354,10 +2699,14 @@ include '../../includes/navbar.php';
         flex-direction: column;
     }
 
-    .roadmap-bulk-toolbar .btn-group {
+    .roadmap-bulk-toolbar__actions {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         width: 100%;
+    }
+
+    .roadmap-bulk-toolbar__actions .btn {
+        padding-inline: .55rem;
     }
 }
 
@@ -2398,10 +2747,87 @@ include '../../includes/navbar.php';
 .monitor-status-pending { background: #fef3c7; color: #92400e; }
 .monitor-status-done { background: #dcfce7; color: #166534; }
 
+#taskModal .modal-dialog {
+    max-width: min(1080px, calc(100vw - 2rem));
+}
+
+#taskModal .modal-body {
+    max-height: calc(100vh - 10rem);
+    overflow-y: auto;
+    padding: 1.15rem 1.35rem;
+}
+
+.task-primary-fields {
+    display: grid;
+    grid-template-columns: minmax(190px, .9fr) minmax(290px, 1.45fr) repeat(2, minmax(155px, .7fr));
+    gap: .9rem;
+    align-items: end;
+    margin-bottom: 1rem;
+}
+
+#taskModal.is-bulk-task .task-primary-fields {
+    grid-template-columns: minmax(240px, 1.15fr) repeat(2, minmax(170px, .75fr));
+}
+
+.task-primary-field {
+    min-width: 0;
+}
+
+.task-primary-field .form-label {
+    margin-bottom: .35rem;
+}
+
+.task-primary-field :is(.form-control, .form-select) {
+    min-height: 42px;
+}
+
+.task-bulk-feature-picker {
+    margin-bottom: 1rem;
+}
+
+.bulk-feature-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .65rem;
+    margin-bottom: .5rem;
+}
+
+.bulk-feature-toolbar-title {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    color: var(--roadmap-ink);
+    font-family: inherit;
+    font-size: .9rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.4;
+}
+
+.bulk-feature-toolbar-title i {
+    color: var(--roadmap-primary);
+}
+
+.bulk-feature-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    margin-left: auto;
+}
+
+.bulk-feature-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    min-height: 32px;
+    padding: .3rem .6rem;
+}
+
 .department-requirement-grid {
     display: grid;
-    gap: .75rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .65rem;
 }
 
 .bulk-feature-list {
@@ -2409,9 +2835,9 @@ include '../../includes/navbar.php';
     border-radius: 8px;
     display: grid;
     gap: .5rem;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    max-height: 14rem;
-    overflow-y: auto;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    max-height: none;
+    overflow: visible;
     padding: .5rem;
 }
 
@@ -2426,7 +2852,19 @@ include '../../includes/navbar.php';
     border-radius: 8px;
     margin: 0;
     min-width: 0;
-    padding: .65rem .75rem .65rem 2.25rem;
+    padding: .55rem .65rem .55rem 2.1rem;
+    transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.bulk-feature-option:hover {
+    border-color: rgba(31, 99, 146, .32);
+    background: #f2f8fc;
+}
+
+.bulk-feature-option:has(.form-check-input:checked) {
+    border-color: rgba(31, 99, 146, .38);
+    background: #edf7fc;
+    box-shadow: inset 3px 0 0 var(--roadmap-primary);
 }
 
 .bulk-feature-option .form-check-label {
@@ -2474,21 +2912,50 @@ include '../../includes/navbar.php';
 }
 
 .department-requirement-grid.is-invalid {
-    padding: .65rem;
     border: 1px solid #dc3545;
     border-radius: 10px;
     background: #fff8f8;
+    box-shadow: 0 0 0 .2rem rgba(220, 53, 69, .12);
 }
 
 .department-requirement-item {
     align-items: center;
-    background: #f8fafc;
+    background: #fff;
     border: 1px solid var(--roadmap-line);
-    border-radius: 8px;
-    display: flex;
-    gap: .75rem;
-    justify-content: space-between;
-    padding: .75rem;
+    border-radius: 9px;
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) 62px;
+    gap: .6rem;
+    min-height: 68px;
+    padding: .55rem .6rem;
+    transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.department-requirement-item:hover {
+    border-color: rgba(31, 99, 146, .32);
+    background: #f2f8fc;
+}
+
+.department-requirement-item:has(.task-department-toggle:checked) {
+    border-color: rgba(31, 99, 146, .38);
+    background: #edf7fc;
+    box-shadow: inset 3px 0 0 var(--roadmap-primary);
+}
+
+.department-requirement-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: #edf7fc;
+    color: var(--roadmap-primary);
+    font-size: .9rem;
+}
+
+.department-requirement-copy {
+    min-width: 0;
 }
 
 .department-requirement-item .form-check {
@@ -2509,7 +2976,16 @@ include '../../includes/navbar.php';
 }
 
 .department-requirement-count {
-    flex: 0 0 88px;
+    flex: 0 0 62px;
+    max-width: 62px;
+    min-height: 38px;
+    padding-inline: .4rem;
+    text-align: center;
+}
+
+.department-requirement-count-wrap {
+    display: grid;
+    place-items: center;
 }
 
 .bulk-task-picker {
@@ -2593,9 +3069,44 @@ include '../../includes/navbar.php';
     color: #f8fafc;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-feature-option,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-requirement-item {
+    background: #111827;
+    border-color: #263244;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-requirement-icon {
+    background: #0d2236;
+    color: #8ad2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-feature-toolbar-title {
+    color: #f8fafc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-feature-option:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-feature-option:has(.form-check-input:checked),
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-requirement-item:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-requirement-item:has(.task-department-toggle:checked) {
+    background: #10283a;
+    border-color: rgba(96, 165, 250, .42);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-card-roadmap.is-headcount-pending {
     background: #1f2937;
     border-color: #475569;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-fold-toggle {
+    border-color: rgba(96, 165, 250, .24);
+    background: #0d2236;
+    color: #8ad2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-fold-toggle:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-fold-toggle:focus-visible {
+    border-color: rgba(96, 165, 250, .46);
+    background: #10283a;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-headcount-required-label {
@@ -2615,6 +3126,7 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-stat strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-project-name,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-card-roadmap h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-label-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-task-picker .form-check-label,
@@ -2622,6 +3134,35 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-panel-heading h3,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-name {
     color: #f8fafc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-project-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-stat-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-task-plan-modal-icon {
+    background: #0d2236;
+    color: #8ad2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-task-plan-modal .modal-content {
+    background: #111827;
+    border-color: #263244;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-task-plan-modal-title .modal-title {
+    color: #f8fafc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-task-plan-table thead th {
+    background: #0f172a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-task-plan-count {
+    background: rgba(96, 165, 250, .16);
+    color: #93c5fd;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-methodology-form {
+    border-color: #263244;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .gantt-head {
@@ -2665,6 +3206,23 @@ include '../../includes/navbar.php';
 }
 
 @media (max-width: 992px) {
+    .roadmap-methodology-form {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .roadmap-methodology-field {
+        grid-column: 1 / -1;
+    }
+
+    .task-primary-fields,
+    #taskModal.is-bulk-task .task-primary-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .department-requirement-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .roadmap-layout {
         grid-template-columns: 1fr;
     }
@@ -2692,6 +3250,46 @@ include '../../includes/navbar.php';
 }
 
 @media (max-width: 576px) {
+    .roadmap-project-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .roadmap-toolbar-actions,
+    .roadmap-toolbar-actions .btn {
+        width: 100%;
+    }
+
+    .roadmap-methodology-form {
+        grid-template-columns: 1fr;
+    }
+
+    .roadmap-methodology-field {
+        grid-column: auto;
+    }
+
+    .roadmap-methodology-option {
+        min-height: auto;
+    }
+
+    .roadmap-methodology-apply {
+        width: 100%;
+    }
+
+    #taskModal .modal-dialog {
+        margin: .5rem;
+        max-width: calc(100vw - 1rem);
+    }
+
+    #taskModal .modal-body {
+        padding: 1rem;
+    }
+
+    .task-primary-fields,
+    #taskModal.is-bulk-task .task-primary-fields {
+        grid-template-columns: 1fr;
+    }
+
     .roadmap-shell {
         padding: 1rem;
     }
@@ -2855,9 +3453,15 @@ include '../../includes/navbar.php';
                     <span class="small text-muted">
                         <i class="fas fa-building-user me-1"></i> Monitoring <?php echo htmlspecialchars($sulDepartmentLabel); ?> tasks
                     </span>
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Roadmap task filter">
-                        <button class="btn btn-outline-primary" type="button" data-roadmap-filter="all">All Roadmap</button>
-                        <button class="btn btn-primary active" type="button" data-roadmap-filter="department">My Department</button>
+                    <div class="roadmap-toolbar-actions">
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Roadmap task filter">
+                            <button class="btn btn-outline-primary" type="button" data-roadmap-filter="all">All Roadmap</button>
+                            <button class="btn btn-primary active" type="button" data-roadmap-filter="department">My Department</button>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm roadmap-task-plan-trigger" type="button" data-bs-toggle="modal" data-bs-target="#roadmapTaskPlanModal">
+                            <i class="fas fa-table me-1" aria-hidden="true"></i> Task Plan
+                            <span class="roadmap-task-plan-count"><?php echo (int) $taskCount; ?></span>
+                        </button>
                     </div>
                 </div>
             <?php else: ?>
@@ -2866,17 +3470,34 @@ include '../../includes/navbar.php';
                 </div>
             <?php endif; ?>
         <?php elseif ($selectedProject): ?>
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <div>
-                    <label class="form-label d-block mb-1">Current Project</label>
-                    <strong><?php echo htmlspecialchars((string) $selectedProject['name']); ?></strong>
-                    <span class="text-muted ms-2"><?php echo htmlspecialchars((string) ($selectedProject['client_name'] ?? '')); ?></span>
+            <div class="roadmap-project-header">
+                <div class="roadmap-project-identity">
+                    <span class="roadmap-project-icon" aria-hidden="true"><i class="fas fa-route"></i></span>
+                    <span class="roadmap-project-copy">
+                        <span class="roadmap-project-eyebrow">Current Project</span>
+                        <span class="roadmap-project-title-line">
+                            <strong class="roadmap-project-name"><?php echo htmlspecialchars((string) $selectedProject['name']); ?></strong>
+                            <span class="roadmap-project-client"><i class="fas fa-building" aria-hidden="true"></i><?php echo htmlspecialchars((string) ($selectedProject['client_name'] ?? '')); ?></span>
+                        </span>
+                    </span>
                 </div>
-                <?php if ($canEditArchitecture): ?>
-                    <div class="roadmap-toolbar-actions" aria-label="Roadmap actions">
+                <div class="roadmap-toolbar-actions" aria-label="Roadmap actions">
+                    <?php if ($canEditArchitecture): ?>
                         <button class="btn btn-primary" type="button" onclick="openPhaseModal()">
                             <i class="fas fa-plus me-2" aria-hidden="true"></i> Add Phase
                         </button>
+                    <?php endif; ?>
+                    <button
+                        class="btn btn-outline-primary roadmap-task-plan-trigger"
+                        type="button"
+                        data-bs-toggle="modal"
+                        data-bs-target="#roadmapTaskPlanModal"
+                    >
+                        <i class="fas fa-table me-2" aria-hidden="true"></i>
+                        Task Plan
+                        <span class="roadmap-task-plan-count"><?php echo (int) $taskCount; ?></span>
+                    </button>
+                    <?php if ($canEditArchitecture): ?>
                         <a
                             class="btn btn-outline-primary"
                             href="<?php echo BASE_URL; ?>modules/architect/upload-diagram.php?id=<?php echo (int) $selectedProjectId; ?>"
@@ -2885,8 +3506,8 @@ include '../../includes/navbar.php';
                         >
                             Continue to Documents <i class="fas fa-arrow-right ms-2" aria-hidden="true"></i>
                         </a>
-                    </div>
-                <?php endif; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         <?php else: ?>
             <form method="GET" class="row g-3 align-items-end">
@@ -2928,11 +3549,11 @@ include '../../includes/navbar.php';
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
-            <form method="POST" id="methodologyTemplateForm" class="row g-3 align-items-end mt-2" data-confirm-skip="1" data-generic-draft-disabled="1" data-app-loading data-loading-title="Applying template" data-loading-text="Generating the methodology phases now.">
+            <form method="POST" id="methodologyTemplateForm" class="roadmap-methodology-form" data-confirm-skip="1" data-generic-draft-disabled="1" data-app-loading data-loading-title="Applying template" data-loading-text="Generating the methodology phases now.">
                 <input type="hidden" name="apply_template" value="1">
                 <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
-                <div class="col-lg-7">
-                    <label class="form-label">Methodology Template</label>
+                <div class="roadmap-methodology-field">
+                    <label class="form-label"><i class="fas fa-layer-group" aria-hidden="true"></i> Methodology Template</label>
                     <select class="form-select" id="methodologyTemplateSelect" name="methodology_template" required>
                         <option value="" disabled <?php echo empty($selectedProject['methodology_template']) ? 'selected' : ''; ?>>Select Agile, Waterfall, Scrum, etc.</option>
                         <?php foreach ($methodologyTemplates as $templateKey => $template): ?>
@@ -2942,14 +3563,14 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-lg-3">
-                    <div class="form-check mt-lg-4">
+                <div class="roadmap-methodology-option">
+                    <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" name="replace_existing_template" value="1" id="replaceExistingTemplate">
                         <label class="form-check-label" for="replaceExistingTemplate">Replace existing phases</label>
                     </div>
                 </div>
-                <div class="col-lg-2">
-                    <button class="btn btn-primary w-100" type="submit">
+                <div>
+                    <button class="btn btn-primary roadmap-methodology-apply" type="submit">
                         <i class="fas fa-layer-group me-1"></i> Apply
                     </button>
                 </div>
@@ -2989,10 +3610,22 @@ include '../../includes/navbar.php';
                     <small class="roadmap-stat-note">blocked, revision, or overdue</small>
                 </div>
             <?php else: ?>
-                <div class="roadmap-card roadmap-stat"><span>Phases</span><strong><?php echo (int) $phaseCount; ?></strong></div>
-                <div class="roadmap-card roadmap-stat"><span>Template</span><strong style="font-size: 1rem;"><?php echo htmlspecialchars(methodologyRoadmapTemplateLabel((string) ($selectedProject['methodology_template'] ?? ''))); ?></strong></div>
-                <div class="roadmap-card roadmap-stat"><span>Roadmap Tasks</span><strong><?php echo (int) $taskCount; ?></strong></div>
-                <div class="roadmap-card roadmap-stat"><span>Developer Capacity</span><strong><?php echo (int) $projectDeveloperCapacity; ?></strong></div>
+                <div class="roadmap-card roadmap-stat roadmap-stat--with-icon">
+                    <span class="roadmap-stat-icon" aria-hidden="true"><i class="fas fa-layer-group"></i></span>
+                    <span class="roadmap-stat-copy"><span>Phases</span><strong><?php echo (int) $phaseCount; ?></strong></span>
+                </div>
+                <div class="roadmap-card roadmap-stat roadmap-stat--with-icon">
+                    <span class="roadmap-stat-icon" aria-hidden="true"><i class="fas fa-project-diagram"></i></span>
+                    <span class="roadmap-stat-copy"><span>Template</span><strong class="roadmap-stat-template"><?php echo htmlspecialchars(methodologyRoadmapTemplateLabel((string) ($selectedProject['methodology_template'] ?? ''))); ?></strong></span>
+                </div>
+                <div class="roadmap-card roadmap-stat roadmap-stat--with-icon">
+                    <span class="roadmap-stat-icon" aria-hidden="true"><i class="fas fa-tasks"></i></span>
+                    <span class="roadmap-stat-copy"><span>Roadmap Tasks</span><strong><?php echo (int) $taskCount; ?></strong></span>
+                </div>
+                <div class="roadmap-card roadmap-stat roadmap-stat--with-icon">
+                    <span class="roadmap-stat-icon" aria-hidden="true"><i class="fas fa-users"></i></span>
+                    <span class="roadmap-stat-copy"><span>Developer Capacity</span><strong><?php echo (int) $projectDeveloperCapacity; ?></strong></span>
+                </div>
             <?php endif; ?>
         </div>
 
@@ -3132,16 +3765,30 @@ include '../../includes/navbar.php';
                     <div
                         class="roadmap-card phase-card-roadmap phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?> <?php echo $canEditArchitecture ? ($phaseHasHeadcount ? '' : 'is-headcount-pending') : 'is-readonly'; ?>"
                         data-phase='<?php echo htmlspecialchars(json_encode($phase, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>'
+                        data-phase-card-id="<?php echo (int) $phase['id']; ?>"
                         <?php echo ($canEditArchitecture && !$phaseHasHeadcount && !$isFinalPhase) ? 'title="Set a positive headcount in Edit Phase to enable task assignment"' : ''; ?>
                         onclick="<?php echo ($canEditArchitecture && $phaseHasHeadcount && !$isFinalPhase) ? 'openTaskModalForPhase(this)' : ''; ?>"
                     >
-                        <div class="d-flex align-items-start justify-content-between gap-2">
+                        <div class="phase-card-heading">
                             <h5><?php echo htmlspecialchars((string) $phase['name']); ?></h5>
-                            <span class="phase-status-indicator phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?>">
-                                <i class="<?php echo htmlspecialchars($phaseIndicator['icon']); ?>"></i>
-                                <?php echo htmlspecialchars($phaseIndicator['label']); ?>
-                            </span>
+                            <div class="phase-card-heading-actions">
+                                <span class="phase-status-indicator phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?>">
+                                    <i class="<?php echo htmlspecialchars($phaseIndicator['icon']); ?>"></i>
+                                    <?php echo htmlspecialchars($phaseIndicator['label']); ?>
+                                </span>
+                                <button
+                                    type="button"
+                                    class="phase-fold-toggle"
+                                    data-phase-collapse-id="<?php echo (int) $phase['id']; ?>"
+                                    aria-expanded="true"
+                                    aria-label="Collapse <?php echo htmlspecialchars((string) $phase['name']); ?> phase and its roadmap tasks"
+                                    title="Collapse phase tasks"
+                                >
+                                    <i class="fas fa-chevron-up" aria-hidden="true"></i>
+                                </button>
+                            </div>
                         </div>
+                        <div class="phase-card-details">
                         <div class="phase-meta">
                             <?php $phaseDurationPercent = [1 => 15, 2 => 20, 3 => 35, 4 => 15, 5 => 15][(int) ($phase['sequence_no'] ?? 0)] ?? 0; ?>
                             <span><i class="fas fa-calendar-day"></i> <?php echo htmlspecialchars((string) $phase['start_date']); ?> to <?php echo htmlspecialchars((string) $phase['end_date']); ?> · <?php echo roadmapDaysBetween((string) $phase['start_date'], (string) $phase['end_date']); ?> days<?php echo $phaseDurationPercent > 0 ? ' · target ' . $phaseDurationPercent . '%' : ''; ?></span>
@@ -3195,6 +3842,7 @@ include '../../includes/navbar.php';
                                 </button>
                             <?php endif; ?>
                         </div>
+                        </div>
                     </div>
                 <?php endforeach; ?>
             </div>
@@ -3228,7 +3876,10 @@ include '../../includes/navbar.php';
                         $phaseLeft = ($phaseOffset / $timelineTotalDays) * 100;
                         $phaseWidth = max(2.5, ($phaseDays / $timelineTotalDays) * 100);
                     ?>
-                    <div class="gantt-row <?php echo ($canEditArchitecture && !$phaseHasHeadcount) ? 'is-headcount-pending' : ''; ?>">
+                    <div
+                        class="gantt-row <?php echo ($canEditArchitecture && !$phaseHasHeadcount) ? 'is-headcount-pending' : ''; ?>"
+                        data-gantt-phase-summary="<?php echo (int) $phase['id']; ?>"
+                    >
                         <div class="gantt-label-cell">
                             <span class="gantt-label-title"><?php echo htmlspecialchars((string) $phase['name']); ?></span>
                             <?php if ($canEditArchitecture && !$phaseHasHeadcount): ?>
@@ -3264,6 +3915,7 @@ include '../../includes/navbar.php';
                         <div
                             class="gantt-row roadmap-task-row <?php echo $isSulMonitoring ? 'has-owner-profile ' : ''; ?><?php echo !empty($task['is_sul_department_task']) ? 'is-sul-department' : 'is-other-department'; ?>"
                             data-monitor-task="1"
+                            data-gantt-phase-task="<?php echo (int) $phase['id']; ?>"
                             data-monitor-task-id="<?php echo (int) $task['id']; ?>"
                             data-sul-department="<?php echo !empty($task['is_sul_department_task']) ? '1' : '0'; ?>"
                             data-monitor-member-id="<?php echo (int) ($task['workflow_assigned_to'] ?? 0); ?>"
@@ -3326,14 +3978,28 @@ include '../../includes/navbar.php';
             </div>
         </div>
 
-        <div class="roadmap-table-wrap" id="roadmap-task-plan">
+        <div class="modal fade roadmap-task-plan-modal" id="roadmapTaskPlanModal" tabindex="-1" aria-labelledby="roadmapTaskPlanModalTitle" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header roadmap-task-plan-modal-header">
+                        <div class="roadmap-task-plan-modal-title">
+                            <span class="roadmap-task-plan-modal-icon" aria-hidden="true"><i class="fas fa-table"></i></span>
+                            <span>
+                                <strong class="modal-title" id="roadmapTaskPlanModalTitle">Roadmap Task Plan</strong>
+                                <small><?php echo (int) $taskCount; ?> task<?php echo (int) $taskCount === 1 ? '' : 's'; ?> across all roadmap phases</small>
+                            </span>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close task plan"></button>
+                    </div>
+                    <div class="modal-body p-0">
+        <div class="roadmap-table-wrap roadmap-task-plan-table" id="roadmap-task-plan">
             <?php if ($canEditArchitecture && count($allTasks) > 0): ?>
                 <div class="roadmap-bulk-toolbar" id="roadmapBulkToolbar" hidden aria-live="polite">
                     <div class="roadmap-bulk-toolbar__summary">
                         <strong id="roadmapBulkSelectionCount">0 tasks selected</strong>
                         <span id="roadmapBulkSelectionPhase">Select tasks from the phase you want to update.</span>
                     </div>
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Selected roadmap task actions">
+                    <div class="roadmap-bulk-toolbar__actions" role="group" aria-label="Selected roadmap task actions">
                         <button type="button" class="btn btn-outline-secondary" id="clearRoadmapTaskSelection">
                             Clear
                         </button>
@@ -3461,13 +4127,9 @@ include '../../includes/navbar.php';
                                     <?php if (!empty($task['department_requirements'])): ?>
                                         <div class="d-flex flex-column gap-1">
                                             <?php foreach ($task['department_requirements'] as $requirement): ?>
-                                                <?php $departmentStatus = (string) ($requirement['status'] ?? 'planned'); ?>
                                                 <span>
                                                     <strong><?php echo htmlspecialchars((string) ($requirement['department'] ?? 'Department')); ?></strong>
                                                     <span class="small text-muted">(<?php echo (int) ($requirement['required_count'] ?? 0); ?>)</span>
-                                                    <span class="status-pill status-<?php echo htmlspecialchars($departmentStatus); ?>">
-                                                        <?php echo htmlspecialchars(projectWorkflowPhaseStatusLabel($departmentStatus)); ?>
-                                                    </span>
                                                 </span>
                                             <?php endforeach; ?>
                                         </div>
@@ -3487,6 +4149,10 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            </div>
+        </div>
+                    </div>
+                </div>
             </div>
         </div>
     <?php endif; ?>
@@ -3584,7 +4250,8 @@ include '../../includes/navbar.php';
                         Last activity: <span id="taskMonitoringUpdated">No activity yet</span>
                     </div>
                 <?php endif; ?>
-                <div class="mb-3">
+                <div class="task-primary-fields">
+                    <div class="task-primary-field task-phase-field">
                     <label class="form-label">Phase</label>
                     <select class="form-select" name="phase_id" id="taskPhaseId" <?php echo !$canEditArchitecture ? 'readonly' : ''; ?> required>
                         <?php foreach ($phases as $phase): ?>
@@ -3597,10 +4264,8 @@ include '../../includes/navbar.php';
                             </option>
                         <?php endforeach; ?>
                     </select>
-                </div>
-
-                <div class="row g-3">
-                    <div class="col-md-12">
+                    </div>
+                    <div class="task-primary-field task-workflow-field">
                         <label class="form-label">Workflow Feature Task</label>
                         <select class="form-select" name="workflow_task_id" id="workflowTaskId" <?php echo !$canEditArchitecture ? 'disabled' : 'required'; ?>>
                             <option value="" disabled selected>Select the real workflow task</option>
@@ -3610,14 +4275,31 @@ include '../../includes/navbar.php';
                                 </option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                    <div class="task-primary-field task-date-field">
+                        <label class="form-label">Start Date</label>
+                        <input type="date" class="form-control" name="task_start" id="taskStart" <?php echo !$canEditArchitecture ? 'readonly' : 'required'; ?>>
+                    </div>
+                    <div class="task-primary-field task-date-field">
+                        <label class="form-label">End Date</label>
+                        <input type="date" class="form-control" name="task_end" id="taskEnd" <?php echo !$canEditArchitecture ? 'readonly' : 'required'; ?>>
+                    </div>
+                </div>
+
                         <?php if ($canEditArchitecture): ?>
                             <input class="d-none" type="checkbox" name="bulk_place_features" value="1" id="bulkPlaceFeatures" tabindex="-1" aria-hidden="true">
-                            <div class="mt-2 d-none" id="bulkFeaturePickerWrap">
-                                <div class="d-flex align-items-center justify-content-between gap-2">
-                                    <span class="form-label small mb-1" id="bulkFeaturePickerLabel">Features to place</span>
-                                    <div class="btn-group btn-group-sm" role="group" aria-label="Bulk feature selection">
-                                        <button class="btn btn-outline-secondary" type="button" id="bulkSelectAllFeatures">Select All</button>
-                                        <button class="btn btn-outline-secondary" type="button" id="bulkClearFeatures">Clear</button>
+                            <div class="task-bulk-feature-picker d-none" id="bulkFeaturePickerWrap">
+                                <div class="bulk-feature-toolbar">
+                                    <span class="bulk-feature-toolbar-title" id="bulkFeaturePickerLabel">
+                                        <i class="fas fa-tasks" aria-hidden="true"></i> Features to place
+                                    </span>
+                                    <div class="bulk-feature-actions" role="group" aria-label="Bulk feature selection">
+                                        <button class="btn btn-outline-primary btn-sm" type="button" id="bulkSelectAllFeatures">
+                                            <i class="fas fa-check-double" aria-hidden="true"></i> Select all
+                                        </button>
+                                        <button class="btn btn-light border btn-sm" type="button" id="bulkClearFeatures">
+                                            <i class="fas fa-eraser" aria-hidden="true"></i> Clear
+                                        </button>
                                     </div>
                                 </div>
                                 <div class="bulk-feature-list" id="bulkWorkflowTaskIds" role="group" aria-labelledby="bulkFeaturePickerLabel" tabindex="-1">
@@ -3644,7 +4326,8 @@ include '../../includes/navbar.php';
                                 <div class="form-text">Each selected feature will get its own roadmap row using the same selected department staffing.</div>
                             </div>
                         <?php endif; ?>
-                    </div>
+
+                <div class="row g-3">
                     <div class="col-md-12">
                         <label class="form-label">Department Staffing Requirements</label>
                         <?php if ($projectDepartmentAllocations !== []): ?>
@@ -3653,7 +4336,10 @@ include '../../includes/navbar.php';
                                     <?php $remainingCapacity = (int) ($projectDepartmentRemainingAllocations[$department] ?? 0); ?>
                                     <?php $fieldId = 'taskDepartment' . substr(sha1($department), 0, 10); ?>
                                     <div class="department-requirement-item">
-                                        <div class="form-check">
+                                        <span class="department-requirement-icon" aria-hidden="true">
+                                            <i class="fas <?php echo htmlspecialchars(roadmapDepartmentIcon((string) $department)); ?>"></i>
+                                        </span>
+                                        <div class="department-requirement-copy form-check">
                                             <input
                                                 class="form-check-input task-department-toggle"
                                                 type="checkbox"
@@ -3672,16 +4358,18 @@ include '../../includes/navbar.php';
                                                 </span>
                                             </label>
                                         </div>
-                                        <input
-                                            type="number"
-                                            class="form-control department-requirement-count"
-                                            name="task_department_counts[<?php echo htmlspecialchars($department); ?>]"
-                                            min="1"
-                                            max="<?php echo (int) $remainingCapacity; ?>"
-                                            value="1"
-                                            aria-label="<?php echo htmlspecialchars($department); ?> headcount"
-                                            disabled
-                                        >
+                                        <span class="department-requirement-count-wrap">
+                                            <input
+                                                type="number"
+                                                class="form-control department-requirement-count"
+                                                name="task_department_counts[<?php echo htmlspecialchars($department); ?>]"
+                                                min="1"
+                                                max="<?php echo (int) $remainingCapacity; ?>"
+                                                value="1"
+                                                aria-label="<?php echo htmlspecialchars($department); ?> headcount"
+                                                disabled
+                                            >
+                                        </span>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
@@ -3689,14 +4377,6 @@ include '../../includes/navbar.php';
                         <?php else: ?>
                             <div class="alert alert-warning mb-0">Complete Developer Allocation before adding roadmap task staffing.</div>
                         <?php endif; ?>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Start Date</label>
-                        <input type="date" class="form-control" name="task_start" id="taskStart" <?php echo !$canEditArchitecture ? 'readonly' : 'required'; ?>>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">End Date</label>
-                        <input type="date" class="form-control" name="task_end" id="taskEnd" <?php echo !$canEditArchitecture ? 'readonly' : 'required'; ?>>
                     </div>
                     <div class="col-md-12">
                         <div class="alert alert-light border mb-0 small">
@@ -3807,9 +4487,11 @@ include '../../includes/navbar.php';
 const phaseModalElement = document.getElementById('phaseModal');
 const taskModalElement = document.getElementById('taskModal');
 const bulkTaskEditModalElement = document.getElementById('bulkTaskEditModal');
+const roadmapTaskPlanModalElement = document.getElementById('roadmapTaskPlanModal');
 const phaseModal = phaseModalElement ? new bootstrap.Modal(phaseModalElement) : null;
 const taskModal = taskModalElement ? new bootstrap.Modal(taskModalElement) : null;
 const bulkTaskEditModal = bulkTaskEditModalElement ? new bootstrap.Modal(bulkTaskEditModalElement) : null;
+const roadmapTaskPlanModal = roadmapTaskPlanModalElement ? bootstrap.Modal.getOrCreateInstance(roadmapTaskPlanModalElement) : null;
 const canEditArchitecture = <?php echo json_encode($canEditArchitecture); ?>;
 const canEditExpertInput = <?php echo json_encode($canEditExpertInput); ?>;
 const isSulMonitoring = <?php echo json_encode($isSulMonitoring); ?>;
@@ -3849,6 +4531,67 @@ const bulkTaskPhaseId = document.getElementById('bulkTaskPhaseId');
 const bulkTaskStart = document.getElementById('bulkTaskStart');
 const bulkTaskEnd = document.getElementById('bulkTaskEnd');
 const deleteTaskIds = document.getElementById('deleteTaskIds');
+const collapsedRoadmapPhaseIds = new Set();
+
+function afterRoadmapTaskPlanCloses(callback, returnAfterModal = null) {
+    if (!roadmapTaskPlanModalElement?.classList.contains('show') || !roadmapTaskPlanModal) {
+        callback();
+        return;
+    }
+
+    if (returnAfterModal) {
+        returnAfterModal.addEventListener('hidden.bs.modal', () => roadmapTaskPlanModal.show(), { once: true });
+    }
+    roadmapTaskPlanModalElement.addEventListener('hidden.bs.modal', callback, { once: true });
+    roadmapTaskPlanModal.hide();
+}
+
+if (window.location.hash === '#roadmap-task-plan' && roadmapTaskPlanModal) {
+    window.requestAnimationFrame(() => roadmapTaskPlanModal.show());
+}
+
+function setRoadmapPhaseCollapsed(phaseId, shouldCollapse) {
+    const normalizedPhaseId = String(phaseId || '');
+    if (!normalizedPhaseId) return;
+
+    if (shouldCollapse) {
+        collapsedRoadmapPhaseIds.add(normalizedPhaseId);
+    } else {
+        collapsedRoadmapPhaseIds.delete(normalizedPhaseId);
+    }
+
+    document.querySelectorAll('[data-phase-card-id]').forEach((card) => {
+        if (card.dataset.phaseCardId !== normalizedPhaseId) return;
+        card.classList.toggle('is-collapsed', shouldCollapse);
+
+        const phaseName = card.querySelector('h5')?.textContent?.trim() || 'phase';
+        card.querySelectorAll('[data-phase-collapse-id]').forEach((button) => {
+            button.setAttribute('aria-expanded', shouldCollapse ? 'false' : 'true');
+            button.setAttribute(
+                'aria-label',
+                `${shouldCollapse ? 'Expand' : 'Collapse'} ${phaseName} phase and its roadmap tasks`
+            );
+            button.title = shouldCollapse ? 'Expand phase tasks' : 'Collapse phase tasks';
+        });
+    });
+
+    document.querySelectorAll('[data-gantt-phase-task]').forEach((row) => {
+        if (row.dataset.ganttPhaseTask === normalizedPhaseId) {
+            row.classList.toggle('is-phase-collapsed', shouldCollapse);
+        }
+    });
+}
+
+document.querySelectorAll('[data-phase-collapse-id]').forEach((button) => {
+    button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const phaseId = String(button.dataset.phaseCollapseId || '');
+        setRoadmapPhaseCollapsed(phaseId, !collapsedRoadmapPhaseIds.has(phaseId));
+    });
+
+    setRoadmapPhaseCollapsed(String(button.dataset.phaseCollapseId || ''), true);
+});
 
 function showRoadmapInlineError(message) {
     if (!roadmapInlineError) {
@@ -4081,7 +4824,7 @@ function openBulkTaskEditor() {
         summary.textContent = `${selected.length} task${selected.length === 1 ? '' : 's'} will share the phase and timeline below.`;
     }
     document.getElementById('bulkTaskFormError')?.classList.add('d-none');
-    bulkTaskEditModal.show();
+    afterRoadmapTaskPlanCloses(() => bulkTaskEditModal.show(), bulkTaskEditModalElement);
 }
 
 async function confirmRoadmapTaskDeletion(tasks) {
@@ -4279,7 +5022,10 @@ function syncTaskDateLimits(forceDefaults = false) {
 function syncBulkFeatureControls() {
     const isBulk = Boolean(bulkPlaceFeaturesInput?.checked);
     const workflowTaskInput = document.getElementById('workflowTaskId');
+    const workflowTaskField = workflowTaskInput?.closest('.task-workflow-field');
 
+    taskModalElement?.classList.toggle('is-bulk-task', isBulk);
+    workflowTaskField?.classList.toggle('d-none', isBulk);
     bulkFeaturePickerWrap?.classList.toggle('d-none', !isBulk);
     bulkWorkflowTaskInputs.forEach((input) => {
         input.disabled = !canEditArchitecture || !isBulk;
@@ -4567,7 +5313,7 @@ function openTaskModalFromBar(source) {
 function openTaskModalFromTask(source) {
     if (!taskModal) return;
     const task = parseData(source, 'task');
-    openTaskModal(task);
+    afterRoadmapTaskPlanCloses(() => openTaskModal(task), taskModalElement);
 }
 
 function openBulkTaskModalForPhase(source) {
