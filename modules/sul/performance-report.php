@@ -1,9 +1,33 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-workflow.php';
 requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$sulDepartment = projectWorkflowDepartmentLabel((string) ($user['department'] ?? ''));
+$reportUserDepartmentClause = $sulDepartment !== ''
+    ? projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment)
+    : '1 = 0';
+$reportTaskDepartmentClause = $sulDepartment !== ''
+    ? projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true)
+    : '1 = 0';
+$reportProjectDepartmentClause = $sulDepartment !== ''
+    ? projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment)
+    : '1 = 0';
+
+function sulPerformanceInitials(string $name): string
+{
+    $parts = preg_split('/\s+/', trim($name)) ?: [];
+    $initial = static function (string $value): string {
+        return strtoupper(function_exists('mb_substr') ? mb_substr($value, 0, 1) : substr($value, 0, 1));
+    };
+    $letters = $initial((string) ($parts[0] ?? 'M'));
+    if (count($parts) > 1) {
+        $letters .= $initial((string) end($parts));
+    }
+    return $letters;
+}
 
 // Get date filters
 $dateFrom = isset($_GET['date_from']) ? (string) $_GET['date_from'] : date('Y-m-d', strtotime('-30 days'));
@@ -50,8 +74,12 @@ $teamMetrics = $conn->query("
         SUM(CASE WHEN t.priority = 'high' AND t.status != 'completed' THEN 1 ELSE 0 END) as high_priority_active,
         SUM(CASE WHEN t.priority = 'critical' AND t.status != 'completed' THEN 1 ELSE 0 END) as critical_active
     FROM users u
-    LEFT JOIN tasks t ON u.id = t.assigned_to AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
-    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
+    LEFT JOIN tasks t ON u.id = t.assigned_to
+        AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
+        AND {$reportTaskDepartmentClause}
+    WHERE u.role IN ('expert', 'developer')
+      AND u.status = 'active'
+      AND {$reportUserDepartmentClause}
 ");
 
 $metrics = $teamMetrics->fetch_assoc() ?: [];
@@ -71,6 +99,7 @@ $individualPerformance = $conn->query("
     SELECT 
         u.id,
         u.full_name,
+        u.email,
         u.role,
         COUNT(t.id) as total_tasks,
         SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
@@ -83,9 +112,13 @@ $individualPerformance = $conn->query("
         SUM(CASE WHEN t.priority = 'high' AND t.status = 'completed' THEN 1 ELSE 0 END) as high_priority_completed,
         SUM(CASE WHEN t.priority = 'critical' AND t.status = 'completed' THEN 1 ELSE 0 END) as critical_completed
     FROM users u
-    LEFT JOIN tasks t ON u.id = t.assigned_to AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
-    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
-    GROUP BY u.id, u.full_name, u.role
+    LEFT JOIN tasks t ON u.id = t.assigned_to
+        AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
+        AND {$reportTaskDepartmentClause}
+    WHERE u.role IN ('expert', 'developer')
+      AND u.status = 'active'
+      AND {$reportUserDepartmentClause}
+    GROUP BY u.id, u.full_name, u.email, u.role
     ORDER BY completion_rate DESC, completed_tasks DESC
 ");
 
@@ -100,6 +133,13 @@ $weeklyTrends = $conn->query("
             ELSE NULL END), 1) as avg_completion_days
     FROM tasks t
     WHERE DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
+      AND {$reportTaskDepartmentClause}
+      AND EXISTS (
+          SELECT 1
+          FROM projects p
+          WHERE p.id = t.project_id
+            AND {$reportProjectDepartmentClause}
+      )
     GROUP BY DATE(t.created_at)
     ORDER BY date ASC
 ");
@@ -107,15 +147,22 @@ $weeklyTrends = $conn->query("
 // Get performance by priority
 $priorityPerformance = $conn->query("
     SELECT 
-        priority,
+        t.priority,
         COUNT(*) as total_tasks,
-        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-        ROUND(AVG(CASE WHEN status = 'completed' AND completed_at IS NOT NULL 
-            THEN TIMESTAMPDIFF(DAY, created_at, completed_at) 
+        SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed,
+        ROUND(AVG(CASE WHEN t.status = 'completed' AND t.completed_at IS NOT NULL
+            THEN TIMESTAMPDIFF(DAY, t.created_at, t.completed_at)
             ELSE NULL END), 1) as avg_completion_days
-    FROM tasks
-    WHERE DATE(created_at) BETWEEN '$dateFrom' AND '$dateTo'
-    GROUP BY priority
+    FROM tasks t
+    WHERE DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
+      AND {$reportTaskDepartmentClause}
+      AND EXISTS (
+          SELECT 1
+          FROM projects p
+          WHERE p.id = t.project_id
+            AND {$reportProjectDepartmentClause}
+      )
+    GROUP BY t.priority
 ");
 
 $weeklyTrendData = [
@@ -134,10 +181,6 @@ if (is_object($weeklyTrends) && method_exists($weeklyTrends, 'fetch_assoc')) {
 }
 
 $priorityRows = [];
-$priorityChartData = [
-    'priorities' => [],
-    'rates' => [],
-];
 if (is_object($priorityPerformance) && method_exists($priorityPerformance, 'fetch_assoc')) {
     while ($row = $priorityPerformance->fetch_assoc()) {
         $totalTasks = max(0, (int) ($row['total_tasks'] ?? 0));
@@ -147,10 +190,6 @@ if (is_object($priorityPerformance) && method_exists($priorityPerformance, 'fetc
         $row['total_tasks'] = $totalTasks;
         $row['completed'] = $completedTasks;
         $priorityRows[] = $row;
-        $priorityChartData['priorities'][] = ucfirst($priority);
-        $priorityChartData['rates'][] = $totalTasks > 0
-            ? (int) round(($completedTasks / $totalTasks) * 100)
-            : 0;
     }
 }
 
@@ -164,8 +203,11 @@ $projectPerformance = $conn->query("
         COALESCE(ROUND((SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) / NULLIF(COUNT(t.id), 0)) * 100, 1), 0) as completion_rate,
         DATEDIFF(p.timeline_end, NOW()) as days_remaining
     FROM projects p
-    LEFT JOIN tasks t ON p.id = t.project_id AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
+    LEFT JOIN tasks t ON p.id = t.project_id
+        AND DATE(t.created_at) BETWEEN '$dateFrom' AND '$dateTo'
+        AND {$reportTaskDepartmentClause}
     WHERE p.status != 'completed'
+      AND {$reportProjectDepartmentClause}
     GROUP BY p.id, p.name, p.status, p.timeline_end
     ORDER BY completion_rate ASC
     LIMIT 5
@@ -473,7 +515,15 @@ $chatScriptLoaded = true;
 }
 
 .native-trends-chart {
-    min-height: 320px;
+    min-height: 270px;
+}
+
+.report-chart-card {
+    height: 100%;
+}
+
+.report-chart-card .card-body {
+    padding: 1.25rem;
 }
 
 .chart-legend {
@@ -530,58 +580,134 @@ $chatScriptLoaded = true;
 .native-trends-svg .chart-point-created { fill: #1f6392; }
 .native-trends-svg .chart-point-completed { fill: #10b981; }
 
-.native-priority-chart {
-    min-height: 210px;
-}
-
-.priority-chart-grid {
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    gap: 1.25rem;
-    min-height: 210px;
-    padding: 0.5rem 0 0;
-}
-
-.priority-chart-item {
+.sparse-trend-summary {
     display: grid;
-    justify-items: center;
-    gap: 0.4rem;
-    min-width: 58px;
+    gap: 1rem;
+    min-height: 245px;
+    align-content: center;
 }
 
-.priority-chart-value {
+.sparse-trend-date {
+    color: var(--gray-600);
+    font-size: 0.72rem;
+    letter-spacing: 0.035em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.sparse-trend-metrics {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sparse-trend-metric {
+    border-bottom: 2px solid var(--gray-200);
+    padding: 0.35rem 0 0.75rem;
+}
+
+.sparse-trend-metric.is-created { border-color: rgba(31, 99, 146, 0.45); }
+.sparse-trend-metric.is-completed { border-color: rgba(16, 185, 129, 0.45); }
+
+.sparse-trend-metric span {
+    color: var(--gray-600);
+    display: block;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.sparse-trend-metric strong {
     color: var(--gray-900);
-    font-size: 0.78rem;
-    font-weight: 700;
+    display: block;
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-top: 0.2rem;
 }
 
-.priority-chart-track {
-    display: flex;
-    align-items: flex-end;
-    width: 38px;
-    height: 140px;
-    overflow: hidden;
-    border-radius: 9px 9px 5px 5px;
-    background: #edf1f5;
+.sparse-trend-bars {
+    display: grid;
+    gap: 0.75rem;
 }
 
-.priority-chart-fill {
-    width: 100%;
-    min-height: 3px;
-    border-radius: 9px 9px 4px 4px;
-    transition: height 0.35s ease;
+.sparse-trend-bar-row {
+    align-items: center;
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: 82px minmax(0, 1fr) 32px;
 }
 
-.priority-chart-label {
-    max-width: 74px;
-    overflow: hidden;
+.sparse-trend-bar-row span,
+.sparse-trend-bar-row strong {
     color: var(--gray-600);
     font-size: 0.7rem;
+}
+
+.sparse-trend-bar-row strong {
+    color: var(--gray-900);
     font-weight: 600;
-    text-align: center;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    text-align: right;
+}
+
+.sparse-trend-track {
+    background: #edf1f5;
+    border-radius: 999px;
+    height: 8px;
+    overflow: hidden;
+}
+
+.sparse-trend-fill {
+    border-radius: inherit;
+    height: 100%;
+}
+
+.priority-performance-list {
+    display: grid;
+}
+
+.priority-performance-row {
+    border-bottom: 1px solid var(--gray-200);
+    padding: 0.85rem 0;
+}
+
+.priority-performance-row:first-child { padding-top: 0; }
+.priority-performance-row:last-child { border-bottom: 0; padding-bottom: 0; }
+
+.priority-performance-head,
+.priority-performance-meta {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.priority-performance-name {
+    align-items: center;
+    color: var(--gray-900);
+    display: inline-flex;
+    font-size: 0.8rem;
+    font-weight: 600;
+    gap: 0.45rem;
+}
+
+.priority-performance-dot {
+    border-radius: 50%;
+    height: 8px;
+    width: 8px;
+}
+
+.priority-performance-rate {
+    color: var(--gray-900);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.priority-performance-row .progress-modern {
+    margin: 0.5rem 0 0.35rem;
+}
+
+.priority-performance-meta {
+    color: var(--gray-600);
+    font-size: 0.68rem;
 }
 
 .chart-empty-state {
@@ -651,6 +777,219 @@ $chatScriptLoaded = true;
 
 .data-table tr:hover {
     background: var(--gray-50);
+}
+
+/* Clean member performance table */
+.performance-member-card {
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(30, 64, 95, 0.06);
+}
+
+.performance-member-header {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+}
+
+.performance-member-heading {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.performance-member-heading-icon {
+    align-items: center;
+    background: #eaf4fb;
+    border-radius: 9px;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 36px;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+}
+
+.performance-member-heading h5 {
+    margin: 0;
+}
+
+.performance-member-heading small {
+    color: var(--gray-600);
+    display: block;
+    font-size: 0.7rem;
+    margin-top: 0.12rem;
+}
+
+.performance-member-actions {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 0.45rem;
+}
+
+.performance-member-actions .btn-secondary-modern {
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #cadbe7;
+    color: var(--theme-primary);
+    display: inline-flex;
+    gap: 0.4rem;
+    min-height: 36px;
+    padding: 0.45rem 0.7rem;
+}
+
+.performance-member-card .table-container {
+    border-top: 1px solid var(--gray-200);
+}
+
+.performance-member-table {
+    min-width: 1040px;
+    table-layout: fixed;
+}
+
+.performance-member-table thead {
+    background: #fafbfd;
+}
+
+.performance-member-table tbody {
+    background: #ffffff;
+}
+
+.performance-member-table th {
+    font-size: 0.68rem;
+    letter-spacing: 0.035em;
+    padding: 0.75rem;
+    white-space: nowrap;
+}
+
+.performance-member-table td {
+    color: #334e68;
+    height: 66px;
+    padding: 0.7rem 0.75rem;
+}
+
+.performance-member-table th:first-child,
+.performance-member-table td:first-child {
+    padding-left: 1.25rem;
+    width: 26%;
+}
+
+.performance-member-table th:nth-child(2),
+.performance-member-table td:nth-child(2) { text-align: center; width: 10%; }
+.performance-member-table th:nth-child(3),
+.performance-member-table td:nth-child(3) { width: 20%; }
+.performance-member-table th:nth-child(4),
+.performance-member-table td:nth-child(4),
+.performance-member-table th:nth-child(5),
+.performance-member-table td:nth-child(5) { text-align: center; width: 8%; }
+.performance-member-table th:nth-child(6),
+.performance-member-table td:nth-child(6) { text-align: center; width: 10%; }
+.performance-member-table th:last-child,
+.performance-member-table td:last-child { padding-right: 1.25rem; width: 18%; }
+
+.performance-member-table tbody tr {
+    box-shadow: inset 2px 0 0 transparent;
+    transition: background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.performance-member-table tbody tr:hover {
+    background: #f7fafc;
+    box-shadow: inset 2px 0 0 var(--theme-primary);
+}
+
+.performance-member-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.performance-member-profile {
+    align-items: center;
+    display: flex;
+    gap: 0.7rem;
+    min-width: 0;
+}
+
+.performance-member-avatar {
+    align-items: center;
+    background: linear-gradient(145deg, #dff1fb 0%, #c8e4f4 100%);
+    border: 1px solid #bedcec;
+    border-radius: 50%;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 36px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+}
+
+.performance-member-copy {
+    min-width: 0;
+}
+
+.performance-member-name {
+    color: var(--gray-900);
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0;
+}
+
+.performance-member-meta {
+    color: var(--gray-600);
+    display: block;
+    font-size: 0.67rem;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.performance-task-progress,
+.performance-metric {
+    color: #334e68;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.performance-task-progress span {
+    color: var(--gray-600);
+    font-size: 0.68rem;
+    font-weight: 400;
+}
+
+.performance-rate {
+    align-items: center;
+    display: grid;
+    gap: 0.55rem;
+    grid-template-columns: minmax(80px, 1fr) auto;
+}
+
+.performance-rate .progress-modern {
+    width: 100%;
+}
+
+.performance-priority-wins {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.performance-priority-win {
+    background: #f3f6f8;
+    border-radius: 999px;
+    color: #51677c;
+    font-size: 0.66rem;
+    padding: 0.28rem 0.5rem;
+    white-space: nowrap;
+}
+
+.performance-priority-win.is-critical {
+    background: #fff0f0;
+    color: #c9252d;
 }
 
 /* Progress Bar */
@@ -782,18 +1121,65 @@ $chatScriptLoaded = true;
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .native-trends-svg .chart-axis-label,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chart-legend,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .priority-chart-label,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chart-empty-state {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chart-empty-state,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sparse-trend-date,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sparse-trend-metric span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sparse-trend-bar-row span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .priority-performance-meta {
     color: #9db6cf;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .priority-chart-value,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chart-empty-state strong {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .chart-empty-state strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sparse-trend-metric strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sparse-trend-bar-row strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .priority-performance-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .priority-performance-rate {
     color: #d7e4f2;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .priority-chart-track {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sparse-trend-track {
     background: #13283b;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .priority-performance-row {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-member-card .table-container,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-member-header {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-member-table tbody {
+    background: #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-member-heading-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-member-avatar {
+    background: #102a40;
+    border-color: #214764;
+    color: #8cc7ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-member-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-task-progress,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-metric {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-member-meta,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-task-progress span {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-priority-win {
+    background: #102536;
+    color: #a9bfd2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .performance-priority-win.is-critical {
+    background: rgba(220, 38, 38, 0.14);
+    color: #fca5a5;
 }
 
 /* Responsive */
@@ -815,6 +1201,20 @@ $chatScriptLoaded = true;
     
     .stat-card-modern .stat-number {
         font-size: 2rem;
+    }
+
+    .performance-member-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .performance-member-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .performance-member-actions .btn-secondary-modern {
+        justify-content: center;
     }
 
     .report-message-card {
@@ -916,40 +1316,43 @@ $chatScriptLoaded = true;
 
     <div class="row g-4 mb-4">
         <div class="col-lg-8">
-            <div class="card">
+            <div class="card report-chart-card">
                 <div class="card-header">
-                    <h5><i class="fas fa-chart-line me-2"></i>Weekly Performance Trends</h5>
+                    <h5><i class="fas fa-chart-line me-2"></i>Task Activity Trend</h5>
                 </div>
                 <div class="card-body">
-                    <div id="trendsChart" class="native-chart native-trends-chart" role="img" aria-label="Weekly tasks created and completed trend chart"></div>
+                    <div id="trendsChart" class="native-chart native-trends-chart" role="img" aria-label="Tasks created and completed activity trend"></div>
                 </div>
             </div>
         </div>
         
         <div class="col-lg-4">
-            <div class="card">
+            <div class="card report-chart-card">
                 <div class="card-header">
                     <h5><i class="fas fa-chart-bar me-2"></i>Performance by Priority</h5>
                 </div>
                 <div class="card-body">
-                    <div id="priorityChart" class="native-chart native-priority-chart" role="img" aria-label="Task completion rate by priority chart"></div>
-                    <div class="mt-3">
+                    <div class="priority-performance-list" aria-label="Task completion rate by priority">
                         <?php foreach($priorityRows as $priority):
-                            $priorityColor = $priority['priority'] == 'critical' ? 'danger' : ($priority['priority'] == 'high' ? 'warning' : ($priority['priority'] == 'medium' ? 'info' : 'success'));
+                            $priorityHex = $priority['priority'] == 'critical' ? '#dc2626' : ($priority['priority'] == 'high' ? '#f59e0b' : ($priority['priority'] == 'medium' ? '#2563eb' : '#10b981'));
+                            $priorityRate = $priority['total_tasks'] > 0 ? (int) round(($priority['completed'] / $priority['total_tasks']) * 100) : 0;
                         ?>
-                        <div class="mb-2">
-                            <div class="d-flex justify-content-between mb-1">
-                                <span><strong><?php echo ucfirst($priority['priority']); ?></strong></span>
-                                <span><?php echo $priority['completed']; ?>/<?php echo $priority['total_tasks']; ?></span>
+                        <div class="priority-performance-row">
+                            <div class="priority-performance-head">
+                                <span class="priority-performance-name"><i class="priority-performance-dot" style="background: <?php echo $priorityHex; ?>;"></i><?php echo htmlspecialchars(ucfirst((string) $priority['priority'])); ?></span>
+                                <span class="priority-performance-rate"><?php echo $priorityRate; ?>%</span>
                             </div>
                             <div class="progress-modern">
-                                <div class="progress-bar-modern" style="width: <?php echo $priority['total_tasks'] > 0 ? ($priority['completed'] / $priority['total_tasks']) * 100 : 0; ?>%; background: <?php echo $priorityColor == 'danger' ? '#dc2626' : ($priorityColor == 'warning' ? '#f59e0b' : ($priorityColor == 'info' ? '#2563eb' : '#10b981')); ?>;"></div>
+                                <div class="progress-bar-modern" style="width: <?php echo $priorityRate; ?>%; background: <?php echo $priorityHex; ?>;"></div>
                             </div>
-                            <small class="text-muted">Avg: <?php echo $priority['avg_completion_days'] ?? 'N/A'; ?> days</small>
+                            <div class="priority-performance-meta">
+                                <span><?php echo (int) $priority['completed']; ?> of <?php echo (int) $priority['total_tasks']; ?> completed</span>
+                                <span>Avg <?php echo $priority['avg_completion_days'] ?? 'N/A'; ?> days</span>
+                            </div>
                         </div>
                         <?php endforeach; ?>
                         <?php if ($priorityRows === []): ?>
-                            <div class="text-muted text-center small py-2">No priority performance data for this date range.</div>
+                            <div class="chart-empty-state"><div><i class="fas fa-chart-bar" aria-hidden="true"></i><strong>No priority data yet</strong><span>Completion rates will appear when tasks exist in this date range.</span></div></div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -959,54 +1362,77 @@ $chatScriptLoaded = true;
 
     <?php if($reportType == 'individual' || $reportType == 'team'): ?>
     <!-- Individual Performance Table -->
-    <div class="card">
-        <div class="card-header">
-            <h5><i class="fas fa-users me-2"></i><?php echo $reportType == 'team' ? 'Team Member Breakdown' : 'Individual Performance Report'; ?></h5>
-            <div class="mt-2">
-                <button class="btn-secondary-modern btn-sm" onclick="exportReport('performanceTable')">
-                    <i class="fas fa-download"></i> Export to Excel
+    <div class="card performance-member-card">
+        <div class="card-header performance-member-header">
+            <div class="performance-member-heading">
+                <span class="performance-member-heading-icon"><i class="fas fa-users" aria-hidden="true"></i></span>
+                <div>
+                    <h5><?php echo $reportType == 'team' ? 'Team Member Breakdown' : 'Individual Performance Report'; ?></h5>
+                    <small><?php echo (int) ($metrics['total_members'] ?? 0); ?> member<?php echo (int) ($metrics['total_members'] ?? 0) === 1 ? '' : 's'; ?> in <?php echo htmlspecialchars($sulDepartment ?: 'your department'); ?></small>
+                </div>
+            </div>
+            <div class="performance-member-actions">
+                <button type="button" class="btn-secondary-modern" onclick="exportReport('performanceTable')">
+                    <i class="fas fa-download" aria-hidden="true"></i> Export
                 </button>
-                <button class="btn-secondary-modern btn-sm ms-2" onclick="printReport('performanceTable')">
-                    <i class="fas fa-print"></i> Print Report
+                <button type="button" class="btn-secondary-modern" onclick="printReport('performanceTable')">
+                    <i class="fas fa-print" aria-hidden="true"></i> Print
                 </button>
             </div>
         </div>
         <div class="table-container">
-            <table class="data-table" id="performanceTable">
+            <table class="data-table performance-member-table" id="performanceTable">
                 <thead>
-                    <th>Resource</th>
-                    <th>Role</th>
-                    <th>Total Tasks</th>
-                    <th>Completed</th>
-                    <th>Completion Rate</th>
-                    <th>Active</th>
-                    <th>Overdue</th>
-                    <th>Avg Days</th>
-                    <th>High Priority</th>
-                    <th>Critical</th>
+                    <tr>
+                        <th>Member</th>
+                        <th>Tasks</th>
+                        <th>Completion Rate</th>
+                        <th>Active</th>
+                        <th>Overdue</th>
+                        <th>Avg Days</th>
+                        <th>Priority Completed</th>
+                    </tr>
                 </thead>
                 <tbody>
-                    <?php while($member = $individualPerformance->fetch_assoc()): ?>
+                    <?php if (is_object($individualPerformance) && $individualPerformance->num_rows > 0): ?>
+                    <?php while($member = $individualPerformance->fetch_assoc()):
+                        $memberName = trim((string) ($member['full_name'] ?? 'Team Member'));
+                        $memberRate = max(0, min(100, (float) ($member['completion_rate'] ?? 0)));
+                        $memberRateColor = $memberRate >= 80 ? '#10b981' : ($memberRate >= 50 ? '#f59e0b' : '#dc2626');
+                    ?>
                     <tr>
-                        <td><div class="fw-semibold"><?php echo htmlspecialchars($member['full_name']); ?></div></td>
-                        <td><span class="badge-role-<?php echo $member['role']; ?>"><?php echo strtoupper($member['role']); ?></span></td>
-                        <td><?php echo $member['total_tasks']; ?></td>
-                        <td><?php echo $member['completed_tasks']; ?></td>
                         <td>
-                            <div class="d-flex align-items-center gap-2">
-                                <div class="progress-modern flex-grow-1" style="width: 80px;">
-                                    <div class="progress-bar-modern" style="width: <?php echo $member['completion_rate']; ?>%; background: <?php echo $member['completion_rate'] >= 80 ? '#10b981' : ($member['completion_rate'] >= 50 ? '#f59e0b' : '#dc2626'); ?>;"></div>
+                            <div class="performance-member-profile">
+                                <span class="performance-member-avatar" aria-hidden="true"><?php echo htmlspecialchars(sulPerformanceInitials($memberName)); ?></span>
+                                <div class="performance-member-copy">
+                                    <p class="performance-member-name"><?php echo htmlspecialchars($memberName); ?></p>
+                                    <span class="performance-member-meta"><?php echo htmlspecialchars(ucfirst((string) ($member['role'] ?? 'member'))); ?> · <?php echo htmlspecialchars((string) ($member['email'] ?? 'No email')); ?></span>
                                 </div>
-                                <span><?php echo $member['completion_rate']; ?>%</span>
                             </div>
                         </td>
-                        <td><?php echo $member['active_tasks']; ?></td>
-                        <td><?php if($member['overdue_tasks'] > 0): ?><span class="badge-priority-critical"><?php echo $member['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
-                        <td><?php echo $member['avg_completion_days'] ?? 'N/A'; ?></td>
-                        <td><?php echo $member['high_priority_completed']; ?></td>
-                        <td><?php echo $member['critical_completed']; ?></td>
+                        <td><span class="performance-task-progress"><?php echo (int) ($member['completed_tasks'] ?? 0); ?> <span>/ <?php echo (int) ($member['total_tasks'] ?? 0); ?></span></span></td>
+                        <td>
+                            <div class="performance-rate">
+                                <div class="progress-modern">
+                                    <div class="progress-bar-modern" style="width: <?php echo $memberRate; ?>%; background: <?php echo $memberRateColor; ?>;"></div>
+                                </div>
+                                <span class="performance-metric"><?php echo number_format($memberRate, 1); ?>%</span>
+                            </div>
+                        </td>
+                        <td><span class="performance-metric"><?php echo (int) ($member['active_tasks'] ?? 0); ?></span></td>
+                        <td><span class="performance-metric<?php echo (int) ($member['overdue_tasks'] ?? 0) > 0 ? ' text-danger' : ''; ?>"><?php echo (int) ($member['overdue_tasks'] ?? 0); ?></span></td>
+                        <td><span class="performance-metric"><?php echo $member['avg_completion_days'] ?? 'N/A'; ?></span></td>
+                        <td>
+                            <div class="performance-priority-wins">
+                                <span class="performance-priority-win">High <?php echo (int) ($member['high_priority_completed'] ?? 0); ?></span>
+                                <span class="performance-priority-win is-critical">Critical <?php echo (int) ($member['critical_completed'] ?? 0); ?></span>
+                            </div>
+                        </td>
                     </tr>
                     <?php endwhile; ?>
+                    <?php else: ?>
+                        <tr><td colspan="7" class="text-center text-muted py-4">No active members are assigned to <?php echo htmlspecialchars($sulDepartment ?: 'this department'); ?>.</td></tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -1075,7 +1501,6 @@ $chatScriptLoaded = true;
 
 <script>
 const trendsData = <?php echo json_encode($weeklyTrendData, JSON_UNESCAPED_SLASHES); ?>;
-const priorityData = <?php echo json_encode($priorityChartData, JSON_UNESCAPED_SLASHES); ?>;
 const svgNamespace = 'http://www.w3.org/2000/svg';
 
 function createSvgNode(tagName, attributes = {}, text = '') {
@@ -1109,6 +1534,56 @@ function renderTrendsChart(container, data) {
     const completed = Array.isArray(data?.completed) ? data.completed.map(Number) : [];
     if (!container || labels.length === 0) {
         renderChartEmptyState(container, 'No weekly activity yet', 'Try a wider date range when task activity becomes available.');
+        return;
+    }
+
+    if (labels.length === 1) {
+        container.replaceChildren();
+        const createdTotal = Math.max(0, created[0] || 0);
+        const completedTotal = Math.max(0, completed[0] || 0);
+        const maximum = Math.max(1, createdTotal, completedTotal);
+        const summary = document.createElement('div');
+        summary.className = 'sparse-trend-summary';
+
+        const date = document.createElement('div');
+        date.className = 'sparse-trend-date';
+        date.textContent = `Activity recorded on ${labels[0]}`;
+
+        const metrics = document.createElement('div');
+        metrics.className = 'sparse-trend-metrics';
+        [['Created', createdTotal, 'is-created'], ['Completed', completedTotal, 'is-completed']].forEach(([label, value, className]) => {
+            const metric = document.createElement('div');
+            metric.className = `sparse-trend-metric ${className}`;
+            const metricLabel = document.createElement('span');
+            metricLabel.textContent = label;
+            const metricValue = document.createElement('strong');
+            metricValue.textContent = String(value);
+            metric.append(metricLabel, metricValue);
+            metrics.appendChild(metric);
+        });
+
+        const bars = document.createElement('div');
+        bars.className = 'sparse-trend-bars';
+        [['Created', createdTotal, '#1f6392'], ['Completed', completedTotal, '#10b981']].forEach(([label, value, color]) => {
+            const row = document.createElement('div');
+            row.className = 'sparse-trend-bar-row';
+            const rowLabel = document.createElement('span');
+            rowLabel.textContent = label;
+            const track = document.createElement('div');
+            track.className = 'sparse-trend-track';
+            const fill = document.createElement('div');
+            fill.className = 'sparse-trend-fill';
+            fill.style.width = `${(Number(value) / maximum) * 100}%`;
+            fill.style.background = color;
+            track.appendChild(fill);
+            const rowValue = document.createElement('strong');
+            rowValue.textContent = String(value);
+            row.append(rowLabel, track, rowValue);
+            bars.appendChild(row);
+        });
+
+        summary.append(date, metrics, bars);
+        container.appendChild(summary);
         return;
     }
 
@@ -1194,49 +1669,7 @@ function renderTrendsChart(container, data) {
     container.append(legend, svg);
 }
 
-function renderPriorityChart(container, data) {
-    const labels = Array.isArray(data?.priorities) ? data.priorities : [];
-    const rates = Array.isArray(data?.rates) ? data.rates.map(Number) : [];
-    if (!container || labels.length === 0) {
-        renderChartEmptyState(container, 'No priority data yet', 'Completion rates will appear when tasks exist in this date range.');
-        return;
-    }
-
-    const colorMap = {
-        critical: '#dc2626',
-        high: '#f59e0b',
-        medium: '#2563eb',
-        low: '#10b981'
-    };
-    const grid = document.createElement('div');
-    grid.className = 'priority-chart-grid';
-    labels.forEach((label, index) => {
-        const rate = Math.max(0, Math.min(100, Number(rates[index]) || 0));
-        const color = colorMap[String(label).toLowerCase()] || '#1f6392';
-        const item = document.createElement('div');
-        item.className = 'priority-chart-item';
-        const value = document.createElement('div');
-        value.className = 'priority-chart-value';
-        value.textContent = `${rate}%`;
-        const track = document.createElement('div');
-        track.className = 'priority-chart-track';
-        const fill = document.createElement('div');
-        fill.className = 'priority-chart-fill';
-        fill.style.height = `${rate}%`;
-        fill.style.minHeight = rate > 0 ? '3px' : '0';
-        fill.style.background = color;
-        track.appendChild(fill);
-        const caption = document.createElement('div');
-        caption.className = 'priority-chart-label';
-        caption.textContent = label;
-        item.append(value, track, caption);
-        grid.appendChild(item);
-    });
-    container.replaceChildren(grid);
-}
-
 renderTrendsChart(document.getElementById('trendsChart'), trendsData);
-renderPriorityChart(document.getElementById('priorityChart'), priorityData);
 
 function exportReport(tableId) {
     const table = document.getElementById(tableId);

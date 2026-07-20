@@ -39,6 +39,10 @@ body[data-theme="dark"] .menu-item {
 body[data-theme="dark"] .menu-item:hover {
     background: rgba(30, 136, 200, 0.15);
     color: #bbf7d0;
+    box-shadow:
+        0 14px 24px rgba(0, 0, 0, 0.38),
+        0 4px 0 rgba(56, 189, 248, 0.22),
+        inset 0 0 0 1px rgba(125, 211, 252, 0.18);
 }
 
 body[data-theme="dark"] .table {
