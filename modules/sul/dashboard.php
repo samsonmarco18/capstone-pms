@@ -244,9 +244,11 @@ if ($resourceProjectsResult) {
 
 $resourceOverviewUtilization = ['underutilized' => 0, 'optimal' => 0, 'overloaded' => 0];
 $resourceOverviewAssignedTasks = 0;
+$resourceOverviewCompletedTasks = 0;
 foreach ($resourceOverviewDevelopers as $resourceRow) {
     $resourceActiveTasks = (int) ($resourceRow['active_tasks'] ?? 0);
     $resourceOverviewAssignedTasks += $resourceActiveTasks;
+    $resourceOverviewCompletedTasks += (int) ($resourceRow['completed_tasks'] ?? 0);
     if ($resourceActiveTasks >= 5) {
         $resourceOverviewUtilization['overloaded']++;
     } elseif ($resourceActiveTasks >= 3) {
@@ -575,6 +577,8 @@ include '../../includes/navbar.php';
 
 .sul-resource-workload-chart {
     height: 245px;
+    margin: 0 auto;
+    max-width: 360px;
     position: relative;
 }
 
@@ -1582,10 +1586,10 @@ include '../../includes/navbar.php';
         <div class="sul-resource-overview-grid">
             <section class="sul-resource-overview-section" aria-labelledby="resourceWorkloadTitle">
                 <h6 class="sul-resource-section-title" id="resourceWorkloadTitle"><i class="fas fa-chart-bar" aria-hidden="true"></i> Resource Workload Overview</h6>
-                <?php if ($resourceOverviewDevelopers !== []): ?>
+                <?php if (($resourceOverviewAssignedTasks + $resourceOverviewCompletedTasks) > 0): ?>
                     <div class="sul-resource-workload-chart"><canvas id="resourceWorkloadChart"></canvas></div>
                 <?php else: ?>
-                    <div class="sul-resource-empty">No active developer resources are available for this department.</div>
+                    <div class="sul-resource-empty">No department workload activity is available yet.</div>
                 <?php endif; ?>
             </section>
 
@@ -1944,9 +1948,7 @@ let currentTaskId = null;
 
 const resourceOverviewData = <?php
     echo json_encode([
-        'names' => array_map(static fn(array $row): string => (string) ($row['full_name'] ?? 'Resource'), $resourceOverviewDevelopers),
-        'active' => array_map(static fn(array $row): int => (int) ($row['active_tasks'] ?? 0), $resourceOverviewDevelopers),
-        'completed' => array_map(static fn(array $row): int => (int) ($row['completed_tasks'] ?? 0), $resourceOverviewDevelopers),
+        'workload' => [$resourceOverviewAssignedTasks, $resourceOverviewCompletedTasks],
         'utilization' => [
             (int) $resourceOverviewUtilization['underutilized'],
             (int) $resourceOverviewUtilization['optimal'],
@@ -1958,22 +1960,37 @@ const resourceOverviewData = <?php
 const resourceWorkloadCanvas = document.getElementById('resourceWorkloadChart');
 if (resourceWorkloadCanvas) {
     new Chart(resourceWorkloadCanvas.getContext('2d'), {
-        type: 'bar',
+        type: 'polarArea',
         data: {
-            labels: resourceOverviewData.names,
-            datasets: [
-                { label: 'Open tasks', data: resourceOverviewData.active, backgroundColor: '#f0a317', borderRadius: 6 },
-                { label: 'Completed', data: resourceOverviewData.completed, backgroundColor: '#1b8d50', borderRadius: 6 }
-            ]
+            labels: ['Open tasks', 'Completed tasks'],
+            datasets: [{
+                data: resourceOverviewData.workload,
+                backgroundColor: ['rgba(240, 163, 23, 0.82)', 'rgba(27, 141, 80, 0.82)'],
+                borderColor: ['#f0a317', '#1b8d50'],
+                borderWidth: 2
+            }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                x: { grid: { display: false } },
-                y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(113, 131, 153, 0.14)' } }
+                r: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(113, 131, 153, 0.14)' },
+                    pointLabels: { display: false },
+                    ticks: { display: false, precision: 0 }
+                }
             },
-            plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } }
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } },
+                tooltip: {
+                    callbacks: {
+                        label(context) {
+                            return `${context.label}: ${Number(context.raw || 0)} tasks`;
+                        }
+                    }
+                }
+            }
         }
     });
 }
