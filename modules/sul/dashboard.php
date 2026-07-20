@@ -22,6 +22,9 @@ $sulProjectDepartmentClause = $sulDepartment !== ''
 $sulTaskDepartmentClause = $sulDepartment !== ''
     ? projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true)
     : '1 = 0';
+$sulResourceProjectDepartmentClause = $sulDepartment !== ''
+    ? projectWorkflowProjectDepartmentClause($conn, 'p_resource', $sulDepartment)
+    : '1 = 0';
 
 function sulDashboardFetchCount($conn, string $sql): int
 {
@@ -179,6 +182,85 @@ $recentTasks = sulDashboardQuery($conn, "
     ORDER BY t.created_at DESC
     LIMIT 10
 ");
+
+// Dashboard-level resource summaries. Detailed management stays on Resource Management.
+$resourceOverviewDevelopers = [];
+$resourceOverviewResult = sulDashboardQuery($conn, "
+    SELECT
+        u.id,
+        u.full_name,
+        SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) AS active_tasks,
+        SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) AS completed_tasks
+    FROM users u
+    LEFT JOIN tasks t
+        ON t.assigned_to = u.id
+       AND {$sulTaskDepartmentClause}
+       AND EXISTS (
+            SELECT 1
+            FROM projects p_resource
+            WHERE p_resource.id = t.project_id
+              AND {$sulResourceProjectDepartmentClause}
+       )
+    WHERE u.role = 'developer'
+      AND u.status = 'active'
+      AND {$sulUserDepartmentClause}
+    GROUP BY u.id, u.full_name
+    ORDER BY active_tasks DESC, u.full_name ASC
+");
+if ($resourceOverviewResult) {
+    while ($resourceRow = $resourceOverviewResult->fetch_assoc()) {
+        $resourceOverviewDevelopers[] = $resourceRow;
+    }
+}
+
+$resourceOverviewProjects = [];
+$resourceProjectsResult = sulDashboardQuery($conn, "
+    SELECT
+        p.id,
+        p.name,
+        c.name AS client_name,
+        COUNT(DISTINCT CASE WHEN u.id IS NOT NULL AND t.status != 'completed' THEN u.id END) AS assigned_resources,
+        SUM(CASE WHEN u.id IS NOT NULL AND t.status != 'completed' THEN 1 ELSE 0 END) AS active_tasks
+    FROM projects p
+    JOIN clients c ON c.id = p.client_id
+    LEFT JOIN tasks t ON t.project_id = p.id AND {$sulTaskDepartmentClause}
+    LEFT JOIN users u
+        ON u.id = t.assigned_to
+       AND u.role = 'developer'
+       AND u.status = 'active'
+       AND {$sulUserDepartmentClause}
+    WHERE p.status NOT IN ('completed', 'cancelled')
+      AND {$sulProjectDepartmentClause}
+    GROUP BY p.id, p.name, c.name
+    HAVING assigned_resources > 0
+    ORDER BY active_tasks DESC, p.name ASC
+    LIMIT 5
+");
+if ($resourceProjectsResult) {
+    while ($resourceProject = $resourceProjectsResult->fetch_assoc()) {
+        $resourceOverviewProjects[] = $resourceProject;
+    }
+}
+
+$resourceOverviewUtilization = ['underutilized' => 0, 'optimal' => 0, 'overloaded' => 0];
+$resourceOverviewAssignedTasks = 0;
+foreach ($resourceOverviewDevelopers as $resourceRow) {
+    $resourceActiveTasks = (int) ($resourceRow['active_tasks'] ?? 0);
+    $resourceOverviewAssignedTasks += $resourceActiveTasks;
+    if ($resourceActiveTasks >= 5) {
+        $resourceOverviewUtilization['overloaded']++;
+    } elseif ($resourceActiveTasks >= 3) {
+        $resourceOverviewUtilization['optimal']++;
+    } else {
+        $resourceOverviewUtilization['underutilized']++;
+    }
+}
+$resourceOverviewCapacity = count($resourceOverviewDevelopers) * 5;
+$resourceOverviewRate = $resourceOverviewCapacity > 0
+    ? (int) round(($resourceOverviewAssignedTasks / $resourceOverviewCapacity) * 100)
+    : 0;
+$allocationProjectCount = $projectsNeedingAllocation ? (int) $projectsNeedingAllocation->num_rows : 0;
+$recentTaskCount = $recentTasks ? (int) $recentTasks->num_rows : 0;
 
 // Build SUL agenda from manual schedules, upcoming deadlines, and allocation actions
 $upcomingAgenda = [];
@@ -457,6 +539,138 @@ include '../../includes/navbar.php';
     padding: 1.5rem;
 }
 
+/* Unified resource overview */
+.sul-resource-overview-card {
+    margin-bottom: 1.5rem;
+}
+
+.sul-resource-overview-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(220px, 0.72fr) minmax(260px, 0.9fr);
+}
+
+.sul-resource-overview-section {
+    min-width: 0;
+    padding: 1.1rem 1.25rem;
+    border-right: 1px solid var(--gray-200);
+}
+
+.sul-resource-overview-section:last-child {
+    border-right: 0;
+}
+
+.sul-resource-section-title {
+    align-items: center;
+    color: var(--gray-900);
+    display: flex;
+    font-size: 0.86rem;
+    font-weight: 600;
+    gap: 0.5rem;
+    margin: 0 0 0.9rem;
+}
+
+.sul-resource-section-title i {
+    color: var(--theme-primary);
+}
+
+.sul-resource-workload-chart {
+    height: 245px;
+    position: relative;
+}
+
+.sul-resource-utilization-chart {
+    height: 175px;
+    margin: 0 auto;
+    max-width: 210px;
+    position: relative;
+}
+
+.sul-resource-rate {
+    align-items: baseline;
+    border-top: 1px solid var(--gray-200);
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.8rem;
+    padding-top: 0.75rem;
+}
+
+.sul-resource-rate span {
+    color: var(--gray-600);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+}
+
+.sul-resource-rate strong {
+    color: var(--theme-primary);
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+.sul-resource-project-list {
+    display: grid;
+}
+
+.sul-resource-project-item {
+    align-items: center;
+    border-bottom: 1px solid var(--gray-200);
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 0.7rem 0;
+}
+
+.sul-resource-project-item:first-child {
+    padding-top: 0;
+}
+
+.sul-resource-project-item:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.sul-resource-project-name {
+    color: var(--gray-900);
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.sul-resource-project-meta {
+    color: var(--gray-600);
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 0.68rem;
+    gap: 0.35rem 0.65rem;
+    margin-top: 0.2rem;
+}
+
+.sul-resource-project-link {
+    align-items: center;
+    border: 1px solid #c9dcea;
+    border-radius: 8px;
+    color: var(--theme-primary);
+    display: inline-flex;
+    height: 32px;
+    justify-content: center;
+    text-decoration: none;
+    transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+    width: 32px;
+}
+
+.sul-resource-project-link:hover {
+    background: #eef7fc;
+    border-color: var(--theme-primary);
+    color: var(--theme-primary);
+    transform: translateY(-1px);
+}
+
+.sul-resource-empty {
+    color: var(--gray-600);
+    font-size: 0.78rem;
+    padding: 2rem 0;
+    text-align: center;
+}
+
 /* Table Styles */
 .table-container {
     padding: 0;
@@ -691,7 +905,7 @@ include '../../includes/navbar.php';
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
-    margin-top: 0.5rem;
+    margin-top: 0;
 }
 
 .allocation-status-tag {
@@ -722,6 +936,144 @@ include '../../includes/navbar.php';
     min-height: 100%;
 }
 
+.sul-bounded-row {
+    --sul-panel-height: 480px;
+    align-items: stretch;
+}
+
+.sul-bounded-row > [class*="col-"] {
+    display: flex;
+    min-width: 0;
+}
+
+.sul-bounded-row > [class*="col-"] > .card,
+.sul-bounded-row > .sul-insights-column > .delay-insights-wrap {
+    width: 100%;
+    height: var(--sul-panel-height);
+    min-height: 0;
+}
+
+.dashboard-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.dashboard-panel-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    padding: 0.32rem 0.6rem;
+    border: 1px solid rgba(31, 99, 146, 0.16);
+    border-radius: 999px;
+    background: #f7fbfe;
+    color: var(--theme-primary);
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.allocation-project-card,
+.recent-tasks-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.allocation-project-list {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.65rem;
+    scrollbar-gutter: stable;
+}
+
+.allocation-project-item {
+    position: relative;
+    display: grid;
+    gap: 0.55rem;
+    padding: 0.75rem 0.75rem 0.75rem 0.85rem;
+    border: 1px solid var(--gray-200);
+    border-left: 3px solid transparent;
+    border-radius: 12px;
+    background: #fff;
+    transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.allocation-project-item:hover {
+    transform: translateY(-1px);
+    border-left-color: var(--theme-primary);
+    background: #f8fcff;
+    box-shadow: 0 8px 18px rgba(15, 76, 129, 0.08);
+}
+
+.allocation-project-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.allocation-project-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.allocation-project-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: #edf7fc;
+    color: var(--theme-primary);
+}
+
+.allocation-project-title {
+    margin: 0;
+    color: var(--gray-900);
+    font-size: 0.86rem;
+    font-weight: 650;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.allocation-project-action {
+    flex: 0 0 auto;
+    padding: 0.38rem 0.65rem;
+    text-decoration: none;
+}
+
+.allocation-project-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.85rem;
+    color: var(--gray-600);
+    font-size: 0.72rem;
+    line-height: 1.35;
+}
+
+.allocation-project-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.allocation-project-meta i {
+    color: #5c83a5;
+}
+
 .sul-insights-column .delay-insights-wrap,
 .sul-insights-column .delay-compact-card {
     height: 100%;
@@ -729,6 +1081,29 @@ include '../../includes/navbar.php';
 
 .sul-insights-column .delay-insights-wrap {
     margin-bottom: 0;
+}
+
+.sul-insights-column .delay-portfolio-body {
+    grid-template-columns: minmax(190px, 0.75fr) minmax(260px, 1.25fr);
+    align-content: center;
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 1rem;
+    padding: 1rem 1.25rem 1.25rem;
+}
+
+.sul-insights-column .delay-portfolio-chart-shell {
+    width: min(220px, 100%);
+}
+
+.sul-insights-column .delay-portfolio-summary {
+    gap: 0.65rem;
+}
+
+.sul-insights-column .delay-portfolio-legend-row,
+.sul-insights-column .delay-portfolio-average {
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
 }
 
 .sul-chart-legend {
@@ -770,8 +1145,10 @@ include '../../includes/navbar.php';
 
 .recent-task-list {
     display: grid;
-    gap: 0.75rem;
-    max-height: 560px;
+    align-content: start;
+    gap: 0.5rem;
+    height: 100%;
+    max-height: none;
     overflow-y: auto;
     overflow-x: hidden;
     padding-right: 4px;
@@ -781,13 +1158,22 @@ include '../../includes/navbar.php';
 .recent-task-card {
     display: flex;
     flex-direction: column;
-    gap: 0.7rem;
+    gap: 0.45rem;
     min-width: 0;
-    padding: 0.95rem 1rem;
+    padding: 0.72rem 0.8rem;
     border: 1px solid var(--gray-200);
-    border-radius: 16px;
+    border-left: 3px solid transparent;
+    border-radius: 12px;
     background: #fff;
     width: 100%;
+    transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.recent-task-card:hover {
+    transform: translateY(-1px);
+    border-left-color: var(--theme-primary);
+    background: #f8fcff;
+    box-shadow: 0 8px 18px rgba(15, 76, 129, 0.08);
 }
 
 .recent-task-card > div:first-child {
@@ -844,8 +1230,35 @@ include '../../includes/navbar.php';
     font-size: 0.8rem;
     line-height: 1.45;
     overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
     white-space: normal;
     word-break: break-word;
+}
+
+.recent-tasks-panel .card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0.65rem;
+}
+
+.allocation-project-list::-webkit-scrollbar,
+.recent-task-list::-webkit-scrollbar {
+    width: 7px;
+}
+
+.allocation-project-list::-webkit-scrollbar-track,
+.recent-task-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.allocation-project-list::-webkit-scrollbar-thumb,
+.recent-task-list::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(31, 99, 146, 0.24);
 }
 
 .recent-task-meta {
@@ -883,7 +1296,8 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-task-card {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-task-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-project-item {
     background: #071321 !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
     box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
@@ -898,6 +1312,12 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-status-tag {
     background: #0a1b2c !important;
     border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .dashboard-panel-count {
+    background: #0a1b2c;
+    border-color: rgba(90, 166, 222, 0.28);
+    color: #8cc7ff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bulk-entity-badge {
@@ -918,6 +1338,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h6,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-task-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-project-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body strong {
     color: #d7e4f2 !important;
@@ -992,6 +1413,38 @@ include '../../includes/navbar.php';
     border-color: rgba(31, 99, 146, 0.24) !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-resource-overview-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-resource-rate,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-resource-project-item {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-resource-section-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-resource-project-name {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-resource-project-link {
+    background: #0a1b2c;
+    border-color: rgba(90, 166, 222, 0.28);
+    color: #8cc7ff;
+}
+
+@media (max-width: 1200px) {
+    .sul-resource-overview-grid {
+        grid-template-columns: minmax(0, 1.4fr) minmax(230px, 0.7fr);
+    }
+
+    .sul-resource-overview-section:nth-child(2) {
+        border-right: 0;
+    }
+
+    .sul-resource-overview-section:last-child {
+        border-top: 1px solid var(--gray-200);
+        grid-column: 1 / -1;
+    }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .welcome-banner {
@@ -1011,6 +1464,22 @@ include '../../includes/navbar.php';
         font-size: 2rem;
     }
 
+    .sul-resource-overview-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .sul-resource-overview-section,
+    .sul-resource-overview-section:nth-child(2) {
+        border-bottom: 1px solid var(--gray-200);
+        border-right: 0;
+    }
+
+    .sul-resource-overview-section:last-child {
+        border-bottom: 0;
+        border-top: 0;
+        grid-column: auto;
+    }
+
     .recent-task-card {
         gap: 0.75rem;
     }
@@ -1024,7 +1493,24 @@ include '../../includes/navbar.php';
     }
 
     .recent-task-list {
-        max-height: 380px;
+        max-height: none;
+    }
+
+    .sul-bounded-row {
+        --sul-panel-height: 430px;
+    }
+
+    .sul-risk-row > .sul-insights-column > .delay-insights-wrap {
+        height: auto;
+    }
+
+    .sul-risk-row .delay-portfolio-body {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+    }
+
+    .sul-risk-row .delay-portfolio-chart-shell {
+        width: min(220px, 100%);
     }
 }
 </style>
@@ -1085,6 +1571,61 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
+    <!-- Unified resource summaries; detailed controls remain in Resource Management. -->
+    <div class="card sul-resource-overview-card">
+        <div class="card-header d-flex align-items-center justify-content-between gap-3">
+            <h5><i class="fas fa-users-cog"></i> Resource Overview</h5>
+            <a href="resource-management.php" class="sul-resource-project-link" title="Open Resource Details &amp; Workload" aria-label="Open Resource Details and Workload">
+                <i class="fas fa-arrow-right" aria-hidden="true"></i>
+            </a>
+        </div>
+        <div class="sul-resource-overview-grid">
+            <section class="sul-resource-overview-section" aria-labelledby="resourceWorkloadTitle">
+                <h6 class="sul-resource-section-title" id="resourceWorkloadTitle"><i class="fas fa-chart-bar" aria-hidden="true"></i> Resource Workload Overview</h6>
+                <?php if ($resourceOverviewDevelopers !== []): ?>
+                    <div class="sul-resource-workload-chart"><canvas id="resourceWorkloadChart"></canvas></div>
+                <?php else: ?>
+                    <div class="sul-resource-empty">No active developer resources are available for this department.</div>
+                <?php endif; ?>
+            </section>
+
+            <section class="sul-resource-overview-section" aria-labelledby="resourceUtilizationTitle">
+                <h6 class="sul-resource-section-title" id="resourceUtilizationTitle"><i class="fas fa-chart-pie" aria-hidden="true"></i> Resource Utilization</h6>
+                <?php if ($resourceOverviewDevelopers !== []): ?>
+                    <div class="sul-resource-utilization-chart"><canvas id="resourceUtilizationChart"></canvas></div>
+                    <div class="sul-resource-rate"><span>Utilization rate</span><strong><?php echo $resourceOverviewRate; ?>%</strong></div>
+                <?php else: ?>
+                    <div class="sul-resource-empty">No utilization data is available.</div>
+                <?php endif; ?>
+            </section>
+
+            <section class="sul-resource-overview-section" aria-labelledby="activeResourceProjectsTitle">
+                <h6 class="sul-resource-section-title" id="activeResourceProjectsTitle"><i class="fas fa-project-diagram" aria-hidden="true"></i> Projects with Active Resources</h6>
+                <?php if ($resourceOverviewProjects !== []): ?>
+                    <div class="sul-resource-project-list">
+                        <?php foreach ($resourceOverviewProjects as $resourceProject): ?>
+                            <article class="sul-resource-project-item">
+                                <div>
+                                    <p class="sul-resource-project-name"><?php echo htmlspecialchars((string) $resourceProject['name']); ?></p>
+                                    <div class="sul-resource-project-meta">
+                                        <span><?php echo htmlspecialchars((string) $resourceProject['client_name']); ?></span>
+                                        <span><?php echo (int) $resourceProject['assigned_resources']; ?> resource<?php echo (int) $resourceProject['assigned_resources'] === 1 ? '' : 's'; ?></span>
+                                        <span><?php echo (int) $resourceProject['active_tasks']; ?> open task<?php echo (int) $resourceProject['active_tasks'] === 1 ? '' : 's'; ?></span>
+                                    </div>
+                                </div>
+                                <a href="task-allocation.php?project_id=<?php echo (int) $resourceProject['id']; ?>" class="sul-resource-project-link" title="Manage project resources" aria-label="Manage resources for <?php echo htmlspecialchars((string) $resourceProject['name']); ?>">
+                                    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                </a>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="sul-resource-empty">No projects currently have active department resources.</div>
+                <?php endif; ?>
+            </section>
+        </div>
+    </div>
+
     <!-- Row 1: Task Status Overview + Calendar -->
     <div class="row g-3 mb-4">
         <div class="col-xl-7">
@@ -1113,7 +1654,7 @@ include '../../includes/navbar.php';
     </div>
 
     <!-- Row 2: Priority Distribution + Projects Needing Task Allocation -->
-    <div class="row g-3 mb-4">
+    <div class="row g-3 mb-4 sul-bounded-row">
         <div class="col-xl-7">
             <div class="card">
                 <div class="card-header">
@@ -1131,11 +1672,12 @@ include '../../includes/navbar.php';
         </div>
 
         <div class="col-xl-5">
-            <div class="card">
-                <div class="card-header">
+            <div class="card allocation-project-card">
+                <div class="card-header dashboard-panel-header">
                     <h5><i class="fas fa-project-diagram"></i> Projects Needing Task Allocation</h5>
+                    <span class="dashboard-panel-count"><?php echo $allocationProjectCount; ?></span>
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body allocation-project-list">
                     <?php if($projectsNeedingAllocation && $projectsNeedingAllocation->num_rows > 0): ?>
                         <?php while($project = $projectsNeedingAllocation->fetch_assoc()): ?>
                         <?php
@@ -1143,47 +1685,48 @@ include '../../includes/navbar.php';
                             $needsExpertCount = (int) ($project['needs_expert_count'] ?? 0);
                             $reviewCount = (int) ($project['review_count'] ?? 0);
                             $readyDevCount = (int) ($project['ready_dev_count'] ?? 0);
+                            $timelineStartTimestamp = !empty($project['timeline_start']) ? strtotime((string) $project['timeline_start']) : false;
+                            $timelineEndTimestamp = !empty($project['timeline_end']) ? strtotime((string) $project['timeline_end']) : false;
+                            if ($timelineStartTimestamp && $timelineEndTimestamp) {
+                                $allocationTimeline = date('M d', $timelineStartTimestamp) . ' – ' . date('M d, Y', $timelineEndTimestamp);
+                            } elseif ($timelineStartTimestamp) {
+                                $allocationTimeline = 'Starts ' . date('M d, Y', $timelineStartTimestamp);
+                            } elseif ($timelineEndTimestamp) {
+                                $allocationTimeline = 'Due ' . date('M d, Y', $timelineEndTimestamp);
+                            } else {
+                                $allocationTimeline = 'Timeline not set';
+                            }
                         ?>
-                        <div class="list-group-item">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($project['name']); ?></h6>
-                                    <small class="text-muted">
-                                        <i class="fas fa-building me-1"></i>
-                                        Client: <?php echo htmlspecialchars($project['client_name']); ?>
-                                    </small>
-                                    <div class="mt-1">
-                                        <small class="text-muted">
-                                            <i class="far fa-calendar-alt me-1"></i>
-                                            Timeline: <?php echo date('M d', strtotime($project['timeline_start'])); ?> - <?php echo date('M d, Y', strtotime($project['timeline_end'])); ?>
-                                        </small>
-                                    </div>
-                                     <div class="mt-1">
-                                         <small class="text-muted">
-                                             <i class="fas fa-tasks me-1"></i>
-                                             Pending tasks: <?php echo $totalTasksForProject; ?>
-                                         </small>
-                                    </div>
-                                     <div class="allocation-status-tags">
-                                         <?php if($totalTasksForProject === 0): ?>
-                                             <span class="allocation-status-tag warning">No tasks yet</span>
-                                        <?php endif; ?>
-                                        <?php if($needsExpertCount > 0): ?>
-                                            <span class="allocation-status-tag warning"><?php echo $needsExpertCount; ?> need expert</span>
-                                        <?php endif; ?>
-                                        <?php if($reviewCount > 0): ?>
-                                            <span class="allocation-status-tag"><?php echo $reviewCount; ?> for review</span>
-                                        <?php endif; ?>
-                                        <?php if($readyDevCount > 0): ?>
-                                            <span class="allocation-status-tag success"><?php echo $readyDevCount; ?> ready for dev</span>
-                                        <?php endif; ?>
-                                    </div>
+                        <article class="allocation-project-item">
+                            <div class="allocation-project-head">
+                                <div class="allocation-project-title-wrap">
+                                    <span class="allocation-project-icon" aria-hidden="true"><i class="fas fa-project-diagram"></i></span>
+                                    <h6 class="allocation-project-title"><?php echo htmlspecialchars($project['name']); ?></h6>
                                 </div>
-                                <a href="task-allocation.php?project_id=<?php echo $project['id']; ?>" class="btn-primary-modern">
-                                    <i class="fas fa-tasks"></i> Allocate
+                                <a href="task-allocation.php?project_id=<?php echo $project['id']; ?>" class="btn-primary-modern allocation-project-action">
+                                    <i class="fas fa-tasks"></i><span>Allocate</span>
                                 </a>
                             </div>
-                        </div>
+                            <div class="allocation-project-meta">
+                                <span><i class="fas fa-building"></i><?php echo htmlspecialchars($project['client_name']); ?></span>
+                                <span><i class="far fa-calendar-alt"></i><?php echo htmlspecialchars($allocationTimeline); ?></span>
+                                <span><i class="fas fa-list-check"></i><?php echo $totalTasksForProject; ?> task<?php echo $totalTasksForProject === 1 ? '' : 's'; ?></span>
+                            </div>
+                            <div class="allocation-status-tags">
+                                <?php if($totalTasksForProject === 0): ?>
+                                    <span class="allocation-status-tag warning">No tasks yet</span>
+                                <?php endif; ?>
+                                <?php if($needsExpertCount > 0): ?>
+                                    <span class="allocation-status-tag warning"><?php echo $needsExpertCount; ?> need expert</span>
+                                <?php endif; ?>
+                                <?php if($reviewCount > 0): ?>
+                                    <span class="allocation-status-tag"><?php echo $reviewCount; ?> for review</span>
+                                <?php endif; ?>
+                                <?php if($readyDevCount > 0): ?>
+                                    <span class="allocation-status-tag success"><?php echo $readyDevCount; ?> ready for dev</span>
+                                <?php endif; ?>
+                            </div>
+                        </article>
                         <?php endwhile; ?>
                     <?php else: ?>
                         <div class="empty-state-mini">
@@ -1196,23 +1739,27 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
-    <!-- Row 3: Project Insight List + Recent Tasks -->
-    <div class="row g-3 mb-4">
+    <!-- Row 3: Portfolio Project Risk + Recent Tasks -->
+    <div class="row g-3 mb-4 sul-bounded-row sul-risk-row">
         <div class="col-xl-7 sul-insights-column">
             <?php
             delayInsightsRenderCompactList($conn, $user, [
-                'limit' => 4,
-                'title' => 'Project Insight List',
-                'subtitle' => 'Small one-line project signals with direct links to the full insight page.',
-                'button_label' => 'View Project',
+                'limit' => 200,
+                'display' => 'portfolio_chart',
+                'title' => 'Overall Project Risk',
+                'subtitle' => 'Portfolio-wide delivery risk across all projects visible to the Service Unit Leader.',
+                'show_empty' => true,
+                'empty_title' => 'No project insights yet',
+                'empty_message' => 'Project insight signals will appear here when they become available.',
             ]);
             ?>
         </div>
 
         <div class="col-xl-5">
-            <div class="card sul-table-card">
-                <div class="card-header">
+            <div class="card sul-table-card recent-tasks-panel">
+                <div class="card-header dashboard-panel-header">
                     <h5><i class="fas fa-history"></i> Recent Tasks</h5>
+                    <span class="dashboard-panel-count"><?php echo $recentTaskCount; ?></span>
                 </div>
                 <div class="card-body">
                     <div class="recent-task-list">
@@ -1232,11 +1779,11 @@ include '../../includes/navbar.php';
                                 </div>
                                 <div class="recent-task-actions">
                                     <div class="d-flex gap-2">
-                                        <button class="btn-primary-modern btn-sm-modern" onclick="viewTask(<?php echo $task['id']; ?>)">
+                                        <button type="button" class="btn-primary-modern btn-sm-modern" title="View task" aria-label="View <?php echo htmlspecialchars((string) $task['title']); ?>" onclick="viewTask(<?php echo $task['id']; ?>)">
                                             <i class="fas fa-eye"></i>
                                         </button>
                                         <?php if(!$task['assigned_to'] && $isExpertDepartmentSul): ?>
-                                        <button class="btn-primary-modern btn-sm-modern" onclick="assignTaskTo(<?php echo $task['id']; ?>)">
+                                        <button type="button" class="btn-primary-modern btn-sm-modern" title="Assign task" aria-label="Assign <?php echo htmlspecialchars((string) $task['title']); ?>" onclick="assignTaskTo(<?php echo $task['id']; ?>)">
                                             <i class="fas fa-user-plus"></i>
                                         </button>
                                         <?php endif; ?>
@@ -1394,6 +1941,64 @@ include '../../includes/navbar.php';
 
 <script>
 let currentTaskId = null;
+
+const resourceOverviewData = <?php
+    echo json_encode([
+        'names' => array_map(static fn(array $row): string => (string) ($row['full_name'] ?? 'Resource'), $resourceOverviewDevelopers),
+        'active' => array_map(static fn(array $row): int => (int) ($row['active_tasks'] ?? 0), $resourceOverviewDevelopers),
+        'completed' => array_map(static fn(array $row): int => (int) ($row['completed_tasks'] ?? 0), $resourceOverviewDevelopers),
+        'utilization' => [
+            (int) $resourceOverviewUtilization['underutilized'],
+            (int) $resourceOverviewUtilization['optimal'],
+            (int) $resourceOverviewUtilization['overloaded'],
+        ],
+    ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+?>;
+
+const resourceWorkloadCanvas = document.getElementById('resourceWorkloadChart');
+if (resourceWorkloadCanvas) {
+    new Chart(resourceWorkloadCanvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: resourceOverviewData.names,
+            datasets: [
+                { label: 'Open tasks', data: resourceOverviewData.active, backgroundColor: '#f0a317', borderRadius: 6 },
+                { label: 'Completed', data: resourceOverviewData.completed, backgroundColor: '#1b8d50', borderRadius: 6 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { grid: { display: false } },
+                y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(113, 131, 153, 0.14)' } }
+            },
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } }
+        }
+    });
+}
+
+const resourceUtilizationCanvas = document.getElementById('resourceUtilizationChart');
+if (resourceUtilizationCanvas) {
+    new Chart(resourceUtilizationCanvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Available', 'Optimal', 'At capacity'],
+            datasets: [{
+                data: resourceOverviewData.utilization,
+                backgroundColor: ['#1b8d50', '#f0a317', '#e3262e'],
+                borderColor: '#ffffff',
+                borderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '68%',
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 9, usePointStyle: true } } }
+        }
+    });
+}
 
 // Task Status Chart
 const taskCtx = document.getElementById('taskStatusChart').getContext('2d');

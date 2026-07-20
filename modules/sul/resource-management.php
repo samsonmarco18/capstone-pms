@@ -9,8 +9,6 @@ $sulDepartment = projectWorkflowDepartmentLabel((string) ($user['department'] ??
 $sulMissingDepartment = $sulDepartment === '';
 $resourceDepartmentFilter = ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment);
 $resourceDepartmentWhere = ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment);
-$projectDepartmentFilter = projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment);
-$taskDepartmentFilter = projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment);
 $assignedTaskDepartmentFilter = projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true);
 $taskProjectDepartmentFilter = projectWorkflowProjectDepartmentClause($conn, 'p_task_scope', $sulDepartment);
 $developerTaskJoinFilter = "
@@ -42,18 +40,6 @@ function sulQueryRows($conn, $sql, $label): array
     return $rows;
 }
 
-function sulQueryAssocOrDefault($conn, $sql, array $default, $label)
-{
-    $result = $conn->query($sql);
-    if ($result === false) {
-        error_log("Resource Management {$label} query failed: " . $conn->error);
-        return $default;
-    }
-
-    $row = $result->fetch_assoc();
-    return $row ?: $default;
-}
-
 // Get developers
 $developers = sulQueryRows($conn, "
     SELECT u.*, 
@@ -72,31 +58,6 @@ $developers = sulQueryRows($conn, "
     ORDER BY active_tasks DESC
 ", 'developers');
 
-// Get the developer count for this SUL's department only.
-$skills = sulQueryAssocOrDefault($conn, "
-    SELECT 
-        COUNT(*) as developers,
-        COUNT(*) as total
-    FROM users u
-    WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
-", ['developers' => 0, 'total' => 0], 'skills');
-
-// Task totals are restricted to both the SUL's project scope and task department.
-$taskStats = sulQueryAssocOrDefault($conn, "
-    SELECT
-        SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks,
-        SUM(CASE WHEN t.status != 'completed' AND t.deadline < NOW() THEN 1 ELSE 0 END) as overdue_tasks,
-        AVG(CASE
-            WHEN t.status = 'completed' AND t.completed_at IS NOT NULL
-            THEN TIMESTAMPDIFF(HOUR, t.created_at, t.completed_at) / 24
-            ELSE NULL
-        END) as avg_completion_days
-    FROM tasks t
-    JOIN projects p ON p.id = t.project_id
-    WHERE {$projectDepartmentFilter}
-      AND {$taskDepartmentFilter}
-", ['active_tasks' => 0, 'overdue_tasks' => 0, 'avg_completion_days' => 0], 'taskStats');
-
 // Get available developers (not already in SUL's team)
 $availableDevelopers = sulQueryRows($conn, "
     SELECT u.id, u.full_name, u.email, u.department
@@ -104,45 +65,6 @@ $availableDevelopers = sulQueryRows($conn, "
     WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
     ORDER BY u.full_name
 ", 'availableDevelopers');
-
-// Get projects with resource allocation
-$projects = sulQueryRows($conn, "
-    SELECT p.*, c.name as client_name,
-           COUNT(DISTINCT CASE WHEN u.id IS NOT NULL THEN t.id END) as total_tasks,
-           COUNT(DISTINCT CASE WHEN u.id IS NOT NULL AND t.status != 'completed' THEN u.id END) as assigned_resources,
-           SUM(CASE WHEN u.id IS NOT NULL AND t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks,
-           SUM(CASE WHEN u.id IS NOT NULL AND t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks
-    FROM projects p
-    JOIN clients c ON p.client_id = c.id
-     LEFT JOIN tasks t ON p.id = t.project_id AND {$assignedTaskDepartmentFilter}
-     LEFT JOIN users u ON u.id = t.assigned_to
-         AND u.role = 'developer'
-         AND u.status = 'active'{$resourceDepartmentFilter}
-    WHERE p.status NOT IN ('completed', 'cancelled')
-      AND {$projectDepartmentFilter}
-    GROUP BY p.id, c.id, c.name
-    HAVING COUNT(DISTINCT CASE WHEN u.id IS NOT NULL AND t.status != 'completed' THEN u.id END) > 0
-    ORDER BY active_tasks DESC, p.created_at DESC
-    LIMIT 10
-", 'projects');
-
-$utilization = [
-    'underutilized' => 0,
-    'optimal' => 0,
-    'overloaded' => 0,
-];
-$totalAssignedTasks = 0;
-foreach ($developers as $resource) {
-    $activeTasks = (int) ($resource['active_tasks'] ?? 0);
-    $totalAssignedTasks += $activeTasks;
-    if ($activeTasks >= 5) {
-        $utilization['overloaded']++;
-    } elseif ($activeTasks >= 3) {
-        $utilization['optimal']++;
-    } else {
-        $utilization['underutilized']++;
-    }
-}
 
 // Handle resource updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -405,6 +327,175 @@ unset($_SESSION['success'], $_SESSION['error']);
     background: var(--gray-50);
 }
 
+.resource-workload-card .card-body {
+    padding: 0;
+}
+
+.resource-workload-toolbar {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.resource-workload-table {
+    min-width: 1040px;
+    table-layout: fixed;
+}
+
+.resource-workload-table th,
+.resource-workload-table td {
+    padding: 0.85rem 0.75rem;
+}
+
+.resource-workload-table th:first-child,
+.resource-workload-table td:first-child {
+    padding-left: 1.25rem;
+    width: 25%;
+}
+
+.resource-workload-table th:nth-child(2),
+.resource-workload-table th:nth-child(3),
+.resource-workload-table th:nth-child(4),
+.resource-workload-table th:nth-child(5),
+.resource-workload-table th:nth-child(6),
+.resource-workload-table td:nth-child(2),
+.resource-workload-table td:nth-child(3),
+.resource-workload-table td:nth-child(4),
+.resource-workload-table td:nth-child(5),
+.resource-workload-table td:nth-child(6) {
+    text-align: center;
+    width: 7%;
+}
+
+.resource-workload-table th:nth-child(7),
+.resource-workload-table td:nth-child(7) {
+    width: 13%;
+}
+
+.resource-workload-table th:nth-child(8),
+.resource-workload-table td:nth-child(8) {
+    width: 10%;
+}
+
+.resource-workload-table th:last-child,
+.resource-workload-table td:last-child {
+    padding-right: 1.25rem;
+    text-align: right;
+    width: 10%;
+}
+
+.resource-workload-table tbody tr {
+    box-shadow: inset 3px 0 0 transparent;
+    transition: background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.resource-workload-table tbody tr:hover {
+    background: #f4f9fc;
+    box-shadow: inset 3px 0 0 var(--theme-primary);
+}
+
+.resource-profile {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.resource-profile-avatar {
+    align-items: center;
+    background: linear-gradient(145deg, #dff1fb 0%, #c8e4f4 100%);
+    border: 1px solid #bedcec;
+    border-radius: 50%;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 42px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    height: 42px;
+    justify-content: center;
+    letter-spacing: 0.03em;
+    width: 42px;
+}
+
+.resource-profile-copy {
+    min-width: 0;
+}
+
+.resource-profile-name {
+    color: var(--gray-900);
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0;
+}
+
+.resource-profile-role,
+.resource-profile-email {
+    color: var(--gray-600);
+    display: block;
+    font-size: 0.68rem;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-profile-email {
+    margin-top: 0.12rem;
+}
+
+.resource-metric {
+    color: #334e68;
+    font-size: 0.84rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.resource-workload {
+    min-width: 110px;
+}
+
+.resource-workload .progress-modern {
+    width: 100%;
+}
+
+.resource-workload-value {
+    color: var(--gray-600);
+    display: block;
+    font-size: 0.68rem;
+    margin-top: 0.3rem;
+}
+
+.badge-status-overloaded,
+.badge-status-busy,
+.badge-status-available,
+.badge-status-free {
+    align-items: center;
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.68rem;
+    font-weight: 600;
+    justify-content: center;
+    min-width: 68px;
+    padding: 0.32rem 0.6rem;
+}
+
+.resource-actions {
+    display: inline-flex;
+    gap: 0.4rem;
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+
+.resource-action-btn {
+    align-items: center;
+    border-radius: 8px;
+    display: inline-flex;
+    height: 34px;
+    justify-content: center;
+    padding: 0;
+    width: 34px;
+}
+
 /* Progress Bar */
 .progress-modern {
     height: 8px;
@@ -417,16 +508,6 @@ unset($_SESSION['success'], $_SESSION['error']);
     height: 100%;
     border-radius: 10px;
     transition: width 0.3s ease;
-}
-
-/* Badges */
-.badge-role-developer {
-    background: #dbeafe;
-    color: #2563eb;
-    padding: 0.25rem 0.6rem;
-    border-radius: 20px;
-    font-size: 0.7rem;
-    font-weight: 600;
 }
 
 .badge-status-overloaded {
@@ -647,6 +728,31 @@ unset($_SESSION['success'], $_SESSION['error']);
     border-color: rgba(31, 99, 146, 0.24) !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-toolbar {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-table tbody tr:hover {
+    background: rgba(31, 99, 146, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-profile-avatar {
+    background: #102a40;
+    border-color: #214764;
+    color: #8cc7ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-profile-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-metric {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-profile-role,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-profile-email,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-value {
+    color: #9db6cf;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
     background-color: #071321;
@@ -709,6 +815,16 @@ unset($_SESSION['success'], $_SESSION['error']);
     .page-header-modern {
         padding: 1.5rem;
     }
+
+    .resource-workload-toolbar {
+        align-items: stretch !important;
+        flex-direction: column;
+    }
+
+    .resource-workload-toolbar .btn-primary-modern {
+        justify-content: center;
+        width: 100%;
+    }
     
     .stats-grid {
         grid-template-columns: 1fr;
@@ -737,71 +853,26 @@ unset($_SESSION['success'], $_SESSION['error']);
     <?php if ($flashSuccess): ?><div class="alert alert-success"><?php echo htmlspecialchars($flashSuccess); ?></div><?php endif; ?>
     <?php if ($flashError): ?><div class="alert alert-danger border-0"><?php echo htmlspecialchars($flashError); ?></div><?php endif; ?>
 
-    <!-- Statistics Cards -->
-    <div class="stats-grid">
-        <div class="stat-card-modern">
-            <i class="fas fa-users stat-icon"></i>
-            <div class="stat-label">Total Resources</div>
-            <div class="stat-number"><?php echo $skills['total']; ?></div>
-            <div class="stat-sub"><?php echo htmlspecialchars($sulDepartment); ?> developers</div>
-        </div>
-        <div class="stat-card-modern">
-            <i class="fas fa-tasks stat-icon"></i>
-            <div class="stat-label">Active Tasks</div>
-            <div class="stat-number"><?php echo (int) ($taskStats['active_tasks'] ?? 0); ?></div>
-            <div class="stat-sub">In <?php echo htmlspecialchars($sulDepartment); ?></div>
-        </div>
-        <div class="stat-card-modern">
-            <i class="fas fa-clock stat-icon"></i>
-            <div class="stat-label">Avg Completion Time</div>
-            <div class="stat-number"><?php echo round((float) ($taskStats['avg_completion_days'] ?? 0), 1); ?></div>
-            <div class="stat-sub">days per task</div>
-        </div>
-        <div class="stat-card-modern">
-            <i class="fas fa-exclamation-triangle stat-icon"></i>
-            <div class="stat-label">Overdue Tasks</div>
-            <div class="stat-number" style="color: #dc2626;"><?php echo (int) ($taskStats['overdue_tasks'] ?? 0); ?></div>
-            <div class="stat-sub">Need immediate attention</div>
-        </div>
-    </div>
-
-    <div class="row g-4 mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-chart-bar me-2"></i>Resource Workload Overview</h5>
-                </div>
-                <div class="card-body">
-                    <?php if ($developers !== []): ?>
-                        <div style="position: relative; height: 300px;">
-                            <canvas id="workloadChart"></canvas>
-                        </div>
-                    <?php else: ?>
-                        <div class="text-center text-muted py-5">No active developer resources are available for this department.</div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Resource Details Table -->
-    <div class="card mb-4">
+    <div class="card mb-4 resource-workload-card">
         <div class="card-header">
             <h5><i class="fas fa-list me-2"></i>Resource Details & Workload</h5>
         </div>
         <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="mb-0">Developer Resources</h6>
+            <div class="resource-workload-toolbar d-flex justify-content-between align-items-center gap-3">
+                <div>
+                    <h6 class="mb-0">Developer Resources</h6>
+                    <small class="text-muted"><?php echo count($developers); ?> active profile<?php echo count($developers) === 1 ? '' : 's'; ?> in <?php echo htmlspecialchars($sulDepartment); ?></small>
+                </div>
                 <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#addDeveloperModal">
                     <i class="fas fa-user-plus me-2"></i>Assign Developer
                 </button>
             </div>
             <div class="table-container">
-                        <table class="data-table">
+                        <table class="data-table resource-workload-table">
                             <thead>
                                 <tr>
                                     <th>Resource</th>
-                                    <th>Role</th>
                                     <th>Active</th>
                                     <th>Completed</th>
                                     <th>Pending</th>
@@ -815,40 +886,59 @@ unset($_SESSION['success'], $_SESSION['error']);
                             <tbody>
                                 <?php if ($developers !== []): ?>
                                     <?php foreach ($developers as $resource):
-                                        $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
-                                        $statusClass = $resource['active_tasks'] >= 5 ? 'overloaded' : ($resource['active_tasks'] >= 3 ? 'busy' : ($resource['active_tasks'] > 0 ? 'available' : 'free'));
-                                        $statusText = $resource['active_tasks'] >= 5 ? 'Overloaded' : ($resource['active_tasks'] >= 3 ? 'Busy' : ($resource['active_tasks'] > 0 ? 'Available' : 'Free'));
+                                        $resourceName = trim((string) ($resource['full_name'] ?? 'Developer'));
+                                        $resourceNameParts = preg_split('/\s+/', $resourceName) ?: [];
+                                        $resourceInitial = static function (string $value): string {
+                                            return strtoupper(function_exists('mb_substr') ? mb_substr($value, 0, 1) : substr($value, 0, 1));
+                                        };
+                                        $resourceInitials = $resourceInitial((string) ($resourceNameParts[0] ?? 'D'));
+                                        if (count($resourceNameParts) > 1) {
+                                            $resourceInitials .= $resourceInitial((string) end($resourceNameParts));
+                                        }
+                                        $resourceActiveTasks = (int) ($resource['active_tasks'] ?? 0);
+                                        $workloadPercent = (int) round(min(100, ($resourceActiveTasks / 5) * 100));
+                                        $statusClass = $resourceActiveTasks >= 5 ? 'overloaded' : ($resourceActiveTasks >= 3 ? 'busy' : ($resourceActiveTasks > 0 ? 'available' : 'free'));
+                                        $statusText = $resourceActiveTasks >= 5 ? 'Overloaded' : ($resourceActiveTasks >= 3 ? 'Busy' : ($resourceActiveTasks > 0 ? 'Available' : 'Free'));
                                     ?>
                                     <tr>
                                         <td>
-                                            <div class="fw-semibold"><?php echo htmlspecialchars($resource['full_name']); ?></div>
-                                            <small class="text-muted"><?php echo htmlspecialchars($resource['email']); ?></small>
-                                        </td>
-                                        <td><span class="badge-role-<?php echo $resource['role']; ?>"><?php echo strtoupper($resource['role']); ?></span></td>
-                                        <td><?php echo $resource['active_tasks']; ?></td>
-                                        <td><?php echo $resource['completed_tasks']; ?></td>
-                                        <td><?php echo $resource['pending_tasks']; ?></td>
-                                        <td><?php if($resource['overdue_tasks'] > 0): ?><span class="badge-status-overloaded"><?php echo $resource['overdue_tasks']; ?></span><?php else: ?>0<?php endif; ?></td>
-                                        <td><?php echo $resource['avg_completion_days'] !== null ? round((float) $resource['avg_completion_days'], 1) . 'd' : 'N/A'; ?></td>
-                                        <td>
-                                            <div class="progress-modern" style="width: 100px;">
-                                                <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resource['active_tasks'] >= 5 ? '#dc2626' : ($resource['active_tasks'] >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
+                                            <div class="resource-profile">
+                                                <span class="resource-profile-avatar" aria-hidden="true"><?php echo htmlspecialchars($resourceInitials); ?></span>
+                                                <div class="resource-profile-copy">
+                                                    <p class="resource-profile-name"><?php echo htmlspecialchars($resourceName); ?></p>
+                                                    <span class="resource-profile-role">Developer</span>
+                                                    <span class="resource-profile-email" title="<?php echo htmlspecialchars((string) $resource['email']); ?>"><?php echo htmlspecialchars((string) $resource['email']); ?></span>
+                                                </div>
                                             </div>
-                                            <small><?php echo $workloadPercent; ?>%</small>
+                                        </td>
+                                        <td><span class="resource-metric"><?php echo $resourceActiveTasks; ?></span></td>
+                                        <td><span class="resource-metric"><?php echo (int) ($resource['completed_tasks'] ?? 0); ?></span></td>
+                                        <td><span class="resource-metric"><?php echo (int) ($resource['pending_tasks'] ?? 0); ?></span></td>
+                                        <td><span class="resource-metric<?php echo (int) ($resource['overdue_tasks'] ?? 0) > 0 ? ' text-danger' : ''; ?>"><?php echo (int) ($resource['overdue_tasks'] ?? 0); ?></span></td>
+                                        <td><span class="resource-metric"><?php echo $resource['avg_completion_days'] !== null ? round((float) $resource['avg_completion_days'], 1) . 'd' : 'N/A'; ?></span></td>
+                                        <td>
+                                            <div class="resource-workload">
+                                                <div class="progress-modern">
+                                                    <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resourceActiveTasks >= 5 ? '#dc2626' : ($resourceActiveTasks >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
+                                                </div>
+                                                <span class="resource-workload-value"><?php echo $workloadPercent; ?>% capacity</span>
+                                            </div>
                                         </td>
                                         <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
                                         <td>
-                                            <button class="btn-primary-modern btn-sm-modern" onclick="editAllocation(<?php echo $resource['id']; ?>, '<?php echo htmlspecialchars($resource['full_name']); ?>', <?php echo $resource['active_tasks']; ?>)">
-                                                <i class="fas fa-sliders-h"></i>
-                                            </button>
-                                            <button class="btn-secondary-modern btn-sm-modern" onclick="viewResourceTasks(<?php echo $resource['id']; ?>)">
-                                                <i class="fas fa-tasks"></i>
-                                            </button>
+                                            <div class="resource-actions">
+                                                <button type="button" class="btn-primary-modern resource-action-btn" title="Edit allocation" aria-label="Edit allocation for <?php echo htmlspecialchars($resourceName); ?>" onclick="editAllocation(<?php echo (int) $resource['id']; ?>, <?php echo htmlspecialchars(json_encode($resourceName), ENT_QUOTES, 'UTF-8'); ?>, <?php echo $resourceActiveTasks; ?>)">
+                                                    <i class="fas fa-sliders-h" aria-hidden="true"></i>
+                                                </button>
+                                                <button type="button" class="btn-secondary-modern resource-action-btn" title="View assigned tasks" aria-label="View tasks for <?php echo htmlspecialchars($resourceName); ?>" onclick="viewResourceTasks(<?php echo (int) $resource['id']; ?>)">
+                                                    <i class="fas fa-list-check" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                     <?php endforeach; ?>
                                 <?php else: ?>
-                                    <tr><td colspan="10" class="text-center text-muted py-4">No developer data available.</td></tr>
+                                    <tr><td colspan="9" class="text-center text-muted py-4">No developer data available.</td></tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -856,82 +946,6 @@ unset($_SESSION['success'], $_SESSION['error']);
         </div>
     </div>
 
-    <div class="row g-4">
-        <div class="col-lg-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-project-diagram me-2"></i>Projects with Active Resources</h5>
-                </div>
-                <div class="card-body p-0">
-                    <?php if ($projects !== []): ?>
-                    <?php foreach ($projects as $project): ?>
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <h6 class="mb-1 fw-semibold"><?php echo htmlspecialchars($project['name']); ?></h6>
-                                <small class="text-muted">Client: <?php echo htmlspecialchars($project['client_name']); ?></small>
-                                <div class="mt-1">
-                                    <small><i class="fas fa-users me-1"></i> <?php echo $project['assigned_resources']; ?> resources</small>
-                                    <small class="ms-2"><i class="fas fa-tasks me-1"></i> <?php echo $project['active_tasks']; ?> active tasks</small>
-                                </div>
-                            </div>
-                            <a href="task-allocation.php?project_id=<?php echo $project['id']; ?>" class="btn-primary-modern">
-                                <i class="fas fa-chart-line"></i> Manage
-                            </a>
-                        </div>
-                        <?php 
-                        $completionPercent = $project['total_tasks'] > 0
-                            ? round(((int) $project['completed_tasks'] / (int) $project['total_tasks']) * 100)
-                            : 0;
-                        ?>
-                        <div class="mt-2">
-                            <div class="progress-modern">
-                                <div class="progress-bar-modern" style="width: <?php echo $completionPercent; ?>%; background: #10b981;"></div>
-                            </div>
-                            <small class="text-muted"><?php echo $completionPercent; ?>% Complete</small>
-                        </div>
-                    </div>
-                    <?php endforeach; ?>
-                    <?php else: ?>
-                    <div class="list-group-item text-muted py-4 text-center">No projects currently have active department resources.</div>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-lg-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-chart-pie me-2"></i>Resource Utilization</h5>
-                </div>
-                <div class="card-body">
-                    <?php if ($developers !== []): ?>
-                        <div style="position: relative; height: 220px;">
-                            <canvas id="utilizationChart"></canvas>
-                        </div>
-                    <?php else: ?>
-                        <div class="text-center text-muted py-5">No utilization data is available for this department.</div>
-                    <?php endif; ?>
-                    <div class="mt-3 p-3 bg-light rounded-3">
-                        <i class="fas fa-info-circle text-primary me-2"></i>
-                        <strong>Utilization Rate:</strong>
-                        <?php 
-                        $totalResources = (int) $skills['total'];
-                        $standardCapacity = $totalResources * 5;
-                        $utilizationRate = $standardCapacity > 0
-                            ? round(($totalAssignedTasks / $standardCapacity) * 100)
-                            : 0;
-                        ?>
-                        <strong><?php echo $utilizationRate; ?>%</strong>
-                        <span class="text-muted">
-                            (<?php echo $totalAssignedTasks; ?> open tasks across <?php echo $totalResources; ?> resources;
-                            <?php echo (int) $utilization['overloaded']; ?> at or over capacity)
-                        </span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 <!-- Add Developer Modal -->
@@ -1026,68 +1040,6 @@ unset($_SESSION['success'], $_SESSION['error']);
 </div>
 
 <script>
-// Workload Chart
-const workloadData = <?php 
-    $names = [];
-    $active = [];
-    $completed = [];
-    foreach ($developers as $row) {
-        $names[] = $row['full_name'] . ' (Dev)';
-        $active[] = (int) ($row['active_tasks'] ?? 0);
-        $completed[] = (int) ($row['completed_tasks'] ?? 0);
-    }
-    echo json_encode(
-        ['names' => $names, 'active' => $active, 'completed' => $completed],
-        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-    );
-?>;
-
-const workloadCanvas = document.getElementById('workloadChart');
-if (workloadCanvas) {
-    new Chart(workloadCanvas.getContext('2d'), {
-        type: 'bar',
-        data: {
-            labels: workloadData.names,
-            datasets: [
-                { label: 'Open Tasks', data: workloadData.active, backgroundColor: '#f59e0b', borderRadius: 8 },
-                { label: 'Completed Tasks', data: workloadData.completed, backgroundColor: '#10b981', borderRadius: 8 }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Number of Tasks' } } },
-            plugins: { legend: { position: 'top' } }
-        }
-    });
-}
-
-// Utilization Chart
-const utilizationCanvas = document.getElementById('utilizationChart');
-if (utilizationCanvas) {
-    new Chart(utilizationCanvas.getContext('2d'), {
-        type: 'doughnut',
-        data: {
-            labels: ['Underutilized (0-2 tasks)', 'Optimal (3-4 tasks)', 'At/over capacity (5+ tasks)'],
-            datasets: [{
-                data: [
-                    <?php echo (int) $utilization['underutilized']; ?>,
-                    <?php echo (int) $utilization['optimal']; ?>,
-                    <?php echo (int) $utilization['overloaded']; ?>
-                ],
-                backgroundColor: ['#10b981', '#f59e0b', '#dc2626'],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '60%',
-            plugins: { legend: { position: 'bottom' } }
-        }
-    });
-}
-
 function editAllocation(userId, userName, currentTasks) {
     document.getElementById('alloc_user_id').value = userId;
     document.getElementById('alloc_user_name').textContent = userName;

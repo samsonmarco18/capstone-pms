@@ -1847,6 +1847,159 @@ include '../../includes/navbar.php';
     min-height: 38px;
 }
 
+.roadmap-monitoring-toolbar {
+    overflow: hidden;
+    padding: 0;
+    border-radius: 18px;
+    box-shadow: 0 10px 28px rgba(15, 76, 129, .07);
+}
+
+.roadmap-monitoring-toolbar > .alert {
+    margin: 1rem;
+}
+
+.monitoring-project-picker {
+    align-items: end;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 1.1rem 1.25rem;
+}
+
+.monitoring-project-field {
+    min-width: 0;
+}
+
+.monitoring-project-field .form-label {
+    align-items: center;
+    color: var(--roadmap-ink);
+    display: inline-flex;
+    font-size: .76rem;
+    font-weight: 600;
+    gap: .45rem;
+    letter-spacing: .035em;
+    margin-bottom: .45rem;
+    text-transform: uppercase;
+}
+
+.monitoring-project-field .form-label i {
+    color: var(--roadmap-primary);
+}
+
+.monitoring-project-select {
+    position: relative;
+}
+
+.monitoring-project-select > i {
+    color: var(--roadmap-primary);
+    left: 1rem;
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+}
+
+.monitoring-project-select .form-select {
+    min-height: 50px;
+    padding-left: 2.7rem;
+    border-color: #d8e5ee;
+    border-radius: 12px;
+    box-shadow: 0 3px 10px rgba(15, 76, 129, .035);
+}
+
+.monitoring-project-submit {
+    font-weight: 600;
+    min-height: 50px;
+    min-width: 176px;
+    border-radius: 12px;
+    box-shadow: 0 7px 15px rgba(31, 99, 146, .16);
+}
+
+.monitoring-toolbar-footer {
+    align-items: center;
+    background: #fbfdff;
+    border-top: 1px solid var(--roadmap-line);
+    display: flex;
+    flex-wrap: wrap;
+    gap: .85rem 1.25rem;
+    justify-content: space-between;
+    padding: .7rem 1.25rem;
+}
+
+.monitoring-department-context {
+    align-items: center;
+    display: flex;
+    gap: .65rem;
+    min-width: 0;
+}
+
+.monitoring-department-icon {
+    align-items: center;
+    background: #edf7fc;
+    border-radius: 10px;
+    color: var(--roadmap-primary);
+    display: inline-flex;
+    flex: 0 0 34px;
+    height: 34px;
+    justify-content: center;
+    width: 34px;
+}
+
+.monitoring-department-copy {
+    display: grid;
+    gap: .05rem;
+    min-width: 0;
+}
+
+.monitoring-department-copy strong {
+    color: var(--roadmap-ink);
+    font-size: .8rem;
+    font-weight: 600;
+}
+
+.monitoring-department-copy small {
+    color: var(--roadmap-muted);
+    font-size: .7rem;
+}
+
+.monitoring-view-toggle {
+    background: #edf3f7;
+    border: 1px solid #dbe7ef;
+    border-radius: 12px;
+    display: inline-flex;
+    gap: .2rem;
+    padding: .25rem;
+}
+
+.monitoring-view-toggle .btn {
+    border: 0;
+    border-radius: 9px !important;
+    min-height: 34px;
+    padding: .4rem .75rem;
+    box-shadow: none;
+    font-weight: 600;
+}
+
+.roadmap-monitoring-toolbar .roadmap-task-plan-count {
+    font-weight: 600;
+}
+
+.roadmap-monitoring-toolbar .roadmap-toolbar-actions > .btn {
+    font-weight: 600;
+}
+
+.monitoring-view-toggle .btn:not(.active) {
+    background: transparent;
+    color: #526b80;
+}
+
+.monitoring-view-toggle .btn.active {
+    background: #fff;
+    color: var(--roadmap-primary);
+    box-shadow: 0 3px 9px rgba(15, 76, 129, .1);
+}
+
 .roadmap-task-plan-trigger {
     gap: .15rem;
 }
@@ -1998,10 +2151,230 @@ include '../../includes/navbar.php';
     margin-top: .2rem;
 }
 
+.roadmap-stats--monitoring {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: .85rem;
+}
+
+.roadmap-stat--monitoring {
+    align-items: center;
+    display: grid;
+    gap: .75rem;
+    grid-template-columns: 38px minmax(0, 1fr);
+    min-height: 88px;
+    overflow: hidden;
+    padding: .75rem .9rem;
+    position: relative;
+    border-left: 3px solid transparent;
+    border-radius: 14px;
+    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.roadmap-stat--monitoring:hover {
+    border-left-color: var(--monitor-accent, var(--roadmap-primary));
+    box-shadow: 0 9px 22px rgba(15, 76, 129, .09);
+    transform: translateY(-2px);
+}
+
+.monitoring-stat-icon {
+    align-items: center;
+    align-self: start;
+    background: var(--monitor-soft, #edf7fc);
+    border-radius: 11px;
+    color: var(--monitor-accent, var(--roadmap-primary)) !important;
+    display: inline-flex !important;
+    font-size: .95rem !important;
+    height: 38px;
+    justify-content: center;
+    width: 38px;
+}
+
+.monitoring-stat-copy {
+    display: grid;
+    gap: .05rem;
+    min-width: 0;
+    text-transform: none;
+}
+
+.roadmap-stat .monitoring-stat-label {
+    font-size: .69rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+}
+
+.roadmap-stat--monitoring strong {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.roadmap-stat--monitoring .roadmap-stat-note {
+    line-height: 1.35;
+    margin-top: 0;
+}
+
+.roadmap-stat--monitoring.monitor-state-coverage {
+    --monitor-accent: #2563eb;
+    --monitor-soft: #eff6ff;
+}
+
+.roadmap-stat--monitoring.monitor-state-in-progress {
+    --monitor-accent: #168a4b;
+    --monitor-soft: #eaf8f0;
+}
+
+.roadmap-stat--monitoring.monitor-state-not-started {
+    --monitor-accent: #d97706;
+    --monitor-soft: #fff7e6;
+}
+
+.roadmap-stat--monitoring.monitor-state-pending {
+    --monitor-accent: #dc2626;
+    --monitor-soft: #fff0f0;
+}
+
 .monitoring-team-panel,
 .monitoring-filter-panel {
     margin-bottom: 1rem;
     padding: 1rem;
+}
+
+.monitoring-roadmap-workspace {
+    margin-bottom: 1rem;
+    overflow: hidden;
+    padding: 0;
+    border-radius: 16px;
+}
+
+.monitoring-roadmap-workspace .monitoring-workspace-filters {
+    margin: 0;
+    padding: 1rem 1.2rem;
+}
+
+.monitoring-workspace-legend {
+    margin: 0;
+    padding: .75rem 1.2rem;
+    border-top: 1px solid var(--roadmap-line);
+    border-bottom: 1px solid var(--roadmap-line);
+    border-radius: 0;
+    background: #fbfdff;
+}
+
+.monitoring-workspace-legend .monitoring-result-count {
+    margin-left: auto;
+}
+
+.monitoring-workspace-roadmap {
+    gap: 0;
+}
+
+.monitoring-workspace-roadmap .phase-list {
+    gap: 0;
+    background: #fff;
+}
+
+.monitoring-workspace-roadmap .phase-card-roadmap {
+    margin: 0;
+    border: 0;
+    border-bottom: 1px solid var(--roadmap-line);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.monitoring-workspace-roadmap .phase-card-roadmap:last-child {
+    border-bottom: 0;
+}
+
+.monitoring-workspace-roadmap .phase-card-roadmap:hover {
+    background: #f8fcff;
+    border-color: var(--roadmap-line);
+    transform: none;
+}
+
+.monitoring-workspace-roadmap .roadmap-gantt {
+    border: 0;
+    border-left: 1px solid var(--roadmap-line);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.architect-roadmap-workspace {
+    margin-bottom: 1rem;
+    overflow: hidden;
+    padding: 0;
+    border-radius: 18px;
+}
+
+.architect-roadmap-workspace > .roadmap-toolbar {
+    margin: 0;
+    padding: 1.1rem 1.25rem;
+    border: 0;
+    border-bottom: 1px solid var(--roadmap-line);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.architect-roadmap-workspace > .roadmap-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    margin: 0;
+    padding: .75rem 1rem;
+    border-bottom: 1px solid var(--roadmap-line);
+}
+
+.architect-roadmap-workspace > .roadmap-stats .roadmap-stat {
+    min-height: 64px;
+    padding: .5rem 1rem;
+    border: 0;
+    border-right: 1px solid var(--roadmap-line);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.architect-roadmap-workspace > .roadmap-stats .roadmap-stat:last-child {
+    border-right: 0;
+}
+
+.architect-workspace-legend {
+    margin: 0;
+    padding: .75rem 1.25rem;
+    border-bottom: 1px solid var(--roadmap-line);
+    border-radius: 0;
+    background: #fbfdff;
+}
+
+.architect-workspace-roadmap {
+    gap: 0;
+}
+
+.architect-workspace-roadmap .phase-list {
+    gap: 0;
+    background: #fff;
+}
+
+.architect-workspace-roadmap .phase-card-roadmap {
+    margin: 0;
+    border: 0;
+    border-bottom: 1px solid var(--roadmap-line);
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.architect-workspace-roadmap .phase-card-roadmap:last-child {
+    border-bottom: 0;
+}
+
+.architect-workspace-roadmap .phase-card-roadmap:hover {
+    background: #f8fcff;
+    border-color: var(--roadmap-line);
+    transform: none;
+}
+
+.architect-workspace-roadmap .roadmap-gantt {
+    border: 0;
+    border-left: 1px solid var(--roadmap-line);
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .monitoring-panel-heading {
@@ -2009,13 +2382,32 @@ include '../../includes/navbar.php';
     display: flex;
     gap: .75rem;
     justify-content: space-between;
-    margin-bottom: .85rem;
+    margin-bottom: .7rem;
+}
+
+.monitoring-heading-main {
+    align-items: center;
+    display: flex;
+    gap: .7rem;
+    min-width: 0;
+}
+
+.monitoring-heading-icon {
+    align-items: center;
+    background: #edf7fc;
+    border-radius: 10px;
+    color: var(--roadmap-primary);
+    display: inline-flex;
+    flex: 0 0 38px;
+    height: 38px;
+    justify-content: center;
+    width: 38px;
 }
 
 .monitoring-panel-heading h3 {
     color: var(--roadmap-ink);
     font-size: .95rem;
-    font-weight: 800;
+    font-weight: 600;
     margin: 0;
 }
 
@@ -2067,7 +2459,7 @@ include '../../includes/navbar.php';
     color: var(--roadmap-ink);
     display: block;
     font-size: .82rem;
-    font-weight: 800;
+    font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2094,7 +2486,7 @@ include '../../includes/navbar.php';
     border-radius: 999px;
     color: #1f6392;
     font-size: .65rem;
-    font-weight: 800;
+    font-weight: 600;
     padding: .25rem .4rem;
     white-space: nowrap;
 }
@@ -2113,7 +2505,7 @@ include '../../includes/navbar.php';
 
 .monitoring-filter-grid .form-label {
     font-size: .7rem;
-    font-weight: 800;
+    font-weight: 600;
     margin-bottom: .3rem;
     text-transform: uppercase;
 }
@@ -2131,9 +2523,54 @@ include '../../includes/navbar.php';
 }
 
 .monitoring-result-count {
+    align-items: center;
+    background: #f5f9fc;
+    border: 1px solid #dce8f0;
+    border-radius: 999px;
+    color: var(--roadmap-primary);
+    display: inline-flex;
+    font-size: .7rem;
+    font-weight: 600;
+    gap: .35rem;
+    padding: .35rem .65rem;
+    white-space: nowrap;
+}
+
+.monitoring-empty-state {
+    align-items: center;
+    background: #fbfdff;
+    border: 1px dashed #cbdde9;
+    border-radius: 12px;
+    display: flex;
+    gap: .8rem;
+    padding: .9rem 1rem;
+}
+
+.monitoring-empty-state > i {
+    align-items: center;
+    background: #edf7fc;
+    border-radius: 50%;
+    color: var(--roadmap-primary);
+    display: inline-flex;
+    flex: 0 0 38px;
+    height: 38px;
+    justify-content: center;
+    width: 38px;
+}
+
+.monitoring-empty-state strong {
+    color: var(--roadmap-ink);
+    display: block;
+    font-size: .8rem;
+    font-weight: 600;
+    margin-bottom: .12rem;
+}
+
+.monitoring-empty-state p {
     color: var(--roadmap-muted);
-    font-size: .75rem;
-    font-weight: 700;
+    font-size: .72rem;
+    line-height: 1.45;
+    margin: 0;
 }
 
 .roadmap-layout {
@@ -2313,6 +2750,14 @@ include '../../includes/navbar.php';
     font-size: .78rem;
     font-weight: 700;
     gap: .4rem;
+}
+
+.roadmap-shell--monitoring .phase-status-legend-title {
+    font-weight: 600;
+}
+
+.roadmap-shell--monitoring .phase-status-key {
+    font-weight: 500;
 }
 
 .phase-status-dot {
@@ -2540,19 +2985,22 @@ include '../../includes/navbar.php';
 }
 
 .gantt-bar-roadmap {
+    --gantt-arrow-depth: 10px;
     align-items: center;
-    border-radius: 6px;
+    border-radius: 0;
+    clip-path: polygon(0 0, calc(100% - var(--gantt-arrow-depth)) 0, 100% 50%, calc(100% - var(--gantt-arrow-depth)) 100%, 0 100%);
     color: #fff;
     display: flex;
     font-size: .75rem;
-    font-weight: 700;
+    font-weight: 600;
     height: 30px;
-    min-width: 34px;
+    min-width: 42px;
     overflow: hidden;
-    padding: 0 .65rem;
+    padding: 0 calc(.65rem + var(--gantt-arrow-depth)) 0 .65rem;
     position: absolute;
     top: 14px;
     white-space: nowrap;
+    -webkit-clip-path: polygon(0 0, calc(100% - var(--gantt-arrow-depth)) 0, 100% 50%, calc(100% - var(--gantt-arrow-depth)) 100%, 0 100%);
 }
 
 .gantt-bar-phase {
@@ -2572,6 +3020,7 @@ include '../../includes/navbar.php';
 }
 
 .gantt-bar-task {
+    --gantt-arrow-depth: 8px;
     background: #0f766e;
     cursor: pointer;
     height: 24px;
@@ -3051,6 +3500,79 @@ include '../../includes/navbar.php';
     border-color: #263244;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-toolbar-footer,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-empty-state {
+    background: #0f172a;
+    border-color: #263244;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-legend,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-roadmap .phase-list {
+    background: #0f172a;
+    border-color: #263244;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-roadmap .phase-card-roadmap,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-roadmap .roadmap-gantt {
+    border-color: #263244;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-roadmap .phase-card-roadmap:hover {
+    background: #10283a !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-workspace-legend,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-workspace-roadmap .phase-list {
+    background: #0f172a;
+    border-color: #263244;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-roadmap-workspace > .roadmap-toolbar,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-roadmap-workspace > .roadmap-stats,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-roadmap-workspace > .roadmap-stats .roadmap-stat,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-workspace-roadmap .phase-card-roadmap,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-workspace-roadmap .roadmap-gantt {
+    border-color: #263244;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-workspace-roadmap .phase-card-roadmap:hover {
+    background: #10283a !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-view-toggle,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-result-count {
+    background: #0d2236;
+    border-color: #263f55;
+    color: #8ad2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-view-toggle .btn.active {
+    background: #18344b;
+    color: #8ad2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-view-toggle .btn:not(.active) {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-department-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-heading-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-empty-state > i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-stat-icon {
+    background: #0d2236;
+    color: #8ad2ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-department-copy strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-empty-state strong {
+    color: #f8fafc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-department-copy small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-empty-state p {
+    color: #9db6cf;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-metric {
     background: rgba(59, 130, 246, .16);
     color: #93c5fd;
@@ -3206,6 +3728,40 @@ include '../../includes/navbar.php';
 }
 
 @media (max-width: 992px) {
+    .monitoring-project-picker {
+        grid-template-columns: 1fr;
+    }
+
+    .monitoring-project-submit {
+        width: 100%;
+    }
+
+    .monitoring-workspace-roadmap .roadmap-gantt {
+        border-left: 0;
+        border-top: 1px solid var(--roadmap-line);
+    }
+
+    .architect-roadmap-workspace > .roadmap-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .architect-roadmap-workspace > .roadmap-stats .roadmap-stat {
+        border-bottom: 1px solid var(--roadmap-line);
+    }
+
+    .architect-roadmap-workspace > .roadmap-stats .roadmap-stat:nth-child(2n) {
+        border-right: 0;
+    }
+
+    .architect-roadmap-workspace > .roadmap-stats .roadmap-stat:nth-last-child(-n + 2) {
+        border-bottom: 0;
+    }
+
+    .architect-workspace-roadmap .roadmap-gantt {
+        border-left: 0;
+        border-top: 1px solid var(--roadmap-line);
+    }
+
     .roadmap-methodology-form {
         grid-template-columns: minmax(0, 1fr) auto;
     }
@@ -3250,6 +3806,42 @@ include '../../includes/navbar.php';
 }
 
 @media (max-width: 576px) {
+    .architect-roadmap-workspace > .roadmap-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .architect-roadmap-workspace > .roadmap-stats .roadmap-stat,
+    .architect-roadmap-workspace > .roadmap-stats .roadmap-stat:nth-child(2n),
+    .architect-roadmap-workspace > .roadmap-stats .roadmap-stat:nth-last-child(-n + 2) {
+        border-right: 0;
+        border-bottom: 1px solid var(--roadmap-line);
+    }
+
+    .architect-roadmap-workspace > .roadmap-stats .roadmap-stat:last-child {
+        border-bottom: 0;
+    }
+
+    .monitoring-toolbar-footer,
+    .monitoring-panel-heading {
+        align-items: flex-start;
+    }
+
+    .monitoring-toolbar-footer,
+    .monitoring-panel-heading,
+    .monitoring-department-context {
+        width: 100%;
+    }
+
+    .monitoring-view-toggle {
+        display: flex;
+        width: 100%;
+    }
+
+    .monitoring-view-toggle .btn {
+        flex: 1 1 0;
+        width: auto;
+    }
+
     .roadmap-project-header {
         align-items: flex-start;
         flex-direction: column;
@@ -3316,7 +3908,7 @@ include '../../includes/navbar.php';
 }
 </style>
 
-<div class="container-fluid roadmap-shell">
+<div class="container-fluid roadmap-shell<?php echo $isSulMonitoring ? ' roadmap-shell--monitoring' : ''; ?>">
     <?php di_render_project_attention_banner($conn, $user, $selectedProjectId); ?>
 
     <div class="roadmap-header">
@@ -3429,34 +4021,41 @@ include '../../includes/navbar.php';
         ?>
     <?php endif; ?>
 
-    <div class="roadmap-toolbar">
+    <?php if (!$isSulMonitoring && $selectedProject): ?>
+        <section class="roadmap-card architect-roadmap-workspace" aria-label="Architect roadmap workspace">
+    <?php endif; ?>
+    <div class="roadmap-toolbar<?php echo $isSulMonitoring ? ' roadmap-monitoring-toolbar' : ''; ?>">
         <?php if ($isSulMonitoring): ?>
             <?php if ($projects !== []): ?>
-                <form method="GET" class="row g-3 align-items-end">
-                    <div class="col-lg-9">
-                        <label class="form-label">Department Project</label>
-                        <select class="form-select" name="project_id">
-                            <?php foreach ($projects as $project): ?>
-                                <option value="<?php echo (int) $project['id']; ?>" <?php echo (int) $project['id'] === (int) $selectedProjectId ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($project['name'] . ' - ' . $project['client_name']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
+                <form method="GET" class="monitoring-project-picker">
+                    <div class="monitoring-project-field">
+                        <label class="form-label" for="monitoringProjectSelect"><i class="fas fa-folder-tree" aria-hidden="true"></i> Department Project</label>
+                        <div class="monitoring-project-select">
+                            <i class="fas fa-diagram-project" aria-hidden="true"></i>
+                            <select class="form-select" name="project_id" id="monitoringProjectSelect">
+                                <?php foreach ($projects as $project): ?>
+                                    <option value="<?php echo (int) $project['id']; ?>" <?php echo (int) $project['id'] === (int) $selectedProjectId ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($project['name'] . ' - ' . $project['client_name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                     </div>
-                    <div class="col-lg-3">
-                        <button class="btn btn-primary w-100" type="submit">
-                            <i class="fas fa-chart-gantt me-1"></i> View Roadmap
-                        </button>
-                    </div>
+                    <button class="btn btn-primary monitoring-project-submit" type="submit">
+                        <i class="fas fa-chart-gantt me-2" aria-hidden="true"></i> View Roadmap
+                    </button>
                 </form>
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
-                    <span class="small text-muted">
-                        <i class="fas fa-building-user me-1"></i> Monitoring <?php echo htmlspecialchars($sulDepartmentLabel); ?> tasks
-                    </span>
+                <div class="monitoring-toolbar-footer">
+                    <div class="monitoring-department-context">
+                        <span class="monitoring-department-icon" aria-hidden="true"><i class="fas fa-building"></i></span>
+                        <span class="monitoring-department-copy">
+                            <strong><?php echo htmlspecialchars($sulDepartmentLabel); ?> workspace</strong>
+                        </span>
+                    </div>
                     <div class="roadmap-toolbar-actions">
-                        <div class="btn-group btn-group-sm" role="group" aria-label="Roadmap task filter">
-                            <button class="btn btn-outline-primary" type="button" data-roadmap-filter="all">All Roadmap</button>
-                            <button class="btn btn-primary active" type="button" data-roadmap-filter="department">My Department</button>
+                        <div class="monitoring-view-toggle" role="group" aria-label="Roadmap task filter">
+                            <button class="btn btn-outline-primary btn-sm" type="button" data-roadmap-filter="all"><i class="fas fa-layer-group me-1" aria-hidden="true"></i> All Roadmap</button>
+                            <button class="btn btn-primary btn-sm active" type="button" data-roadmap-filter="department"><i class="fas fa-users me-1" aria-hidden="true"></i> My Department</button>
                         </div>
                         <button class="btn btn-outline-primary btn-sm roadmap-task-plan-trigger" type="button" data-bs-toggle="modal" data-bs-target="#roadmapTaskPlanModal">
                             <i class="fas fa-table me-1" aria-hidden="true"></i> Task Plan
@@ -3581,33 +4180,43 @@ include '../../includes/navbar.php';
     <?php if (!$selectedProject): ?>
         <div class="roadmap-card empty-roadmap">No project roadmap is available.</div>
     <?php else: ?>
-        <div class="roadmap-stats">
+        <div class="roadmap-stats<?php echo $isSulMonitoring ? ' roadmap-stats--monitoring' : ''; ?>">
             <?php if ($isSulMonitoring): ?>
                 <?php $departmentTaskTotal = (int) array_sum($monitoringTaskCounts); ?>
-                <div class="roadmap-card roadmap-stat">
-                    <span>Team Members</span>
-                    <strong><?php echo count($monitoringMembers); ?></strong>
-                    <small class="roadmap-stat-note"><?php echo (int) $monitoringSummary['active_members']; ?> currently active</small>
+                <div class="roadmap-card roadmap-stat roadmap-stat--monitoring">
+                    <span class="monitoring-stat-icon" aria-hidden="true"><i class="fas fa-user-group"></i></span>
+                    <span class="monitoring-stat-copy">
+                        <span class="monitoring-stat-label">Team Members</span>
+                        <strong><?php echo count($monitoringMembers); ?></strong>
+                    </span>
                 </div>
-                <div class="roadmap-card roadmap-stat">
-                    <span>Staffing Coverage</span>
-                    <strong><?php echo (int) $monitoringSummary['assigned_tasks']; ?>/<?php echo $departmentTaskTotal; ?></strong>
-                    <small class="roadmap-stat-note">department tasks assigned</small>
+                <div class="roadmap-card roadmap-stat roadmap-stat--monitoring monitor-state-coverage">
+                    <span class="monitoring-stat-icon" aria-hidden="true"><i class="fas fa-chart-pie"></i></span>
+                    <span class="monitoring-stat-copy">
+                        <span class="monitoring-stat-label">Staffing Coverage</span>
+                        <strong><?php echo (int) $monitoringSummary['assigned_tasks']; ?>/<?php echo $departmentTaskTotal; ?></strong>
+                    </span>
                 </div>
-                <div class="roadmap-card roadmap-stat monitor-state-in-progress">
-                    <span>Active Tasks</span>
-                    <strong><?php echo (int) $monitoringTaskCounts['in-progress']; ?></strong>
-                    <small class="roadmap-stat-note">work currently in progress</small>
+                <div class="roadmap-card roadmap-stat roadmap-stat--monitoring monitor-state-in-progress">
+                    <span class="monitoring-stat-icon" aria-hidden="true"><i class="fas fa-circle-play"></i></span>
+                    <span class="monitoring-stat-copy">
+                        <span class="monitoring-stat-label">Active Tasks</span>
+                        <strong><?php echo (int) $monitoringTaskCounts['in-progress']; ?></strong>
+                    </span>
                 </div>
-                <div class="roadmap-card roadmap-stat monitor-state-not-started">
-                    <span>Unassigned</span>
-                    <strong><?php echo (int) $monitoringSummary['unassigned_tasks']; ?></strong>
-                    <small class="roadmap-stat-note">tasks needing an owner</small>
+                <div class="roadmap-card roadmap-stat roadmap-stat--monitoring monitor-state-not-started">
+                    <span class="monitoring-stat-icon" aria-hidden="true"><i class="fas fa-user-clock"></i></span>
+                    <span class="monitoring-stat-copy">
+                        <span class="monitoring-stat-label">Unassigned</span>
+                        <strong><?php echo (int) $monitoringSummary['unassigned_tasks']; ?></strong>
+                    </span>
                 </div>
-                <div class="roadmap-card roadmap-stat monitor-state-pending">
-                    <span>At Risk</span>
-                    <strong><?php echo (int) $monitoringSummary['at_risk_tasks']; ?></strong>
-                    <small class="roadmap-stat-note">blocked, revision, or overdue</small>
+                <div class="roadmap-card roadmap-stat roadmap-stat--monitoring monitor-state-pending">
+                    <span class="monitoring-stat-icon" aria-hidden="true"><i class="fas fa-triangle-exclamation"></i></span>
+                    <span class="monitoring-stat-copy">
+                        <span class="monitoring-stat-label">At Risk</span>
+                        <strong><?php echo (int) $monitoringSummary['at_risk_tasks']; ?></strong>
+                    </span>
                 </div>
             <?php else: ?>
                 <div class="roadmap-card roadmap-stat roadmap-stat--with-icon">
@@ -3632,14 +4241,20 @@ include '../../includes/navbar.php';
         <?php if ($isSulMonitoring): ?>
             <section class="roadmap-card monitoring-team-panel" aria-labelledby="teamWorkloadHeading">
                 <div class="monitoring-panel-heading">
-                    <div>
-                        <h3 id="teamWorkloadHeading"><i class="fas fa-people-group me-1"></i> Team Workload</h3>
-                        <p>Select a member to show only their assigned roadmap tasks.</p>
+                    <div class="monitoring-heading-main">
+                        <span class="monitoring-heading-icon" aria-hidden="true"><i class="fas fa-users"></i></span>
+                        <div>
+                            <h3 id="teamWorkloadHeading">Team Workload</h3>
+                        </div>
                     </div>
-                    <span class="monitoring-result-count"><?php echo count($monitoringMembers); ?> members</span>
                 </div>
                 <?php if ($monitoringMembers === []): ?>
-                    <div class="small text-muted">No team members are assigned to this department's roadmap tasks yet.</div>
+                    <div class="monitoring-empty-state">
+                        <i class="fas fa-user-plus" aria-hidden="true"></i>
+                        <div>
+                            <strong>No team members assigned yet</strong>
+                        </div>
+                    </div>
                 <?php else: ?>
                     <div class="team-workload-grid">
                         <?php foreach ($monitoringMembers as $member): ?>
@@ -3680,14 +4295,8 @@ include '../../includes/navbar.php';
                 <?php endif; ?>
             </section>
 
-            <section class="roadmap-card monitoring-filter-panel" aria-labelledby="monitoringFiltersHeading">
-                <div class="monitoring-panel-heading">
-                    <div>
-                        <h3 id="monitoringFiltersHeading"><i class="fas fa-filter me-1"></i> Monitoring Filters</h3>
-                        <p>Narrow the roadmap by owner, status, phase, or attention needed.</p>
-                    </div>
-                    <span class="monitoring-result-count" id="monitoringResultCount"><?php echo $departmentTaskTotal; ?> tasks shown</span>
-                </div>
+            <section class="roadmap-card monitoring-roadmap-workspace" aria-label="Roadmap monitoring workspace">
+            <section class="monitoring-filter-panel monitoring-workspace-filters" aria-label="Roadmap filters">
                 <div class="monitoring-filter-grid">
                     <div>
                         <label class="form-label" for="monitorMemberFilter">Member</label>
@@ -3734,22 +4343,18 @@ include '../../includes/navbar.php';
             </section>
         <?php endif; ?>
 
-        <div class="roadmap-card phase-status-legend" aria-label="Phase status color legend">
+        <div class="<?php echo $isSulMonitoring ? 'phase-status-legend monitoring-workspace-legend' : 'phase-status-legend architect-workspace-legend'; ?>" aria-label="Phase status color legend">
             <span class="phase-status-legend-title">Phase Status</span>
             <span class="phase-status-key"><span class="phase-status-dot phase-state-done"></span> Done</span>
             <span class="phase-status-key"><span class="phase-status-dot phase-state-in-progress"></span> In Progress</span>
             <span class="phase-status-key"><span class="phase-status-dot phase-state-pending"></span> Pending / Blocked</span>
             <span class="phase-status-key"><span class="phase-status-dot phase-state-not-started"></span> Not Yet Started</span>
+            <?php if ($isSulMonitoring): ?>
+                <span class="monitoring-result-count" id="monitoringResultCount"><i class="fas fa-list-check" aria-hidden="true"></i><span data-monitoring-count-label><?php echo $departmentTaskTotal; ?> tasks shown</span></span>
+            <?php endif; ?>
         </div>
 
-        <?php if ($isSulMonitoring): ?>
-            <div class="alert alert-info roadmap-monitoring-notice d-flex align-items-start gap-2 small" role="status">
-                <i class="fas fa-arrows-rotate mt-1"></i>
-                <span>Statuses are read-only here and update automatically from developer work, SUL review, QA, and final completion.</span>
-            </div>
-        <?php endif; ?>
-
-        <div class="roadmap-layout">
+        <div class="roadmap-layout<?php echo $isSulMonitoring ? ' monitoring-workspace-roadmap' : ' architect-workspace-roadmap'; ?>">
             <div class="phase-list">
                 <?php if (count($phases) === 0): ?>
                     <div class="roadmap-card empty-roadmap"><?php echo $isSulMonitoring ? 'No roadmap phases are available for this project.' : 'No methodology phases yet.'; ?></div>
@@ -3977,6 +4582,11 @@ include '../../includes/navbar.php';
                 <?php endforeach; ?>
             </div>
         </div>
+        <?php if ($isSulMonitoring): ?>
+            </section>
+        <?php elseif ($selectedProject): ?>
+            </section>
+        <?php endif; ?>
 
         <div class="modal fade roadmap-task-plan-modal" id="roadmapTaskPlanModal" tabindex="-1" aria-labelledby="roadmapTaskPlanModalTitle" aria-hidden="true">
             <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -5154,7 +5764,13 @@ function applyMonitoringFilters() {
 
     const resultCount = document.getElementById('monitoringResultCount');
     if (resultCount) {
-        resultCount.textContent = `${visibleTaskIds.size} ${visibleTaskIds.size === 1 ? 'task' : 'tasks'} shown`;
+        const resultCountLabel = resultCount.querySelector('[data-monitoring-count-label]');
+        const resultCountText = `${visibleTaskIds.size} ${visibleTaskIds.size === 1 ? 'task' : 'tasks'} shown`;
+        if (resultCountLabel) {
+            resultCountLabel.textContent = resultCountText;
+        } else {
+            resultCount.textContent = resultCountText;
+        }
     }
     const emptyRow = document.getElementById('monitoringFilterEmpty');
     if (emptyRow) {

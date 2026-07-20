@@ -591,13 +591,13 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
-    <!-- Row 2: Project Insight List -->
+    <!-- Row 2: Portfolio Project Risk -->
     <?php
     delayInsightsRenderCompactList($conn, $user, [
-        'limit' => 4,
-        'title' => 'Project Insight List',
-        'subtitle' => 'Small one-line project signals with direct links to the full insight page.',
-        'button_label' => 'View Project',
+        'limit' => 200,
+        'display' => 'portfolio_chart',
+        'title' => 'Overall Project Risk',
+        'subtitle' => 'Portfolio-wide delivery risk across all monitored projects.',
         'show_empty' => true,
         'empty_title' => 'No project insights yet',
         'empty_message' => 'Project insight signals will appear here when they become available.',

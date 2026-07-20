@@ -18,12 +18,52 @@ if ($architectReviewProjectId > 0) {
 }
 
 if ($architectReviewProject):
-    $reviewFeatureText = trim((string) ($architectReviewProject['requested_features'] ?? ''));
+    $reviewRequirementsText = trim((string) ($architectReviewProject['requested_features'] ?? ''));
     $reviewAdditionalText = '';
-    if (str_contains($reviewFeatureText, 'Additional Requirements:')) {
-        [$reviewFeatureText, $reviewAdditionalText] = array_pad(explode('Additional Requirements:', $reviewFeatureText, 2), 2, '');
+    if (preg_match('/Additional Requirements:\s*(.*?)(?=\R+\s*Budget\s*:|\z)/is', $reviewRequirementsText, $reviewAdditionalMatches)) {
+        $reviewAdditionalText = trim((string) ($reviewAdditionalMatches[1] ?? ''));
     }
-    $reviewFeatures = array_values(array_filter(array_map('trim', preg_split('/\R+/', $reviewFeatureText) ?: [])));
+    $reviewFeatures = [];
+    $reviewFeatureSeen = [];
+    foreach ((preg_split('/\R+/', $reviewRequirementsText) ?: []) as $reviewFeatureLine) {
+        $reviewFeatureLine = trim((string) $reviewFeatureLine);
+        if ($reviewFeatureLine === '') {
+            continue;
+        }
+        if (preg_match('/^(additional requirements|budget)\s*:/i', $reviewFeatureLine)) {
+            break;
+        }
+        $reviewFeatureLine = trim((string) preg_replace('/^\s*(?:[-*]|\d+[\.)])\s*/', '', $reviewFeatureLine));
+        if ($reviewFeatureLine === '') {
+            continue;
+        }
+        $reviewFeatureKey = strtolower((string) preg_replace('/\s+/', ' ', $reviewFeatureLine));
+        if (isset($reviewFeatureSeen[$reviewFeatureKey])) {
+            continue;
+        }
+        $reviewFeatureSeen[$reviewFeatureKey] = true;
+        $reviewFeatures[] = $reviewFeatureLine;
+    }
+    $reviewBudgetAmount = null;
+    if (isset($architectReviewProject['sales_budget']) && is_numeric($architectReviewProject['sales_budget']) && (float) $architectReviewProject['sales_budget'] > 0) {
+        $reviewBudgetAmount = (float) $architectReviewProject['sales_budget'];
+    } elseif (preg_match('/(?:^|\R)Budget:\s*(?:\R\s*)?([^\r\n]+)/i', $reviewRequirementsText, $reviewBudgetMatches)) {
+        $reviewBudgetRaw = preg_replace('/[^0-9.]/', '', (string) ($reviewBudgetMatches[1] ?? ''));
+        if (is_numeric($reviewBudgetRaw) && (float) $reviewBudgetRaw > 0) {
+            $reviewBudgetAmount = (float) $reviewBudgetRaw;
+        }
+    }
+    $reviewTimelineStart = !empty($architectReviewProject['timeline_start']) ? strtotime((string) $architectReviewProject['timeline_start']) : false;
+    $reviewTimelineEnd = !empty($architectReviewProject['timeline_end']) ? strtotime((string) $architectReviewProject['timeline_end']) : false;
+    if ($reviewTimelineStart && $reviewTimelineEnd) {
+        $reviewTimelineLabel = date('M d, Y', $reviewTimelineStart) . ' - ' . date('M d, Y', $reviewTimelineEnd);
+    } elseif ($reviewTimelineStart) {
+        $reviewTimelineLabel = 'Starts ' . date('M d, Y', $reviewTimelineStart);
+    } elseif ($reviewTimelineEnd) {
+        $reviewTimelineLabel = 'Due ' . date('M d, Y', $reviewTimelineEnd);
+    } else {
+        $reviewTimelineLabel = 'Not set';
+    }
     $reviewAttachments = [];
     if (!empty($architectReviewProject['sales_attachments'])) {
         $decodedReviewAttachments = json_decode((string) $architectReviewProject['sales_attachments'], true);
@@ -45,8 +85,8 @@ if ($architectReviewProject):
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    min-height: 72px;
-    padding: 0.9rem 1rem;
+    min-height: 60px;
+    padding: 0.65rem 1rem;
     background: #ffffff;
 }
 
@@ -68,16 +108,16 @@ if ($architectReviewProject):
     color: var(--theme-primary, #1f6392);
     display: inline-flex;
     flex: 0 0 auto;
-    height: 38px;
+    height: 34px;
     justify-content: center;
-    width: 38px;
+    width: 34px;
 }
 
 .architect-review-panel__head h5 {
     margin: 0;
     color: var(--gray-900, #212529);
     font-size: 0.95rem;
-    font-weight: 700;
+    font-weight: 600;
 }
 
 .architect-review-panel__head p {
@@ -92,10 +132,11 @@ if ($architectReviewProject):
     border: 1px solid #c8d8e6;
     border-radius: 9px;
     color: var(--theme-primary, #1f6392);
+    cursor: pointer;
     display: inline-flex;
     flex: 0 0 auto;
     font-size: 0.82rem;
-    font-weight: 700;
+    font-weight: 600;
     gap: 0.5rem;
     min-height: 36px;
     padding: 0.45rem 0.75rem;
@@ -123,60 +164,127 @@ if ($architectReviewProject):
 }
 
 .architect-review-panel__body {
-    display: grid;
-    gap: 1rem;
-    padding: 1rem;
-    background: #f7fafc;
-}
-
-.architect-review-panel__grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.75rem;
-}
-
-.architect-review-panel__item,
-.architect-review-panel__section {
-    border: 1px solid #e1e9f0;
-    border-radius: 10px;
+    display: block;
+    padding: 0;
     background: #ffffff;
-    padding: 0.9rem;
 }
 
-.architect-review-panel__item span,
-.architect-review-panel__section span {
+.architect-review-panel__body > :last-child {
+    border-bottom: 0;
+}
+
+.architect-review-panel__overview {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.architect-review-panel__item {
+    align-items: center;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: minmax(90px, 0.34fr) minmax(0, 1fr);
+    min-height: 52px;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e5edf4;
+}
+
+.architect-review-panel__item:nth-child(odd) {
+    border-right: 1px solid #e5edf4;
+}
+
+.architect-review-panel__label,
+.architect-review-panel__section-title {
     display: block;
     color: #718399;
-    font-size: 0.69rem;
-    font-weight: 700;
+    font-size: 0.67rem;
+    font-weight: 600;
     letter-spacing: 0.035em;
     text-transform: uppercase;
 }
 
-.architect-review-panel__item strong,
-.architect-review-panel__section div {
+.architect-review-panel__value {
     color: #1e344a;
-    font-size: 0.9rem;
+    font-size: 0.82rem;
+    font-weight: 500;
     overflow-wrap: anywhere;
 }
 
-.architect-review-panel__item strong {
-    display: block;
-    margin-top: 0.3rem;
+.architect-review-panel__row {
+    align-items: start;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 150px minmax(0, 1fr);
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid #e5edf4;
 }
 
-.architect-review-panel__section div {
-    margin-top: 0.35rem;
+.architect-review-panel__row .architect-review-panel__value {
+    line-height: 1.55;
     white-space: pre-wrap;
 }
 
-.architect-review-panel__features {
-    margin: 0.45rem 0 0;
-    padding-left: 1.1rem;
+.architect-review-panel__section {
+    padding: 0.9rem 1rem 0.75rem;
+    border-bottom: 1px solid #e5edf4;
 }
 
-.architect-review-panel__features li {
-    margin-bottom: 0.25rem;
+.architect-review-panel__section-head {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+    margin-bottom: 0.45rem;
+}
+
+.architect-review-panel__section-count {
+    color: #718399;
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+.architect-review-panel__features {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0;
+}
+
+.architect-review-panel__feature {
+    align-items: center;
+    color: #1e344a;
+    display: flex;
+    font-size: 0.8rem;
+    gap: 0.5rem;
+    min-width: 0;
+    padding: 0.55rem 0.65rem 0.55rem 0;
+    border-bottom: 1px solid #edf2f6;
+}
+
+.architect-review-panel__feature i {
+    color: var(--theme-primary, #1f6392);
+    flex: 0 0 auto;
+    font-size: 0.68rem;
+}
+
+.architect-review-panel__context-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-bottom: 1px solid #e5edf4;
+}
+
+.architect-review-panel__context-item {
+    min-width: 0;
+    padding: 0.85rem 1rem;
+    border-right: 1px solid #e5edf4;
+}
+
+.architect-review-panel__context-item:last-child {
+    border-right: 0;
+}
+
+.architect-review-panel__context-item .architect-review-panel__value {
+    line-height: 1.5;
+    margin-top: 0.35rem;
+    white-space: pre-wrap;
 }
 
 .architect-review-panel__attachment {
@@ -198,8 +306,21 @@ if ($architectReviewProject):
 }
 
 @media (max-width: 992px) {
-    .architect-review-panel__grid {
+    .architect-review-panel__features {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .architect-review-panel__context-grid {
         grid-template-columns: 1fr;
+    }
+
+    .architect-review-panel__context-item {
+        border-right: 0;
+        border-bottom: 1px solid #e5edf4;
+    }
+
+    .architect-review-panel__context-item:last-child {
+        border-bottom: 0;
     }
 }
 
@@ -213,11 +334,23 @@ if ($architectReviewProject):
         justify-content: center;
         width: 100%;
     }
+
+    .architect-review-panel__overview,
+    .architect-review-panel__features {
+        grid-template-columns: 1fr;
+    }
+
+    .architect-review-panel__item:nth-child(odd) {
+        border-right: 0;
+    }
+
+    .architect-review-panel__row {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+    }
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__item,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__section {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel {
     background: #071321;
     border-color: rgba(31, 99, 146, 0.24);
     color: #d7e4f2;
@@ -229,7 +362,16 @@ if ($architectReviewProject):
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__body {
-    background: #091624;
+    background: #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__context-grid,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__context-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__feature {
+    border-color: rgba(31, 99, 146, 0.24);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__icon,
@@ -245,8 +387,8 @@ if ($architectReviewProject):
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__head h5,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__item strong,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__section div {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-review-panel__feature {
     color: #d7e4f2;
 }
 </style>
@@ -256,7 +398,6 @@ if ($architectReviewProject):
             <span class="architect-review-panel__icon"><i class="fas fa-clipboard-check"></i></span>
             <div>
                 <h5>Project Review Details</h5>
-                <p>Reference the approved client requirements and sales context.</p>
             </div>
         </div>
         <button
@@ -271,41 +412,49 @@ if ($architectReviewProject):
         </button>
     </div>
     <div class="architect-review-panel__body" id="<?php echo htmlspecialchars($architectReviewPanelBodyId); ?>" <?php echo $architectReviewPanelExpanded ? '' : 'hidden'; ?>>
-        <div class="architect-review-panel__grid">
-            <div class="architect-review-panel__item"><span>Project</span><strong><?php echo htmlspecialchars((string) $architectReviewProject['name']); ?></strong></div>
-            <div class="architect-review-panel__item"><span>Client</span><strong><?php echo htmlspecialchars((string) $architectReviewProject['client_name']); ?></strong></div>
-            <div class="architect-review-panel__item"><span>Timeline</span><strong><?php echo htmlspecialchars(trim((string) ($architectReviewProject['timeline_start'] ?? 'Not set') . ' to ' . (string) ($architectReviewProject['timeline_end'] ?? 'Not set'))); ?></strong></div>
-            <div class="architect-review-panel__item"><span>Contact</span><strong><?php echo htmlspecialchars((string) ($architectReviewProject['contact_person'] ?? 'N/A')); ?></strong></div>
-            <div class="architect-review-panel__item"><span>Email</span><strong><?php echo htmlspecialchars((string) ($architectReviewProject['client_email'] ?? 'N/A')); ?></strong></div>
-            <div class="architect-review-panel__item"><span>Priority</span><strong><?php echo htmlspecialchars(ucfirst((string) ($architectReviewProject['priority'] ?? 'medium'))); ?></strong></div>
+        <div class="architect-review-panel__overview">
+            <div class="architect-review-panel__item"><span class="architect-review-panel__label">Project</span><span class="architect-review-panel__value"><?php echo htmlspecialchars((string) $architectReviewProject['name']); ?></span></div>
+            <div class="architect-review-panel__item"><span class="architect-review-panel__label">Client</span><span class="architect-review-panel__value"><?php echo htmlspecialchars((string) $architectReviewProject['client_name']); ?></span></div>
+            <div class="architect-review-panel__item"><span class="architect-review-panel__label">Timeline</span><span class="architect-review-panel__value"><?php echo htmlspecialchars($reviewTimelineLabel); ?></span></div>
+            <div class="architect-review-panel__item"><span class="architect-review-panel__label">Priority</span><span class="architect-review-panel__value"><?php echo htmlspecialchars(ucfirst((string) ($architectReviewProject['priority'] ?? 'medium'))); ?></span></div>
+            <div class="architect-review-panel__item"><span class="architect-review-panel__label">Contact</span><span class="architect-review-panel__value"><?php echo htmlspecialchars((string) ($architectReviewProject['contact_person'] ?: 'Not provided')); ?></span></div>
+            <div class="architect-review-panel__item"><span class="architect-review-panel__label">Email</span><span class="architect-review-panel__value"><?php echo htmlspecialchars((string) ($architectReviewProject['client_email'] ?: 'Not provided')); ?></span></div>
+            <div class="architect-review-panel__item"><span class="architect-review-panel__label">Phone</span><span class="architect-review-panel__value"><?php echo htmlspecialchars((string) ($architectReviewProject['client_phone'] ?: 'Not provided')); ?></span></div>
+            <div class="architect-review-panel__item"><span class="architect-review-panel__label">Budget</span><span class="architect-review-panel__value"><?php echo $reviewBudgetAmount !== null ? '&#8369;' . number_format($reviewBudgetAmount, 2) : 'Not provided'; ?></span></div>
+        </div>
+        <div class="architect-review-panel__row">
+            <span class="architect-review-panel__label">Description</span>
+            <div class="architect-review-panel__value"><?php echo htmlspecialchars((string) ($architectReviewProject['description'] ?: 'Not provided')); ?></div>
         </div>
         <div class="architect-review-panel__section">
-            <span>Description</span>
-            <div><?php echo htmlspecialchars((string) ($architectReviewProject['description'] ?: 'No description provided.')); ?></div>
-        </div>
-        <div class="architect-review-panel__section">
-            <span>Requested Features</span>
+            <div class="architect-review-panel__section-head">
+                <span class="architect-review-panel__section-title">Requested Features</span>
+                <span class="architect-review-panel__section-count"><?php echo count($reviewFeatures); ?> item<?php echo count($reviewFeatures) === 1 ? '' : 's'; ?></span>
+            </div>
             <?php if ($reviewFeatures): ?>
-                <ul class="architect-review-panel__features">
+                <div class="architect-review-panel__features">
                     <?php foreach ($reviewFeatures as $reviewFeature): ?>
-                        <li><?php echo htmlspecialchars($reviewFeature); ?></li>
+                        <span class="architect-review-panel__feature"><i class="fas fa-check-circle" aria-hidden="true"></i><span><?php echo htmlspecialchars($reviewFeature); ?></span></span>
                     <?php endforeach; ?>
-                </ul>
+                </div>
             <?php else: ?>
-                <div>No requested features provided.</div>
-            <?php endif; ?>
-            <?php if (trim($reviewAdditionalText) !== ''): ?>
-                <div><strong>Additional Requirements:</strong> <?php echo htmlspecialchars(trim($reviewAdditionalText)); ?></div>
+                <div class="architect-review-panel__value">Not provided</div>
             <?php endif; ?>
         </div>
-        <div class="architect-review-panel__grid">
-            <div class="architect-review-panel__section"><span>Meeting Notes</span><div><?php echo htmlspecialchars((string) ($architectReviewProject['meeting_notes'] ?: 'No meeting notes provided.')); ?></div></div>
-            <div class="architect-review-panel__section"><span>MOM</span><div><?php echo htmlspecialchars((string) ($architectReviewProject['mom'] ?: 'No MOM provided.')); ?></div></div>
-            <div class="architect-review-panel__section"><span>Sales Notes</span><div><?php echo htmlspecialchars((string) (($architectReviewProject['sales_notes'] ?? '') ?: 'No sales notes provided.')); ?></div></div>
+        <?php if (trim($reviewAdditionalText) !== ''): ?>
+            <div class="architect-review-panel__row">
+                <span class="architect-review-panel__label">Additional Requirements</span>
+                <div class="architect-review-panel__value"><?php echo htmlspecialchars(trim($reviewAdditionalText)); ?></div>
+            </div>
+        <?php endif; ?>
+        <div class="architect-review-panel__context-grid">
+            <div class="architect-review-panel__context-item"><span class="architect-review-panel__label">Meeting Notes</span><div class="architect-review-panel__value"><?php echo htmlspecialchars((string) ($architectReviewProject['meeting_notes'] ?: 'Not provided')); ?></div></div>
+            <div class="architect-review-panel__context-item"><span class="architect-review-panel__label">MOM</span><div class="architect-review-panel__value"><?php echo htmlspecialchars((string) ($architectReviewProject['mom'] ?: 'Not provided')); ?></div></div>
+            <div class="architect-review-panel__context-item"><span class="architect-review-panel__label">Sales Notes</span><div class="architect-review-panel__value"><?php echo htmlspecialchars((string) (($architectReviewProject['sales_notes'] ?? '') ?: 'Not provided')); ?></div></div>
         </div>
-        <div class="architect-review-panel__section">
-            <span>Attachments</span>
-            <div>
+        <div class="architect-review-panel__row">
+            <span class="architect-review-panel__label">Attachments</span>
+            <div class="architect-review-panel__value">
                 <?php if ($reviewAttachments): ?>
                     <?php foreach ($reviewAttachments as $attachment): ?>
                         <a class="architect-review-panel__attachment" href="<?php echo BASE_URL . htmlspecialchars((string) ($attachment['path'] ?? '')); ?>" target="_blank" rel="noopener">

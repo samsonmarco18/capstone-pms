@@ -136,44 +136,71 @@ function delayInsightsEnsureStyles(): void
         .delay-action:hover{color:#fff;background:#184f73;box-shadow:0 6px 16px rgba(31,99,146,.25);}
         .delay-fix-action{margin-top:.85rem;width:max-content;max-width:100%;}
         .delay-insight-project-right{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;justify-content:flex-end;}
-        .delay-compact-card{background:#fff;border:1px solid rgba(31,99,146,.14);border-radius:24px;box-shadow:0 12px 28px rgba(15,76,129,.08);overflow:hidden;margin-bottom:0;display:flex;flex-direction:column;}
-        .delay-compact-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.35rem 1.5rem;border-bottom:1px solid rgba(31,99,146,.10);background:#f8fcff;}
+        .delay-compact-card{background:#fff;border:1px solid rgba(31,99,146,.14);border-radius:24px;box-shadow:0 12px 28px rgba(15,76,129,.08);overflow:hidden;margin-bottom:0;display:flex;flex-direction:column;container-type:inline-size;}
+        .delay-compact-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.05rem 1.25rem;border-bottom:1px solid rgba(31,99,146,.10);background:#f8fcff;}
         .delay-compact-head-copy{min-width:0;}
-        .delay-compact-head h4{margin:0 0 .3rem;font-size:1rem;font-weight:600;color:#1f6392;display:flex;align-items:center;gap:.55rem;}
+        .delay-compact-head h4{margin:0 0 .22rem;font-size:1rem;font-weight:600;color:#1f6392;display:flex;align-items:center;gap:.6rem;}
+        .delay-compact-head h4 i{width:30px;height:30px;border-radius:9px;background:#eaf5fb;display:inline-flex;align-items:center;justify-content:center;font-size:.82rem;}
         .delay-compact-head p{margin:0;color:#6c757d;font-size:.82rem;line-height:1.55;max-width:700px;}
         .delay-compact-count{display:inline-flex;align-items:center;justify-content:center;padding:.45rem .8rem;border-radius:999px;background:#fff;color:#1f6392;border:1px solid rgba(31,99,146,.16);font-size:.72rem;font-weight:600;white-space:nowrap;}
-        .delay-compact-list{display:grid;gap:1rem;padding:1rem 1.1rem;flex-grow:1;}
-        .delay-compact-row{display:grid;grid-template-columns:1fr 1fr auto;grid-template-rows:auto auto;gap:.8rem 1rem;padding:.75rem 1rem;border:1px solid #d9e8f3;border-radius:14px;background:#fff;box-shadow:0 4px 12px rgba(15,74,110,.04);transition:border-color .2s ease,box-shadow .2s ease;position:relative;}
-        .delay-compact-row:hover{border-color:#aecadf;box-shadow:0 14px 28px rgba(15,74,110,.09);}
-        .delay-compact-row.delay-row-risk-high{border-color:rgba(220,38,38,.46);box-shadow:0 0 0 1px rgba(220,38,38,.12),0 0 22px rgba(220,38,38,.16),0 14px 30px rgba(15,74,110,.06);}
-        .delay-compact-row.delay-row-risk-high:hover{border-color:rgba(220,38,38,.58);box-shadow:0 0 0 1px rgba(220,38,38,.18),0 0 28px rgba(220,38,38,.22),0 16px 34px rgba(15,74,110,.08);}
-        .delay-compact-main{min-width:0;display:block;grid-column:1 / 3;grid-row:1;}
-        .delay-compact-top{display:block;min-width:0;}
-        .delay-compact-title{min-width:0;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;width:100%;}
-        .delay-compact-title-row{display:block;min-width:0;}
-        .delay-compact-title strong{display:inline;font-size:.9rem;font-weight:600;color:#212529;line-height:1.2;}
-        .delay-compact-meta{display:flex;flex-wrap:wrap;gap:.5rem;}
-        .delay-compact-meta span{display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .65rem;border-radius:999px;background:#f8fafc;border:1px solid #e2eaf1;color:#52616f;font-size:.72rem;line-height:1;}
-        .delay-compact-note{max-width:780px;font-size:.82rem;line-height:1.55;color:#425466;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-        .delay-compact-metric{min-width:0;display:flex;flex-direction:column;justify-content:center;min-height:50px;padding:.6rem .7rem;border:1px solid #dce7ef;border-radius:10px;background:#fbfdff;box-shadow:inset 0 1px 0 rgba(255,255,255,.7);grid-row:2;}
-        .delay-metric-delay{grid-column:1;}
-        .delay-metric-success{grid-column:2;}
-        .delay-compact-metric label{display:block;font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;color:#6c757d;margin-bottom:.25rem;}
-        .delay-compact-metric strong{font-size:1.1rem;font-weight:600;color:#1f6392;line-height:1.1;}
-        .delay-row-risk-high .delay-metric-delay{border-color:rgba(220,38,38,.26);background:#fffafa;}
-        .delay-row-risk-high .delay-metric-delay strong{color:#b91c1c;}
-        .delay-compact-action{align-self:center;justify-self:stretch;min-height:40px;white-space:nowrap;border-radius:10px;font-size:0.85rem;grid-column:3;grid-row:2;display:flex;align-items:center;justify-content:center;}
+        .delay-portfolio-head-risk{position:static;top:auto;right:auto;}
+        .delay-compact-list{display:grid;gap:.65rem;padding:.9rem;flex-grow:1;}
+        .delay-compact-row{--risk-accent:#1f6392;display:grid;grid-template-columns:minmax(210px,1fr) auto auto auto auto;align-items:center;gap:1rem;padding:.78rem .9rem .78rem 1.05rem;border:1px solid #d9e8f3;border-radius:15px;background:#fff;box-shadow:0 4px 12px rgba(15,74,110,.035);transition:transform .18s ease,border-color .18s ease,background-color .18s ease,box-shadow .18s ease;position:relative;overflow:hidden;}
+        .delay-compact-row::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:var(--risk-accent);}
+        .delay-compact-row:hover{transform:translateY(-2px);border-color:#b9d2e3;background:#fbfdff;box-shadow:0 12px 24px rgba(15,74,110,.09);}
+        .delay-compact-row.delay-row-risk-low{--risk-accent:#0f8a57;}
+        .delay-compact-row.delay-row-risk-medium{--risk-accent:#d98a0b;}
+        .delay-compact-row.delay-row-risk-high{--risk-accent:#dc2626;}
+        .delay-compact-main{min-width:0;display:flex;align-items:center;gap:.75rem;}
+        .delay-compact-project-icon{width:38px;height:38px;border-radius:11px;background:#edf7fc;color:#1f6392;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;}
+        .delay-compact-project-copy{min-width:0;display:grid;gap:.2rem;}
+        .delay-compact-title{font-size:.92rem;font-weight:600;color:#212529;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .delay-compact-project-meta{font-size:.7rem;color:#718096;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .delay-compact-metric{--metric-color:#1f6392;display:grid;grid-template-columns:50px auto;align-items:center;gap:.55rem;min-width:120px;}
+        .delay-metric-delay{--metric-color:#dc2626;}
+        .delay-metric-success{--metric-color:#168a4b;}
+        .delay-compact-gauge{--metric-value:0;position:relative;width:50px;height:50px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--metric-color) calc(var(--metric-value) * 1%),#e5edf3 0);}
+        .delay-compact-gauge::before{content:"";position:absolute;inset:6px;border-radius:50%;background:#fff;}
+        .delay-compact-gauge strong{position:relative;z-index:1;color:var(--metric-color);font-size:.84rem;font-weight:700;line-height:1;}
+        .delay-compact-metric label{display:block;margin:0;font-size:.62rem;letter-spacing:.055em;text-transform:uppercase;color:#6c757d;line-height:1.3;max-width:62px;}
+        .delay-compact-row .delay-risk-badge{position:static;top:auto;right:auto;}
+        .delay-compact-action{align-self:center;min-height:38px;white-space:nowrap;border-radius:10px;font-size:.78rem;padding:.58rem .8rem;}
         .delay-compact-footer{display:flex;justify-content:flex-end;align-items:center;padding:.95rem 1.1rem 1.1rem;border-top:1px solid rgba(31,99,146,.10);background:linear-gradient(180deg,#fff 0%,#f8fcff 100%);}
         .delay-compact-more-action{min-height:44px;padding:.72rem 1rem;border-radius:12px;font-size:.86rem;box-shadow:0 10px 22px rgba(31,99,146,.14);}
         .delay-compact-more-action i{transition:transform .2s ease;}
         .delay-compact-more-action:hover i{transform:translateX(2px);}
-         .delay-compact-empty{min-height:220px;padding:2rem 1.5rem;display:grid;place-items:center;align-content:center;gap:.55rem;color:#6c757d;text-align:center;}
-         .delay-compact-empty i{font-size:2rem;color:#1f6392;opacity:.72;}
-         .delay-compact-empty strong{color:#212529;font-size:.95rem;font-weight:600;}
-         .delay-compact-empty span{max-width:380px;color:#6c757d;font-size:.82rem;line-height:1.5;}
-         @media (max-width: 1199.98px){.delay-compact-row{grid-template-columns:1fr auto;grid-template-rows:auto auto auto;gap:.6rem;padding-top:2.5rem;}.delay-compact-main{grid-column:1;grid-row:1;}.delay-metric-delay{grid-column:1;grid-row:2;}.delay-metric-success{grid-column:1;grid-row:3;}.delay-compact-action{grid-column:2;grid-row:2 / 4;}.delay-risk-badge{position:absolute;top:.75rem;right:1rem;}}
-         @media (max-width: 991.98px){.delay-panels{grid-template-columns:1fr;}}
-         @media (max-width: 767.98px){.delay-insights-head,.delay-insight-item{padding:1.2rem;}.delay-compact-head{padding:1.2rem;flex-direction:column;align-items:flex-start;}.delay-compact-list{padding:1rem;}.delay-compact-footer{padding:.85rem 1rem 1rem;}.delay-metric-grid{grid-template-columns:1fr;}.delay-compact-row{grid-template-columns:1fr;grid-template-rows:auto auto auto auto;gap:.6rem;padding:2.5rem 1rem 1rem 1rem;}.delay-compact-main{grid-column:1;grid-row:1;}.delay-compact-top{flex-direction:column;align-items:flex-start;}.delay-metric-delay{grid-column:1;grid-row:2;width:100%;}.delay-metric-success{grid-column:1;grid-row:3;width:100%;}.delay-compact-action{grid-column:1;grid-row:4;width:100%;justify-self:stretch;min-height:44px;}.delay-risk-badge{position:absolute;top:.75rem;right:1rem;}.delay-insight-project-right{justify-content:flex-start;}}
+        .delay-compact-empty{min-height:220px;padding:2rem 1.5rem;display:grid;place-items:center;align-content:center;gap:.55rem;color:#6c757d;text-align:center;}
+        .delay-compact-empty i{font-size:2rem;color:#1f6392;opacity:.72;}
+        .delay-compact-empty strong{color:#212529;font-size:.95rem;font-weight:600;}
+        .delay-compact-empty span{max-width:380px;color:#6c757d;font-size:.82rem;line-height:1.5;}
+        .delay-portfolio-body{display:grid;grid-template-columns:minmax(250px,.8fr) minmax(320px,1.2fr);align-items:center;gap:2rem;padding:1.35rem 1.5rem 1.5rem;}
+        .delay-portfolio-chart-pane{display:flex;align-items:center;justify-content:center;min-width:0;}
+        .delay-portfolio-chart-shell{position:relative;width:min(280px,100%);aspect-ratio:1;}
+        .delay-portfolio-chart-shell canvas{position:absolute;inset:0;width:100%!important;height:100%!important;}
+        .delay-portfolio-chart-center{position:absolute;inset:50% auto auto 50%;transform:translate(-50%,-50%);display:grid;place-items:center;gap:.12rem;pointer-events:none;text-align:center;}
+        .delay-portfolio-chart-center strong{color:#17324d;font-size:2rem;font-weight:700;line-height:1;}
+        .delay-portfolio-chart-center span{color:#718096;font-size:.67rem;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;}
+        .delay-portfolio-summary{min-width:0;display:grid;gap:1rem;}
+        .delay-portfolio-summary-head{display:grid;gap:.25rem;}
+        .delay-portfolio-summary-head strong{color:#17324d;font-size:1rem;font-weight:600;}
+        .delay-portfolio-summary-head span{color:#718096;font-size:.78rem;line-height:1.5;}
+        .delay-portfolio-legend{display:grid;border-top:1px solid #e3edf4;}
+        .delay-portfolio-legend-row{display:grid;grid-template-columns:10px minmax(0,1fr) auto;align-items:center;gap:.65rem;padding:.7rem 0;border-bottom:1px solid #e3edf4;color:#425466;font-size:.78rem;}
+        .delay-portfolio-dot{width:10px;height:10px;border-radius:50%;}
+        .delay-portfolio-dot.high{background:#dc2626;}.delay-portfolio-dot.medium{background:#e4a11b;}.delay-portfolio-dot.low{background:#168a4b;}
+        .delay-portfolio-legend-row strong{color:#17324d;font-size:.78rem;font-weight:600;white-space:nowrap;}
+        .delay-portfolio-averages{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;}
+        .delay-portfolio-average{display:flex;align-items:baseline;justify-content:space-between;gap:.7rem;padding:.7rem 0;border-bottom:2px solid #dce8f0;}
+        .delay-portfolio-average span{color:#718096;font-size:.68rem;letter-spacing:.045em;text-transform:uppercase;}
+        .delay-portfolio-average strong{font-size:1.15rem;font-weight:650;}
+        .delay-portfolio-average.delay{border-color:#f3b7b7;}.delay-portfolio-average.delay strong{color:#c82424;}
+        .delay-portfolio-average.success{border-color:#a9ddc1;}.delay-portfolio-average.success strong{color:#168a4b;}
+        @container (max-width:820px){.delay-compact-row{grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"main risk action" "delay success action";gap:.7rem 1rem;}.delay-compact-main{grid-area:main;}.delay-metric-delay{grid-area:delay;}.delay-metric-success{grid-area:success;}.delay-compact-row .delay-risk-badge{grid-area:risk;}.delay-compact-action{grid-area:action;align-self:stretch;}}
+        @container (max-width:700px){.delay-portfolio-body{grid-template-columns:1fr;gap:1rem;padding:1.1rem;}.delay-portfolio-chart-shell{width:min(240px,100%);}.delay-portfolio-summary{width:100%;}}
+        @container (max-width:560px){.delay-compact-row{grid-template-columns:1fr 1fr;grid-template-areas:"main main" "delay success" "risk action";}.delay-compact-main{padding-right:0;}.delay-compact-action{width:100%;}.delay-compact-head{align-items:flex-start;}.delay-compact-head p{max-width:260px;}}
+        @media (max-width:991.98px){.delay-panels{grid-template-columns:1fr;}}
+        @media (max-width:767.98px){.delay-insights-head,.delay-insight-item{padding:1.2rem;}.delay-compact-head{padding:1rem;}.delay-compact-list{padding:.75rem;}.delay-compact-footer{padding:.85rem 1rem 1rem;}.delay-metric-grid{grid-template-columns:1fr;}.delay-insight-project-right{justify-content:flex-start;}}
+        @media (prefers-reduced-motion:reduce){.delay-compact-row{transition:none;}.delay-compact-row:hover{transform:none;}}
          html[data-theme="dark"] .delay-insights-card,
          html[data-theme="dark"] .delay-compact-card{
              background:rgba(10,22,35,.88);
@@ -189,17 +216,18 @@ function delayInsightsEnsureStyles(): void
          html[data-theme="dark"] .delay-compact-head h4,
           html[data-theme="dark"] .delay-panel-title,
           html[data-theme="dark"] .delay-insight-project h5,
-          html[data-theme="dark"] .delay-compact-title strong,
-          html[data-theme="dark"] .delay-compact-empty strong{
+           html[data-theme="dark"] .delay-compact-title,
+           html[data-theme="dark"] .delay-compact-empty strong{
               color:#d8e6f3;
           }
          html[data-theme="dark"] .delay-insights-head p,
          html[data-theme="dark"] .delay-compact-head p,
          html[data-theme="dark"] .delay-insight-project p,
          html[data-theme="dark"] .delay-copy,
-          html[data-theme="dark"] .delay-list,
-          html[data-theme="dark"] .delay-compact-note,
-          html[data-theme="dark"] .delay-compact-empty span{
+           html[data-theme="dark"] .delay-list,
+           html[data-theme="dark"] .delay-compact-note,
+           html[data-theme="dark"] .delay-compact-project-meta,
+           html[data-theme="dark"] .delay-compact-empty span{
               color:#a8c0d6;
           }
           html[data-theme="dark"] .delay-compact-empty i{
@@ -224,20 +252,11 @@ function delayInsightsEnsureStyles(): void
              background:linear-gradient(180deg,rgba(10,22,35,.88) 0%,rgba(12,31,49,.96) 100%);
              border-top-color:rgba(138,210,255,.10);
          }
-         html[data-theme="dark"] .delay-compact-row.delay-row-risk-high{
-             border-color:rgba(248,113,113,.48);
-             box-shadow:0 0 0 1px rgba(248,113,113,.14),0 0 26px rgba(127,29,29,.34),0 14px 30px rgba(0,0,0,.24);
-         }
-         html[data-theme="dark"] .delay-compact-row.delay-row-risk-high:hover{
-             border-color:rgba(248,113,113,.62);
-             box-shadow:0 0 0 1px rgba(248,113,113,.2),0 0 34px rgba(127,29,29,.42),0 16px 34px rgba(0,0,0,.30);
-         }
-         html[data-theme="dark"] .delay-panel,
-         html[data-theme="dark"] .delay-metric,
-         html[data-theme="dark"] .delay-compact-metric{
-             background:rgba(9,24,38,.92);
-             border-color:rgba(138,210,255,.10);
-             box-shadow:none;
+          html[data-theme="dark"] .delay-panel,
+          html[data-theme="dark"] .delay-metric{
+              background:rgba(9,24,38,.92);
+              border-color:rgba(138,210,255,.10);
+              box-shadow:none;
          }
          html[data-theme="dark"] .delay-panel.before{
              background:rgba(9,24,38,.96);
@@ -251,17 +270,34 @@ function delayInsightsEnsureStyles(): void
          html[data-theme="dark"] .delay-note{
              color:#90aeca;
          }
-         html[data-theme="dark"] .delay-metric strong,
-         html[data-theme="dark"] .delay-compact-metric strong{
-             color:#8cc7ff;
-         }
-         html[data-theme="dark"] .delay-row-risk-high .delay-metric-delay{
-             background:rgba(69,16,16,.35);
-             border-color:rgba(248,113,113,.28);
-         }
-         html[data-theme="dark"] .delay-row-risk-high .delay-metric-delay strong{
-             color:#fca5a5;
-         }
+          html[data-theme="dark"] .delay-metric strong{
+              color:#8cc7ff;
+          }
+          html[data-theme="dark"] .delay-compact-project-icon{
+              background:rgba(31,99,146,.22);
+              color:#8cc7ff;
+          }
+          html[data-theme="dark"] .delay-compact-gauge{
+              background:conic-gradient(var(--metric-color) calc(var(--metric-value) * 1%),#183246 0);
+          }
+          html[data-theme="dark"] .delay-compact-gauge::before{
+              background:#0c1f31;
+          }
+          html[data-theme="dark"] .delay-portfolio-chart-center strong,
+          html[data-theme="dark"] .delay-portfolio-summary-head strong,
+          html[data-theme="dark"] .delay-portfolio-legend-row strong{
+              color:#d8e6f3;
+          }
+          html[data-theme="dark"] .delay-portfolio-chart-center span,
+          html[data-theme="dark"] .delay-portfolio-summary-head span,
+          html[data-theme="dark"] .delay-portfolio-legend-row,
+          html[data-theme="dark"] .delay-portfolio-average span{
+              color:#90aeca;
+          }
+          html[data-theme="dark"] .delay-portfolio-legend,
+          html[data-theme="dark"] .delay-portfolio-legend-row{
+              border-color:rgba(138,210,255,.11);
+          }
          html[data-theme="dark"] .delay-bar{
              background:#163044;
          }
@@ -315,6 +351,8 @@ function delayInsightsRenderCompactList(mysqli|PgsqlMysqliCompatConnection $conn
     $limit = isset($options['limit']) ? max(1, (int) $options['limit']) : 3;
     $moreUrl = trim((string) ($options['more_url'] ?? ''));
     $moreLabel = trim((string) ($options['more_label'] ?? 'See More'));
+    $displayMode = strtolower(trim((string) ($options['display'] ?? 'list')));
+    $isPortfolioChart = $displayMode === 'portfolio_chart';
     $showEmpty = !empty($options['show_empty']);
     $emptyTitle = trim((string) ($options['empty_title'] ?? 'No project insights yet'));
     $emptyMessage = trim((string) ($options['empty_message'] ?? 'Project insight signals will appear here when they become available.'));
@@ -331,55 +369,135 @@ function delayInsightsRenderCompactList(mysqli|PgsqlMysqliCompatConnection $conn
         return;
     }
 
+    $portfolioRiskCounts = ['high' => 0, 'medium' => 0, 'low' => 0];
+    $portfolioProjectNames = ['high' => [], 'medium' => [], 'low' => []];
+    $portfolioDelayTotal = 0;
+    $portfolioSuccessTotal = 0;
+    foreach ($insights as $insight) {
+        $riskKey = strtolower(trim((string) ($insight['before']['risk_level'] ?? 'low')));
+        if (!array_key_exists($riskKey, $portfolioRiskCounts)) {
+            $riskKey = 'low';
+        }
+
+        $portfolioRiskCounts[$riskKey]++;
+        $portfolioProjectNames[$riskKey][] = (string) ($insight['project']['name'] ?? 'Project');
+        $portfolioDelayTotal += max(0, min(100, (int) ($insight['before']['delay_probability'] ?? 0)));
+        $portfolioSuccessTotal += max(0, min(100, (int) ($insight['before']['success_probability'] ?? 0)));
+    }
+
+    $portfolioProjectCount = count($insights);
+    $portfolioAverageDelay = $portfolioProjectCount > 0 ? (int) round($portfolioDelayTotal / $portfolioProjectCount) : 0;
+    $portfolioAverageSuccess = $portfolioProjectCount > 0 ? (int) round($portfolioSuccessTotal / $portfolioProjectCount) : 0;
+    $portfolioDominantCounts = $portfolioRiskCounts;
+    arsort($portfolioDominantCounts);
+    $portfolioDominantRisk = (string) (array_key_first($portfolioDominantCounts) ?? 'low');
+    $portfolioDominantLabel = ucfirst($portfolioDominantRisk) . ' Risk';
+    $portfolioDominantClass = 'delay-risk-' . $portfolioDominantRisk;
+
+    static $portfolioChartInstance = 0;
+    $portfolioChartInstance++;
+    $portfolioChartId = 'delayPortfolioRiskChart' . $portfolioChartInstance;
+
     delayInsightsEnsureStyles();
 
     echo '<section class="delay-insights-wrap">';
     echo '<div class="delay-compact-card">';
     echo '<div class="delay-compact-head">';
     echo '<div class="delay-compact-head-copy">';
-    echo '<h4><i class="fas fa-list-ul"></i> ' . htmlspecialchars($title) . '</h4>';
+    echo '<h4><i class="fas ' . ($isPortfolioChart ? 'fa-chart-pie' : 'fa-list-ul') . '"></i> ' . htmlspecialchars($title) . '</h4>';
     echo '<p>' . htmlspecialchars($subtitle) . '</p>';
     echo '</div>';
-    echo '<span class="delay-compact-count">' . count($insights) . ' project' . (count($insights) === 1 ? '' : 's') . '</span>';
-    echo '</div>';
-    echo '<div class="delay-compact-list">';
-
-    if ($insights === []) {
-        echo '<div class="delay-compact-empty">';
-        echo '<i class="fas fa-chart-line" aria-hidden="true"></i>';
-        echo '<strong>' . htmlspecialchars($emptyTitle) . '</strong>';
-        echo '<span>' . htmlspecialchars($emptyMessage) . '</span>';
-        echo '</div>';
+    if ($isPortfolioChart && $portfolioProjectCount > 0) {
+        echo '<span class="delay-risk-badge delay-portfolio-head-risk ' . $portfolioDominantClass . '"><i class="fas fa-signal"></i> ' . htmlspecialchars($portfolioDominantLabel) . '</span>';
+    } else {
+        echo '<span class="delay-compact-count">' . $portfolioProjectCount . ' project' . ($portfolioProjectCount === 1 ? '' : 's') . '</span>';
     }
+    echo '</div>';
 
-    foreach ($insights as $insight) {
+    if ($isPortfolioChart && $insights !== []) {
+        $portfolioChartPayload = json_encode([
+            'counts' => array_values($portfolioRiskCounts),
+            'projects' => array_values($portfolioProjectNames),
+            'total' => $portfolioProjectCount,
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if (!is_string($portfolioChartPayload)) {
+            $portfolioChartPayload = '{"counts":[0,0,0],"projects":[[],[],[]],"total":0}';
+        }
+
+        echo '<div class="delay-portfolio-body">';
+        echo '<div class="delay-portfolio-chart-pane">';
+        echo '<div class="delay-portfolio-chart-shell">';
+        echo '<canvas id="' . htmlspecialchars($portfolioChartId) . '" aria-label="Overall project risk distribution" role="img"></canvas>';
+        echo '<div class="delay-portfolio-chart-center"><strong>' . $portfolioProjectCount . '</strong><span>Projects</span></div>';
+        echo '</div>';
+        echo '</div>';
+        echo '<div class="delay-portfolio-summary">';
+        echo '<div class="delay-portfolio-summary-head"><strong>Portfolio distribution</strong><span>Current delivery risk across all monitored projects.</span></div>';
+        echo '<div class="delay-portfolio-legend">';
+        foreach (['high' => 'High risk', 'medium' => 'Medium risk', 'low' => 'Low risk'] as $riskKey => $riskLabel) {
+            $riskCount = (int) $portfolioRiskCounts[$riskKey];
+            $riskPercent = $portfolioProjectCount > 0 ? (int) round(($riskCount / $portfolioProjectCount) * 100) : 0;
+            echo '<div class="delay-portfolio-legend-row"><span class="delay-portfolio-dot ' . $riskKey . '"></span><span>' . htmlspecialchars($riskLabel) . '</span><strong>' . $riskCount . ' · ' . $riskPercent . '%</strong></div>';
+        }
+        echo '</div>';
+        echo '<div class="delay-portfolio-averages">';
+        echo '<div class="delay-portfolio-average delay"><span>Average delay</span><strong>' . $portfolioAverageDelay . '%</strong></div>';
+        echo '<div class="delay-portfolio-average success"><span>Average success</span><strong>' . $portfolioAverageSuccess . '%</strong></div>';
+        echo '</div>';
+        echo '</div>';
+        echo '</div>';
+        echo '<script>(function(){const canvas=document.getElementById(' . json_encode($portfolioChartId) . ');if(!canvas||typeof Chart==="undefined"){return;}const payload=' . $portfolioChartPayload . ';new Chart(canvas,{type:"doughnut",data:{labels:["High risk","Medium risk","Low risk"],datasets:[{data:payload.counts,backgroundColor:["#dc2626","#e4a11b","#168a4b"],borderWidth:0,spacing:4,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:"72%",plugins:{legend:{display:false},tooltip:{displayColors:true,callbacks:{label:function(context){const value=Number(context.raw||0);const percent=payload.total>0?Math.round((value/payload.total)*100):0;return context.label+": "+value+" project"+(value===1?"":"s")+" ("+percent+"%)";},afterLabel:function(context){return payload.projects[context.dataIndex]||[];}}}}}});})();</script>';
+    } else {
+        echo '<div class="delay-compact-list">';
+        if ($insights === []) {
+            echo '<div class="delay-compact-empty">';
+            echo '<i class="fas fa-chart-line" aria-hidden="true"></i>';
+            echo '<strong>' . htmlspecialchars($emptyTitle) . '</strong>';
+            echo '<span>' . htmlspecialchars($emptyMessage) . '</span>';
+            echo '</div>';
+        }
+
+        foreach ($insights as $insight) {
         $riskLevel = (string) $insight['before']['risk_level'];
         $riskClass = $riskLevel === 'High' ? 'delay-risk-high' : ($riskLevel === 'Medium' ? 'delay-risk-medium' : 'delay-risk-low');
-        $riskRowClass = $riskLevel === 'High' ? ' delay-row-risk-high' : '';
+        $riskRowClass = ' delay-row-risk-' . ($riskLevel === 'High' ? 'high' : ($riskLevel === 'Medium' ? 'medium' : 'low'));
+        $delayProbability = max(0, min(100, (int) ($insight['before']['delay_probability'] ?? 0)));
+        $successProbability = max(0, min(100, (int) ($insight['before']['success_probability'] ?? 0)));
+        $projectMeta = array_values(array_filter([
+            trim((string) ($insight['project']['client_name'] ?? '')),
+            trim((string) ($insight['project']['status_label'] ?? '')),
+        ], static fn(string $value): bool => $value !== ''));
         $projectUrl = BASE_URL . 'modules/insights/decision-center.php?project_id=' . (int) $insight['project']['id'];
 
         echo '<article class="delay-compact-row' . $riskRowClass . '">';
         echo '<div class="delay-compact-main">';
-        echo '<div class="delay-compact-top">';
-        echo '<div class="delay-compact-title">';
-        echo '<div class="delay-compact-title-row">';
-        echo '<strong>' . htmlspecialchars($insight['project']['name']) . '</strong>';
+        echo '<span class="delay-compact-project-icon" aria-hidden="true"><i class="fas fa-diagram-project"></i></span>';
+        echo '<div class="delay-compact-project-copy">';
+        echo '<strong class="delay-compact-title">' . htmlspecialchars($insight['project']['name']) . '</strong>';
+        if ($projectMeta !== []) {
+            echo '<span class="delay-compact-project-meta">' . htmlspecialchars(implode(' · ', $projectMeta)) . '</span>';
+        }
+        echo '</div>';
+        echo '</div>';
+        echo '<div class="delay-compact-metric delay-metric-delay" aria-label="Delay chance: ' . $delayProbability . ' percent">';
+        echo '<span class="delay-compact-gauge" style="--metric-value:' . $delayProbability . '" aria-hidden="true"><strong>' . $delayProbability . '%</strong></span>';
+        echo '<label aria-hidden="true">Delay chance</label>';
+        echo '</div>';
+        echo '<div class="delay-compact-metric delay-metric-success" aria-label="Success chance: ' . $successProbability . ' percent">';
+        echo '<span class="delay-compact-gauge" style="--metric-value:' . $successProbability . '" aria-hidden="true"><strong>' . $successProbability . '%</strong></span>';
+        echo '<label aria-hidden="true">Success chance</label>';
+        echo '</div>';
         echo '<span class="delay-risk-badge ' . $riskClass . '"><i class="fas fa-signal"></i> ' . htmlspecialchars($riskLevel) . ' Risk</span>';
-        echo '</div>';
-        echo '</div>';
-        echo '</div>';
-        echo '</div>';
-        echo '<div class="delay-compact-metric delay-metric-delay"><label>Delay Chance</label><strong>' . (int) $insight['before']['delay_probability'] . '%</strong></div>';
-        echo '<div class="delay-compact-metric delay-metric-success"><label>Success Chance</label><strong>' . (int) $insight['before']['success_probability'] . '%</strong></div>';
-        echo '<a class="delay-action delay-compact-action" href="' . htmlspecialchars($projectUrl) . '"><i class="fas fa-arrow-right"></i> ' . htmlspecialchars($buttonLabel) . '</a>';
-        echo '</article>';
-    }
+        echo '<a class="delay-action delay-compact-action" href="' . htmlspecialchars($projectUrl) . '"><span>' . htmlspecialchars($buttonLabel) . '</span><i class="fas fa-arrow-right"></i></a>';
+            echo '</article>';
+        }
 
-    echo '</div>';
-    if ($moreUrl !== '' && count($insights) >= $limit) {
-        echo '<div class="delay-compact-footer">';
-        echo '<a class="delay-action delay-compact-more-action" href="' . htmlspecialchars($moreUrl) . '"><span>' . htmlspecialchars($moreLabel) . '</span><i class="fas fa-arrow-right"></i></a>';
         echo '</div>';
+        if ($moreUrl !== '' && count($insights) >= $limit) {
+            echo '<div class="delay-compact-footer">';
+            echo '<a class="delay-action delay-compact-more-action" href="' . htmlspecialchars($moreUrl) . '"><span>' . htmlspecialchars($moreLabel) . '</span><i class="fas fa-arrow-right"></i></a>';
+            echo '</div>';
+        }
     }
     echo '</div>';
     echo '</section>';

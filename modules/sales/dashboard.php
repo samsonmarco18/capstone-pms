@@ -2645,13 +2645,12 @@ body.dark-mode .evortix-3d-platform {
             <?php
             delayInsightsRenderCompactList($conn, $user, [
                 'limit' => max(1, (int) $insightProjectCount),
-                'risk_level' => 'high',
-                'title' => 'Project Insight List',
-                'subtitle' => 'High-risk project signals with direct links to each full insight page.',
-                'button_label' => 'View Project',
+                'display' => 'portfolio_chart',
+                'title' => 'Overall Project Risk',
+                'subtitle' => 'Portfolio-wide delivery risk across all monitored client projects.',
                 'show_empty' => true,
-                'empty_title' => 'No high-risk project insights',
-                'empty_message' => 'Projects will appear here when a high-risk insight needs your attention.',
+                'empty_title' => 'No project insights yet',
+                'empty_message' => 'Project insight signals will appear here when they become available.',
             ]);
             ?>
         </div>
