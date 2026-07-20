@@ -331,44 +331,123 @@ unset($_SESSION['success'], $_SESSION['error']);
     padding: 0;
 }
 
-.resource-workload-toolbar {
+.resource-workload-card {
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(30, 64, 95, 0.06);
+}
+
+.resource-workload-header {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
     padding: 1rem 1.25rem;
+}
+
+.resource-workload-heading {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.resource-workload-heading-icon {
+    align-items: center;
+    background: #eaf4fb;
+    border-radius: 9px;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 36px;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+}
+
+.resource-workload-heading h5 {
+    margin: 0;
+}
+
+.resource-workload-heading small {
+    color: var(--gray-600);
+    display: block;
+    font-size: 0.7rem;
+    margin-top: 0.12rem;
+}
+
+.resource-workload-header .btn-primary-modern {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 0.55rem 0.85rem;
+}
+
+.resource-workload-card .table-container {
+    border-top: 1px solid var(--gray-200);
+}
+
+.resource-workload-table thead {
+    background: #fafbfd;
+}
+
+.resource-workload-table tbody {
+    background: #ffffff;
+}
+
+.resource-workload-table th {
+    font-size: 0.68rem;
+    letter-spacing: 0.035em;
+    white-space: nowrap;
+}
+
+.resource-workload-table td {
+    color: #334e68;
+    height: 66px;
+}
+
+.resource-workload-table th,
+.resource-workload-table td,
+.resource-workload-card .table-container {
     border-bottom: 1px solid var(--gray-200);
 }
 
+.resource-workload-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
 .resource-workload-table {
-    min-width: 1040px;
+    min-width: 1160px;
     table-layout: fixed;
 }
 
 .resource-workload-table th,
 .resource-workload-table td {
-    padding: 0.85rem 0.75rem;
+    padding: 0.7rem 0.75rem;
 }
 
 .resource-workload-table th:first-child,
 .resource-workload-table td:first-child {
     padding-left: 1.25rem;
-    width: 25%;
+    width: 26%;
+}
+
+.resource-workload-table th:nth-child(n+2):nth-child(-n+6),
+.resource-workload-table td:nth-child(n+2):nth-child(-n+6) {
+    text-align: center;
 }
 
 .resource-workload-table th:nth-child(2),
+.resource-workload-table td:nth-child(2) { width: 6.5%; }
 .resource-workload-table th:nth-child(3),
+.resource-workload-table td:nth-child(3) { width: 9%; }
 .resource-workload-table th:nth-child(4),
+.resource-workload-table td:nth-child(4) { width: 7%; }
 .resource-workload-table th:nth-child(5),
+.resource-workload-table td:nth-child(5) { width: 7%; }
 .resource-workload-table th:nth-child(6),
-.resource-workload-table td:nth-child(2),
-.resource-workload-table td:nth-child(3),
-.resource-workload-table td:nth-child(4),
-.resource-workload-table td:nth-child(5),
-.resource-workload-table td:nth-child(6) {
-    text-align: center;
-    width: 7%;
-}
+.resource-workload-table td:nth-child(6) { width: 7.5%; }
 
 .resource-workload-table th:nth-child(7),
 .resource-workload-table td:nth-child(7) {
-    width: 13%;
+    width: 14%;
 }
 
 .resource-workload-table th:nth-child(8),
@@ -380,7 +459,7 @@ unset($_SESSION['success'], $_SESSION['error']);
 .resource-workload-table td:last-child {
     padding-right: 1.25rem;
     text-align: right;
-    width: 10%;
+    width: 11%;
 }
 
 .resource-workload-table tbody tr {
@@ -389,8 +468,8 @@ unset($_SESSION['success'], $_SESSION['error']);
 }
 
 .resource-workload-table tbody tr:hover {
-    background: #f4f9fc;
-    box-shadow: inset 3px 0 0 var(--theme-primary);
+    background: #f7fafc;
+    box-shadow: inset 2px 0 0 var(--theme-primary);
 }
 
 .resource-profile {
@@ -407,13 +486,13 @@ unset($_SESSION['success'], $_SESSION['error']);
     border-radius: 50%;
     color: var(--theme-primary);
     display: inline-flex;
-    flex: 0 0 42px;
-    font-size: 0.78rem;
+    flex: 0 0 36px;
+    font-size: 0.7rem;
     font-weight: 700;
-    height: 42px;
+    height: 36px;
     justify-content: center;
     letter-spacing: 0.03em;
-    width: 42px;
+    width: 36px;
 }
 
 .resource-profile-copy {
@@ -428,7 +507,6 @@ unset($_SESSION['success'], $_SESSION['error']);
     margin: 0;
 }
 
-.resource-profile-role,
 .resource-profile-email {
     color: var(--gray-600);
     display: block;
@@ -437,10 +515,6 @@ unset($_SESSION['success'], $_SESSION['error']);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.resource-profile-email {
-    margin-top: 0.12rem;
 }
 
 .resource-metric {
@@ -728,8 +802,18 @@ unset($_SESSION['success'], $_SESSION['error']);
     border-color: rgba(31, 99, 146, 0.24) !important;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-toolbar {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-card .table-container,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-header {
     border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-table tbody {
+    background: #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-heading-icon {
+    background: #102a40;
+    color: #8cc7ff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-table tbody tr:hover {
@@ -747,7 +831,6 @@ unset($_SESSION['success'], $_SESSION['error']);
     color: #d7e4f2;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-profile-role,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-profile-email,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-value {
     color: #9db6cf;
@@ -816,12 +899,12 @@ unset($_SESSION['success'], $_SESSION['error']);
         padding: 1.5rem;
     }
 
-    .resource-workload-toolbar {
+    .resource-workload-header {
         align-items: stretch !important;
         flex-direction: column;
     }
 
-    .resource-workload-toolbar .btn-primary-modern {
+    .resource-workload-header .btn-primary-modern {
         justify-content: center;
         width: 100%;
     }
@@ -855,19 +938,19 @@ unset($_SESSION['success'], $_SESSION['error']);
 
     <!-- Resource Details Table -->
     <div class="card mb-4 resource-workload-card">
-        <div class="card-header">
-            <h5><i class="fas fa-list me-2"></i>Resource Details & Workload</h5>
-        </div>
-        <div class="card-body">
-            <div class="resource-workload-toolbar d-flex justify-content-between align-items-center gap-3">
+        <div class="card-header resource-workload-header">
+            <div class="resource-workload-heading">
+                <span class="resource-workload-heading-icon"><i class="fas fa-list" aria-hidden="true"></i></span>
                 <div>
-                    <h6 class="mb-0">Developer Resources</h6>
+                    <h5>Resource Details &amp; Workload</h5>
                     <small class="text-muted"><?php echo count($developers); ?> active profile<?php echo count($developers) === 1 ? '' : 's'; ?> in <?php echo htmlspecialchars($sulDepartment); ?></small>
                 </div>
-                <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#addDeveloperModal">
-                    <i class="fas fa-user-plus me-2"></i>Assign Developer
-                </button>
             </div>
+            <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#addDeveloperModal">
+                <i class="fas fa-user-plus" aria-hidden="true"></i>Assign Developer
+            </button>
+        </div>
+        <div class="card-body">
             <div class="table-container">
                         <table class="data-table resource-workload-table">
                             <thead>
@@ -906,7 +989,6 @@ unset($_SESSION['success'], $_SESSION['error']);
                                                 <span class="resource-profile-avatar" aria-hidden="true"><?php echo htmlspecialchars($resourceInitials); ?></span>
                                                 <div class="resource-profile-copy">
                                                     <p class="resource-profile-name"><?php echo htmlspecialchars($resourceName); ?></p>
-                                                    <span class="resource-profile-role">Developer</span>
                                                     <span class="resource-profile-email" title="<?php echo htmlspecialchars((string) $resource['email']); ?>"><?php echo htmlspecialchars((string) $resource['email']); ?></span>
                                                 </div>
                                             </div>

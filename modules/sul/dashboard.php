@@ -576,10 +576,43 @@ include '../../includes/navbar.php';
 }
 
 .sul-resource-workload-chart {
-    height: 245px;
-    margin: 0 auto;
-    max-width: 360px;
+    height: 130px;
+    margin-top: 0.35rem;
     position: relative;
+}
+
+.sul-resource-workload-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.sul-resource-workload-total {
+    align-items: baseline;
+    border-bottom: 2px solid var(--gray-200);
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0 0.55rem;
+}
+
+.sul-resource-workload-total span {
+    color: var(--gray-600);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+}
+
+.sul-resource-workload-total strong {
+    color: var(--gray-900);
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.sul-resource-workload-total.is-open {
+    border-color: rgba(240, 163, 23, 0.55);
+}
+
+.sul-resource-workload-total.is-completed {
+    border-color: rgba(27, 141, 80, 0.5);
 }
 
 .sul-resource-utilization-chart {
@@ -1424,7 +1457,8 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-resource-section-title,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-resource-project-name {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-resource-project-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sul-resource-workload-total strong {
     color: #d7e4f2;
 }
 
@@ -1587,6 +1621,10 @@ include '../../includes/navbar.php';
             <section class="sul-resource-overview-section" aria-labelledby="resourceWorkloadTitle">
                 <h6 class="sul-resource-section-title" id="resourceWorkloadTitle"><i class="fas fa-chart-bar" aria-hidden="true"></i> Resource Workload Overview</h6>
                 <?php if (($resourceOverviewAssignedTasks + $resourceOverviewCompletedTasks) > 0): ?>
+                    <div class="sul-resource-workload-summary" aria-label="Department workload totals">
+                        <div class="sul-resource-workload-total is-open"><span>Open</span><strong><?php echo $resourceOverviewAssignedTasks; ?></strong></div>
+                        <div class="sul-resource-workload-total is-completed"><span>Completed</span><strong><?php echo $resourceOverviewCompletedTasks; ?></strong></div>
+                    </div>
                     <div class="sul-resource-workload-chart"><canvas id="resourceWorkloadChart"></canvas></div>
                 <?php else: ?>
                     <div class="sul-resource-empty">No department workload activity is available yet.</div>
@@ -1960,26 +1998,40 @@ const resourceOverviewData = <?php
 const resourceWorkloadCanvas = document.getElementById('resourceWorkloadChart');
 if (resourceWorkloadCanvas) {
     new Chart(resourceWorkloadCanvas.getContext('2d'), {
-        type: 'polarArea',
+        type: 'bar',
         data: {
-            labels: ['Open tasks', 'Completed tasks'],
-            datasets: [{
-                data: resourceOverviewData.workload,
-                backgroundColor: ['rgba(240, 163, 23, 0.82)', 'rgba(27, 141, 80, 0.82)'],
-                borderColor: ['#f0a317', '#1b8d50'],
-                borderWidth: 2
-            }]
+            labels: ['Department workload'],
+            datasets: [
+                {
+                    label: 'Open tasks',
+                    data: [resourceOverviewData.workload[0]],
+                    backgroundColor: '#f0a317',
+                    borderRadius: 7,
+                    borderSkipped: false,
+                    maxBarThickness: 48
+                },
+                {
+                    label: 'Completed tasks',
+                    data: [resourceOverviewData.workload[1]],
+                    backgroundColor: '#1b8d50',
+                    borderRadius: 7,
+                    borderSkipped: false,
+                    maxBarThickness: 48
+                }
+            ]
         },
         options: {
+            indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                r: {
+                x: {
                     beginAtZero: true,
-                    grid: { color: 'rgba(113, 131, 153, 0.14)' },
-                    pointLabels: { display: false },
-                    ticks: { display: false, precision: 0 }
-                }
+                    stacked: true,
+                    grid: { color: 'rgba(113, 131, 153, 0.12)' },
+                    ticks: { precision: 0 }
+                },
+                y: { stacked: true, display: false, grid: { display: false } }
             },
             plugins: {
                 legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } },
