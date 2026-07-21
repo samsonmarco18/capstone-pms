@@ -16,6 +16,49 @@ projectWorkflowEnsureSchema($conn);
 projectEstimationEnsureSchema($conn);
 taskReopenEnsureSchema($conn);
 
+// Resource signals used by Evortix recommendations. Keep older installations compatible.
+foreach ([
+    'skills' => (DB_DRIVER === 'pgsql' ? 'TEXT NULL' : 'TEXT NULL'),
+    'availability_status' => "VARCHAR(30) DEFAULT 'available'",
+    'max_concurrent_tasks' => 'INT DEFAULT 5',
+] as $resourceColumn => $resourceDefinition) {
+    if (!dbColumnExists($conn, 'users', $resourceColumn)) {
+        try {
+            $conn->query("ALTER TABLE users ADD COLUMN {$resourceColumn} {$resourceDefinition}");
+        } catch (Throwable $e) {
+            error_log('Evortix resource signal migration failed: ' . $e->getMessage());
+        }
+    }
+}
+
+// Persist reviewed Evortix decisions per SUL so skipped items stay skipped after reload.
+$conn->query(DB_DRIVER === 'pgsql' ? "
+    CREATE TABLE IF NOT EXISTS evortix_sul_suggestion_history (
+        id SERIAL PRIMARY KEY,
+        sul_id INT NOT NULL,
+        task_id INT NOT NULL,
+        project_id INT NOT NULL,
+        decision VARCHAR(30) NOT NULL,
+        recommended_user_id INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (sul_id, task_id)
+    )
+" : "
+    CREATE TABLE IF NOT EXISTS evortix_sul_suggestion_history (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        sul_id INT NOT NULL,
+        task_id INT NOT NULL,
+        project_id INT NOT NULL,
+        decision VARCHAR(30) NOT NULL,
+        recommended_user_id INT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_evortix_sul_task (sul_id, task_id),
+        INDEX idx_evortix_sul_decision (sul_id, decision)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+");
+
 $projectId = isset($_GET['project_id']) ? intval($_GET['project_id']) : (isset($_POST['project_id']) ? intval($_POST['project_id']) : 0);
 $taskId = isset($_GET['task_id']) ? intval($_GET['task_id']) : 0;
 
@@ -914,14 +957,18 @@ $completedTasks = $conn->query("
 
 // Get available experts
 $experts = $conn->query("
-    SELECT u.id, u.full_name, u.profile_pic, u.designation,
+    SELECT u.id, u.full_name, u.profile_pic, u.designation, u.department,
+           COALESCE(u.skills, '') AS skills,
+           COALESCE(u.availability_status, 'available') AS availability_status,
+           COALESCE(u.max_concurrent_tasks, 5) AS max_concurrent_tasks,
            COUNT(t.id) as assigned_tasks
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
     WHERE u.role = 'expert' AND u.status = 'active'
       {$sulUserDepartmentFilter}
-    GROUP BY u.id, u.full_name, u.profile_pic, u.designation
-    ORDER BY assigned_tasks ASC, u.full_name ASC
+    GROUP BY u.id, u.full_name, u.profile_pic, u.designation, u.department, u.skills, u.availability_status, u.max_concurrent_tasks
+    ORDER BY CASE COALESCE(u.availability_status, 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
+             assigned_tasks ASC, u.full_name ASC
 ");
 
 $expertProjectOptions = [];
@@ -989,14 +1036,18 @@ $expertAllocationBadgeCount = ($projectId && $project) ? $selectedExpertTaskCoun
 
 // Get available developers
 $developers = $conn->query("
-    SELECT u.id, u.full_name, u.profile_pic, u.designation,
+    SELECT u.id, u.full_name, u.profile_pic, u.designation, u.department,
+           COALESCE(u.skills, '') AS skills,
+           COALESCE(u.availability_status, 'available') AS availability_status,
+           COALESCE(u.max_concurrent_tasks, 5) AS max_concurrent_tasks,
            COUNT(t.id) as assigned_tasks
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
     WHERE u.role = 'developer' AND u.status = 'active'
       {$sulUserDepartmentFilter}
-    GROUP BY u.id, u.full_name, u.profile_pic, u.designation
-    ORDER BY assigned_tasks ASC, u.full_name ASC
+    GROUP BY u.id, u.full_name, u.profile_pic, u.designation, u.department, u.skills, u.availability_status, u.max_concurrent_tasks
+    ORDER BY CASE COALESCE(u.availability_status, 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
+             assigned_tasks ASC, u.full_name ASC
 ");
 
 $developerProjectOptions = [];
@@ -1069,6 +1120,68 @@ $reopenRequests = $canManageDeveloperWorkflow ? taskReopenLoadSulRequests($conn,
 $developerReopenRequestCount = count($reopenRequests);
 $selectedDeveloperTaskCount = $readyDeveloperAssignmentCount + $inProgressTasks->num_rows + $codeReviewTasks->num_rows + $developerReopenRequestCount;
 $developerAllocationBadgeCount = ($projectId && $project) ? $selectedDeveloperTaskCount : $developerProjectOptionTaskCount;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['evortix_review_decision'])) {
+    header('Content-Type: application/json');
+    $reviewedTaskId = (int) ($_POST['task_id'] ?? 0);
+    $reviewDecision = trim((string) ($_POST['decision'] ?? ''));
+    $recommendedUserId = (int) ($_POST['recommended_user_id'] ?? 0);
+    if ($reviewedTaskId <= 0 || !in_array($reviewDecision, ['skip', 'choose_another'], true)) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'error' => 'Invalid Evortix decision.']);
+        exit();
+    }
+    $reviewTaskStmt = $conn->prepare("SELECT t.project_id FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = ? AND {$sulProjectFilter} LIMIT 1");
+    $reviewTaskStmt->bind_param('i', $reviewedTaskId);
+    $reviewTaskStmt->execute();
+    $reviewTask = $reviewTaskStmt->get_result()->fetch_assoc();
+    $reviewTaskStmt->close();
+    if (!$reviewTask) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => 'This task is outside your SUL scope.']);
+        exit();
+    }
+    $reviewProjectId = (int) $reviewTask['project_id'];
+    if (DB_DRIVER === 'pgsql') {
+        $historyStmt = $conn->prepare("INSERT INTO evortix_sul_suggestion_history (sul_id, task_id, project_id, decision, recommended_user_id) VALUES (?, ?, ?, ?, ?) ON CONFLICT (sul_id, task_id) DO UPDATE SET decision = EXCLUDED.decision, recommended_user_id = EXCLUDED.recommended_user_id, updated_at = CURRENT_TIMESTAMP");
+    } else {
+        $historyStmt = $conn->prepare("INSERT INTO evortix_sul_suggestion_history (sul_id, task_id, project_id, decision, recommended_user_id) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE decision = VALUES(decision), recommended_user_id = VALUES(recommended_user_id), updated_at = CURRENT_TIMESTAMP");
+    }
+    $historyStmt->bind_param('iiisi', $userId, $reviewedTaskId, $reviewProjectId, $reviewDecision, $recommendedUserId);
+    $historyStmt->execute();
+    $historyStmt->close();
+    echo json_encode(['success' => true, 'message' => $reviewDecision === 'skip' ? 'Suggestion skipped and saved.' : 'Manual selection recorded.']);
+    exit();
+}
+
+// Opening Task Allocation should immediately start the most relevant queue.
+// Choose the project with the largest actionable assignment backlog for this SUL.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && $projectId <= 0 && !$sulMissingDepartment) {
+    $automaticProjectId = 0;
+    $automaticProjectScore = 0;
+    $reviewedByProject = [];
+    $reviewedProjectRows = $conn->query("SELECT project_id, COUNT(*) AS reviewed_count FROM evortix_sul_suggestion_history WHERE sul_id = {$userId} AND decision IN ('skip', 'choose_another') GROUP BY project_id");
+    if ($reviewedProjectRows) {
+        while ($reviewedProjectRow = $reviewedProjectRows->fetch_assoc()) {
+            $reviewedByProject[(int) $reviewedProjectRow['project_id']] = (int) $reviewedProjectRow['reviewed_count'];
+        }
+    }
+    $automaticOptions = $canManageExpertWorkflow ? $expertProjectOptions : $developerProjectOptions;
+    foreach ($automaticOptions as $automaticOption) {
+        $automaticScore = $canManageExpertWorkflow
+            ? (int) ($automaticOption['unassigned_count'] ?? 0)
+            : (int) ($automaticOption['ready_count'] ?? 0);
+        $automaticScore = max(0, $automaticScore - ($reviewedByProject[(int) ($automaticOption['id'] ?? 0)] ?? 0));
+        if ($automaticScore > $automaticProjectScore) {
+            $automaticProjectScore = $automaticScore;
+            $automaticProjectId = (int) ($automaticOption['id'] ?? 0);
+        }
+    }
+    if ($automaticProjectId > 0) {
+        header('Location: task-allocation.php?project_id=' . $automaticProjectId . '&evortix_auto=1');
+        exit();
+    }
+}
 
 // Handle task operations
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -2041,6 +2154,85 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             exit();
         } else {
             $_SESSION['error'] = "Failed to reject estimation";
+        }
+    }
+}
+
+$evortixAssignmentQueue = [];
+$evortixReviewedTaskIds = [];
+$reviewedSuggestions = $conn->query("SELECT task_id FROM evortix_sul_suggestion_history WHERE sul_id = {$userId} AND decision IN ('skip', 'choose_another')");
+if ($reviewedSuggestions) {
+    while ($reviewedSuggestion = $reviewedSuggestions->fetch_assoc()) {
+        $evortixReviewedTaskIds[(int) ($reviewedSuggestion['task_id'] ?? 0)] = true;
+    }
+}
+$sourceQueue = $canManageExpertWorkflow ? $unassignedAssignmentGroups : $readyDeveloperAssignmentGroups;
+foreach ($sourceQueue as $assignmentGroup) {
+    $queueTask = $assignmentGroup['representative'] ?? [];
+    if (!$queueTask) continue;
+    if (isset($evortixReviewedTaskIds[(int) ($queueTask['id'] ?? 0)])) continue;
+    $evortixAssignmentQueue[] = [
+        'id' => (int) ($queueTask['id'] ?? 0),
+        'title' => (string) ($queueTask['title'] ?? 'Untitled task'),
+        'project' => (string) ($queueTask['project_name'] ?? ($project['name'] ?? 'Project')),
+        'priority' => (string) ($assignmentGroup['priority'] ?? 'medium'),
+        'deadline' => sulTaskAllocationAssignmentDeadlineValue(
+            $assignmentGroup['deadline'] ?? null,
+            $queueTask['department_roadmap_start'] ?? null,
+            $queueTask['department_roadmap_end'] ?? null
+        ),
+        'min_date' => sulTaskAllocationDateInputValue($queueTask['department_roadmap_start'] ?? null),
+        'max_date' => sulTaskAllocationDateInputValue($queueTask['department_roadmap_end'] ?? null),
+        'features' => count($assignmentGroup['features'] ?? []),
+    ];
+}
+
+$evortixReallocationSuggestions = [];
+if (!$sulMissingDepartment) {
+    $reallocationRows = $conn->query("
+        SELECT t.id, t.title, t.deadline, t.status, p.name AS project_name,
+               u.full_name, COALESCE(u.availability_status, 'available') AS availability_status
+        FROM tasks t
+        JOIN projects p ON p.id = t.project_id
+        JOIN users u ON u.id = t.assigned_to
+        WHERE t.status NOT IN ('completed', 'merged', 'ready_for_release')
+          AND {$sulProjectFilter}
+          {$sulTaskDepartmentFilter}
+          AND (COALESCE(u.availability_status, 'available') NOT IN ('available', 'limited') OR t.deadline < NOW())
+        ORDER BY CASE WHEN COALESCE(u.availability_status, 'available') NOT IN ('available', 'limited') THEN 0 ELSE 1 END,
+                 t.deadline ASC
+        LIMIT 5
+    ");
+    if ($reallocationRows) {
+        while ($reallocation = $reallocationRows->fetch_assoc()) $evortixReallocationSuggestions[] = $reallocation;
+    }
+}
+
+$evortixChangeImpactNotice = null;
+if ($projectId > 0 && dbTableExists($conn, 'project_compilations')) {
+    $impactResult = $conn->query("
+        SELECT pc.change_source, pc.impact_json, pc.created_at, u.full_name, u.role
+        FROM project_compilations pc
+        LEFT JOIN users u ON u.id = pc.created_by
+        WHERE pc.project_id = {$projectId}
+          AND u.role IN ('architect', 'expert')
+        ORDER BY pc.compilation_no DESC
+        LIMIT 1
+    ");
+    $impactRow = $impactResult ? $impactResult->fetch_assoc() : null;
+    $impactItems = $impactRow ? json_decode((string) ($impactRow['impact_json'] ?? ''), true) : null;
+    if ($impactRow && is_array($impactItems)) {
+        $changedAreas = [];
+        foreach ($impactItems as $impactArea => $impactMessage) {
+            if (stripos((string) $impactMessage, 'no recalculation required') === false) $changedAreas[] = (string) $impactArea;
+        }
+        if ($changedAreas !== []) {
+            $evortixChangeImpactNotice = [
+                'author' => (string) ($impactRow['full_name'] ?? ucfirst((string) $impactRow['role'])),
+                'role' => (string) ($impactRow['role'] ?? ''),
+                'areas' => $changedAreas,
+                'source' => (string) ($impactRow['change_source'] ?? 'project update'),
+            ];
         }
     }
 }
@@ -4281,6 +4473,33 @@ include '../../includes/navbar.php';
         grid-template-columns: 1fr;
     }
 }
+.evortix-allocation-assistant { border:1px solid #cfe4f2; border-radius:20px; background:linear-gradient(135deg,#f7fcff,#eef7fc); padding:1.25rem; margin-bottom:1.5rem; box-shadow:0 12px 30px rgba(31,99,146,.09) }
+.evortix-assistant-grid { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(260px,.75fr); gap:1rem }
+.evortix-assignment-card,.evortix-reallocation-card { background:#fff; border:1px solid #dbeaf3; border-radius:15px; padding:1rem }
+.evortix-assignment-meta { display:flex; flex-wrap:wrap; gap:.45rem; margin:.65rem 0 }
+.evortix-assignment-meta span { background:#eef6fb; border-radius:999px; padding:.3rem .6rem; font-size:.75rem }
+.evortix-assistant-actions { display:flex; gap:.55rem; flex-wrap:wrap; margin-top:.9rem }
+.evortix-assistant-actions button { border-radius:10px; padding:.55rem .85rem; font-weight:700; border:1px solid #bdd7e7; background:#fff }
+.evortix-assistant-actions .is-accept { background:#1f6392; color:#fff; border-color:#1f6392 }
+.evortix-reallocation-item { padding:.65rem 0; border-bottom:1px solid #edf1f4; font-size:.82rem }
+.evortix-reallocation-item:last-child { border-bottom:0 }
+.evortix-reallocation-item strong,.evortix-reallocation-item span { display:block }
+.evortix-reallocation-item span { color:#6b7280; margin-top:.2rem }
+.evortix-recommendation-reason { color:#536779; font-size:.83rem; margin:0 }
+.chat-bot-speech.evortix-allocation-bubble { top:42%; right:calc(100% + 18px); width:min(420px,calc(100vw - 190px)); min-width:350px; padding:1rem; border-radius:22px 22px 8px 22px; pointer-events:auto; }
+.evortix-bubble-head { display:flex; justify-content:space-between; gap:.75rem; align-items:flex-start }
+.evortix-bubble-eyebrow { color:#157baa; font-size:.65rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase }
+.chat-bot-speech .evortix-bubble-title { min-height:0; padding:0; color:#083a5d; font-size:1rem; line-height:1.3 }
+.evortix-bubble-close { display:grid; place-items:center; width:28px; height:28px; flex:0 0 28px; border:0; border-radius:50%; background:rgba(255,255,255,.72); color:#0d6f9f }
+.evortix-bubble-task { margin:.7rem 0 .45rem; padding:.7rem; border:1px solid rgba(8,123,185,.17); border-radius:12px; background:rgba(255,255,255,.78) }
+.evortix-bubble-task strong,.evortix-bubble-task span { display:block }
+.evortix-bubble-task span,.evortix-bubble-reason { color:#376b8d; font-size:.72rem; line-height:1.45 }
+.evortix-bubble-actions { display:grid; grid-template-columns:repeat(3,1fr); gap:.4rem; margin-top:.75rem }
+.evortix-bubble-actions button { border:1px solid rgba(8,123,185,.28); border-radius:10px; background:rgba(255,255,255,.85); color:#0b466d; padding:.5rem .35rem; font-size:.72rem; font-weight:800 }
+.evortix-bubble-actions .is-accept { background:#137eb3; border-color:#137eb3; color:#fff }
+.evortix-bubble-warning { margin-top:.55rem; color:#a15c08; font-size:.67rem; font-weight:700 }
+@media (max-width:900px) { .evortix-assistant-grid { grid-template-columns:1fr } }
+@media (max-width:640px) { .chat-bot-speech.evortix-allocation-bubble { right:calc(100% + 9px); width:min(290px,calc(100vw - 145px)); min-width:235px } }
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -5556,6 +5775,10 @@ include '../../includes/navbar.php';
                                         aria-checked="false"
                                         data-expert-choice
                                         data-expert-name="<?php echo htmlspecialchars($expertName, ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-member-skills="<?php echo htmlspecialchars((string) ($expert['skills'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-member-availability="<?php echo htmlspecialchars((string) ($expert['availability_status'] ?? 'available'), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-member-load="<?php echo $activeTaskCount; ?>"
+                                        data-member-capacity="<?php echo max(1, (int) ($expert['max_concurrent_tasks'] ?? 5)); ?>"
                                     >
                                         <td>
                                             <span class="expert-identity">
@@ -5705,6 +5928,10 @@ include '../../includes/navbar.php';
                                         aria-checked="false"
                                         data-developer-choice
                                         data-developer-name="<?php echo htmlspecialchars($developerName, ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-member-skills="<?php echo htmlspecialchars((string) ($developer['skills'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-member-availability="<?php echo htmlspecialchars((string) ($developer['availability_status'] ?? 'available'), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-member-load="<?php echo $activeTaskCount; ?>"
+                                        data-member-capacity="<?php echo max(1, (int) ($developer['max_concurrent_tasks'] ?? 5)); ?>"
                                     >
                                         <td>
                                             <span class="expert-identity">
@@ -5855,6 +6082,169 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
+const evortixAllocationQueue = <?php echo json_encode($evortixAssignmentQueue, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+const evortixReallocationQueue = <?php echo json_encode($evortixReallocationSuggestions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+const evortixChangeImpactNotice = <?php echo json_encode($evortixChangeImpactNotice, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+const evortixIsExpertWorkflow = <?php echo $canManageExpertWorkflow ? 'true' : 'false'; ?>;
+let evortixQueueIndex = 0;
+let evortixLastAnnouncedIndex = -1;
+
+function evortixCandidateRows() {
+    return Array.from(document.querySelectorAll(evortixIsExpertWorkflow ? '[data-expert-choice]' : '[data-developer-choice]'));
+}
+
+function evortixScoreCandidate(row, task) {
+    const availability = (row.dataset.memberAvailability || 'available').toLowerCase();
+    const load = Number(row.dataset.memberLoad || 0);
+    const capacity = Math.max(1, Number(row.dataset.memberCapacity || 5));
+    const profile = `${row.dataset.memberSkills || ''} ${row.textContent || ''}`.toLowerCase();
+    const terms = (task.title || '').toLowerCase().split(/[^a-z0-9+#.]+/).filter(term => term.length > 2);
+    const skillMatches = terms.filter(term => profile.includes(term)).length;
+    const availabilityScore = availability === 'available' ? 35 : (availability === 'limited' ? 10 : -80);
+    const daysLeft = task.deadline ? Math.ceil((new Date(`${task.deadline}T23:59:59`) - new Date()) / 86400000) : 30;
+    const deadlinePressure = daysLeft <= 3 ? 1.5 : (daysLeft <= 7 ? 1.25 : 1);
+    return availabilityScore + (skillMatches * 12) + Math.max(-50, 30 - ((load / capacity) * 45 * deadlinePressure));
+}
+
+function evortixRecommendedRow(task) {
+    return evortixCandidateRows().sort((a, b) => evortixScoreCandidate(b, task) - evortixScoreCandidate(a, task))[0] || null;
+}
+
+function renderEvortixBubble() {
+    const float = document.getElementById('chat-bot-float');
+    const speech = float?.querySelector('.chat-bot-speech');
+    if (!float || !speech || !evortixAllocationQueue.length) return;
+    if (evortixQueueIndex >= evortixAllocationQueue.length) {
+        speech.className = 'chat-bot-speech evortix-allocation-bubble';
+        speech.innerHTML = '<strong class="evortix-bubble-title">All recommendations reviewed</strong><div class="evortix-bubble-reason">Your current allocation queue is clear.</div>';
+        return;
+    }
+    const task = evortixAllocationQueue[evortixQueueIndex];
+    const recommendation = evortixRecommendedRow(task);
+    const memberName = recommendation?.dataset[evortixIsExpertWorkflow ? 'expertName' : 'developerName'] || 'No available match';
+    const load = Number(recommendation?.dataset.memberLoad || 0);
+    const capacity = Number(recommendation?.dataset.memberCapacity || 5);
+    const availability = recommendation?.dataset.memberAvailability || 'unknown';
+    const reallocation = evortixReallocationQueue[0];
+    speech.className = 'chat-bot-speech evortix-allocation-bubble';
+    speech.hidden = false;
+    speech.setAttribute('aria-hidden', 'false');
+    speech.setAttribute('role', 'dialog');
+    speech.innerHTML = `
+        <div class="evortix-bubble-head"><div><div class="evortix-bubble-eyebrow">Task ${evortixQueueIndex + 1} of ${evortixAllocationQueue.length}</div><strong class="evortix-bubble-title">${escapeHtml(task.title)} needs an owner.</strong></div><button class="evortix-bubble-close" type="button" aria-label="Close recommendation"><i class="fas fa-xmark"></i></button></div>
+        <div class="evortix-bubble-task"><span>Recommended</span><strong>${escapeHtml(memberName)}</strong><span>${escapeHtml(recommendation?.querySelector('.expert-role')?.textContent?.trim() || 'Team member')}</span></div>
+        <div class="evortix-bubble-reason"><b>Current workload:</b> ${load} active task${load === 1 ? '' : 's'}<br><b>Availability:</b> ${escapeHtml(availability === 'available' && load < capacity ? 'Sufficient' : availability)}<br><b>Reason:</b> Matching department and ${escapeHtml((recommendation?.dataset.memberSkills || 'relevant delivery').split(',').slice(0, 2).join(' and '))} skills</div>
+        ${evortixChangeImpactNotice ? `<div class="evortix-bubble-warning"><i class="fas fa-code-branch me-1"></i>Change impact: ${escapeHtml(evortixChangeImpactNotice.author)} updated ${escapeHtml(evortixChangeImpactNotice.areas.join(', '))}. Recheck this decision.</div>` : ''}
+        ${reallocation ? `<div class="evortix-bubble-warning"><i class="fas fa-rotate me-1"></i>Reallocation watch: ${escapeHtml(reallocation.title)} may need a new owner.</div>` : ''}
+        <div class="evortix-bubble-actions"><button type="button" data-evortix-action="skip">Skip</button><button type="button" data-evortix-action="adjust">Choose another</button><button class="is-accept" type="button" data-evortix-action="accept">Accept assignment</button></div>`;
+    float.hidden = false;
+    float.setAttribute('aria-hidden', 'false');
+    window.chatBotFloatRobot?.point?.('left', 5000);
+    speech.querySelector('.evortix-bubble-close')?.addEventListener('click', () => {
+        speech.hidden = true;
+        speech.setAttribute('aria-hidden', 'true');
+    });
+}
+
+async function persistEvortixDecision(taskId, decision, recommended) {
+    const recommendedInput = recommended?.querySelector('input[type="radio"]');
+    const body = new URLSearchParams({
+        evortix_review_decision: '1',
+        task_id: String(taskId),
+        decision,
+        recommended_user_id: recommendedInput?.value || '0'
+    });
+    const response = await fetch(window.location.href, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body });
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Unable to save this Evortix decision.');
+    return result;
+}
+
+document.addEventListener('click', async event => {
+    const action = event.target.closest('[data-evortix-action]')?.dataset.evortixAction;
+    if (!action) return;
+    const task = evortixAllocationQueue[evortixQueueIndex];
+    const recommended = evortixRecommendedRow(task);
+    if (action === 'skip') {
+        try {
+            await persistEvortixDecision(task.id, 'skip', recommended);
+            window.appToast?.('Suggestion skipped', 'Evortix saved this decision and will not repeat it after reload.', 'success');
+            evortixQueueIndex += 1;
+            renderEvortixBubble();
+        } catch (error) {
+            window.appToast?.('Unable to save decision', error.message, 'error');
+        }
+        return;
+    }
+    if (action === 'adjust') {
+        try { await persistEvortixDecision(task.id, 'choose_another', recommended); }
+        catch (error) { window.appToast?.('History not saved', error.message, 'warning'); }
+    }
+    if (evortixIsExpertWorkflow) {
+        openAssignExpertModal(task.id, task.title);
+        if (action === 'accept' && recommended) {
+            selectExpertChoice(recommended);
+            document.getElementById('assignExpertForm')?.requestSubmit();
+        }
+    } else {
+        openAssignDeveloperModal(task.id, task.title, task.deadline, task.min_date, task.max_date);
+        if (action === 'accept' && recommended) {
+            selectDeveloperChoice(recommended);
+            const form = document.getElementById('assignDeveloperForm');
+            const submitter = document.getElementById('confirmDeveloperAssignment');
+            if (form && submitter) form.requestSubmit(submitter);
+        }
+    }
+});
+
+const evortixAssignmentSuccess = <?php echo json_encode($flashSuccess, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+document.addEventListener('DOMContentLoaded', () => window.setTimeout(() => {
+    if (!evortixAssignmentSuccess) {
+        renderEvortixBubble();
+        return;
+    }
+    const float = document.getElementById('chat-bot-float');
+    const speech = float?.querySelector('.chat-bot-speech');
+    if (float && speech) {
+        const completedAssignment = /assign/i.test(evortixAssignmentSuccess);
+        speech.className = 'chat-bot-speech evortix-allocation-bubble';
+        speech.hidden = false;
+        speech.setAttribute('aria-hidden', 'false');
+        speech.innerHTML = `<div class="evortix-bubble-head"><div><div class="evortix-bubble-eyebrow">${completedAssignment ? 'Assignment saved' : 'Decision saved'}</div><strong class="evortix-bubble-title"><i class="fas fa-circle-check me-1"></i>Successful</strong></div></div><div class="evortix-bubble-task"><span>${escapeHtml(evortixAssignmentSuccess)}</span></div><div class="evortix-bubble-reason">Evortix refreshed the queue so completed assignments, reductions, approvals, and reallocations are not repeated.</div>`;
+        float.hidden = false;
+        float.setAttribute('aria-hidden', 'false');
+    }
+    window.setTimeout(renderEvortixBubble, 2600);
+}, 900));
+
+['assignExpertForm', 'assignDeveloperForm'].forEach(formId => {
+    document.getElementById(formId)?.addEventListener('submit', async event => {
+        const form = event.currentTarget;
+        if (form.dataset.overloadConfirmed === '1') return;
+        const selected = form.querySelector('input[type="radio"]:checked')?.closest('[data-expert-choice],[data-developer-choice]');
+        if (!selected) return;
+        const load = Number(selected.dataset.memberLoad || 0);
+        const capacity = Math.max(1, Number(selected.dataset.memberCapacity || 5));
+        const unavailable = !['available', 'limited'].includes((selected.dataset.memberAvailability || 'available').toLowerCase());
+        if (load < capacity && !unavailable) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const confirmed = await window.appConfirm?.({
+            title: 'Workload warning',
+            titleIcon: 'fas fa-triangle-exclamation',
+            subject: unavailable ? 'This team member is currently unavailable.' : `This assignment exceeds the ${capacity}-task capacity.`,
+            message: 'Accepting may put the deadline at risk. Continue only if you have confirmed the workload plan.',
+            confirmText: 'Accept overload',
+            confirmIcon: 'fas fa-check'
+        });
+        if (confirmed) {
+            form.dataset.overloadConfirmed = '1';
+            const submitter = form.id === 'assignDeveloperForm' ? document.getElementById('confirmDeveloperAssignment') : null;
+            submitter ? form.requestSubmit(submitter) : form.requestSubmit();
+        }
+    }, true);
+});
+
 const projectPickers = Array.from(document.querySelectorAll('[data-project-picker]'));
 const bulkAssignmentDetails = Array.from(document.querySelectorAll('.bulk-assignment-details'));
 

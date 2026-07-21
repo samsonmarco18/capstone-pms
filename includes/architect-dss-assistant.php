@@ -8,13 +8,22 @@ $architectDssAssistantConfig = is_array($architectDssAssistantConfig ?? null) ? 
 </button>
 <?php endif; ?>
 <style>
+<?php if (empty($architectDssAssistantConfig['showSourceControls'])): ?>
 .architect-dss-source-controls,
 .architect-dss-source-card { display: none !important; }
+<?php endif; ?>
 .chat-bot-speech.evortix-architect-dss {
+    top: auto;
+    bottom: 18%;
+    right: calc(100% + 18px);
     width: min(380px, calc(100vw - 190px));
     min-width: 300px;
+    max-height: min(520px, calc(100vh - 110px));
+    overflow-y: auto;
     padding: 1rem 1.05rem;
+    border-radius: 22px 22px 8px 22px;
     pointer-events: auto;
+    box-shadow: 0 18px 42px rgba(15, 91, 137, .22);
 }
 .chat-bot-speech.evortix-architect-dss .evortix-dss-heading {
     display: block;
@@ -70,7 +79,7 @@ $architectDssAssistantConfig = is_array($architectDssAssistantConfig ?? null) ? 
 .evortix-dss-replay-trigger[hidden] { display: none !important; }
 .evortix-dss-replay-trigger:hover { background: #eef9ff; }
 @media (max-width: 600px) {
-    .chat-bot-speech.evortix-architect-dss { width: min(280px, calc(100vw - 135px)); min-width: 225px; }
+    .chat-bot-speech.evortix-architect-dss { right: calc(100% + 9px); bottom: 12%; width: min(280px, calc(100vw - 135px)); min-width: 225px; max-height: calc(100vh - 90px); }
     .chat-bot-speech.evortix-architect-dss .evortix-dss-actions { grid-template-columns: 1fr; }
     .evortix-dss-replay-trigger { right: 5.3rem; bottom: 1.1rem; }
     .evortix-dss-replay-trigger span { display: none; }
@@ -80,9 +89,12 @@ $architectDssAssistantConfig = is_array($architectDssAssistantConfig ?? null) ? 
 document.addEventListener('DOMContentLoaded', () => {
     const config = <?php echo json_encode($architectDssAssistantConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     const allItems = Array.isArray(config.items) ? config.items : [];
+    const persistDecisions = config.persistDecisions !== false;
     const stateKey = config.stateKey || `evortix.dss.v2:${location.pathname}:${new URLSearchParams(location.search).get('id') || ''}:${config.title || 'review'}`;
     let savedDecisions = {};
-    try { savedDecisions = JSON.parse(localStorage.getItem(stateKey) || '{}') || {}; } catch (error) { savedDecisions = {}; }
+    if (persistDecisions) {
+        try { savedDecisions = JSON.parse(localStorage.getItem(stateKey) || '{}') || {}; } catch (error) { savedDecisions = {}; }
+    }
     const itemDecisionKey = (item) => [item?.selector, item?.label, item?.value ?? '', item?.count ?? ''].join('|');
     const items = allItems.filter((item) => !savedDecisions[itemDecisionKey(item)]);
     let itemIndex = 0;
@@ -193,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const replay = event.target.closest('[data-evortix-dss-replay]');
         if (replay) {
             event.preventDefault();
-            try { localStorage.removeItem(stateKey); } catch (error) {}
+            if (persistDecisions) try { localStorage.removeItem(stateKey); } catch (error) {}
             location.reload();
             return;
         }
@@ -206,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         applyItemDecision(item, accepted);
         if (item) {
             savedDecisions[itemDecisionKey(item)] = accepted ? 'accepted' : 'skipped';
-            try { localStorage.setItem(stateKey, JSON.stringify(savedDecisions)); } catch (error) {}
+            if (persistDecisions) try { localStorage.setItem(stateKey, JSON.stringify(savedDecisions)); } catch (error) {}
         }
         accepted ? acceptedCount++ : skippedCount++;
         itemIndex++;

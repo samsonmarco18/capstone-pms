@@ -1,6 +1,8 @@
 <?php
 $isSulRoute = str_contains($_SERVER['REQUEST_URI'] ?? '', '/modules/sul/');
 $evortixProjectTeamNotification = null;
+$evortixSulRevisionNotification = null;
+$evortixRoleDashboardSummary = null;
 $evortixCompilationImpact = is_array($_SESSION['evortix_change_impact'] ?? null) ? $_SESSION['evortix_change_impact'] : null;
 $evortixDecisionRoute = preg_match('#/modules/(architect/tech-recommendation|architect/developer-allocation|roadmap/methodology)\.php#', (string) ($_SERVER['REQUEST_URI'] ?? '')) === 1;
 $evortixDeferredCompilationImpact = $evortixDecisionRoute ? $evortixCompilationImpact : null;
@@ -33,9 +35,135 @@ if (function_exists('isLoggedIn') && isLoggedIn()) {
                 }
                 $evortixStmt->close();
             }
+            $revisionStmt = getConnection()->prepare(
+                "SELECT id, title, message, action_url, related_table, related_id
+                 FROM notifications
+                 WHERE user_id = ?
+                   AND is_read = FALSE
+                   AND (title LIKE '%Revision Requested:%' OR message LIKE 'SUL requested revision%')
+                 ORDER BY created_at DESC, id DESC
+                 LIMIT 1"
+            );
+            if ($revisionStmt) {
+                $revisionStmt->bind_param('i', $evortixUserId);
+                $revisionStmt->execute();
+                $evortixSulRevisionNotification = $revisionStmt->get_result()->fetch_assoc() ?: null;
+                $revisionStmt->close();
+            }
         }
     } catch (Throwable $e) {
         error_log('Evortix project notification load failed: ' . $e->getMessage());
+    }
+}
+
+$evortixRequestPath = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+if (
+    preg_match('#/modules/(admin|architect|qa|expert|developer)/dashboard\.php$#', $evortixRequestPath, $evortixDashboardMatch)
+) {
+    try {
+        $summaryUser = getCurrentUser();
+        $summaryRole = (string) ($summaryUser['role'] ?? '');
+        $summaryUserId = (int) ($summaryUser['id'] ?? 0);
+        if ($summaryRole === (string) ($evortixDashboardMatch[1] ?? '') && $summaryUserId > 0) {
+            $summaryConn = getConnection();
+            $summaryCount = static function (string $sql) use ($summaryConn): int {
+                try {
+                    $result = $summaryConn->query($sql);
+                    return $result ? (int) (($result->fetch_assoc()['count'] ?? 0)) : 0;
+                } catch (Throwable $e) {
+                    error_log('Evortix dashboard metric unavailable: ' . $e->getMessage());
+                    return 0;
+                }
+            };
+            $roleSummaries = [
+                'admin' => [
+                    'title' => 'Your admin dashboard snapshot',
+                    'metrics' => [
+                        ['icon' => 'fa-users', 'label' => 'Active Users', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM users WHERE status = 'active'"), 'meta' => 'Enabled accounts'],
+                        ['icon' => 'fa-diagram-project', 'label' => 'Active Projects', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM projects WHERE status NOT IN ('completed','cancelled')"), 'meta' => 'Across the platform'],
+                        ['icon' => 'fa-key', 'label' => 'Pending Resets', 'value' => dbTableExists($summaryConn, 'password_reset_requests') ? $summaryCount("SELECT COUNT(*) AS count FROM password_reset_requests WHERE status = 'pending'") : 0, 'meta' => 'Awaiting review'],
+                        ['icon' => 'fa-shield-halved', 'label' => 'Security Events', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM audit_logs WHERE action LIKE '%security%'"), 'meta' => 'Recorded events'],
+                    ],
+                ],
+                'architect' => [
+                    'title' => 'Your architect dashboard snapshot',
+                    'metrics' => [
+                        ['icon' => 'fa-folder-open', 'label' => 'Total Projects', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM projects WHERE architect_id = {$summaryUserId} OR architect_id IS NULL"), 'meta' => 'In your architecture scope'],
+                        ['icon' => 'fa-hourglass-half', 'label' => 'Pending Review', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM projects WHERE (architect_id = {$summaryUserId} OR architect_id IS NULL) AND status IN ('pending','review','architectural_review')"), 'meta' => 'Needs architecture action'],
+                        ['icon' => 'fa-gears', 'label' => 'In Progress', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM projects WHERE (architect_id = {$summaryUserId} OR architect_id IS NULL) AND status NOT IN ('pending','completed','cancelled')"), 'meta' => 'Active technical work'],
+                        ['icon' => 'fa-triangle-exclamation', 'label' => 'Overdue', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM projects WHERE (architect_id = {$summaryUserId} OR architect_id IS NULL) AND timeline_end < CURRENT_DATE AND status NOT IN ('completed','cancelled')"), 'meta' => 'Past project deadline', 'overdue' => true],
+                    ],
+                ],
+                'qa' => [
+                    'title' => 'Your QA dashboard snapshot',
+                    'metrics' => [
+                        ['icon' => 'fa-vial', 'label' => 'Ready for Testing', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE status = 'qa_testing'"), 'meta' => 'Awaiting QA'],
+                        ['icon' => 'fa-circle-xmark', 'label' => 'Failed Checks', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE status = 'qa_failed'"), 'meta' => 'Returned for fixes'],
+                        ['icon' => 'fa-circle-check', 'label' => 'QA Passed', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE status = 'qa_passed'"), 'meta' => 'Ready for final review'],
+                        ['icon' => 'fa-triangle-exclamation', 'label' => 'Overdue', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE deadline < NOW() AND status IN ('qa_testing','qa_failed')"), 'meta' => 'Needs QA attention', 'overdue' => true],
+                    ],
+                ],
+                'expert' => [
+                    'title' => 'Your expert dashboard snapshot',
+                    'metrics' => [
+                        ['icon' => 'fa-list-check', 'label' => 'Assigned Tasks', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND status != 'completed'"), 'meta' => 'Current workload'],
+                        ['icon' => 'fa-calculator', 'label' => 'To Estimate', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND status = 'todo'"), 'meta' => 'Needs estimation'],
+                        ['icon' => 'fa-paper-plane', 'label' => 'In Review', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND status = 'review'"), 'meta' => 'Submitted estimates'],
+                        ['icon' => 'fa-triangle-exclamation', 'label' => 'Overdue', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND deadline < NOW() AND status != 'completed'"), 'meta' => 'Needs attention', 'overdue' => true],
+                    ],
+                ],
+                'developer' => [
+                    'title' => 'Your developer dashboard snapshot',
+                    'metrics' => [
+                        ['icon' => 'fa-list-check', 'label' => 'Assigned Tasks', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId}"), 'meta' => 'All assigned work'],
+                        ['icon' => 'fa-play', 'label' => 'In Progress', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND status = 'in_progress'"), 'meta' => 'Currently active'],
+                        ['icon' => 'fa-circle-check', 'label' => 'Completed', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND status = 'completed'"), 'meta' => 'Finished tasks'],
+                        ['icon' => 'fa-triangle-exclamation', 'label' => 'Overdue', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM tasks WHERE assigned_to = {$summaryUserId} AND deadline < NOW() AND status != 'completed'"), 'meta' => 'Needs attention', 'overdue' => true],
+                    ],
+                ],
+            ];
+            $evortixRoleDashboardSummary = $roleSummaries[$summaryRole] ?? null;
+            if ($summaryRole === 'architect' && $evortixRoleDashboardSummary) {
+                $planningResult = $summaryConn->query("
+                    SELECT p.id, p.name, p.status, p.timeline_end,
+                           (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id) AS task_count
+                    FROM projects p
+                    WHERE (p.architect_id = {$summaryUserId} OR p.architect_id IS NULL)
+                      AND p.status IN ('pending', 'review', 'architectural_review')
+                    ORDER BY CASE WHEN p.timeline_end IS NULL THEN 1 ELSE 0 END,
+                             p.timeline_end ASC, p.created_at ASC
+                    LIMIT 1
+                ");
+                $planningProject = $planningResult ? $planningResult->fetch_assoc() : null;
+                if ($planningProject) {
+                    $planningStarted = (int) ($planningProject['task_count'] ?? 0) > 0;
+                    $planningDeadline = !empty($planningProject['timeline_end'])
+                        ? date('M d, Y', strtotime((string) $planningProject['timeline_end']))
+                        : 'No target deadline';
+                    $evortixRoleDashboardSummary['suggestion'] = [
+                        'eyebrow' => 'Project planning suggestion',
+                        'title' => (string) $planningProject['name'] . ' needs architecture planning',
+                        'message' => ($planningStarted
+                            ? 'Continue the existing plan and validate features, technology, allocation, documents, and roadmap.'
+                            : 'Start with the Sales intake, validate requested features, then prepare the technical plan.')
+                            . ' Target: ' . $planningDeadline . '.',
+                        'action_label' => $planningStarted ? 'Continue planning' : 'Start project review',
+                        'action_url' => BASE_URL . 'modules/architect/project-review.php?id=' . (int) $planningProject['id'],
+                    ];
+                } else {
+                    $evortixRoleDashboardSummary['suggestion'] = [
+                        'eyebrow' => 'Project planning suggestion',
+                        'title' => 'No project is waiting for architecture planning',
+                        'message' => 'Your current planning intake is clear.',
+                        'action_label' => '',
+                        'action_url' => '',
+                    ];
+                }
+            }
+            unset($_SESSION['evortix_role_dashboard_welcome_pending']);
+        }
+    } catch (Throwable $e) {
+        error_log('Evortix role dashboard summary failed: ' . $e->getMessage());
     }
 }
 ?>
@@ -108,6 +236,27 @@ document.addEventListener('DOMContentLoaded', () => {
     border-radius: 14px;
     animation: evortixGuidancePulse 1.1s ease-in-out 3;
 }
+.chat-bot-speech.evortix-role-dashboard-summary { top:42%; right:calc(100% + 18px); width:min(390px,calc(100vw - 190px)); min-width:340px; padding:1rem 1.05rem 1.05rem; border-radius:22px 22px 8px 22px; pointer-events:auto; animation:evortixRoleSummaryReveal .55s cubic-bezier(.16,.86,.22,1) both }
+.evortix-role-summary-head { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; padding-left:.75rem }
+.evortix-role-summary-eyebrow { color:#157baa; font-size:.65rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase }
+.chat-bot-speech .evortix-role-summary-title { min-height:0; padding:0; color:#083a5d; font-size:.98rem; line-height:1.3 }
+.evortix-role-summary-close { display:grid; place-items:center; flex:0 0 30px; width:30px; height:30px; border:0; border-radius:50%; background:rgba(255,255,255,.7); color:#0d6f9f }
+.evortix-role-summary-intro { margin:.5rem 0 .7rem; color:#175f8f; font-size:.74rem; font-weight:700 }
+.evortix-role-summary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.48rem }
+.evortix-role-summary-metric { min-width:0; padding:.62rem .68rem; border:1px solid rgba(8,123,185,.17); border-radius:12px; background:rgba(255,255,255,.78); box-shadow:0 6px 16px rgba(15,119,183,.09) }
+.evortix-role-summary-top { display:flex; align-items:center; justify-content:space-between; gap:.5rem }
+.evortix-role-summary-top i { color:#138ac1; font-size:.78rem }
+.chat-bot-speech .evortix-role-summary-value { min-height:0; padding:0; color:#083a5d; font-size:1.1rem; line-height:1 }
+.evortix-role-summary-label { margin-top:.36rem; color:#0b466d; font-size:.71rem; font-weight:850 }
+.evortix-role-summary-meta { margin-top:.16rem; color:#5b7f97; font-size:.63rem; font-weight:700 }
+.evortix-role-planning-suggestion { margin-top:.65rem; padding:.72rem; border:1px solid rgba(8,123,185,.2); border-radius:12px; background:rgba(255,255,255,.82) }
+.evortix-role-planning-eyebrow { color:#157baa; font-size:.6rem; font-weight:850; letter-spacing:.08em; text-transform:uppercase }
+.evortix-role-planning-title { display:block; margin-top:.18rem; color:#083a5d; font-size:.78rem; line-height:1.35 }
+.evortix-role-planning-copy { margin:.25rem 0 0; color:#426f8c; font-size:.66rem; line-height:1.45 }
+.evortix-role-planning-action { display:inline-flex; align-items:center; gap:.35rem; margin-top:.5rem; padding:.42rem .65rem; border-radius:9px; background:#137eb3; color:#fff !important; font-size:.67rem; font-weight:800; text-decoration:none }
+.evortix-role-summary-metric.is-overdue .evortix-role-summary-value,.evortix-role-summary-metric.is-overdue i { color:#c2413b }
+@keyframes evortixRoleSummaryReveal { from { opacity:0; transform:translateY(-50%) translateX(18px) scale(.94) } to { opacity:1; transform:translateY(-50%) translateX(0) scale(1) } }
+@media(max-width:640px){.chat-bot-speech.evortix-role-dashboard-summary{right:calc(100% + 9px);width:min(270px,calc(100vw - 145px));min-width:220px}.evortix-role-summary-grid{grid-template-columns:1fr;max-height:238px;overflow-y:auto}}
 @keyframes evortixGuidancePulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
     50% { box-shadow: 0 0 0 10px rgba(14, 165, 233, .16); }
@@ -266,6 +415,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const evortixProjectTeamNotification = <?php echo json_encode($evortixProjectTeamNotification, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
+    const evortixSulRevisionNotification = <?php echo json_encode($evortixSulRevisionNotification, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     const widget = document.getElementById('chat-widget');
     const minimized = document.getElementById('chat-widget-minimized');
     const botWidget = document.getElementById('chat-bot-widget');
@@ -398,6 +548,42 @@ document.addEventListener('DOMContentLoaded', function () {
         typeBotSpeech(180);
     };
 
+    const evortixRoleDashboardSummary = <?php echo json_encode($evortixRoleDashboardSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    if (evortixRoleDashboardSummary && botFloat) {
+        window.setTimeout(() => {
+            const speech = botFloat.querySelector('.chat-bot-speech');
+            if (!speech) return;
+            const escapeSummary = value => {
+                const node = document.createElement('div');
+                node.textContent = String(value ?? '');
+                return node.innerHTML;
+            };
+            const metricMarkup = (evortixRoleDashboardSummary.metrics || []).map(metric => `
+                <div class="evortix-role-summary-metric${metric.overdue ? ' is-overdue' : ''}">
+                    <div class="evortix-role-summary-top"><i class="fas ${escapeSummary(metric.icon)}"></i><strong class="evortix-role-summary-value">${escapeSummary(metric.value)}</strong></div>
+                    <div class="evortix-role-summary-label">${escapeSummary(metric.label)}</div>
+                    <div class="evortix-role-summary-meta">${escapeSummary(metric.meta)}</div>
+                </div>`).join('');
+            speech.className = 'chat-bot-speech evortix-role-dashboard-summary';
+            speech.hidden = false;
+            speech.style.pointerEvents = 'auto';
+            speech.setAttribute('aria-hidden', 'false');
+            speech.setAttribute('role', 'status');
+            speech.innerHTML = `
+                <div class="evortix-role-summary-head"><div><div class="evortix-role-summary-eyebrow">Live overview</div><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong></div><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+                <div class="evortix-role-summary-intro">Here is the information most relevant to your role right now.</div>
+                <div class="evortix-role-summary-grid">${metricMarkup}</div>
+                ${evortixRoleDashboardSummary.suggestion ? `<div class="evortix-role-planning-suggestion"><div class="evortix-role-planning-eyebrow">${escapeSummary(evortixRoleDashboardSummary.suggestion.eyebrow)}</div><strong class="evortix-role-planning-title">${escapeSummary(evortixRoleDashboardSummary.suggestion.title)}</strong><p class="evortix-role-planning-copy">${escapeSummary(evortixRoleDashboardSummary.suggestion.message)}</p>${evortixRoleDashboardSummary.suggestion.action_url ? `<a class="evortix-role-planning-action" href="${escapeSummary(evortixRoleDashboardSummary.suggestion.action_url)}"><i class="fas fa-arrow-right"></i>${escapeSummary(evortixRoleDashboardSummary.suggestion.action_label)}</a>` : ''}</div>` : ''}`;
+            botFloat.hidden = false;
+            botFloat.setAttribute('aria-hidden', 'false');
+            window.chatBotFloatRobot?.point?.('left', 6500);
+            speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', () => {
+                speech.hidden = true;
+                speech.setAttribute('aria-hidden', 'true');
+            });
+        }, 800);
+    }
+
     const evortixGuidanceParams = new URLSearchParams(window.location.search);
     const evortixGuidanceIssue = evortixGuidanceParams.get('evortix_issue') || '';
     if (evortixGuidanceIssue) {
@@ -457,6 +643,45 @@ document.addEventListener('DOMContentLoaded', function () {
             document.addEventListener('evortix:dashboard-welcome-complete', announceProjectNotification, { once:true });
         } else {
             announceProjectNotification();
+        }
+    }
+
+    if (evortixSulRevisionNotification) {
+        const revisionStorageKey = `evortix.sulRevision.${evortixSulRevisionNotification.id}`;
+        if (!sessionStorage.getItem(revisionStorageKey)) {
+            sessionStorage.setItem(revisionStorageKey, '1');
+            window.setTimeout(() => {
+                const isExpertRevision = evortixSulRevisionNotification.related_table === 'expert_project_estimations';
+                const guidance = isExpertRevision
+                    ? 'Review the SUL reason, update the affected estimates, staffing, cost, and timeline, then save and resubmit the project estimation.'
+                    : 'Review the SUL comment, update the implementation and evidence, then resubmit the task or pull request for SUL review.';
+                window.evortixAnnounceNotification?.(
+                    evortixSulRevisionNotification.title || 'SUL revision requested',
+                    `${evortixSulRevisionNotification.message || 'Your SUL requested changes.'} ${guidance}`,
+                    evortixSulRevisionNotification.action_url || ''
+                );
+                const action = document.querySelector('#chat-bot-float .evortix-project-notification-action');
+                if (action) action.textContent = 'Review revision';
+
+                const currentPath = window.location.pathname;
+                const actionPath = (() => {
+                    try {
+                        const url = new URL(evortixSulRevisionNotification.action_url || '', window.location.origin);
+                        return url.pathname;
+                    } catch (error) { return ''; }
+                })();
+                if (actionPath && currentPath === actionPath) {
+                    const taskId = String(evortixSulRevisionNotification.related_id || '').replace(/[^0-9]/g, '');
+                    const target = (taskId ? document.querySelector(`[data-task-id="${taskId}"]`) : null)
+                        || document.querySelector('.estimation-card:not([style*="display: none"])')
+                        || document.querySelector('main form, #page-content-wrapper form');
+                    if (target) {
+                        target.classList.add('evortix-guidance-target');
+                        target.scrollIntoView({ behavior:'smooth', block:'center' });
+                        window.setTimeout(() => target.classList.remove('evortix-guidance-target'), 7000);
+                    }
+                }
+            }, 1600);
         }
     }
 

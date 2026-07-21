@@ -2694,6 +2694,7 @@ function viewTask(taskId) {
             const reopenPanel = buildReopenRequestPanel(task);
             const isUiUxDepartment = currentDepartmentCanonical === 'UI/UX';
             const isReopenedTask = Boolean(task.last_reopened_at) && String(task.status || '') === 'sul_revision';
+            announceDeveloperTaskGuidance(task);
             const reopenedBadge = isReopenedTask
                 ? '<span class="reopen-indicator mb-0"><i class="fas fa-rotate-left"></i> Reopened</span>'
                 : '';
@@ -2845,6 +2846,80 @@ function viewTask(taskId) {
         }
     });
 }
+
+function announceDeveloperTaskGuidance(task) {
+    if (!task || !task.id) return;
+    const historyKey = `evortix.developer.task.v2.${task.id}.${task.evortix_suggestion_version || task.status || 'current'}`;
+    if (localStorage.getItem(historyKey)) return;
+
+    const guidance = [];
+    const daysLeft = Number(task.days_left);
+    if (task.deadline && Number.isFinite(daysLeft) && daysLeft <= 3) {
+        guidance.push(daysLeft < 0
+            ? `Deadline alert: this task is ${Math.abs(daysLeft)} day(s) overdue.`
+            : `Deadline alert: only ${daysLeft} day(s) remain.`);
+    }
+
+    if (task.evortix_revision) {
+        const source = String(task.evortix_revision.role || 'reviewer').toUpperCase();
+        guidance.push(`${source} requested revision: ${task.evortix_revision.comment || 'Review the latest feedback and correct the requested items.'}`);
+    }
+
+    const tests = Array.isArray(task.evortix_recommended_tests) ? task.evortix_recommended_tests : [];
+    if (!['for_review', 'qa_testing', 'qa_passed', 'architect_review', 'completed'].includes(String(task.status || ''))) {
+        guidance.push(`Before submission: ${tests.join(' ')}`);
+    }
+
+    if (task.evortix_next_task) {
+        guidance.push(`Recommended next task: ${task.evortix_next_task.title}. ${task.evortix_next_task.reason}`);
+    } else {
+        guidance.push('No other dependency-ready task is currently ahead of this one.');
+    }
+
+    let announcementAttempts = 0;
+    const deliverGuidance = () => {
+        if (typeof window.evortixAnnounceNotification !== 'function' && announcementAttempts++ < 10) {
+            window.setTimeout(deliverGuidance, 250);
+            return;
+        }
+        if (typeof window.evortixAnnounceNotification !== 'function') return;
+        window.evortixAnnounceNotification(
+            `Developer guidance: ${task.title || 'Task'}`,
+            guidance.join(' '),
+            ''
+        );
+        localStorage.setItem(historyKey, JSON.stringify({ reviewedAt: new Date().toISOString(), taskId: task.id }));
+    };
+    window.setTimeout(deliverGuidance, 350);
+}
+
+function announceDeveloperTaskPageGuidance() {
+    const recommendedCard = document.querySelector('#progress-column .reopened-card')
+        || document.querySelector('#progress-column .kanban-card')
+        || document.querySelector('#todo-column .kanban-card');
+    const taskId = Number(recommendedCard?.dataset.taskId || 0);
+
+    if (taskId <= 0) {
+        window.setTimeout(() => window.evortixAnnounceNotification?.(
+            'Developer task guidance',
+            'You have no active or ready tasks right now. Evortix will guide you when a new task or revision is assigned.',
+            ''
+        ), 700);
+        return;
+    }
+
+    $.ajax({
+        url: '../../api/get-task-details.php',
+        method: 'GET',
+        data: { id: taskId },
+        success: response => {
+            const task = typeof response === 'string' ? JSON.parse(response) : response;
+            announceDeveloperTaskGuidance(task);
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', announceDeveloperTaskPageGuidance);
 
 function buildReopenRequestPanel(task) {
     const eligibleStatuses = ['for_review', 'qa_testing', 'qa_failed', 'qa_passed', 'architect_review', 'merged', 'ready_for_release', 'completed'];
@@ -3365,6 +3440,11 @@ let draggedItem = null;
 document.querySelectorAll('.kanban-card').forEach(card => {
     card.addEventListener('dragstart', handleDragStart);
     card.addEventListener('dragend', handleDragEnd);
+    card.addEventListener('click', event => {
+        if (event.target.closest('button, a, input, select, textarea')) return;
+        const taskId = Number(card.dataset.taskId || 0);
+        if (taskId > 0) viewTask(taskId);
+    });
 });
 
 document.querySelectorAll('.kanban-body').forEach(column => {

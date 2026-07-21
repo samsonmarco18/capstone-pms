@@ -6053,7 +6053,10 @@ restoreRoadmapEditor(roadmapEditorState);
 
 <?php if ($canEditArchitecture && $selectedProject):
     $architectDssAssistantConfig = ['items' => []];
-    if ($suggestedMethodologyKey !== '') {
+    if (
+        $suggestedMethodologyKey !== ''
+        && (string) ($selectedProject['methodology_template'] ?? '') !== $suggestedMethodologyKey
+    ) {
         $methodologyDetail = $suggestedMethodologyLabel . ' fits this project baseline. Accept it to generate the roadmap phases.';
         $suggestedTotalDays = roadmapDaysBetween((string) ($selectedProject['timeline_start'] ?? ''), (string) ($selectedProject['timeline_end'] ?? ''));
         $suggestedPhaseDays = methodologyRoadmapPhaseDurationPlan($suggestedTotalDays, 5);

@@ -19,6 +19,9 @@ CREATE TABLE users (
     phone VARCHAR(20),
     address TEXT,
     designation VARCHAR(100),
+    skills TEXT NULL,
+    availability_status VARCHAR(30) DEFAULT 'available',
+    max_concurrent_tasks INT DEFAULT 5,
     password_changed_at DATETIME NULL,
     last_login DATETIME NULL,
     email_notifications BOOLEAN DEFAULT TRUE,
@@ -757,6 +760,19 @@ CREATE TABLE messages (
 -- =====================================================
 -- AUDIT LOG TABLE
 -- =====================================================
+CREATE TABLE evortix_sul_suggestion_history (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    sul_id INT NOT NULL,
+    task_id INT NOT NULL,
+    project_id INT NOT NULL,
+    decision VARCHAR(30) NOT NULL,
+    recommended_user_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_evortix_sul_task (sul_id, task_id),
+    INDEX idx_evortix_sul_decision (sul_id, decision)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE audit_logs (
     id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT,

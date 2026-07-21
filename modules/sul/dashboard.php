@@ -8,6 +8,8 @@ requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$showEvortixSulLoginWelcome = true;
+unset($_SESSION['evortix_sul_dashboard_welcome_pending']);
 methodologyRoadmapEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
 $sulDepartment = trim((string) ($user['department'] ?? ''));
@@ -96,6 +98,7 @@ $unassignedTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM 
 $inProgressTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE status = 'in_progress'");
 $completedTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE status = 'completed'");
 $todoTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE status = 'todo'");
+$activeProjects = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM projects WHERE status NOT IN ('completed', 'cancelled')");
 
 // Get tasks by priority
 $highPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE priority = 'high' AND status != 'completed'");
@@ -1551,6 +1554,22 @@ include '../../includes/navbar.php';
         width: min(220px, 100%);
     }
 }
+.chat-bot-speech.evortix-dashboard-summary { top:42%; right:calc(100% + 18px); width:min(390px,calc(100vw - 190px)); min-width:340px; padding:1rem 1.05rem 1.05rem; border-radius:22px 22px 8px 22px; pointer-events:auto; animation:evortixSulSummaryReveal .55s cubic-bezier(.16,.86,.22,1) both }
+.evortix-dashboard-summary-head { position:relative; z-index:2; display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; padding-left:.75rem }
+.evortix-dashboard-summary-eyebrow { color:#157baa; font-size:.65rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase }
+.chat-bot-speech .evortix-dashboard-summary-title { min-height:0; padding:0; color:#083a5d; font-size:.98rem; line-height:1.3 }
+.evortix-dashboard-summary-close { display:grid; place-items:center; flex:0 0 30px; width:30px; height:30px; border:0; border-radius:50%; background:rgba(255,255,255,.7); color:#0d6f9f; box-shadow:0 5px 14px rgba(15,119,183,.15) }
+.evortix-dashboard-summary-intro { position:relative; z-index:2; margin:.5rem 0 .7rem; color:#175f8f; font-size:.74rem; font-weight:700 }
+.evortix-dashboard-summary-grid { position:relative; z-index:2; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.48rem }
+.evortix-dashboard-summary-metric { min-width:0; padding:.62rem .68rem; border:1px solid rgba(8,123,185,.17); border-radius:12px; background:rgba(255,255,255,.78); box-shadow:0 6px 16px rgba(15,119,183,.09) }
+.evortix-dashboard-summary-metric-top { display:flex; align-items:center; justify-content:space-between; gap:.5rem }
+.evortix-dashboard-summary-metric i { color:#138ac1; font-size:.78rem }
+.chat-bot-speech .evortix-dashboard-summary-value { min-height:0; padding:0; color:#083a5d; font-size:1.1rem; line-height:1 }
+.evortix-dashboard-summary-label { margin-top:.36rem; color:#0b466d; font-size:.71rem; font-weight:850 }
+.evortix-dashboard-summary-meta { margin-top:.16rem; color:#5b7f97; font-size:.63rem; font-weight:700 }
+.evortix-dashboard-summary-metric.is-overdue .evortix-dashboard-summary-value,.evortix-dashboard-summary-metric.is-overdue i { color:#c2413b }
+@keyframes evortixSulSummaryReveal { from { opacity:0; transform:translateY(-50%) translateX(18px) scale(.94) } to { opacity:1; transform:translateY(-50%) translateX(0) scale(1) } }
+@media(max-width:640px){.chat-bot-speech.evortix-dashboard-summary{right:calc(100% + 9px);width:min(270px,calc(100vw - 145px));min-width:220px}.evortix-dashboard-summary-grid{grid-template-columns:1fr;max-height:238px;overflow-y:auto}}
 </style>
 
 <div class="container-fluid px-4 py-4 role-dashboard-shell">
@@ -2304,6 +2323,35 @@ function escapeHtml(text) {
     div.textContent = text ?? '';
     return div.innerHTML;
 }
+
+<?php if ($showEvortixSulLoginWelcome): ?>
+document.addEventListener('DOMContentLoaded', () => {
+    window.setTimeout(() => {
+        const float = document.getElementById('chat-bot-float');
+        const speech = float?.querySelector('.chat-bot-speech');
+        if (!float || !speech) return;
+        speech.className = 'chat-bot-speech evortix-dashboard-summary';
+        const metrics = [
+            ['fa-play', '<?php echo $inProgressTasks; ?>', 'In progress', 'Active delivery work', false],
+            ['fa-user-plus', '<?php echo $unassignedTasks; ?>', 'Unassigned', 'Waiting for an owner', false],
+            ['fa-triangle-exclamation', '<?php echo $overdueTasks; ?>', 'Overdue', 'Needs immediate attention', true],
+            ['fa-diagram-project', '<?php echo $activeProjects; ?>', 'Active projects', 'Current portfolio', false]
+        ];
+        speech.innerHTML = `
+            <div class="evortix-dashboard-summary-head"><div><div class="evortix-dashboard-summary-eyebrow">Live overview</div><strong class="evortix-dashboard-summary-title">Your SUL dashboard snapshot</strong></div><button type="button" class="evortix-dashboard-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+            <div class="evortix-dashboard-summary-intro">Here is what your delivery summary is reporting right now.</div>
+            <div class="evortix-dashboard-summary-grid">${metrics.map(metric => `<div class="evortix-dashboard-summary-metric${metric[4] ? ' is-overdue' : ''}"><div class="evortix-dashboard-summary-metric-top"><i class="fas ${metric[0]}"></i><strong class="evortix-dashboard-summary-value">${metric[1]}</strong></div><div class="evortix-dashboard-summary-label">${metric[2]}</div><div class="evortix-dashboard-summary-meta">${metric[3]}</div></div>`).join('')}</div>`;
+        float.hidden = false;
+        float.setAttribute('aria-hidden', 'false');
+        speech.setAttribute('aria-hidden', 'false');
+        speech.querySelector('.evortix-dashboard-summary-close')?.addEventListener('click', () => {
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+        });
+        document.dispatchEvent(new CustomEvent('evortix:dashboard-welcome-complete'));
+    }, 700);
+});
+<?php endif; ?>
 </script>
 
 <?php include '../../includes/footer.php'; ?>

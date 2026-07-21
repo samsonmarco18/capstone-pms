@@ -461,6 +461,60 @@ include '../../includes/navbar.php';
     gap: 0.75rem;
     margin-bottom: 1.25rem;
 }
+.architect-dss-source-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid #b9e3f5;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #f5fcff, #e8f7fd);
+    color: #174f73;
+    box-shadow: 0 8px 22px rgba(31, 99, 146, .08);
+}
+.architect-dss-source-controls strong { color: #0d5f8f; }
+.architect-dss-source-controls span { color: #52758d; font-size: .78rem; }
+.saved-feature.is-recommended { border-color: #9edcf3; background: linear-gradient(135deg, #ffffff, #f1fbff); }
+.saved-feature-recommendation { display: inline-flex; align-items: center; gap: .3rem; margin-bottom: .35rem; padding: .2rem .48rem; border-radius: 999px; background: #e2f5fd; color: #126b9b; font-size: .64rem; font-weight: 800; }
+.saved-feature-list {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: .75rem;
+    margin-bottom: 1.25rem;
+}
+.saved-feature-columns { display: none !important; }
+.saved-feature {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    min-height: 70px;
+    padding: .8rem 1rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(15, 76, 129, .035);
+}
+.saved-feature:hover { border-color: #9edcf3; box-shadow: 0 8px 18px rgba(31, 99, 146, .08); }
+.saved-feature-check { flex: 0 0 auto; margin: 0; }
+.saved-feature-check .form-check-input { margin: 0; }
+.saved-feature > div:nth-of-type(2) { min-width: 0; flex: 1; }
+.saved-feature > div:nth-of-type(3),
+.saved-feature-field-label,
+.saved-feature [data-existing-feature-field],
+.saved-feature-recommendation,
+.saved-feature-status-note { display: none !important; }
+.saved-feature-display-title { display: block; color: var(--gray-900); font-size: .88rem; font-weight: 650; line-height: 1.3; word-break: break-word; }
+.saved-feature.is-locked { opacity: .72; }
+@media (max-width: 1100px) { .saved-feature-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 820px) { .saved-feature-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .saved-feature-list { grid-template-columns: 1fr; } }
+@media (max-width: 720px) {
+    .architect-dss-source-controls { align-items: stretch; flex-direction: column; }
+    .architect-dss-source-controls .d-flex { width: 100%; }
+    .architect-dss-source-controls .btn { flex: 1; }
+}
 
 .sales-requested-feature {
     display: grid;
@@ -962,7 +1016,7 @@ a.progress-step:hover {
                         $normalizedFeatureTitle = architectFeatureNormalizeTitle($featureTitle);
                         $isRecommendedFeature = isset($templateFeatureLookup[$normalizedFeatureTitle]) || isset($salesFeatureLookup[$normalizedFeatureTitle]);
                     ?>
-                    <div class="saved-feature <?php echo $isFeatureEditable ? '' : 'is-locked'; ?>" data-existing-feature>
+                    <div class="saved-feature <?php echo $isFeatureEditable ? '' : 'is-locked'; ?> <?php echo $isRecommendedFeature ? 'is-recommended' : ''; ?>" data-existing-feature>
                         <div class="form-check saved-feature-check">
                             <input type="hidden" name="existing_features[<?php echo $featureId; ?>][include]" value="<?php echo $isFeatureEditable ? '0' : '1'; ?>">
                             <input
@@ -973,11 +1027,13 @@ a.progress-step:hover {
                                 id="existingFeature<?php echo $featureId; ?>"
                                 data-existing-feature-toggle
                                 data-recommended-feature="<?php echo $isRecommendedFeature ? htmlspecialchars($featureTitle) : ''; ?>"
-                                <?php echo isset($existingFeatureLookup[architectFeatureNormalizeTitle($salesFeature)]) ? 'checked' : ''; ?>
+                                checked
                                 <?php echo $isFeatureEditable ? '' : 'disabled'; ?>
                             >
                         </div>
                         <div>
+                            <?php if ($isRecommendedFeature): ?><span class="saved-feature-recommendation"><i class="fas fa-wand-magic-sparkles"></i> Evortix recommended</span><?php endif; ?>
+                            <span class="saved-feature-display-title"><?php echo htmlspecialchars($featureTitle); ?></span>
                             <label class="form-label saved-feature-field-label" for="existingFeatureTitle<?php echo $featureId; ?>">Feature Title</label>
                             <input
                                 type="text"
@@ -1254,7 +1310,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-<?php if (count($salesRequestedFeatures) > 0):
+<?php
     $architectDssItems = [];
     foreach ($salesRequestedFeatures as $index => $salesFeature) {
         if (isset($existingFeatureLookup[architectFeatureNormalizeTitle((string) $salesFeature)])) continue;
@@ -1264,14 +1320,17 @@ document.addEventListener('DOMContentLoaded', () => {
             'selector' => '#salesFeature' . $index,
         ];
     }
+    if ($architectDssItems !== []):
     $architectDssAssistantConfig = [
         'title' => 'Feature recommendations ready',
-        'message' => 'I found ' . count($salesRequestedFeatures) . ' feature suggestions from the Sales intake. Would you like me to include them for Architect review?',
+        'message' => 'I found ' . count($architectDssItems) . ' feature recommendation' . (count($architectDssItems) === 1 ? '' : 's') . ' from the Sales intake and project template. Review them one at a time.',
         'stateKey' => 'evortix.dss.features.project.' . (int) $projectId,
+        'showSourceControls' => true,
         'items' => $architectDssItems,
         'completedTitle' => 'Feature review complete',
     ];
     include '../../includes/architect-dss-assistant.php';
-endif; ?>
+    endif;
+?>
 
 <?php include '../../includes/footer.php'; ?>

@@ -78,6 +78,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($user['role'] === 'sales') {
                     $_SESSION['evortix_sales_dashboard_welcome_pending'] = true;
                 }
+                if ($user['role'] === 'sul') {
+                    $_SESSION['evortix_sul_dashboard_welcome_pending'] = true;
+                }
+                if (!in_array($user['role'], ['sales', 'sul'], true)) {
+                    $_SESSION['evortix_role_dashboard_welcome_pending'] = true;
+                }
 
                 $updateStmt = $conn->prepare('UPDATE users SET last_login = NOW() WHERE id = ?');
                 $updateStmt->bind_param('i', $user['id']);

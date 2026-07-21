@@ -122,6 +122,71 @@ if ($task = $result->fetch_assoc()) {
         $task['roadmap_start_block_reason'] = null;
     }
     $task['department_artifacts'] = departmentArtifactFetchVisibleForTask($conn, $taskId);
+
+    $task['evortix_revision'] = null;
+    if (in_array((string) ($task['status'] ?? ''), ['sul_revision', 'qa_failed'], true)) {
+        $revisionStmt = $conn->prepare(
+            "SELECT tc.comment, tc.created_at, u.full_name, u.role
+             FROM task_comments tc
+             INNER JOIN users u ON u.id = tc.user_id
+             WHERE tc.task_id = ? AND u.role IN ('sul', 'qa', 'architect')
+             ORDER BY tc.created_at DESC, tc.id DESC
+             LIMIT 1"
+        );
+        $revisionStmt->bind_param('i', $taskId);
+        $revisionStmt->execute();
+        $task['evortix_revision'] = $revisionStmt->get_result()->fetch_assoc() ?: null;
+        $revisionStmt->close();
+    }
+
+    $taskText = strtolower((string) ($task['title'] ?? '') . ' ' . (string) ($task['description'] ?? ''));
+    $recommendedTests = ['Run the task acceptance criteria and a focused regression check.'];
+    if (preg_match('/api|backend|payment|database|auth|login/', $taskText)) {
+        $recommendedTests = ['Run unit tests for changed logic.', 'Run API integration and error-path tests.', 'Verify authentication, authorization, and data validation.'];
+    } elseif (preg_match('/ui|ux|frontend|page|screen|form|dashboard/', $taskText)) {
+        $recommendedTests = ['Check the main user flow and form validation.', 'Run responsive and cross-browser checks.', 'Verify accessibility and regression behavior.'];
+    }
+    $task['evortix_recommended_tests'] = $recommendedTests;
+
+    $task['evortix_next_task'] = null;
+    if (($user['role'] ?? '') === 'developer') {
+        $developerId = (int) ($user['id'] ?? 0);
+        $nextResult = $conn->query(
+            "SELECT DISTINCT t.id, t.title, t.priority, t.status, t.started_at, t.deadline
+             FROM tasks t
+             LEFT JOIN methodology_tasks mt ON mt.task_id = t.id
+             LEFT JOIN methodology_task_departments mtd ON mtd.workflow_task_id = t.id OR mtd.methodology_task_id = mt.id
+             WHERE t.id <> {$taskId}
+               AND t.status IN ('todo', 'in_progress', 'sul_revision', 'qa_failed', 'blocked')
+               AND (t.assigned_to = {$developerId} OR mt.assigned_developer_id = {$developerId} OR mtd.assigned_developer_id = {$developerId})
+             ORDER BY
+               CASE t.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+               CASE WHEN t.started_at IS NULL THEN 1 ELSE 0 END,
+               t.started_at ASC,
+               CASE WHEN t.deadline IS NULL THEN 1 ELSE 0 END,
+               t.deadline ASC,
+               t.id ASC
+             LIMIT 20"
+        );
+        if ($nextResult) {
+            while ($candidate = $nextResult->fetch_assoc()) {
+                $blocker = methodologyRoadmapStartBlockReason($conn, (int) $candidate['id'], $developerId);
+                if ($blocker !== null && $blocker !== '') continue;
+                $candidate['reason'] = ucfirst((string) ($candidate['priority'] ?? 'medium'))
+                    . ' priority, dependencies are ready, and it has the earliest applicable start/deadline date.';
+                $task['evortix_next_task'] = $candidate;
+                break;
+            }
+        }
+    }
+
+    $task['evortix_suggestion_version'] = hash('sha256', implode('|', [
+        (string) ($task['id'] ?? ''),
+        (string) ($task['status'] ?? ''),
+        (string) ($task['updated_at'] ?? ''),
+        (string) ($task['deadline'] ?? ''),
+        (string) ($task['evortix_revision']['created_at'] ?? ''),
+    ]));
     
     echo json_encode($task);
 } else {

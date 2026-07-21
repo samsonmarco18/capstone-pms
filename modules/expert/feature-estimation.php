@@ -2586,7 +2586,7 @@ textarea.form-control-custom {
                     : 'not set';
             ?>
             <?php $isReadonly = $task['status'] !== 'todo'; ?>
-            <div class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-task-title="<?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-saved-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars($featureWindowStart, ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars($featureWindowEnd, ENT_QUOTES, 'UTF-8'); ?>" data-duration-label="<?php echo htmlspecialchars($featureWindowLabel, ENT_QUOTES, 'UTF-8'); ?>" data-estimate-duration-days="<?php echo (int) $featureEstimateDurationDays; ?>" data-evortix-estimate="<?php echo htmlspecialchars(json_encode($evortixEstimatePayload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>" style="display:none;">
+            <div id="estimate-task-<?php echo (int) $task['id']; ?>" class="feature-row estimation-card <?php echo $isEstimated ? 'complete' : 'incomplete'; ?>" data-project-id="<?php echo (int) $task['project_id']; ?>" data-task-id="<?php echo (int) $task['id']; ?>" data-task-title="<?php echo htmlspecialchars((string) $task['title'], ENT_QUOTES, 'UTF-8'); ?>" data-readonly="<?php echo $isReadonly ? '1' : '0'; ?>" data-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-saved-estimated="<?php echo $isEstimated ? '1' : '0'; ?>" data-architect-deadline="<?php echo htmlspecialchars($architectDeadlineValue, ENT_QUOTES, 'UTF-8'); ?>" data-project-start="<?php echo htmlspecialchars($featureWindowStart, ENT_QUOTES, 'UTF-8'); ?>" data-project-end="<?php echo htmlspecialchars($featureWindowEnd, ENT_QUOTES, 'UTF-8'); ?>" data-duration-label="<?php echo htmlspecialchars($featureWindowLabel, ENT_QUOTES, 'UTF-8'); ?>" data-estimate-duration-days="<?php echo (int) $featureEstimateDurationDays; ?>" data-evortix-estimate="<?php echo htmlspecialchars(json_encode($evortixEstimatePayload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>" style="display:none;">
                 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                     <div>
                         <div class="feature-title"><?php echo htmlspecialchars($task['title']); ?></div>
@@ -3880,6 +3880,16 @@ function bindGanttHandlers() {
         if (!validateEstimateCard(card)) {
             e.preventDefault();
             form.reportValidity();
+            return;
+        }
+        try {
+            window.sessionStorage.setItem('evortix.expert.estimation.scroll', JSON.stringify({
+                scrollY: window.scrollY,
+                taskId: card.getAttribute('data-task-id') || '',
+                projectId: card.getAttribute('data-project-id') || ''
+            }));
+        } catch (error) {
+            // Saving still works if browser storage is unavailable.
         }
     });
 
@@ -3935,6 +3945,21 @@ bindPreviewHandlers();
 bindGanttHandlers();
 bindRecommendationHandlers();
 filterFeatureList();
+if (featureSubmittedMessage) {
+    try {
+        const savedPosition = JSON.parse(window.sessionStorage.getItem('evortix.expert.estimation.scroll') || 'null');
+        window.sessionStorage.removeItem('evortix.expert.estimation.scroll');
+        if (savedPosition && Number.isFinite(Number(savedPosition.scrollY))) {
+            if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+            const restorePosition = () => window.scrollTo({ top: Math.max(0, Number(savedPosition.scrollY)), behavior: 'auto' });
+            window.requestAnimationFrame(restorePosition);
+            window.setTimeout(restorePosition, 180);
+            window.setTimeout(restorePosition, 500);
+        }
+    } catch (error) {
+        // Fall back to the browser's normal scroll behavior.
+    }
+}
 setTimeout(renderExpertGantt, 50);
 setTimeout(renderProjectManagementTable, 50);
 if (featureSubmittedMessage) {
