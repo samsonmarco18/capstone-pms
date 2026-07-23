@@ -133,15 +133,15 @@ function departmentArtifactProfiles(): array
         'QA Engineer' => [
             'icon' => 'fa-vial-circle-check',
             'title' => 'QA Workbench',
-            'summary' => 'Prepare test focus, acceptance checks, and defect notes without bypassing the controlled QA workflow.',
+            'summary' => 'Execute the assigned testing scope, record evidence and defects, and submit the results to the QA SUL.',
             'artifact_cta' => 'Save QA Notes',
             'artifact_type' => 'qa_note',
             'link_label' => 'Test case, evidence, or defect link',
             'notes_label' => 'QA notes',
             'steps' => [
                 'Review requirements and expected behavior before testing.',
-                'Record test focus or evidence links for team visibility.',
-                'Keep pass/fail decisions in the existing QA workflow.',
+                'Record executed tests, evidence links, results, and defects.',
+                'Submit the completed testing results to the QA SUL for approval.',
             ],
         ],
         'DevOps Engineer' => [

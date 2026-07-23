@@ -25,7 +25,7 @@ $taskId = (int) ($_POST['task_id'] ?? 0);
 $newStatus = trim((string) ($_POST['new_status'] ?? ''));
 $userDepartmentCanonical = projectWorkflowDepartmentLabel((string) ($user['department'] ?? ''));
 $allowedStatuses = ['todo', 'in_progress'];
-if ($userDepartmentCanonical === 'UI/UX') {
+if (in_array($userDepartmentCanonical, ['UI/UX', 'QA'], true)) {
     $allowedStatuses[] = 'for_review';
 }
 
@@ -67,9 +67,18 @@ if (!in_array($currentStatus, ['todo', 'in_progress', 'sul_revision', 'qa_failed
     exit;
 }
 
-if ($newStatus === 'for_review' && $userDepartmentCanonical !== 'UI/UX') {
+if ($newStatus === 'for_review' && !in_array($userDepartmentCanonical, ['UI/UX', 'QA'], true)) {
     http_response_code(403);
     echo json_encode(['error' => 'Submit a Pull Request from the Git update form to request SUL review.']);
+    exit;
+}
+if (
+    $newStatus === 'for_review'
+    && $userDepartmentCanonical === 'QA'
+    && !in_array($currentStatus, ['in_progress', 'sul_revision', 'qa_failed'], true)
+) {
+    http_response_code(409);
+    echo json_encode(['error' => 'Start testing before submitting QA test results to the QA SUL.']);
     exit;
 }
 
@@ -106,16 +115,33 @@ workflowLogStatusChange(
     $taskId,
     $currentStatus,
     $newStatus,
-    $newStatus === 'for_review' ? 'uiux_submit_design' : 'developer_update_task_status'
+    $newStatus === 'for_review'
+        ? ($userDepartmentCanonical === 'QA' ? 'qa_submit_test_results' : 'uiux_submit_design')
+        : 'developer_update_task_status'
 );
 
 if ($newStatus === 'for_review') {
-    workflowAddTaskComment($conn, $taskId, $userId, 'UI/UX submitted design work for SUL review.');
-    if (!empty($task['sul_id'])) {
+    $isQaSubmission = $userDepartmentCanonical === 'QA';
+    workflowAddTaskComment(
+        $conn,
+        $taskId,
+        $userId,
+        $isQaSubmission
+            ? 'QA Developer submitted test results for QA SUL review.'
+            : 'UI/UX submitted design work for SUL review.'
+    );
+    $reviewerIds = array_values(array_filter([(int) ($task['assigned_by'] ?? 0)]));
+    if ($reviewerIds === [] && (int) ($task['sul_id'] ?? 0) > 0) {
+        $reviewerIds[] = (int) $task['sul_id'];
+    }
+    foreach ($reviewerIds as $reviewerId) {
         workflowNotifyUser(
-            (int) $task['sul_id'],
-            'Design Submitted for Review: ' . (string) ($task['title'] ?? 'Task'),
-            'UI/UX submitted design files or references for review.',
+            (int) $reviewerId,
+            ($isQaSubmission ? 'QA Test Results Submitted: ' : 'Design Submitted for Review: ')
+                . (string) ($task['title'] ?? 'Task'),
+            $isQaSubmission
+                ? 'A QA Developer submitted testing notes and evidence for QA SUL review.'
+                : 'UI/UX submitted design files or references for review.',
             BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($task['project_id'] ?? 0),
             $taskId
         );
@@ -128,7 +154,11 @@ echo json_encode([
     'old_status' => $currentStatus,
     'new_status' => $newStatus,
     'message' => $newStatus === 'in_progress'
-        ? 'Task started. UI/UX designs and uploads are available in the task details.'
-        : 'Task status updated.',
+        ? ($userDepartmentCanonical === 'QA'
+            ? 'Testing started. Review the requirements, suggested tests, and existing handoffs.'
+            : 'Task started. UI/UX designs and uploads are available in the task details.')
+        : ($newStatus === 'for_review' && $userDepartmentCanonical === 'QA'
+            ? 'QA test results submitted to the QA SUL for review.'
+            : 'Task status updated.'),
 ]);
 ?>

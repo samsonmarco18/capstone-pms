@@ -126,6 +126,36 @@ if ($task = $result->fetch_assoc()) {
         $task['roadmap_start_block_reason'] = null;
     }
     $task['department_artifacts'] = departmentArtifactFetchVisibleForTask($conn, $taskId);
+    $task['department_revision'] = null;
+    if (
+        ($user['role'] ?? '') === 'developer'
+        && (int) ($task['assigned_to'] ?? 0) === (int) ($user['id'] ?? 0)
+        && dbTableExists($conn, 'methodology_task_departments')
+    ) {
+        $developerId = (int) ($user['id'] ?? 0);
+        $revisionLane = $conn->query("
+            SELECT mtd.department, mtd.status, mtd.revision_notes,
+                   developer.full_name AS developer_name,
+                   responsible_sul.full_name AS sul_name,
+                   mp.sequence_no AS phase_sequence
+            FROM methodology_task_departments mtd
+            INNER JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+            INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
+            LEFT JOIN users developer ON developer.id = mtd.assigned_developer_id
+            LEFT JOIN tasks t_assigned ON t_assigned.id = {$taskId}
+            LEFT JOIN users responsible_sul ON responsible_sul.id = COALESCE(mtd.approved_by, t_assigned.assigned_by)
+            WHERE COALESCE(mtd.workflow_task_id, mt.task_id) = {$taskId}
+              AND mtd.assigned_developer_id = {$developerId}
+              AND COALESCE(mtd.revision_notes, '') <> ''
+              AND mtd.status IN ('planned', 'in_progress', 'for_review', 'for_revision')
+            ORDER BY COALESCE(NULLIF(mp.sequence_no, 0), mp.id) ASC, mt.id ASC, mtd.id ASC
+            LIMIT 1
+        ");
+        if ($revisionLane && ($revisionRow = $revisionLane->fetch_assoc())) {
+            $revisionRow['department'] = projectWorkflowDepartmentLabel((string) ($revisionRow['department'] ?? ''));
+            $task['department_revision'] = $revisionRow;
+        }
+    }
 
     $task['evortix_revision'] = null;
     if (in_array((string) ($task['status'] ?? ''), ['sul_revision', 'qa_failed'], true)) {
@@ -190,6 +220,7 @@ if ($task = $result->fetch_assoc()) {
         (string) ($task['updated_at'] ?? ''),
         (string) ($task['deadline'] ?? ''),
         (string) ($task['evortix_revision']['created_at'] ?? ''),
+        (string) ($task['department_revision']['revision_notes'] ?? ''),
     ]));
     
     echo json_encode($task);

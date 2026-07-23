@@ -9,11 +9,103 @@ $user = getCurrentUser();
 workflowEnsureSchema($conn);
 projectWorkflowEnsureSchema($conn);
 
+function qaEvortixSuggestedTests(array $task): array
+{
+    $taskTitle = trim((string) ($task['title'] ?? 'Feature'));
+    $taskText = strtolower(implode(' ', [
+        $taskTitle,
+        (string) ($task['description'] ?? ''),
+        (string) ($task['requested_features'] ?? ''),
+    ]));
+    $tests = [
+        'Verify the feature matches the approved requirements and acceptance criteria',
+        'Test empty, invalid, boundary, and unexpected input values',
+        'Confirm validation and error messages are clear and accurate',
+        'Verify saved data remains correct after refresh and reopening the feature',
+        'Run a focused regression check on related existing workflows',
+    ];
+
+    if (preg_match('/auth|login|password|account|user|role|permission|access/', $taskText)) {
+        $tests[] = 'Verify authorized and unauthorized roles have the correct access';
+        $tests[] = 'Test expired sessions, invalid credentials, and protected actions';
+    }
+    if (preg_match('/api|backend|database|integration|sync|webhook/', $taskText)) {
+        $tests[] = 'Verify API success, validation, authorization, and error responses';
+        $tests[] = 'Confirm database changes are complete, consistent, and not duplicated';
+    }
+    if (preg_match('/payment|billing|checkout|invoice|price|amount|subscription/', $taskText)) {
+        $tests[] = 'Test successful, declined, cancelled, and duplicate payment attempts';
+        $tests[] = 'Verify totals, currency, discounts, and transaction records';
+    }
+    if (preg_match('/ui|ux|frontend|page|screen|form|dashboard|modal|mobile/', $taskText)) {
+        $tests[] = 'Test responsive layouts on desktop, tablet, and mobile sizes';
+        $tests[] = 'Check keyboard navigation, labels, focus states, and basic accessibility';
+    }
+    if (preg_match('/upload|attachment|document|image|file|download/', $taskText)) {
+        $tests[] = 'Test allowed, blocked, oversized, empty, and corrupted files';
+        $tests[] = 'Verify uploaded files can only be accessed by permitted users';
+    }
+    if (preg_match('/search|filter|sort|catalog|list|pagination/', $taskText)) {
+        $tests[] = 'Test search and filters with exact, partial, empty, and no-result values';
+        $tests[] = 'Verify sorting and pagination remain consistent after filtering';
+    }
+    if (preg_match('/notification|email|message|alert|reminder/', $taskText)) {
+        $tests[] = 'Verify notifications use the correct recipient, content, link, and timing';
+        $tests[] = 'Confirm retrying an action does not create duplicate notifications';
+    }
+
+    return array_values(array_unique(array_map(
+        static fn(string $test): string => trim($test),
+        $tests
+    )));
+}
+
+function qaEvortixRisk(array $task, int $previousReturns, int $issueCount): array
+{
+    $score = match (strtolower((string) ($task['priority'] ?? 'medium'))) {
+        'critical' => 35,
+        'high' => 25,
+        'medium' => 10,
+        default => 5,
+    };
+    $reasons = [ucfirst((string) ($task['priority'] ?? 'medium')) . ' priority'];
+    $deadline = trim((string) ($task['deadline'] ?? ''));
+    if ($deadline !== '') {
+        $daysRemaining = (int) floor((strtotime($deadline) - strtotime(date('Y-m-d'))) / 86400);
+        if ($daysRemaining < 0) {
+            $score += 30;
+            $reasons[] = 'deadline is overdue';
+        } elseif ($daysRemaining <= 2) {
+            $score += 20;
+            $reasons[] = 'deadline is within 2 days';
+        } elseif ($daysRemaining <= 5) {
+            $score += 10;
+            $reasons[] = 'deadline is within 5 days';
+        }
+    }
+    if ($previousReturns > 0) {
+        $score += min(25, 10 + ($previousReturns * 5));
+        $reasons[] = $previousReturns . ' previous QA return' . ($previousReturns === 1 ? '' : 's');
+    }
+    if ($issueCount > 0) {
+        $score += min(25, 10 + ($issueCount * 5));
+        $reasons[] = $issueCount . ' current checklist issue' . ($issueCount === 1 ? '' : 's');
+    }
+    $score = min(100, $score);
+
+    return [
+        'score' => $score,
+        'level' => $score >= 60 ? 'High' : ($score >= 30 ? 'Medium' : 'Low'),
+        'reasons' => $reasons,
+    ];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $taskId = (int) ($_POST['task_id'] ?? 0);
 
     $taskStmt = $conn->prepare("
-        SELECT t.id, t.title, t.status, t.assigned_to, t.project_id, p.name AS project_name
+        SELECT t.id, t.title, t.description, t.priority, t.deadline, t.status, t.assigned_to,
+               t.project_id, p.name AS project_name, p.requested_features
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
         WHERE t.id = ? AND t.status = 'qa_testing'
@@ -27,6 +119,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$task) {
         $_SESSION['error'] = 'Only tasks currently in QA Testing can be updated by QA.';
         header('Location: dashboard.php');
+        exit();
+    }
+
+    if (isset($_POST['apply_evortix_qa_suggestions'])) {
+        header('Content-Type: application/json; charset=UTF-8');
+        $suggestions = qaEvortixSuggestedTests($task);
+        $existingItems = [];
+        $existingStmt = $conn->prepare('SELECT item_text FROM qa_checklist_items WHERE task_id = ?');
+        $existingStmt->bind_param('i', $taskId);
+        $existingStmt->execute();
+        $existingResult = $existingStmt->get_result();
+        while ($existingItem = $existingResult->fetch_assoc()) {
+            $existingItems[strtolower(trim((string) ($existingItem['item_text'] ?? '')))] = true;
+        }
+        $existingStmt->close();
+
+        $inserted = 0;
+        $insertStmt = $conn->prepare('INSERT INTO qa_checklist_items (task_id, feature_name, item_text, developer_id) VALUES (?, ?, ?, ?)');
+        foreach ($suggestions as $suggestion) {
+            $normalizedSuggestion = strtolower(trim($suggestion));
+            if ($normalizedSuggestion === '' || isset($existingItems[$normalizedSuggestion])) {
+                continue;
+            }
+            $insertStmt->bind_param('issi', $taskId, $task['title'], $suggestion, $task['assigned_to']);
+            $insertStmt->execute();
+            $existingItems[$normalizedSuggestion] = true;
+            $inserted++;
+        }
+        $insertStmt->close();
+
+        echo json_encode([
+            'success' => true,
+            'inserted' => $inserted,
+            'message' => $inserted > 0
+                ? $inserted . ' Evortix test suggestion' . ($inserted === 1 ? '' : 's') . ' added.'
+                : 'All Evortix test suggestions are already in the checklist.',
+        ]);
         exit();
     }
 
@@ -69,6 +198,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['qa_decision'])) {
         $decision = (string) ($_POST['decision'] ?? '');
         $qaComment = trim((string) ($_POST['qa_comment'] ?? ''));
+        $decisionCounts = ['total' => 0, 'pending' => 0, 'failed' => 0, 'needs_revision' => 0];
+        $decisionItemsStmt = $conn->prepare('SELECT status FROM qa_checklist_items WHERE task_id = ?');
+        $decisionItemsStmt->bind_param('i', $taskId);
+        $decisionItemsStmt->execute();
+        $decisionItems = $decisionItemsStmt->get_result();
+        while ($decisionItem = $decisionItems->fetch_assoc()) {
+            $itemStatus = (string) ($decisionItem['status'] ?? 'pending');
+            $decisionCounts['total']++;
+            if (isset($decisionCounts[$itemStatus])) {
+                $decisionCounts[$itemStatus]++;
+            }
+        }
+        $decisionItemsStmt->close();
+
+        if (
+            $decision === 'passed'
+            && (
+                $decisionCounts['total'] === 0
+                || $decisionCounts['pending'] > 0
+                || $decisionCounts['failed'] > 0
+                || $decisionCounts['needs_revision'] > 0
+            )
+        ) {
+            $_SESSION['error'] = 'QA cannot pass this feature until every checklist item is marked Passed.';
+            header('Location: dashboard.php?task_id=' . $taskId);
+            exit();
+        }
+        if ($decision === 'failed' && ($decisionCounts['failed'] === 0 || $qaComment === '')) {
+            $_SESSION['error'] = 'Mark at least one checklist item Failed and provide a QA decision comment.';
+            header('Location: dashboard.php?task_id=' . $taskId);
+            exit();
+        }
+        if (
+            $decision === 'needs_revision'
+            && (
+                ($decisionCounts['failed'] + $decisionCounts['needs_revision']) === 0
+                || $qaComment === ''
+            )
+        ) {
+            $_SESSION['error'] = 'Mark at least one issue item and provide a QA decision comment.';
+            header('Location: dashboard.php?task_id=' . $taskId);
+            exit();
+        }
 
         if ($decision === 'passed') {
             $stmt = $conn->prepare("UPDATE tasks SET status = 'qa_passed', qa_reviewed_by = ?, qa_reviewed_at = NOW() WHERE id = ?");
@@ -123,7 +295,12 @@ $queue = $conn->query("
     JOIN projects p ON p.id = t.project_id
     LEFT JOIN users u ON u.id = t.assigned_to
     WHERE t.status = 'qa_testing'
-    ORDER BY t.sul_reviewed_at ASC, t.updated_at ASC
+    ORDER BY
+        CASE t.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+        CASE WHEN t.deadline IS NULL THEN 1 ELSE 0 END,
+        t.deadline ASC,
+        t.sul_reviewed_at ASC,
+        t.updated_at ASC
 ");
 
 $selectedTaskId = (int) ($_GET['task_id'] ?? 0);
@@ -136,7 +313,7 @@ if ($selectedTaskId <= 0 && $queue && $queue->num_rows > 0) {
 
 if ($selectedTaskId > 0) {
     $selectedStmt = $conn->prepare("
-        SELECT t.*, p.name AS project_name, u.full_name AS developer_name
+        SELECT t.*, p.name AS project_name, p.requested_features, u.full_name AS developer_name
         FROM tasks t
         JOIN projects p ON p.id = t.project_id
         LEFT JOIN users u ON u.id = t.assigned_to
@@ -186,18 +363,121 @@ $qaReviewedThisMonth = (int) $conn->query($qaReviewedThisMonthQuery)->fetch_asso
 $selectedChecklistTotal = 0;
 $selectedChecklistPassed = 0;
 $selectedChecklistIssues = 0;
+$selectedChecklistPending = 0;
+$selectedChecklistFailed = 0;
+$selectedChecklistNeedsRevision = 0;
+$selectedChecklistSignatureParts = [];
 foreach ($checklistByFeature as $items) {
     foreach ($items as $item) {
         $selectedChecklistTotal++;
-        if ((string) $item['status'] === 'passed') {
+        $itemStatus = (string) ($item['status'] ?? 'pending');
+        $selectedChecklistSignatureParts[] = (int) ($item['id'] ?? 0) . ':' . $itemStatus . ':' . trim((string) ($item['notes'] ?? ''));
+        if ($itemStatus === 'passed') {
             $selectedChecklistPassed++;
         }
-        if (in_array((string) $item['status'], ['failed', 'needs_revision'], true)) {
+        if ($itemStatus === 'pending') {
+            $selectedChecklistPending++;
+        }
+        if ($itemStatus === 'failed') {
+            $selectedChecklistFailed++;
+        }
+        if ($itemStatus === 'needs_revision') {
+            $selectedChecklistNeedsRevision++;
+        }
+        if (in_array($itemStatus, ['failed', 'needs_revision'], true)) {
             $selectedChecklistIssues++;
         }
     }
 }
 $selectedChecklistProgress = $selectedChecklistTotal > 0 ? (int) round(($selectedChecklistPassed / $selectedChecklistTotal) * 100) : 0;
+
+$qaEvortixPayload = null;
+if ($selectedTask) {
+    $previousReturns = 0;
+    $returnStmt = $conn->prepare("
+        SELECT COUNT(*) AS return_count
+        FROM task_comments tc
+        INNER JOIN users u ON u.id = tc.user_id
+        WHERE tc.task_id = ? AND u.role = 'qa'
+          AND (tc.comment LIKE 'QA failed:%' OR tc.comment LIKE 'QA needs revision:%')
+    ");
+    if ($returnStmt) {
+        $returnStmt->bind_param('i', $selectedTaskId);
+        $returnStmt->execute();
+        $previousReturns = (int) (($returnStmt->get_result()->fetch_assoc()['return_count'] ?? 0));
+        $returnStmt->close();
+    }
+
+    $suggestedTests = qaEvortixSuggestedTests($selectedTask);
+    $existingTestMap = [];
+    foreach ($checklistByFeature as $items) {
+        foreach ($items as $item) {
+            $existingTestMap[strtolower(trim((string) ($item['item_text'] ?? '')))] = true;
+        }
+    }
+    $missingTests = array_values(array_filter(
+        $suggestedTests,
+        static fn(string $suggestion): bool => !isset($existingTestMap[strtolower(trim($suggestion))])
+    ));
+    $risk = qaEvortixRisk($selectedTask, $previousReturns, $selectedChecklistIssues);
+
+    if ($selectedChecklistFailed > 0) {
+        $recommendedVerdict = 'Failed';
+        $verdictReason = 'At least one checklist item failed.';
+    } elseif ($selectedChecklistNeedsRevision > 0) {
+        $recommendedVerdict = 'Needs Revision';
+        $verdictReason = 'The checklist contains items that require developer revision.';
+    } elseif ($selectedChecklistTotal > 0 && $selectedChecklistPending === 0) {
+        $recommendedVerdict = 'Passed';
+        $verdictReason = 'Every recorded checklist item passed.';
+    } else {
+        $recommendedVerdict = 'Continue Testing';
+        $verdictReason = $selectedChecklistPending . ' checklist item' . ($selectedChecklistPending === 1 ? '' : 's') . ' still pending.';
+    }
+
+    $draftComment = match ($recommendedVerdict) {
+        'Failed' => 'QA failed this feature. ' . $selectedChecklistFailed . ' check'
+            . ($selectedChecklistFailed === 1 ? '' : 's') . ' failed. Review the failed checklist notes, reproduce each issue, and submit the corrected implementation for QA retesting.',
+        'Needs Revision' => 'QA needs revision. ' . $selectedChecklistNeedsRevision . ' checklist item'
+            . ($selectedChecklistNeedsRevision === 1 ? '' : 's') . ' require changes. Please address the recorded notes and confirm the affected regression paths before resubmission.',
+        'Passed' => 'QA passed this feature. All ' . $selectedChecklistTotal
+            . ' recorded checks passed, including the focused regression coverage.',
+        default => 'QA testing is still in progress. Complete the remaining ' . $selectedChecklistPending
+            . ' pending check' . ($selectedChecklistPending === 1 ? '' : 's') . ' before making the final QA decision.',
+    };
+
+    $qaEvortixPayload = [
+        'task_id' => $selectedTaskId,
+        'task_title' => (string) ($selectedTask['title'] ?? 'Feature'),
+        'project_name' => (string) ($selectedTask['project_name'] ?? ''),
+        'risk' => $risk,
+        'suggested_tests' => $suggestedTests,
+        'missing_tests' => $missingTests,
+        'recommended_verdict' => $recommendedVerdict,
+        'verdict_reason' => $verdictReason,
+        'draft_comment' => $draftComment,
+        'counts' => [
+            'total' => $selectedChecklistTotal,
+            'passed' => $selectedChecklistPassed,
+            'pending' => $selectedChecklistPending,
+            'failed' => $selectedChecklistFailed,
+            'needs_revision' => $selectedChecklistNeedsRevision,
+        ],
+        'triggers' => [
+            'task_opened',
+            'checklist_changed',
+            'manual_request',
+        ],
+        'version' => hash('sha256', implode('|', [
+            $selectedTaskId,
+            (string) ($selectedTask['updated_at'] ?? ''),
+            (string) ($selectedTask['priority'] ?? ''),
+            (string) ($selectedTask['deadline'] ?? ''),
+            implode(',', $selectedChecklistSignatureParts),
+            implode(',', $missingTests),
+        ])),
+    ];
+}
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -639,6 +919,9 @@ include '../../includes/navbar.php';
                                 <small class="text-muted"><?php echo htmlspecialchars((string) $selectedTask['project_name']); ?> · Developer: <?php echo htmlspecialchars((string) ($selectedTask['developer_name'] ?? 'Unassigned')); ?></small>
                             </div>
                             <div class="d-flex gap-2 align-items-start flex-wrap">
+                                <button type="button" class="btn btn-outline-info btn-sm" id="askEvortixQa">
+                                    <i class="fas fa-robot me-1"></i> Ask Evortix
+                                </button>
                                 <a class="btn btn-outline-primary btn-sm" href="<?php echo BASE_URL; ?>modules/version-control/repositories.php?project_id=<?php echo (int) $selectedTask['project_id']; ?>">
                                     <i class="fas fa-code-branch me-1"></i> Version Control
                                 </a>
@@ -726,5 +1009,407 @@ include '../../includes/navbar.php';
         </div>
     </div>
 </div>
+
+<?php if ($qaEvortixPayload): ?>
+<style>
+body.qa-evortix-page .chat-bot-speech.evortix-qa-advisor {
+    top: auto;
+    right: calc(100% + 8px);
+    bottom: 22px;
+    width: min(390px, calc(100vw - 180px));
+    min-width: 310px;
+    max-height: min(500px, calc(100vh - 100px));
+    padding: 0.9rem;
+    overflow: hidden;
+    pointer-events: auto;
+    transform: none;
+}
+
+body.qa-evortix-page .chat-bot-float.is-speaking .chat-bot-speech.evortix-qa-advisor {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    visibility: visible;
+}
+
+body.qa-evortix-page .chat-bot-speech.evortix-qa-advisor::after {
+    top: auto;
+    bottom: 48px;
+    transform: rotate(45deg);
+}
+
+.evortix-qa-head,
+.evortix-qa-title-row,
+.evortix-qa-actions,
+.evortix-qa-test {
+    display: flex;
+    align-items: center;
+}
+
+.evortix-qa-head,
+.evortix-qa-title-row {
+    justify-content: space-between;
+    gap: 0.65rem;
+}
+
+.evortix-qa-eyebrow {
+    color: #157baa;
+    font-size: 0.6rem;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.chat-bot-speech .evortix-qa-title {
+    min-height: 0;
+    padding: 0;
+    color: #083a5d;
+    font-size: 0.95rem;
+    line-height: 1.3;
+}
+
+.evortix-qa-close {
+    display: grid;
+    place-items: center;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.72);
+    color: #116c9e;
+}
+
+.evortix-qa-copy {
+    margin: 0.45rem 0 0;
+    color: #3f6e8d;
+    font-size: 0.69rem;
+    line-height: 1.42;
+}
+
+.evortix-qa-summary {
+    display: grid;
+    grid-template-columns: 0.8fr 1.2fr;
+    gap: 0.45rem;
+    margin-top: 0.6rem;
+}
+
+.evortix-qa-panel {
+    padding: 0.55rem 0.6rem;
+    border: 1px solid rgba(8, 123, 185, 0.18);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.68);
+}
+
+.evortix-qa-panel span,
+.evortix-qa-test small {
+    color: #4c7691;
+    font-size: 0.58rem;
+    font-weight: 750;
+}
+
+.evortix-qa-panel strong {
+    display: block;
+    margin-top: 0.18rem;
+    color: #083a5d;
+    font-size: 0.76rem;
+    line-height: 1.25;
+}
+
+.evortix-qa-risk-high strong { color: #b42318; }
+.evortix-qa-risk-medium strong { color: #b25e09; }
+.evortix-qa-risk-low strong { color: #087443; }
+
+.evortix-qa-tests {
+    display: grid;
+    gap: 0.35rem;
+    max-height: 210px;
+    margin-top: 0.6rem;
+    padding-right: 0.2rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.evortix-qa-test {
+    align-items: flex-start;
+    gap: 0.45rem;
+    padding: 0.46rem 0.5rem;
+    border: 1px solid rgba(8, 123, 185, 0.14);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.56);
+    color: #164f73;
+    font-size: 0.65rem;
+    line-height: 1.35;
+}
+
+.evortix-qa-test i {
+    margin-top: 0.12rem;
+    color: #1492c6;
+}
+
+.evortix-qa-test.is-added i {
+    color: #149657;
+}
+
+.evortix-qa-verdict-reason {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.55);
+    color: #356b8d;
+    font-size: 0.64rem;
+    line-height: 1.4;
+}
+
+.evortix-qa-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.6rem;
+}
+
+.evortix-qa-actions button {
+    min-height: 32px;
+    padding: 0.38rem 0.65rem;
+    border: 1px solid rgba(31, 99, 146, 0.24);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.78);
+    color: #175f8f;
+    font-size: 0.64rem;
+    font-weight: 800;
+}
+
+.evortix-qa-actions button.is-primary {
+    border-color: #1877b1;
+    background: #1877b1;
+    color: #fff;
+}
+
+@media (max-width: 600px) {
+    body.qa-evortix-page .chat-bot-speech.evortix-qa-advisor {
+        right: calc(100% + 4px);
+        bottom: 18px;
+        width: min(285px, calc(100vw - 132px));
+        min-width: 225px;
+    }
+
+    .evortix-qa-summary {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const qaEvortixBase = <?php echo json_encode($qaEvortixPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    if (!qaEvortixBase) return;
+    document.body.classList.add('qa-evortix-page');
+
+    const escapeQaHtml = (value) => {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    };
+    const qaStateKey = `evortix.qa.advisor.v1.${qaEvortixBase.task_id}.${qaEvortixBase.version}`;
+    let checklistChangeTimer = null;
+
+    const currentQaGuidance = () => {
+        const counts = { total: 0, passed: 0, pending: 0, failed: 0, needs_revision: 0 };
+        const issueDetails = [];
+        document.querySelectorAll('select[name^="item_status["]').forEach((select) => {
+            const status = String(select.value || 'pending');
+            counts.total++;
+            if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status]++;
+            if (status === 'failed' || status === 'needs_revision') {
+                const itemRow = select.closest('.border');
+                issueDetails.push({
+                    status,
+                    check: String(itemRow?.querySelector('.fw-semibold')?.textContent || 'Checklist issue').trim(),
+                    actual: String(itemRow?.querySelector('input[name^="item_notes["]')?.value || '').trim(),
+                });
+            }
+        });
+
+        let verdict = 'Continue Testing';
+        let reason = `${counts.pending} checklist item${counts.pending === 1 ? '' : 's'} still pending.`;
+        if (counts.failed > 0) {
+            verdict = 'Failed';
+            reason = 'At least one checklist item failed.';
+        } else if (counts.needs_revision > 0) {
+            verdict = 'Needs Revision';
+            reason = 'The checklist contains items that require developer revision.';
+        } else if (counts.total > 0 && counts.pending === 0) {
+            verdict = 'Passed';
+            reason = 'Every recorded checklist item passed.';
+        }
+
+        const defectLines = issueDetails.map((issue, issueIndex) =>
+            `${issueIndex + 1}. ${issue.check}\nActual: ${issue.actual || 'Add the observed result before submitting this decision.'}`
+        ).join('\n');
+        const severity = String(qaEvortixBase.risk?.level || 'Medium');
+        const draft = verdict === 'Failed'
+            ? `QA DEFECT REPORT\nFeature: ${qaEvortixBase.task_title}\nSeverity: ${severity}\n\nFailed checks:\n${defectLines}\n\nExpected: The feature should satisfy the approved requirement and pass the listed checks.\nSteps to reproduce: Repeat each failed checklist scenario using the recorded inputs and environment.\nDeveloper action: Correct the failed behavior, run focused regression tests, and resubmit for QA.`
+            : verdict === 'Needs Revision'
+                ? `QA REVISION REPORT\nFeature: ${qaEvortixBase.task_title}\nSeverity: ${severity}\n\nIssues requiring revision:\n${defectLines}\n\nExpected: The feature should satisfy the approved requirement without the recorded issue.\nDeveloper action: Address each item, verify related regression paths, and resubmit for QA.`
+                : verdict === 'Passed'
+                    ? `QA passed this feature. All ${counts.total} recorded checks passed, including the focused regression coverage.`
+                    : `QA testing is still in progress. Complete the remaining ${counts.pending} pending check${counts.pending === 1 ? '' : 's'} before making the final QA decision.`;
+
+        const baseIssues = Number(qaEvortixBase.counts?.failed || 0) + Number(qaEvortixBase.counts?.needs_revision || 0);
+        const currentIssues = counts.failed + counts.needs_revision;
+        const issueRiskPoints = (issueCount) => issueCount > 0 ? Math.min(25, 10 + (issueCount * 5)) : 0;
+        const liveRiskScore = Math.max(
+            0,
+            Math.min(100, Number(qaEvortixBase.risk?.score || 0) - issueRiskPoints(baseIssues) + issueRiskPoints(currentIssues))
+        );
+        const riskReasons = (qaEvortixBase.risk?.reasons || [])
+            .filter((riskReason) => !String(riskReason).includes('current checklist issue'));
+        if (currentIssues > 0) {
+            riskReasons.push(`${currentIssues} current checklist issue${currentIssues === 1 ? '' : 's'}`);
+        }
+        const risk = {
+            ...(qaEvortixBase.risk || {}),
+            score: liveRiskScore,
+            level: liveRiskScore >= 60 ? 'High' : (liveRiskScore >= 30 ? 'Medium' : 'Low'),
+            reasons: riskReasons,
+        };
+
+        return { ...qaEvortixBase, counts, risk, recommended_verdict: verdict, verdict_reason: reason, draft_comment: draft };
+    };
+
+    const showQaEvortix = (trigger = 'manual_request') => {
+        const payload = currentQaGuidance();
+        const bot = document.getElementById('chat-bot-float');
+        const speech = bot?.querySelector('.chat-bot-speech');
+        if (!bot || !speech) {
+            window.setTimeout(() => showQaEvortix(trigger), 300);
+            return;
+        }
+
+        const missingSet = new Set((payload.missing_tests || []).map((test) => String(test).toLowerCase()));
+        const testMarkup = (payload.suggested_tests || []).map((test) => {
+            const isMissing = missingSet.has(String(test).toLowerCase());
+            return `
+                <div class="evortix-qa-test ${isMissing ? '' : 'is-added'}">
+                    <i class="fas ${isMissing ? 'fa-flask' : 'fa-circle-check'}" aria-hidden="true"></i>
+                    <div>${escapeQaHtml(test)}<small class="d-block">${isMissing ? 'Suggested test' : 'Already in checklist'}</small></div>
+                </div>`;
+        }).join('');
+        const triggerCopy = {
+            task_opened: 'I reviewed this task because it was opened for QA.',
+            checklist_changed: 'I updated the guidance because a checklist result changed.',
+            manual_request: 'Here is the latest QA guidance you requested.',
+        }[trigger] || 'Here is the latest QA guidance.';
+        const riskClass = `evortix-qa-risk-${String(payload.risk?.level || 'Low').toLowerCase()}`;
+
+        speech.className = 'chat-bot-speech evortix-qa-advisor';
+        speech.hidden = false;
+        speech.setAttribute('aria-hidden', 'false');
+        speech.style.pointerEvents = 'auto';
+        speech.innerHTML = `
+            <div class="evortix-qa-head">
+                <div>
+                    <div class="evortix-qa-eyebrow">QA recommendation</div>
+                    <strong class="evortix-qa-title">${escapeQaHtml(payload.task_title)}</strong>
+                </div>
+                <button type="button" class="evortix-qa-close" data-qa-evortix-action="close" aria-label="Close Evortix recommendation"><i class="fas fa-xmark"></i></button>
+            </div>
+            <p class="evortix-qa-copy">${escapeQaHtml(triggerCopy)} QA keeps control of the final decision.</p>
+            <div class="evortix-qa-summary">
+                <div class="evortix-qa-panel ${riskClass}">
+                    <span>Testing risk</span>
+                    <strong>${escapeQaHtml(payload.risk?.level || 'Low')} · ${Number(payload.risk?.score || 0)}/100</strong>
+                </div>
+                <div class="evortix-qa-panel">
+                    <span>Recommended verdict</span>
+                    <strong>${escapeQaHtml(payload.recommended_verdict)}</strong>
+                </div>
+            </div>
+            <div class="evortix-qa-verdict-reason">${escapeQaHtml(payload.verdict_reason)} ${escapeQaHtml((payload.risk?.reasons || []).join(' · '))}</div>
+            <div class="evortix-qa-tests">${testMarkup}</div>
+            <div class="evortix-qa-actions">
+                <button type="button" data-qa-evortix-action="draft">Use draft comment</button>
+                ${(payload.missing_tests || []).length > 0
+                    ? `<button type="button" class="is-primary" data-qa-evortix-action="apply-tests">Add ${payload.missing_tests.length} suggested test${payload.missing_tests.length === 1 ? '' : 's'}</button>`
+                    : '<button type="button" class="is-primary" data-qa-evortix-action="close">Checklist ready</button>'}
+            </div>`;
+
+        bot.hidden = false;
+        bot.setAttribute('aria-hidden', 'false');
+        bot.classList.remove('is-returning-bed', 'is-preparing-speech');
+        bot.classList.add('is-speaking');
+        window.chatBotFloatRobot?.wake?.();
+        window.chatBotFloatRobot?.setEmotion?.('thinking', 0);
+        try { window.localStorage.setItem(qaStateKey, trigger); } catch (error) {}
+    };
+
+    document.getElementById('askEvortixQa')?.addEventListener('click', () => showQaEvortix('manual_request'));
+    document.querySelectorAll('select[name^="item_status["]').forEach((select) => {
+        select.addEventListener('change', () => {
+            window.clearTimeout(checklistChangeTimer);
+            checklistChangeTimer = window.setTimeout(() => showQaEvortix('checklist_changed'), 350);
+        });
+    });
+    document.querySelectorAll('input[name^="item_notes["]').forEach((input) => {
+        input.addEventListener('input', () => {
+            window.clearTimeout(checklistChangeTimer);
+            checklistChangeTimer = window.setTimeout(() => showQaEvortix('checklist_changed'), 700);
+        });
+    });
+
+    document.addEventListener('click', async (event) => {
+        const actionButton = event.target.closest('[data-qa-evortix-action]');
+        if (!actionButton) return;
+        const action = actionButton.getAttribute('data-qa-evortix-action');
+        if (action === 'close') {
+            const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
+            if (speech) {
+                speech.hidden = true;
+                speech.setAttribute('aria-hidden', 'true');
+            }
+            return;
+        }
+        if (action === 'draft') {
+            const comment = document.querySelector('textarea[name="qa_comment"]');
+            if (comment) {
+                comment.value = currentQaGuidance().draft_comment;
+                comment.dispatchEvent(new Event('input', { bubbles: true }));
+                comment.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                comment.focus();
+                window.appToast?.('Evortix QA draft', 'The recommended QA comment is ready for your review.', 'info');
+            }
+            return;
+        }
+        if (action === 'apply-tests') {
+            actionButton.disabled = true;
+            actionButton.textContent = 'Adding tests...';
+            try {
+                const response = await fetch(window.location.pathname + window.location.search, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                    body: new URLSearchParams({
+                        task_id: String(qaEvortixBase.task_id),
+                        apply_evortix_qa_suggestions: '1',
+                    }),
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.message || 'Unable to add the suggested tests.');
+                window.appToast?.('Evortix QA checklist', result.message, 'success');
+                window.setTimeout(() => {
+                    window.location.href = `${window.location.pathname}?task_id=${encodeURIComponent(qaEvortixBase.task_id)}`;
+                }, 500);
+            } catch (error) {
+                actionButton.disabled = false;
+                actionButton.textContent = 'Try adding tests again';
+                window.appToast?.('Evortix QA checklist', error.message || 'Unable to add the suggested tests.', 'danger');
+            }
+        }
+    });
+
+    let alreadyShown = false;
+    try { alreadyShown = window.localStorage.getItem(qaStateKey) !== null; } catch (error) {}
+    if (!alreadyShown) window.setTimeout(() => showQaEvortix('task_opened'), 1400);
+});
+</script>
+<?php endif; ?>
 
 <?php include '../../includes/footer.php'; ?>

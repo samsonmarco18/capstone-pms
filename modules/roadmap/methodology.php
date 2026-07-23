@@ -227,6 +227,56 @@ function roadmapCollectDepartmentRequirements(
     return $departmentRequirements;
 }
 
+function roadmapDepartmentUsage(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    int $projectId,
+    string $excludedEntityKey = ''
+): array {
+    if ($projectId <= 0) {
+        return [];
+    }
+
+    $rows = $conn->query("
+        SELECT mt.id AS methodology_task_id, mt.developer_entity_key,
+               COALESCE(mtd.department, mt.department) AS department,
+               COALESCE(mtd.required_count, 1) AS required_count
+        FROM methodology_tasks mt
+        LEFT JOIN methodology_task_departments mtd
+          ON mtd.methodology_task_id = mt.id
+         AND mtd.project_id = mt.project_id
+        WHERE mt.project_id = {$projectId}
+    ");
+    $entityUsage = [];
+    if ($rows) {
+        while ($row = $rows->fetch_assoc()) {
+            $entityKey = trim((string) ($row['developer_entity_key'] ?? ''));
+            if ($entityKey === '') {
+                $entityKey = 'task-' . (int) ($row['methodology_task_id'] ?? 0);
+            }
+            if ($excludedEntityKey !== '' && hash_equals($excludedEntityKey, $entityKey)) {
+                continue;
+            }
+
+            $department = projectWorkflowDepartmentLabel((string) ($row['department'] ?? ''));
+            if ($department === '') {
+                continue;
+            }
+            $requiredCount = max(0, (int) ($row['required_count'] ?? 0));
+            $entityUsage[$department][$entityKey] = max(
+                $requiredCount,
+                (int) ($entityUsage[$department][$entityKey] ?? 0)
+            );
+        }
+    }
+
+    $usage = [];
+    foreach ($entityUsage as $department => $entities) {
+        $usage[$department] = array_sum($entities);
+    }
+
+    return $usage;
+}
+
 function roadmapDaysBetween(string $start, string $end): int
 {
     $startDate = roadmapParseDate($start);
@@ -1002,6 +1052,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 roadmapReturnToEditor($postedProjectId, 'task', $departmentError, $_POST);
             }
 
+            $currentDeveloperEntityKey = '';
+            if ($taskId > 0) {
+                $currentEntityResult = $conn->query("
+                    SELECT developer_entity_key
+                    FROM methodology_tasks
+                    WHERE id = {$taskId}
+                      AND project_id = {$postedProjectId}
+                    LIMIT 1
+                ");
+                $currentEntityRow = $currentEntityResult ? $currentEntityResult->fetch_assoc() : [];
+                $currentDeveloperEntityKey = trim((string) ($currentEntityRow['developer_entity_key'] ?? ''));
+                if ($currentDeveloperEntityKey === '') {
+                    $currentDeveloperEntityKey = 'task-' . $taskId;
+                }
+            }
+            $roadmapDepartmentUsage = roadmapDepartmentUsage(
+                $conn,
+                $postedProjectId,
+                $currentDeveloperEntityKey
+            );
+            foreach ($departmentRequirements as $requirementDepartment => $requiredCount) {
+                $allocationLimit = max(0, (int) ($postedDepartmentAllocations[$requirementDepartment] ?? 0));
+                $usedInRoadmap = max(0, (int) ($roadmapDepartmentUsage[$requirementDepartment] ?? 0));
+                $remainingInRoadmap = max(0, $allocationLimit - $usedInRoadmap);
+                if ($requiredCount > $remainingInRoadmap) {
+                    roadmapReturnToEditor(
+                        $postedProjectId,
+                        'task',
+                        $requirementDepartment . ' has only ' . $remainingInRoadmap
+                            . ' developer' . ($remainingInRoadmap === 1 ? '' : 's')
+                            . ' remaining across the roadmap from the Architect allocation.',
+                        $_POST
+                    );
+                }
+            }
+
             $department = (string) array_key_first($departmentRequirements);
 
             $validation = roadmapValidateTask($phase, $start, $end);
@@ -1399,6 +1485,15 @@ if ($monitoringMembers !== []) {
 
 $workflowTasks = [];
 if ($selectedProject) {
+    $workflowTaskPhaseAssignments = [];
+    foreach ($allTasks as $scheduledTask) {
+        $scheduledWorkflowTaskId = (int) ($scheduledTask['task_id'] ?? 0);
+        $scheduledPhaseId = (int) ($scheduledTask['phase_id'] ?? 0);
+        if ($scheduledWorkflowTaskId > 0 && $scheduledPhaseId > 0) {
+            $workflowTaskPhaseAssignments[$scheduledWorkflowTaskId][$scheduledPhaseId] = $scheduledPhaseId;
+        }
+    }
+
     $workflowTaskRows = $conn->query("
         SELECT id, title, status, assigned_to
         FROM tasks
@@ -1407,6 +1502,9 @@ if ($selectedProject) {
         ORDER BY title ASC
     ");
     while ($row = $workflowTaskRows->fetch_assoc()) {
+        $row['scheduled_phase_ids'] = array_values(
+            $workflowTaskPhaseAssignments[(int) ($row['id'] ?? 0)] ?? []
+        );
         $workflowTasks[] = $row;
     }
 }
@@ -1486,9 +1584,30 @@ if ($selectedProject && $canEditArchitecture) {
 $finalPhaseId = $phases !== [] ? (int) array_key_last($phases) : 0;
 $projectDepartmentRemainingAllocations = [];
 foreach ($projectDepartmentAllocations as $department => $capacity) {
-    // Allocation is a per-task concurrency limit, not a consumable total.
-    // The same role can participate in multiple roadmap tasks.
+    // JavaScript narrows this project limit to the whole roadmap's remaining count.
     $projectDepartmentRemainingAllocations[$department] = max(0, (int) $capacity);
+}
+$roadmapDepartmentEntityUsage = [];
+foreach ($allTasks as $scheduledTask) {
+    $scheduledTaskId = (int) ($scheduledTask['id'] ?? 0);
+    if ($scheduledTaskId <= 0) {
+        continue;
+    }
+    $entityKey = trim((string) ($scheduledTask['developer_entity_key'] ?? ''));
+    if ($entityKey === '') {
+        $entityKey = 'task-' . $scheduledTaskId;
+    }
+    foreach (($scheduledTask['department_requirements'] ?? []) as $requirement) {
+        $department = projectWorkflowDepartmentLabel((string) ($requirement['department'] ?? ''));
+        if ($department === '') {
+            continue;
+        }
+        $requiredCount = max(0, (int) ($requirement['required_count'] ?? 0));
+        $roadmapDepartmentEntityUsage[$department][$entityKey] = max(
+            $requiredCount,
+            (int) ($roadmapDepartmentEntityUsage[$department][$entityKey] ?? 0)
+        );
+    }
 }
 $phaseDateRanges = [];
 $phaseHeadcountUsage = [];
@@ -1504,6 +1623,8 @@ $scheduledWorkflowTasks = array_map(
         'id' => (int) ($task['id'] ?? 0),
         'phase_id' => (int) ($task['phase_id'] ?? 0),
         'task_id' => (int) ($task['task_id'] ?? 0),
+        'developer_entity_key' => trim((string) ($task['developer_entity_key'] ?? ''))
+            ?: 'task-' . (int) ($task['id'] ?? 0),
     ],
     $allTasks
 );
@@ -3339,6 +3460,41 @@ include '../../includes/navbar.php';
     font-size: .72rem;
 }
 
+.bulk-feature-meta {
+    align-items: flex-end;
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: .2rem;
+}
+
+.bulk-feature-assignment-state,
+.department-architect-allocation {
+    align-items: center;
+    display: inline-flex;
+    font-size: .7rem;
+    font-weight: 700;
+    gap: .3rem;
+}
+
+.bulk-feature-assignment-state {
+    color: #15803d;
+}
+
+.bulk-feature-option.is-assigned-in-phase {
+    background: #fff7ed;
+    border-color: #fdba74;
+    opacity: .82;
+}
+
+.bulk-feature-option.is-assigned-in-phase .bulk-feature-assignment-state {
+    color: #c2410c;
+}
+
+.bulk-feature-option.is-assigned-in-phase .form-check-label {
+    cursor: not-allowed;
+}
+
 .editor-validation-alert {
     align-items: flex-start;
     display: flex;
@@ -3422,6 +3578,24 @@ include '../../includes/navbar.php';
     display: block;
     font-size: .72rem;
     font-weight: 500;
+}
+
+.department-architect-allocation {
+    display: flex;
+    margin-top: .18rem;
+}
+
+.department-architect-allocation.is-allocated {
+    color: #15803d;
+}
+
+.department-architect-allocation.is-unallocated {
+    color: #b91c1c;
+}
+
+.department-requirement-item.has-no-architect-allocation {
+    border-color: #fecaca;
+    background: #fff7f7;
 }
 
 .department-requirement-count {
@@ -4880,7 +5054,11 @@ include '../../includes/navbar.php';
                         <select class="form-select" name="workflow_task_id" id="workflowTaskId" <?php echo !$canEditArchitecture ? 'disabled' : 'required'; ?>>
                             <option value="" disabled selected>Select the real workflow task</option>
                             <?php foreach ($workflowTasks as $workflowTask): ?>
-                                <option value="<?php echo (int) $workflowTask['id']; ?>">
+                                <option
+                                    value="<?php echo (int) $workflowTask['id']; ?>"
+                                    data-base-label="<?php echo htmlspecialchars($workflowTask['title'] . ' - ' . ucwords(str_replace('_', ' ', (string) $workflowTask['status'])), ENT_QUOTES, 'UTF-8'); ?>"
+                                    data-scheduled-phase-ids="<?php echo htmlspecialchars(implode(',', $workflowTask['scheduled_phase_ids'] ?? []), ENT_QUOTES, 'UTF-8'); ?>"
+                                >
                                     <?php echo htmlspecialchars($workflowTask['title'] . ' - ' . ucwords(str_replace('_', ' ', (string) $workflowTask['status']))); ?>
                                 </option>
                             <?php endforeach; ?>
@@ -4918,7 +5096,10 @@ include '../../includes/navbar.php';
                                     <?php endif; ?>
                                     <?php foreach ($workflowTasks as $workflowTask): ?>
                                         <?php $bulkFeatureId = 'bulkWorkflowTask' . (int) $workflowTask['id']; ?>
-                                        <div class="form-check bulk-feature-option">
+                                        <div
+                                            class="form-check bulk-feature-option"
+                                            data-scheduled-phase-ids="<?php echo htmlspecialchars(implode(',', $workflowTask['scheduled_phase_ids'] ?? []), ENT_QUOTES, 'UTF-8'); ?>"
+                                        >
                                             <input
                                                 class="form-check-input bulk-workflow-task-checkbox"
                                                 type="checkbox"
@@ -4928,7 +5109,13 @@ include '../../includes/navbar.php';
                                             >
                                             <label class="form-check-label" for="<?php echo htmlspecialchars($bulkFeatureId); ?>">
                                                 <span class="bulk-feature-name"><?php echo htmlspecialchars((string) $workflowTask['title']); ?></span>
-                                                <span class="bulk-feature-status"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $workflowTask['status']))); ?></span>
+                                                <span class="bulk-feature-meta">
+                                                    <span class="bulk-feature-status"><?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $workflowTask['status']))); ?></span>
+                                                    <span class="bulk-feature-assignment-state">
+                                                        <i class="fas fa-circle-check" aria-hidden="true"></i>
+                                                        Available in this phase
+                                                    </span>
+                                                </span>
                                             </label>
                                         </div>
                                     <?php endforeach; ?>
@@ -4944,8 +5131,12 @@ include '../../includes/navbar.php';
                             <div class="department-requirement-grid" id="taskDepartmentRequirements">
                                 <?php foreach ($projectDepartmentAllocations as $department => $capacity): ?>
                                     <?php $remainingCapacity = (int) ($projectDepartmentRemainingAllocations[$department] ?? 0); ?>
+                                    <?php
+                                        $architectDeveloperCount = max(0, (int) $capacity);
+                                        $hasArchitectAllocation = $architectDeveloperCount > 0;
+                                    ?>
                                     <?php $fieldId = 'taskDepartment' . substr(sha1($department), 0, 10); ?>
-                                    <div class="department-requirement-item">
+                                    <div class="department-requirement-item <?php echo $hasArchitectAllocation ? 'has-architect-allocation' : 'has-no-architect-allocation'; ?>">
                                         <span class="department-requirement-icon" aria-hidden="true">
                                             <i class="fas <?php echo htmlspecialchars(roadmapDepartmentIcon((string) $department)); ?>"></i>
                                         </span>
@@ -4965,6 +5156,14 @@ include '../../includes/navbar.php';
                                                 <?php echo htmlspecialchars($department); ?>
                                                 <span class="department-limit">
                                                     <?php echo $remainingCapacity > 0 ? 'Up to ' . (int) $remainingCapacity . ' people' : 'No remaining headcount'; ?>
+                                                </span>
+                                                <span class="department-architect-allocation <?php echo $hasArchitectAllocation ? 'is-allocated' : 'is-unallocated'; ?>">
+                                                    <i class="fas <?php echo $hasArchitectAllocation ? 'fa-user-check' : 'fa-user-slash'; ?>" aria-hidden="true"></i>
+                                                    <?php if ($hasArchitectAllocation): ?>
+                                                        Architect allocated <?php echo $architectDeveloperCount; ?> developer<?php echo $architectDeveloperCount === 1 ? '' : 's'; ?>
+                                                    <?php else: ?>
+                                                        No developer allocation from Architect
+                                                    <?php endif; ?>
                                                 </span>
                                             </label>
                                         </div>
@@ -5110,6 +5309,8 @@ const projectEnd = <?php echo json_encode($selectedProject['timeline_end'] ?? ''
 const phaseDateRanges = <?php echo json_encode($phaseDateRanges, JSON_UNESCAPED_SLASHES); ?>;
 const phaseHeadcountUsage = <?php echo json_encode($phaseHeadcountUsage, JSON_UNESCAPED_SLASHES); ?>;
 const projectDeveloperCapacity = <?php echo (int) $projectDeveloperCapacity; ?>;
+const projectDepartmentAllocations = <?php echo json_encode($projectDepartmentAllocations, JSON_UNESCAPED_SLASHES); ?>;
+const roadmapDepartmentEntityUsage = <?php echo json_encode($roadmapDepartmentEntityUsage, JSON_UNESCAPED_SLASHES); ?>;
 const scheduledWorkflowTasks = <?php echo json_encode($scheduledWorkflowTasks, JSON_UNESCAPED_SLASHES); ?>;
 const roadmapEditorState = <?php echo json_encode($roadmapEditorState, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
 const phaseForm = document.getElementById('phaseForm');
@@ -5629,6 +5830,56 @@ function syncTaskDateLimits(forceDefaults = false) {
     endInput.max = range.end || '';
 }
 
+function workflowTaskIsAssignedInPhase(workflowTaskId, phaseId, currentRoadmapTaskId = 0) {
+    return scheduledWorkflowTasks.some((scheduledTask) => (
+        Number(scheduledTask.id || 0) !== Number(currentRoadmapTaskId || 0)
+        && Number(scheduledTask.task_id || 0) === Number(workflowTaskId || 0)
+        && String(scheduledTask.phase_id || '') === String(phaseId || '')
+    ));
+}
+
+function syncWorkflowTaskAvailability() {
+    const phaseId = String(document.getElementById('taskPhaseId')?.value || '');
+    const currentRoadmapTaskId = Number(document.getElementById('taskId')?.value || 0);
+    const isBulk = Boolean(bulkPlaceFeaturesInput?.checked);
+    const workflowTaskInput = document.getElementById('workflowTaskId');
+
+    Array.from(workflowTaskInput?.options || []).forEach((option) => {
+        const workflowTaskId = Number(option.value || 0);
+        if (workflowTaskId <= 0) return;
+        const assignedInPhase = workflowTaskIsAssignedInPhase(
+            workflowTaskId,
+            phaseId,
+            currentRoadmapTaskId
+        );
+        const baseLabel = option.dataset.baseLabel || option.textContent.replace(/\s+— already assigned in this phase$/, '');
+        option.dataset.baseLabel = baseLabel;
+        option.disabled = assignedInPhase;
+        option.textContent = assignedInPhase
+            ? `${baseLabel} — already assigned in this phase`
+            : baseLabel;
+    });
+
+    bulkWorkflowTaskInputs.forEach((input) => {
+        const assignedInPhase = workflowTaskIsAssignedInPhase(
+            Number(input.value || 0),
+            phaseId,
+            currentRoadmapTaskId
+        );
+        const option = input.closest('.bulk-feature-option');
+        const indicator = option?.querySelector('.bulk-feature-assignment-state');
+        input.dataset.assignedInPhase = assignedInPhase ? '1' : '0';
+        input.disabled = !canEditArchitecture || !isBulk || assignedInPhase;
+        if (assignedInPhase) input.checked = false;
+        option?.classList.toggle('is-assigned-in-phase', assignedInPhase);
+        if (indicator) {
+            indicator.innerHTML = assignedInPhase
+                ? '<i class="fas fa-ban" aria-hidden="true"></i> Already assigned in this phase'
+                : '<i class="fas fa-circle-check" aria-hidden="true"></i> Available in this phase';
+        }
+    });
+}
+
 function syncBulkFeatureControls() {
     const isBulk = Boolean(bulkPlaceFeaturesInput?.checked);
     const workflowTaskInput = document.getElementById('workflowTaskId');
@@ -5637,13 +5888,11 @@ function syncBulkFeatureControls() {
     taskModalElement?.classList.toggle('is-bulk-task', isBulk);
     workflowTaskField?.classList.toggle('d-none', isBulk);
     bulkFeaturePickerWrap?.classList.toggle('d-none', !isBulk);
-    bulkWorkflowTaskInputs.forEach((input) => {
-        input.disabled = !canEditArchitecture || !isBulk;
-    });
     if (workflowTaskInput) {
         workflowTaskInput.required = canEditArchitecture && !isBulk;
         workflowTaskInput.disabled = !canEditArchitecture || isBulk;
     }
+    syncWorkflowTaskAvailability();
 }
 
 function validateTaskEditor() {
@@ -5844,6 +6093,68 @@ function updateTaskDepartmentControl(toggle) {
     }
 }
 
+function roadmapTaskEntityKey(taskId) {
+    const normalizedTaskId = Number(taskId || 0);
+    if (normalizedTaskId <= 0) return '';
+    const scheduledTask = scheduledWorkflowTasks.find((task) => Number(task.id || 0) === normalizedTaskId);
+    return String(scheduledTask?.developer_entity_key || `task-${normalizedTaskId}`);
+}
+
+function departmentRemainingInRoadmap(department, currentTaskId = 0) {
+    const allocation = Math.max(0, Number(projectDepartmentAllocations[department] || 0));
+    const entities = roadmapDepartmentEntityUsage[department] || {};
+    const currentEntityKey = roadmapTaskEntityKey(currentTaskId);
+    const used = Object.entries(entities).reduce((total, [entityKey, requiredCount]) => (
+        currentEntityKey && entityKey === currentEntityKey
+            ? total
+            : total + Math.max(0, Number(requiredCount || 0))
+    ), 0);
+    return Math.max(0, allocation - used);
+}
+
+function syncTaskDepartmentAvailability() {
+    const currentTaskId = Number(document.getElementById('taskId')?.value || 0);
+
+    taskDepartmentToggles.forEach((toggle) => {
+        const item = toggle.closest('.department-requirement-item');
+        const department = String(toggle.dataset.department || '');
+        const allocation = Math.max(0, Number(projectDepartmentAllocations[department] || 0));
+        const remaining = departmentRemainingInRoadmap(department);
+        const availableForThisTask = departmentRemainingInRoadmap(department, currentTaskId);
+        const countInput = item?.querySelector('.department-requirement-count');
+        const limit = item?.querySelector('.department-limit');
+        const allocationState = item?.querySelector('.department-architect-allocation');
+
+        toggle.dataset.capacity = String(allocation);
+        toggle.dataset.remaining = String(remaining);
+        toggle.dataset.available = String(availableForThisTask);
+        toggle.disabled = !canEditArchitecture || availableForThisTask <= 0;
+
+        if (availableForThisTask <= 0) {
+            toggle.checked = false;
+            if (countInput) countInput.value = '0';
+        } else if (toggle.checked && countInput) {
+            countInput.value = String(Math.max(1, Math.min(availableForThisTask, Number(countInput.value || 1))));
+        }
+
+        if (limit) {
+            limit.textContent = availableForThisTask > 0
+                ? `Up to ${availableForThisTask} ${availableForThisTask === 1 ? 'person' : 'people'} for this task`
+                : 'No remaining headcount in this roadmap';
+        }
+        if (allocationState) {
+            allocationState.classList.toggle('is-allocated', remaining > 0);
+            allocationState.classList.toggle('is-unallocated', remaining <= 0);
+            allocationState.innerHTML = remaining > 0
+                ? `<i class="fas fa-user-check" aria-hidden="true"></i>${remaining} of ${allocation} Architect developer${allocation === 1 ? '' : 's'} remaining in roadmap`
+                : `<i class="fas fa-user-slash" aria-hidden="true"></i>0 of ${allocation} Architect developer${allocation === 1 ? '' : 's'} remaining in roadmap`;
+        }
+        item?.classList.toggle('has-architect-allocation', remaining > 0);
+        item?.classList.toggle('has-no-architect-allocation', remaining <= 0);
+        updateTaskDepartmentControl(toggle);
+    });
+}
+
 function setTaskDepartmentRequirements(requirements = []) {
     const requirementMap = new Map(
         (Array.isArray(requirements) ? requirements : []).map((requirement) => [
@@ -5856,18 +6167,10 @@ function setTaskDepartmentRequirements(requirements = []) {
         const department = String(toggle.dataset.department || '');
         const requiredCount = requirementMap.get(department);
         const countInput = toggle.closest('.department-requirement-item')?.querySelector('.department-requirement-count');
-        const remaining = Number(toggle.dataset.remaining || 0);
-        const availableForThisTask = remaining + (requirementMap.has(department) ? Number(requiredCount || 0) : 0);
-        toggle.dataset.available = String(availableForThisTask);
-        toggle.disabled = !canEditArchitecture || availableForThisTask <= 0;
-        const limit = toggle.closest('.department-requirement-item')?.querySelector('.department-limit');
-        if (limit) {
-            limit.textContent = availableForThisTask > 0 ? `Up to ${availableForThisTask} ${availableForThisTask === 1 ? 'person' : 'people'}` : 'No remaining headcount';
-        }
         toggle.checked = requirementMap.has(department);
         if (countInput) countInput.value = requiredCount || 1;
-        updateTaskDepartmentControl(toggle);
     });
+    syncTaskDepartmentAvailability();
 }
 
 taskDepartmentToggles.forEach((toggle) => {
@@ -5884,7 +6187,11 @@ taskForm?.addEventListener('submit', (event) => {
     stopInvalidEditorSubmit(event, 'task', validateTaskEditor());
 });
 
-document.getElementById('taskPhaseId')?.addEventListener('change', () => syncTaskDateLimits(true));
+document.getElementById('taskPhaseId')?.addEventListener('change', () => {
+    syncTaskDateLimits(true);
+    syncWorkflowTaskAvailability();
+    syncTaskDepartmentAvailability();
+});
 bulkPlaceFeaturesInput?.addEventListener('change', syncBulkFeatureControls);
 bulkSelectAllFeatures?.addEventListener('click', () => {
     bulkWorkflowTaskInputs.forEach((input) => {

@@ -18,6 +18,7 @@ taskReopenEnsureSchema($conn);
 $userDepartment = trim((string) ($user['department'] ?? ''));
 $userDepartmentCanonical = projectWorkflowDepartmentLabel($userDepartment);
 $departmentProfile = departmentArtifactProfile($userDepartment);
+$isQaDepartmentDeveloper = $userDepartmentCanonical === 'QA';
 
 if (!class_exists('DeveloperTaskQueryResult')) {
     class DeveloperTaskQueryResult
@@ -307,7 +308,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $taskId = (int) ($_POST['task_id'] ?? 0);
     $newStatus = (string) ($_POST['new_status'] ?? '');
     $allowedStatuses = ['todo', 'in_progress'];
-    if ($userDepartmentCanonical === 'UI/UX') {
+    if (in_array($userDepartmentCanonical, ['UI/UX', 'QA'], true)) {
         $allowedStatuses[] = 'for_review';
     }
 
@@ -342,8 +343,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         exit();
     }
 
-    if ($newStatus === 'for_review' && $userDepartmentCanonical !== 'UI/UX') {
+    if ($newStatus === 'for_review' && !in_array($userDepartmentCanonical, ['UI/UX', 'QA'], true)) {
         $_SESSION['error'] = "Submit a Pull Request from the Git update form to request SUL review.";
+        header('Location: task.php');
+        exit();
+    }
+    if (
+        $newStatus === 'for_review'
+        && $userDepartmentCanonical === 'QA'
+        && !in_array((string) ($task['status'] ?? ''), ['in_progress', 'sul_revision', 'qa_failed'], true)
+    ) {
+        $_SESSION['error'] = "Start testing before submitting QA test results to the QA SUL.";
         header('Location: task.php');
         exit();
     }
@@ -369,14 +379,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 
     projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
     
-    workflowLogStatusChange((int) $user['id'], $taskId, (string) ($task['status'] ?? ''), $newStatus, $newStatus === 'for_review' ? 'uiux_submit_design' : 'developer_update_task_status');
+    workflowLogStatusChange(
+        (int) $user['id'],
+        $taskId,
+        (string) ($task['status'] ?? ''),
+        $newStatus,
+        $newStatus === 'for_review'
+            ? ($userDepartmentCanonical === 'QA' ? 'qa_submit_test_results' : 'uiux_submit_design')
+            : 'developer_update_task_status'
+    );
     if ($newStatus === 'for_review') {
-        workflowAddTaskComment($conn, $taskId, (int) $user['id'], 'UI/UX submitted design work for SUL review.');
-        if (!empty($task['sul_id'])) {
+        $isQaSubmission = $userDepartmentCanonical === 'QA';
+        $submissionLabel = $userDepartmentCanonical === 'QA'
+            ? 'QA Developer submitted test results for QA SUL review.'
+            : 'UI/UX submitted design work for SUL review.';
+        workflowAddTaskComment($conn, $taskId, (int) $user['id'], $submissionLabel);
+        $reviewerIds = array_values(array_filter([(int) ($task['assigned_by'] ?? 0)]));
+        if ($reviewerIds === [] && (int) ($task['sul_id'] ?? 0) > 0) {
+            $reviewerIds[] = (int) $task['sul_id'];
+        }
+        foreach ($reviewerIds as $reviewerId) {
             workflowNotifyUser(
-                (int) $task['sul_id'],
-                'Design Submitted for Review: ' . $task['title'],
-                'UI/UX submitted design files or references for review.',
+                (int) $reviewerId,
+                ($isQaSubmission ? 'QA Test Results Submitted: ' : 'Design Submitted for Review: ') . $task['title'],
+                $isQaSubmission
+                    ? 'A QA Developer submitted testing notes and evidence for QA SUL review.'
+                    : 'UI/UX submitted design files or references for review.',
                 BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($task['project_id'] ?? 0),
                 $taskId
             );
@@ -1976,7 +2004,7 @@ include '../../includes/navbar.php';
             <div class="kanban-column">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-clock text-secondary me-2"></i>To Do <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Tasks waiting for you to start. Moving from here only sets the task to In Progress."></i></span>
+                        <span><i class="fas fa-clock text-secondary me-2"></i><?php echo $isQaDepartmentDeveloper ? 'Ready for Testing' : 'To Do'; ?> <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'QA tasks assigned by the QA SUL and ready for testing.' : 'Tasks waiting for you to start. Moving from here only sets the task to In Progress.'; ?>"></i></span>
                         <span class="badge bg-secondary"><?php echo $todoTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -1998,10 +2026,10 @@ include '../../includes/navbar.php';
                         <div class="kanban-card-footer">
                             <span class="kanban-card-due"><i class="far fa-calendar-alt"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></span>
                             <div class="kanban-card-actions">
-                                <button class="btn-action" onclick="startTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Start this task without changing the controlled review workflow.">
-                                    <i class="fas fa-play"></i> Start
+                                <button class="btn-action" onclick="startTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Start testing this task.' : 'Start this task without changing the controlled review workflow.'; ?>">
+                                    <i class="fas fa-play"></i> <?php echo $isQaDepartmentDeveloper ? 'Start Testing' : 'Start'; ?>
                                 </button>
-                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
+                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Open testing requirements, QA notes, evidence, and comments.' : 'Open task details, department handoff tools, comments, and Git updates.'; ?>">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
@@ -2011,7 +2039,7 @@ include '../../includes/navbar.php';
                     <?php if($todoTasks->num_rows == 0): ?>
                     <div class="empty-state-mini">
                         <i class="fas fa-check-circle"></i>
-                        <p>No tasks in To Do</p>
+                        <p><?php echo $isQaDepartmentDeveloper ? 'No tasks ready for testing' : 'No tasks in To Do'; ?></p>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -2023,7 +2051,7 @@ include '../../includes/navbar.php';
             <div class="kanban-column">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-spinner text-primary me-2"></i>In Progress <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Work is active here. Submit a PR from task details when it is ready for review."></i></span>
+                        <span><i class="fas fa-spinner text-primary me-2"></i><?php echo $isQaDepartmentDeveloper ? 'Testing' : 'In Progress'; ?> <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Testing is active. Record QA notes and evidence, then submit the results to the QA SUL.' : 'Work is active here. Submit a PR from task details when it is ready for review.'; ?>"></i></span>
                         <span class="badge bg-primary"><?php echo $inProgressTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -2051,13 +2079,13 @@ include '../../includes/navbar.php';
                         <div class="kanban-card-footer">
                             <span class="kanban-card-due"><i class="far fa-calendar-alt"></i>Due: <?php echo !empty($task['deadline']) ? date('M d', strtotime((string) $task['deadline'])) : 'No deadline'; ?></span>
                             <div class="kanban-card-actions">
-                                <button class="btn-action" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details and submit the PR through the Git update form.">
-                                    <i class="fas fa-code-pull-request"></i> Submit PR
+                                <button class="btn-action" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Open the testing workbench to review your evidence before submitting it.' : 'Open task details and submit the PR through the Git update form.'; ?>">
+                                    <i class="fas <?php echo $isQaDepartmentDeveloper ? 'fa-vial-circle-check' : 'fa-code-pull-request'; ?>"></i> <?php echo $isQaDepartmentDeveloper ? 'Review & Submit' : 'Submit PR'; ?>
                                 </button>
-                                <button class="btn-action" onclick="reviewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Move this task back to To Do if work has not started cleanly.">
+                                <button class="btn-action" onclick="reviewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Move this task back to Ready for Testing.' : 'Move this task back to To Do if work has not started cleanly.'; ?>">
                                     <i class="fas fa-undo"></i> Back
                                 </button>
-                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
+                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Open testing requirements, QA notes, evidence, and comments.' : 'Open task details, department handoff tools, comments, and Git updates.'; ?>">
                                     <i class="fas fa-eye"></i>
                                 </button>
                             </div>
@@ -2067,7 +2095,7 @@ include '../../includes/navbar.php';
                     <?php if($inProgressTasks->num_rows == 0): ?>
                     <div class="empty-state-mini">
                         <i class="fas fa-play-circle"></i>
-                        <p>No tasks in progress</p>
+                        <p><?php echo $isQaDepartmentDeveloper ? 'No tasks currently being tested' : 'No tasks in progress'; ?></p>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -2079,7 +2107,7 @@ include '../../includes/navbar.php';
             <div class="kanban-column">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-check-circle text-warning me-2"></i>Workflow Review <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Tasks arrive here only through PR submission and continue through SUL, QA, and Architect review."></i></span>
+                        <span><i class="fas fa-check-circle text-warning me-2"></i><?php echo $isQaDepartmentDeveloper ? 'QA SUL Review' : 'Workflow Review'; ?> <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Submitted test results are waiting for QA SUL approval or revision.' : 'Tasks arrive here only through PR submission and continue through SUL, QA, and Architect review.'; ?>"></i></span>
                         <span class="badge bg-warning"><?php echo $reviewTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -2118,7 +2146,7 @@ include '../../includes/navbar.php';
                     <?php if($reviewTasks->num_rows == 0): ?>
                     <div class="empty-state-mini">
                         <i class="fas fa-check-double"></i>
-                        <p>No tasks in review</p>
+                        <p><?php echo $isQaDepartmentDeveloper ? 'No test results awaiting QA SUL review' : 'No tasks in review'; ?></p>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -2130,7 +2158,7 @@ include '../../includes/navbar.php';
             <div class="kanban-column">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-check-double text-success me-2"></i>Completed <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Completion remains controlled by the existing SUL, QA, Architect, and release flow."></i></span>
+                        <span><i class="fas fa-check-double text-success me-2"></i><?php echo $isQaDepartmentDeveloper ? 'Testing Completed' : 'Completed'; ?> <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'QA department testing approved by the QA SUL.' : 'Completion remains controlled by the existing SUL, QA, Architect, and release flow.'; ?>"></i></span>
                         <span class="badge bg-success"><?php echo $completedTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -2254,6 +2282,7 @@ include '../../includes/navbar.php';
 const currentDepartment = <?php echo json_encode($userDepartment); ?>;
 const currentDepartmentCanonical = <?php echo json_encode($userDepartmentCanonical); ?>;
 const departmentProfile = <?php echo json_encode($departmentProfile); ?>;
+const isQaDepartment = currentDepartmentCanonical === 'QA';
 
 function initTooltips(root = document) {
     if (!window.bootstrap || !bootstrap.Tooltip) {
@@ -2282,13 +2311,13 @@ function updateKanbanColumnCount(columnBody) {
 
 function getKanbanEmptyState(columnBody) {
     if (columnBody.id === 'todo-column') {
-        return { icon: 'fa-check-circle', text: 'No tasks in To Do' };
+        return { icon: 'fa-check-circle', text: isQaDepartment ? 'No tasks ready for testing' : 'No tasks in To Do' };
     }
     if (columnBody.id === 'progress-column') {
-        return { icon: 'fa-play-circle', text: 'No tasks in progress' };
+        return { icon: 'fa-play-circle', text: isQaDepartment ? 'No tasks currently being tested' : 'No tasks in progress' };
     }
     if (columnBody.id === 'review-column') {
-        return { icon: 'fa-check-double', text: 'No tasks in review' };
+        return { icon: 'fa-check-double', text: isQaDepartment ? 'No test results awaiting QA SUL review' : 'No tasks in review' };
     }
 
     return { icon: 'fa-inbox', text: 'No tasks' };
@@ -2345,13 +2374,13 @@ function transformKanbanCardForProgressColumn(card, taskId) {
     footer.innerHTML = `
         ${dueHtml}
         <div class="kanban-card-actions">
-            <button class="btn-action" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details and submit the PR through the Git update form.">
-                <i class="fas fa-code-pull-request"></i> Submit PR
+            <button class="btn-action" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="${isQaDepartment ? 'Open the testing workbench to review your evidence before submitting it.' : 'Open task details and submit the PR through the Git update form.'}">
+                <i class="fas ${isQaDepartment ? 'fa-vial-circle-check' : 'fa-code-pull-request'}"></i> ${isQaDepartment ? 'Review & Submit' : 'Submit PR'}
             </button>
-            <button class="btn-action" onclick="reviewTask(${taskId})" data-bs-toggle="tooltip" title="Move this task back to To Do if work has not started cleanly.">
+            <button class="btn-action" onclick="reviewTask(${taskId})" data-bs-toggle="tooltip" title="${isQaDepartment ? 'Move this task back to Ready for Testing.' : 'Move this task back to To Do if work has not started cleanly.'}">
                 <i class="fas fa-undo"></i> Back
             </button>
-            <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
+            <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="${isQaDepartment ? 'Open testing requirements, QA notes, evidence, and comments.' : 'Open task details, department handoff tools, comments, and Git updates.'}">
                 <i class="fas fa-eye"></i>
             </button>
         </div>
@@ -2370,10 +2399,10 @@ function transformKanbanCardForTodoColumn(card, taskId) {
     footer.innerHTML = `
         ${dueHtml}
         <div class="kanban-card-actions">
-            <button class="btn-action" onclick="startTask(${taskId})" data-bs-toggle="tooltip" title="Start this task and open the UI/UX design references.">
-                <i class="fas fa-play"></i> Start
+            <button class="btn-action" onclick="startTask(${taskId})" data-bs-toggle="tooltip" title="${isQaDepartment ? 'Start testing this task.' : 'Start this task and open the UI/UX design references.'}">
+                <i class="fas fa-play"></i> ${isQaDepartment ? 'Start Testing' : 'Start'}
             </button>
-            <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
+            <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="${isQaDepartment ? 'Open testing requirements, QA notes, evidence, and comments.' : 'Open task details, department handoff tools, comments, and Git updates.'}">
                 <i class="fas fa-eye"></i>
             </button>
         </div>
@@ -2441,15 +2470,23 @@ async function updateTaskStatus(taskId, status, options = {}) {
         const confirmed = typeof window.appConfirm === 'function'
             ? await window.appConfirm({
                 title: 'Confirm Task Update',
-                subject: status === 'for_review' ? 'Submit design for review?' : (status === 'in_progress' ? 'Start this task?' : 'Update this task status?'),
+                subject: status === 'for_review'
+                    ? (isQaDepartment ? 'Submit QA test results?' : 'Submit design for review?')
+                    : (status === 'in_progress' ? (isQaDepartment ? 'Start testing?' : 'Start this task?') : 'Update this task status?'),
                 message: status === 'for_review'
-                    ? 'Your UI/UX design handoff will be sent to the SUL for approval.'
+                    ? (isQaDepartment
+                        ? 'Your QA notes and evidence will be sent to the QA SUL for approval.'
+                        : 'Your UI/UX design handoff will be sent to the SUL for approval.')
                     : status === 'in_progress'
-                        ? 'The task will move to In Progress and its UI/UX designs/uploads will open for reference.'
+                        ? (isQaDepartment
+                            ? 'The task will move to Testing and its requirements, suggested tests, and handoffs will open.'
+                            : 'The task will move to In Progress and its UI/UX designs/uploads will open for reference.')
                         : 'The task status will be saved and activity logged.',
                 icon: 'fas fa-circle-check fa-lg',
                 confirmIcon: 'fas fa-check',
-                confirmText: status === 'for_review' ? 'Submit Design' : (status === 'in_progress' ? 'Start Task' : 'Update')
+                confirmText: status === 'for_review'
+                    ? (isQaDepartment ? 'Submit Test Results' : 'Submit Design')
+                    : (status === 'in_progress' ? (isQaDepartment ? 'Start Testing' : 'Start Task') : 'Update')
             })
             : false;
         if (!confirmed) {
@@ -2469,7 +2506,7 @@ async function updateTaskStatus(taskId, status, options = {}) {
         });
 
         moveKanbanTaskToColumn(taskId, response.new_status || status);
-        if (options.openDetails || status === 'in_progress' || status === 'for_review') {
+        if (!options.skipDetails && (options.openDetails || status === 'in_progress' || status === 'for_review')) {
             viewTask(taskId);
         }
         return response;
@@ -2726,6 +2763,7 @@ function viewTask(taskId) {
             const designReferenceStrip = buildDesignReferenceStrip(task);
             const departmentPanel = buildDepartmentPanel(task);
             const roadmapBanner = buildRoadmapReadyBanner(task);
+            const departmentRevisionBanner = buildDepartmentRevisionBanner(task);
             const reopenPanel = buildReopenRequestPanel(task);
             const isUiUxDepartment = currentDepartmentCanonical === 'UI/UX';
             const isReopenedTask = Boolean(task.last_reopened_at) && String(task.status || '') === 'sul_revision';
@@ -2733,7 +2771,7 @@ function viewTask(taskId) {
             const reopenedBadge = isReopenedTask
                 ? '<span class="reopen-indicator mb-0"><i class="fas fa-rotate-left"></i> Reopened</span>'
                 : '';
-            const gitToolsPanel = isUiUxDepartment ? '' : `
+            const gitToolsPanel = (isUiUxDepartment || isQaDepartment) ? '' : `
                         <div class="task-side-panel">
                             <div class="task-side-heading">
                                 <label class="form-label mb-0 fw-semibold">Log Git Update</label>
@@ -2799,6 +2837,7 @@ function viewTask(taskId) {
                             </div>
                         </div>
 
+                        ${departmentRevisionBanner}
                         ${roadmapBanner}
                         ${designReferenceStrip}
                         ${departmentPanel}
@@ -2884,7 +2923,7 @@ function viewTask(taskId) {
 
 function announceDeveloperTaskGuidance(task) {
     if (!task || !task.id) return;
-    const historyKey = `evortix.developer.task.v2.${task.id}.${task.evortix_suggestion_version || task.status || 'current'}`;
+    const historyKey = `${isQaDepartment ? 'evortix.qa-developer.testing.v1' : 'evortix.developer.task.v2'}.${task.id}.${task.evortix_suggestion_version || task.status || 'current'}`;
     if (localStorage.getItem(historyKey)) return;
 
     const guidance = [];
@@ -2919,7 +2958,7 @@ function announceDeveloperTaskGuidance(task) {
         }
         if (typeof window.evortixAnnounceNotification !== 'function') return;
         window.evortixAnnounceNotification(
-            `Developer guidance: ${task.title || 'Task'}`,
+            `${isQaDepartment ? 'QA testing guidance' : 'Developer guidance'}: ${task.title || 'Task'}`,
             guidance.join(' '),
             ''
         );
@@ -3085,8 +3124,38 @@ function buildDesignReferenceStrip(task) {
     `;
 }
 
+function buildDepartmentRevisionBanner(task) {
+    const revision = task.department_revision;
+    if (!revision || !revision.revision_notes) {
+        return '';
+    }
+
+    const department = revision.department || currentDepartmentCanonical || 'Your department';
+    const developer = revision.developer_name || task.assigned_to_name || 'Assigned developer';
+    const responsibleSul = revision.sul_name || task.assigned_by_name || 'Department SUL';
+
+    return `
+        <div class="alert alert-warning border-warning-subtle mb-3">
+            <div class="d-flex align-items-start gap-2">
+                <i class="fas fa-user-check mt-1"></i>
+                <div>
+                    <strong>${escapeHtml(department)} owns this QA revision.</strong>
+                    <div class="small mt-1">
+                        Responsible developer: <strong>${escapeHtml(developer)}</strong>
+                        · Review handler: <strong>${escapeHtml(responsibleSul)}</strong>
+                    </div>
+                    <div class="small mt-2">${escapeHtml(revision.revision_notes)}</div>
+                    <div class="small text-muted mt-2">
+                        Complete this correction and resubmit it to your department SUL. The workflow unlocks the next department only after approval.
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function buildRoadmapReadyBanner(task) {
-    if (!['Frontend', 'Backend'].includes(currentDepartmentCanonical)) {
+    if (!['Frontend', 'Backend', 'QA'].includes(currentDepartmentCanonical)) {
         return '';
     }
 
@@ -3103,13 +3172,18 @@ function buildRoadmapReadyBanner(task) {
     return `
         <div class="roadmap-ready-banner">
             <i class="fas fa-lock-open"></i>
-            <div><strong>Ready to start.</strong> Earlier roadmap phase gates are clear, so ${escapeHtml(currentDepartmentCanonical.toLowerCase())} work can begin even if the schedule was planned for later.</div>
+            <div><strong>${isQaDepartment ? 'Ready for testing.' : 'Ready to start.'}</strong> Earlier roadmap phase gates are clear, so ${isQaDepartment ? 'QA testing' : escapeHtml(currentDepartmentCanonical.toLowerCase() + ' work')} can begin.</div>
         </div>
     `;
 }
 
 function buildDepartmentPanel(task) {
     const isUiUx = currentDepartmentCanonical === 'UI/UX';
+    const isQa = currentDepartmentCanonical === 'QA';
+    const canSubmitQaResults = isQa && ['in_progress', 'sul_revision', 'qa_failed'].includes(String(task.status || ''));
+    const qaSubmissionHint = String(task.status || '') === 'for_review'
+        ? '<div class="small text-success mt-2"><i class="fas fa-circle-check me-1"></i>Test results were submitted and are awaiting QA SUL review.</div>'
+        : '<div class="small text-muted mt-2"><i class="fas fa-circle-info me-1"></i>Start testing before submitting QA results.</div>';
     const requirements = Array.isArray(task.project_requirements) ? task.project_requirements : [];
     const requirementItems = requirements.length > 0
         ? requirements.map((item) => `<li><i class="fas fa-check-circle"></i><span>${escapeHtml(item)}</span></li>`).join('')
@@ -3129,8 +3203,8 @@ function buildDepartmentPanel(task) {
                 <input id="departmentArtifactFile" class="form-control form-control-sm" type="file" accept="image/*">
            </div>`
         : '';
-    const panelLabel = isUiUx ? 'Client Requirements' : 'Project Inputs';
-    const handoffHeading = isUiUx ? 'Department Handoffs' : 'Handoffs and UI/UX Designs';
+    const panelLabel = isUiUx ? 'Client Requirements' : (isQa ? 'Testing Requirements' : 'Project Inputs');
+    const handoffHeading = isUiUx ? 'Department Handoffs' : (isQa ? 'QA Evidence and Handoffs' : 'Handoffs and UI/UX Designs');
 
     return `
         <div class="task-detail-panel department-modal-panel">
@@ -3144,7 +3218,11 @@ function buildDepartmentPanel(task) {
 
             <div class="small fw-semibold mb-2">
                 ${panelLabel}
-                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx ? 'UI/UX should review these requirements before preparing designs and wireframes.' : 'Use these requirements as context for this department without changing the task workflow.'}"></i>
+                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx
+                    ? 'UI/UX should review these requirements before preparing designs and wireframes.'
+                    : (isQa
+                        ? 'Use these requirements to prepare acceptance, negative, boundary, and regression tests.'
+                        : 'Use these requirements as context for this department without changing the task workflow.')}"></i>
             </div>
             <ul class="department-requirements">${requirementItems}</ul>
             ${additionalRequirements}
@@ -3154,16 +3232,20 @@ function buildDepartmentPanel(task) {
                     <div class="task-side-panel mb-0">
                         <div class="task-side-heading">
                             <label class="form-label mb-0 fw-semibold">${escapeHtml(departmentProfile.artifact_cta || 'Save Handoff')}</label>
-                            <small class="text-muted">${isUiUx ? 'Design, wireframe, notes' : 'Link, notes'}</small>
+                            <small class="text-muted">${isUiUx ? 'Design, wireframe, notes' : (isQa ? 'Test evidence, defects, notes' : 'Link, notes')}</small>
                         </div>
                         <div class="mb-2">
-                            <input id="departmentArtifactTitle" class="form-control form-control-sm" placeholder="Handoff title">
+                            <input id="departmentArtifactTitle" class="form-control form-control-sm" placeholder="${isQa ? 'QA test result title' : 'Handoff title'}">
                         </div>
                         ${uploadInput}
                         <div class="mb-2">
                             <label class="form-label">
                                 ${escapeHtml(departmentProfile.link_label || 'Reference link')}
-                                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx ? 'Paste a Figma, FigJam, wireframe, or prototype link.' : 'Paste the reference link this department needs to hand off.'}"></i>
+                                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx
+                                    ? 'Paste a Figma, FigJam, wireframe, or prototype link.'
+                                    : (isQa
+                                        ? 'Paste a test case, screenshot, recording, or defect reference link.'
+                                        : 'Paste the reference link this department needs to hand off.')}"></i>
                             </label>
                             <input id="departmentArtifactUrl" class="form-control form-control-sm" placeholder="https://...">
                         </div>
@@ -3179,6 +3261,11 @@ function buildDepartmentPanel(task) {
                                 <i class="fas fa-paper-plane"></i> Submit Design
                             </button>
                         ` : ''}
+                        ${canSubmitQaResults ? `
+                            <button class="btn-primary-modern task-detail-action mt-2" onclick="submitQaResultsForReview(${Number(task.id)})" data-bs-toggle="tooltip" title="Save the QA notes and evidence, then submit the testing results to the QA SUL.">
+                                <i class="fas fa-vial-circle-check"></i> Submit Test Results
+                            </button>
+                        ` : (isQa ? qaSubmissionHint : '')}
                     </div>
                 </div>
                 <div class="col-md-6">
@@ -3299,6 +3386,43 @@ async function submitDesignForReview(taskId) {
     }
 
     await updateTaskStatus(taskId, 'for_review', { skipConfirm: true, openDetails: true });
+}
+
+async function submitQaResultsForReview(taskId) {
+    const notesInput = document.getElementById('departmentArtifactNotes');
+    const titleInput = document.getElementById('departmentArtifactTitle');
+    const notes = String(notesInput?.value || '').trim();
+    if (!notes) {
+        showTaskNotice('QA Test Results', 'Record the executed tests, result summary, and any defects before submitting.', 'error');
+        notesInput?.focus();
+        return;
+    }
+    if (titleInput && String(titleInput.value || '').trim() === '') {
+        titleInput.value = 'QA Test Results';
+    }
+
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Submit QA Test Results',
+            subject: 'Send testing evidence to the QA SUL?',
+            message: 'Your QA notes and evidence will be saved first. The task will then move to QA SUL Review.',
+            icon: 'fas fa-vial-circle-check fa-lg',
+            confirmIcon: 'fas fa-paper-plane',
+            confirmText: 'Submit Test Results'
+        })
+        : false;
+    if (!confirmed) return;
+
+    try {
+        await saveDepartmentArtifact(taskId, { silent: true, reloadTask: false });
+    } catch (xhr) {
+        showTaskNotice('QA Test Results', xhr.responseJSON?.error || 'Unable to save QA notes before submitting.', 'error');
+        return;
+    }
+
+    await updateTaskStatus(taskId, 'for_review', { skipConfirm: true, skipDetails: true });
+    showTaskNotice('QA Test Results', 'Testing results submitted to the QA SUL for review.');
+    window.setTimeout(() => window.location.reload(), 350);
 }
 
 function loadComments(taskId) {
@@ -3507,14 +3631,26 @@ function handleDrop(e) {
     const columnTitle = targetColumn.querySelector('.kanban-header h5 span:first-child').textContent.trim();
     
     let newStatus = '';
-    if(columnTitle === 'To Do') newStatus = 'todo';
-    else if(columnTitle === 'In Progress') newStatus = 'in_progress';
-    else if(columnTitle === 'Workflow Review') {
-        showTaskNotice('Workflow Review', 'Submit a Pull Request from the task Git update form to move this task For Review.', 'error');
+    if(['To Do', 'Ready for Testing'].includes(columnTitle)) newStatus = 'todo';
+    else if(['In Progress', 'Testing'].includes(columnTitle)) newStatus = 'in_progress';
+    else if(['Workflow Review', 'QA SUL Review'].includes(columnTitle)) {
+        showTaskNotice(
+            isQaDepartment ? 'QA SUL Review' : 'Workflow Review',
+            isQaDepartment
+                ? 'Open the task, record QA notes and evidence, then submit the test results to the QA SUL.'
+                : 'Submit a Pull Request from the task Git update form to move this task For Review.',
+            'error'
+        );
         return;
     }
-    else if(columnTitle === 'Completed') {
-        showTaskNotice('Completed Tasks', 'Tasks are completed only after SUL review, QA testing, and Architect merge.', 'error');
+    else if(['Completed', 'Testing Completed'].includes(columnTitle)) {
+        showTaskNotice(
+            isQaDepartment ? 'Testing Completed' : 'Completed Tasks',
+            isQaDepartment
+                ? 'Testing is completed only after the QA SUL approves the submitted results.'
+                : 'Tasks are completed only after SUL review, QA testing, and Architect merge.',
+            'error'
+        );
         return;
     }
     

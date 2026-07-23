@@ -47,6 +47,26 @@ function projectWorkflowDepartmentAliases(?string $value): array
     return array_values(array_unique(array_filter(array_map('strval', $aliases))));
 }
 
+function projectWorkflowDepartmentSequence(?string $value): int
+{
+    $department = projectWorkflowDepartmentLabel($value);
+    $sequence = [
+        'Expert Department' => 0,
+        'UI/UX' => 10,
+        'Frontend' => 20,
+        'Backend' => 30,
+        'Mobile' => 35,
+        'Database' => 40,
+        'AI' => 50,
+        'Security' => 60,
+        'DevOps' => 70,
+        'Other Departments' => 80,
+        'QA' => 90,
+    ];
+
+    return $sequence[$department] ?? 85;
+}
+
 function projectWorkflowSelectedDepartments(
     mysqli|PgsqlMysqliCompatConnection $conn,
     int $projectId,
@@ -602,6 +622,31 @@ function projectWorkflowRoadmapTaskRows(mysqli|PgsqlMysqliCompatConnection $conn
     }
 
     if ($expandedRows !== []) {
+        usort($expandedRows, static function (array $left, array $right): int {
+            $phaseComparison = ((int) ($left['phase_sequence'] ?? 0)) <=> ((int) ($right['phase_sequence'] ?? 0));
+            if ($phaseComparison !== 0) {
+                return $phaseComparison;
+            }
+
+            $startComparison = strcmp((string) ($left['start_date'] ?? ''), (string) ($right['start_date'] ?? ''));
+            if ($startComparison !== 0) {
+                return $startComparison;
+            }
+
+            $departmentComparison = projectWorkflowDepartmentSequence((string) ($left['department_label'] ?? ''))
+                <=> projectWorkflowDepartmentSequence((string) ($right['department_label'] ?? ''));
+            if ($departmentComparison !== 0) {
+                return $departmentComparison;
+            }
+
+            $taskComparison = ((int) ($left['id'] ?? 0)) <=> ((int) ($right['id'] ?? 0));
+            if ($taskComparison !== 0) {
+                return $taskComparison;
+            }
+
+            return ((int) ($left['department_progress_id'] ?? 0)) <=> ((int) ($right['department_progress_id'] ?? 0));
+        });
+
         return $expandedRows;
     }
 
@@ -861,8 +906,13 @@ function projectWorkflowSyncRoadmap(mysqli|PgsqlMysqliCompatConnection $conn, in
                     if ($departmentProgressId > 0 && $updateDepartmentTask) {
                         $matchesWorkflowTask = (int) ($row['workflow_task_id'] ?? 0) === $taskId;
                         $matchesAssignee = $assignedTo > 0 && (int) ($row['assigned_developer_id'] ?? 0) === $assignedTo;
-                        if (!$isFinalComplete && !$matchesWorkflowTask && !$matchesAssignee) {
-                            continue;
+                        if (!$isFinalComplete) {
+                            if ($assignedTo > 0 && !$matchesAssignee) {
+                                continue;
+                            }
+                            if ($assignedTo <= 0 && !$matchesWorkflowTask) {
+                                continue;
+                            }
                         }
 
                         if (!$isFinalComplete && (string) ($row['status'] ?? 'planned') === 'completed') {
