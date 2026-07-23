@@ -451,6 +451,140 @@ include '../../includes/navbar.php';
     margin: 0;
 }
 
+.expert-dashboard-section {
+    margin-bottom: 1.5rem;
+}
+
+.expert-dashboard-section > [class*="col-"] {
+    display: flex;
+}
+
+.expert-dashboard-section .card {
+    width: 100%;
+}
+
+.expert-chart-card .card-body {
+    display: flex;
+    align-items: center;
+    min-height: 330px;
+}
+
+.expert-chart-shell {
+    width: 100%;
+    height: 280px;
+}
+
+.expert-schedule-card .card-body {
+    min-height: 330px;
+}
+
+.expert-insight-column {
+    min-width: 0;
+}
+
+.expert-insight-column .delay-insights-wrap {
+    width: 100%;
+    height: 100%;
+    margin-bottom: 0;
+}
+
+.expert-insight-column .delay-compact-card {
+    height: 100%;
+}
+
+.expert-insight-column .delay-compact-empty {
+    min-height: 248px;
+}
+
+.recent-estimates-card .card-body {
+    padding: 0;
+}
+
+.recent-estimates-list {
+    display: grid;
+}
+
+.recent-estimate-row {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.35fr) minmax(200px, 1fr) minmax(230px, 1fr) auto auto;
+    align-items: center;
+    gap: 1.25rem;
+    min-height: 88px;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--gray-200);
+    transition: background-color 180ms ease;
+}
+
+.recent-estimate-row:last-child {
+    border-bottom: 0;
+}
+
+.recent-estimate-row:hover {
+    background: var(--gray-50);
+}
+
+.recent-estimate-primary,
+.recent-estimate-context,
+.recent-estimate-range {
+    min-width: 0;
+}
+
+.recent-estimate-title {
+    margin: 0 0 0.2rem;
+    color: var(--gray-900);
+    font-size: 0.92rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recent-estimate-label {
+    display: block;
+    margin-bottom: 0.2rem;
+    color: var(--gray-600);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+}
+
+.recent-estimate-value {
+    display: block;
+    color: #39546f;
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+.recent-estimate-pert {
+    min-width: 76px;
+    padding: 0.5rem 0.75rem;
+    border-radius: 12px;
+    background: #eaf5fb;
+    color: var(--theme-primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: center;
+    white-space: nowrap;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-estimate-row {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-estimate-row:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-estimate-pert {
+    background: #0a1b2c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-estimate-title {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-estimate-value {
+    color: #9db6cf;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
     background: #06111e;
@@ -549,6 +683,15 @@ include '../../includes/navbar.php';
         grid-template-columns: repeat(2, 1fr);
         gap: 1rem;
     }
+
+    .recent-estimate-row {
+        grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 1fr) minmax(210px, 1fr) auto;
+    }
+
+    .recent-estimate-action {
+        grid-column: 1 / -1;
+        justify-self: start;
+    }
 }
 
 @media (max-width: 768px) {
@@ -576,6 +719,31 @@ include '../../includes/navbar.php';
     .card-body {
         padding: 1.25rem;
     }
+
+    .expert-chart-card .card-body,
+    .expert-schedule-card .card-body {
+        min-height: 0;
+    }
+
+    .expert-chart-shell {
+        height: 250px;
+    }
+
+    .recent-estimate-row {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.85rem 1rem;
+        padding: 1rem 1.1rem;
+    }
+
+    .recent-estimate-primary,
+    .recent-estimate-context {
+        grid-column: 1 / -1;
+    }
+
+    .recent-estimate-action {
+        grid-column: auto;
+        justify-self: end;
+    }
 }
 </style>
 
@@ -602,29 +770,6 @@ include '../../includes/navbar.php';
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-4 mb-4">
-        <div class="col-xl-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header">
-                    <h5><i class="fas fa-chart-pie"></i> Estimation Status</h5>
-                </div>
-                <div class="card-body">
-                    <div style="height: 280px;"><canvas id="expertEstimationStatusChart"></canvas></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header">
-                    <h5><i class="fas fa-chart-column"></i> Average Estimate Range</h5>
-                </div>
-                <div class="card-body">
-                    <div style="height: 280px;"><canvas id="expertEstimateRangeChart"></canvas></div>
                 </div>
             </div>
         </div>
@@ -701,19 +846,67 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
-    <?php
-    delayInsightsRenderCompactList($conn, $user, [
-        'limit' => 4,
-        'title' => 'Project Insight List',
-        'subtitle' => 'Small one-line project signals with direct links to the full insight page.',
-        'button_label' => 'View Project',
-    ]);
-    ?>
+    <!-- Estimation Status and Schedule -->
+    <div class="row g-4 expert-dashboard-section">
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100 expert-chart-card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-pie"></i> Estimation Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="expert-chart-shell">
+                        <canvas id="expertEstimationStatusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    <div class="row g-4">
-        <div class="col-xl-7">
-            <!-- Pending Feature Estimations -->
-            <div class="card mb-4 card-no-border">
+        <div class="col-xl-6">
+            <div class="card h-100 expert-schedule-card">
+                <div class="card-header">
+                    <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
+                </div>
+                <div class="card-body p-0">
+                    <?php renderScheduleAgendaPreview($schedules, $expertAgenda, 'Calendar'); ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estimate Range and Project Insights -->
+    <div class="row g-4 expert-dashboard-section">
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100 expert-chart-card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-column"></i> Average Estimate Range</h5>
+                </div>
+                <div class="card-body">
+                    <div class="expert-chart-shell">
+                        <canvas id="expertEstimateRangeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-6 expert-insight-column">
+            <?php
+            delayInsightsRenderCompactList($conn, $user, [
+                'limit' => 2,
+                'title' => 'Project Insight List',
+                'subtitle' => 'Current project delivery signals available to your Expert workspace.',
+                'button_label' => 'View Project',
+                'show_empty' => true,
+                'empty_title' => 'No project insights yet',
+                'empty_message' => 'Project delivery signals will appear here when an assigned project becomes available.',
+            ]);
+            ?>
+        </div>
+    </div>
+
+    <!-- Pending Estimations and Team Compositions -->
+    <div class="row g-4 expert-dashboard-section">
+        <div class="col-xl-6">
+            <div class="card h-100 card-no-border">
                 <div class="card-header">
                     <h5><i class="fas fa-calculator"></i> Pending Feature Estimations</h5>
                 </div>
@@ -753,9 +946,10 @@ include '../../includes/navbar.php';
                     <?php endif; ?>
                 </div>
             </div>
-            
-            <!-- Recent Team Compositions -->
-            <div class="card">
+        </div>
+
+        <div class="col-xl-6">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5><i class="fas fa-users"></i> Recent Team Compositions</h5>
                 </div>
@@ -801,58 +995,51 @@ include '../../includes/navbar.php';
                 </div>
             </div>
         </div>
-        
-        <div class="col-xl-5">
-            <!-- Upcoming Schedule -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
-                </div>
-                <div class="card-body p-0">
-                    <?php renderScheduleAgendaPreview($schedules, $expertAgenda, 'Calendar'); ?>
-                </div>
-            </div>
-            
-            <!-- Recent Feature Estimates -->
-            <div class="card">
+    </div>
+
+    <!-- Recent Feature Estimates -->
+    <div class="row expert-dashboard-section mb-0">
+        <div class="col-12">
+            <div class="card recent-estimates-card">
                 <div class="card-header">
                     <h5><i class="fas fa-chart-line"></i> Recent Feature Estimates</h5>
                 </div>
-                <div>
+                <div class="card-body">
                     <?php if($recentFeatureEstimates && $recentFeatureEstimates->num_rows > 0): ?>
-                        <?php while($estimate = $recentFeatureEstimates->fetch_assoc()): ?>
-                        <?php
-                            $minDays = (int) ($estimate['min_days'] ?? 0);
-                            $likelyDays = (int) ($estimate['likely_days'] ?? 0);
-                            $maxDays = (int) ($estimate['max_days'] ?? 0);
-                            $pertDays = round(($minDays + (4 * $likelyDays) + $maxDays) / 6, 1);
-                        ?>
-                        <div class="list-group-item-custom">
-                            <div class="d-flex justify-content-between align-items-start gap-3">
-                                <div>
-                                    <div class="fw-semibold mb-1"><?php echo htmlspecialchars($estimate['task_title']); ?></div>
-                                    <small class="text-muted">
-                                        <?php echo htmlspecialchars($estimate['project_name']); ?>
-                                        <?php if(!empty($estimate['phase_name'])): ?>
-                                            &bull; <?php echo htmlspecialchars($estimate['phase_name']); ?>
-                                        <?php endif; ?>
-                                        <?php if(!empty($estimate['latest_update'])): ?>
-                                            &bull; Updated <?php echo date('M d, Y', strtotime((string) $estimate['latest_update'])); ?>
-                                        <?php endif; ?>
-                                    </small>
-                                    <div class="small text-muted mt-1">
-                                        Min <?php echo $minDays; ?>d &bull; Likely <?php echo $likelyDays; ?>d &bull; Max <?php echo $maxDays; ?>d
-                                    </div>
-                                    <div class="mt-2">
-                                        <a href="feature-estimation.php?task_id=<?php echo (int) $estimate['task_id']; ?>" class="btn-estimate">
-                                            Review Estimate
-                                        </a>
-                                    </div>
+                        <div class="recent-estimates-list">
+                            <?php while($estimate = $recentFeatureEstimates->fetch_assoc()): ?>
+                            <?php
+                                $minDays = (int) ($estimate['min_days'] ?? 0);
+                                $likelyDays = (int) ($estimate['likely_days'] ?? 0);
+                                $maxDays = (int) ($estimate['max_days'] ?? 0);
+                                $pertDays = round(($minDays + (4 * $likelyDays) + $maxDays) / 6, 1);
+                                $latestUpdate = !empty($estimate['latest_update'])
+                                    ? date('M d, Y', strtotime((string) $estimate['latest_update']))
+                                    : 'Not recorded';
+                            ?>
+                            <article class="recent-estimate-row">
+                                <div class="recent-estimate-primary">
+                                    <h6 class="recent-estimate-title"><?php echo htmlspecialchars($estimate['task_title']); ?></h6>
+                                    <span class="recent-estimate-value"><?php echo htmlspecialchars($estimate['project_name']); ?></span>
                                 </div>
-                                <span class="badge-estimate"><?php echo number_format($pertDays, 1); ?>d PERT</span>
-                            </div>
+                                <div class="recent-estimate-context">
+                                    <span class="recent-estimate-label">Phase / Updated</span>
+                                    <span class="recent-estimate-value">
+                                        <?php echo htmlspecialchars(!empty($estimate['phase_name']) ? $estimate['phase_name'] : 'No phase'); ?>
+                                        &bull; <?php echo htmlspecialchars($latestUpdate); ?>
+                                    </span>
+                                </div>
+                                <div class="recent-estimate-range">
+                                    <span class="recent-estimate-label">Estimate Range</span>
+                                    <span class="recent-estimate-value">Min <?php echo $minDays; ?>d &bull; Likely <?php echo $likelyDays; ?>d &bull; Max <?php echo $maxDays; ?>d</span>
+                                </div>
+                                <span class="recent-estimate-pert"><?php echo number_format($pertDays, 1); ?>d PERT</span>
+                                <a href="feature-estimation.php?task_id=<?php echo (int) $estimate['task_id']; ?>" class="btn-estimate recent-estimate-action">
+                                    Review Estimate
+                                </a>
+                            </article>
+                            <?php endwhile; ?>
                         </div>
-                        <?php endwhile; ?>
                     <?php else: ?>
                         <div class="empty-state">
                             <i class="fas fa-chart-line"></i>
