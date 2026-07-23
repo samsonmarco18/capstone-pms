@@ -222,6 +222,74 @@ function sulTaskAllocationBulkEntityBadge(array $task): string
         . '</span>';
 }
 
+function sulTaskAllocationBulkEntityDetails(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    array $task
+): string {
+    $bulkCount = (int) ($task['bulk_entity_task_count'] ?? 0);
+    $entityKey = trim((string) ($task['bulk_entity_key'] ?? ''));
+    $projectId = (int) ($task['project_id'] ?? 0);
+    if ($bulkCount <= 1 || $entityKey === '' || $projectId <= 0) {
+        return '';
+    }
+
+    $safeEntityKey = $conn->real_escape_string($entityKey);
+    $featuresResult = $conn->query("
+        SELECT DISTINCT t.id, t.title, t.status, owner.full_name AS owner_name
+        FROM methodology_tasks mt
+        INNER JOIN tasks t ON t.id = mt.task_id
+        LEFT JOIN users owner ON owner.id = t.assigned_to
+        WHERE mt.project_id = {$projectId}
+          AND mt.developer_entity_key = '{$safeEntityKey}'
+          AND mt.task_id IS NOT NULL
+          AND mt.task_id > 0
+        ORDER BY t.id ASC
+    ");
+    if (!$featuresResult) {
+        return sulTaskAllocationBulkEntityBadge($task);
+    }
+
+    $features = [];
+    while ($feature = $featuresResult->fetch_assoc()) {
+        $features[] = $feature;
+    }
+    if (count($features) <= 1) {
+        return '';
+    }
+
+    ob_start();
+    ?>
+    <details class="bulk-assignment-details mt-2" onclick="event.stopPropagation();">
+        <summary>
+            <span class="bulk-entity-badge">
+                <i class="fas fa-layer-group" aria-hidden="true"></i>
+                Bulk assignment: <?php echo count($features); ?> features
+            </span>
+            <i class="fas fa-chevron-down bulk-assignment-chevron" aria-hidden="true"></i>
+        </summary>
+        <div class="bulk-assignment-feature-list">
+            <span class="bulk-assignment-feature-note">Features in this bulk group:</span>
+            <?php foreach ($features as $feature): ?>
+                <?php $statusLabel = ucwords(str_replace('_', ' ', (string) ($feature['status'] ?? 'todo'))); ?>
+                <button type="button" class="bulk-assignment-feature" onclick="this.closest('details').open = false; viewTaskDetails(<?php echo (int) $feature['id']; ?>)">
+                    <span class="bulk-feature-copy">
+                        <strong><i class="far fa-file-lines" aria-hidden="true"></i><?php echo htmlspecialchars((string) $feature['title']); ?></strong>
+                        <small>
+                            <?php echo htmlspecialchars($statusLabel); ?>
+                            <?php if (!empty($feature['owner_name'])): ?>
+                                &middot; <?php echo htmlspecialchars((string) $feature['owner_name']); ?>
+                            <?php endif; ?>
+                        </small>
+                    </span>
+                    <i class="fas fa-circle-info" aria-hidden="true"></i>
+                </button>
+            <?php endforeach; ?>
+        </div>
+    </details>
+    <?php
+    return trim((string) ob_get_clean());
+}
+
 function sulTaskAllocationProjectOptionGroups(array $options, array $countKeys): array
 {
     $active = [];
@@ -413,6 +481,7 @@ function sulTaskAllocationRoadmapEntityRows(
     int $taskId,
     array $currentRoadmapTask,
     string $department,
+    array $requestedTaskIds,
     ?string &$error
 ): array {
     $error = null;
@@ -441,6 +510,9 @@ function sulTaskAllocationRoadmapEntityRows(
     while ($entityTask = $entityTaskRows->fetch_assoc()) {
         $entityTaskId = (int) ($entityTask['task_id'] ?? 0);
         if ($entityTaskId <= 0) {
+            continue;
+        }
+        if ($requestedTaskIds !== [] && !in_array($entityTaskId, $requestedTaskIds, true)) {
             continue;
         }
 
@@ -829,6 +901,36 @@ $projectEstimationReviews = $conn->query("
     ORDER BY e.submitted_at ASC, e.id ASC
 ");
 
+$expertCompletedTasks = $conn->query("
+    SELECT DISTINCT
+           t.id, t.title, t.priority, t.project_id,
+           p.name AS project_name,
+           u.full_name AS expert_name,
+           fe.min_days, fe.likely_days, fe.max_days,
+           fe.expectation_description,
+           COALESCE(mtd.approved_at, mtd.updated_at, fe.submitted_at, fe.updated_at) AS expert_completed_at
+    FROM methodology_task_departments mtd
+    INNER JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+    INNER JOIN tasks t ON t.id = COALESCE(mtd.workflow_task_id, mt.task_id)
+    INNER JOIN projects p ON p.id = t.project_id
+    LEFT JOIN feature_estimations fe
+      ON fe.id = (
+          SELECT fe_latest.id
+          FROM feature_estimations fe_latest
+          WHERE fe_latest.task_id = t.id
+            AND fe_latest.status = 'completed'
+          ORDER BY fe_latest.submitted_at DESC, fe_latest.id DESC
+          LIMIT 1
+      )
+    LEFT JOIN users u ON u.id = fe.expert_id
+    WHERE mtd.department IN ({$sulDepartmentAliasesSql})
+      AND mtd.status = 'completed'
+      {$selectedExpertProjectFilter}
+    ORDER BY expert_completed_at DESC, t.id DESC
+    LIMIT 20
+");
+$expertCompletedCount = $expertCompletedTasks ? $expertCompletedTasks->num_rows : 0;
+
 // Get tasks ready for developer assignment (approved, waiting for developer)
 $readyForDevTasks = $conn->query("
     SELECT t.*, u.full_name as expert_name, p.name as project_name,
@@ -906,7 +1008,11 @@ if ($readyForDevTasks) {
     }
     $readyForDevTasks->data_seek(0);
 }
-$readyDeveloperAssignmentCount = count($readyDeveloperAssignmentGroups);
+$readyDeveloperAssignmentGroupCount = count($readyDeveloperAssignmentGroups);
+$readyDeveloperAssignmentCount = array_sum(array_map(
+    static fn(array $group): int => count($group['features'] ?? []),
+    $readyDeveloperAssignmentGroups
+));
 
 // Get tasks assigned to developers (in progress)
 $inProgressTasks = $conn->query("
@@ -926,6 +1032,7 @@ $inProgressTasks = $conn->query("
 $codeReviewTasks = $conn->query("
     SELECT t.*, u.full_name as developer_name, p.name as project_name,
            {$bulkEntityCountSelect},
+           {$bulkEntityKeySelect},
            latest_git.branch_name, latest_git.commit_hash, latest_git.pull_request_url, latest_git.repository_url, latest_git.notes AS git_notes
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
@@ -1074,7 +1181,7 @@ foreach ($expertProjectOptions as $expertProjectOption) {
         + (int) ($expertProjectOption['project_review_count'] ?? 0);
 }
 $expertReviewCount = $reviewTasks->num_rows + $projectEstimationReviews->num_rows;
-$selectedExpertTaskCount = $unassignedAssignmentCount + $pendingEstimationAssignmentCount + $expertReviewCount;
+$selectedExpertTaskCount = $unassignedAssignmentCount + $pendingEstimationAssignmentCount + $expertReviewCount + $expertCompletedCount;
 $expertAllocationBadgeCount = ($projectId && $project) ? $selectedExpertTaskCount : $expertProjectOptionTaskCount;
 
 // Get available developers
@@ -1092,6 +1199,19 @@ $developers = $conn->query("
     ORDER BY CASE COALESCE(u.availability_status, 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
              assigned_tasks ASC, u.full_name ASC
 ");
+$availableDeveloperCount = $developers ? $developers->num_rows : 0;
+$developerPlannedHeadcount = 1;
+if ($canManageDeveloperWorkflow && $projectId > 0) {
+    $plannedHeadcountResult = $conn->query("
+        SELECT COALESCE(SUM(required_count), 0) AS required_count
+        FROM developer_allocations
+        WHERE project_id = {$projectId}
+          AND role IN ({$sulDepartmentAliasesSql})
+    ");
+    if ($plannedHeadcountResult) {
+        $developerPlannedHeadcount = max(1, (int) ($plannedHeadcountResult->fetch_assoc()['required_count'] ?? 1));
+    }
+}
 
 $developerProjectOptions = [];
 if ($canManageDeveloperWorkflow) {
@@ -1465,11 +1585,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $taskId = (int) ($_POST['task_id'] ?? 0);
-        $developerId = (int) ($_POST['developer_id'] ?? 0);
+        $requestedTaskIds = array_values(array_unique(array_filter(array_map(
+            'intval',
+            preg_split('/\s*,\s*/', trim((string) ($_POST['task_ids'] ?? (string) $taskId))) ?: []
+        ))));
+        if ($taskId > 0 && !in_array($taskId, $requestedTaskIds, true)) {
+            $requestedTaskIds[] = $taskId;
+        }
+        $developerIds = array_values(array_unique(array_filter(array_map(
+            'intval',
+            is_array($_POST['developer_ids'] ?? null)
+                ? $_POST['developer_ids']
+                : [($_POST['developer_id'] ?? 0)]
+        ))));
+        $developerId = (int) ($developerIds[0] ?? 0);
         $deadline = trim((string) ($_POST['deadline'] ?? ''));
 
-        if ($taskId <= 0 || $developerId <= 0 || $deadline === '') {
-            $_SESSION['error'] = "Please select a valid task, {$deliveryAssigneeLower}, and deadline.";
+        if ($taskId <= 0 || $developerIds === [] || $deadline === '') {
+            $_SESSION['error'] = "Please select a valid task, department members, and deadline.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -1487,11 +1620,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $developerDepartmentSql = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) : ' AND 1 = 0';
-        $developerCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'developer' AND status = 'active'{$developerDepartmentSql}");
-        $developerCheck->bind_param("i", $developerId);
-        $developerCheck->execute();
-        $validDeveloper = $developerCheck->get_result()->num_rows > 0;
-        $developerCheck->close();
+        $developerIdList = implode(',', $developerIds);
+        $developerCheck = $conn->query("
+            SELECT id
+            FROM users
+            WHERE id IN ({$developerIdList})
+              AND role = 'developer'
+              AND status = 'active'
+              {$developerDepartmentSql}
+        ");
+        $validDeveloper = $developerCheck && $developerCheck->num_rows === count($developerIds);
 
         $approvalSql = $hasSalesApproval ? " AND sales_approved = 1" : "";
         $choiceSql = $hasSalesChoice ? " AND sales_estimate_days IS NOT NULL" : "";
@@ -1530,7 +1668,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $assignmentProjectId = (int) ($validTaskRow['project_id'] ?? 0);
         $roadmapPhaseCount = (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$assignmentProjectId}")->fetch_assoc()['total'] ?? 0));
         $currentRoadmapTask = null;
-        $assignmentTaskIds = [$taskId => $taskId];
+        $assignmentTaskIds = array_fill_keys($requestedTaskIds, 0);
+        foreach ($requestedTaskIds as $requestedTaskId) {
+            $assignmentTaskIds[$requestedTaskId] = $requestedTaskId;
+        }
         $assignmentRoadmapTaskIds = [];
         $assignmentRoadmapTaskByTaskId = [];
         $assignmentDepartmentProgressByTaskId = [];
@@ -1543,10 +1684,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
 
             $entityError = null;
-            $roadmapEntityRows = sulTaskAllocationRoadmapEntityRows($conn, $assignmentProjectId, $taskId, $currentRoadmapTask, $sulDepartment, $entityError);
+            $roadmapEntityRows = sulTaskAllocationRoadmapEntityRows($conn, $assignmentProjectId, $taskId, $currentRoadmapTask, $sulDepartment, $requestedTaskIds, $entityError);
             if ($entityError !== null) {
                 $_SESSION['error'] = $entityError;
                 header("Location: task-allocation.php");
+                exit();
+            }
+            if (count($roadmapEntityRows) !== count($requestedTaskIds)) {
+                $_SESSION['error'] = "The bulk assignment changed while the dialog was open. Refresh and select the group again.";
+                header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
                 exit();
             }
 
@@ -1605,8 +1751,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             while ($readyRow = $readyRows->fetch_assoc()) {
                 $readyTaskIds[(int) $readyRow['id']] = true;
             }
-            if (count($readyTaskIds) !== count($assignmentTaskIds)) {
-                $_SESSION['error'] = "Every task in this roadmap assignment group must be approved and ready before assignment.";
+            if (count($readyTaskIds) !== count($requestedTaskIds)) {
+                $_SESSION['error'] = "One or more displayed tasks are no longer ready. Refresh the queue before assigning.";
                 header("Location: task-allocation.php");
                 exit();
             }
@@ -1639,19 +1785,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                      users.id ASC
         ");
 
-        $assignmentTeam = [];
+        $availableTeamIds = [];
         if ($teamRows) {
             while ($teamMember = $teamRows->fetch_assoc()) {
                 $memberId = (int) ($teamMember['id'] ?? 0);
-                if ($memberId > 0 && count($assignmentTeam) < $teamLimit) {
-                    $assignmentTeam[] = $memberId;
+                if ($memberId > 0) {
+                    $availableTeamIds[] = $memberId;
                 }
             }
         }
-        if (!in_array($developerId, $assignmentTeam, true)) {
-            array_unshift($assignmentTeam, $developerId);
-            $assignmentTeam = array_slice(array_values(array_unique($assignmentTeam)), 0, $teamLimit);
+        $teamLimit = min($teamLimit, count($availableTeamIds));
+        $invalidSelections = array_diff($developerIds, $availableTeamIds);
+        if ($teamLimit <= 0 || count($developerIds) !== $teamLimit || $invalidSelections !== []) {
+            $_SESSION['error'] = "Select exactly {$teamLimit} active department member" . ($teamLimit === 1 ? '' : 's') . " for this task group.";
+            header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
+            exit();
         }
+        $assignmentTeam = $developerIds;
 
         $tasksByDeveloper = array_fill_keys($assignmentTeam, []);
         foreach ($assignmentTaskIds as $taskIndex => $assignmentTaskId) {
@@ -1687,6 +1837,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     throw new RuntimeException('Unable to save task distribution.');
                 }
                 $memberTaskUpdateStmt->close();
+                $ownerVerification = $conn->query("
+                    SELECT COUNT(*) AS assigned_count
+                    FROM tasks
+                    WHERE id IN ({$memberTaskIdList})
+                      AND assigned_to = {$memberId}
+                      AND status = 'todo'
+                ");
+                $verifiedCount = $ownerVerification
+                    ? (int) ($ownerVerification->fetch_assoc()['assigned_count'] ?? 0)
+                    : 0;
+                if ($verifiedCount !== count($memberTaskIds)) {
+                    throw new RuntimeException('The saved task count did not match the requested distribution.');
+                }
 
                 $roadmapIds = [];
                 foreach ($memberTaskIds as $memberTaskId) {
@@ -4711,6 +4874,11 @@ include '../../includes/navbar.php';
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="expert-completed-tab" data-bs-toggle="tab" data-bs-target="#expert-completed-panel" type="button" role="tab" aria-controls="expert-completed-panel" aria-selected="false">
+                        <i class="fas fa-check-double"></i> Recently Completed <span class="badge-count"><?php echo $expertCompletedCount; ?></span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
                     <button class="nav-link" id="expert-gantt-tab" data-bs-toggle="tab" data-bs-target="#expert-gantt-panel" type="button" role="tab" aria-controls="expert-gantt-panel" aria-selected="false">
                         <i class="fas fa-stream"></i> Project Gantt
                     </button>
@@ -5192,6 +5360,70 @@ include '../../includes/navbar.php';
                 </div>
             </div>
 
+            <div class="tab-pane fade section-card allocation-column" id="expert-completed-panel" role="tabpanel" aria-labelledby="expert-completed-tab">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-check-double"></i>
+                        Recently Completed Estimations
+                        <span class="badge-count"><?php echo $expertCompletedCount; ?> <?php echo $expertCompletedCount === 1 ? 'task' : 'tasks'; ?></span>
+                    </h5>
+                </div>
+                <div class="p-3 allocation-column-body">
+                    <?php if (!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for completed estimations</p>
+                        </div>
+                    <?php elseif ($expertCompletedTasks && $expertCompletedCount > 0): ?>
+                        <div class="task-allocation-table-wrap">
+                            <table class="task-allocation-table" aria-label="Recently completed expert estimations">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Task</th>
+                                        <th scope="col">Expert</th>
+                                        <th scope="col">Estimate</th>
+                                        <th scope="col">Completed</th>
+                                        <th scope="col" class="allocation-actions-heading">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                <?php while ($completedExpertTask = $expertCompletedTasks->fetch_assoc()): ?>
+                                    <tr tabindex="0" onclick="viewTaskDetails(<?php echo (int) $completedExpertTask['id']; ?>)">
+                                        <td>
+                                            <span class="allocation-task-name"><?php echo htmlspecialchars((string) $completedExpertTask['title']); ?></span>
+                                            <span class="allocation-task-secondary"><?php echo htmlspecialchars((string) $completedExpertTask['project_name']); ?></span>
+                                        </td>
+                                        <td><span class="allocation-deadline"><?php echo htmlspecialchars((string) ($completedExpertTask['expert_name'] ?? 'Expert')); ?></span></td>
+                                        <td>
+                                            <span class="estimation-badge">
+                                                Min <?php echo (int) ($completedExpertTask['min_days'] ?? 0); ?>d &middot;
+                                                Likely <?php echo (int) ($completedExpertTask['likely_days'] ?? 0); ?>d &middot;
+                                                Max <?php echo (int) ($completedExpertTask['max_days'] ?? 0); ?>d
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="allocation-deadline"><?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($completedExpertTask['expert_completed_at'] ?? null)); ?></span>
+                                            <span class="allocation-deadline-note">SUL approved</span>
+                                        </td>
+                                        <td>
+                                            <button class="btn-outline-modern" type="button" onclick="event.stopPropagation(); viewTaskDetails(<?php echo (int) $completedExpertTask['id']; ?>)">
+                                                <i class="fas fa-eye"></i> View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="fas fa-check-circle"></i>
+                            <p>No completed estimations yet</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <div class="tab-pane fade section-card allocation-column" id="expert-gantt-panel" role="tabpanel" aria-labelledby="expert-gantt-tab">
                 <?php if (!$projectId || !$project): ?>
                     <div class="p-3 allocation-column-body">
@@ -5313,7 +5545,12 @@ include '../../includes/navbar.php';
                     <h5>
                         <i class="fas fa-code"></i>
                         Ready for <?php echo htmlspecialchars($deliveryAssigneeLabel); ?> Assignment
-                        <span class="badge-count"><?php echo $readyDeveloperAssignmentCount; ?> <?php echo $readyDeveloperAssignmentCount === 1 ? 'assignment' : 'assignments'; ?></span>
+                        <span class="badge-count">
+                            <?php echo $readyDeveloperAssignmentCount; ?> <?php echo $readyDeveloperAssignmentCount === 1 ? 'feature' : 'features'; ?>
+                            <?php if ($readyDeveloperAssignmentGroupCount < $readyDeveloperAssignmentCount): ?>
+                                in <?php echo $readyDeveloperAssignmentGroupCount; ?> <?php echo $readyDeveloperAssignmentGroupCount === 1 ? 'group' : 'groups'; ?>
+                            <?php endif; ?>
+                        </span>
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
@@ -5378,6 +5615,14 @@ include '../../includes/navbar.php';
                                         $groupRoadmapStart,
                                         $groupRoadmapEnd
                                     );
+                                    $distributionMemberCount = max(1, min($developerPlannedHeadcount, $availableDeveloperCount, $featureCount));
+                                    $tasksPerMember = intdiv($featureCount, $distributionMemberCount);
+                                    $distributionRemainder = $featureCount % $distributionMemberCount;
+                                    $distributionCopy = $distributionMemberCount > 1
+                                        ? ($distributionRemainder === 0
+                                            ? "{$tasksPerMember} tasks each across {$distributionMemberCount} {$deliveryAssigneePluralLower}"
+                                            : "Balanced across {$distributionMemberCount} {$deliveryAssigneePluralLower} ({$tasksPerMember}–" . ($tasksPerMember + 1) . ' tasks each)')
+                                        : 'Ready for ' . $deliveryAssigneeLower . ' allocation';
                                     $assignmentTitle = $isBulkAssignment
                                         ? 'Bulk assignment: ' . implode(', ', $featureTitles)
                                         : (string) ($task['title'] ?? 'Feature');
@@ -5400,7 +5645,7 @@ include '../../includes/navbar.php';
                                                 <?php echo $isBulkAssignment ? $featureCount . ' grouped features' : htmlspecialchars((string) $task['title']); ?>
                                             </span>
                                             <span class="allocation-task-secondary">
-                                                <?php echo $isBulkAssignment ? 'Assigned together to one ' . htmlspecialchars($deliveryAssigneeLower) : 'Ready for ' . htmlspecialchars($deliveryAssigneeLower) . ' allocation'; ?>
+                                                <?php echo htmlspecialchars($isBulkAssignment ? $distributionCopy : 'Ready for ' . $deliveryAssigneeLower . ' allocation'); ?>
                                             </span>
                                         </td>
                                         <td>
@@ -5420,7 +5665,7 @@ include '../../includes/navbar.php';
                                                         <i class="fas fa-chevron-down bulk-assignment-chevron" aria-hidden="true"></i>
                                                     </summary>
                                                     <div class="bulk-assignment-feature-list">
-                                                        <span class="bulk-assignment-feature-note">These features will be assigned together:</span>
+                                                        <span class="bulk-assignment-feature-note"><?php echo htmlspecialchars($distributionCopy); ?>:</span>
                                                         <?php foreach ($features as $index => $feature): ?>
                                                             <button type="button" class="bulk-assignment-feature" onclick="this.closest('details').open = false; viewTaskDetails(<?php echo (int) $feature['id']; ?>)">
                                                                 <span class="bulk-feature-copy">
@@ -5465,7 +5710,7 @@ include '../../includes/navbar.php';
                                                 <button
                                                     class="btn-primary-modern"
                                                     type="button"
-                                                    onclick="openAssignDeveloperModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode($assignmentTitle); ?>'), '<?php echo htmlspecialchars($assignmentDeadlineValue, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapStart, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapEnd, ENT_QUOTES); ?>')"
+                                                    onclick="openAssignDeveloperModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode($assignmentTitle); ?>'), '<?php echo htmlspecialchars($assignmentDeadlineValue, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapStart, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapEnd, ENT_QUOTES); ?>', <?php echo $distributionMemberCount; ?>, <?php echo $featureCount; ?>, <?php echo htmlspecialchars(json_encode(array_values(array_map(static fn(array $feature): int => (int) $feature['id'], $features))), ENT_QUOTES, 'UTF-8'); ?>)"
                                                 >
                                                     <i class="fas fa-user-plus"></i> <?php echo htmlspecialchars($deliveryAssignmentAction); ?>
                                                 </button>
@@ -5606,7 +5851,7 @@ include '../../includes/navbar.php';
                                             <i class="fas fa-folder" aria-hidden="true"></i>
                                             <?php echo htmlspecialchars((string) $task['project_name']); ?>
                                         </span>
-                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
+                                        <?php echo sulTaskAllocationBulkEntityDetails($conn, $task); ?>
                                     </td>
                                     <td>
                                         <span class="allocation-deadline"><?php echo htmlspecialchars((string) $task['developer_name']); ?></span>
@@ -5984,6 +6229,7 @@ include '../../includes/navbar.php';
                 <div class="modal-body">
                     <input type="hidden" name="project_id" value="<?php echo (int) $projectId; ?>">
                     <input type="hidden" name="task_id" id="devTaskId">
+                    <input type="hidden" name="task_ids" id="devTaskIds">
 
                     <div class="assign-expert-intro">
                         <span class="assign-expert-intro-icon" aria-hidden="true"><i class="fas fa-code"></i></span>
@@ -6042,7 +6288,7 @@ include '../../includes/navbar.php';
                                     <tr
                                         class="expert-choice-row developer-choice-row"
                                         tabindex="0"
-                                        role="radio"
+                                        role="checkbox"
                                         aria-checked="false"
                                         data-developer-choice
                                         data-developer-name="<?php echo htmlspecialchars($developerName, ENT_QUOTES, 'UTF-8'); ?>"
@@ -6082,10 +6328,9 @@ include '../../includes/navbar.php';
                                         <td class="text-center">
                                             <input
                                                 class="visually-hidden developer-choice-input"
-                                                type="radio"
-                                                name="developer_id"
+                                                type="checkbox"
+                                                name="developer_ids[]"
                                                 value="<?php echo (int) $developer['id']; ?>"
-                                                required
                                                 tabindex="-1"
                                             >
                                             <span class="expert-select-indicator" aria-hidden="true"><i class="fas fa-check"></i></span>
@@ -6100,7 +6345,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="expert-assignment-note">
                             <i class="fas fa-circle-info" aria-hidden="true"></i>
-                            For bulk groups, the selected member is included and tasks are divided evenly across the department's planned headcount.
+                            For bulk groups, select the required department members here. Tasks are divided evenly only among the people you select.
                         </div>
                     <?php else: ?>
                         <div class="empty-state">
@@ -6265,7 +6510,7 @@ function renderEvortixBubble() {
 }
 
 async function persistEvortixDecision(taskId, decision, recommended) {
-    const recommendedInput = recommended?.querySelector('input[type="radio"]');
+    const recommendedInput = recommended?.querySelector('input');
     const body = new URLSearchParams({
         evortix_review_decision: '1',
         task_id: String(taskId),
@@ -6339,7 +6584,16 @@ document.addEventListener('DOMContentLoaded', () => window.setTimeout(() => {
     document.getElementById(formId)?.addEventListener('submit', async event => {
         const form = event.currentTarget;
         if (form.dataset.overloadConfirmed === '1') return;
-        const selected = form.querySelector('input[type="radio"]:checked')?.closest('[data-expert-choice],[data-developer-choice]');
+        const selected = form.id === 'assignDeveloperForm'
+            ? Array.from(form.querySelectorAll('.developer-choice-input:checked'))
+                .map(input => input.closest('[data-developer-choice]'))
+                .find(row => {
+                    const load = Number(row?.dataset.memberLoad || 0);
+                    const capacity = Math.max(1, Number(row?.dataset.memberCapacity || 5));
+                    const unavailable = !['available', 'limited'].includes((row?.dataset.memberAvailability || 'available').toLowerCase());
+                    return load >= capacity || unavailable;
+                })
+            : form.querySelector('input[type="radio"]:checked')?.closest('[data-expert-choice]');
         if (!selected) return;
         const load = Number(selected.dataset.memberLoad || 0);
         const capacity = Math.max(1, Number(selected.dataset.memberCapacity || 5));
@@ -6550,6 +6804,35 @@ const deliveryNoSelectionText = <?php echo json_encode($deliveryNoSelectionText)
 const deliveryAssigneeFallback = <?php echo json_encode($deliveryAssigneeFallback); ?>;
 const deliveryAssignmentReadyMessage = <?php echo json_encode('The task will become ready for ' . $deliveryAssigneeLower . ' assignment.'); ?>;
 const deliveryAssignmentLoadingMessage = <?php echo json_encode('Please wait while the task is prepared for ' . $deliveryAssigneeLower . ' assignment.'); ?>;
+let developerSelectionLimit = 1;
+let developerBulkFeatureCount = 1;
+
+function updateDeveloperSelectionState() {
+    const selectedRows = developerChoiceRows.filter(row => row.querySelector('.developer-choice-input')?.checked);
+    developerChoiceRows.forEach(row => {
+        const checked = Boolean(row.querySelector('.developer-choice-input')?.checked);
+        row.classList.toggle('is-selected', checked);
+        row.setAttribute('aria-checked', checked ? 'true' : 'false');
+    });
+
+    const selectionComplete = selectedRows.length === developerSelectionLimit;
+    if (confirmDeveloperAssignment) confirmDeveloperAssignment.disabled = !selectionComplete;
+    if (developerSelectionSummary) {
+        if (!selectedRows.length) {
+            developerSelectionSummary.textContent = developerSelectionLimit > 1
+                ? `Select ${developerSelectionLimit} developers`
+                : deliveryNoSelectionText;
+            return;
+        }
+        const names = selectedRows.map(row => row.dataset.developerName || deliveryAssigneeFallback);
+        const tasksPerDeveloper = developerSelectionLimit > 0
+            ? Math.floor(developerBulkFeatureCount / developerSelectionLimit)
+            : developerBulkFeatureCount;
+        developerSelectionSummary.textContent = selectionComplete
+            ? `Selected: ${names.join(', ')} · ${tasksPerDeveloper} task${tasksPerDeveloper === 1 ? '' : 's'} each`
+            : `Select ${developerSelectionLimit - selectedRows.length} more developer${developerSelectionLimit - selectedRows.length === 1 ? '' : 's'}`;
+    }
+}
 
 function clearDeveloperChoice() {
     developerChoiceRows.forEach(row => {
@@ -6559,33 +6842,24 @@ function clearDeveloperChoice() {
         if (input) input.checked = false;
     });
 
-    if (confirmDeveloperAssignment) confirmDeveloperAssignment.disabled = true;
-    if (developerSelectionSummary && developerChoiceRows.length > 0) {
-        developerSelectionSummary.textContent = deliveryNoSelectionText;
-    }
+    updateDeveloperSelectionState();
 }
 
 function selectDeveloperChoice(row) {
     const input = row?.querySelector('.developer-choice-input');
     if (!input) return;
 
-    developerChoiceRows.forEach(otherRow => {
-        const isSelected = otherRow === row;
-        otherRow.classList.toggle('is-selected', isSelected);
-        otherRow.setAttribute('aria-checked', isSelected ? 'true' : 'false');
-        const otherInput = otherRow.querySelector('.developer-choice-input');
-        if (otherInput) otherInput.checked = isSelected;
-    });
-
-    if (confirmDeveloperAssignment) confirmDeveloperAssignment.disabled = false;
-    if (developerSelectionSummary) {
-        developerSelectionSummary.replaceChildren(
-            document.createTextNode('Selected: '),
-            Object.assign(document.createElement('strong'), {
-                textContent: row.dataset.developerName || deliveryAssigneeFallback
-            })
-        );
+    if (input.checked) {
+        input.checked = false;
+    } else {
+        const selectedCount = developerChoiceRows.filter(choice => choice.querySelector('.developer-choice-input')?.checked).length;
+        if (selectedCount >= developerSelectionLimit) {
+            window.appToast?.('Selection limit', `Select exactly ${developerSelectionLimit} developers for this assignment.`, 'warning');
+            return;
+        }
+        input.checked = true;
     }
+    updateDeveloperSelectionState();
 }
 
 developerChoiceRows.forEach(row => {
@@ -6598,9 +6872,15 @@ developerChoiceRows.forEach(row => {
     });
 });
 
-function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', maxDate = '') {
+function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', maxDate = '', selectionLimit = 1, featureCount = 1, taskIds = []) {
     document.getElementById('devTaskId').value = taskId;
+    document.getElementById('devTaskIds').value = (Array.isArray(taskIds) && taskIds.length ? taskIds : [taskId])
+        .map(Number)
+        .filter(id => Number.isInteger(id) && id > 0)
+        .join(',');
     document.getElementById('devTaskTitle').textContent = taskTitle;
+    developerSelectionLimit = Math.max(1, Math.min(Number(selectionLimit) || 1, developerChoiceRows.length || 1));
+    developerBulkFeatureCount = Math.max(1, Number(featureCount) || 1);
     const deadlineInput = document.getElementById('devDeadline');
     deadlineInput.min = minDate || '';
     deadlineInput.max = maxDate || '';

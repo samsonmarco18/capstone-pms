@@ -5276,20 +5276,11 @@ setTimeout(renderExpertGantt, 50);
 setTimeout(renderProjectManagementTable, 50);
 if (featureSubmittedMessage) {
     setTimeout(() => {
-        if (typeof window.appConfirm === 'function') {
-            window.appConfirm({
-                title: 'Estimation Submitted',
-                titleIcon: 'fas fa-circle-check',
-                subject: featureSubmittedMessage,
-                message: 'The estimate is now with the Expert SUL for approval.',
-                icon: 'fas fa-paper-plane',
-                confirmText: 'OK',
-                cancelText: 'Close',
-                variant: 'success'
-            });
-        } else {
-            alert(featureSubmittedMessage);
-        }
+        window.appToast?.(
+            'Estimation submitted',
+            featureSubmittedMessage,
+            'success'
+        );
     }, 150);
 }
 </script>
