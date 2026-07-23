@@ -222,6 +222,74 @@ function sulTaskAllocationBulkEntityBadge(array $task): string
         . '</span>';
 }
 
+function sulTaskAllocationBulkEntityDetails(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    array $task
+): string {
+    $bulkCount = (int) ($task['bulk_entity_task_count'] ?? 0);
+    $entityKey = trim((string) ($task['bulk_entity_key'] ?? ''));
+    $projectId = (int) ($task['project_id'] ?? 0);
+    if ($bulkCount <= 1 || $entityKey === '' || $projectId <= 0) {
+        return '';
+    }
+
+    $safeEntityKey = $conn->real_escape_string($entityKey);
+    $featuresResult = $conn->query("
+        SELECT DISTINCT t.id, t.title, t.status, owner.full_name AS owner_name
+        FROM methodology_tasks mt
+        INNER JOIN tasks t ON t.id = mt.task_id
+        LEFT JOIN users owner ON owner.id = t.assigned_to
+        WHERE mt.project_id = {$projectId}
+          AND mt.developer_entity_key = '{$safeEntityKey}'
+          AND mt.task_id IS NOT NULL
+          AND mt.task_id > 0
+        ORDER BY t.id ASC
+    ");
+    if (!$featuresResult) {
+        return sulTaskAllocationBulkEntityBadge($task);
+    }
+
+    $features = [];
+    while ($feature = $featuresResult->fetch_assoc()) {
+        $features[] = $feature;
+    }
+    if (count($features) <= 1) {
+        return '';
+    }
+
+    ob_start();
+    ?>
+    <details class="bulk-assignment-details mt-2" onclick="event.stopPropagation();">
+        <summary>
+            <span class="bulk-entity-badge">
+                <i class="fas fa-layer-group" aria-hidden="true"></i>
+                Bulk assignment: <?php echo count($features); ?> features
+            </span>
+            <i class="fas fa-chevron-down bulk-assignment-chevron" aria-hidden="true"></i>
+        </summary>
+        <div class="bulk-assignment-feature-list">
+            <span class="bulk-assignment-feature-note">Features in this bulk group:</span>
+            <?php foreach ($features as $feature): ?>
+                <?php $statusLabel = ucwords(str_replace('_', ' ', (string) ($feature['status'] ?? 'todo'))); ?>
+                <button type="button" class="bulk-assignment-feature" onclick="this.closest('details').open = false; viewTaskDetails(<?php echo (int) $feature['id']; ?>)">
+                    <span class="bulk-feature-copy">
+                        <strong><i class="far fa-file-lines" aria-hidden="true"></i><?php echo htmlspecialchars((string) $feature['title']); ?></strong>
+                        <small>
+                            <?php echo htmlspecialchars($statusLabel); ?>
+                            <?php if (!empty($feature['owner_name'])): ?>
+                                &middot; <?php echo htmlspecialchars((string) $feature['owner_name']); ?>
+                            <?php endif; ?>
+                        </small>
+                    </span>
+                    <i class="fas fa-circle-info" aria-hidden="true"></i>
+                </button>
+            <?php endforeach; ?>
+        </div>
+    </details>
+    <?php
+    return trim((string) ob_get_clean());
+}
+
 function sulTaskAllocationProjectOptionGroups(array $options, array $countKeys): array
 {
     $active = [];
@@ -964,6 +1032,7 @@ $inProgressTasks = $conn->query("
 $codeReviewTasks = $conn->query("
     SELECT t.*, u.full_name as developer_name, p.name as project_name,
            {$bulkEntityCountSelect},
+           {$bulkEntityKeySelect},
            latest_git.branch_name, latest_git.commit_hash, latest_git.pull_request_url, latest_git.repository_url, latest_git.notes AS git_notes
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
@@ -5782,7 +5851,7 @@ include '../../includes/navbar.php';
                                             <i class="fas fa-folder" aria-hidden="true"></i>
                                             <?php echo htmlspecialchars((string) $task['project_name']); ?>
                                         </span>
-                                        <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
+                                        <?php echo sulTaskAllocationBulkEntityDetails($conn, $task); ?>
                                     </td>
                                     <td>
                                         <span class="allocation-deadline"><?php echo htmlspecialchars((string) $task['developer_name']); ?></span>
