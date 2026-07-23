@@ -1512,11 +1512,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $taskId = (int) ($_POST['task_id'] ?? 0);
-        $developerId = (int) ($_POST['developer_id'] ?? 0);
+        $developerIds = array_values(array_unique(array_filter(array_map(
+            'intval',
+            is_array($_POST['developer_ids'] ?? null)
+                ? $_POST['developer_ids']
+                : [($_POST['developer_id'] ?? 0)]
+        ))));
+        $developerId = (int) ($developerIds[0] ?? 0);
         $deadline = trim((string) ($_POST['deadline'] ?? ''));
 
-        if ($taskId <= 0 || $developerId <= 0 || $deadline === '') {
-            $_SESSION['error'] = "Please select a valid task, {$deliveryAssigneeLower}, and deadline.";
+        if ($taskId <= 0 || $developerIds === [] || $deadline === '') {
+            $_SESSION['error'] = "Please select a valid task, department members, and deadline.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -1534,11 +1540,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $developerDepartmentSql = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) : ' AND 1 = 0';
-        $developerCheck = $conn->prepare("SELECT id FROM users WHERE id = ? AND role = 'developer' AND status = 'active'{$developerDepartmentSql}");
-        $developerCheck->bind_param("i", $developerId);
-        $developerCheck->execute();
-        $validDeveloper = $developerCheck->get_result()->num_rows > 0;
-        $developerCheck->close();
+        $developerIdList = implode(',', $developerIds);
+        $developerCheck = $conn->query("
+            SELECT id
+            FROM users
+            WHERE id IN ({$developerIdList})
+              AND role = 'developer'
+              AND status = 'active'
+              {$developerDepartmentSql}
+        ");
+        $validDeveloper = $developerCheck && $developerCheck->num_rows === count($developerIds);
 
         $approvalSql = $hasSalesApproval ? " AND sales_approved = 1" : "";
         $choiceSql = $hasSalesChoice ? " AND sales_estimate_days IS NOT NULL" : "";
@@ -1686,19 +1697,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                      users.id ASC
         ");
 
-        $assignmentTeam = [];
+        $availableTeamIds = [];
         if ($teamRows) {
             while ($teamMember = $teamRows->fetch_assoc()) {
                 $memberId = (int) ($teamMember['id'] ?? 0);
-                if ($memberId > 0 && count($assignmentTeam) < $teamLimit) {
-                    $assignmentTeam[] = $memberId;
+                if ($memberId > 0) {
+                    $availableTeamIds[] = $memberId;
                 }
             }
         }
-        if (!in_array($developerId, $assignmentTeam, true)) {
-            array_unshift($assignmentTeam, $developerId);
-            $assignmentTeam = array_slice(array_values(array_unique($assignmentTeam)), 0, $teamLimit);
+        $teamLimit = min($teamLimit, count($availableTeamIds));
+        $invalidSelections = array_diff($developerIds, $availableTeamIds);
+        if ($teamLimit <= 0 || count($developerIds) !== $teamLimit || $invalidSelections !== []) {
+            $_SESSION['error'] = "Select exactly {$teamLimit} active department member" . ($teamLimit === 1 ? '' : 's') . " for this task group.";
+            header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
+            exit();
         }
+        $assignmentTeam = $developerIds;
 
         $tasksByDeveloper = array_fill_keys($assignmentTeam, []);
         foreach ($assignmentTaskIds as $taskIndex => $assignmentTaskId) {
@@ -5594,7 +5609,7 @@ include '../../includes/navbar.php';
                                                 <button
                                                     class="btn-primary-modern"
                                                     type="button"
-                                                    onclick="openAssignDeveloperModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode($assignmentTitle); ?>'), '<?php echo htmlspecialchars($assignmentDeadlineValue, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapStart, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapEnd, ENT_QUOTES); ?>')"
+                                                    onclick="openAssignDeveloperModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode($assignmentTitle); ?>'), '<?php echo htmlspecialchars($assignmentDeadlineValue, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapStart, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapEnd, ENT_QUOTES); ?>', <?php echo $distributionMemberCount; ?>, <?php echo $featureCount; ?>)"
                                                 >
                                                     <i class="fas fa-user-plus"></i> <?php echo htmlspecialchars($deliveryAssignmentAction); ?>
                                                 </button>
@@ -6171,7 +6186,7 @@ include '../../includes/navbar.php';
                                     <tr
                                         class="expert-choice-row developer-choice-row"
                                         tabindex="0"
-                                        role="radio"
+                                        role="checkbox"
                                         aria-checked="false"
                                         data-developer-choice
                                         data-developer-name="<?php echo htmlspecialchars($developerName, ENT_QUOTES, 'UTF-8'); ?>"
@@ -6211,10 +6226,9 @@ include '../../includes/navbar.php';
                                         <td class="text-center">
                                             <input
                                                 class="visually-hidden developer-choice-input"
-                                                type="radio"
-                                                name="developer_id"
+                                                type="checkbox"
+                                                name="developer_ids[]"
                                                 value="<?php echo (int) $developer['id']; ?>"
-                                                required
                                                 tabindex="-1"
                                             >
                                             <span class="expert-select-indicator" aria-hidden="true"><i class="fas fa-check"></i></span>
@@ -6229,7 +6243,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="expert-assignment-note">
                             <i class="fas fa-circle-info" aria-hidden="true"></i>
-                            For bulk groups, the selected member is included and tasks are divided evenly across the department's planned headcount.
+                            For bulk groups, select the required department members here. Tasks are divided evenly only among the people you select.
                         </div>
                     <?php else: ?>
                         <div class="empty-state">
@@ -6394,7 +6408,7 @@ function renderEvortixBubble() {
 }
 
 async function persistEvortixDecision(taskId, decision, recommended) {
-    const recommendedInput = recommended?.querySelector('input[type="radio"]');
+    const recommendedInput = recommended?.querySelector('input');
     const body = new URLSearchParams({
         evortix_review_decision: '1',
         task_id: String(taskId),
@@ -6468,7 +6482,16 @@ document.addEventListener('DOMContentLoaded', () => window.setTimeout(() => {
     document.getElementById(formId)?.addEventListener('submit', async event => {
         const form = event.currentTarget;
         if (form.dataset.overloadConfirmed === '1') return;
-        const selected = form.querySelector('input[type="radio"]:checked')?.closest('[data-expert-choice],[data-developer-choice]');
+        const selected = form.id === 'assignDeveloperForm'
+            ? Array.from(form.querySelectorAll('.developer-choice-input:checked'))
+                .map(input => input.closest('[data-developer-choice]'))
+                .find(row => {
+                    const load = Number(row?.dataset.memberLoad || 0);
+                    const capacity = Math.max(1, Number(row?.dataset.memberCapacity || 5));
+                    const unavailable = !['available', 'limited'].includes((row?.dataset.memberAvailability || 'available').toLowerCase());
+                    return load >= capacity || unavailable;
+                })
+            : form.querySelector('input[type="radio"]:checked')?.closest('[data-expert-choice]');
         if (!selected) return;
         const load = Number(selected.dataset.memberLoad || 0);
         const capacity = Math.max(1, Number(selected.dataset.memberCapacity || 5));
@@ -6679,6 +6702,35 @@ const deliveryNoSelectionText = <?php echo json_encode($deliveryNoSelectionText)
 const deliveryAssigneeFallback = <?php echo json_encode($deliveryAssigneeFallback); ?>;
 const deliveryAssignmentReadyMessage = <?php echo json_encode('The task will become ready for ' . $deliveryAssigneeLower . ' assignment.'); ?>;
 const deliveryAssignmentLoadingMessage = <?php echo json_encode('Please wait while the task is prepared for ' . $deliveryAssigneeLower . ' assignment.'); ?>;
+let developerSelectionLimit = 1;
+let developerBulkFeatureCount = 1;
+
+function updateDeveloperSelectionState() {
+    const selectedRows = developerChoiceRows.filter(row => row.querySelector('.developer-choice-input')?.checked);
+    developerChoiceRows.forEach(row => {
+        const checked = Boolean(row.querySelector('.developer-choice-input')?.checked);
+        row.classList.toggle('is-selected', checked);
+        row.setAttribute('aria-checked', checked ? 'true' : 'false');
+    });
+
+    const selectionComplete = selectedRows.length === developerSelectionLimit;
+    if (confirmDeveloperAssignment) confirmDeveloperAssignment.disabled = !selectionComplete;
+    if (developerSelectionSummary) {
+        if (!selectedRows.length) {
+            developerSelectionSummary.textContent = developerSelectionLimit > 1
+                ? `Select ${developerSelectionLimit} developers`
+                : deliveryNoSelectionText;
+            return;
+        }
+        const names = selectedRows.map(row => row.dataset.developerName || deliveryAssigneeFallback);
+        const tasksPerDeveloper = developerSelectionLimit > 0
+            ? Math.floor(developerBulkFeatureCount / developerSelectionLimit)
+            : developerBulkFeatureCount;
+        developerSelectionSummary.textContent = selectionComplete
+            ? `Selected: ${names.join(', ')} · ${tasksPerDeveloper} task${tasksPerDeveloper === 1 ? '' : 's'} each`
+            : `Select ${developerSelectionLimit - selectedRows.length} more developer${developerSelectionLimit - selectedRows.length === 1 ? '' : 's'}`;
+    }
+}
 
 function clearDeveloperChoice() {
     developerChoiceRows.forEach(row => {
@@ -6688,33 +6740,24 @@ function clearDeveloperChoice() {
         if (input) input.checked = false;
     });
 
-    if (confirmDeveloperAssignment) confirmDeveloperAssignment.disabled = true;
-    if (developerSelectionSummary && developerChoiceRows.length > 0) {
-        developerSelectionSummary.textContent = deliveryNoSelectionText;
-    }
+    updateDeveloperSelectionState();
 }
 
 function selectDeveloperChoice(row) {
     const input = row?.querySelector('.developer-choice-input');
     if (!input) return;
 
-    developerChoiceRows.forEach(otherRow => {
-        const isSelected = otherRow === row;
-        otherRow.classList.toggle('is-selected', isSelected);
-        otherRow.setAttribute('aria-checked', isSelected ? 'true' : 'false');
-        const otherInput = otherRow.querySelector('.developer-choice-input');
-        if (otherInput) otherInput.checked = isSelected;
-    });
-
-    if (confirmDeveloperAssignment) confirmDeveloperAssignment.disabled = false;
-    if (developerSelectionSummary) {
-        developerSelectionSummary.replaceChildren(
-            document.createTextNode('Selected: '),
-            Object.assign(document.createElement('strong'), {
-                textContent: row.dataset.developerName || deliveryAssigneeFallback
-            })
-        );
+    if (input.checked) {
+        input.checked = false;
+    } else {
+        const selectedCount = developerChoiceRows.filter(choice => choice.querySelector('.developer-choice-input')?.checked).length;
+        if (selectedCount >= developerSelectionLimit) {
+            window.appToast?.('Selection limit', `Select exactly ${developerSelectionLimit} developers for this assignment.`, 'warning');
+            return;
+        }
+        input.checked = true;
     }
+    updateDeveloperSelectionState();
 }
 
 developerChoiceRows.forEach(row => {
@@ -6727,9 +6770,11 @@ developerChoiceRows.forEach(row => {
     });
 });
 
-function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', maxDate = '') {
+function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', maxDate = '', selectionLimit = 1, featureCount = 1) {
     document.getElementById('devTaskId').value = taskId;
     document.getElementById('devTaskTitle').textContent = taskTitle;
+    developerSelectionLimit = Math.max(1, Math.min(Number(selectionLimit) || 1, developerChoiceRows.length || 1));
+    developerBulkFeatureCount = Math.max(1, Number(featureCount) || 1);
     const deadlineInput = document.getElementById('devDeadline');
     deadlineInput.min = minDate || '';
     deadlineInput.max = maxDate || '';
