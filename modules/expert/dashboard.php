@@ -492,6 +492,23 @@ include '../../includes/navbar.php';
     height: 100%;
 }
 
+.expert-insight-column .delay-compact-list {
+    align-content: center;
+    grid-auto-rows: max-content;
+}
+
+.expert-insight-column .delay-compact-row {
+    min-height: 112px;
+}
+
+.expert-insight-column .delay-compact-action {
+    width: auto;
+    height: auto;
+    min-height: 40px;
+    align-self: center;
+    padding: 0.58rem 0.85rem;
+}
+
 .expert-insight-column .delay-compact-empty {
     min-height: 248px;
 }
