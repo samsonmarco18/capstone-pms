@@ -829,6 +829,36 @@ $projectEstimationReviews = $conn->query("
     ORDER BY e.submitted_at ASC, e.id ASC
 ");
 
+$expertCompletedTasks = $conn->query("
+    SELECT DISTINCT
+           t.id, t.title, t.priority, t.project_id,
+           p.name AS project_name,
+           u.full_name AS expert_name,
+           fe.min_days, fe.likely_days, fe.max_days,
+           fe.expectation_description,
+           COALESCE(mtd.approved_at, mtd.updated_at, fe.submitted_at, fe.updated_at) AS expert_completed_at
+    FROM methodology_task_departments mtd
+    INNER JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+    INNER JOIN tasks t ON t.id = COALESCE(mtd.workflow_task_id, mt.task_id)
+    INNER JOIN projects p ON p.id = t.project_id
+    LEFT JOIN feature_estimations fe
+      ON fe.id = (
+          SELECT fe_latest.id
+          FROM feature_estimations fe_latest
+          WHERE fe_latest.task_id = t.id
+            AND fe_latest.status = 'completed'
+          ORDER BY fe_latest.submitted_at DESC, fe_latest.id DESC
+          LIMIT 1
+      )
+    LEFT JOIN users u ON u.id = fe.expert_id
+    WHERE mtd.department IN ({$sulDepartmentAliasesSql})
+      AND mtd.status = 'completed'
+      {$selectedExpertProjectFilter}
+    ORDER BY expert_completed_at DESC, t.id DESC
+    LIMIT 20
+");
+$expertCompletedCount = $expertCompletedTasks ? $expertCompletedTasks->num_rows : 0;
+
 // Get tasks ready for developer assignment (approved, waiting for developer)
 $readyForDevTasks = $conn->query("
     SELECT t.*, u.full_name as expert_name, p.name as project_name,
@@ -906,7 +936,11 @@ if ($readyForDevTasks) {
     }
     $readyForDevTasks->data_seek(0);
 }
-$readyDeveloperAssignmentCount = count($readyDeveloperAssignmentGroups);
+$readyDeveloperAssignmentGroupCount = count($readyDeveloperAssignmentGroups);
+$readyDeveloperAssignmentCount = array_sum(array_map(
+    static fn(array $group): int => count($group['features'] ?? []),
+    $readyDeveloperAssignmentGroups
+));
 
 // Get tasks assigned to developers (in progress)
 $inProgressTasks = $conn->query("
@@ -1074,7 +1108,7 @@ foreach ($expertProjectOptions as $expertProjectOption) {
         + (int) ($expertProjectOption['project_review_count'] ?? 0);
 }
 $expertReviewCount = $reviewTasks->num_rows + $projectEstimationReviews->num_rows;
-$selectedExpertTaskCount = $unassignedAssignmentCount + $pendingEstimationAssignmentCount + $expertReviewCount;
+$selectedExpertTaskCount = $unassignedAssignmentCount + $pendingEstimationAssignmentCount + $expertReviewCount + $expertCompletedCount;
 $expertAllocationBadgeCount = ($projectId && $project) ? $selectedExpertTaskCount : $expertProjectOptionTaskCount;
 
 // Get available developers
@@ -1092,6 +1126,19 @@ $developers = $conn->query("
     ORDER BY CASE COALESCE(u.availability_status, 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
              assigned_tasks ASC, u.full_name ASC
 ");
+$availableDeveloperCount = $developers ? $developers->num_rows : 0;
+$developerPlannedHeadcount = 1;
+if ($canManageDeveloperWorkflow && $projectId > 0) {
+    $plannedHeadcountResult = $conn->query("
+        SELECT COALESCE(SUM(required_count), 0) AS required_count
+        FROM developer_allocations
+        WHERE project_id = {$projectId}
+          AND role IN ({$sulDepartmentAliasesSql})
+    ");
+    if ($plannedHeadcountResult) {
+        $developerPlannedHeadcount = max(1, (int) ($plannedHeadcountResult->fetch_assoc()['required_count'] ?? 1));
+    }
+}
 
 $developerProjectOptions = [];
 if ($canManageDeveloperWorkflow) {
@@ -4711,6 +4758,11 @@ include '../../includes/navbar.php';
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="expert-completed-tab" data-bs-toggle="tab" data-bs-target="#expert-completed-panel" type="button" role="tab" aria-controls="expert-completed-panel" aria-selected="false">
+                        <i class="fas fa-check-double"></i> Recently Completed <span class="badge-count"><?php echo $expertCompletedCount; ?></span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
                     <button class="nav-link" id="expert-gantt-tab" data-bs-toggle="tab" data-bs-target="#expert-gantt-panel" type="button" role="tab" aria-controls="expert-gantt-panel" aria-selected="false">
                         <i class="fas fa-stream"></i> Project Gantt
                     </button>
@@ -5192,6 +5244,70 @@ include '../../includes/navbar.php';
                 </div>
             </div>
 
+            <div class="tab-pane fade section-card allocation-column" id="expert-completed-panel" role="tabpanel" aria-labelledby="expert-completed-tab">
+                <div class="section-header">
+                    <h5>
+                        <i class="fas fa-check-double"></i>
+                        Recently Completed Estimations
+                        <span class="badge-count"><?php echo $expertCompletedCount; ?> <?php echo $expertCompletedCount === 1 ? 'task' : 'tasks'; ?></span>
+                    </h5>
+                </div>
+                <div class="p-3 allocation-column-body">
+                    <?php if (!$projectId || !$project): ?>
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open"></i>
+                            <p>Select a project for completed estimations</p>
+                        </div>
+                    <?php elseif ($expertCompletedTasks && $expertCompletedCount > 0): ?>
+                        <div class="task-allocation-table-wrap">
+                            <table class="task-allocation-table" aria-label="Recently completed expert estimations">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Task</th>
+                                        <th scope="col">Expert</th>
+                                        <th scope="col">Estimate</th>
+                                        <th scope="col">Completed</th>
+                                        <th scope="col" class="allocation-actions-heading">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                <?php while ($completedExpertTask = $expertCompletedTasks->fetch_assoc()): ?>
+                                    <tr tabindex="0" onclick="viewTaskDetails(<?php echo (int) $completedExpertTask['id']; ?>)">
+                                        <td>
+                                            <span class="allocation-task-name"><?php echo htmlspecialchars((string) $completedExpertTask['title']); ?></span>
+                                            <span class="allocation-task-secondary"><?php echo htmlspecialchars((string) $completedExpertTask['project_name']); ?></span>
+                                        </td>
+                                        <td><span class="allocation-deadline"><?php echo htmlspecialchars((string) ($completedExpertTask['expert_name'] ?? 'Expert')); ?></span></td>
+                                        <td>
+                                            <span class="estimation-badge">
+                                                Min <?php echo (int) ($completedExpertTask['min_days'] ?? 0); ?>d &middot;
+                                                Likely <?php echo (int) ($completedExpertTask['likely_days'] ?? 0); ?>d &middot;
+                                                Max <?php echo (int) ($completedExpertTask['max_days'] ?? 0); ?>d
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="allocation-deadline"><?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($completedExpertTask['expert_completed_at'] ?? null)); ?></span>
+                                            <span class="allocation-deadline-note">SUL approved</span>
+                                        </td>
+                                        <td>
+                                            <button class="btn-outline-modern" type="button" onclick="event.stopPropagation(); viewTaskDetails(<?php echo (int) $completedExpertTask['id']; ?>)">
+                                                <i class="fas fa-eye"></i> View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="empty-state">
+                            <i class="fas fa-check-circle"></i>
+                            <p>No completed estimations yet</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+
             <div class="tab-pane fade section-card allocation-column" id="expert-gantt-panel" role="tabpanel" aria-labelledby="expert-gantt-tab">
                 <?php if (!$projectId || !$project): ?>
                     <div class="p-3 allocation-column-body">
@@ -5313,7 +5429,12 @@ include '../../includes/navbar.php';
                     <h5>
                         <i class="fas fa-code"></i>
                         Ready for <?php echo htmlspecialchars($deliveryAssigneeLabel); ?> Assignment
-                        <span class="badge-count"><?php echo $readyDeveloperAssignmentCount; ?> <?php echo $readyDeveloperAssignmentCount === 1 ? 'assignment' : 'assignments'; ?></span>
+                        <span class="badge-count">
+                            <?php echo $readyDeveloperAssignmentCount; ?> <?php echo $readyDeveloperAssignmentCount === 1 ? 'feature' : 'features'; ?>
+                            <?php if ($readyDeveloperAssignmentGroupCount < $readyDeveloperAssignmentCount): ?>
+                                in <?php echo $readyDeveloperAssignmentGroupCount; ?> <?php echo $readyDeveloperAssignmentGroupCount === 1 ? 'group' : 'groups'; ?>
+                            <?php endif; ?>
+                        </span>
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
@@ -5378,6 +5499,14 @@ include '../../includes/navbar.php';
                                         $groupRoadmapStart,
                                         $groupRoadmapEnd
                                     );
+                                    $distributionMemberCount = max(1, min($developerPlannedHeadcount, $availableDeveloperCount, $featureCount));
+                                    $tasksPerMember = intdiv($featureCount, $distributionMemberCount);
+                                    $distributionRemainder = $featureCount % $distributionMemberCount;
+                                    $distributionCopy = $distributionMemberCount > 1
+                                        ? ($distributionRemainder === 0
+                                            ? "{$tasksPerMember} tasks each across {$distributionMemberCount} {$deliveryAssigneePluralLower}"
+                                            : "Balanced across {$distributionMemberCount} {$deliveryAssigneePluralLower} ({$tasksPerMember}–" . ($tasksPerMember + 1) . ' tasks each)')
+                                        : 'Ready for ' . $deliveryAssigneeLower . ' allocation';
                                     $assignmentTitle = $isBulkAssignment
                                         ? 'Bulk assignment: ' . implode(', ', $featureTitles)
                                         : (string) ($task['title'] ?? 'Feature');
@@ -5400,7 +5529,7 @@ include '../../includes/navbar.php';
                                                 <?php echo $isBulkAssignment ? $featureCount . ' grouped features' : htmlspecialchars((string) $task['title']); ?>
                                             </span>
                                             <span class="allocation-task-secondary">
-                                                <?php echo $isBulkAssignment ? 'Assigned together to one ' . htmlspecialchars($deliveryAssigneeLower) : 'Ready for ' . htmlspecialchars($deliveryAssigneeLower) . ' allocation'; ?>
+                                                <?php echo htmlspecialchars($isBulkAssignment ? $distributionCopy : 'Ready for ' . $deliveryAssigneeLower . ' allocation'); ?>
                                             </span>
                                         </td>
                                         <td>
@@ -5420,7 +5549,7 @@ include '../../includes/navbar.php';
                                                         <i class="fas fa-chevron-down bulk-assignment-chevron" aria-hidden="true"></i>
                                                     </summary>
                                                     <div class="bulk-assignment-feature-list">
-                                                        <span class="bulk-assignment-feature-note">These features will be assigned together:</span>
+                                                        <span class="bulk-assignment-feature-note"><?php echo htmlspecialchars($distributionCopy); ?>:</span>
                                                         <?php foreach ($features as $index => $feature): ?>
                                                             <button type="button" class="bulk-assignment-feature" onclick="this.closest('details').open = false; viewTaskDetails(<?php echo (int) $feature['id']; ?>)">
                                                                 <span class="bulk-feature-copy">
