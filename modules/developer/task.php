@@ -145,7 +145,15 @@ $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 // Get tasks assigned to this developer
 $todoTasks = developerTaskQuery(
     $conn,
-    $taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status = 'todo' AND NOT {$developerCompletedRoadmapAssignmentSql} ORDER BY t.deadline ASC",
+    $taskBaseQuery . "
+        WHERE {$developerTaskAccessSql}
+          AND t.status = 'todo'
+          AND (
+              t.assigned_to = {$user['id']}
+              OR NOT {$developerCompletedRoadmapAssignmentSql}
+          )
+        ORDER BY t.deadline ASC
+    ",
     'todo'
 );
 $inProgressTasks = developerTaskQuery($conn, $taskBaseQuery . "
@@ -183,6 +191,7 @@ $completedTasks = developerTaskQuery($conn, $taskBaseQuery . "
               WHERE mt_done.task_id = t.id
                 AND mt_done.assigned_developer_id = {$user['id']}
                 AND mt_done.status = 'completed'
+                AND NOT (t.status = 'todo' AND t.assigned_to = {$user['id']})
                 AND NOT EXISTS (
                     SELECT 1
                     FROM task_reopen_requests rr_mine_done
@@ -198,6 +207,7 @@ $completedTasks = developerTaskQuery($conn, $taskBaseQuery . "
               WHERE mtd_done.assigned_developer_id = {$user['id']}
                 AND (mtd_done.workflow_task_id = t.id OR mt_done_department.task_id = t.id)
                 AND mtd_done.status = 'completed'
+                AND NOT (t.status = 'todo' AND t.assigned_to = {$user['id']})
                 AND NOT EXISTS (
                     SELECT 1
                     FROM task_reopen_requests rr_mine_department_done
