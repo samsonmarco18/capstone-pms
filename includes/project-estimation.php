@@ -582,6 +582,51 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     $estimationStatusLabel = $statusLabels[$estimationStatus] ?? ucwords(str_replace('_', ' ', $estimationStatus));
     $sulReviewComplete = in_array($estimationStatus, ['sul_approved', 'sales_approved'], true);
     $salesReviewComplete = $estimationStatus === 'sales_approved';
+    $featureProgressTotal = 0;
+    $featureProgressEstimated = 0;
+    if ($selectedProjectId > 0 && $project) {
+        $featureProgressResult = $conn->query("
+            SELECT
+                COUNT(DISTINCT t.id) AS total_features,
+                COUNT(DISTINCT CASE
+                    WHEN fe.min_days > 0 AND fe.likely_days > 0 AND fe.max_days > 0 THEN t.id
+                    ELSE NULL
+                END) AS estimated_features
+            FROM tasks t
+            LEFT JOIN feature_estimations fe
+                ON fe.task_id = t.id
+               AND fe.expert_id = " . (int) $user['id'] . "
+            WHERE t.project_id = {$selectedProjectId}
+              AND t.assigned_to = " . (int) $user['id'] . "
+              AND t.task_type = 'feature'
+              AND t.status IN ('todo', 'in_review')
+        ");
+        if ($featureProgressResult) {
+            $featureProgressRow = $featureProgressResult->fetch_assoc() ?: [];
+            $featureProgressTotal = max(0, (int) ($featureProgressRow['total_features'] ?? 0));
+            $featureProgressEstimated = min(
+                $featureProgressTotal,
+                max(0, (int) ($featureProgressRow['estimated_features'] ?? 0))
+            );
+        }
+    }
+    $featureProgressPending = max(0, $featureProgressTotal - $featureProgressEstimated);
+    $featureProgressPercent = $featureProgressTotal > 0
+        ? (int) round(($featureProgressEstimated / $featureProgressTotal) * 100)
+        : 0;
+    $featureProgressReady = $featureProgressTotal > 0 && $featureProgressEstimated === $featureProgressTotal;
+    $featureProgressStatus = $featureProgressTotal === 0
+        ? 'No features'
+        : ($featureProgressReady ? 'Complete' : 'In progress');
+    $allocatedDeveloperCount = array_sum(array_map(
+        static fn(array $row): int => max(0, (int) ($row['required_count'] ?? 0)),
+        $allocations
+    ));
+    $projectOverviewComplete = $project !== null;
+    $technologyCostComplete = count($technologies) > 0;
+    $developerAllocationComplete = $allocatedDeveloperCount > 0;
+    $developerCostComplete = $developerAllocationComplete;
+    $projectCostSummaryComplete = $estimationLockedForReview;
     $reviewHeadline = 'Sent to Expert SUL for review';
     $reviewMessage = 'Your estimate is safely submitted. Editing is locked while the Expert SUL checks the cost breakdown.';
     if ($estimationStatus === 'sul_approved') {
@@ -618,6 +663,8 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .project-estimation-body { background: #f8fbfd; }
     .project-estimation-status-pill { display: inline-flex; align-items: center; gap: 0.38rem; padding: 0.38rem 0.68rem; border-radius: 999px; background: #e8f3fa; color: var(--pe-primary); font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
     .project-estimation-status-pill.is-submitted { background: #dcfce7; color: #166534; }
+    .project-estimation-form { display: grid; gap: 1rem; margin-bottom: 1rem; }
+    .project-estimation-form > .estimation-section { margin-bottom: 0; }
     .estimation-section { margin-bottom: 1rem; border-color: #e3ebf3; box-shadow: 0 2px 8px rgba(15, 42, 64, 0.025); }
     .estimation-section:last-child { margin-bottom: 0; }
     .estimation-section > .estimation-panel-head { padding: 0.9rem 1.05rem; background: #fff; }
@@ -626,6 +673,20 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .estimation-section-toggle:hover { background: #f8fbfd; }
     .estimation-section-toggle:focus-visible { position: relative; z-index: 1; outline: 3px solid rgba(31, 99, 146, 0.2); outline-offset: -3px; }
     .estimation-section-toggle__meta { display: inline-flex; align-items: center; gap: 0.65rem; margin-left: auto; }
+    .estimation-section-complete {
+        align-items: center;
+        background: #16a34a;
+        border-radius: 50%;
+        color: #fff;
+        display: inline-flex;
+        flex: 0 0 auto;
+        font-size: 0.7rem;
+        height: 26px;
+        justify-content: center;
+        line-height: 1;
+        width: 26px;
+    }
+    .estimation-section-complete i { color: #fff; }
     .estimation-section-toggle__chevron { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; background: #edf6fb; color: var(--pe-primary); transition: transform 0.2s ease, background 0.2s ease; }
     .estimation-section-toggle[aria-expanded="true"] .estimation-section-toggle__chevron { transform: rotate(180deg); background: #dceef8; }
     .estimation-section-title { display: flex; align-items: center; gap: 0.68rem; }
@@ -644,15 +705,74 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .department-estimate:last-child { margin-bottom: 0; }
     .department-estimate-title { padding: 0.78rem 1rem; background: #f6f9fc; display: flex; justify-content: space-between; gap: 1rem; font-size: 0.82rem; font-weight: 600; color: var(--pe-ink); }
     .department-estimate-title span:last-child { color: var(--pe-muted); font-size: 0.76rem; }
+    .feature-estimation-progress-meta { color: var(--pe-muted); font-size: 0.74rem; font-weight: 500; white-space: nowrap; }
+    .feature-estimation-progress { display: grid; gap: 1rem; }
+    .feature-estimation-progress__track { width: 100%; height: 8px; overflow: hidden; border-radius: 999px; background: #e5edf3; }
+    .feature-estimation-progress__bar { display: block; height: 100%; border-radius: inherit; background: var(--pe-primary); transition: width 0.25s ease; }
+    .feature-estimation-progress__bar.is-complete { background: #16a34a; }
+    .feature-estimation-progress__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--pe-line); border-bottom: 1px solid var(--pe-line); }
+    .feature-estimation-progress__stat { display: grid; gap: 0.2rem; padding: 0.8rem 1rem; border-left: 1px solid var(--pe-line); }
+    .feature-estimation-progress__stat:first-child { border-left: 0; }
+    .feature-estimation-progress__stat span { color: var(--pe-muted); font-size: 0.66rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+    .feature-estimation-progress__stat strong { color: var(--pe-ink); font-size: 1rem; font-weight: 600; }
+    .feature-estimation-progress__note { display: flex; align-items: flex-start; gap: 0.55rem; color: var(--pe-muted); font-size: 0.78rem; line-height: 1.45; }
+    .feature-estimation-progress__note i { color: var(--pe-primary); margin-top: 0.12rem; }
+    .feature-estimation-editor-slot:not(:empty) { margin-top: 0.15rem; padding-top: 1rem; border-top: 1px solid var(--pe-line); }
     .money-positive { color: #047857 !important; }
     .money-negative { color: #b91c1c !important; }
-    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.8rem; }
-    .summary-cell { padding: 1rem; border-radius: 12px; border: 1px solid var(--pe-line); background: #fff; }
-    .summary-cell span { display: block; font-size: 0.68rem; color: var(--pe-muted); font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
-    .summary-cell strong { display: block; font-size: 1.08rem; font-weight: 600; color: var(--pe-primary); margin-top: 0.28rem; }
-    .summary-note { margin-top: 0.45rem; color: var(--pe-muted); font-size: 0.76rem; line-height: 1.45; }
-    .summary-cell.is-primary { background: #eef7fc; border-color: #cfe5f3; }
+    .cost-summary-adjustment {
+        align-items: center;
+        background: #f8fafc;
+        border: 1px solid var(--pe-line);
+        border-radius: 12px;
+        display: flex;
+        gap: 1rem;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+        padding: 0.85rem 1rem;
+    }
+    .cost-summary-adjustment__copy { display: grid; gap: 0.15rem; min-width: 0; }
+    .cost-summary-adjustment__copy strong { color: var(--pe-ink); font-size: 0.82rem; font-weight: 600; }
+    .cost-summary-adjustment__copy span { color: var(--pe-muted); font-size: 0.72rem; }
+    .cost-summary-adjustment__field { flex: 0 0 230px; }
+    .cost-summary-adjustment__field label { display: block; margin-bottom: 0.32rem; color: var(--pe-muted); font-size: 0.64rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+    .cost-summary-currency-input { align-items: center; background: #fff; border: 1px solid var(--pe-line); border-radius: 10px; display: flex; min-height: 42px; overflow: hidden; }
+    .cost-summary-currency-input > span { align-self: stretch; align-items: center; background: #f1f5f9; border-right: 1px solid var(--pe-line); color: var(--pe-primary); display: inline-flex; font-size: 0.78rem; font-weight: 600; padding: 0 0.72rem; }
+    .cost-summary-currency-input .form-control-custom { background: transparent; border: 0; border-radius: 0; min-height: 40px; padding: 0.5rem 0.7rem; }
+    .cost-summary-currency-input .form-control-custom:focus { box-shadow: none; }
+    .cost-summary-layout { align-items: stretch; display: grid; gap: 1rem; grid-template-columns: minmax(0, 1.35fr) minmax(290px, 0.65fr); }
+    .cost-summary-breakdown,
+    .cost-summary-total-panel { background: #fff; border: 1px solid var(--pe-line); border-radius: 14px; overflow: hidden; }
+    .cost-summary-block-title { align-items: center; background: #f8fafc; border-bottom: 1px solid var(--pe-line); color: var(--pe-ink); display: flex; font-size: 0.8rem; font-weight: 600; gap: 0.5rem; margin: 0; padding: 0.78rem 1rem; }
+    .cost-summary-block-title i { color: var(--pe-primary); }
+    .cost-summary-row { align-items: center; border-bottom: 1px solid var(--pe-line); display: grid; gap: 1rem; grid-template-columns: minmax(0, 1fr) auto; padding: 0.72rem 1rem; }
+    .cost-summary-row:last-child { border-bottom: 0; }
+    .cost-summary-row > span { color: var(--pe-muted); font-size: 0.76rem; }
+    .cost-summary-row > strong { color: var(--pe-ink); font-size: 0.88rem; font-weight: 600; text-align: right; white-space: nowrap; }
+    .cost-summary-row.is-subtotal { background: #fbfdff; }
+    .cost-summary-row.is-subtotal > span,
+    .cost-summary-row.is-subtotal > strong { color: var(--pe-primary); font-weight: 600; }
+    .cost-summary-row.has-note { align-items: start; }
+    .cost-summary-row__label { display: grid; gap: 0.2rem; min-width: 0; }
+    .cost-summary-row__label > span { color: var(--pe-ink); font-size: 0.76rem; font-weight: 500; }
+    .summary-note { color: var(--pe-muted); display: block; font-size: 0.68rem; line-height: 1.4; max-width: 520px; }
+    .cost-summary-total { background: linear-gradient(135deg, #17668b, #12516f); color: #fff; padding: 1.05rem 1.1rem; }
+    .cost-summary-total span { display: block; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.05em; opacity: 0.78; text-transform: uppercase; }
+    .cost-summary-total strong { color: #fff; display: block; font-size: 1.55rem; font-weight: 600; margin-top: 0.3rem; }
+    .cost-summary-budget { display: grid; gap: 0.75rem; padding: 1rem 1.1rem; }
+    .cost-summary-budget__row { align-items: center; display: flex; gap: 0.75rem; justify-content: space-between; }
+    .cost-summary-budget__row span { color: var(--pe-muted); font-size: 0.72rem; }
+    .cost-summary-budget__row strong { color: var(--pe-ink); font-size: 0.86rem; font-weight: 600; white-space: nowrap; }
+    .cost-summary-budget__row.is-remaining { border-top: 1px solid var(--pe-line); padding-top: 0.75rem; }
+    .cost-summary-budget__track { background: #e5edf3; border-radius: 999px; height: 7px; overflow: hidden; }
+    .cost-summary-budget__bar { background: #16a34a; border-radius: inherit; display: block; height: 100%; transition: width 0.25s ease; width: 0; }
+    .cost-summary-budget__bar.is-over { background: #dc2626; }
+    .cost-summary-budget__usage { color: var(--pe-muted); font-size: 0.68rem; text-align: right; }
     .project-estimation-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding-top: 1rem; border-top: 1px solid var(--pe-line); }
+    .project-estimation-action-buttons { display: flex; align-items: center; justify-content: flex-end; gap: 0.65rem; margin-left: auto; }
+    .project-estimation-draft { display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; min-height: 40px; padding: 0.58rem 0.85rem; border: 1px solid #b9d5e6; border-radius: 10px; background: #fff; color: var(--pe-primary); font-size: 0.8rem; font-weight: 600; box-shadow: 0 3px 0 rgba(31, 99, 146, 0.15); }
+    .project-estimation-draft:hover { background: #edf6fb; border-color: #8dbedb; color: var(--pe-primary-dark); transform: translateY(-1px); }
+    .project-estimation-draft-status { color: var(--pe-muted); font-size: 0.72rem; min-height: 1em; }
     .project-estimation-submit-note { display: flex; align-items: center; gap: 0.55rem; max-width: 560px; color: var(--pe-muted); font-size: 0.76rem; line-height: 1.45; }
     .project-estimation-submit-note i { color: var(--pe-primary); }
     .project-estimation-submit { min-width: 225px; justify-content: center; }
@@ -710,7 +830,8 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-shell,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-panel,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-estimate,
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-cell,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-breakdown,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-total-panel,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .review-progress { background: #0d1b2a; border-color: #20364a; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-toolbar,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-section > .estimation-panel-head { background: #102235; border-color: #20364a; }
@@ -719,15 +840,30 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-body { background: #091725; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-panel-head h5,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-cell strong,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-estimation-progress__stat strong,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-estimate-title,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimation-empty-state strong { color: #e7f0f8; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .department-estimate-title,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-table th { background: #12263a; border-color: #20364a; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .overview-cell { background: transparent; border-color: #20364a; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-table td,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-estimation-progress__stats,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-estimation-progress__stat,
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-actions { border-color: #20364a; color: #d7e4f2; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-estimation-progress__track { background: #263b4f; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .estimate-table tbody tr:hover td { background: #102235; }
-    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-cell:nth-child(4) { background: rgba(31, 99, 146, 0.18); border-color: rgba(102, 200, 255, 0.28); }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-adjustment,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-block-title,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-row.is-subtotal { background: #12263a; border-color: #20364a; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-currency-input { background: #0d1b2a; border-color: #20364a; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-currency-input > span { background: #18334b; border-color: #20364a; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-row,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-budget__row.is-remaining { border-color: #20364a; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-block-title,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-row > strong,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-row__label > span,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-budget__row strong,
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-summary-adjustment__copy strong { color: #e7f0f8; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-feedback {
         background: rgba(22, 101, 52, 0.2);
         color: #bbf7d0;
@@ -739,6 +875,8 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-feedback__content small { color: #86efac; }
     :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-dashboard-link { border-color: #2c4b65; color: #7cc0ee; }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-draft { background: #102235; border-color: #2c4b65; color: #7cc0ee; box-shadow: 0 3px 0 rgba(2, 10, 18, 0.35); }
+    :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-estimation-draft:hover { background: #163049; border-color: #3d6685; }
     @media (max-width: 768px) {
         .project-estimation-toolbar { align-items: stretch; }
         .project-estimation-picker { grid-template-columns: 1fr; width: 100%; }
@@ -748,8 +886,17 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         .review-progress { grid-template-columns: 1fr; }
         .review-progress__connector { width: 2px; height: 18px; margin-left: 14px; }
         .project-estimation-actions { align-items: stretch; }
+        .project-estimation-action-buttons { align-items: stretch; flex-direction: column; margin-left: 0; width: 100%; }
+        .project-estimation-draft { width: 100%; }
         .project-estimation-submit, .project-estimation-dashboard-link { width: 100%; justify-content: center; }
         .overview-grid { grid-template-columns: 1fr; }
+        .cost-summary-adjustment { align-items: stretch; flex-direction: column; }
+        .cost-summary-adjustment__field { flex-basis: auto; width: 100%; }
+        .cost-summary-layout { grid-template-columns: 1fr; }
+        .feature-estimation-progress__stats { grid-template-columns: 1fr; }
+        .feature-estimation-progress__stat,
+        .feature-estimation-progress__stat:first-child { border-left: 0; border-top: 1px solid var(--pe-line); }
+        .feature-estimation-progress__stat:first-child { border-top: 0; }
     }
     </style>
 
@@ -795,7 +942,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         <span class="project-estimation-status-pill is-submitted"><i class="fas fa-circle-check" aria-hidden="true"></i><?php echo htmlspecialchars($estimationStatusLabel); ?></span>
                     </div>
                 <?php endif; ?>
-                <form method="POST" id="projectCostEstimationForm" class="project-estimation-form <?php echo $estimationLockedForReview ? 'is-locked' : ''; ?>" <?php echo $estimationLockedForReview ? 'onsubmit="return false;"' : ''; ?>>
+                <form method="POST" id="projectCostEstimationForm" data-generic-draft-disabled="1" class="project-estimation-form <?php echo $estimationLockedForReview ? 'is-locked' : ''; ?>" <?php echo $estimationLockedForReview ? 'onsubmit="return false;"' : ''; ?>>
                     <input type="hidden" name="save_project_estimation" value="1">
                     <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
                     <input type="hidden" id="projectDurationMonths" value="<?php echo $durationMonths; ?>">
@@ -804,7 +951,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="projectOverviewDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-briefcase"></i></span><span>Project Overview</span></h5>
-                            <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            <span class="estimation-section-toggle__meta">
+                                <?php if ($projectOverviewComplete): ?><span class="estimation-section-complete" title="Section complete" aria-label="Project Overview complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
+                                <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            </span>
                         </button>
                         <div class="estimation-panel-body" id="projectOverviewDetails" hidden>
                             <div class="overview-grid">
@@ -823,7 +973,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="technologyCostDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-layer-group"></i></span><span>Technology Stack Cost</span></h5>
-                            <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            <span class="estimation-section-toggle__meta">
+                                <?php if ($technologyCostComplete): ?><span class="estimation-section-complete" title="Section complete" aria-label="Technology Stack Cost complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
+                                <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            </span>
                         </button>
                         <div class="estimation-panel-body estimation-scroll" id="technologyCostDetails" hidden>
                             <table class="estimate-table">
@@ -847,7 +1000,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="developerAllocationDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-users"></i></span><span>Developer Allocation</span></h5>
-                            <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            <span class="estimation-section-toggle__meta">
+                                <?php if ($developerAllocationComplete): ?><span class="estimation-section-complete" title="Section complete" aria-label="Developer Allocation complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
+                                <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            </span>
                         </button>
                         <div class="estimation-panel-body" id="developerAllocationDetails" hidden>
                             <?php if (count($allocations) === 0): ?>
@@ -892,7 +1048,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="developerCostDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-calculator"></i></span><span>Developer Cost Estimation</span></h5>
-                            <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            <span class="estimation-section-toggle__meta">
+                                <?php if ($developerCostComplete): ?><span class="estimation-section-complete" title="Section complete" aria-label="Developer Cost Estimation complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
+                                <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            </span>
                         </button>
                         <div class="estimation-panel-body estimation-scroll" id="developerCostDetails" hidden>
                             <table class="estimate-table">
@@ -907,31 +1066,99 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                             </table>
                         </div>
                     </div>
+                </form>
+
+                    <div class="estimation-panel estimation-section">
+                        <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="featureEstimationProgressDetails">
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-list-check"></i></span><span>Feature Estimation Progress</span></h5>
+                            <span class="estimation-section-toggle__meta">
+                                <span class="feature-estimation-progress-meta"><?php echo $featureProgressEstimated; ?> of <?php echo $featureProgressTotal; ?> complete</span>
+                                <span class="project-estimation-status-pill <?php echo $featureProgressReady ? 'is-submitted' : ''; ?>"><?php echo htmlspecialchars($featureProgressStatus); ?></span>
+                                <?php if ($featureProgressReady): ?><span class="estimation-section-complete" title="Section complete" aria-label="Feature Estimation Progress complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
+                                <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
+                            </span>
+                        </button>
+                        <div class="estimation-panel-body" id="featureEstimationProgressDetails" hidden>
+                            <div class="feature-estimation-progress">
+                                <div class="feature-estimation-progress__track" role="progressbar" aria-label="Feature estimation progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?php echo $featureProgressPercent; ?>">
+                                    <span class="feature-estimation-progress__bar <?php echo $featureProgressReady ? 'is-complete' : ''; ?>" style="width: <?php echo $featureProgressPercent; ?>%"></span>
+                                </div>
+                                <div class="feature-estimation-progress__stats">
+                                    <div class="feature-estimation-progress__stat"><span>Estimated</span><strong><?php echo $featureProgressEstimated; ?></strong></div>
+                                    <div class="feature-estimation-progress__stat"><span>Remaining</span><strong><?php echo $featureProgressPending; ?></strong></div>
+                                    <div class="feature-estimation-progress__stat"><span>Completion</span><strong><?php echo $featureProgressPercent; ?>%</strong></div>
+                                </div>
+                                <div class="feature-estimation-progress__note">
+                                    <i class="fas fa-circle-info" aria-hidden="true"></i>
+                                    <span><?php echo $featureProgressTotal === 0
+                                        ? 'No assigned features are available for estimation in this project.'
+                                        : ($featureProgressReady
+                                            ? 'All assigned features have recorded estimates.'
+                                            : $featureProgressPending . ' assigned feature' . ($featureProgressPending === 1 ? ' does' : 's do') . ' not yet have a recorded estimate.'); ?></span>
+                                </div>
+                                <div id="featureEstimationEditorSlot" class="feature-estimation-editor-slot"></div>
+                            </div>
+                        </div>
+                    </div>
 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="projectCostSummaryDetails">
                             <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-chart-pie"></i></span><span>Project Cost Summary</span></h5>
                             <span class="estimation-section-toggle__meta">
                                 <span class="project-estimation-status-pill <?php echo $estimationLockedForReview ? 'is-submitted' : ''; ?>"><i class="fas fa-<?php echo $estimationLockedForReview ? 'lock' : 'pen'; ?>" aria-hidden="true"></i><?php echo htmlspecialchars($estimationStatusLabel); ?></span>
+                                <?php if ($projectCostSummaryComplete): ?><span class="estimation-section-complete" title="Section complete" aria-label="Project Cost Summary complete"><i class="fas fa-check" aria-hidden="true"></i></span><?php endif; ?>
                                 <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                             </span>
                         </button>
                         <div class="estimation-panel-body" id="projectCostSummaryDetails" hidden>
-                            <div class="row g-3 align-items-end mb-3">
-                                <div class="col-md-4">
-                                    <label class="form-label">Additional Project Costs</label>
-                                    <input type="number" name="additional_costs" id="additionalCostsInput" class="form-control-custom" min="0" step="0.01" value="<?php echo htmlspecialchars((string) ($estimation['additional_costs'] ?? 0)); ?>" <?php echo $estimationLockedForReview ? 'disabled' : ''; ?>>
+                            <div class="cost-summary-adjustment">
+                                <div class="cost-summary-adjustment__copy">
+                                    <strong>Cost adjustment</strong>
+                                    <span>Add project expenses that are not included in staffing or technology costs.</span>
+                                </div>
+                                <div class="cost-summary-adjustment__field">
+                                    <label for="additionalCostsInput">Additional project costs</label>
+                                    <div class="cost-summary-currency-input">
+                                        <span aria-hidden="true">&#8369;</span>
+                                        <input type="number" name="additional_costs" id="additionalCostsInput" class="form-control-custom" min="0" step="0.01" value="<?php echo htmlspecialchars((string) ($estimation['additional_costs'] ?? 0)); ?>" form="projectCostEstimationForm" <?php echo $estimationLockedForReview ? 'disabled' : ''; ?>>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="summary-grid">
-                                <div class="summary-cell"><span>Total Developer Cost</span><strong id="summaryDeveloperCost">&#8369;0.00</strong></div>
-                                <div class="summary-cell"><span>Total Technology Stack Cost</span><strong id="summaryTechCost">&#8369;0.00</strong></div>
-                                <div class="summary-cell"><span>Additional Project Costs</span><strong id="summaryAdditionalCost">&#8369;0.00</strong></div>
-                                <div class="summary-cell"><span>Base Project Cost</span><strong id="summaryBaseCost">&#8369;0.00</strong></div>
-                                <div class="summary-cell"><span>Priority Markup</span><strong id="summaryPriorityMarkup">&#8369;0.00</strong><small class="summary-note" id="summaryPriorityReason"><?php echo htmlspecialchars((string) $priorityMarkup['reason']); ?></small></div>
-                                <div class="summary-cell is-primary"><span>Overall Estimated Project Cost</span><strong id="summaryOverallCost">&#8369;0.00</strong></div>
-                                <div class="summary-cell"><span>Client Budget</span><strong id="summaryBudget"><?php echo projectEstimationPeso((float) ($project['sales_budget'] ?? 0)); ?></strong></div>
-                                <div class="summary-cell"><span>Remaining Budget</span><strong id="summaryRemainingBudget">&#8369;0.00</strong></div>
+                            <div class="cost-summary-layout">
+                                <section class="cost-summary-breakdown" aria-labelledby="costBreakdownTitle">
+                                    <h6 class="cost-summary-block-title" id="costBreakdownTitle"><i class="fas fa-receipt" aria-hidden="true"></i>Cost breakdown</h6>
+                                    <div class="cost-summary-row"><span>Developer cost</span><strong id="summaryDeveloperCost">&#8369;0.00</strong></div>
+                                    <div class="cost-summary-row"><span>Technology stack cost</span><strong id="summaryTechCost">&#8369;0.00</strong></div>
+                                    <div class="cost-summary-row"><span>Additional project costs</span><strong id="summaryAdditionalCost">&#8369;0.00</strong></div>
+                                    <div class="cost-summary-row is-subtotal"><span>Base project cost</span><strong id="summaryBaseCost">&#8369;0.00</strong></div>
+                                    <div class="cost-summary-row has-note">
+                                        <span class="cost-summary-row__label">
+                                            <span>Priority markup</span>
+                                            <small class="summary-note" id="summaryPriorityReason"><?php echo htmlspecialchars((string) $priorityMarkup['reason']); ?></small>
+                                        </span>
+                                        <strong id="summaryPriorityMarkup">&#8369;0.00</strong>
+                                    </div>
+                                </section>
+                                <aside class="cost-summary-total-panel" aria-label="Project total and budget">
+                                    <div class="cost-summary-total">
+                                        <span>Overall estimated project cost</span>
+                                        <strong id="summaryOverallCost">&#8369;0.00</strong>
+                                    </div>
+                                    <div class="cost-summary-budget">
+                                        <div class="cost-summary-budget__row">
+                                            <span>Client budget</span>
+                                            <strong id="summaryBudget"><?php echo projectEstimationPeso((float) ($project['sales_budget'] ?? 0)); ?></strong>
+                                        </div>
+                                        <div class="cost-summary-budget__track" aria-hidden="true">
+                                            <span class="cost-summary-budget__bar" id="summaryBudgetBar"></span>
+                                        </div>
+                                        <div class="cost-summary-budget__usage" id="summaryBudgetUsage">0% of client budget</div>
+                                        <div class="cost-summary-budget__row is-remaining">
+                                            <span>Remaining budget</span>
+                                            <strong id="summaryRemainingBudget">&#8369;0.00</strong>
+                                        </div>
+                                    </div>
+                                </aside>
                             </div>
                             <div class="project-estimation-actions mt-3">
                                 <?php if ($estimationLockedForReview): ?>
@@ -942,12 +1169,18 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                     <a class="project-estimation-dashboard-link" href="<?php echo BASE_URL; ?>modules/expert/dashboard.php"><i class="fas fa-arrow-left" aria-hidden="true"></i>Back to Dashboard</a>
                                 <?php else: ?>
                                     <div class="project-estimation-submit-note"><i class="fas fa-circle-info" aria-hidden="true"></i><span>Review all amounts before submitting. The estimate will be locked and sent to the Expert SUL.</span></div>
-                                    <button type="submit" class="btn-save-phases project-estimation-submit"><i class="fas fa-paper-plane"></i>Submit for SUL Review</button>
+                                    <div class="project-estimation-action-buttons">
+                                        <span class="project-estimation-draft-status" data-project-estimation-draft-status aria-live="polite"></span>
+                                        <button type="button" class="project-estimation-draft" data-project-estimation-save-draft>
+                                            <i class="fas fa-floppy-disk" aria-hidden="true"></i>
+                                            <span>Save Draft</span>
+                                        </button>
+                                        <button type="submit" class="btn-save-phases project-estimation-submit" form="projectCostEstimationForm"><i class="fas fa-paper-plane"></i>Submit for SUL Review</button>
+                                    </div>
                                 <?php endif; ?>
                             </div>
                         </div>
                     </div>
-                </form>
                 <?php endif; ?>
             </div>
         </div>
@@ -962,13 +1195,60 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         const priorityMarkup = <?php echo json_encode($priorityMarkup); ?>;
         const peso = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
         const estimationForm = document.getElementById('projectCostEstimationForm');
+        const estimationModule = document.getElementById('projectEstimationModule');
         const submissionStatus = document.querySelector('[data-project-estimation-submitted]');
+        const draftButton = document.querySelector('[data-project-estimation-save-draft]');
+        const draftStatus = document.querySelector('[data-project-estimation-draft-status]');
+        const draftKey = `erniPms.formDraft.${location.pathname}.projectCostEstimationForm`;
 
-        estimationForm?.querySelectorAll('.estimation-section-toggle').forEach((toggle) => {
+        function readProjectEstimationDraft() {
+            const data = {};
+            Array.from(estimationForm?.elements || []).forEach((field) => {
+                if (!field.name || field.type === 'hidden' || field.type === 'file' || field.type === 'password') return;
+                data[field.name] = field.type === 'checkbox' || field.type === 'radio'
+                    ? (field.checked ? field.value : '')
+                    : field.value;
+            });
+            return data;
+        }
+
+        function restoreProjectEstimationDraft() {
+            if (!estimationForm) return false;
+            try {
+                const stored = JSON.parse(localStorage.getItem(draftKey) || 'null');
+                if (!stored?.data) return false;
+                Array.from(estimationForm.elements).forEach((field) => {
+                    if (!field.name || !Object.prototype.hasOwnProperty.call(stored.data, field.name)) return;
+                    const value = stored.data[field.name];
+                    if (field.type === 'checkbox' || field.type === 'radio') {
+                        field.checked = String(field.value) === String(value);
+                    } else {
+                        field.value = value;
+                    }
+                });
+                if (draftStatus) draftStatus.textContent = 'Draft restored';
+                return true;
+            } catch (error) {
+                localStorage.removeItem(draftKey);
+                return false;
+            }
+        }
+
+        draftButton?.addEventListener('click', () => {
+            const data = readProjectEstimationDraft();
+            try {
+                localStorage.setItem(draftKey, JSON.stringify({ savedAt: new Date().toISOString(), data }));
+                if (draftStatus) draftStatus.textContent = 'Draft saved';
+            } catch (error) {
+                if (draftStatus) draftStatus.textContent = 'Draft could not be saved';
+            }
+        });
+
+        estimationModule?.querySelectorAll('.estimation-section-toggle').forEach((toggle) => {
             toggle.addEventListener('click', () => {
                 const shouldOpen = toggle.getAttribute('aria-expanded') !== 'true';
 
-                estimationForm.querySelectorAll('.estimation-section-toggle').forEach((otherToggle) => {
+                estimationModule.querySelectorAll('.estimation-section-toggle').forEach((otherToggle) => {
                     const otherDetails = document.getElementById(otherToggle.getAttribute('aria-controls') || '');
                     otherToggle.setAttribute('aria-expanded', 'false');
                     if (otherDetails) otherDetails.hidden = true;
@@ -982,12 +1262,16 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
         if (estimationForm && !estimationForm.classList.contains('is-locked')) {
             estimationForm.addEventListener('submit', () => {
+                if (estimationForm.dataset.confirmedSubmit !== '1') {
+                    return;
+                }
                 try {
                     sessionStorage.setItem('projectEstimationJustSubmitted', '1');
+                    localStorage.removeItem(draftKey);
                 } catch (error) {
                     // Submission still works when browser storage is unavailable.
                 }
-                const submitButton = estimationForm.querySelector('.project-estimation-submit');
+                const submitButton = document.querySelector('.project-estimation-submit[form="projectCostEstimationForm"]');
                 if (submitButton) {
                     submitButton.classList.add('is-loading');
                     submitButton.disabled = true;
@@ -1080,6 +1364,18 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             setText('summaryPriorityMarkup', priorityMarkupAmount);
             setText('summaryOverallCost', overall);
             setText('summaryRemainingBudget', remaining);
+            const budgetUsage = clientBudget > 0 ? (overall / clientBudget) * 100 : 0;
+            const budgetBar = document.getElementById('summaryBudgetBar');
+            const budgetUsageLabel = document.getElementById('summaryBudgetUsage');
+            if (budgetBar) {
+                budgetBar.style.width = `${Math.min(100, Math.max(0, budgetUsage))}%`;
+                budgetBar.classList.toggle('is-over', budgetUsage > 100);
+            }
+            if (budgetUsageLabel) {
+                budgetUsageLabel.textContent = clientBudget > 0
+                    ? `${budgetUsage.toFixed(1)}% of client budget`
+                    : 'No client budget provided';
+            }
             const priorityReason = document.getElementById('summaryPriorityReason');
             if (priorityReason) {
                 priorityReason.textContent = `${priorityMarkup.label || 'Medium'} priority adds ${Number(priorityMarkup.percent || 0)}% (${peso.format(priorityMarkupAmount)}). ${priorityMarkup.reason || ''}`;
@@ -1098,6 +1394,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                 updateProjectEstimation();
             }
         });
+        restoreProjectEstimationDraft();
         updateProjectEstimation();
     })();
     </script>

@@ -3139,7 +3139,7 @@ include '../../includes/navbar.php';
 }
 
 .roadmap-table-wrap tr.roadmap-task-row.is-bulk-selected > *:first-child {
-    border-left-color: #166a96;
+    border-left-color: transparent;
 }
 
 @media (max-width: 767.98px) {
@@ -3313,7 +3313,7 @@ include '../../includes/navbar.php';
 .bulk-feature-option:has(.form-check-input:checked) {
     border-color: rgba(31, 99, 146, .38);
     background: #edf7fc;
-    box-shadow: inset 3px 0 0 var(--roadmap-primary);
+    box-shadow: none;
 }
 
 .bulk-feature-option .form-check-label {
@@ -3388,7 +3388,7 @@ include '../../includes/navbar.php';
 .department-requirement-item:has(.task-department-toggle:checked) {
     border-color: rgba(31, 99, 146, .38);
     background: #edf7fc;
-    box-shadow: inset 3px 0 0 var(--roadmap-primary);
+    box-shadow: none;
 }
 
 .department-requirement-icon {

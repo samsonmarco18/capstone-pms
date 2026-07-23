@@ -579,6 +579,218 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['project_setup'])) {
     exit();
 }
 
+// Save all feature estimates from the consolidated progress table.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_estimations'])) {
+    $projectId = max(0, (int) ($_POST['project_id'] ?? 0));
+    $postedEstimates = is_array($_POST['feature_estimates'] ?? null) ? $_POST['feature_estimates'] : [];
+    $taskIds = array_values(array_unique(array_filter(array_map('intval', array_keys($postedEstimates)))));
+    $redirectUrl = 'feature-estimation.php' . ($projectId > 0 ? '?project_estimation_id=' . $projectId : '');
+
+    try {
+        if ($projectId <= 0 || empty($taskIds)) {
+            throw new RuntimeException('No feature estimates were provided.');
+        }
+
+        $taskResult = $conn->query("
+            SELECT t.id, t.project_id, t.title, p.timeline_start, p.timeline_end
+            FROM tasks t
+            INNER JOIN projects p ON p.id = t.project_id
+            WHERE t.id IN (" . implode(',', $taskIds) . ")
+              AND t.project_id = {$projectId}
+              AND t.assigned_to = " . (int) $user['id'] . "
+              AND t.task_type = 'feature'
+        ");
+        $taskLookup = [];
+        if ($taskResult) {
+            while ($taskRow = $taskResult->fetch_assoc()) {
+                $taskLookup[(int) $taskRow['id']] = $taskRow;
+            }
+        }
+        if (count($taskLookup) !== count($taskIds)) {
+            throw new RuntimeException('One or more feature rows are no longer assigned to you. Refresh and try again.');
+        }
+
+        $architectPlans = featureEstimationLoadArchitectPlanning($conn, $taskIds);
+        $conn->begin_transaction();
+        $savedCount = 0;
+
+        foreach ($taskIds as $taskId) {
+            $taskInfo = $taskLookup[$taskId];
+            $estimateRow = is_array($postedEstimates[$taskId] ?? null) ? $postedEstimates[$taskId] : [];
+            $expectation = trim((string) ($estimateRow['expectation'] ?? ''));
+            $minDays = max(0, (int) ($estimateRow['min_days'] ?? 0));
+            $likelyDays = max(0, (int) ($estimateRow['likely_days'] ?? 0));
+            $maxDays = max(0, (int) ($estimateRow['max_days'] ?? 0));
+
+            if ($expectation === '' || $minDays < 1 || $likelyDays < 1 || $maxDays < 1) {
+                throw new RuntimeException('Complete the expectation and all three day estimates for every feature before saving.');
+            }
+            if ($minDays > $likelyDays || $likelyDays > $maxDays) {
+                throw new RuntimeException('Every feature must follow Minimum <= Most Likely <= Maximum.');
+            }
+
+            $architectPlan = $architectPlans[$taskId] ?? featureEstimationEmptyArchitectPlan();
+            $durationWindow = projectEstimationDurationWindow($conn, [
+                'id' => $projectId,
+                'timeline_start' => $taskInfo['timeline_start'] ?? '',
+                'timeline_end' => $taskInfo['timeline_end'] ?? '',
+            ]);
+            $phaseName = trim((string) ($architectPlan['phase_name'] ?? '')) ?: null;
+            $plannedStart = trim((string) ($architectPlan['planned_start'] ?? ''));
+            $plannedEnd = trim((string) ($architectPlan['planned_end'] ?? ''));
+            if ($plannedStart === '') {
+                $plannedStart = trim((string) ($durationWindow['start'] ?? ''));
+            }
+            if ($plannedEnd === '') {
+                $plannedEnd = trim((string) ($durationWindow['end'] ?? ''));
+            }
+
+            $plannedStartDate = DateTimeImmutable::createFromFormat('Y-m-d', $plannedStart);
+            $plannedEndDate = DateTimeImmutable::createFromFormat('Y-m-d', $plannedEnd);
+            if (!$plannedStartDate || !$plannedEndDate || $plannedEndDate < $plannedStartDate) {
+                throw new RuntimeException('A valid Architect-planned schedule is required for ' . (string) $taskInfo['title'] . '.');
+            }
+            $plannedWindowDays = max(1, (int) $plannedStartDate->diff($plannedEndDate)->days + 1);
+            if ($maxDays > $plannedWindowDays) {
+                throw new RuntimeException(
+                    (string) $taskInfo['title'] . ' cannot exceed its planned window of ' . $plannedWindowDays . ' day(s).'
+                );
+            }
+
+            $normalizedInvolvement = [];
+            foreach ((array) ($architectPlan['involvement_plan'] ?? []) as $entry) {
+                $role = trim((string) ($entry['role'] ?? ''));
+                $percentage = max(0, min(100, (int) ($entry['percentage'] ?? 0)));
+                if ($role === '' && $percentage <= 0) {
+                    continue;
+                }
+                $normalizedInvolvement[] = [
+                    'role' => $role,
+                    'percentage' => $percentage,
+                    'required_count' => max(0, (int) ($entry['required_count'] ?? 0)),
+                ];
+            }
+            $normalizedComponents = [];
+            foreach ((array) ($architectPlan['component_plan'] ?? []) as $entry) {
+                $component = trim((string) ($entry['name'] ?? ''));
+                if ($component !== '') {
+                    $normalizedComponents[] = ['name' => $component];
+                }
+            }
+            $involvementPlanJson = json_encode($normalizedInvolvement, JSON_UNESCAPED_UNICODE);
+            $componentPlanJson = json_encode($normalizedComponents, JSON_UNESCAPED_UNICODE);
+
+            $existingStmt = $conn->prepare("SELECT id FROM feature_estimations WHERE task_id = ? AND expert_id = ? LIMIT 1");
+            $expertId = (int) $user['id'];
+            $existingStmt->bind_param('ii', $taskId, $expertId);
+            $existingStmt->execute();
+            $existingEstimate = $existingStmt->get_result()->fetch_assoc();
+            $existingStmt->close();
+
+            if ($existingEstimate) {
+                $updateParts = ['min_days=?', 'likely_days=?', 'max_days=?'];
+                $types = 'iii';
+                $params = [$minDays, $likelyDays, $maxDays];
+                if ($hasPhaseName) {
+                    $updateParts[] = 'phase_name=?';
+                    $types .= 's';
+                    $params[] = $phaseName;
+                }
+                if ($hasInvolvementPlan) {
+                    $updateParts[] = 'involvement_plan_json=?';
+                    $types .= 's';
+                    $params[] = $involvementPlanJson;
+                }
+                if ($hasComponentPlan) {
+                    $updateParts[] = 'component_plan_json=?';
+                    $types .= 's';
+                    $params[] = $componentPlanJson;
+                }
+                $updateParts[] = 'expectation_description=?';
+                $types .= 'sii';
+                $params[] = $expectation;
+                $params[] = $taskId;
+                $params[] = $expertId;
+                $saveStmt = $conn->prepare(
+                    "UPDATE feature_estimations SET " . implode(', ', $updateParts) . ", status='completed', submitted_at=NOW() WHERE task_id=? AND expert_id=?"
+                );
+                $saveStmt->bind_param($types, ...$params);
+            } else {
+                $columns = ['task_id', 'expert_id', 'project_id', 'min_days', 'likely_days', 'max_days'];
+                $placeholders = ['?', '?', '?', '?', '?', '?'];
+                $types = 'iiiiii';
+                $params = [$taskId, $expertId, $projectId, $minDays, $likelyDays, $maxDays];
+                if ($hasPhaseName) {
+                    $columns[] = 'phase_name';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $phaseName;
+                }
+                if ($hasInvolvementPlan) {
+                    $columns[] = 'involvement_plan_json';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $involvementPlanJson;
+                }
+                if ($hasComponentPlan) {
+                    $columns[] = 'component_plan_json';
+                    $placeholders[] = '?';
+                    $types .= 's';
+                    $params[] = $componentPlanJson;
+                }
+                $columns[] = 'expectation_description';
+                $placeholders[] = '?';
+                $types .= 's';
+                $params[] = $expectation;
+                $saveStmt = $conn->prepare(
+                    "INSERT INTO feature_estimations (" . implode(', ', $columns) . ", status, submitted_at) VALUES (" . implode(', ', $placeholders) . ", 'completed', NOW())"
+                );
+                $saveStmt->bind_param($types, ...$params);
+            }
+
+            if (!$saveStmt->execute()) {
+                throw new RuntimeException('Failed to save ' . (string) $taskInfo['title'] . '.');
+            }
+            $saveStmt->close();
+
+            $salesColumns = $hasSalesApproval ? ', sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL' : '';
+            $taskUpdate = $conn->prepare(
+                "UPDATE tasks SET status='in_review', started_at=?, deadline=?, estimated_days_min=?, estimated_days_likely=?, estimated_days_max=?{$salesColumns} WHERE id=?"
+            );
+            $taskUpdate->bind_param('ssiiii', $plannedStart, $plannedEnd, $minDays, $likelyDays, $maxDays, $taskId);
+            if (!$taskUpdate->execute()) {
+                throw new RuntimeException('Failed to update the task schedule for ' . (string) $taskInfo['title'] . '.');
+            }
+            $taskUpdate->close();
+            $savedCount++;
+            logActivity($expertId, 'submit_estimation', 'tasks', $taskId, null, $estimateRow);
+        }
+
+        $conn->commit();
+        workflowNotifyRoles(
+            $conn,
+            ['sul'],
+            'Feature Estimations Ready for SUL Approval',
+            $savedCount . ' feature estimates were saved and are ready for SUL review.',
+            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
+            $projectId,
+            'approval',
+            'projects'
+        );
+        $_SESSION['success'] = $savedCount . ' feature estimate' . ($savedCount === 1 ? '' : 's') . ' saved successfully.';
+    } catch (Throwable $e) {
+        try {
+            $conn->rollback();
+        } catch (Throwable $rollbackError) {
+            // Preserve the original validation or save error.
+        }
+        $_SESSION['error'] = $e->getMessage();
+    }
+
+    header('Location: ' . $redirectUrl);
+    exit();
+}
+
 // Handle task estimation save (draft)
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($_POST['submit_all'])) {
     $taskId = (int) ($_POST['task_id'] ?? 0);
@@ -682,17 +894,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     $deadlineDuration = max(1, (int) $plannedStartDate->diff($plannedEndDate)->days + 1);
     if ($minDays < 1 || $likelyDays < 1 || $maxDays < 1) {
         $_SESSION['error'] = 'Accept the Evortix feature estimate or enter all three day values before saving.';
-        header('Location: feature-estimation.php?project_estimation_id=' . $projectId . '&workspace=features');
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
         exit();
     }
     if ($minDays > $likelyDays || $likelyDays > $maxDays) {
         $_SESSION['error'] = 'Feature estimates must follow Minimum <= Most Likely <= Maximum.';
-        header('Location: feature-estimation.php?project_estimation_id=' . $projectId . '&workspace=features');
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
         exit();
     }
     if ($maxDays > $deadlineDuration) {
         $_SESSION['error'] = 'The maximum feature estimate cannot exceed its Architect-planned window of ' . $deadlineDuration . ' day(s).';
-        header('Location: feature-estimation.php?project_estimation_id=' . $projectId . '&workspace=features');
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
         exit();
     }
     if (!empty($architectPlan['involvement_plan'])) {
@@ -987,7 +1199,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
         $_SESSION['error'] = "Failed to save estimation: " . $conn->error;
     }
     
-    header('Location: feature-estimation.php?project_estimation_id=' . $projectId . '&workspace=features&feature_submitted=1');
+    header('Location: feature-estimation.php?project_estimation_id=' . $projectId . '&feature_submitted=1');
     exit();
 }
 
@@ -1255,6 +1467,12 @@ include '../../includes/navbar.php';
     gap: 0.25rem;
     margin-bottom: 1.25rem;
     overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+.expert-workspace-switcher::-webkit-scrollbar {
+    display: none;
 }
 
 .expert-workspace-tab {
@@ -1352,11 +1570,25 @@ include '../../includes/navbar.php';
 
 .feature-project-action {
     align-items: center;
+    color: #fff;
     display: flex;
     height: 100%;
     justify-content: center;
     min-height: 42px;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     width: 100%;
+}
+
+.feature-project-action:visited {
+    color: #fff;
+}
+
+.feature-project-action:hover,
+.feature-project-action:focus-visible {
+    background: var(--theme-dark);
+    box-shadow: 0 6px 14px rgba(24, 79, 115, 0.24);
+    color: #fff;
+    transform: translateY(-2px);
 }
 
 .feature-project-action[hidden] {
@@ -1559,6 +1791,14 @@ include '../../includes/navbar.php';
     margin-bottom: 1.5rem;
 }
 
+.phase-management-card .management-table-section {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    margin-bottom: 0;
+}
+
 .management-table-header {
     padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--gray-200);
@@ -1572,7 +1812,7 @@ include '../../includes/navbar.php';
 .management-table-header h5 {
     margin: 0;
     font-size: 1rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--gray-800);
 }
 
@@ -1594,14 +1834,14 @@ include '../../includes/navbar.php';
 
 .management-table {
     width: 100%;
-    min-width: 980px;
+    min-width: 820px;
     border-collapse: separate;
     border-spacing: 0;
 }
 
 .management-table th,
 .management-table td {
-    padding: 1rem 1.1rem;
+    padding: 0.9rem 1.25rem;
     border-bottom: 1px solid var(--gray-200);
     vertical-align: top;
 }
@@ -1609,8 +1849,8 @@ include '../../includes/navbar.php';
 .management-table th {
     background: var(--gray-50);
     color: var(--gray-700);
-    font-size: 0.78rem;
-    font-weight: 700;
+    font-size: 0.72rem;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     white-space: nowrap;
@@ -1625,53 +1865,322 @@ include '../../includes/navbar.php';
 }
 
 .table-feature-name {
-    font-weight: 700;
+    font-size: 0.9rem;
+    font-weight: 600;
     color: var(--gray-900);
-    margin-bottom: 0.35rem;
+    margin-bottom: 0.4rem;
 }
 
 .table-feature-meta {
     font-size: 0.78rem;
     color: var(--gray-600);
     display: flex;
+    align-items: center;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.45rem 0.75rem;
 }
 
 .table-phase-tag {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    padding: 0.2rem 0.55rem;
-    border-radius: 999px;
-    background: #e0f2fe;
+    padding: 0;
+    background: transparent;
     color: #0369a1;
     font-size: 0.72rem;
+    font-weight: 500;
+}
+
+.table-date-range {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.management-shared-allocation {
+    align-items: center;
+    background: #ffffff;
+    border-bottom: 1px solid var(--gray-200);
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(180px, 0.45fr) minmax(420px, 1.55fr);
+    padding: 1rem 1.25rem;
+}
+
+.management-shared-allocation__copy {
+    display: grid;
+    gap: 0.18rem;
+}
+
+.management-shared-allocation__copy strong {
+    align-items: center;
+    color: var(--gray-800);
+    display: inline-flex;
+    font-size: 0.82rem;
+    font-weight: 600;
+    gap: 0.4rem;
+}
+
+.management-shared-allocation__copy span {
+    color: var(--gray-600);
+    font-size: 0.74rem;
+}
+
+.management-shared-allocation__visual {
+    align-items: center;
+    display: grid;
+    gap: 0.75rem 1rem;
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(180px, 0.7fr) minmax(420px, 1.3fr);
+    width: 100%;
+}
+
+.management-plan-facts {
+    display: grid;
+    gap: 0;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.management-plan-fact {
+    border-left: 1px solid var(--gray-200);
+    display: grid;
+    gap: 0.16rem;
+    min-width: 0;
+    padding: 0.1rem 1rem;
+}
+
+.management-plan-fact:first-child {
+    border-left: 0;
+}
+
+.management-plan-fact small,
+.management-allocation-label {
+    color: var(--gray-500);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.management-plan-fact strong {
+    color: var(--gray-800);
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.table-allocation-stack {
+    background: #dce5ec;
+    border-radius: 999px;
+    display: flex;
+    height: 6px;
+    overflow: hidden;
+    width: 100%;
+}
+
+.table-allocation-segment {
+    background: var(--allocation-color, var(--theme-primary));
+    display: block;
+    height: 100%;
+    min-width: 2px;
+}
+
+.management-allocation-legend {
+    display: grid;
+    gap: 0.6rem 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.management-allocation-legend__item {
+    align-items: center;
+    color: var(--gray-600);
+    display: grid;
+    font-size: 0.72rem;
+    gap: 0.15rem 0.4rem;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.management-allocation-legend__dot {
+    background: var(--allocation-color, var(--theme-primary));
+    border-radius: 50%;
+    height: 8px;
+    width: 8px;
+}
+
+.management-allocation-legend__item strong {
+    color: var(--gray-800);
     font-weight: 600;
 }
 
-.table-list {
-    display: grid;
-    gap: 0.45rem;
+.management-allocation-legend__item small {
+    color: var(--gray-500);
+    font-size: 0.68rem;
+    grid-column: 2 / -1;
 }
 
-.table-list-item {
-    padding: 0.55rem 0.7rem;
-    border: 1px solid var(--gray-200);
-    border-radius: 12px;
+.management-allocation-label {
+    white-space: nowrap;
+}
+
+.management-table--grouped {
+    min-width: 620px;
+}
+
+.management-feature-list__header {
+    align-items: center;
     background: var(--gray-50);
-    line-height: 1.35;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-700);
+    display: flex;
+    font-size: 0.72rem;
+    font-weight: 600;
+    justify-content: space-between;
+    letter-spacing: 0.04em;
+    padding: 0.78rem 1.25rem;
+    text-transform: uppercase;
 }
 
-.table-list-item strong {
-    display: block;
-    font-size: 0.84rem;
+.management-feature-list__header small {
+    color: var(--gray-500);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.management-feature-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.management-feature-grid__item {
+    align-items: center;
+    border-bottom: 1px solid var(--gray-200);
+    border-right: 1px solid var(--gray-200);
     color: var(--gray-800);
+    display: grid;
+    font-size: 0.82rem;
+    font-weight: 500;
+    gap: 0.7rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: 52px;
+    padding: 0.72rem 1.25rem;
 }
 
-.table-list-item span {
+.management-feature-grid__item:nth-child(3n) {
+    border-right: 0;
+}
+
+.management-feature-grid__index {
+    color: var(--gray-400);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.table-allocation-details summary {
+    align-items: center;
+    cursor: pointer;
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: auto minmax(120px, 1fr) auto;
+    list-style: none;
+}
+
+.table-allocation-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.table-allocation-summary-label {
+    color: var(--gray-700);
     font-size: 0.76rem;
+    white-space: nowrap;
+}
+
+.table-allocation-details__chevron {
+    color: var(--theme-primary);
+    font-size: 0.68rem;
+    transition: transform 0.18s ease;
+}
+
+.table-allocation-details[open] .table-allocation-details__chevron {
+    transform: rotate(180deg);
+}
+
+.table-allocation-list {
+    display: grid;
+    gap: 0;
+    margin-top: 0.6rem;
+}
+
+.table-allocation-row {
+    align-items: center;
+    border-top: 1px solid var(--gray-200);
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 0.42rem 0;
+}
+
+.table-allocation-copy {
+    min-width: 0;
+}
+
+.table-allocation-name {
+    color: var(--gray-800);
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.table-allocation-count,
+.table-component-copy,
+.table-empty-copy {
     color: var(--gray-600);
+    display: block;
+    font-size: 0.72rem;
+    line-height: 1.45;
+}
+
+.table-allocation-percent {
+    color: var(--theme-primary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.table-component-copy {
+    font-size: 0.8rem;
+}
+
+@media (max-width: 767.98px) {
+    .management-shared-allocation {
+        grid-template-columns: 1fr;
+    }
+
+    .management-plan-facts {
+        grid-template-columns: 1fr;
+    }
+
+    .management-plan-fact,
+    .management-plan-fact:first-child {
+        border-left: 0;
+        border-top: 1px solid var(--gray-200);
+        padding: 0.55rem 0;
+    }
+
+    .management-shared-allocation__visual {
+        align-items: stretch;
+        grid-template-columns: 1fr;
+    }
+
+    .management-feature-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .management-feature-grid__item,
+    .management-feature-grid__item:nth-child(3n) {
+        border-right: 0;
+    }
 }
 
 .days-stack {
@@ -1781,6 +2290,309 @@ include '../../includes/navbar.php';
     border-radius: 14px;
     border: 1px solid var(--gray-200);
     box-shadow: var(--shadow-sm);
+}
+
+.feature-bulk-form {
+    display: grid;
+    gap: 1rem;
+}
+
+.feature-bulk-table-wrap {
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    overflow: auto;
+}
+
+.feature-bulk-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 1040px;
+    table-layout: fixed;
+    width: 100%;
+}
+
+.feature-bulk-table th,
+.feature-bulk-table td {
+    border-bottom: 1px solid var(--gray-200);
+    padding: 0.65rem 0.8rem;
+    vertical-align: middle;
+}
+
+.feature-bulk-table th {
+    background: var(--gray-50);
+    color: var(--gray-600);
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    position: sticky;
+    text-transform: uppercase;
+    top: 0;
+    z-index: 1;
+}
+
+.feature-bulk-table th:nth-child(1) { width: 18%; }
+.feature-bulk-table th:nth-child(2) { width: 28%; }
+.feature-bulk-table th:nth-child(3),
+.feature-bulk-table th:nth-child(4),
+.feature-bulk-table th:nth-child(5) { width: 9%; }
+.feature-bulk-table th:nth-child(6) { width: 17%; }
+.feature-bulk-table th:nth-child(7) { width: 10%; }
+
+.feature-bulk-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.feature-bulk-table tbody tr.is-incomplete td {
+    background: #fffbeb;
+}
+
+.feature-bulk-table tbody tr.is-ready td {
+    background: #f2fbf5;
+}
+
+.feature-bulk-table tbody tr {
+    transition: background-color 0.18s ease;
+}
+
+.feature-bulk-table tbody tr.is-incomplete:hover td {
+    background: #fff7dc;
+}
+
+.feature-bulk-table tbody tr.is-ready:hover td {
+    background: #eaf8ef;
+}
+
+.feature-bulk-name {
+    color: var(--gray-900);
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.35;
+    min-width: 170px;
+}
+
+.feature-bulk-phase,
+.feature-bulk-schedule,
+.feature-bulk-pert {
+    color: var(--gray-600);
+    display: block;
+    font-size: 0.7rem;
+    line-height: 1.4;
+}
+
+.feature-bulk-schedule {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.feature-bulk-pert {
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.feature-bulk-table th:nth-child(6),
+.feature-bulk-table th:nth-child(7),
+.feature-bulk-table td:nth-child(6),
+.feature-bulk-table td:nth-child(7) {
+    text-align: center;
+}
+
+.feature-bulk-table textarea,
+.feature-bulk-table input[type="number"] {
+    background: #fff;
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    color: var(--gray-900);
+    font: inherit;
+    min-height: 38px;
+    padding: 0.48rem 0.6rem;
+    width: 100%;
+}
+
+.feature-bulk-table textarea {
+    height: 44px;
+    line-height: 1.35;
+    min-height: 44px;
+    resize: none;
+}
+
+.feature-bulk-table input[type="number"] {
+    min-width: 0;
+    text-align: center;
+}
+
+.feature-bulk-table tbody tr.is-changed textarea,
+.feature-bulk-table tbody tr.is-changed input[type="number"] {
+    border-color: rgba(31, 99, 146, 0.58);
+}
+
+.feature-bulk-table textarea:focus,
+.feature-bulk-table input[type="number"]:focus {
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
+    outline: 0;
+}
+
+.feature-bulk-actions {
+    bottom: 0.75rem;
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.25rem 0;
+    position: sticky;
+    z-index: 8;
+}
+
+.feature-bulk-save-button {
+    align-items: center;
+    background: #164f73;
+    border: 1px solid #164f73;
+    border-radius: 10px;
+    box-shadow: 0 8px 18px rgba(15, 42, 64, 0.18);
+    color: #fff;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    font-weight: 600;
+    gap: 0.45rem;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0.6rem 0.9rem;
+}
+
+.feature-bulk-save-button:not(:disabled):hover {
+    background: #0f405f;
+    border-color: #0f405f;
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.feature-bulk-save-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.48;
+}
+
+.feature-bulk-form [data-generic-save-draft],
+.feature-bulk-form [data-generic-draft-status] {
+    display: none !important;
+}
+
+#appConfirmModal.feature-estimate-confirm-modal .modal-dialog {
+    max-width: min(920px, calc(100vw - 2rem));
+}
+
+#appConfirmModal.feature-estimate-confirm-modal .app-confirm-note {
+    align-items: start;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: 24px minmax(0, 1fr);
+    width: 100%;
+}
+
+#appConfirmModal.feature-estimate-confirm-modal .app-confirm-note > div {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#appConfirmModal.feature-estimate-confirm-modal .app-confirm-note > i {
+    align-items: center;
+    display: inline-flex;
+    font-size: 1rem;
+    height: 24px;
+    justify-content: center;
+    line-height: 1;
+    margin: 0;
+    width: 24px;
+}
+
+#appConfirmModal.feature-estimate-confirm-modal #appConfirmSubject {
+    line-height: 24px;
+    margin-bottom: 0 !important;
+}
+
+.feature-save-confirm-overview {
+    align-items: center;
+    background: #f3f8fb;
+    border: 1px solid #d8e7f0;
+    border-radius: 10px;
+    color: #31536b;
+    display: flex;
+    font-size: 0.76rem;
+    justify-content: space-between;
+    margin: 0.75rem 0;
+    padding: 0.65rem 0.75rem;
+}
+
+.feature-save-confirm-table-wrap {
+    border: 1px solid #dce6ed;
+    border-radius: 10px;
+    max-height: min(52vh, 520px);
+    overflow: auto;
+}
+
+.feature-save-confirm-table {
+    border-collapse: collapse;
+    font-size: 0.72rem;
+    width: 100%;
+}
+
+.feature-save-confirm-table th,
+.feature-save-confirm-table td {
+    border-bottom: 1px solid #e3eaf0;
+    padding: 0.58rem 0.65rem;
+    text-align: left;
+    vertical-align: top;
+}
+
+.feature-save-confirm-table th {
+    background: #f7f9fb;
+    color: #617487;
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    position: sticky;
+    text-transform: uppercase;
+    top: 0;
+}
+
+.feature-save-confirm-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.feature-save-confirm-table strong,
+.feature-save-confirm-table small {
+    display: block;
+}
+
+.feature-save-confirm-table strong {
+    color: #18324a;
+    font-weight: 600;
+}
+
+.feature-save-confirm-table small {
+    color: #6b7e90;
+    margin-top: 0.15rem;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-save-confirm-overview,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-save-confirm-table th {
+    background: #12263a;
+    border-color: #29445c;
+    color: #a8bfd2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-save-confirm-table-wrap,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-save-confirm-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-save-confirm-table td {
+    border-color: #29445c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-save-confirm-table strong {
+    color: #e2edf6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-save-confirm-table small {
+    color: #95aec2;
 }
 
 .feature-row {
@@ -2217,6 +3029,16 @@ textarea.form-control-custom {
     box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-management-card .management-table-section {
+    border: 0 !important;
+    box-shadow: none;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-shared-allocation {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-selector,
@@ -2225,8 +3047,8 @@ textarea.form-control-custom {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-feature-list__header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table tbody tr:hover td,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-list-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-stats span,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-save-panel,
@@ -2244,6 +3066,43 @@ textarea.form-control-custom {
     background: rgba(16, 185, 129, 0.08) !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table-wrap,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table td {
+    border-color: #20364a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table th {
+    background: #12263a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table tbody tr.is-incomplete td {
+    background: rgba(245, 158, 11, 0.08);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table tbody tr.is-ready td {
+    background: rgba(22, 163, 74, 0.08);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table tbody tr.is-incomplete:hover td {
+    background: rgba(245, 158, 11, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table tbody tr.is-ready:hover td {
+    background: rgba(22, 163, 74, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-name {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table textarea,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table input[type="number"] {
+    background: #071321;
+    border-color: #2c4b65;
+    color: #d7e4f2;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-header h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-header h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-section-header h6,
@@ -2251,7 +3110,13 @@ textarea.form-control-custom {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table-header h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table td,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-feature-name,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-list-item strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-allocation-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-component-copy,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-shared-allocation__copy strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-plan-fact strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-feature-grid__item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-allocation-legend__item strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-allocation-summary-label,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-panel-header h6,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recommendation-title,
@@ -2264,7 +3129,13 @@ textarea.form-control-custom {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table-header p,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table th,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-feature-meta,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-list-item span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-allocation-count,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-empty-copy,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-shared-allocation__copy span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-plan-fact small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-allocation-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-feature-list__header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-allocation-legend__item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-empty,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pm-day-label,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-meta,
@@ -2290,8 +3161,22 @@ textarea.form-control-custom {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table-header,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table th,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-plan-fact,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-feature-list__header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .management-feature-grid__item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-allocation-row,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-row {
     border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-phase-tag,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-allocation-percent,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-allocation-details__chevron {
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-allocation-stack {
+    background: #334155;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-name input,
@@ -2392,6 +3277,16 @@ textarea.form-control-custom {
     .estimate-action-row [data-generic-draft-status] {
         text-align: left;
     }
+
+    .feature-bulk-save-button {
+        width: 100%;
+    }
+
+    .feature-save-confirm-overview {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
 }
 </style>
 
@@ -2405,41 +3300,14 @@ textarea.form-control-custom {
                 <i class="fas fa-calculator me-2"></i> 
                 Project Estimation
             </h2>
-            <p>Estimate project costs and feature effort for review.</p>
+            <p>Review project inputs, calculate delivery costs, and track estimation completion.</p>
         </div>
     </div>
 
-    <nav class="expert-workspace-switcher" role="tablist" aria-label="Estimation workspace">
-        <button
-            class="expert-workspace-tab is-active"
-            id="costEstimationTab"
-            type="button"
-            role="tab"
-            aria-selected="true"
-            aria-controls="costEstimationWorkspace"
-            data-expert-workspace="cost"
-        >
-            <i class="fas fa-file-invoice-dollar" aria-hidden="true"></i>
-            Cost Estimation
-        </button>
-        <button
-            class="expert-workspace-tab"
-            id="featureEstimationTab"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="featureEstimationWorkspace"
-            data-expert-workspace="features"
-        >
-            <i class="fas fa-list-check" aria-hidden="true"></i>
-            Feature Estimation
-        </button>
-    </nav>
+    <?php projectEstimationRenderExpertModule($conn, $user); ?>
+</div>
 
-    <section class="expert-workspace-panel" id="costEstimationWorkspace" role="tabpanel" aria-labelledby="costEstimationTab" data-expert-workspace-panel="cost">
-        <?php projectEstimationRenderExpertModule($conn, $user); ?>
-    </section>
-
+<div id="featureEstimatorSource" hidden aria-hidden="true">
     <section class="expert-workspace-panel" id="featureEstimationWorkspace" role="tabpanel" aria-labelledby="featureEstimationTab" data-expert-workspace-panel="features" hidden>
     <div class="phase-management-card" id="featureProjectChooser">
         <div class="phase-header">
@@ -2468,22 +3336,23 @@ textarea.form-control-custom {
                 </div>
             </div>
         </div>
+        <div id="projectManagementSection" style="display: none;">
+            <div class="management-table-section">
+                <div class="management-table-header">
+                    <div>
+                        <h5><i class="fas fa-table me-2"></i>Project Management Table</h5>
+                        <p>Architect roadmap allocations and component planning.</p>
+                    </div>
+                    <div class="management-table-meta" id="managementTableMeta">Select a project to load the planning table.</div>
+                </div>
+                <div class="management-table-wrap" id="projectManagementTable">
+                    <div class="table-empty">Select a project to load the planning table.</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="projectSections" style="display: none;">
-        <div class="management-table-section">
-            <div class="management-table-header">
-                <div>
-                    <h5><i class="fas fa-table me-2"></i>Project Management Table</h5>
-                    <p>Planning view from the Architect roadmap: features, involved departments, allocation percentages, and components.</p>
-                </div>
-                <div class="management-table-meta" id="managementTableMeta">Select a project to load the planning table.</div>
-            </div>
-            <div class="management-table-wrap" id="projectManagementTable">
-                <div class="table-empty">Select a project to load the planning table.</div>
-            </div>
-        </div>
-
         <!-- Feature List -->
         <div class="feature-list">
             <div class="feature-row incomplete" id="featureProgressRow">
@@ -2782,6 +3651,296 @@ let evortixFeatureReviewTimer = null;
 function updateFeatureProjectView(hasProject) {
     const sections = document.getElementById('projectSections');
     if (sections) sections.style.display = hasProject ? 'block' : 'none';
+    const managementSection = document.getElementById('projectManagementSection');
+    if (managementSection) managementSection.style.display = hasProject ? 'block' : 'none';
+}
+
+function mountFeatureEstimationEditors() {
+    const slot = document.getElementById('featureEstimationEditorSlot');
+    const source = document.getElementById('featureEstimatorSource');
+    if (!slot || !source) {
+        return;
+    }
+
+    const projectId = selectedFeatureProjectId !== '0'
+        ? selectedFeatureProjectId
+        : String(currentProjectId || '');
+    const matchingRows = Array.from(source.querySelectorAll('.estimation-card')).filter((row) => {
+        return projectId !== '' && row.getAttribute('data-project-id') === projectId;
+    });
+
+    if (!matchingRows.length) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'text-muted small py-2';
+        emptyState.textContent = 'No editable feature estimates are assigned to you for this project.';
+        slot.replaceChildren(emptyState);
+        return;
+    }
+
+    const inputValue = (row, selector) => row.querySelector(selector)?.value || '';
+    const escapeAttribute = (value) => escapeHtml(String(value ?? ''))
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    const displayDate = (value) => {
+        if (!value) return 'Not scheduled';
+        const date = new Date(`${value}T00:00:00`);
+        return Number.isNaN(date.getTime())
+            ? value
+            : date.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
+    };
+    const tableRows = matchingRows.map((row) => {
+        const taskId = row.getAttribute('data-task-id') || '';
+        const title = row.querySelector('.feature-title')?.textContent?.trim() || 'Feature';
+        const phase = inputValue(row, 'input[name="phase_name"]') || 'Roadmap phase';
+        const expectation = inputValue(row, 'textarea[name="expectation"]');
+        const minDays = inputValue(row, 'input[name="min_days"]');
+        const likelyDays = inputValue(row, 'input[name="likely_days"]');
+        const maxDays = inputValue(row, 'input[name="max_days"]');
+        const plannedStart = inputValue(row, 'input[name="planned_start"]');
+        const plannedEnd = inputValue(row, 'input[name="planned_end"]');
+        const initialPert = minDays && likelyDays && maxDays
+            ? ((Number(minDays) + (4 * Number(likelyDays)) + Number(maxDays)) / 6).toFixed(1)
+            : '—';
+
+        return `
+            <tr data-feature-bulk-row>
+                <td>
+                    <span class="feature-bulk-name">${escapeHtml(title)}</span>
+                    <span class="feature-bulk-phase">${escapeHtml(phase)}</span>
+                </td>
+                <td>
+                    <textarea
+                        name="feature_estimates[${escapeAttribute(taskId)}][expectation]"
+                        rows="2"
+                        required
+                        data-original="${escapeAttribute(expectation)}"
+                        aria-label="Expectation for ${escapeAttribute(title)}"
+                        placeholder="Expected feature outcome"
+                    >${escapeHtml(expectation)}</textarea>
+                </td>
+                <td>
+                    <input
+                        type="number"
+                        name="feature_estimates[${escapeAttribute(taskId)}][min_days]"
+                        min="1"
+                        step="1"
+                        required
+                        value="${escapeAttribute(minDays)}"
+                        data-original="${escapeAttribute(minDays)}"
+                        aria-label="Minimum days for ${escapeAttribute(title)}"
+                    >
+                </td>
+                <td>
+                    <input
+                        type="number"
+                        name="feature_estimates[${escapeAttribute(taskId)}][likely_days]"
+                        min="1"
+                        step="1"
+                        required
+                        value="${escapeAttribute(likelyDays)}"
+                        data-original="${escapeAttribute(likelyDays)}"
+                        aria-label="Most likely days for ${escapeAttribute(title)}"
+                    >
+                </td>
+                <td>
+                    <input
+                        type="number"
+                        name="feature_estimates[${escapeAttribute(taskId)}][max_days]"
+                        min="1"
+                        step="1"
+                        required
+                        value="${escapeAttribute(maxDays)}"
+                        data-original="${escapeAttribute(maxDays)}"
+                        aria-label="Maximum days for ${escapeAttribute(title)}"
+                    >
+                </td>
+                <td>
+                    <span class="feature-bulk-schedule">
+                        ${escapeHtml(displayDate(plannedStart))}
+                        <span aria-hidden="true">→</span>
+                        ${escapeHtml(displayDate(plannedEnd))}
+                    </span>
+                </td>
+                <td>
+                    <span class="feature-bulk-pert" data-feature-bulk-pert>${escapeHtml(initialPert)}${initialPert === '—' ? '' : ' days'}</span>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    const bulkForm = document.createElement('form');
+    bulkForm.method = 'POST';
+    bulkForm.className = 'feature-bulk-form';
+    bulkForm.id = 'bulkFeatureEstimationForm';
+    bulkForm.dataset.genericDraftDisabled = '1';
+    bulkForm.dataset.confirmSkip = '1';
+    bulkForm.innerHTML = `
+        <input type="hidden" name="bulk_save_feature_estimations" value="1">
+        <input type="hidden" name="project_id" value="${escapeAttribute(projectId)}">
+        <div class="feature-bulk-table-wrap">
+            <table class="feature-bulk-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Feature</th>
+                        <th scope="col">Expectation</th>
+                        <th scope="col">Min</th>
+                        <th scope="col">Likely</th>
+                        <th scope="col">Max</th>
+                        <th scope="col">Schedule</th>
+                        <th scope="col">PERT</th>
+                    </tr>
+                </thead>
+                <tbody>${tableRows}</tbody>
+            </table>
+        </div>
+        <div class="feature-bulk-actions">
+            <button type="submit" class="feature-bulk-save-button">
+                <i class="fas fa-floppy-disk" aria-hidden="true"></i>
+                <span>Save feature estimates</span>
+            </button>
+        </div>
+    `;
+    slot.replaceChildren(bulkForm);
+
+    const updateBulkSummary = () => {
+        const rows = Array.from(bulkForm.querySelectorAll('[data-feature-bulk-row]'));
+        let readyCount = 0;
+        let changedCount = 0;
+        let totalPert = 0;
+
+        rows.forEach((row) => {
+            const expectationInput = row.querySelector('textarea');
+            const numberInputs = Array.from(row.querySelectorAll('input[type="number"]'));
+            const [minInput, likelyInput, maxInput] = numberInputs;
+            const expectation = expectationInput?.value.trim() || '';
+            const minDays = Number(minInput?.value || 0);
+            const likelyDays = Number(likelyInput?.value || 0);
+            const maxDays = Number(maxInput?.value || 0);
+            const hasValidEstimate = minDays >= 1
+                && minDays <= likelyDays
+                && likelyDays <= maxDays;
+            const isReady = expectation !== '' && hasValidEstimate;
+            const isChanged = [expectationInput, ...numberInputs].some((input) => {
+                return input && input.value !== (input.dataset.original || '');
+            });
+            const pert = hasValidEstimate ? (minDays + (4 * likelyDays) + maxDays) / 6 : 0;
+
+            if (isReady) {
+                readyCount++;
+            }
+            if (hasValidEstimate) totalPert += pert;
+            if (isChanged) changedCount++;
+            row.classList.toggle('is-incomplete', !isReady);
+            row.classList.toggle('is-ready', isReady);
+            row.classList.toggle('is-changed', isReady && isChanged);
+
+            const pertLabel = row.querySelector('[data-feature-bulk-pert]');
+            if (pertLabel) {
+                pertLabel.textContent = hasValidEstimate ? `${pert.toFixed(1)} days` : '—';
+            }
+        });
+
+        const incompleteCount = rows.length - readyCount;
+        const saveButton = bulkForm.querySelector('.feature-bulk-save-button');
+        if (saveButton) {
+            saveButton.disabled = rows.length === 0 || incompleteCount > 0;
+            saveButton.dataset.featureCount = String(rows.length);
+            saveButton.dataset.changedCount = String(changedCount);
+            saveButton.dataset.totalPert = totalPert.toFixed(1);
+        }
+    };
+
+    bulkForm.addEventListener('input', updateBulkSummary);
+    bulkForm.addEventListener('change', updateBulkSummary);
+    bulkForm.addEventListener('submit', async (event) => {
+        if (bulkForm.dataset.featureConfirmed === '1') {
+            delete bulkForm.dataset.featureConfirmed;
+            return;
+        }
+
+        updateBulkSummary();
+        const firstIncomplete = bulkForm.querySelector('[data-feature-bulk-row].is-incomplete');
+        if (firstIncomplete) {
+            event.preventDefault();
+            firstIncomplete.querySelector('textarea:invalid, input:invalid, textarea, input')?.focus();
+            return;
+        }
+
+        event.preventDefault();
+        const saveButton = bulkForm.querySelector('.feature-bulk-save-button');
+        const rows = Array.from(bulkForm.querySelectorAll('[data-feature-bulk-row]'));
+        const totalPert = Number(saveButton?.dataset.totalPert || 0);
+        const changedCount = Number(saveButton?.dataset.changedCount || 0);
+        const detailRows = rows.map((row) => {
+            const title = row.querySelector('.feature-bulk-name')?.textContent?.trim() || 'Feature';
+            const phase = row.querySelector('.feature-bulk-phase')?.textContent?.trim() || 'Roadmap phase';
+            const expectation = row.querySelector('textarea')?.value.trim() || 'No expectation';
+            const numberInputs = Array.from(row.querySelectorAll('input[type="number"]'));
+            const minDays = numberInputs[0]?.value || '—';
+            const likelyDays = numberInputs[1]?.value || '—';
+            const maxDays = numberInputs[2]?.value || '—';
+            const schedule = row.querySelector('.feature-bulk-schedule')?.textContent?.replace(/\s+/g, ' ').trim() || 'Not scheduled';
+            const pert = row.querySelector('[data-feature-bulk-pert]')?.textContent?.trim() || '—';
+            return `
+                <tr>
+                    <td><strong>${escapeHtml(title)}</strong><small>${escapeHtml(phase)}</small></td>
+                    <td>${escapeHtml(expectation)}</td>
+                    <td><strong>${escapeHtml(`${minDays} / ${likelyDays} / ${maxDays} days`)}</strong><small>Min / likely / max · PERT ${escapeHtml(pert)}</small></td>
+                    <td>${escapeHtml(schedule)}</td>
+                </tr>
+            `;
+        }).join('');
+
+        let confirmed = true;
+        if (typeof window.appConfirm === 'function') {
+            const confirmModal = document.getElementById('appConfirmModal');
+            confirmModal?.classList.add('feature-estimate-confirm-modal');
+            const confirmation = window.appConfirm({
+                title: 'Confirm Feature Estimates',
+                titleIcon: 'fas fa-list-check',
+                subject: `Review ${rows.length} feature estimates before saving.`,
+                message: 'Confirm the values below to save the complete feature estimation table.',
+                icon: 'fas fa-table-list',
+                confirmIcon: 'fas fa-floppy-disk',
+                confirmText: 'Save Estimates',
+                cancelText: 'Continue Editing'
+            });
+            const message = document.getElementById('appConfirmMessage');
+            if (message) {
+                message.innerHTML = `
+                    <div class="feature-save-confirm-overview">
+                        <span>${rows.length} features · ${changedCount} edited</span>
+                        <strong>${totalPert.toFixed(1)} total PERT days</strong>
+                    </div>
+                    <div class="feature-save-confirm-table-wrap">
+                        <table class="feature-save-confirm-table">
+                            <thead>
+                                <tr><th>Feature</th><th>Expectation</th><th>Estimate</th><th>Schedule</th></tr>
+                            </thead>
+                            <tbody>${detailRows}</tbody>
+                        </table>
+                    </div>
+                `;
+            }
+            confirmed = await confirmation;
+            confirmModal?.classList.remove('feature-estimate-confirm-modal');
+        } else {
+            confirmed = window.confirm(`Save all ${rows.length} feature estimates?`);
+        }
+        if (!confirmed) return;
+
+        try {
+            window.sessionStorage.setItem('evortix.expert.estimation.scroll', JSON.stringify({
+                scrollY: window.scrollY,
+                projectId
+            }));
+        } catch (error) {
+            // Saving remains available when browser storage is unavailable.
+        }
+        bulkForm.dataset.featureConfirmed = '1';
+        bulkForm.requestSubmit(saveButton || undefined);
+    });
+    updateBulkSummary();
 }
 
 function setExpertWorkspace(workspace, persist = true) {
@@ -3552,83 +4711,248 @@ function renderProjectManagementTable() {
     const featureRows = Array.from(document.querySelectorAll('.feature-row')).filter(row => {
         return row.id !== 'featureProgressRow' && row.getAttribute('data-project-id') === String(currentProjectId);
     });
-    meta.textContent = `${projectName || 'Selected project'} | ${featureRows.length} feature${featureRows.length === 1 ? '' : 's'} from architect planning`;
+    meta.textContent = `${projectName || 'Selected project'} | ${featureRows.length} feature${featureRows.length === 1 ? '' : 's'}`;
 
     if (!featureRows.length) {
         container.innerHTML = '<div class="table-empty">No features are available for this project yet.</div>';
         return;
     }
 
-    const rowsHtml = featureRows.map(row => {
+    const allocationColors = ['#19758b', '#ee9638', '#a8456d', '#376fc2', '#168a4b'];
+    const featurePlans = featureRows.map(row => {
         const taskId = row.getAttribute('data-task-id') || '';
-        const featureName = escapeHtml(row.querySelector('.feature-title')?.textContent?.trim() || 'Feature');
         const architectPlan = getArchitectPlan(taskId);
-        const phaseName = String(architectPlan.phase_name || '').trim();
-        const plannedStart = String(architectPlan.planned_start || '').trim();
-        const plannedEnd = String(architectPlan.planned_end || '').trim();
-        const involvementPlan = normalizeInvolvementPlan(architectPlan.involvement_plan || []);
-        const componentPlan = normalizeComponentPlan(architectPlan.component_plan || []);
+        return {
+            featureName: row.querySelector('.feature-title')?.textContent?.trim() || 'Feature',
+            phaseName: String(architectPlan.phase_name || '').trim(),
+            plannedStart: String(architectPlan.planned_start || '').trim(),
+            plannedEnd: String(architectPlan.planned_end || '').trim(),
+            involvementPlan: normalizeInvolvementPlan(architectPlan.involvement_plan || []),
+            componentPlan: normalizeComponentPlan(architectPlan.component_plan || []),
+        };
+    });
 
-        const involvedMarkup = involvementPlan.length
-            ? involvementPlan.map((item) => `
-                <div class="table-list-item">
-                    <strong>${escapeHtml(item.role || 'Department')}</strong>
-                    <span>${item.required_count ? `${item.required_count} planned ${item.required_count === 1 ? 'person' : 'people'}` : 'Planned by architect'}</span>
-                </div>
-            `).join('')
-            : '<div class="table-list-item"><span>No architect-planned department yet.</span></div>';
+    const allocationSignature = (plan) => JSON.stringify(
+        plan.map((item) => ({
+            role: String(item.role || 'Department').trim().toLowerCase(),
+            requiredCount: Math.max(0, Number(item.required_count || 0)),
+            percentage: Math.max(0, Math.min(100, Number(item.percentage || 0))),
+        })).sort((left, right) => left.role.localeCompare(right.role))
+    );
 
-        const percentageMarkup = involvementPlan.length
-            ? involvementPlan.map((item) => `
-                <div class="table-list-item">
-                    <strong>${Number(item.percentage || 0)}%</strong>
-                    <span>${escapeHtml(item.role || 'Department')}</span>
-                </div>
-            `).join('')
-            : '<div class="table-list-item"><span>No percentage available.</span></div>';
+    const firstAllocationSignature = allocationSignature(featurePlans[0]?.involvementPlan || []);
+    const hasSharedAllocation = featurePlans.length > 1
+        && featurePlans[0].involvementPlan.length > 0
+        && featurePlans.every((feature) => allocationSignature(feature.involvementPlan) === firstAllocationSignature);
+    const sharedAllocationPlan = hasSharedAllocation ? featurePlans[0].involvementPlan : [];
+    const hasAnyComponents = featurePlans.some((feature) => feature.componentPlan.length > 0);
+    const planningContextSignature = (feature) => JSON.stringify({
+        phase: String(feature.phaseName || '').trim().toLowerCase(),
+        start: String(feature.plannedStart || '').trim(),
+        end: String(feature.plannedEnd || '').trim(),
+    });
+    const firstPlanningContext = featurePlans[0] || {};
+    const firstPlanningSignature = planningContextSignature(firstPlanningContext);
+    const hasSharedPlanningContext = featurePlans.length > 1
+        && Boolean(firstPlanningContext.phaseName || firstPlanningContext.plannedStart || firstPlanningContext.plannedEnd)
+        && featurePlans.every((feature) => planningContextSignature(feature) === firstPlanningSignature);
+    const useCompactFeatureList = hasSharedAllocation && hasSharedPlanningContext && !hasAnyComponents;
+    const formatPlanDate = (value) => {
+        const normalizedValue = String(value || '').trim();
+        if (!normalizedValue) {
+            return 'TBD';
+        }
+        const parsedDate = new Date(`${normalizedValue}T00:00:00`);
+        if (Number.isNaN(parsedDate.getTime())) {
+            return normalizedValue;
+        }
+        return parsedDate.toLocaleDateString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+        });
+    };
 
-        const componentMarkup = componentPlan.length
-            ? componentPlan.map((item) => `
-                <div class="table-list-item">
-                    <strong>${escapeHtml(item.name || 'Component')}</strong>
-                    <span>Architect planning</span>
+    const renderAllocationStack = (plan) => {
+        if (!plan.length) {
+            return '<span class="table-empty-copy">No allocation planned</span>';
+        }
+
+        const percentages = plan.map((item) => Math.max(0, Math.min(100, Number(item.percentage || 0))));
+        const total = percentages.reduce((sum, value) => sum + value, 0);
+        const chartTotal = total > 0 ? total : plan.length;
+        const chartLabel = plan.map((item, index) => `${item.role || 'Department'} ${percentages[index]}%`).join(', ');
+        const segments = plan.map((item, index) => {
+            const segmentWeight = total > 0 ? percentages[index] : 1;
+            const segmentWidth = (segmentWeight / chartTotal) * 100;
+            const allocationColor = allocationColors[index % allocationColors.length];
+            return `<span class="table-allocation-segment" style="--allocation-color:${allocationColor};width:${segmentWidth.toFixed(3)}%" title="${escapeHtml(item.role || 'Department')}: ${percentages[index]}%"></span>`;
+        }).join('');
+
+        return `<span class="table-allocation-stack" role="img" aria-label="${escapeHtml(chartLabel)}">${segments}</span>`;
+    };
+
+    const renderAllocationDetails = (plan) => `
+        <div class="table-allocation-list">
+            ${plan.map((item) => {
+                const requiredCount = Math.max(0, Number(item.required_count || 0));
+                const allocationPercentage = Math.max(0, Math.min(100, Number(item.percentage || 0)));
+                const countLabel = requiredCount > 0
+                    ? `${requiredCount} ${requiredCount === 1 ? 'person' : 'people'}`
+                    : 'Headcount not set';
+                return `
+                    <div class="table-allocation-row">
+                        <div class="table-allocation-copy">
+                            <span class="table-allocation-name">${escapeHtml(item.role || 'Department')}</span>
+                            <span class="table-allocation-count">${countLabel}</span>
+                        </div>
+                        <span class="table-allocation-percent">${allocationPercentage}%</span>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+
+    const renderAllocationLegend = (plan) => plan.map((item, index) => {
+        const requiredCount = Math.max(0, Number(item.required_count || 0));
+        const allocationPercentage = Math.max(0, Math.min(100, Number(item.percentage || 0)));
+        const countLabel = requiredCount > 0
+            ? `${requiredCount} ${requiredCount === 1 ? 'person' : 'people'}`
+            : 'Headcount not set';
+        const allocationColor = allocationColors[index % allocationColors.length];
+        return `
+            <span class="management-allocation-legend__item">
+                <i class="management-allocation-legend__dot" style="--allocation-color:${allocationColor}" aria-hidden="true"></i>
+                <span>${escapeHtml(item.role || 'Department')}</span>
+                <strong>${allocationPercentage}%</strong>
+                <small>${countLabel}</small>
+            </span>
+        `;
+    }).join('');
+
+    const sharedPlanFacts = [
+        ...(hasSharedPlanningContext && firstPlanningContext.phaseName
+            ? [{
+                label: 'Phase',
+                value: firstPlanningContext.phaseName,
+            }]
+            : []),
+        ...(hasSharedPlanningContext && (firstPlanningContext.plannedStart || firstPlanningContext.plannedEnd)
+            ? [{
+                label: 'Schedule',
+                value: `${formatPlanDate(firstPlanningContext.plannedStart)} \u2013 ${formatPlanDate(firstPlanningContext.plannedEnd)}`,
+            }]
+            : []),
+        {
+            label: 'Features',
+            value: `${featurePlans.length} included`,
+        },
+    ];
+    const sharedPlanFactsMarkup = sharedPlanFacts.map((fact) => `
+        <span class="management-plan-fact">
+            <small>${escapeHtml(fact.label)}</small>
+            <strong>${escapeHtml(fact.value)}</strong>
+        </span>
+    `).join('');
+
+    const sharedAllocationMarkup = hasSharedAllocation || hasSharedPlanningContext
+        ? `
+            <div class="management-shared-allocation">
+                <div class="management-shared-allocation__copy">
+                    <strong><i class="fas fa-layer-group" aria-hidden="true"></i> Plan Overview</strong>
+                    <span>Common planning details shown once for this feature group</span>
                 </div>
-            `).join('')
-            : '<div class="table-list-item"><span>No architect-planned component yet.</span></div>';
+                <div class="management-plan-facts">${sharedPlanFactsMarkup}</div>
+                ${hasSharedAllocation
+                    ? `<div class="management-shared-allocation__visual">
+                        <span class="management-allocation-label">Staffing mix</span>
+                        ${renderAllocationStack(sharedAllocationPlan)}
+                        <div class="management-allocation-legend">${renderAllocationLegend(sharedAllocationPlan)}</div>
+                    </div>`
+                    : ''}
+            </div>
+        `
+        : '';
+
+    const rowsHtml = featurePlans.map((feature) => {
+        const {
+            featureName,
+            phaseName,
+            plannedStart,
+            plannedEnd,
+            involvementPlan,
+            componentPlan,
+        } = feature;
+        let allocationMarkup = '<span class="table-empty-copy">No allocation planned</span>';
+        if (involvementPlan.length) {
+            allocationMarkup = `
+                <details class="table-allocation-details">
+                    <summary>
+                        <span class="table-allocation-summary-label">${involvementPlan.length} department${involvementPlan.length === 1 ? '' : 's'}</span>
+                        ${renderAllocationStack(involvementPlan)}
+                        <i class="fas fa-chevron-down table-allocation-details__chevron" aria-hidden="true"></i>
+                    </summary>
+                    ${renderAllocationDetails(involvementPlan)}
+                </details>
+            `;
+        }
+
+        const componentNames = componentPlan
+            .map((item) => String(item.name || '').trim())
+            .filter(Boolean)
+            .map((name) => escapeHtml(name));
+        const componentMarkup = componentNames.length
+            ? `<span class="table-component-copy">${componentNames.join(', ')}</span>`
+            : '<span class="table-empty-copy" title="No component planned">&mdash;</span>';
+        const plannedRangeMarkup = plannedStart || plannedEnd
+            ? `<span class="table-date-range"><i class="far fa-calendar" aria-hidden="true"></i>${escapeHtml(plannedStart || 'TBD')} &ndash; ${escapeHtml(plannedEnd || 'TBD')}</span>`
+            : '';
 
         return `
             <tr>
-                <td>
-                    <div class="table-feature-name">${featureName}</div>
-                    <div class="table-feature-meta">
-                        ${phaseName ? `<span class="table-phase-tag"><i class="fas fa-layer-group"></i>${escapeHtml(phaseName)}</span>` : ''}
-                        ${plannedStart ? `<span>Start: ${escapeHtml(plannedStart)}</span>` : ''}
-                        ${plannedEnd ? `<span>End: ${escapeHtml(plannedEnd)}</span>` : ''}
-                    </div>
-                </td>
-                <td>
-                    <div class="table-list">${involvedMarkup}</div>
-                </td>
-                <td><div class="table-list">${percentageMarkup}</div></td>
-                <td>
-                    <div class="table-list">${componentMarkup}</div>
-                </td>
+                <td><div class="table-feature-name">${escapeHtml(featureName)}</div></td>
+                ${hasSharedPlanningContext
+                    ? ''
+                    : `<td>${phaseName ? `<span class="table-phase-tag"><i class="fas fa-layer-group"></i>${escapeHtml(phaseName)}</span>` : '<span class="table-empty-copy">Not specified</span>'}</td>
+                       <td>${plannedRangeMarkup || '<span class="table-empty-copy">Not scheduled</span>'}</td>`}
+                ${hasSharedAllocation ? '' : `<td>${allocationMarkup}</td>`}
+                ${hasAnyComponents ? `<td>${componentMarkup}</td>` : ''}
             </tr>
         `;
     }).join('');
 
+    const compactFeatureListMarkup = `
+        <section class="management-feature-list" aria-label="Features in this plan">
+            <div class="management-feature-list__header">
+                <span>Features in this plan</span>
+                <small>${featurePlans.length} items</small>
+            </div>
+            <div class="management-feature-grid" role="list">
+                ${featurePlans.map((feature, index) => `
+                    <div class="management-feature-grid__item" role="listitem">
+                        <span class="management-feature-grid__index">${String(index + 1).padStart(2, '0')}</span>
+                        <span>${escapeHtml(feature.featureName)}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </section>
+    `;
+
     container.innerHTML = `
-        <table class="management-table">
-            <thead>
-                <tr>
-                    <th>Feature Name</th>
-                    <th>Developer / Department Involved</th>
-                    <th>Percentage Involved</th>
-                    <th>Components</th>
-                </tr>
-            </thead>
-            <tbody>${rowsHtml}</tbody>
-        </table>
+        ${sharedAllocationMarkup}
+        ${useCompactFeatureList
+            ? compactFeatureListMarkup
+            : `<table class="management-table management-table--grouped">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        ${hasSharedPlanningContext ? '' : '<th>Phase</th><th>Schedule</th>'}
+                        ${hasSharedAllocation ? '' : '<th>Department Allocation</th>'}
+                        ${hasAnyComponents ? '<th>Components</th>' : ''}
+                    </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>`}
     `;
 }
 
@@ -3928,6 +5252,7 @@ if (phaseSelect) {
     phaseSelect.value = selectedFeatureProjectId !== '0' ? selectedFeatureProjectId : '';
     loadProjectSetup();
 }
+mountFeatureEstimationEditors();
 bindPreviewHandlers();
 bindGanttHandlers();
 bindRecommendationHandlers();
