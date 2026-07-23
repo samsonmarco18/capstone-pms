@@ -890,7 +890,7 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
-    <!-- Estimate Range and Project Insights -->
+    <!-- Estimate Range and Portfolio Risk -->
     <div class="row g-4 expert-dashboard-section">
         <div class="col-xl-6">
             <div class="card border-0 shadow-sm h-100 expert-chart-card">
@@ -908,10 +908,10 @@ include '../../includes/navbar.php';
         <div class="col-xl-6 expert-insight-column">
             <?php
             delayInsightsRenderCompactList($conn, $user, [
-                'limit' => 2,
-                'title' => 'Project Insight List',
-                'subtitle' => 'Current project delivery signals available to your Expert workspace.',
-                'button_label' => 'View Project',
+                'limit' => 200,
+                'display' => 'portfolio_chart',
+                'title' => 'Overall Project Risk',
+                'subtitle' => 'Portfolio-wide delivery risk across all monitored projects available to your Expert workspace.',
                 'show_empty' => true,
                 'empty_title' => 'No project insights yet',
                 'empty_message' => 'Project delivery signals will appear here when an assigned project becomes available.',
