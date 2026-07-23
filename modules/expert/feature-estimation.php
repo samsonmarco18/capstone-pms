@@ -1226,7 +1226,7 @@ include '../../includes/navbar.php';
 
 .page-header-modern h2 {
     font-size: 1.5rem;
-    font-weight: 700;
+    font-weight: 600;
     margin-bottom: 0.35rem;
     color: white;
 }
@@ -1248,18 +1248,6 @@ include '../../includes/navbar.php';
     min-width: 0;
 }
 
-.page-header-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-bottom: 0.42rem;
-    color: #cfeeff;
-    font-size: 0.68rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
 .expert-workspace-switcher {
     align-items: flex-end;
     border-bottom: 1px solid var(--gray-300);
@@ -1277,7 +1265,7 @@ include '../../includes/navbar.php';
     color: var(--gray-600);
     display: inline-flex;
     font-size: 0.86rem;
-    font-weight: 700;
+    font-weight: 600;
     gap: 0.5rem;
     margin-bottom: -1px;
     padding: 0.75rem 1rem;
@@ -2413,12 +2401,11 @@ textarea.form-control-custom {
     <!-- Page Header -->
     <div class="page-header-modern">
         <div class="page-header-content">
-            <span class="page-header-eyebrow"><i class="fas fa-user-check" aria-hidden="true"></i>Expert estimation workspace</span>
             <h2>
                 <i class="fas fa-calculator me-2"></i> 
-                Project &amp; Feature Estimation
+                Project Estimation
             </h2>
-            <p>Review project requirements, estimate feature effort, and prepare a clear recommendation for review.</p>
+            <p>Estimate project costs and feature effort for review.</p>
         </div>
     </div>
 

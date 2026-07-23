@@ -606,18 +606,14 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .estimation-panel { background: #fff; border: 1px solid var(--pe-line); border-radius: 16px; overflow: hidden; }
     .project-estimation-shell { border-radius: 22px; box-shadow: 0 16px 40px rgba(15, 42, 64, 0.08); }
     .estimation-panel-head { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--pe-line); align-items: center; flex-wrap: wrap; }
-    .estimation-panel-head h5 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--pe-ink); }
+    .estimation-panel-head h5 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--pe-ink); }
     .estimation-panel-body { padding: 1.25rem; }
-    .project-estimation-toolbar { padding: 1.2rem 1.4rem; background: linear-gradient(135deg, #fff 0%, #f7fbfe 100%); }
-    .project-estimation-heading { display: flex; align-items: center; gap: 0.85rem; min-width: 0; }
-    .project-estimation-heading__icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 44px; height: 44px; border-radius: 13px; background: #e8f3fa; color: var(--pe-primary); font-size: 1.05rem; }
-    .project-estimation-eyebrow { display: block; margin-bottom: 0.12rem; color: var(--pe-primary); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
-    .project-estimation-heading p { margin: 0.22rem 0 0; color: var(--pe-muted); font-size: 0.8rem; }
+    .project-estimation-toolbar { justify-content: flex-end; padding: 1rem 1.25rem; background: #fff; }
     .project-estimation-picker { display: grid; grid-template-columns: auto minmax(220px, 310px); align-items: center; gap: 0.65rem; }
-    .project-estimation-picker label { margin: 0; color: var(--pe-muted); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+    .project-estimation-picker label { margin: 0; color: var(--pe-muted); font-size: 0.76rem; font-weight: 500; }
     .project-estimation-picker .form-control-custom { min-height: 44px; background: #fff; }
     .project-estimation-body { background: #f8fbfd; }
-    .project-estimation-status-pill { display: inline-flex; align-items: center; gap: 0.38rem; padding: 0.38rem 0.68rem; border-radius: 999px; background: #e8f3fa; color: var(--pe-primary); font-size: 0.72rem; font-weight: 800; white-space: nowrap; }
+    .project-estimation-status-pill { display: inline-flex; align-items: center; gap: 0.38rem; padding: 0.38rem 0.68rem; border-radius: 999px; background: #e8f3fa; color: var(--pe-primary); font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
     .project-estimation-status-pill.is-submitted { background: #dcfce7; color: #166534; }
     .estimation-section { margin-bottom: 1rem; border-color: #e3ebf3; box-shadow: 0 2px 8px rgba(15, 42, 64, 0.025); }
     .estimation-section:last-child { margin-bottom: 0; }
@@ -631,11 +627,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .estimation-section-toggle[aria-expanded="true"] .estimation-section-toggle__chevron { transform: rotate(180deg); background: #dceef8; }
     .estimation-section-title { display: flex; align-items: center; gap: 0.68rem; }
     .estimation-section-icon { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 9px; background: #edf6fb; color: var(--pe-primary); font-size: 0.78rem; }
-    .estimation-section-title small { display: block; margin-top: 0.1rem; color: var(--pe-muted); font-size: 0.72rem; font-weight: 500; }
     .overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); column-gap: 2rem; margin: 0; }
     .overview-cell { min-width: 0; padding: 0.85rem 0; background: transparent; border: 0; border-bottom: 1px solid var(--pe-line); border-radius: 0; }
-    .overview-cell span { display: block; color: var(--pe-muted); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
-    .overview-cell strong { display: block; color: var(--pe-ink); font-size: 0.9rem; margin-top: 0.28rem; overflow-wrap: anywhere; }
+    .overview-cell span { display: block; color: var(--pe-muted); font-size: 0.68rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+    .overview-cell strong { display: block; color: var(--pe-ink); font-size: 0.9rem; font-weight: 500; margin-top: 0.28rem; overflow-wrap: anywhere; }
     .overview-detail { display: block; margin-top: 0.32rem; color: var(--pe-muted); font-size: 0.76rem; line-height: 1.45; }
     .estimate-table { width: 100%; border-collapse: separate; border-spacing: 0; }
     .estimate-table th, .estimate-table td { padding: 0.78rem; border-bottom: 1px solid var(--pe-line); vertical-align: middle; font-size: 0.82rem; }
@@ -644,14 +639,14 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .estimate-table tbody tr:hover td { background: #fbfdff; }
     .department-estimate { border: 1px solid var(--pe-line); border-radius: 14px; overflow: hidden; margin-bottom: 0.85rem; background: #fff; }
     .department-estimate:last-child { margin-bottom: 0; }
-    .department-estimate-title { padding: 0.78rem 1rem; background: #f6f9fc; display: flex; justify-content: space-between; gap: 1rem; font-size: 0.82rem; font-weight: 700; color: var(--pe-ink); }
+    .department-estimate-title { padding: 0.78rem 1rem; background: #f6f9fc; display: flex; justify-content: space-between; gap: 1rem; font-size: 0.82rem; font-weight: 600; color: var(--pe-ink); }
     .department-estimate-title span:last-child { color: var(--pe-muted); font-size: 0.76rem; }
     .money-positive { color: #047857 !important; }
     .money-negative { color: #b91c1c !important; }
     .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.8rem; }
     .summary-cell { padding: 1rem; border-radius: 12px; border: 1px solid var(--pe-line); background: #fff; }
-    .summary-cell span { display: block; font-size: 0.68rem; color: var(--pe-muted); font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; }
-    .summary-cell strong { display: block; font-size: 1.08rem; color: var(--pe-primary); margin-top: 0.28rem; }
+    .summary-cell span { display: block; font-size: 0.68rem; color: var(--pe-muted); font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+    .summary-cell strong { display: block; font-size: 1.08rem; font-weight: 600; color: var(--pe-primary); margin-top: 0.28rem; }
     .summary-note { margin-top: 0.45rem; color: var(--pe-muted); font-size: 0.76rem; line-height: 1.45; }
     .summary-cell.is-primary { background: #eef7fc; border-color: #cfe5f3; }
     .project-estimation-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap; padding-top: 1rem; border-top: 1px solid var(--pe-line); }
@@ -659,7 +654,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .project-estimation-submit-note i { color: var(--pe-primary); }
     .project-estimation-submit { min-width: 225px; justify-content: center; }
     .project-estimation-submit.is-loading { pointer-events: none; opacity: 0.82; }
-    .project-estimation-locked-note { display: flex; align-items: center; gap: 0.65rem; color: #166534; font-size: 0.8rem; font-weight: 700; }
+    .project-estimation-locked-note { display: flex; align-items: center; gap: 0.65rem; color: #166534; font-size: 0.8rem; font-weight: 500; }
     .project-estimation-locked-note i { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #dcfce7; }
     .project-estimation-dashboard-link { display: inline-flex; align-items: center; gap: 0.45rem; min-height: 40px; padding: 0.58rem 0.85rem; border: 1px solid #b9d5e6; border-radius: 10px; color: var(--pe-primary); font-size: 0.8rem; font-weight: 700; text-decoration: none; }
     .project-estimation-dashboard-link:hover { background: #edf6fb; color: var(--pe-primary-dark); }
@@ -691,8 +686,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         box-shadow: 0 6px 14px rgba(22, 163, 74, 0.2);
     }
     .project-estimation-feedback__content { display: grid; gap: 0.12rem; min-width: 0; flex: 1 1 auto; }
-    .project-estimation-feedback__content small { color: #15803d; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
-    .project-estimation-feedback__content strong { color: inherit; font-size: 0.95rem; }
+    .project-estimation-feedback__content strong { color: inherit; font-size: 0.95rem; font-weight: 600; }
     .project-estimation-feedback__content span { font-size: 0.8rem; line-height: 1.45; }
     .project-estimation-feedback.is-arrival { animation: projectEstimationArrival 0.8s ease; }
     .review-progress { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 0.7rem; margin-bottom: 1rem; padding: 0.95rem 1.05rem; border: 1px solid var(--pe-line); border-radius: 14px; background: #fff; }
@@ -759,14 +753,6 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     <div class="estimation-workspace" id="projectEstimationModule">
         <div class="estimation-panel project-estimation-shell">
             <div class="estimation-panel-head project-estimation-toolbar">
-                <div class="project-estimation-heading">
-                    <span class="project-estimation-heading__icon" aria-hidden="true"><i class="fas fa-file-invoice-dollar"></i></span>
-                    <div>
-                        <span class="project-estimation-eyebrow">Expert workspace</span>
-                        <h5>Project Cost Estimation</h5>
-                        <p>Review project inputs, calculate delivery costs, and submit the estimate for approval.</p>
-                    </div>
-                </div>
                 <form method="GET" class="project-estimation-picker">
                     <label for="projectEstimationSelect">Project</label>
                     <select id="projectEstimationSelect" name="project_estimation_id" class="form-control-custom" onchange="this.form.submit()">
@@ -796,7 +782,6 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                     <div class="project-estimation-feedback" role="status" tabindex="-1" data-project-estimation-submitted>
                         <span class="project-estimation-feedback__icon" aria-hidden="true"><i class="fas fa-check"></i></span>
                         <div class="project-estimation-feedback__content">
-                            <small>Submission complete</small>
                             <strong><?php echo htmlspecialchars($reviewHeadline); ?></strong>
                             <span><?php echo htmlspecialchars($reviewMessage); ?></span>
                         </div>
@@ -811,7 +796,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="projectOverviewDetails">
-                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-briefcase"></i></span><span>Project Overview<small>Client scope and planning inputs</small></span></h5>
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-briefcase"></i></span><span>Project Overview</span></h5>
                             <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                         </button>
                         <div class="estimation-panel-body" id="projectOverviewDetails" hidden>
@@ -830,7 +815,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="technologyCostDetails">
-                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-layer-group"></i></span><span>Technology Stack Cost<small>Software cost across phases 2, 3, and 4 when available</small></span></h5>
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-layer-group"></i></span><span>Technology Stack Cost</span></h5>
                             <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                         </button>
                         <div class="estimation-panel-body estimation-scroll" id="technologyCostDetails" hidden>
@@ -854,7 +839,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="developerAllocationDetails">
-                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-users"></i></span><span>Developer Allocation<small>Set level and contribution for each roadmap position</small></span></h5>
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-users"></i></span><span>Developer Allocation</span></h5>
                             <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                         </button>
                         <div class="estimation-panel-body" id="developerAllocationDetails" hidden>
@@ -899,7 +884,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="developerCostDetails">
-                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-calculator"></i></span><span>Developer Cost Estimation<small>Calculated staffing and technology totals</small></span></h5>
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-calculator"></i></span><span>Developer Cost Estimation</span></h5>
                             <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
                         </button>
                         <div class="estimation-panel-body estimation-scroll" id="developerCostDetails" hidden>
@@ -918,7 +903,7 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
                     <div class="estimation-panel estimation-section">
                         <button type="button" class="estimation-panel-head estimation-section-toggle" aria-expanded="false" aria-controls="projectCostSummaryDetails">
-                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-chart-pie"></i></span><span>Project Cost Summary<small>Final estimate compared with the client budget</small></span></h5>
+                            <h5 class="estimation-section-title"><span class="estimation-section-icon"><i class="fas fa-chart-pie"></i></span><span>Project Cost Summary</span></h5>
                             <span class="estimation-section-toggle__meta">
                                 <span class="project-estimation-status-pill <?php echo $estimationLockedForReview ? 'is-submitted' : ''; ?>"><i class="fas fa-<?php echo $estimationLockedForReview ? 'lock' : 'pen'; ?>" aria-hidden="true"></i><?php echo htmlspecialchars($estimationStatusLabel); ?></span>
                                 <span class="estimation-section-toggle__chevron" aria-hidden="true"><i class="fas fa-chevron-down"></i></span>
