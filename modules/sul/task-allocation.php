@@ -1663,11 +1663,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             while ($readyRow = $readyRows->fetch_assoc()) {
                 $readyTaskIds[(int) $readyRow['id']] = true;
             }
-            if (count($readyTaskIds) !== count($assignmentTaskIds)) {
-                $_SESSION['error'] = "Every task in this roadmap assignment group must be approved and ready before assignment.";
+            if ($readyTaskIds === [] || !isset($readyTaskIds[$taskId])) {
+                $_SESSION['error'] = "The selected task is not yet approved and ready for assignment.";
                 header("Location: task-allocation.php");
                 exit();
             }
+
+            // A bulk entity may contain later tasks that are still awaiting approval.
+            // Assign the ready subset shown in this department's queue and leave the
+            // remaining entity tasks untouched until they become eligible.
+            $assignmentTaskIds = array_intersect_key($assignmentTaskIds, $readyTaskIds);
+            $assignmentRoadmapTaskByTaskId = array_intersect_key($assignmentRoadmapTaskByTaskId, $readyTaskIds);
+            $assignmentRoadmapTaskIds = [];
+            foreach ($assignmentRoadmapTaskByTaskId as $readyRoadmapTaskId) {
+                $readyRoadmapTaskId = (int) $readyRoadmapTaskId;
+                if ($readyRoadmapTaskId > 0) {
+                    $assignmentRoadmapTaskIds[$readyRoadmapTaskId] = $readyRoadmapTaskId;
+                }
+            }
+            $assignmentDepartmentProgressByTaskId = array_filter(
+                $assignmentDepartmentProgressByTaskId,
+                static fn(int $workflowTaskId): bool => isset($readyTaskIds[$workflowTaskId])
+            );
         }
 
         $assignmentTaskIds = array_values(array_unique(array_map('intval', $assignmentTaskIds)));
