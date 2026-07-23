@@ -118,11 +118,36 @@ $taskBaseQuery = "
     )
 ";
 
+$developerCompletedRoadmapAssignmentSql = "
+    (
+        EXISTS (
+            SELECT 1
+            FROM methodology_tasks mt_done_assignment
+            WHERE mt_done_assignment.task_id = t.id
+              AND mt_done_assignment.assigned_developer_id = {$user['id']}
+              AND mt_done_assignment.status = 'completed'
+        )
+        OR EXISTS (
+            SELECT 1
+            FROM methodology_task_departments mtd_done_assignment
+            LEFT JOIN methodology_tasks mt_done_assignment_parent
+              ON mt_done_assignment_parent.id = mtd_done_assignment.methodology_task_id
+            WHERE mtd_done_assignment.assigned_developer_id = {$user['id']}
+              AND (mtd_done_assignment.workflow_task_id = t.id OR mt_done_assignment_parent.task_id = t.id)
+              AND mtd_done_assignment.status = 'completed'
+        )
+    )
+";
+
 // Check if project_phases column exists
 $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 
 // Get tasks assigned to this developer
-$todoTasks = developerTaskQuery($conn, $taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status = 'todo' ORDER BY t.deadline ASC", 'todo');
+$todoTasks = developerTaskQuery(
+    $conn,
+    $taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status = 'todo' AND NOT {$developerCompletedRoadmapAssignmentSql} ORDER BY t.deadline ASC",
+    'todo'
+);
 $inProgressTasks = developerTaskQuery($conn, $taskBaseQuery . "
     WHERE {$developerTaskAccessSql}
       AND (

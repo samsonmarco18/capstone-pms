@@ -489,6 +489,10 @@ $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 $sulDepartment = trim((string) ($user['department'] ?? ''));
 $sulDepartmentLabel = projectWorkflowDepartmentLabel($sulDepartment);
 $sulDepartmentEscaped = $conn->real_escape_string($sulDepartment);
+$sulDepartmentAliases = projectWorkflowDepartmentAliases($sulDepartment);
+$sulDepartmentAliasesSql = $sulDepartmentAliases !== []
+    ? implode(',', array_map(static fn(string $department): string => "'" . $conn->real_escape_string($department) . "'", $sulDepartmentAliases))
+    : "''";
 $sulMissingDepartment = $sulDepartment === '';
 $isExpertDepartmentSul = $sulDepartmentLabel === 'Expert Department';
 $canManageExpertWorkflow = !$sulMissingDepartment && $isExpertDepartmentSul;
@@ -522,7 +526,8 @@ $deliveryAssignmentLoadingTitle = 'Assigning ' . $deliveryAssigneeLabel;
 $deliveryAssignmentLoadingText = 'Please wait while the ' . $deliveryAssigneeLower . ' assignment is saved.';
 $deliveryNoSelectionText = 'No ' . $deliveryAssigneeLower . ' selected';
 $deliveryNoAvailableText = 'No ' . $deliveryAssigneePluralLower . ' available';
-$sulUserDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : ' AND 1 = 0';
+$sulUserDepartmentClause = $sulDepartment !== '' ? projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : '1 = 0';
+$sulUserDepartmentFilter = ' AND ' . $sulUserDepartmentClause;
 $sulProjectFilter = sulTaskAllocationProjectFilter($conn, 'p', $sulDepartment);
 $sulTaskDepartmentFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
 $sulCurrentRoadmapTaskFilter = $sulDepartment !== '' ? ' AND ' . projectWorkflowCurrentRoadmapTaskClause($conn, 't', $sulDepartment, true) : ' AND 1 = 0';
@@ -941,17 +946,55 @@ $codeReviewTasks = $conn->query("
 
 // Get completed tasks
 $completedTasks = $conn->query("
-    SELECT t.*, u.full_name as assigned_to_name, p.name as project_name,
+    SELECT t.*,
+           COALESCE(
+               u.full_name,
+               (
+                   SELECT completed_user.full_name
+                   FROM methodology_task_departments completed_lane
+                   INNER JOIN users completed_user ON completed_user.id = completed_lane.assigned_developer_id
+                   LEFT JOIN methodology_tasks completed_parent ON completed_parent.id = completed_lane.methodology_task_id
+                   WHERE (completed_lane.workflow_task_id = t.id OR completed_parent.task_id = t.id)
+                     AND completed_lane.department IN ({$sulDepartmentAliasesSql})
+                     AND completed_lane.status = 'completed'
+                   ORDER BY completed_lane.updated_at DESC, completed_lane.id DESC
+                   LIMIT 1
+               )
+           ) AS assigned_to_name,
+           p.name as project_name,
+           COALESCE(
+               t.completed_at,
+               (
+                   SELECT MAX(completed_lane_date.updated_at)
+                   FROM methodology_task_departments completed_lane_date
+                   LEFT JOIN methodology_tasks completed_parent_date ON completed_parent_date.id = completed_lane_date.methodology_task_id
+                   WHERE (completed_lane_date.workflow_task_id = t.id OR completed_parent_date.task_id = t.id)
+                     AND completed_lane_date.department IN ({$sulDepartmentAliasesSql})
+                     AND completed_lane_date.status = 'completed'
+               )
+           ) AS department_completed_at,
            {$bulkEntityCountSelect}
     FROM tasks t
     LEFT JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
-    WHERE t.status = 'completed'
-      AND (t.architect_reviewed_at IS NOT NULL OR t.merged_at IS NOT NULL)
-      {$sulUserDepartmentFilter}
+    WHERE (
+          (
+              t.status = 'completed'
+              AND (t.architect_reviewed_at IS NOT NULL OR t.merged_at IS NOT NULL)
+              AND {$sulUserDepartmentClause}
+          )
+          OR EXISTS (
+              SELECT 1
+              FROM methodology_task_departments completed_lane_scope
+              LEFT JOIN methodology_tasks completed_parent_scope ON completed_parent_scope.id = completed_lane_scope.methodology_task_id
+              WHERE (completed_lane_scope.workflow_task_id = t.id OR completed_parent_scope.task_id = t.id)
+                AND completed_lane_scope.department IN ({$sulDepartmentAliasesSql})
+                AND completed_lane_scope.status = 'completed'
+          )
+      )
       AND {$sulProjectFilter}
       {$selectedDeveloperProjectFilter}
-    ORDER BY t.completed_at DESC
+    ORDER BY department_completed_at DESC, t.updated_at DESC
     LIMIT 10
 ");
 
@@ -1489,6 +1532,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $currentRoadmapTask = null;
         $assignmentTaskIds = [$taskId => $taskId];
         $assignmentRoadmapTaskIds = [];
+        $assignmentRoadmapTaskByTaskId = [];
         $assignmentDepartmentProgressByTaskId = [];
         if ($roadmapPhaseCount > 0) {
             $currentRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $assignmentProjectId, $taskId, $sulDepartment);
@@ -1523,6 +1567,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $roadmapEntityRowId = (int) ($roadmapEntityRow['id'] ?? 0);
                 if ($roadmapEntityRowId > 0) {
                     $assignmentRoadmapTaskIds[$roadmapEntityRowId] = $roadmapEntityRowId;
+                    $assignmentRoadmapTaskByTaskId[(int) $entityTaskId] = $roadmapEntityRowId;
                 }
                 $departmentProgressId = (int) ($roadmapEntityRow['department_progress_id'] ?? 0);
                 if ($departmentProgressId > 0) {
@@ -1567,89 +1612,162 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         }
 
-        $assignmentTaskIdList = implode(',', array_map('intval', array_values($assignmentTaskIds)));
-        
-        $stmt = $conn->prepare("
-            UPDATE tasks
-            SET assigned_to = ?,
-                assigned_by = ?,
-                status = 'todo',
-                deadline = ?,
-                completed_at = NULL,
-                pr_submitted_at = NULL,
-                sul_reviewed_by = NULL,
-                sul_reviewed_at = NULL
-            WHERE id IN ({$assignmentTaskIdList})
+        $assignmentTaskIds = array_values(array_unique(array_map('intval', $assignmentTaskIds)));
+        sort($assignmentTaskIds);
+
+        $plannedHeadcountRow = $conn->query("
+            SELECT COALESCE(SUM(required_count), 0) AS required_count
+            FROM developer_allocations
+            WHERE project_id = {$assignmentProjectId}
+              AND role IN ({$sulDepartmentAliasesSql})
+        ")->fetch_assoc();
+        $plannedHeadcount = max(1, (int) ($plannedHeadcountRow['required_count'] ?? 1));
+        $teamLimit = min($plannedHeadcount, count($assignmentTaskIds));
+
+        $teamRows = $conn->query("
+            SELECT users.id, COUNT(active_tasks.id) AS active_count
+            FROM users
+            LEFT JOIN tasks active_tasks
+              ON active_tasks.assigned_to = users.id
+             AND active_tasks.status NOT IN ('completed', 'cancelled')
+            WHERE users.role = 'developer'
+              AND users.status = 'active'
+              AND " . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) . "
+            GROUP BY users.id
+            ORDER BY CASE WHEN users.id = {$developerId} THEN 0 ELSE 1 END,
+                     active_count ASC,
+                     users.id ASC
         ");
-        $stmt->bind_param("iis", $developerId, $userId, $deadline);
-        
-        if ($stmt->execute()) {
-            if ($currentRoadmapTask) {
-                if ($assignmentRoadmapTaskIds === []) {
-                    $currentRoadmapTaskId = (int) ($currentRoadmapTask['id'] ?? 0);
-                    if ($currentRoadmapTaskId > 0) {
-                        $assignmentRoadmapTaskIds[$currentRoadmapTaskId] = $currentRoadmapTaskId;
+
+        $assignmentTeam = [];
+        if ($teamRows) {
+            while ($teamMember = $teamRows->fetch_assoc()) {
+                $memberId = (int) ($teamMember['id'] ?? 0);
+                if ($memberId > 0 && count($assignmentTeam) < $teamLimit) {
+                    $assignmentTeam[] = $memberId;
+                }
+            }
+        }
+        if (!in_array($developerId, $assignmentTeam, true)) {
+            array_unshift($assignmentTeam, $developerId);
+            $assignmentTeam = array_slice(array_values(array_unique($assignmentTeam)), 0, $teamLimit);
+        }
+
+        $tasksByDeveloper = array_fill_keys($assignmentTeam, []);
+        foreach ($assignmentTaskIds as $taskIndex => $assignmentTaskId) {
+            $memberId = $assignmentTeam[$taskIndex % count($assignmentTeam)];
+            $tasksByDeveloper[$memberId][] = $assignmentTaskId;
+        }
+
+        $assignmentSucceeded = true;
+        $conn->begin_transaction();
+        try {
+            foreach ($tasksByDeveloper as $memberId => $memberTaskIds) {
+                if ($memberTaskIds === []) {
+                    continue;
+                }
+                $memberTaskIdList = implode(',', $memberTaskIds);
+                $memberTaskUpdateStmt = $conn->prepare(str_replace('%s', $memberTaskIdList, "
+                    UPDATE tasks
+                    SET assigned_to = ?,
+                        assigned_by = ?,
+                        status = 'todo',
+                        deadline = ?,
+                        completed_at = NULL,
+                        pr_submitted_at = NULL,
+                        sul_reviewed_by = NULL,
+                        sul_reviewed_at = NULL
+                    WHERE id IN (%s)
+                "));
+                if (!$memberTaskUpdateStmt) {
+                    throw new RuntimeException('Unable to prepare task distribution.');
+                }
+                $memberTaskUpdateStmt->bind_param("iis", $memberId, $userId, $deadline);
+                if (!$memberTaskUpdateStmt->execute()) {
+                    throw new RuntimeException('Unable to save task distribution.');
+                }
+                $memberTaskUpdateStmt->close();
+
+                $roadmapIds = [];
+                foreach ($memberTaskIds as $memberTaskId) {
+                    if (isset($assignmentRoadmapTaskByTaskId[$memberTaskId])) {
+                        $roadmapIds[] = (int) $assignmentRoadmapTaskByTaskId[$memberTaskId];
                     }
                 }
-                $assignmentRoadmapTaskIdList = implode(',', array_map('intval', array_values($assignmentRoadmapTaskIds)));
-                if ($assignmentRoadmapTaskIdList !== '') {
-                    $syncRoadmapStmt = $conn->prepare("
+                if ($roadmapIds !== []) {
+                    $roadmapIdList = implode(',', $roadmapIds);
+                    $roadmapUpdateResult = $conn->query("
                         UPDATE methodology_tasks
-                        SET assigned_developer_id = ?, status = 'planned', updated_by = ?, updated_at = CURRENT_TIMESTAMP
-                        WHERE id IN ({$assignmentRoadmapTaskIdList})
-                          AND project_id = ?
+                        SET assigned_developer_id = {$memberId}, status = 'planned', updated_by = {$userId}, updated_at = CURRENT_TIMESTAMP
+                        WHERE id IN ({$roadmapIdList}) AND project_id = {$assignmentProjectId}
                     ");
-                    if ($syncRoadmapStmt) {
-                        $syncRoadmapStmt->bind_param("iii", $developerId, $userId, $assignmentProjectId);
-                        $syncRoadmapStmt->execute();
-                        $syncRoadmapStmt->close();
-                    }
-                }
-
-                if ($assignmentDepartmentProgressByTaskId !== []) {
-                    $syncDepartmentStmt = $conn->prepare("
-                        UPDATE methodology_task_departments
-                        SET assigned_developer_id = ?,
-                            workflow_task_id = ?,
-                            deadline = ?,
-                            status = 'planned',
-                            updated_by = ?,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE id = ? AND project_id = ?
-                    ");
-                    if ($syncDepartmentStmt) {
-                        foreach ($assignmentDepartmentProgressByTaskId as $departmentProgressId => $workflowTaskId) {
-                            $syncDepartmentStmt->bind_param("iisiii", $developerId, $workflowTaskId, $deadline, $userId, $departmentProgressId, $assignmentProjectId);
-                            $syncDepartmentStmt->execute();
-                        }
-                        $syncDepartmentStmt->close();
+                    if ($roadmapUpdateResult === false) {
+                        throw new RuntimeException('Unable to save roadmap distribution.');
                     }
                 }
             }
 
-            projectWorkflowSyncRoadmap($conn, $assignmentProjectId);
-            $assignedTaskRows = $conn->query("SELECT id, title, deadline FROM tasks WHERE id IN ({$assignmentTaskIdList})");
-            if ($assignedTaskRows) {
-                while ($assignedTask = $assignedTaskRows->fetch_assoc()) {
-                    createNotification(
-                        (int) $developerId,
-                        "New Task Assignment: " . $assignedTask['title'],
-                        "You have been assigned a new task. Deadline: " . date('M d, Y', strtotime((string) $assignedTask['deadline'])),
-                        'task',
-                        'tasks',
-                        (int) $assignedTask['id'],
-                        BASE_URL . 'modules/developer/task.php?id=' . (int) $assignedTask['id']
-                    );
+            if ($assignmentDepartmentProgressByTaskId !== []) {
+                $taskOwners = [];
+                foreach ($tasksByDeveloper as $memberId => $memberTaskIds) {
+                    foreach ($memberTaskIds as $memberTaskId) {
+                        $taskOwners[$memberTaskId] = $memberId;
+                    }
                 }
+                $syncDepartmentStmt = $conn->prepare("
+                    UPDATE methodology_task_departments
+                    SET assigned_developer_id = ?, workflow_task_id = ?, deadline = ?, status = 'planned',
+                        updated_by = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND project_id = ?
+                ");
+                if (!$syncDepartmentStmt) {
+                    throw new RuntimeException('Unable to prepare department distribution.');
+                }
+                foreach ($assignmentDepartmentProgressByTaskId as $departmentProgressId => $workflowTaskId) {
+                    $memberId = (int) ($taskOwners[$workflowTaskId] ?? $developerId);
+                    $syncDepartmentStmt->bind_param("iisiii", $memberId, $workflowTaskId, $deadline, $userId, $departmentProgressId, $assignmentProjectId);
+                    if (!$syncDepartmentStmt->execute()) {
+                        throw new RuntimeException('Unable to save department distribution.');
+                    }
+                }
+                $syncDepartmentStmt->close();
             }
-            
-            $assignedCount = count($assignmentTaskIds);
-            $_SESSION['success'] = $assignedCount . " task" . ($assignedCount === 1 ? "" : "s") . " assigned to one Developer successfully";
+            $conn->commit();
+        } catch (Throwable $e) {
+            $conn->rollback();
+            error_log('Bulk developer distribution failed: ' . $e->getMessage());
+            $assignmentSucceeded = false;
+        }
+
+        if (!$assignmentSucceeded) {
+            $_SESSION['error'] = "Failed to distribute the task group.";
             header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
             exit();
-        } else {
-            $_SESSION['error'] = "Failed to assign task";
         }
+
+        projectWorkflowSyncRoadmap($conn, $assignmentProjectId);
+        foreach ($tasksByDeveloper as $memberId => $memberTaskIds) {
+            foreach ($memberTaskIds as $memberTaskId) {
+                $assignedTask = $conn->query("SELECT title FROM tasks WHERE id = {$memberTaskId}")->fetch_assoc();
+                createNotification(
+                    (int) $memberId,
+                    "New Task Assignment: " . (string) ($assignedTask['title'] ?? 'Task'),
+                    "You have been assigned a new task. Deadline: " . date('M d, Y', strtotime($deadline)),
+                    'task',
+                    'tasks',
+                    $memberTaskId,
+                    BASE_URL . 'modules/developer/task.php?id=' . $memberTaskId
+                );
+            }
+        }
+
+        $assignedCount = count($assignmentTaskIds);
+        $memberCount = count($assignmentTeam);
+        $_SESSION['success'] = $memberCount > 1
+            ? "{$assignedCount} tasks distributed evenly across {$memberCount} department members."
+            : "{$assignedCount} task" . ($assignedCount === 1 ? '' : 's') . " assigned successfully.";
+        header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
+        exit();
     }
 
     // Review developer Pull Request and move to QA or back to Developer
@@ -5671,14 +5789,14 @@ include '../../includes/navbar.php';
                                     </td>
                                     <td>
                                         <span class="estimation-badge"><i class="fas fa-check-circle"></i> Done</span>
-                                        <span class="allocation-deadline-note"><?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['completed_at'] ?? null)); ?></span>
+                                        <span class="allocation-deadline-note"><?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['department_completed_at'] ?? ($task['completed_at'] ?? null))); ?></span>
                                     </td>
                                     <td>
                                         <div class="allocation-table-actions" onclick="event.stopPropagation();">
                                             <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
                                                 <i class="fas fa-eye"></i> View
                                             </button>
-                                            <?php if (empty($task['architect_reviewed_at'])): ?>
+                                            <?php if ((string) ($task['status'] ?? '') === 'completed' && empty($task['architect_reviewed_at'])): ?>
                                                 <button class="btn-warning-modern" type="button" onclick="openReviseCompletedModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode((string) $task['title']); ?>'))">
                                                     <i class="fas fa-undo"></i> Revise
                                                 </button>
@@ -5982,7 +6100,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="expert-assignment-note">
                             <i class="fas fa-circle-info" aria-hidden="true"></i>
-                            Bulk feature groups are assigned to the selected <?php echo htmlspecialchars($deliveryAssigneeLower); ?> together.
+                            For bulk groups, the selected member is included and tasks are divided evenly across the department's planned headcount.
                         </div>
                     <?php else: ?>
                         <div class="empty-state">

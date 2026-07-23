@@ -36,6 +36,15 @@ $projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:
 $totalEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']}");
 $pendingEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'pending'");
 $completedEstimations = expertDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM feature_estimations WHERE expert_id = {$user['id']} AND status = 'completed'");
+$estimationRangeResult = expertDashboardQuery($conn, "
+    SELECT
+        COALESCE(AVG(min_days), 0) AS avg_min,
+        COALESCE(AVG(likely_days), 0) AS avg_likely,
+        COALESCE(AVG(max_days), 0) AS avg_max
+    FROM feature_estimations
+    WHERE expert_id = {$user['id']}
+");
+$estimationRange = $estimationRangeResult ? ($estimationRangeResult->fetch_assoc() ?: []) : [];
 
 // Get assigned tasks for estimation
 $pendingTasks = expertDashboardQuery($conn, "
@@ -598,6 +607,29 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
+    <div class="row g-4 mb-4">
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-pie"></i> Estimation Status</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 280px;"><canvas id="expertEstimationStatusChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-column"></i> Average Estimate Range</h5>
+                </div>
+                <div class="card-body">
+                    <div style="height: 280px;"><canvas id="expertEstimateRangeChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Statistics Cards -->
     <div class="row g-3 mb-4 role-stats-row">
         <div class="col-xl-3 col-md-6">
@@ -832,5 +864,61 @@ include '../../includes/navbar.php';
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof Chart === 'undefined') return;
+
+    const statusCanvas = document.getElementById('expertEstimationStatusChart');
+    if (statusCanvas) {
+        new Chart(statusCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: ['Completed', 'Pending', 'Other'],
+                datasets: [{
+                    data: [
+                        <?php echo $completedEstimations; ?>,
+                        <?php echo $pendingEstimations; ?>,
+                        <?php echo max(0, $totalEstimations - $completedEstimations - $pendingEstimations); ?>
+                    ],
+                    backgroundColor: ['#10b981', '#f59e0b', '#1f6392'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+    }
+
+    const rangeCanvas = document.getElementById('expertEstimateRangeChart');
+    if (rangeCanvas) {
+        new Chart(rangeCanvas, {
+            type: 'bar',
+            data: {
+                labels: ['Minimum', 'Likely', 'Maximum'],
+                datasets: [{
+                    label: 'Average days',
+                    data: [
+                        <?php echo json_encode(round((float) ($estimationRange['avg_min'] ?? 0), 1)); ?>,
+                        <?php echo json_encode(round((float) ($estimationRange['avg_likely'] ?? 0), 1)); ?>,
+                        <?php echo json_encode(round((float) ($estimationRange['avg_max'] ?? 0), 1)); ?>
+                    ],
+                    backgroundColor: ['#38bdf8', '#1f6392', '#0f3f5f'],
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, title: { display: true, text: 'Days' } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+});
+</script>
 
 <?php include '../../includes/footer.php'; ?>
