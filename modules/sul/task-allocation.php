@@ -413,6 +413,7 @@ function sulTaskAllocationRoadmapEntityRows(
     int $taskId,
     array $currentRoadmapTask,
     string $department,
+    array $requestedTaskIds,
     ?string &$error
 ): array {
     $error = null;
@@ -441,6 +442,9 @@ function sulTaskAllocationRoadmapEntityRows(
     while ($entityTask = $entityTaskRows->fetch_assoc()) {
         $entityTaskId = (int) ($entityTask['task_id'] ?? 0);
         if ($entityTaskId <= 0) {
+            continue;
+        }
+        if ($requestedTaskIds !== [] && !in_array($entityTaskId, $requestedTaskIds, true)) {
             continue;
         }
 
@@ -1512,6 +1516,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $taskId = (int) ($_POST['task_id'] ?? 0);
+        $requestedTaskIds = array_values(array_unique(array_filter(array_map(
+            'intval',
+            preg_split('/\s*,\s*/', trim((string) ($_POST['task_ids'] ?? (string) $taskId))) ?: []
+        ))));
+        if ($taskId > 0 && !in_array($taskId, $requestedTaskIds, true)) {
+            $requestedTaskIds[] = $taskId;
+        }
         $developerIds = array_values(array_unique(array_filter(array_map(
             'intval',
             is_array($_POST['developer_ids'] ?? null)
@@ -1588,7 +1599,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $assignmentProjectId = (int) ($validTaskRow['project_id'] ?? 0);
         $roadmapPhaseCount = (int) (($conn->query("SELECT COUNT(*) AS total FROM methodology_phases WHERE project_id = {$assignmentProjectId}")->fetch_assoc()['total'] ?? 0));
         $currentRoadmapTask = null;
-        $assignmentTaskIds = [$taskId => $taskId];
+        $assignmentTaskIds = array_fill_keys($requestedTaskIds, 0);
+        foreach ($requestedTaskIds as $requestedTaskId) {
+            $assignmentTaskIds[$requestedTaskId] = $requestedTaskId;
+        }
         $assignmentRoadmapTaskIds = [];
         $assignmentRoadmapTaskByTaskId = [];
         $assignmentDepartmentProgressByTaskId = [];
@@ -1601,10 +1615,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
 
             $entityError = null;
-            $roadmapEntityRows = sulTaskAllocationRoadmapEntityRows($conn, $assignmentProjectId, $taskId, $currentRoadmapTask, $sulDepartment, $entityError);
+            $roadmapEntityRows = sulTaskAllocationRoadmapEntityRows($conn, $assignmentProjectId, $taskId, $currentRoadmapTask, $sulDepartment, $requestedTaskIds, $entityError);
             if ($entityError !== null) {
                 $_SESSION['error'] = $entityError;
                 header("Location: task-allocation.php");
+                exit();
+            }
+            if (count($roadmapEntityRows) !== count($requestedTaskIds)) {
+                $_SESSION['error'] = "The bulk assignment changed while the dialog was open. Refresh and select the group again.";
+                header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
                 exit();
             }
 
@@ -1663,28 +1682,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             while ($readyRow = $readyRows->fetch_assoc()) {
                 $readyTaskIds[(int) $readyRow['id']] = true;
             }
-            if ($readyTaskIds === [] || !isset($readyTaskIds[$taskId])) {
-                $_SESSION['error'] = "The selected task is not yet approved and ready for assignment.";
+            if (count($readyTaskIds) !== count($requestedTaskIds)) {
+                $_SESSION['error'] = "One or more displayed tasks are no longer ready. Refresh the queue before assigning.";
                 header("Location: task-allocation.php");
                 exit();
             }
-
-            // A bulk entity may contain later tasks that are still awaiting approval.
-            // Assign the ready subset shown in this department's queue and leave the
-            // remaining entity tasks untouched until they become eligible.
-            $assignmentTaskIds = array_intersect_key($assignmentTaskIds, $readyTaskIds);
-            $assignmentRoadmapTaskByTaskId = array_intersect_key($assignmentRoadmapTaskByTaskId, $readyTaskIds);
-            $assignmentRoadmapTaskIds = [];
-            foreach ($assignmentRoadmapTaskByTaskId as $readyRoadmapTaskId) {
-                $readyRoadmapTaskId = (int) $readyRoadmapTaskId;
-                if ($readyRoadmapTaskId > 0) {
-                    $assignmentRoadmapTaskIds[$readyRoadmapTaskId] = $readyRoadmapTaskId;
-                }
-            }
-            $assignmentDepartmentProgressByTaskId = array_filter(
-                $assignmentDepartmentProgressByTaskId,
-                static fn(int $workflowTaskId): bool => isset($readyTaskIds[$workflowTaskId])
-            );
         }
 
         $assignmentTaskIds = array_values(array_unique(array_map('intval', $assignmentTaskIds)));
@@ -1766,6 +1768,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     throw new RuntimeException('Unable to save task distribution.');
                 }
                 $memberTaskUpdateStmt->close();
+                $ownerVerification = $conn->query("
+                    SELECT COUNT(*) AS assigned_count
+                    FROM tasks
+                    WHERE id IN ({$memberTaskIdList})
+                      AND assigned_to = {$memberId}
+                      AND status = 'todo'
+                ");
+                $verifiedCount = $ownerVerification
+                    ? (int) ($ownerVerification->fetch_assoc()['assigned_count'] ?? 0)
+                    : 0;
+                if ($verifiedCount !== count($memberTaskIds)) {
+                    throw new RuntimeException('The saved task count did not match the requested distribution.');
+                }
 
                 $roadmapIds = [];
                 foreach ($memberTaskIds as $memberTaskId) {
@@ -5626,7 +5641,7 @@ include '../../includes/navbar.php';
                                                 <button
                                                     class="btn-primary-modern"
                                                     type="button"
-                                                    onclick="openAssignDeveloperModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode($assignmentTitle); ?>'), '<?php echo htmlspecialchars($assignmentDeadlineValue, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapStart, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapEnd, ENT_QUOTES); ?>', <?php echo $distributionMemberCount; ?>, <?php echo $featureCount; ?>)"
+                                                    onclick="openAssignDeveloperModal(<?php echo (int) $task['id']; ?>, decodeURIComponent('<?php echo rawurlencode($assignmentTitle); ?>'), '<?php echo htmlspecialchars($assignmentDeadlineValue, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapStart, ENT_QUOTES); ?>', '<?php echo htmlspecialchars($groupRoadmapEnd, ENT_QUOTES); ?>', <?php echo $distributionMemberCount; ?>, <?php echo $featureCount; ?>, <?php echo htmlspecialchars(json_encode(array_values(array_map(static fn(array $feature): int => (int) $feature['id'], $features))), ENT_QUOTES, 'UTF-8'); ?>)"
                                                 >
                                                     <i class="fas fa-user-plus"></i> <?php echo htmlspecialchars($deliveryAssignmentAction); ?>
                                                 </button>
@@ -6145,6 +6160,7 @@ include '../../includes/navbar.php';
                 <div class="modal-body">
                     <input type="hidden" name="project_id" value="<?php echo (int) $projectId; ?>">
                     <input type="hidden" name="task_id" id="devTaskId">
+                    <input type="hidden" name="task_ids" id="devTaskIds">
 
                     <div class="assign-expert-intro">
                         <span class="assign-expert-intro-icon" aria-hidden="true"><i class="fas fa-code"></i></span>
@@ -6787,8 +6803,12 @@ developerChoiceRows.forEach(row => {
     });
 });
 
-function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', maxDate = '', selectionLimit = 1, featureCount = 1) {
+function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', maxDate = '', selectionLimit = 1, featureCount = 1, taskIds = []) {
     document.getElementById('devTaskId').value = taskId;
+    document.getElementById('devTaskIds').value = (Array.isArray(taskIds) && taskIds.length ? taskIds : [taskId])
+        .map(Number)
+        .filter(id => Number.isInteger(id) && id > 0)
+        .join(',');
     document.getElementById('devTaskTitle').textContent = taskTitle;
     developerSelectionLimit = Math.max(1, Math.min(Number(selectionLimit) || 1, developerChoiceRows.length || 1));
     developerBulkFeatureCount = Math.max(1, Number(featureCount) || 1);
