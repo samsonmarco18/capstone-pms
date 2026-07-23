@@ -608,7 +608,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     .estimation-panel-head { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--pe-line); align-items: center; flex-wrap: wrap; }
     .estimation-panel-head h5 { margin: 0; font-size: 1rem; font-weight: 600; color: var(--pe-ink); }
     .estimation-panel-body { padding: 1.25rem; }
-    .project-estimation-toolbar { justify-content: flex-end; padding: 1rem 1.25rem; background: #fff; }
+    .project-estimation-toolbar { padding: 0.75rem 1rem; background: #fff; }
+    .project-estimation-heading { display: inline-flex; align-items: center; gap: 0.65rem; min-width: 0; }
+    .project-estimation-heading__icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 36px; height: 36px; border-radius: 10px; background: #edf6fb; color: var(--pe-primary); font-size: 0.9rem; }
+    .project-estimation-heading h5 { font-size: 0.95rem; font-weight: 600; }
     .project-estimation-picker { display: grid; grid-template-columns: auto minmax(220px, 310px); align-items: center; gap: 0.65rem; }
     .project-estimation-picker label { margin: 0; color: var(--pe-muted); font-size: 0.76rem; font-weight: 500; }
     .project-estimation-picker .form-control-custom { min-height: 44px; background: #fff; }
@@ -753,6 +756,10 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     <div class="estimation-workspace" id="projectEstimationModule">
         <div class="estimation-panel project-estimation-shell">
             <div class="estimation-panel-head project-estimation-toolbar">
+                <div class="project-estimation-heading">
+                    <span class="project-estimation-heading__icon" aria-hidden="true"><i class="fas fa-file-invoice-dollar"></i></span>
+                    <h5>Cost Estimate Details</h5>
+                </div>
                 <form method="GET" class="project-estimation-picker">
                     <label for="projectEstimationSelect">Project</label>
                     <select id="projectEstimationSelect" name="project_estimation_id" class="form-control-custom" onchange="this.form.submit()">
