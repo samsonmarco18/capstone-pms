@@ -2298,6 +2298,7 @@ function viewTask(taskId) {
                             <div class="mb-2"><strong>Project:</strong> ${escapeHtml(task.project_name || 'No project')}</div>
                             <div class="mb-2"><strong>Client:</strong> ${escapeHtml(task.client_name || 'No client')}</div>
                             <div class="mb-2"><strong>Deadline:</strong> ${task.deadline ? new Date(task.deadline).toLocaleDateString() : 'Not set'}</div>
+                            ${renderSulDashboardDeveloperWork(task)}
                         </div>
                         <div class="col-md-4">
                             <div class="p-3 bg-light rounded-3">
@@ -2316,6 +2317,27 @@ function viewTask(taskId) {
             new bootstrap.Modal(document.getElementById('taskDetailsModal')).show();
         }
     });
+}
+
+function renderSulDashboardDeveloperWork(task) {
+    const artifacts = Array.isArray(task.department_artifacts) ? task.department_artifacts : [];
+    const gitUpdates = Array.isArray(task.git_updates) ? task.git_updates : [];
+    const gitRows = gitUpdates.map(update => `<div class="border rounded-3 p-3 mb-2">
+        <div><strong><i class="fas fa-code-branch"></i> Branch:</strong> ${escapeHtml(update.branch_name || 'Not specified')}</div>
+        ${update.commit_hash ? `<div class="small mt-1"><strong>Commit:</strong> ${escapeHtml(update.commit_hash)}</div>` : ''}
+        ${update.notes ? `<p class="mb-2 mt-2">${escapeHtml(update.notes)}</p>` : ''}
+        ${update.pull_request_url ? `<a class="me-2" href="${escapeHtml(update.pull_request_url)}" target="_blank" rel="noopener">Pull request</a>` : ''}
+        ${update.repository_url ? `<a href="${escapeHtml(update.repository_url)}" target="_blank" rel="noopener">Repository</a>` : ''}
+    </div>`).join('');
+    const artifactRows = artifacts.map(artifact => `<div class="border rounded-3 p-3 mb-2">
+        <strong>${escapeHtml(artifact.title || 'Developer submission')}</strong>
+        ${artifact.notes ? `<p class="mb-2 mt-2">${escapeHtml(artifact.notes)}</p>` : ''}
+        ${artifact.file_url ? `<a class="me-2" href="${escapeHtml(artifact.file_url)}" target="_blank" rel="noopener">${escapeHtml(artifact.original_file_name || 'View upload')}</a>` : ''}
+        ${artifact.external_url ? `<a href="${escapeHtml(artifact.external_url)}" target="_blank" rel="noopener">Open link</a>` : ''}
+    </div>`).join('');
+    return `<div class="mt-4"><h6><i class="fas fa-laptop-code me-2"></i>Developer work for review</h6>
+        ${gitRows || artifactRows ? `${gitRows}${artifactRows}` : '<div class="text-muted">No links, uploads, or Git updates have been submitted yet.</div>'}
+    </div>`;
 }
 
 function escapeHtml(text) {

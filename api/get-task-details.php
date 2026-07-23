@@ -105,12 +105,16 @@ if ($task = $result->fetch_assoc()) {
          FROM task_git_updates tgu
          INNER JOIN users u ON u.id = tgu.user_id
          WHERE tgu.task_id = ?
-         ORDER BY tgu.created_at DESC, tgu.id DESC
-         LIMIT 1'
+         ORDER BY tgu.created_at DESC, tgu.id DESC'
     );
     $latestGitStmt->bind_param('i', $taskId);
     $latestGitStmt->execute();
-    $task['latest_git_update'] = $latestGitStmt->get_result()->fetch_assoc() ?: null;
+    $gitUpdatesResult = $latestGitStmt->get_result();
+    $task['git_updates'] = [];
+    while ($gitUpdate = $gitUpdatesResult->fetch_assoc()) {
+        $task['git_updates'][] = $gitUpdate;
+    }
+    $task['latest_git_update'] = $task['git_updates'][0] ?? null;
     $latestGitStmt->close();
 
     $task['project_requirements'] = departmentArtifactParseRequirements($task['requested_features'] ?? '');

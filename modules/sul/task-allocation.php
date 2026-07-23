@@ -6538,6 +6538,41 @@ function formatTaskDeadlineLabel(deadline) {
     return parsed.toLocaleDateString();
 }
 
+function renderSulDeveloperWork(task) {
+    const artifacts = Array.isArray(task.department_artifacts) ? task.department_artifacts : [];
+    const gitUpdates = Array.isArray(task.git_updates) ? task.git_updates : [];
+    const artifactRows = artifacts.map(artifact => {
+        const fileLink = artifact.file_url
+            ? `<a class="btn-outline-modern text-decoration-none" href="${escapeHtml(artifact.file_url)}" target="_blank" rel="noopener"><i class="fas fa-download"></i> ${escapeHtml(artifact.original_file_name || 'View upload')}</a>`
+            : '';
+        const externalLink = artifact.external_url
+            ? `<a class="btn-outline-modern text-decoration-none" href="${escapeHtml(artifact.external_url)}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Open link</a>`
+            : '';
+        return `<div class="border rounded-3 p-3 mb-2">
+            <div class="d-flex justify-content-between gap-2 flex-wrap">
+                <strong>${escapeHtml(artifact.title || 'Developer submission')}</strong>
+                <small class="text-muted">${escapeHtml(artifact.user_name || '')}</small>
+            </div>
+            ${artifact.notes ? `<p class="mb-2 mt-2">${escapeHtml(artifact.notes)}</p>` : ''}
+            <div class="d-flex gap-2 flex-wrap">${fileLink}${externalLink}</div>
+        </div>`;
+    }).join('');
+    const gitRows = gitUpdates.map(update => `<div class="border rounded-3 p-3 mb-2">
+        <div><strong><i class="fas fa-code-branch"></i> Branch:</strong> ${escapeHtml(update.branch_name || 'Not specified')}</div>
+        ${update.commit_hash ? `<div class="small mt-1"><strong>Commit:</strong> ${escapeHtml(update.commit_hash)}</div>` : ''}
+        ${update.notes ? `<p class="mb-2 mt-2">${escapeHtml(update.notes)}</p>` : ''}
+        <div class="d-flex gap-2 flex-wrap">
+            ${update.pull_request_url ? `<a class="btn-outline-modern text-decoration-none" href="${escapeHtml(update.pull_request_url)}" target="_blank" rel="noopener"><i class="fas fa-code-pull-request"></i> Pull request</a>` : ''}
+            ${update.repository_url ? `<a class="btn-outline-modern text-decoration-none" href="${escapeHtml(update.repository_url)}" target="_blank" rel="noopener"><i class="fas fa-link"></i> Repository</a>` : ''}
+        </div>
+    </div>`).join('');
+
+    return `<div class="mt-4">
+        <h6><i class="fas fa-laptop-code me-2"></i>Developer work for review</h6>
+        ${gitRows || artifactRows ? `${gitRows}${artifactRows}` : '<div class="text-muted">No links, uploads, or Git updates have been submitted yet.</div>'}
+    </div>`;
+}
+
 function viewTaskDetails(taskId) {
     $.ajax({
         url: '../../api/get-task-details.php',
@@ -6568,6 +6603,7 @@ function viewTaskDetails(taskId) {
                         <div class="mb-2">
                             <strong>Deadline:</strong> ${formatTaskDeadlineLabel(task.deadline)}
                         </div>
+                        ${renderSulDeveloperWork(task)}
                     </div>
                     <div class="col-md-4">
                         <div class="p-3 bg-light rounded-3">
