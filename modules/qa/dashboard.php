@@ -164,26 +164,6 @@ main.qa-overview .role-dashboard-hero::before {
 .qa-overview .role-dashboard-hero p {
     color: #6d7f91;
 }
-.qa-hero-action {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: .55rem;
-    min-height: 44px;
-    padding: .65rem 1rem;
-    border: 1px solid var(--qa-blue);
-    border-radius: 12px;
-    background: var(--qa-blue);
-    color: #fff;
-    text-decoration: none;
-    font-weight: 600;
-    transition: transform .18s ease, background .18s ease;
-}
-.qa-hero-action:hover {
-    color: #fff;
-    background: #174f76;
-    transform: translateY(-2px);
-}
 .qa-metrics {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -520,11 +500,7 @@ html[data-theme="dark"] .qa-results td {
                         <div class="col-lg-8 role-dashboard-hero-copy">
                             <span class="qa-overview-badge mb-3"><i class="fas fa-shield-halved"></i> QA Overview</span>
                             <h1 class="h3 mb-2">Quality assurance at a glance</h1>
-                            <p class="mb-3">Monitor testing demand, pass trends, delivery risk, and work that needs attention.</p>
-                            <a class="qa-hero-action" href="testing.php">
-                                <i class="fas fa-clipboard-check"></i>
-                                Open QA Testing
-                            </a>
+                            <p class="mb-0">Monitor testing demand, pass trends, delivery risk, and work that needs attention.</p>
                         </div>
                         <div class="col-lg-4 d-none d-lg-flex justify-content-end">
                             <div class="role-3d-scene role-3d-scene--qa" aria-hidden="true">
