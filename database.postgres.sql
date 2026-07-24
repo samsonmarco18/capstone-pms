@@ -36,6 +36,16 @@ CREATE TABLE users (
     email_notifications SMALLINT DEFAULT 1,
     task_reminders SMALLINT DEFAULT 1,
     project_updates SMALLINT DEFAULT 1,
+    in_app_notifications SMALLINT DEFAULT 1,
+    theme_preference VARCHAR(20) DEFAULT 'system',
+    accent_color VARCHAR(20) DEFAULT 'blue',
+    evortix_enabled SMALLINT DEFAULT 1,
+    evortix_suggestions SMALLINT DEFAULT 1,
+    evortix_sound SMALLINT DEFAULT 0,
+    timezone VARCHAR(64) DEFAULT 'Asia/Manila',
+    date_format VARCHAR(20) DEFAULT 'M d, Y',
+    session_version INT DEFAULT 1,
+    sessions_invalid_before TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

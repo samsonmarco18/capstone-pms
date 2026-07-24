@@ -74,6 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_email'] = $user['email'];
                 $_SESSION['login_time'] = time();
                 $_SESSION['last_activity'] = time();
+                $_SESSION['session_version'] = (int) ($user['session_version'] ?? 1);
                 $_SESSION['ip_address'] = $ipAddress;
                 if ($user['role'] === 'sales') {
                     $_SESSION['evortix_sales_dashboard_welcome_pending'] = true;

@@ -458,17 +458,68 @@ function setStoredSidebarValue(key, value) {
 
 function initDarkMode() {
     const root = $('html');
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    root.attr('data-theme', savedTheme);
-    updateThemeIcon(savedTheme);
+    const body = $('body');
+    const serverPreference = String(window.APP_USER_PREFERENCES?.theme || 'system');
+    const visualTheme = ['tropical', 'futuristic'].includes(serverPreference) ? serverPreference : '';
+    let colorMode = '';
+
+    try {
+        const localTheme = localStorage.getItem('theme');
+        if (localTheme === 'light' || localTheme === 'dark') {
+            colorMode = localTheme;
+        } else if (localTheme === 'tropical' || localTheme === 'futuristic') {
+            colorMode = localTheme === 'futuristic' ? 'dark' : 'light';
+            localStorage.setItem('theme', colorMode);
+        }
+    } catch (error) {
+        // Use the saved server preference when browser storage is unavailable.
+    }
+
+    const resolveTheme = preference => {
+        if (preference === 'system') {
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        return ['dark', 'futuristic'].includes(preference) ? 'dark' : 'light';
+    };
+    const applyTheme = theme => {
+        root.attr('data-theme', theme);
+        body.attr('data-theme', theme);
+        if (visualTheme) {
+            root.attr('data-app-theme', visualTheme);
+            body.attr('data-app-theme', visualTheme);
+        } else {
+            root.removeAttr('data-app-theme');
+            body.removeAttr('data-app-theme');
+        }
+        updateThemeIcon(theme);
+    };
+
+    applyTheme(colorMode || resolveTheme(serverPreference));
 
     $('#darkModeToggle').on('click', function (event) {
         event.preventDefault();
         const nextTheme = (root.attr('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
-        root.attr('data-theme', nextTheme);
-        localStorage.setItem('theme', nextTheme);
-        updateThemeIcon(nextTheme);
+        applyTheme(nextTheme);
+        try {
+            localStorage.setItem('theme', nextTheme);
+        } catch (error) {
+            // The toggle still works for the current page.
+        }
     });
+
+    if (serverPreference === 'system') {
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', event => {
+            let hasLocalOverride = false;
+            try {
+                hasLocalOverride = ['light', 'dark'].includes(localStorage.getItem('theme'));
+            } catch (error) {
+                hasLocalOverride = false;
+            }
+            if (!hasLocalOverride) {
+                applyTheme(event.matches ? 'dark' : 'light');
+            }
+        });
+    }
 }
 
 function updateThemeIcon(theme) {
@@ -478,6 +529,9 @@ function updateThemeIcon(theme) {
 
 function initNotifications() {
     if (!$('#notificationsDropdown').length) {
+        return;
+    }
+    if (window.APP_USER_PREFERENCES?.inAppNotifications === false) {
         return;
     }
 

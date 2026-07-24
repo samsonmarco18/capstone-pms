@@ -1,6 +1,29 @@
 <?php
+require_once __DIR__ . '/user-preferences.php';
+
 $appFaviconPath = __DIR__ . '/../assets/img/logoInside.png';
 $appFaviconVersion = file_exists($appFaviconPath) ? (string) filemtime($appFaviconPath) : '1';
+$headerUser = isset($user) && is_array($user) ? $user : (isLoggedIn() ? getCurrentUser() : null);
+$headerPreferences = userPreferencesFromUser($headerUser);
+$headerThemePreference = (string) ($headerPreferences['theme_preference'] ?? 'system');
+$headerThemeAccentOptions = [
+    'tropical' => [
+        'primary' => '#0797b5',
+        'light' => '#56c9da',
+        'dark' => '#08738b',
+    ],
+    'futuristic' => [
+        'primary' => '#6d4aff',
+        'light' => '#9b78ff',
+        'dark' => '#3d2a9b',
+    ],
+];
+$headerAccent = $headerThemeAccentOptions[$headerThemePreference]
+    ?? [
+        'primary' => '#0d556b',
+        'light' => '#4da8da',
+        'dark' => '#0a4454',
+    ];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -8,6 +31,56 @@ $appFaviconVersion = file_exists($appFaviconPath) ? (string) filemtime($appFavic
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERNI PMS</title>
+    <script>
+        window.APP_USER_PREFERENCES = <?php echo json_encode([
+            'theme' => (string) $headerPreferences['theme_preference'],
+            'evortixEnabled' => (int) $headerPreferences['evortix_enabled'] === 1,
+            'evortixSuggestions' => (int) $headerPreferences['evortix_suggestions'] === 1,
+            'evortixSound' => (int) $headerPreferences['evortix_sound'] === 1,
+            'inAppNotifications' => (int) $headerPreferences['in_app_notifications'] === 1,
+            'timezone' => (string) $headerPreferences['timezone'],
+            'dateFormat' => (string) $headerPreferences['date_format'],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+        (() => {
+            const savedThemePreference = window.APP_USER_PREFERENCES.theme || 'system';
+            const visualTheme = ['tropical', 'futuristic'].includes(savedThemePreference)
+                ? savedThemePreference
+                : '';
+            let localColorMode = '';
+            try {
+                const localTheme = window.localStorage.getItem('theme');
+                if (localTheme === 'light' || localTheme === 'dark') {
+                    localColorMode = localTheme;
+                } else if (localTheme === 'tropical' || localTheme === 'futuristic') {
+                    localColorMode = localTheme === 'futuristic' ? 'dark' : 'light';
+                    window.localStorage.setItem('theme', localColorMode);
+                }
+            } catch (error) {
+                // Use the saved server preference when browser storage is unavailable.
+            }
+            const resolvedTheme = localColorMode || (
+                savedThemePreference === 'system'
+                    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+                    : (['dark', 'futuristic'].includes(savedThemePreference) ? 'dark' : 'light')
+            );
+            document.documentElement.setAttribute('data-theme', resolvedTheme);
+            if (visualTheme) {
+                document.documentElement.setAttribute('data-app-theme', visualTheme);
+            } else {
+                document.documentElement.removeAttribute('data-app-theme');
+            }
+        })();
+    </script>
+    <style>
+        :root {
+            --primary-color: <?php echo htmlspecialchars($headerAccent['primary']); ?> !important;
+            --primary-light: <?php echo htmlspecialchars($headerAccent['light']); ?> !important;
+            --primary-dark: <?php echo htmlspecialchars($headerAccent['dark']); ?> !important;
+            --theme-primary: <?php echo htmlspecialchars($headerAccent['primary']); ?> !important;
+            --theme-light: <?php echo htmlspecialchars($headerAccent['light']); ?> !important;
+            --theme-dark: <?php echo htmlspecialchars($headerAccent['dark']); ?> !important;
+        }
+    </style>
     <link rel="icon" type="image/png" href="<?php echo BASE_URL; ?>assets/img/logoInside.png?v=<?php echo $appFaviconVersion; ?>">
     <link rel="shortcut icon" type="image/png" href="<?php echo BASE_URL; ?>assets/img/logoInside.png?v=<?php echo $appFaviconVersion; ?>">
     <link rel="apple-touch-icon" href="<?php echo BASE_URL; ?>assets/img/logoInside.png?v=<?php echo $appFaviconVersion; ?>">
@@ -16,6 +89,7 @@ $appFaviconVersion = file_exists($appFaviconPath) ? (string) filemtime($appFavic
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.3.0/dist/frappe-gantt.css">
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/style.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/style.css'); ?>">
     <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/dark-mode.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/dark-mode.css'); ?>">
+    <link rel="stylesheet" href="<?php echo BASE_URL; ?>assets/css/personal-themes.css?v=<?php echo filemtime(__DIR__ . '/../assets/css/personal-themes.css'); ?>">
     <script>
         window.BASE_URL = <?php echo json_encode(BASE_URL); ?>;
     </script>
@@ -175,5 +249,12 @@ $appFaviconVersion = file_exists($appFaviconPath) ? (string) filemtime($appFavic
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="<?php echo BASE_URL; ?>assets/js/main.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/main.js'); ?>" defer></script>
 </head>
-<body>
+<body data-theme="">
+    <script>
+        document.body.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') || 'light');
+        const initialVisualTheme = document.documentElement.getAttribute('data-app-theme');
+        if (initialVisualTheme) {
+            document.body.setAttribute('data-app-theme', initialVisualTheme);
+        }
+    </script>
     <div class="d-flex" id="wrapper">

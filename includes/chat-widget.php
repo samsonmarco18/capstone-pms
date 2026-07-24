@@ -416,6 +416,9 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('DOMContentLoaded', function () {
     const evortixProjectTeamNotification = <?php echo json_encode($evortixProjectTeamNotification, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     const evortixSulRevisionNotification = <?php echo json_encode($evortixSulRevisionNotification, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
+    const evortixEnabled = window.APP_USER_PREFERENCES?.evortixEnabled !== false;
+    const evortixSuggestionsEnabled = window.APP_USER_PREFERENCES?.evortixSuggestions !== false;
+    const evortixSoundEnabled = window.APP_USER_PREFERENCES?.evortixSound === true;
     const widget = document.getElementById('chat-widget');
     const minimized = document.getElementById('chat-widget-minimized');
     const botWidget = document.getElementById('chat-bot-widget');
@@ -435,6 +438,42 @@ document.addEventListener('DOMContentLoaded', function () {
     if (botFloat) {
         document.body.appendChild(botFloat);
     }
+
+    if (!evortixEnabled) {
+        if (botWidget) {
+            botWidget.hidden = true;
+            botWidget.style.display = 'none';
+            botWidget.setAttribute('aria-hidden', 'true');
+        }
+        if (botFloat) {
+            botFloat.hidden = true;
+            botFloat.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    const playEvortixSuggestionSound = function () {
+        if (!evortixSoundEnabled) return;
+
+        try {
+            const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextConstructor) return;
+            const context = new AudioContextConstructor();
+            const oscillator = context.createOscillator();
+            const gain = context.createGain();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(620, context.currentTime);
+            gain.gain.setValueAtTime(0.0001, context.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.16);
+            oscillator.connect(gain);
+            gain.connect(context.destination);
+            oscillator.start();
+            oscillator.stop(context.currentTime + 0.18);
+            oscillator.addEventListener('ended', () => context.close().catch(() => {}), { once: true });
+        } catch (error) {
+            // Browser audio restrictions should not interrupt Evortix guidance.
+        }
+    };
 
     const setSharedChatOpen = function (isOpen) {
         widget.classList.toggle('chat-widget-open', isOpen);
@@ -514,7 +553,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     window.evortixAnnounceNotification = function (heading, message, actionUrl) {
-        if (!botFloat) return;
+        if (!evortixEnabled || !evortixSuggestionsEnabled || !botFloat) return;
         const speech = botFloat.querySelector('.chat-bot-speech');
         if (!speech) return;
 
@@ -543,13 +582,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         botFloat.hidden = false;
         botFloat.setAttribute('aria-hidden', 'false');
+        playEvortixSuggestionSound();
         window.chatBotWidgetRobot?.wake?.();
         window.chatBotFloatRobot?.wink?.('right');
         typeBotSpeech(180);
     };
 
     const evortixRoleDashboardSummary = <?php echo json_encode($evortixRoleDashboardSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
-    if (evortixRoleDashboardSummary && botFloat) {
+    if (evortixEnabled && evortixSuggestionsEnabled && evortixRoleDashboardSummary && botFloat) {
         window.setTimeout(() => {
             const speech = botFloat.querySelector('.chat-bot-speech');
             if (!speech) return;
@@ -576,6 +616,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 ${evortixRoleDashboardSummary.suggestion ? `<div class="evortix-role-planning-suggestion"><div class="evortix-role-planning-eyebrow">${escapeSummary(evortixRoleDashboardSummary.suggestion.eyebrow)}</div><strong class="evortix-role-planning-title">${escapeSummary(evortixRoleDashboardSummary.suggestion.title)}</strong><p class="evortix-role-planning-copy">${escapeSummary(evortixRoleDashboardSummary.suggestion.message)}</p>${evortixRoleDashboardSummary.suggestion.action_url ? `<a class="evortix-role-planning-action" href="${escapeSummary(evortixRoleDashboardSummary.suggestion.action_url)}"><i class="fas fa-arrow-right"></i>${escapeSummary(evortixRoleDashboardSummary.suggestion.action_label)}</a>` : ''}</div>` : ''}`;
             botFloat.hidden = false;
             botFloat.setAttribute('aria-hidden', 'false');
+            playEvortixSuggestionSound();
             window.chatBotFloatRobot?.point?.('left', 6500);
             speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', () => {
                 speech.hidden = true;

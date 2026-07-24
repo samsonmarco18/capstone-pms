@@ -4,8 +4,10 @@ require_once __DIR__ . '/auth.php';
 $user = getCurrentUser();
 $notifications = [];
 $unreadCount = 0;
+$inAppNotificationsEnabled = (int) ($user['in_app_notifications'] ?? 1) === 1;
+$preferredDateFormat = trim((string) ($user['date_format'] ?? 'M d, Y')) ?: 'M d, Y';
 
-if ($user) {
+if ($user && $inAppNotificationsEnabled) {
     $unreadCount = getUnreadNotificationsCount((int) $user['id']);
 
     try {
@@ -29,7 +31,7 @@ if ($user) {
                     while ($row = $result->fetch_assoc()) {
                         $ageMinutes = max(0, (int) floor((float) ($row['age_minutes'] ?? 0)));
                         $row['time_ago'] = formatMinutesAgo($ageMinutes);
-                        $row['formatted_created_at'] = date('M d, Y h:i A', time() - ($ageMinutes * 60));
+                        $row['formatted_created_at'] = date($preferredDateFormat . ' h:i A', time() - ($ageMinutes * 60));
                         unset($row['age_minutes']);
                         $notifications[] = $row;
                     }
@@ -85,7 +87,9 @@ $appUserContext = [
                         <li><hr class="dropdown-divider m-0"></li>
                         <li class="p-0">
                             <ul id="notificationsList" class="list-unstyled mb-0">
-                            <?php if ($notifications): ?>
+                            <?php if (!$inAppNotificationsEnabled): ?>
+                                <li><span class="dropdown-item text-muted">In-app notifications are paused.</span></li>
+                            <?php elseif ($notifications): ?>
                                 <?php foreach ($notifications as $notification): ?>
                                     <li>
                                         <a class="dropdown-item py-2 <?php echo !$notification['is_read'] ? 'bg-light' : ''; ?>"
@@ -105,7 +109,11 @@ $appUserContext = [
                             </ul>
                         </li>
                         <li><hr class="dropdown-divider m-0"></li>
-                        <li><a class="dropdown-item text-center small py-2" href="<?php echo BASE_URL; ?>notifications.php">View All</a></li>
+                        <?php if ($inAppNotificationsEnabled): ?>
+                            <li><a class="dropdown-item text-center small py-2" href="<?php echo BASE_URL; ?>notifications.php">View All</a></li>
+                        <?php else: ?>
+                            <li><a class="dropdown-item text-center small py-2" href="<?php echo BASE_URL; ?>settings.php">Open Settings</a></li>
+                        <?php endif; ?>
                     </ul>
                 </li>
 

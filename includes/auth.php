@@ -212,6 +212,24 @@ function requireLogin(): void
         logoutUser();
     }
 
+    $preferredTimezone = trim((string) ($user['timezone'] ?? ''));
+    if ($preferredTimezone !== '' && in_array($preferredTimezone, timezone_identifiers_list(), true)) {
+        date_default_timezone_set($preferredTimezone);
+    }
+
+    $currentSessionVersion = (int) ($user['session_version'] ?? 1);
+    if (!isset($_SESSION['session_version'])) {
+        $_SESSION['session_version'] = $currentSessionVersion;
+    } elseif ((int) $_SESSION['session_version'] !== $currentSessionVersion) {
+        logoutUser();
+    }
+
+    $sessionsInvalidBefore = strtotime((string) ($user['sessions_invalid_before'] ?? ''));
+    $sessionLoginTime = (int) ($_SESSION['login_time'] ?? time());
+    if ($sessionsInvalidBefore !== false && $sessionsInvalidBefore > $sessionLoginTime) {
+        logoutUser();
+    }
+
     $currentScript = basename((string) ($_SERVER['PHP_SELF'] ?? ''));
 
     $securitySettings = getSecuritySettings();
