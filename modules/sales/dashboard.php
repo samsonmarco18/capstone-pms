@@ -201,6 +201,7 @@ if ($schedules && $schedules->num_rows > 0) {
         ];
     }
 }
+$dashboardScheduleEvents = array_slice($dashboardScheduleEvents, 0, 3);
 
 $nextDashboardEvent = $dashboardScheduleEvents[0] ?? null;
 

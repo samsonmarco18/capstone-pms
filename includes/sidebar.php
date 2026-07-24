@@ -64,7 +64,8 @@ $menuItems = [
         ['label' => 'Version Control', 'url' => '/modules/version-control/repositories.php', 'icon' => 'code-branch'],
     ],
     'qa' => [
-        ['label' => 'Testing Dashboard', 'url' => '/modules/qa/dashboard.php', 'icon' => 'clipboard-check'],
+        ['label' => 'Dashboard', 'url' => '/modules/qa/dashboard.php', 'icon' => 'chart-pie'],
+        ['label' => 'QA Testing', 'url' => '/modules/qa/testing.php', 'icon' => 'clipboard-check'],
         ['label' => 'Calendar', 'url' => '/calendar.php', 'icon' => 'calendar-alt'],
         ['label' => 'Project Insights', 'url' => '/modules/insights/decision-center.php', 'icon' => 'lightbulb', 'attention' => true],
         ['label' => 'Process History', 'url' => '/modules/insights/process-history.php', 'icon' => 'clock-rotate-left'],

@@ -1,203 +1,116 @@
 <?php
 require_once '../../includes/auth.php';
-require_once '../../includes/workflow.php';
-require_once '../../includes/project-workflow.php';
+require_once '../../includes/project-delay-insights.php';
 requireRole('qa');
 
 $conn = getConnection();
 $user = getCurrentUser();
-workflowEnsureSchema($conn);
-projectWorkflowEnsureSchema($conn);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $taskId = (int) ($_POST['task_id'] ?? 0);
-
-    $taskStmt = $conn->prepare("
-        SELECT t.id, t.title, t.status, t.assigned_to, t.project_id, p.name AS project_name
-        FROM tasks t
-        JOIN projects p ON p.id = t.project_id
-        WHERE t.id = ? AND t.status = 'qa_testing'
-        LIMIT 1
-    ");
-    $taskStmt->bind_param('i', $taskId);
-    $taskStmt->execute();
-    $task = $taskStmt->get_result()->fetch_assoc();
-    $taskStmt->close();
-
-    if (!$task) {
-        $_SESSION['error'] = 'Only tasks currently in QA Testing can be updated by QA.';
-        header('Location: dashboard.php');
-        exit();
+function qaDashboardCount($conn, string $sql): int
+{
+    $result = $conn->query($sql);
+    if (!is_object($result) || !method_exists($result, 'fetch_assoc')) {
+        return 0;
     }
 
-    if (isset($_POST['add_checklist_item'])) {
-        $featureName = trim((string) ($_POST['feature_name'] ?? ''));
-        $itemText = trim((string) ($_POST['item_text'] ?? ''));
-        if ($featureName === '' || $itemText === '') {
-            $_SESSION['error'] = 'Feature/module and checklist item are required.';
+    $row = $result->fetch_assoc() ?: [];
+    return (int) ($row['count'] ?? 0);
+}
+
+function qaDashboardQuery($conn, string $sql)
+{
+    $result = $conn->query($sql);
+    return is_object($result) && method_exists($result, 'fetch_assoc') ? $result : null;
+}
+
+$qaQueueCount = qaDashboardCount($conn, "SELECT COUNT(*) AS count FROM tasks WHERE status = 'qa_testing'");
+$qaPassedCount = qaDashboardCount($conn, "SELECT COUNT(*) AS count FROM tasks WHERE status IN ('qa_passed', 'architect_review', 'completed') AND qa_reviewed_at IS NOT NULL");
+$qaReturnedCount = qaDashboardCount($conn, "SELECT COUNT(*) AS count FROM tasks WHERE status = 'qa_failed' AND qa_reviewed_at IS NOT NULL");
+$qaReviewedThisMonth = qaDashboardCount($conn, "
+    SELECT COUNT(*) AS count
+    FROM tasks
+    WHERE qa_reviewed_at IS NOT NULL
+      AND qa_reviewed_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+");
+$qaReviewedTotal = max(0, $qaPassedCount + $qaReturnedCount);
+$qaPassRate = $qaReviewedTotal > 0 ? (int) round(($qaPassedCount / $qaReviewedTotal) * 100) : 0;
+
+$weeklyLabels = [];
+$weeklyPassed = [];
+$weeklyReturned = [];
+$weekLookup = [];
+$currentWeekStart = new DateTimeImmutable('monday this week');
+for ($offset = 5; $offset >= 0; $offset--) {
+    $weekStart = $currentWeekStart->modify("-{$offset} weeks");
+    $key = $weekStart->format('Y-m-d');
+    $weekLookup[$key] = count($weeklyLabels);
+    $weeklyLabels[] = $weekStart->format('M j');
+    $weeklyPassed[] = 0;
+    $weeklyReturned[] = 0;
+}
+
+$weeklyResults = qaDashboardQuery($conn, "
+    SELECT qa_reviewed_at, status
+    FROM tasks
+    WHERE qa_reviewed_at IS NOT NULL
+      AND qa_reviewed_at >= DATE_SUB(CURDATE(), INTERVAL 42 DAY)
+    ORDER BY qa_reviewed_at ASC
+");
+if ($weeklyResults) {
+    while ($row = $weeklyResults->fetch_assoc()) {
+        $reviewedAt = strtotime((string) ($row['qa_reviewed_at'] ?? ''));
+        if ($reviewedAt === false) {
+            continue;
+        }
+        $weekKey = date('Y-m-d', strtotime('monday this week', $reviewedAt));
+        if (!isset($weekLookup[$weekKey])) {
+            continue;
+        }
+        $index = $weekLookup[$weekKey];
+        if ((string) ($row['status'] ?? '') === 'qa_failed') {
+            $weeklyReturned[$index]++;
         } else {
-            $stmt = $conn->prepare('INSERT INTO qa_checklist_items (task_id, feature_name, item_text, developer_id) VALUES (?, ?, ?, ?)');
-            $stmt->bind_param('issi', $taskId, $featureName, $itemText, $task['assigned_to']);
-            $stmt->execute();
-            $stmt->close();
-            $_SESSION['success'] = 'Checklist item added.';
+            $weeklyPassed[$index]++;
         }
-        header('Location: dashboard.php?task_id=' . $taskId);
-        exit();
-    }
-
-    $itemStatuses = $_POST['item_status'] ?? [];
-    $itemNotes = $_POST['item_notes'] ?? [];
-    if (is_array($itemStatuses)) {
-        $updateStmt = $conn->prepare("UPDATE qa_checklist_items SET status = ?, notes = ?, qa_user_id = ?, reviewed_at = NOW() WHERE id = ? AND task_id = ?");
-        foreach ($itemStatuses as $itemId => $itemStatus) {
-            $itemId = (int) $itemId;
-            $status = in_array($itemStatus, ['pending', 'passed', 'failed', 'needs_revision'], true) ? $itemStatus : 'pending';
-            $notes = trim((string) ($itemNotes[$itemId] ?? ''));
-            $updateStmt->bind_param('ssiii', $status, $notes, $user['id'], $itemId, $taskId);
-            $updateStmt->execute();
-        }
-        $updateStmt->close();
-    }
-
-    if (isset($_POST['save_checklist'])) {
-        $_SESSION['success'] = 'QA checklist saved.';
-        header('Location: dashboard.php?task_id=' . $taskId);
-        exit();
-    }
-
-    if (isset($_POST['qa_decision'])) {
-        $decision = (string) ($_POST['decision'] ?? '');
-        $qaComment = trim((string) ($_POST['qa_comment'] ?? ''));
-
-        if ($decision === 'passed') {
-            $stmt = $conn->prepare("UPDATE tasks SET status = 'qa_passed', qa_reviewed_by = ?, qa_reviewed_at = NOW() WHERE id = ?");
-            $stmt->bind_param('ii', $user['id'], $taskId);
-            $stmt->execute();
-            $stmt->close();
-
-            workflowAddTaskComment($conn, $taskId, (int) $user['id'], $qaComment !== '' ? 'QA passed: ' . $qaComment : 'QA passed this feature.');
-            workflowLogStatusChange((int) $user['id'], $taskId, 'qa_testing', 'qa_passed', 'qa_pass_feature', $qaComment);
-            workflowNotifyRoles(
-                $conn,
-                ['architect'],
-                'QA Passed: ' . $task['title'],
-                'QA passed the feature. Architect final review and merge can begin.',
-                BASE_URL . 'modules/architect/final-approval.php?task_id=' . $taskId,
-                $taskId
-            );
-            projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
-            $_SESSION['success'] = 'Feature passed QA and moved to Architect approval.';
-        } elseif (in_array($decision, ['failed', 'needs_revision'], true)) {
-            $stmt = $conn->prepare("UPDATE tasks SET status = 'qa_failed', completed_at = NULL, qa_reviewed_by = ?, qa_reviewed_at = NOW() WHERE id = ?");
-            $stmt->bind_param('ii', $user['id'], $taskId);
-            $stmt->execute();
-            $stmt->close();
-
-            $label = $decision === 'failed' ? 'QA failed' : 'QA needs revision';
-            workflowAddTaskComment($conn, $taskId, (int) $user['id'], $label . ': ' . ($qaComment !== '' ? $qaComment : 'Please review failed checklist items.'));
-            workflowLogStatusChange((int) $user['id'], $taskId, 'qa_testing', 'qa_failed', 'qa_reject_feature', $qaComment);
-            workflowNotifyUser(
-                (int) $task['assigned_to'],
-                $label . ': ' . $task['title'],
-                'QA returned this feature to Developer. ' . ($qaComment !== '' ? 'Comment: ' . $qaComment : 'Review the QA checklist for failed items.'),
-                BASE_URL . 'modules/developer/task.php?id=' . $taskId,
-                $taskId
-            );
-            projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
-            $_SESSION['success'] = 'Feature returned to Developer for fixing.';
-        } else {
-            $_SESSION['error'] = 'Invalid QA decision.';
-            header('Location: dashboard.php?task_id=' . $taskId);
-            exit();
-        }
-
-        header('Location: dashboard.php');
-        exit();
     }
 }
 
-$queue = $conn->query("
-    SELECT t.*, p.name AS project_name, u.full_name AS developer_name
+$upcomingTests = qaDashboardQuery($conn, "
+    SELECT t.id, t.title, t.deadline, p.name AS project_name, u.full_name AS developer_name
     FROM tasks t
     JOIN projects p ON p.id = t.project_id
     LEFT JOIN users u ON u.id = t.assigned_to
     WHERE t.status = 'qa_testing'
-    ORDER BY t.sul_reviewed_at ASC, t.updated_at ASC
+    ORDER BY
+        CASE WHEN t.deadline IS NULL THEN 1 ELSE 0 END,
+        t.deadline ASC,
+        t.updated_at ASC
+    LIMIT 3
 ");
 
-$selectedTaskId = (int) ($_GET['task_id'] ?? 0);
-$selectedTask = null;
-if ($selectedTaskId <= 0 && $queue && $queue->num_rows > 0) {
-    $first = $queue->fetch_assoc();
-    $selectedTaskId = (int) $first['id'];
-    $queue->data_seek(0);
-}
+$attentionItems = qaDashboardQuery($conn, "
+    SELECT t.id, t.title, t.status, t.deadline, p.name AS project_name
+    FROM tasks t
+    JOIN projects p ON p.id = t.project_id
+    WHERE
+        (t.status = 'qa_testing' AND t.deadline IS NOT NULL AND t.deadline < CURDATE())
+        OR t.status = 'qa_failed'
+    ORDER BY
+        CASE WHEN t.status = 'qa_testing' THEN 0 ELSE 1 END,
+        COALESCE(t.deadline, CURDATE()) ASC,
+        t.updated_at DESC
+    LIMIT 5
+");
 
-if ($selectedTaskId > 0) {
-    $selectedStmt = $conn->prepare("
-        SELECT t.*, p.name AS project_name, u.full_name AS developer_name
-        FROM tasks t
-        JOIN projects p ON p.id = t.project_id
-        LEFT JOIN users u ON u.id = t.assigned_to
-        WHERE t.id = ? AND t.status = 'qa_testing'
-        LIMIT 1
-    ");
-    $selectedStmt->bind_param('i', $selectedTaskId);
-    $selectedStmt->execute();
-    $selectedTask = $selectedStmt->get_result()->fetch_assoc();
-    $selectedStmt->close();
-
-    if ($selectedTask) {
-        workflowEnsureDefaultQaChecklist($conn, $selectedTask);
-    }
-}
-
-$checklistByFeature = [];
-if ($selectedTask) {
-    $itemsStmt = $conn->prepare('SELECT * FROM qa_checklist_items WHERE task_id = ? ORDER BY feature_name ASC, id ASC');
-    $itemsStmt->bind_param('i', $selectedTaskId);
-    $itemsStmt->execute();
-    $items = $itemsStmt->get_result();
-    while ($item = $items->fetch_assoc()) {
-        $checklistByFeature[(string) $item['feature_name']][] = $item;
-    }
-    $itemsStmt->close();
-}
-
-$recentResults = $conn->query("
-    SELECT t.id, t.title, t.status, p.name AS project_name, u.full_name AS developer_name, t.qa_reviewed_at
+$recentResults = qaDashboardQuery($conn, "
+    SELECT t.id, t.title, t.status, t.qa_reviewed_at, p.name AS project_name, u.full_name AS developer_name
     FROM tasks t
     JOIN projects p ON p.id = t.project_id
     LEFT JOIN users u ON u.id = t.assigned_to
-    WHERE t.status IN ('qa_passed', 'qa_failed', 'architect_review', 'completed')
-      AND t.qa_reviewed_at IS NOT NULL
+    WHERE t.qa_reviewed_at IS NOT NULL
     ORDER BY t.qa_reviewed_at DESC
-    LIMIT 8
+    LIMIT 6
 ");
-
-$qaQueueCount = $queue ? (int) $queue->num_rows : 0;
-$qaPassedCount = (int) $conn->query("SELECT COUNT(*) AS count FROM tasks WHERE status IN ('qa_passed', 'architect_review', 'completed') AND qa_reviewed_at IS NOT NULL")->fetch_assoc()['count'];
-$qaReturnedCount = (int) $conn->query("SELECT COUNT(*) AS count FROM tasks WHERE status = 'qa_failed' AND qa_reviewed_at IS NOT NULL")->fetch_assoc()['count'];
-$qaReviewedThisMonthQuery = (defined('DB_DRIVER') && DB_DRIVER === 'pgsql')
-    ? "SELECT COUNT(*) AS count FROM tasks WHERE qa_reviewed_at IS NOT NULL AND qa_reviewed_at >= DATE_TRUNC('month', CURRENT_DATE)"
-    : "SELECT COUNT(*) AS count FROM tasks WHERE qa_reviewed_at IS NOT NULL AND qa_reviewed_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')";
-$qaReviewedThisMonth = (int) $conn->query($qaReviewedThisMonthQuery)->fetch_assoc()['count'];
-$selectedChecklistTotal = 0;
-$selectedChecklistPassed = 0;
-$selectedChecklistIssues = 0;
-foreach ($checklistByFeature as $items) {
-    foreach ($items as $item) {
-        $selectedChecklistTotal++;
-        if ((string) $item['status'] === 'passed') {
-            $selectedChecklistPassed++;
-        }
-        if (in_array((string) $item['status'], ['failed', 'needs_revision'], true)) {
-            $selectedChecklistIssues++;
-        }
-    }
-}
-$selectedChecklistProgress = $selectedChecklistTotal > 0 ? (int) round(($selectedChecklistPassed / $selectedChecklistTotal) * 100) : 0;
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -205,318 +118,419 @@ include '../../includes/navbar.php';
 ?>
 
 <style>
-:root {
-    --theme-primary: #1f6392;
-    --theme-dark: #184f73;
-    --gray-50: #f8f9fa;
-    --gray-200: #e9ecef;
-    --gray-300: #dee2e6;
-    --gray-600: #6c757d;
-    --gray-900: #212529;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03);
-    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+.qa-overview {
+    --qa-blue: #1f6392;
+    --qa-navy: #17324d;
+    --qa-green: #15945d;
+    --qa-amber: #e39b11;
+    --qa-red: #d83434;
+    color: var(--qa-navy);
 }
-
-.qa-dashboard .card {
-    background: #fff;
-    border: 1px solid var(--gray-200);
-    border-radius: 20px;
-    box-shadow: var(--shadow-sm);
+main.qa-overview.role-dashboard-shell > .row:first-child .card.card.role-dashboard-hero {
+    border: 0;
     overflow: hidden;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    background:
+        radial-gradient(circle at 88% 12%, rgba(65, 167, 216, .18), transparent 32%),
+        linear-gradient(135deg, rgba(255, 255, 255, .98), rgba(239, 248, 253, .96)) !important;
 }
-
-.qa-dashboard .card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+main.qa-overview .role-dashboard-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, transparent 0 78%, rgba(31, 99, 146, .055) 78% 78.15%, transparent 78.15%),
+        linear-gradient(0deg, transparent 0 68%, rgba(31, 99, 146, .05) 68% 68.2%, transparent 68.2%);
+    background-size: 150px 110px;
+    opacity: .72;
 }
-
-.qa-dashboard .card-header {
-    background: #fff;
-    border-bottom: 1px solid var(--gray-200);
-    padding: 1.2rem 1.5rem;
-}
-
-.qa-dashboard .card-header h5 {
-    align-items: center;
-    color: var(--gray-900);
-    display: flex;
-    font-size: 1rem;
-    font-weight: 700;
-    gap: 0.5rem;
-    margin: 0;
-}
-
-.qa-dashboard .card-header h5 i,
-.qa-stat-icon {
-    color: var(--theme-primary);
-}
-
 .qa-overview-badge {
-    background-color: var(--theme-primary) !important;
-    color: #fff !important;
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .38rem .72rem;
+    border: 1px solid rgba(31,99,146,.14);
+    border-radius: 999px;
+    background: var(--qa-blue);
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 600;
 }
-
-.qa-stat-card {
-    min-height: 158px;
+.qa-overview .role-dashboard-hero h1,
+.qa-overview .role-dashboard-hero p {
+    color: var(--qa-navy);
 }
-
-.qa-stat-icon {
-    font-size: 2.4rem;
-    opacity: 0.65;
+.qa-overview .role-dashboard-hero p {
+    color: #6d7f91;
 }
-
-.qa-stat-label {
-    color: var(--gray-600);
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.4px;
-    margin-bottom: 0.45rem;
+.qa-hero-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .55rem;
+    min-height: 44px;
+    padding: .65rem 1rem;
+    border: 1px solid var(--qa-blue);
+    border-radius: 12px;
+    background: var(--qa-blue);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 600;
+    transition: transform .18s ease, background .18s ease;
+}
+.qa-hero-action:hover {
+    color: #fff;
+    background: #174f76;
+    transform: translateY(-2px);
+}
+.qa-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+}
+.qa-metric {
+    display: flex;
+    align-items: center;
+    gap: .9rem;
+    min-height: 106px;
+    padding: 1rem 1.1rem;
+    border: 1px solid #dce8f0;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 8px 22px rgba(20,72,108,.06);
+}
+.qa-metric-icon,
+.qa-section-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    background: #eaf5fb;
+    color: var(--qa-blue);
+}
+.qa-metric-copy {
+    min-width: 0;
+}
+.qa-metric-label {
+    color: #6d7c8b;
+    font-size: .7rem;
+    font-weight: 600;
+    letter-spacing: .055em;
     text-transform: uppercase;
 }
-
-.qa-stat-number {
-    font-size: 2.45rem;
-    font-weight: 800;
+.qa-metric-value {
+    margin-top: .12rem;
+    color: var(--qa-navy);
+    font-size: 1.75rem;
+    font-weight: 650;
     line-height: 1;
-    margin-bottom: 0.35rem;
 }
-
-.qa-stat-sub,
-.qa-meta {
-    color: var(--gray-600);
-    font-size: 0.76rem;
+.qa-metric-note {
+    margin-top: .3rem;
+    color: #7b8da0;
+    font-size: .74rem;
 }
-
-.qa-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem 0.85rem;
-}
-
-.qa-queue-list {
-    display: grid;
-    gap: 0.75rem;
-}
-
-.qa-queue-item {
-    border: 1px solid var(--gray-200);
-    border-radius: 8px;
-    color: inherit;
-    display: block;
-    padding: 1rem;
-    text-decoration: none;
-    transition: all 0.18s ease;
-}
-
-.qa-queue-item:hover,
-.qa-queue-item.active {
-    background: rgba(31, 99, 146, 0.07);
-    border-color: rgba(31, 99, 146, 0.28);
-    color: inherit;
-}
-
-.qa-queue-item.active {
-    box-shadow: inset 4px 0 0 var(--theme-primary);
-}
-
-.qa-queue-title,
-.qa-check-title {
-    color: var(--gray-900);
-    font-weight: 700;
-}
-
-.qa-queue-title {
-    font-size: 0.94rem;
-    margin-bottom: 0.35rem;
-}
-
-.qa-check-summary {
-    background: var(--gray-50);
-    border: 1px solid var(--gray-200);
-    border-radius: 8px;
-    padding: 1rem;
-}
-
-.qa-progress {
-    background: var(--gray-200);
-    border-radius: 999px;
-    height: 8px;
-    overflow: hidden;
-}
-
-.qa-progress-bar {
-    background: linear-gradient(90deg, #10b981 0%, var(--theme-primary) 100%);
+.qa-panel {
     height: 100%;
-}
-
-.qa-feature-block {
-    border: 1px solid var(--gray-200);
-    border-radius: 8px;
-    margin-bottom: 1rem;
     overflow: hidden;
+    border: 1px solid #dce8f0;
+    border-radius: 20px;
+    background: #fff;
+    box-shadow: 0 10px 26px rgba(20,72,108,.06);
 }
-
-.qa-feature-header {
-    align-items: center;
-    background: var(--gray-50);
-    border-bottom: 1px solid var(--gray-200);
+.qa-panel-head {
     display: flex;
-    gap: 0.75rem;
+    align-items: center;
     justify-content: space-between;
-    padding: 0.9rem 1rem;
+    gap: 1rem;
+    padding: 1rem 1.2rem;
+    border-bottom: 1px solid #e2ebf1;
+    background: #f9fcfe;
 }
-
-.qa-feature-title {
-    color: var(--theme-primary);
-    font-size: 0.92rem;
-    font-weight: 800;
+.qa-panel-title {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    min-width: 0;
+}
+.qa-panel-title h2 {
     margin: 0;
+    color: var(--qa-blue);
+    font-size: 1rem;
+    font-weight: 600;
 }
-
-.qa-check-item {
-    border-bottom: 1px solid var(--gray-200);
-    padding: 1rem;
+.qa-panel-title p {
+    margin: .16rem 0 0;
+    color: #7a8b9b;
+    font-size: .74rem;
 }
-
-.qa-check-item:last-child,
-.qa-result-item:last-child {
-    border-bottom: none;
+.qa-panel-link {
+    color: var(--qa-blue);
+    font-size: .78rem;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
 }
-
-.qa-check-title {
-    font-size: 0.9rem;
-    margin-bottom: 0.75rem;
+.qa-panel-link:hover {
+    color: #154d70;
 }
-
-.qa-result-item {
-    border-bottom: 1px solid var(--gray-200);
-    padding: 0.9rem 0;
+.qa-panel-body {
+    padding: 1.15rem 1.2rem;
 }
-
-.qa-result-item:first-child {
-    padding-top: 0;
+.qa-chart-shell {
+    position: relative;
+    height: 280px;
 }
-
+.qa-chart-shell--compact {
+    height: 245px;
+}
+.qa-upcoming-list,
+.qa-attention-list {
+    display: grid;
+}
+.qa-upcoming-row,
+.qa-attention-row {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .85rem;
+    min-height: 78px;
+    padding: .75rem 0;
+    border-bottom: 1px solid #e5edf3;
+}
+.qa-upcoming-row:last-child,
+.qa-attention-row:last-child {
+    border-bottom: 0;
+}
+.qa-date {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    background: #eef6fb;
+    color: var(--qa-blue);
+}
+.qa-date span {
+    font-size: .62rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+.qa-date strong {
+    font-size: 1.2rem;
+    line-height: 1.05;
+}
+.qa-row-copy {
+    min-width: 0;
+}
+.qa-row-copy strong {
+    display: block;
+    overflow: hidden;
+    color: var(--qa-navy);
+    font-size: .84rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.qa-row-copy span {
+    display: block;
+    margin-top: .2rem;
+    overflow: hidden;
+    color: #76899c;
+    font-size: .72rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.qa-row-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid #cfe0eb;
+    border-radius: 10px;
+    color: var(--qa-blue);
+    text-decoration: none;
+}
+.qa-row-action:hover {
+    border-color: var(--qa-blue);
+    color: var(--qa-blue);
+    background: #eef7fc;
+}
+.qa-attention-row {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+}
+.qa-attention-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: #fff1e7;
+    color: #d97706;
+}
+.qa-status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: .38rem .68rem;
+    border-radius: 999px;
+    font-size: .68rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.qa-status-pill--passed {
+    background: #dcf8e8;
+    color: #087e4d;
+}
+.qa-status-pill--returned {
+    background: #fee8e8;
+    color: #b52626;
+}
 .qa-empty {
-    color: var(--gray-600);
-    padding: 2.5rem 1.5rem;
+    min-height: 210px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: .55rem;
+    color: #8191a0;
     text-align: center;
 }
-
 .qa-empty i {
-    color: var(--gray-300);
-    font-size: 2.6rem;
-    margin-bottom: 0.8rem;
+    color: var(--qa-blue);
+    font-size: 1.7rem;
+    opacity: .58;
 }
-
-.btn-qa-primary,
-.btn-qa-primary:hover {
-    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
-    border: none;
-    color: #fff;
+.qa-empty strong {
+    color: var(--qa-navy);
+    font-size: .88rem;
 }
-
-.btn-qa-primary:hover {
-    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.25);
-    transform: translateY(-1px);
+.qa-results {
+    width: 100%;
+    border-collapse: collapse;
 }
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-dashboard,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
-    background: #06111e;
+.qa-results th {
+    padding: .72rem .85rem;
+    background: #f7fafc;
+    color: #65778a;
+    font-size: .66rem;
+    font-weight: 600;
+    letter-spacing: .05em;
+    text-align: left;
+    text-transform: uppercase;
 }
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-dashboard .card,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-stat-card {
-    background: #071321 !important;
-    border-color: rgba(31, 99, 146, 0.24) !important;
-    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+.qa-results td {
+    padding: .85rem;
+    border-top: 1px solid #e4edf3;
+    color: #53687d;
+    font-size: .78rem;
+    vertical-align: middle;
 }
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-dashboard .card-header,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-check-summary,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-feature-header,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-queue-item:hover,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-queue-item.active {
-    background: #0a1b2c !important;
-    border-color: rgba(31, 99, 146, 0.24) !important;
+.qa-results td strong {
+    display: block;
+    color: var(--qa-navy);
+    font-weight: 600;
 }
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-queue-item,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-feature-block,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-check-item,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-result-item,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) hr {
-    border-color: rgba(31, 99, 146, 0.24) !important;
+.qa-insight-column {
+    display: flex;
 }
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-dashboard .card-header h5,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-queue-title,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-check-title,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h1,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h2,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h3,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h4,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h6,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold {
-    color: #d7e4f2 !important;
+.qa-insight-column > * {
+    width: 100%;
 }
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-stat-label,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-stat-sub,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-meta,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-empty,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
-    color: #9db6cf !important;
+.qa-insight-column .delay-compact-card {
+    height: 100%;
 }
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-progress {
-    background: rgba(157, 182, 207, 0.18);
+@media (max-width: 1199.98px) {
+    .qa-metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
-    background-color: #071321;
-    border-color: rgba(31, 99, 146, 0.28);
-    color: #d7e4f2;
-}
-
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control::placeholder {
-    color: #7f9bb6;
-}
-
 @media (max-width: 767.98px) {
-    .qa-dashboard .card-header,
-    .qa-dashboard .card-body {
-        padding: 1rem;
+    .qa-overview {
+        padding-left: .85rem !important;
+        padding-right: .85rem !important;
     }
-
-    .qa-stat-number {
-        font-size: 2rem;
+    .qa-metrics {
+        grid-template-columns: 1fr;
     }
+    .qa-chart-shell,
+    .qa-chart-shell--compact {
+        height: 230px;
+    }
+    .qa-panel-head {
+        align-items: flex-start;
+    }
+    .qa-results th:nth-child(3),
+    .qa-results td:nth-child(3) {
+        display: none;
+    }
+}
+html[data-theme="dark"] .qa-overview {
+    color: #d7e7f4;
+}
+html[data-theme="dark"] main.qa-overview.role-dashboard-shell > .row:first-child .card.card.role-dashboard-hero {
+    background:
+        radial-gradient(circle at 88% 12%, rgba(76, 184, 255, .2), transparent 32%),
+        linear-gradient(135deg, rgba(8, 25, 40, .98), rgba(12, 43, 65, .96)) !important;
+}
+html[data-theme="dark"] .qa-overview .role-dashboard-hero h1 {
+    color: #eaf6ff;
+}
+html[data-theme="dark"] .qa-overview .role-dashboard-hero p {
+    color: #a9bfd2;
+}
+html[data-theme="dark"] .qa-metric,
+html[data-theme="dark"] .qa-panel {
+    border-color: rgba(138,210,255,.12);
+    background: rgba(9,24,38,.92);
+    box-shadow: 0 12px 28px rgba(0,0,0,.28);
+}
+html[data-theme="dark"] .qa-panel-head,
+html[data-theme="dark"] .qa-results th {
+    border-color: rgba(138,210,255,.1);
+    background: rgba(12,31,49,.96);
+}
+html[data-theme="dark"] .qa-metric-value,
+html[data-theme="dark"] .qa-panel-title h2,
+html[data-theme="dark"] .qa-row-copy strong,
+html[data-theme="dark"] .qa-results td strong,
+html[data-theme="dark"] .qa-empty strong {
+    color: #d7e7f4;
+}
+html[data-theme="dark"] .qa-upcoming-row,
+html[data-theme="dark"] .qa-attention-row,
+html[data-theme="dark"] .qa-results td {
+    border-color: rgba(138,210,255,.1);
 }
 </style>
 
-<div class="container-fluid px-4 py-4 qa-dashboard role-dashboard-shell">
+<main class="container-fluid px-4 py-4 qa-overview role-dashboard-shell">
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card border-0 shadow-sm role-dashboard-hero">
+            <section class="card border-0 shadow-sm role-dashboard-hero qa-dashboard-hero">
                 <div class="card-body p-4">
-                    <div class="row align-items-center g-3">
+                    <div class="row align-items-center g-4">
                         <div class="col-lg-8 role-dashboard-hero-copy">
-                            <span class="badge qa-overview-badge mb-2 px-3 py-2">QA Overview</span>
-                            <h1 class="h3 mb-1">Welcome back, <?php echo htmlspecialchars((string) $user['full_name']); ?>!</h1>
-                            <p class="text-muted mb-0 small">Review SUL-approved work, manage checklist coverage, and return clear findings to the right team.</p>
+                            <span class="qa-overview-badge mb-3"><i class="fas fa-shield-halved"></i> QA Overview</span>
+                            <h1 class="h3 mb-2">Quality assurance at a glance</h1>
+                            <p class="mb-3">Monitor testing demand, pass trends, delivery risk, and work that needs attention.</p>
+                            <a class="qa-hero-action" href="testing.php">
+                                <i class="fas fa-clipboard-check"></i>
+                                Open QA Testing
+                            </a>
                         </div>
                         <div class="col-lg-4 d-none d-lg-flex justify-content-end">
                             <div class="role-3d-scene role-3d-scene--qa" aria-hidden="true">
                                 <div class="role-3d-platform">
                                     <span class="role-3d-node role-3d-node--one"><i class="fas fa-bug"></i></span>
-                                    <span class="role-3d-node role-3d-node--two"><i class="fas fa-check-circle"></i></span>
+                                    <span class="role-3d-node role-3d-node--two"><i class="fas fa-magnifying-glass"></i></span>
                                     <span class="role-3d-orbit"></span>
                                     <span class="role-3d-core"><i class="fas fa-clipboard-check"></i></span>
                                 </div>
@@ -524,207 +538,309 @@ include '../../includes/navbar.php';
                         </div>
                     </div>
                 </div>
-            </div>
+            </section>
         </div>
     </div>
 
-    <?php if(isset($_SESSION['success'])): ?><div class="alert alert-success"><?php echo $_SESSION['success']; unset($_SESSION['success']); ?></div><?php endif; ?>
-    <?php if(isset($_SESSION['error'])): ?><div class="alert alert-danger"><?php echo $_SESSION['error']; unset($_SESSION['error']); ?></div><?php endif; ?>
+    <section class="qa-metrics mb-4" aria-label="QA summary">
+        <article class="qa-metric">
+            <span class="qa-metric-icon"><i class="fas fa-vial"></i></span>
+            <div class="qa-metric-copy">
+                <div class="qa-metric-label">Awaiting QA</div>
+                <div class="qa-metric-value"><?php echo $qaQueueCount; ?></div>
+                <div class="qa-metric-note">Ready for testing</div>
+            </div>
+        </article>
+        <article class="qa-metric">
+            <span class="qa-metric-icon"><i class="fas fa-circle-check"></i></span>
+            <div class="qa-metric-copy">
+                <div class="qa-metric-label">Passed</div>
+                <div class="qa-metric-value"><?php echo $qaPassedCount; ?></div>
+                <div class="qa-metric-note"><?php echo $qaPassRate; ?>% pass rate</div>
+            </div>
+        </article>
+        <article class="qa-metric">
+            <span class="qa-metric-icon"><i class="fas fa-rotate-left"></i></span>
+            <div class="qa-metric-copy">
+                <div class="qa-metric-label">Returned</div>
+                <div class="qa-metric-value"><?php echo $qaReturnedCount; ?></div>
+                <div class="qa-metric-note">Sent back for fixes</div>
+            </div>
+        </article>
+        <article class="qa-metric">
+            <span class="qa-metric-icon"><i class="fas fa-calendar-check"></i></span>
+            <div class="qa-metric-copy">
+                <div class="qa-metric-label">Reviewed This Month</div>
+                <div class="qa-metric-value"><?php echo $qaReviewedThisMonth; ?></div>
+                <div class="qa-metric-note">Recorded decisions</div>
+            </div>
+        </article>
+    </section>
 
-    <div class="row g-3 mb-4 role-stats-row">
-        <div class="col-xl-3 col-md-6">
-            <div class="card qa-stat-card h-100">
-                <div class="card-body p-4 d-flex justify-content-between align-items-start">
-                    <div>
-                        <div class="qa-stat-label">In QA Queue</div>
-                        <div class="qa-stat-number" style="color: #1f6392;"><?php echo $qaQueueCount; ?></div>
-                        <div class="qa-stat-sub">Ready for testing</div>
+    <section class="row g-4 mb-4">
+        <div class="col-xl-7">
+            <article class="qa-panel">
+                <header class="qa-panel-head">
+                    <div class="qa-panel-title">
+                        <span class="qa-section-icon"><i class="fas fa-chart-line"></i></span>
+                        <div>
+                            <h2>QA Decision Trend</h2>
+                            <p>Passed and returned work over the last six weeks.</p>
+                        </div>
                     </div>
-                    <i class="fas fa-clipboard-check qa-stat-icon"></i>
+                </header>
+                <div class="qa-panel-body">
+                    <div class="qa-chart-shell"><canvas id="qaDecisionTrend"></canvas></div>
                 </div>
-            </div>
+            </article>
         </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card qa-stat-card h-100">
-                <div class="card-body p-4 d-flex justify-content-between align-items-start">
-                    <div>
-                        <div class="qa-stat-label">Passed</div>
-                        <div class="qa-stat-number" style="color: #10b981;"><?php echo $qaPassedCount; ?></div>
-                        <div class="qa-stat-sub">Moved forward after QA</div>
+        <div class="col-xl-5">
+            <article class="qa-panel">
+                <header class="qa-panel-head">
+                    <div class="qa-panel-title">
+                        <span class="qa-section-icon"><i class="fas fa-calendar-days"></i></span>
+                        <div>
+                            <h2>Upcoming Testing</h2>
+                            <p>The next three items in the QA queue.</p>
+                        </div>
                     </div>
-                    <i class="fas fa-circle-check qa-stat-icon"></i>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card qa-stat-card h-100">
-                <div class="card-body p-4 d-flex justify-content-between align-items-start">
-                    <div>
-                        <div class="qa-stat-label">Returned</div>
-                        <div class="qa-stat-number" style="color: #dc2626;"><?php echo $qaReturnedCount; ?></div>
-                        <div class="qa-stat-sub">Sent back for fixes</div>
-                    </div>
-                    <i class="fas fa-rotate-left qa-stat-icon"></i>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6">
-            <div class="card qa-stat-card h-100">
-                <div class="card-body p-4 d-flex justify-content-between align-items-start">
-                    <div>
-                        <div class="qa-stat-label">This Month</div>
-                        <div class="qa-stat-number" style="color: #f59e0b;"><?php echo $qaReviewedThisMonth; ?></div>
-                        <div class="qa-stat-sub">QA decisions recorded</div>
-                    </div>
-                    <i class="fas fa-calendar-check qa-stat-icon"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-4">
-        <div class="col-lg-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5><i class="fas fa-list-check"></i> QA Queue</h5>
-                </div>
-                <div class="card-body">
-                    <div class="qa-queue-list">
-                    <?php if($queue && $queue->num_rows > 0): ?>
-                        <?php while($task = $queue->fetch_assoc()): ?>
-                            <a href="dashboard.php?task_id=<?php echo (int) $task['id']; ?>" class="qa-queue-item <?php echo (int) $task['id'] === $selectedTaskId ? 'active' : ''; ?>">
-                                <div class="qa-queue-title"><?php echo htmlspecialchars((string) $task['title']); ?></div>
-                                <small><?php echo htmlspecialchars((string) $task['project_name']); ?> · <?php echo htmlspecialchars((string) ($task['developer_name'] ?? 'Unassigned')); ?></small>
-                            </a>
-                        <?php endwhile; ?>
+                    <a class="qa-panel-link" href="testing.php">View queue</a>
+                </header>
+                <div class="qa-panel-body">
+                    <?php if ($upcomingTests && $upcomingTests->num_rows > 0): ?>
+                        <div class="qa-upcoming-list">
+                            <?php while ($task = $upcomingTests->fetch_assoc()):
+                                $deadline = !empty($task['deadline']) ? strtotime((string) $task['deadline']) : false;
+                            ?>
+                                <div class="qa-upcoming-row">
+                                    <div class="qa-date">
+                                        <span><?php echo $deadline !== false ? date('M', $deadline) : 'No'; ?></span>
+                                        <strong><?php echo $deadline !== false ? date('j', $deadline) : '—'; ?></strong>
+                                    </div>
+                                    <div class="qa-row-copy">
+                                        <strong><?php echo htmlspecialchars((string) $task['title']); ?></strong>
+                                        <span><?php echo htmlspecialchars((string) $task['project_name']); ?> · <?php echo htmlspecialchars((string) ($task['developer_name'] ?: 'Unassigned')); ?></span>
+                                    </div>
+                                    <a class="qa-row-action" href="testing.php?task_id=<?php echo (int) $task['id']; ?>" aria-label="Open test">
+                                        <i class="fas fa-arrow-right"></i>
+                                    </a>
+                                </div>
+                            <?php endwhile; ?>
+                        </div>
                     <?php else: ?>
                         <div class="qa-empty">
-                            <i class="fas fa-check-circle"></i>
-                            <p class="mb-0">No pull requests approved for QA yet.</p>
+                            <i class="fas fa-circle-check"></i>
+                            <strong>QA queue is clear</strong>
+                            <span>New items will appear after SUL review.</span>
                         </div>
                     <?php endif; ?>
-                    </div>
                 </div>
-            </div>
+            </article>
+        </div>
+    </section>
 
-            <div class="card mt-4">
-                <div class="card-header">
-                    <h5><i class="fas fa-clock-rotate-left"></i> Recent QA Results</h5>
+    <section class="row g-4 mb-4">
+        <div class="col-xl-5">
+            <article class="qa-panel">
+                <header class="qa-panel-head">
+                    <div class="qa-panel-title">
+                        <span class="qa-section-icon"><i class="fas fa-chart-bar"></i></span>
+                        <div>
+                            <h2>Testing Outcome</h2>
+                            <p>Current QA workload and recorded decisions.</p>
+                        </div>
+                    </div>
+                </header>
+                <div class="qa-panel-body">
+                    <div class="qa-chart-shell qa-chart-shell--compact"><canvas id="qaOutcomeChart"></canvas></div>
                 </div>
-                <div class="card-body">
-                    <?php if($recentResults && $recentResults->num_rows > 0): ?>
-                        <?php while($result = $recentResults->fetch_assoc()): ?>
-                            <div class="qa-result-item">
-                                <div class="fw-semibold"><?php echo htmlspecialchars((string) $result['title']); ?></div>
-                                <small class="text-muted"><?php echo workflowStatusLabel((string) $result['status']); ?> · <?php echo htmlspecialchars((string) $result['developer_name']); ?></small>
-                            </div>
-                        <?php endwhile; ?>
+            </article>
+        </div>
+        <div class="col-xl-7 qa-insight-column">
+            <?php
+            delayInsightsRenderCompactList($conn, $user, [
+                'limit' => 200,
+                'display' => 'portfolio_chart',
+                'title' => 'Overall Project Risk',
+                'subtitle' => 'Portfolio-wide delivery risk across projects currently visible to QA.',
+                'show_empty' => true,
+                'empty_title' => 'No project insights yet',
+                'empty_message' => 'Delivery signals will appear when a project reaches the QA workflow.',
+            ]);
+            ?>
+        </div>
+    </section>
+
+    <section class="row g-4">
+        <div class="col-xl-5">
+            <article class="qa-panel">
+                <header class="qa-panel-head">
+                    <div class="qa-panel-title">
+                        <span class="qa-section-icon"><i class="fas fa-triangle-exclamation"></i></span>
+                        <div>
+                            <h2>Needs Attention</h2>
+                            <p>Overdue tests and work returned for revision.</p>
+                        </div>
+                    </div>
+                </header>
+                <div class="qa-panel-body">
+                    <?php if ($attentionItems && $attentionItems->num_rows > 0): ?>
+                        <div class="qa-attention-list">
+                            <?php while ($item = $attentionItems->fetch_assoc()): ?>
+                                <div class="qa-attention-row">
+                                    <span class="qa-attention-mark"><i class="fas fa-exclamation"></i></span>
+                                    <div class="qa-row-copy">
+                                        <strong><?php echo htmlspecialchars((string) $item['title']); ?></strong>
+                                        <span><?php echo htmlspecialchars((string) $item['project_name']); ?></span>
+                                    </div>
+                                    <span class="qa-status-pill <?php echo (string) $item['status'] === 'qa_failed' ? 'qa-status-pill--returned' : 'qa-status-pill--returned'; ?>">
+                                        <?php echo (string) $item['status'] === 'qa_failed' ? 'Returned' : 'Overdue'; ?>
+                                    </span>
+                                </div>
+                            <?php endwhile; ?>
+                        </div>
                     <?php else: ?>
-                        <div class="qa-empty py-3">
-                            <i class="fas fa-inbox"></i>
-                            <p class="mb-0">No QA results yet.</p>
+                        <div class="qa-empty">
+                            <i class="fas fa-shield-halved"></i>
+                            <strong>No urgent QA issues</strong>
+                            <span>Overdue tests and returned work will be listed here.</span>
                         </div>
                     <?php endif; ?>
                 </div>
-            </div>
+            </article>
         </div>
-
-        <div class="col-lg-8">
-            <?php if($selectedTask): ?>
-                <div class="card">
-                    <div class="card-header">
-                        <div class="d-flex justify-content-between flex-wrap gap-2">
-                            <div>
-                                <h5 class="mb-1"><i class="fas fa-vial-circle-check"></i><?php echo htmlspecialchars((string) $selectedTask['title']); ?></h5>
-                                <small class="text-muted"><?php echo htmlspecialchars((string) $selectedTask['project_name']); ?> · Developer: <?php echo htmlspecialchars((string) ($selectedTask['developer_name'] ?? 'Unassigned')); ?></small>
-                            </div>
-                            <div class="d-flex gap-2 align-items-start flex-wrap">
-                                <a class="btn btn-outline-primary btn-sm" href="<?php echo BASE_URL; ?>modules/version-control/repositories.php?project_id=<?php echo (int) $selectedTask['project_id']; ?>">
-                                    <i class="fas fa-code-branch me-1"></i> Version Control
-                                </a>
-                                <span class="badge bg-warning text-dark align-self-start">QA Testing</span>
-                            </div>
+        <div class="col-xl-7">
+            <article class="qa-panel">
+                <header class="qa-panel-head">
+                    <div class="qa-panel-title">
+                        <span class="qa-section-icon"><i class="fas fa-clock-rotate-left"></i></span>
+                        <div>
+                            <h2>Recent QA Results</h2>
+                            <p>The latest quality decisions across monitored projects.</p>
                         </div>
                     </div>
-                    <div class="card-body">
-                        <div class="qa-check-summary mb-4">
-                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                                <div>
-                                    <div class="fw-bold">Checklist Progress</div>
-                                    <small class="text-muted"><?php echo $selectedChecklistPassed; ?> of <?php echo $selectedChecklistTotal; ?> items passed<?php echo $selectedChecklistIssues > 0 ? ' | ' . $selectedChecklistIssues . ' issue item' . ($selectedChecklistIssues === 1 ? '' : 's') : ''; ?></small>
-                                </div>
-                                <span class="badge bg-primary"><?php echo $selectedChecklistProgress; ?>%</span>
-                            </div>
-                            <div class="qa-progress">
-                                <div class="qa-progress-bar" style="width: <?php echo $selectedChecklistProgress; ?>%;"></div>
-                            </div>
-                        </div>
-
-                        <form method="POST">
-                            <input type="hidden" name="task_id" value="<?php echo (int) $selectedTask['id']; ?>">
-                            <?php foreach($checklistByFeature as $featureName => $items): ?>
-                                <div class="mb-4">
-                                    <h6 class="fw-bold text-primary">Feature: <?php echo htmlspecialchars($featureName); ?></h6>
-                                    <?php foreach($items as $item): ?>
-                                        <div class="border rounded-3 p-3 mb-2 bg-light">
-                                            <div class="fw-semibold mb-2"><?php echo htmlspecialchars((string) $item['item_text']); ?></div>
-                                            <div class="row g-2">
-                                                <div class="col-md-4">
-                                                    <select name="item_status[<?php echo (int) $item['id']; ?>]" class="form-select">
-                                                        <?php foreach(['pending' => 'Pending', 'passed' => 'Passed', 'failed' => 'Failed', 'needs_revision' => 'Needs Revision'] as $value => $label): ?>
-                                                            <option value="<?php echo $value; ?>" <?php echo (string) $item['status'] === $value ? 'selected' : ''; ?>><?php echo $label; ?></option>
-                                                        <?php endforeach; ?>
-                                                    </select>
-                                                </div>
-                                                <div class="col-md-8">
-                                                    <input name="item_notes[<?php echo (int) $item['id']; ?>]" class="form-control" value="<?php echo htmlspecialchars((string) ($item['notes'] ?? '')); ?>" placeholder="Notes / issue details">
-                                                </div>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                </div>
-                            <?php endforeach; ?>
-
-                            <div class="mb-3">
-                                <label class="form-label fw-semibold">QA Decision Comment</label>
-                                <textarea name="qa_comment" class="form-control" rows="3" placeholder="Summarize pass/fail findings for the developer or architect"></textarea>
-                            </div>
-                            <div class="d-flex gap-2 flex-wrap">
-                                <button type="submit" name="save_checklist" class="btn btn-outline-primary">Save Checklist</button>
-                                <button type="submit" name="qa_decision" value="1" onclick="this.form.decision.value='passed'" class="btn btn-success">Passed</button>
-                                <button type="submit" name="qa_decision" value="1" onclick="this.form.decision.value='failed'" class="btn btn-danger">Failed</button>
-                                <button type="submit" name="qa_decision" value="1" onclick="this.form.decision.value='needs_revision'" class="btn btn-warning">Needs Revision</button>
-                                <input type="hidden" name="decision" value="">
-                            </div>
-                        </form>
-
-                        <hr>
-                        <form method="POST" class="row g-2 align-items-end">
-                            <input type="hidden" name="task_id" value="<?php echo (int) $selectedTask['id']; ?>">
-                            <div class="col-md-4">
-                                <label class="form-label">Feature / Module</label>
-                                <input name="feature_name" class="form-control" value="<?php echo htmlspecialchars((string) $selectedTask['title']); ?>">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Checklist Item</label>
-                                <input name="item_text" class="form-control" placeholder="Example: Password validation works">
-                            </div>
-                            <div class="col-md-2">
-                                <button type="submit" name="add_checklist_item" class="btn btn-primary w-100">Add</button>
-                            </div>
-                        </form>
+                </header>
+                <?php if ($recentResults && $recentResults->num_rows > 0): ?>
+                    <div class="table-responsive">
+                        <table class="qa-results">
+                            <thead>
+                                <tr>
+                                    <th>Task</th>
+                                    <th>Result</th>
+                                    <th>Developer</th>
+                                    <th>Reviewed</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php while ($result = $recentResults->fetch_assoc()):
+                                    $isReturned = (string) $result['status'] === 'qa_failed';
+                                    $reviewedAt = strtotime((string) ($result['qa_reviewed_at'] ?? ''));
+                                ?>
+                                    <tr>
+                                        <td>
+                                            <strong><?php echo htmlspecialchars((string) $result['title']); ?></strong>
+                                            <?php echo htmlspecialchars((string) $result['project_name']); ?>
+                                        </td>
+                                        <td>
+                                            <span class="qa-status-pill <?php echo $isReturned ? 'qa-status-pill--returned' : 'qa-status-pill--passed'; ?>">
+                                                <?php echo $isReturned ? 'Returned' : 'Passed'; ?>
+                                            </span>
+                                        </td>
+                                        <td><?php echo htmlspecialchars((string) ($result['developer_name'] ?: 'Unassigned')); ?></td>
+                                        <td><?php echo $reviewedAt !== false ? date('M j, Y', $reviewedAt) : '—'; ?></td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-            <?php else: ?>
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body text-center py-5 text-muted">
-                        <i class="fas fa-check-circle fa-3x mb-3"></i>
-                        <p class="mb-0">Nothing to test right now. QA will be notified after SUL approval.</p>
+                <?php else: ?>
+                    <div class="qa-empty">
+                        <i class="fas fa-inbox"></i>
+                        <strong>No QA results yet</strong>
+                        <span>Completed decisions will be recorded here.</span>
                     </div>
-                </div>
-            <?php endif; ?>
+                <?php endif; ?>
+            </article>
         </div>
-    </div>
-</div>
+    </section>
+</main>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof Chart === 'undefined') return;
+
+    const chartText = document.documentElement.getAttribute('data-theme') === 'dark' ? '#a9bfd2' : '#6f8091';
+    const chartGrid = document.documentElement.getAttribute('data-theme') === 'dark' ? 'rgba(145,190,222,.10)' : 'rgba(31,99,146,.09)';
+    Chart.defaults.color = chartText;
+    Chart.defaults.font.family = 'inherit';
+
+    const trendCanvas = document.getElementById('qaDecisionTrend');
+    if (trendCanvas) {
+        new Chart(trendCanvas, {
+            type: 'line',
+            data: {
+                labels: <?php echo json_encode($weeklyLabels); ?>,
+                datasets: [
+                    {
+                        label: 'Passed',
+                        data: <?php echo json_encode($weeklyPassed); ?>,
+                        borderColor: '#15945d',
+                        backgroundColor: 'rgba(21,148,93,.12)',
+                        fill: true,
+                        tension: .35,
+                        borderWidth: 2,
+                        pointRadius: 3
+                    },
+                    {
+                        label: 'Returned',
+                        data: <?php echo json_encode($weeklyReturned); ?>,
+                        borderColor: '#d83434',
+                        backgroundColor: 'rgba(216,52,52,.08)',
+                        fill: true,
+                        tension: .35,
+                        borderWidth: 2,
+                        pointRadius: 3
+                    }
+                ]
+            },
+            options: {
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { legend: { position: 'top', align: 'end', labels: { usePointStyle: true, boxWidth: 8 } } },
+                scales: {
+                    x: { grid: { display: false }, border: { display: false } },
+                    y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: chartGrid }, border: { display: false } }
+                }
+            }
+        });
+    }
+
+    const outcomeCanvas = document.getElementById('qaOutcomeChart');
+    if (outcomeCanvas) {
+        new Chart(outcomeCanvas, {
+            type: 'bar',
+            data: {
+                labels: ['Awaiting QA', 'Passed', 'Returned'],
+                datasets: [{
+                    data: [<?php echo $qaQueueCount; ?>, <?php echo $qaPassedCount; ?>, <?php echo $qaReturnedCount; ?>],
+                    backgroundColor: ['#4b8fbd', '#15945d', '#d83434'],
+                    borderRadius: 9,
+                    borderSkipped: false,
+                    maxBarThickness: 44
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: chartGrid }, border: { display: false } },
+                    y: { grid: { display: false }, border: { display: false } }
+                }
+            }
+        });
+    }
+});
+</script>
 
 <?php include '../../includes/footer.php'; ?>

@@ -2418,37 +2418,76 @@ include '../../includes/navbar.php';
 }
 
 .team-workload-grid {
+    border-top: 1px solid var(--roadmap-line);
+    margin: 0 -1rem -1rem;
+    overflow: hidden;
+}
+
+.team-workload-head,
+.team-workload-member {
     display: grid;
-    gap: .65rem;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: minmax(250px, 1.7fr) repeat(3, minmax(76px, .45fr)) minmax(180px, 1fr);
+}
+
+.team-workload-head {
+    align-items: center;
+    background: #f8fafc;
+    border-bottom: 1px solid var(--roadmap-line);
+    color: var(--roadmap-muted);
+    font-size: .66rem;
+    font-weight: 600;
+    letter-spacing: .035em;
+    padding: .6rem 1rem;
+    text-transform: uppercase;
+}
+
+.team-workload-head span:not(:first-child) {
+    text-align: center;
 }
 
 .team-workload-member {
     align-items: center;
-    background: #f8fafc;
-    border: 1px solid var(--roadmap-line);
-    border-radius: 10px;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--roadmap-line);
     color: inherit;
     cursor: pointer;
-    display: flex;
     font: inherit;
-    gap: .7rem;
     min-width: 0;
-    padding: .7rem;
+    padding: .8rem 1rem;
     text-align: left;
-    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    transition: background-color .18s ease;
+    width: 100%;
+}
+
+.team-workload-member:last-child {
+    border-bottom: 0;
 }
 
 .team-workload-member:focus-visible {
-    outline: 3px solid rgba(31, 99, 146, .2);
-    outline-offset: 2px;
+    box-shadow: inset 0 0 0 2px rgba(31, 99, 146, .35);
+    outline: 0;
 }
 
-.team-workload-member:hover,
+.team-workload-member:hover {
+    background: #f8fcff;
+}
+
 .team-workload-member.is-selected {
-    border-color: rgba(31, 99, 146, .45);
-    box-shadow: 0 5px 16px rgba(31, 99, 146, .1);
-    transform: translateY(-1px);
+    background: #edf7fc;
+}
+
+.team-workload-person {
+    align-items: center;
+    display: flex;
+    gap: .7rem;
+    min-width: 0;
+}
+
+.team-workload-person .task-owner-avatar {
+    flex-basis: 36px;
+    height: 36px;
+    width: 36px;
 }
 
 .team-workload-copy {
@@ -2469,31 +2508,55 @@ include '../../includes/navbar.php';
     color: var(--roadmap-muted);
     display: block;
     font-size: .7rem;
+    margin-top: .12rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.team-workload-metrics {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .3rem;
-    margin-left: auto;
-}
-
-.team-workload-metric {
-    background: #e9f3fa;
-    border-radius: 999px;
-    color: #1f6392;
-    font-size: .65rem;
+.team-workload-value {
+    color: var(--roadmap-ink);
+    font-size: .82rem;
     font-weight: 600;
-    padding: .25rem .4rem;
-    white-space: nowrap;
+    text-align: center;
 }
 
-.team-workload-metric.is-risk {
-    background: #fee2e2;
+.team-workload-progress {
+    align-items: center;
+    display: grid;
+    gap: .45rem;
+    grid-template-columns: minmax(72px, 1fr) auto;
+    min-width: 0;
+}
+
+.team-workload-progress-track {
+    background: #e5edf3;
+    border-radius: 999px;
+    height: 6px;
+    overflow: hidden;
+}
+
+.team-workload-progress-fill {
+    background: #168a4b;
+    border-radius: inherit;
+    display: block;
+    height: 100%;
+    min-width: 0;
+}
+
+.team-workload-progress-label {
+    color: var(--roadmap-muted);
+    font-size: .69rem;
+    min-width: 30px;
+    text-align: right;
+}
+
+.team-workload-risk {
     color: #b91c1c;
+    display: block;
+    font-size: .65rem;
+    grid-column: 1 / -1;
+    margin-top: -.15rem;
 }
 
 .monitoring-filter-grid {
@@ -3495,9 +3558,19 @@ include '../../includes/navbar.php';
     border-color: #263244;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-member {
-    background: #0f172a;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-grid,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-member,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-head {
     border-color: #263244;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-head {
+    background: #0f172a;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-member:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-member.is-selected {
+    background: #10283a;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-toolbar-footer,
@@ -3573,13 +3646,15 @@ include '../../includes/navbar.php';
     color: #9db6cf;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-metric {
-    background: rgba(59, 130, 246, .16);
-    color: #93c5fd;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-value {
+    color: #f8fafc;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-metric.is-risk {
-    background: rgba(239, 68, 68, .16);
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-progress-track {
+    background: #263244;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-workload-risk {
     color: #fca5a5;
 }
 
@@ -3795,6 +3870,11 @@ include '../../includes/navbar.php';
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .team-workload-head,
+    .team-workload-member {
+        grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(68px, .45fr)) minmax(140px, 1fr);
+    }
+
     .gantt-head,
     .gantt-row {
         grid-template-columns: 180px minmax(520px, 1fr);
@@ -3904,6 +3984,37 @@ include '../../includes/navbar.php';
 
     .monitoring-filter-grid {
         grid-template-columns: 1fr;
+    }
+
+    .team-workload-head {
+        display: none;
+    }
+
+    .team-workload-member {
+        gap: .7rem .5rem;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        padding: .85rem 1rem;
+    }
+
+    .team-workload-person,
+    .team-workload-progress {
+        grid-column: 1 / -1;
+    }
+
+    .team-workload-value {
+        align-items: center;
+        display: flex;
+        flex-direction: column;
+        gap: .12rem;
+    }
+
+    .team-workload-value::before {
+        color: var(--roadmap-muted);
+        content: attr(data-label);
+        font-size: .6rem;
+        font-weight: 600;
+        letter-spacing: .03em;
+        text-transform: uppercase;
     }
 }
 </style>
@@ -4257,6 +4368,13 @@ include '../../includes/navbar.php';
                     </div>
                 <?php else: ?>
                     <div class="team-workload-grid">
+                        <div class="team-workload-head" aria-hidden="true">
+                            <span>Team member</span>
+                            <span>Assigned</span>
+                            <span>Active</span>
+                            <span>Completed</span>
+                            <span>Task progress</span>
+                        </div>
                         <?php foreach ($monitoringMembers as $member): ?>
                             <?php
                                 $memberName = (string) ($member['name'] ?? 'Team Member');
@@ -4264,6 +4382,13 @@ include '../../includes/navbar.php';
                                 if ($memberSubtitle === '') {
                                     $memberSubtitle = ucwords(str_replace('_', ' ', (string) ($member['role'] ?? 'developer')));
                                 }
+                                $memberTaskCount = max(0, (int) ($member['tasks'] ?? 0));
+                                $memberActiveCount = max(0, (int) ($member['in_progress'] ?? 0));
+                                $memberDoneCount = max(0, (int) ($member['done'] ?? 0));
+                                $memberRiskCount = max(0, (int) ($member['at_risk'] ?? 0));
+                                $memberProgress = $memberTaskCount > 0
+                                    ? min(100, (int) round(($memberDoneCount / $memberTaskCount) * 100))
+                                    : 0;
                             ?>
                             <button
                                 type="button"
@@ -4271,22 +4396,28 @@ include '../../includes/navbar.php';
                                 data-monitor-member-select="<?php echo (int) $member['id']; ?>"
                                 aria-pressed="false"
                             >
-                                <span class="task-owner-avatar">
-                                    <span><?php echo htmlspecialchars((string) ($member['initials'] ?? '?')); ?></span>
-                                    <?php if (!empty($member['profile_url'])): ?>
-                                        <img src="<?php echo htmlspecialchars((string) $member['profile_url']); ?>" alt="" loading="lazy">
-                                    <?php endif; ?>
+                                <span class="team-workload-person">
+                                    <span class="task-owner-avatar">
+                                        <span><?php echo htmlspecialchars((string) ($member['initials'] ?? '?')); ?></span>
+                                        <?php if (!empty($member['profile_url'])): ?>
+                                            <img src="<?php echo htmlspecialchars((string) $member['profile_url']); ?>" alt="" loading="lazy">
+                                        <?php endif; ?>
+                                    </span>
+                                    <span class="team-workload-copy">
+                                        <span class="team-workload-name"><?php echo htmlspecialchars($memberName); ?></span>
+                                        <span class="team-workload-role"><?php echo htmlspecialchars($memberSubtitle); ?></span>
+                                    </span>
                                 </span>
-                                <span class="team-workload-copy">
-                                    <span class="team-workload-name"><?php echo htmlspecialchars($memberName); ?></span>
-                                    <span class="team-workload-role"><?php echo htmlspecialchars($memberSubtitle); ?></span>
-                                </span>
-                                <span class="team-workload-metrics" aria-label="Workload counts">
-                                    <span class="team-workload-metric"><?php echo (int) $member['tasks']; ?> total</span>
-                                    <span class="team-workload-metric"><?php echo (int) $member['in_progress']; ?> active</span>
-                                    <span class="team-workload-metric"><?php echo (int) $member['done']; ?> done</span>
-                                    <?php if ((int) $member['at_risk'] > 0): ?>
-                                        <span class="team-workload-metric is-risk"><?php echo (int) $member['at_risk']; ?> risk</span>
+                                <span class="team-workload-value" data-label="Assigned"><?php echo $memberTaskCount; ?></span>
+                                <span class="team-workload-value" data-label="Active"><?php echo $memberActiveCount; ?></span>
+                                <span class="team-workload-value" data-label="Completed"><?php echo $memberDoneCount; ?></span>
+                                <span class="team-workload-progress">
+                                    <span class="team-workload-progress-track" aria-hidden="true">
+                                        <span class="team-workload-progress-fill" style="width: <?php echo $memberProgress; ?>%;"></span>
+                                    </span>
+                                    <span class="team-workload-progress-label"><?php echo $memberProgress; ?>%</span>
+                                    <?php if ($memberRiskCount > 0): ?>
+                                        <span class="team-workload-risk"><i class="fas fa-exclamation-triangle me-1" aria-hidden="true"></i><?php echo $memberRiskCount; ?> at risk</span>
                                     <?php endif; ?>
                                 </span>
                             </button>

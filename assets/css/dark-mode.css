@@ -154,11 +154,31 @@ body.dark-mode .message.received {
     border-color: #1a1a2e;
 }
 
-html[data-theme="dark"] body {
-    background:
+html[data-theme="dark"] body,
+body[data-theme="dark"],
+body.dark-mode {
+    background-color: #071421;
+    background-image:
         radial-gradient(circle at top left, rgba(77, 168, 218, 0.14), transparent 28%),
         linear-gradient(180deg, #071421 0%, #0c1f31 100%);
+    background-position: left top, center;
+    background-repeat: no-repeat, no-repeat;
+    background-size: auto, cover;
+    background-attachment: scroll, fixed;
     color: #d8e6f3;
+    --system-circuit-idle-opacity: 0.96;
+}
+
+html[data-theme="dark"] body::before,
+body[data-theme="dark"]::before,
+body.dark-mode::before {
+    opacity: 0.96 !important;
+    filter:
+        drop-shadow(0 0 5px rgba(53, 197, 255, 0.74))
+        brightness(1.75)
+        saturate(1.38)
+        contrast(1.08) !important;
+    mix-blend-mode: screen;
 }
 
 html[data-theme="dark"] #sidebar-wrapper {

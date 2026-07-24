@@ -470,6 +470,113 @@ include '../../includes/navbar.php';
     border-radius: 10px;
 }
 
+/* Keep the paired performance and schedule cards compact and visually balanced. */
+.developer-overview-row .developer-performance-body {
+    display: flex;
+    min-height: 450px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.developer-performance-chart {
+    position: relative;
+    width: min(100%, 390px);
+    height: 340px;
+    margin: 0 auto 0.35rem;
+}
+
+.developer-performance-chart canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.developer-performance-summary {
+    width: min(100%, 390px);
+    text-align: center;
+}
+
+.developer-performance-rate {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.4rem;
+    margin-bottom: 0.65rem;
+    color: #17324f;
+}
+
+.developer-performance-rate strong {
+    font-size: 1.65rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.developer-performance-rate span {
+    color: var(--gray-600);
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+
+.developer-overview-row .developer-schedule-body .agenda-preview {
+    gap: 0.7rem;
+    padding: 1rem 1.15rem;
+}
+
+.developer-overview-row .developer-schedule-body .agenda-summary {
+    grid-template-columns: 66px minmax(0, 1fr);
+    padding: 0.65rem;
+}
+
+.developer-overview-row .developer-schedule-body .agenda-today-badge {
+    min-height: 68px;
+}
+
+.developer-overview-row .developer-schedule-body .agenda-list {
+    gap: 0.5rem;
+}
+
+.developer-overview-row .developer-schedule-body .agenda-date-group {
+    padding: 0.55rem 0.75rem;
+}
+
+.developer-overview-row .developer-schedule-body .agenda-date-row {
+    margin-bottom: 0.25rem;
+}
+
+.developer-overview-row .developer-schedule-body .agenda-item {
+    padding: 0.25rem 0;
+}
+
+.developer-overview-row .developer-schedule-body .agenda-color {
+    height: 32px;
+}
+
+.developer-insights-column {
+    min-width: 0;
+}
+
+.developer-insights-column .delay-insights-wrap,
+.developer-insights-column .delay-compact-card {
+    width: 100%;
+    height: 100%;
+}
+
+.developer-insights-column .delay-insights-wrap {
+    margin-bottom: 0;
+}
+
+.developer-priority-chart {
+    position: relative;
+    width: min(100%, 920px);
+    height: 260px;
+    margin: 0 auto;
+}
+
+.developer-priority-chart canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
 /* Buttons */
 .btn-view {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
@@ -584,6 +691,14 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .attention-reason {
     background: rgba(31, 99, 146, 0.16);
     color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-performance-rate {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-performance-rate span {
+    color: #9db6cf;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .agenda-preview {
@@ -755,25 +870,21 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
-    <?php
-    delayInsightsRenderCompactList($conn, $user, [
-        'limit' => 4,
-        'title' => 'Project Insight List',
-        'subtitle' => 'Small one-line project signals with direct links to the full insight page.',
-        'button_label' => 'View Project',
-    ]);
-    ?>
-
-    <div class="row g-4 mb-4 align-items-stretch">
+    <div class="row g-4 mb-4 align-items-stretch developer-overview-row">
         <div class="col-xl-6">
             <div class="card h-100">
                 <div class="card-header">
                     <h5><i class="fas fa-chart-pie"></i> Performance Overview</h5>
                 </div>
-                <div class="card-body">
-                    <canvas id="performanceChart" style="height: 280px; width: 100%;"></canvas>
-                    <div class="text-center mt-3">
-                        <h4 class="mb-2"><?php echo $performance; ?>% Completion Rate</h4>
+                <div class="card-body developer-performance-body">
+                    <div class="developer-performance-chart">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                    <div class="developer-performance-summary">
+                        <div class="developer-performance-rate">
+                            <strong><?php echo $performance; ?>%</strong>
+                            <span>Completion rate</span>
+                        </div>
                         <div class="progress-custom">
                             <div class="progress-bar-custom" style="width: <?php echo $performance; ?>%;"></div>
                         </div>
@@ -787,28 +898,26 @@ include '../../includes/navbar.php';
                 <div class="card-header">
                     <h5><i class="fas fa-calendar-alt"></i> Upcoming Schedule</h5>
                 </div>
-                <div class="card-body p-0">
+                <div class="card-body p-0 developer-schedule-body">
                     <?php renderScheduleAgendaPreview($schedules, $developerAgenda, 'Calendar'); ?>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row g-4">
-        <div class="col-xl-6">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5><i class="fas fa-chart-bar"></i> Task Priority Distribution</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="priorityChart" style="height: 220px; width: 100%;"></canvas>
-                    <div class="mt-3 d-flex justify-content-between gap-2 flex-wrap">
-                        <span><span class="badge-priority-high">High</span> <?php echo $highPriority; ?> tasks</span>
-                        <span><span class="badge-priority-medium">Medium</span> <?php echo $mediumPriority; ?> tasks</span>
-                        <span><span class="badge-priority-low">Low</span> <?php echo $lowPriority; ?> tasks</span>
-                    </div>
-                </div>
-            </div>
+    <div class="row g-4 mb-4 align-items-stretch developer-secondary-row">
+        <div class="col-xl-6 developer-insights-column">
+            <?php
+            delayInsightsRenderCompactList($conn, $user, [
+                'limit' => 200,
+                'display' => 'portfolio_chart',
+                'title' => 'Overall Project Risk',
+                'subtitle' => 'Portfolio-wide delivery risk across your assigned projects.',
+                'show_empty' => true,
+                'empty_title' => 'No project insights yet',
+                'empty_message' => 'Project delivery signals will appear here when an assigned project becomes available.',
+            ]);
+            ?>
         </div>
 
         <div class="col-xl-6">
@@ -863,6 +972,26 @@ include '../../includes/navbar.php';
                         <p>No tasks need attention</p>
                     </div>
                     <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar"></i> Task Priority Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div class="developer-priority-chart">
+                        <canvas id="priorityChart"></canvas>
+                    </div>
+                    <div class="mt-3 d-flex justify-content-between gap-2 flex-wrap">
+                        <span><span class="badge-priority-high">High</span> <?php echo $highPriority; ?> tasks</span>
+                        <span><span class="badge-priority-medium">Medium</span> <?php echo $mediumPriority; ?> tasks</span>
+                        <span><span class="badge-priority-low">Low</span> <?php echo $lowPriority; ?> tasks</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -989,7 +1118,7 @@ new Chart(perfCtx, {
     },
     options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         cutout: '60%',
         plugins: {
             legend: {
@@ -1021,7 +1150,7 @@ new Chart(priorityCtx, {
     },
     options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         scales: {
             y: {
                 beginAtZero: true,

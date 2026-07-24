@@ -467,11 +467,17 @@ if (!function_exists('renderScheduleCalendar')) {
 }
 
 if (!function_exists('renderScheduleAgendaPreview')) {
-    function renderScheduleAgendaPreview($schedules, array $extraEvents = [], string $title = 'Calendar'): void
+    function renderScheduleAgendaPreview(
+        $schedules,
+        array $extraEvents = [],
+        string $title = 'Calendar',
+        int $limit = 3
+    ): void
     {
         static $stylesRendered = false;
 
         $events = scheduleCalendarCollectEvents($schedules, $extraEvents);
+        $events = array_slice($events, 0, max(1, $limit));
         $nextEvent = $events[0] ?? null;
 
         if (!$stylesRendered): ?>

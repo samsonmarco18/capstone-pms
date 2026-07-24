@@ -567,6 +567,7 @@ $sulDepartmentAliasesSql = $sulDepartmentAliases !== []
     : "''";
 $sulMissingDepartment = $sulDepartment === '';
 $isExpertDepartmentSul = $sulDepartmentLabel === 'Expert Department';
+$isUiUxDepartmentSul = $sulDepartmentLabel === 'UI/UX';
 $canManageExpertWorkflow = !$sulMissingDepartment && $isExpertDepartmentSul;
 $canManageDeveloperWorkflow = !$sulMissingDepartment && !$isExpertDepartmentSul;
 $departmentAssigneeLabels = [
@@ -592,6 +593,9 @@ $deliveryAssigneeFallback = $deliveryAssigneeCopy['fallback'];
 $deliveryAssigneeLower = $deliveryAssigneeCopy['lower'];
 $deliveryAssigneePluralLower = $deliveryAssigneeCopy['plural'];
 $deliveryWorkflowLabel = $deliveryAssigneeLabel . ' Workflow';
+$deliveryReviewLabel = $isUiUxDepartmentSul ? 'SUL UI/UX Review' : 'SUL Code Review';
+$deliveryEvidenceLabel = $isUiUxDepartmentSul ? 'Design Handoff' : 'Repository';
+$deliverySubmissionLabel = $isUiUxDepartmentSul ? 'UI/UX submission' : 'pull request';
 $deliveryAssignmentAction = 'Assign ' . $deliveryAssigneeLabel;
 $deliveryAssignmentModalTitle = 'Assign to ' . $deliveryAssigneeLabel;
 $deliveryAssignmentLoadingTitle = 'Assigning ' . $deliveryAssigneeLabel;
@@ -1936,7 +1940,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Review developer Pull Request and move to QA or back to Developer
     if (isset($_POST['sul_approve_pr']) || isset($_POST['sul_request_revision'])) {
         if (!$canManageDeveloperWorkflow) {
-            $_SESSION['error'] = "Developer code review is available only for department SULs outside Expert Department.";
+            $_SESSION['error'] = "Department review is available only for department SULs outside Expert Department.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -2088,7 +2092,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         ['qa'],
                         'Ready for QA: ' . $reviewTask['title'],
                         'All prior work for this item is ready for QA testing.',
-                        BASE_URL . 'modules/qa/dashboard.php?task_id=' . $taskId,
+                        BASE_URL . 'modules/qa/testing.php?task_id=' . $taskId,
                         $taskId
                     );
                     $_SESSION['success'] = "Work approved and moved to QA Testing.";
@@ -2105,7 +2109,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 } else {
                     $_SESSION['success'] = "Department work approved. The parent task remains in progress until every department is approved.";
                 }
-                header("Location: task-allocation.php");
+                header("Location: task-allocation.php?project_id=" . $projectForRouting . "#developer-review-panel");
                 exit();
             }
             $_SESSION['error'] = "Failed to approve work.";
@@ -2118,13 +2122,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 projectWorkflowSyncRoadmap($conn, (int) ($reviewTask['project_id'] ?? 0));
                 workflowNotifyUser(
                     (int) $reviewTask['assigned_to'],
-                    'PR Revision Requested: ' . $reviewTask['title'],
+                    ($isUiUxDepartmentSul ? 'UI/UX Revision Requested: ' : 'PR Revision Requested: ') . $reviewTask['title'],
                     'SUL requested revisions before QA. Comment: ' . $reviewComment,
                     BASE_URL . 'modules/developer/task.php?id=' . $taskId,
                     $taskId
                 );
                 $_SESSION['success'] = "Pull Request returned to Developer for revision.";
-                header("Location: task-allocation.php");
+                header("Location: task-allocation.php?project_id=" . (int) ($reviewTask['project_id'] ?? 0) . "#developer-review-panel");
                 exit();
             }
             $_SESSION['error'] = "Failed to request revision.";
@@ -2370,7 +2374,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
 
             $_SESSION['success'] = "Estimation approved! Task is now ready for department assignment.";
-            header("Location: task-allocation.php?project_id=" . $projectForAllocation);
+            header("Location: task-allocation.php?project_id=" . $projectForAllocation . "&review_result=approved#expert-review-panel");
             exit();
         } else {
             $_SESSION['error'] = "Failed to approve estimation";
@@ -2395,7 +2399,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
         
         $taskCheck = $conn->prepare("
-            SELECT t.assigned_to, t.title
+            SELECT t.assigned_to, t.title, t.project_id
             FROM tasks t
             INNER JOIN projects p ON p.id = t.project_id
             INNER JOIN feature_estimations fe ON fe.task_id = t.id AND fe.status = 'completed'
@@ -2431,7 +2435,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 );
             }
             $_SESSION['success'] = "Estimation rejected. Task sent back to Expert.";
-            header("Location: task-allocation.php");
+            header("Location: task-allocation.php?project_id=" . (int) ($task['project_id'] ?? 0) . "&review_result=revision_requested#expert-review-panel");
             exit();
         } else {
             $_SESSION['error'] = "Failed to reject estimation";
@@ -3647,24 +3651,34 @@ include '../../includes/navbar.php';
 }
 
 .project-review-details {
-    padding: 1rem;
+    padding: 0;
     border-top: 1px solid var(--gray-200);
-    background: #fbfcfe;
+    background: #fff;
 }
 
 .project-review-costs {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.65rem;
-    margin-bottom: 0.9rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    margin: 0;
+    border-bottom: 1px solid var(--gray-200);
 }
 
 .project-review-cost {
     min-width: 0;
-    padding: 0.75rem 0.8rem;
-    border: 1px solid var(--gray-200);
-    border-radius: 11px;
-    background: #fff;
+    padding: 0.9rem 1rem;
+    border: 0;
+    border-right: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--gray-200);
+    background: transparent;
+}
+
+.project-review-cost:nth-child(3n) {
+    border-right: 0;
+}
+
+.project-review-cost:nth-last-child(-n + 3) {
+    border-bottom: 0;
 }
 
 .project-review-cost span {
@@ -3685,8 +3699,7 @@ include '../../includes/navbar.php';
 }
 
 .project-review-cost.is-primary {
-    border-color: #bfdbfe;
-    background: #eff6ff;
+    background: transparent;
 }
 
 .project-review-cost.is-primary strong {
@@ -3694,8 +3707,7 @@ include '../../includes/navbar.php';
 }
 
 .project-review-cost.is-negative {
-    border-color: #fecaca;
-    background: #fef2f2;
+    background: transparent;
 }
 
 .project-review-cost.is-negative strong {
@@ -3705,7 +3717,7 @@ include '../../includes/navbar.php';
 .project-review-decisions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
+    gap: 0;
 }
 
 .project-review-decision {
@@ -3714,10 +3726,14 @@ include '../../includes/navbar.php';
     gap: 0.65rem;
     min-width: 0;
     margin: 0;
-    padding: 0.85rem;
-    border: 1px solid var(--gray-200);
-    border-radius: 12px;
-    background: #fff;
+    padding: 1rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.project-review-decision.is-revision {
+    border-left: 1px solid var(--gray-200);
 }
 
 .project-review-decision-head {
@@ -3773,9 +3789,13 @@ include '../../includes/navbar.php';
 }
 
 .project-review-decision button {
+    align-self: flex-end;
     justify-content: center;
     min-height: 38px;
+    min-width: 180px;
     margin-top: auto;
+    padding-inline: 1rem;
+    width: auto;
 }
 
 /* Estimation Badge */
@@ -3967,34 +3987,850 @@ include '../../includes/navbar.php';
     border-top: 1px solid var(--gray-200);
 }
 
-.assign-expert-modal .modal-dialog {
-    max-width: 820px;
+#taskDetailsModal .modal-dialog {
+    max-width: 880px;
 }
 
-.assign-expert-intro {
+#taskDetailsModal .modal-content {
+    box-shadow: 0 26px 70px rgba(15, 43, 64, 0.24);
+}
+
+#page-content-wrapper #taskDetailsModal .modal-header {
     align-items: center;
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    border-radius: 14px;
+    background: linear-gradient(135deg, #15577f 0%, #0f3f60 100%) !important;
+    border-bottom: 0;
+    min-height: 72px;
+    padding: 1rem 1.35rem;
+}
+
+#page-content-wrapper #taskDetailsModal .modal-title,
+#page-content-wrapper #taskDetailsModal .modal-title i {
+    color: #ffffff !important;
+}
+
+#taskDetailsModal .task-details-modal-title {
+    align-items: center;
     display: flex;
-    gap: .8rem;
-    margin-bottom: 1.15rem;
-    padding: .85rem 1rem;
+    gap: 0.75rem;
 }
 
-.assign-expert-intro-icon {
+#taskDetailsModal .task-details-modal-icon {
     align-items: center;
-    background: #dbeafe;
-    border-radius: 11px;
-    color: #1d4ed8;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
+    display: inline-flex;
+    flex: 0 0 42px;
+    height: 42px;
+    justify-content: center;
+    width: 42px;
+}
+
+#taskDetailsModal .task-details-modal-copy {
+    display: grid;
+    gap: 0.12rem;
+}
+
+#taskDetailsModal .task-details-modal-copy strong {
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 650;
+}
+
+#taskDetailsModal .task-details-modal-copy small {
+    color: rgba(255, 255, 255, 0.74);
+    font-size: 0.72rem;
+    font-weight: 400;
+}
+
+#taskDetailsModal .btn-close {
+    filter: brightness(0) invert(1) !important;
+    opacity: 0.82;
+}
+
+#taskDetailsModal .btn-close:hover {
+    opacity: 1;
+}
+
+#taskDetailsModal .modal-body {
+    padding: 0;
+}
+
+.task-details-record {
+    color: #19324d;
+}
+
+.task-details-heading {
+    align-items: flex-start;
+    border-bottom: 1px solid #dce8f1;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: 1.35rem 1.5rem 1.1rem;
+}
+
+.task-details-heading-copy {
+    min-width: 0;
+}
+
+.task-details-heading-actions {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 0.55rem;
+}
+
+.task-details-roadmap-button {
+    align-items: center;
+    background: #fff;
+    border: 1px solid #c8dce9;
+    border-radius: 9px;
+    color: #1f6392;
+    display: inline-flex;
+    font-size: 0.74rem;
+    font-weight: 650;
+    gap: 0.42rem;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0.42rem 0.68rem;
+    text-decoration: none;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.task-details-roadmap-button:hover {
+    background: #edf6fb;
+    border-color: #9fc6dd;
+    color: #0f4f78;
+}
+
+.task-details-eyebrow {
+    color: #6c8298;
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+}
+
+.task-details-heading h4 {
+    color: #17324d;
+    font-size: 1.25rem;
+    font-weight: 650;
+    line-height: 1.3;
+    margin: 0;
+}
+
+.task-details-status {
+    align-items: center;
+    background: #e8f7ef;
+    border-radius: 999px;
+    color: #087a46;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    font-weight: 650;
+    gap: 0.4rem;
+    padding: 0.45rem 0.7rem;
+}
+
+.task-details-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(230px, 0.85fr);
+    padding: 0 1.5rem;
+}
+
+.task-details-primary {
+    min-width: 0;
+    padding: 1.2rem 1.5rem 1.35rem 0;
+}
+
+.task-details-summary {
+    border-left: 1px solid #dce8f1;
+    min-width: 0;
+    padding: 1.2rem 0 1.35rem 1.5rem;
+}
+
+.task-details-description {
+    margin-bottom: 1.15rem;
+}
+
+.task-details-label {
+    color: #6c8298;
+    display: block;
+    font-size: 0.67rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    margin-bottom: 0.35rem;
+    text-transform: uppercase;
+}
+
+.task-details-description p {
+    color: #314a62;
+    font-size: 0.87rem;
+    line-height: 1.65;
+    margin: 0;
+}
+
+.task-details-facts {
+    border-bottom: 1px solid #dce8f1;
+    border-top: 1px solid #dce8f1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.task-details-fact {
+    min-width: 0;
+    padding: 0.85rem 0;
+}
+
+.task-details-fact:nth-child(odd) {
+    padding-right: 1rem;
+}
+
+.task-details-fact:nth-child(even) {
+    border-left: 1px solid #dce8f1;
+    padding-left: 1rem;
+}
+
+.task-details-fact strong {
+    color: #17324d;
+    display: block;
+    font-size: 0.84rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.task-details-assignee {
+    align-items: center;
+    display: flex;
+    gap: 0.65rem;
+    margin-bottom: 1.25rem;
+}
+
+.task-details-assignee-icon {
+    align-items: center;
+    background: #eaf4fb;
+    border-radius: 50%;
+    color: #1f6392;
+    display: inline-flex;
+    flex: 0 0 38px;
+    height: 38px;
+    justify-content: center;
+    width: 38px;
+}
+
+.task-details-assignee strong {
+    color: #17324d;
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.task-details-estimate {
+    margin-bottom: 1.25rem;
+}
+
+.task-details-estimate-values {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin-top: 0.65rem;
+}
+
+.task-details-estimate-value {
+    border-left: 1px solid #dce8f1;
+    padding: 0 0.65rem;
+}
+
+.task-details-estimate-value:first-child {
+    border-left: 0;
+    padding-left: 0;
+}
+
+.task-details-estimate-value:last-child {
+    padding-right: 0;
+}
+
+.task-details-estimate-value span {
+    color: #7b8fa2;
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.task-details-estimate-value strong {
+    color: #17324d;
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 650;
+    margin-top: 0.18rem;
+}
+
+.task-details-roadmap {
+    border-top: 1px solid #dce8f1;
+    color: #1f6392;
+    display: flex;
+    font-size: 0.78rem;
+    font-weight: 650;
+    justify-content: space-between;
+    padding-top: 0.9rem;
+    text-decoration: none;
+}
+
+.task-details-roadmap:hover {
+    color: #0f3f60;
+}
+
+.task-detail-work {
+    margin-top: 1.25rem;
+}
+
+.task-detail-work-header {
+    align-items: center;
+    color: #17324d;
+    display: flex;
+    font-size: 0.86rem;
+    font-weight: 600;
+    gap: 0.55rem;
+    margin-bottom: 0.55rem;
+}
+
+.task-detail-work-header i {
+    color: #1f6392;
+}
+
+.task-detail-work-empty {
+    color: #71879c;
+    font-size: 0.8rem;
+    line-height: 1.55;
+}
+
+.task-detail-artifact {
+    border-bottom: 1px solid #dce8f1;
+    padding: 0.8rem 0;
+}
+
+.task-detail-artifact:last-child {
+    border-bottom: 0;
+}
+
+@media (max-width: 767.98px) {
+    #taskDetailsModal .modal-dialog {
+        margin: 0.75rem;
+    }
+
+    .task-details-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .task-details-body {
+        grid-template-columns: 1fr;
+    }
+
+    .task-details-primary {
+        padding-right: 0;
+    }
+
+    .task-details-summary {
+        border-left: 0;
+        border-top: 1px solid #dce8f1;
+        padding-left: 0;
+    }
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-details-record {
+    background: #071321;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(
+    .task-details-heading,
+    .task-details-facts,
+    .task-details-summary,
+    .task-details-estimate-value,
+    .task-details-roadmap,
+    .task-detail-artifact
+) {
+    border-color: rgba(138, 210, 255, 0.14);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(
+    .task-details-heading h4,
+    .task-details-fact strong,
+    .task-details-assignee strong,
+    .task-details-estimate-value strong,
+    .task-detail-work-header
+) {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(
+    .task-details-eyebrow,
+    .task-details-label,
+    .task-details-description p,
+    .task-detail-work-empty
+) {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-details-assignee-icon {
+    background: rgba(31, 99, 146, 0.22);
+    color: #79c7f4;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-details-roadmap {
+    color: #79c7f4;
+}
+
+/* Compact department review record */
+#taskDetailsModal .modal-dialog {
+    max-width: 1040px;
+}
+
+#taskDetailsModal .modal-content {
+    overflow: hidden;
+}
+
+#taskDetailsModal .modal-body {
+    max-height: calc(100vh - 150px);
+    overflow-y: auto;
+}
+
+#taskDetailsModal .task-details-body {
+    display: block;
+    padding: 1.1rem 1.5rem 1.4rem;
+}
+
+#taskDetailsModal .task-details-primary {
+    padding: 0;
+}
+
+#taskDetailsModal .task-details-description {
+    margin-bottom: 1rem;
+}
+
+#taskDetailsModal .task-details-facts {
+    border-bottom: 1px solid #dce8f1;
+    border-top: 1px solid #dce8f1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#taskDetailsModal .task-details-fact,
+#taskDetailsModal .task-details-fact:nth-child(odd),
+#taskDetailsModal .task-details-fact:nth-child(even) {
+    border-left: 1px solid #dce8f1;
+    padding: 0.8rem 1rem;
+}
+
+#taskDetailsModal .task-details-fact:nth-child(3n + 1) {
+    border-left: 0;
+    padding-left: 0;
+}
+
+#taskDetailsModal .task-details-fact:nth-child(n + 4) {
+    border-top: 1px solid #dce8f1;
+}
+
+#taskDetailsModal .task-detail-work {
+    margin-top: 1.2rem;
+}
+
+#taskDetailsModal .task-detail-work-header {
+    align-items: center;
+    border-bottom: 1px solid #dce8f1;
+    display: flex;
+    justify-content: space-between;
+    margin: 0;
+    padding: 0 0 0.7rem;
+}
+
+#taskDetailsModal .task-detail-work-header > div {
+    min-width: 0;
+}
+
+#taskDetailsModal .task-detail-work-header .task-details-label {
+    margin-bottom: 0.15rem;
+}
+
+#taskDetailsModal .task-detail-work-header strong {
+    color: #17324d;
+    display: block;
+    font-size: 0.92rem;
+    font-weight: 650;
+}
+
+#taskDetailsModal .task-detail-work-count {
+    background: #edf5fa;
+    border-radius: 999px;
+    color: #42627d;
+    flex: 0 0 auto;
+    font-size: 0.7rem;
+    font-weight: 650;
+    padding: 0.35rem 0.6rem;
+}
+
+#taskDetailsModal .task-evidence-list {
+    display: grid;
+}
+
+#taskDetailsModal .task-evidence-row {
+    align-items: center;
+    border-bottom: 1px solid #e1eaf1;
+    display: grid;
+    gap: 0.8rem;
+    grid-template-columns: 38px minmax(180px, 1.2fr) 105px minmax(150px, 1fr) auto;
+    min-width: 0;
+    padding: 0.7rem 0;
+}
+
+#taskDetailsModal .task-evidence-row.is-uiux-handoff {
+    grid-template-columns: 38px minmax(160px, 240px) auto;
+    justify-content: start;
+    padding: 0.75rem 0;
+}
+
+#taskDetailsModal .task-evidence-row.is-uiux-handoff .task-evidence-actions {
+    justify-content: flex-start;
+}
+
+#taskDetailsModal .task-evidence-row:last-child {
+    border-bottom: 0;
+}
+
+#taskDetailsModal .task-evidence-icon {
+    align-items: center;
+    background: #eaf4fb;
+    border-radius: 10px;
+    color: #1f6392;
+    display: inline-flex;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+}
+
+#taskDetailsModal .task-evidence-main {
+    display: grid;
+    min-width: 0;
+}
+
+#taskDetailsModal .task-evidence-title-line {
+    align-items: center;
+    display: flex;
+    gap: 0.45rem;
+    min-width: 0;
+}
+
+#taskDetailsModal .task-evidence-title-line strong {
+    min-width: 0;
+}
+
+#taskDetailsModal .task-evidence-kind {
+    background: #edf5fa;
+    border-radius: 999px;
+    color: #17628f;
+    flex: 0 0 auto;
+    font-size: 0.64rem;
+    font-weight: 650;
+    padding: 0.24rem 0.45rem;
+}
+
+#taskDetailsModal .task-evidence-main strong {
+    color: #17324d;
+    font-size: 0.8rem;
+    font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#taskDetailsModal .task-evidence-main span {
+    color: #7a8fa3;
+    font-size: 0.7rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#taskDetailsModal .task-evidence-uiux-note {
+    color: #71879c;
+    line-height: 1.4;
+    margin-top: 0.15rem;
+}
+
+#taskDetailsModal .task-evidence-type {
+    background: #edf5fa;
+    border-radius: 999px;
+    color: #1f6392;
+    font-size: 0.66rem;
+    font-weight: 650;
+    justify-self: start;
+    padding: 0.3rem 0.5rem;
+    white-space: nowrap;
+}
+
+#taskDetailsModal .task-evidence-note {
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    color: #657c91;
+    display: -webkit-box;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    margin: 0;
+    max-width: 100%;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+}
+
+#taskDetailsModal .task-evidence-actions {
+    align-items: center;
+    display: flex;
+    gap: 0.35rem;
+    justify-content: flex-end;
+}
+
+#taskDetailsModal .task-evidence-actions a {
+    align-items: center;
+    border: 1px solid #cbdde9;
+    border-radius: 8px;
+    color: #17628f;
+    display: inline-flex;
+    font-size: 0.68rem;
+    font-weight: 650;
+    gap: 0.35rem;
+    min-height: 32px;
+    padding: 0.35rem 0.5rem;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+#taskDetailsModal .task-evidence-actions a:hover {
+    background: #edf6fb;
+    border-color: #9fc6dd;
+}
+
+#taskDetailsModal .task-detail-work-empty {
+    background: #f7fafc;
+    border: 1px dashed #cadbe7;
+    border-radius: 10px;
+    margin-top: 0.75rem;
+    padding: 1rem;
+    text-align: center;
+}
+
+#taskDetailsModal .task-details-roadmap {
+    margin-top: 0.85rem;
+}
+
+@media (max-width: 900px) {
+    #taskDetailsModal .task-evidence-row {
+        grid-template-columns: 38px minmax(0, 1fr) auto;
+    }
+
+    #taskDetailsModal .task-evidence-type {
+        grid-column: 2;
+    }
+
+    #taskDetailsModal .task-evidence-note {
+        grid-column: 2 / -1;
+    }
+
+    #taskDetailsModal .task-evidence-actions {
+        grid-column: 3;
+        grid-row: 1 / span 2;
+    }
+
+    #taskDetailsModal .task-evidence-row.is-uiux-handoff {
+        grid-template-columns: 38px minmax(0, 1fr) auto;
+    }
+}
+
+@media (max-width: 640px) {
+    #taskDetailsModal .task-details-facts {
+        grid-template-columns: 1fr;
+    }
+
+    #taskDetailsModal .task-details-fact,
+    #taskDetailsModal .task-details-fact:nth-child(odd),
+    #taskDetailsModal .task-details-fact:nth-child(even) {
+        border-left: 0;
+        border-top: 1px solid #dce8f1;
+        padding: 0.7rem 0;
+    }
+
+    #taskDetailsModal .task-details-fact:first-child {
+        border-top: 0;
+    }
+
+    #taskDetailsModal .task-evidence-actions a span {
+        display: none;
+    }
+
+    #taskDetailsModal .task-details-heading {
+        align-items: stretch;
+    }
+
+    #taskDetailsModal .task-details-heading-actions {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #taskDetailsModal :is(
+    .task-details-facts,
+    .task-details-fact,
+    .task-detail-work-header,
+    .task-evidence-row
+) {
+    border-color: rgba(138, 210, 255, 0.14);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #taskDetailsModal :is(
+    .task-detail-work-header strong,
+    .task-evidence-main strong
+) {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #taskDetailsModal :is(
+    .task-detail-work-count,
+    .task-evidence-type,
+    .task-evidence-icon,
+    .task-evidence-kind
+) {
+    background: rgba(31, 99, 146, 0.24);
+    color: #87d2fb;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #taskDetailsModal .task-details-roadmap-button {
+    background: rgba(31, 99, 146, 0.16);
+    border-color: rgba(138, 210, 255, 0.24);
+    color: #87d2fb;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #taskDetailsModal .task-evidence-main span,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #taskDetailsModal .task-evidence-uiux-note,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #taskDetailsModal .task-evidence-note {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #taskDetailsModal .task-evidence-actions a {
+    border-color: rgba(138, 210, 255, 0.24);
+    color: #87d2fb;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #taskDetailsModal .task-detail-work-empty {
+    background: rgba(255, 255, 255, 0.025);
+    border-color: rgba(138, 210, 255, 0.2);
+}
+
+.assign-expert-modal .modal-dialog {
+    max-width: 860px;
+}
+
+.assign-expert-modal .modal-content {
+    box-shadow: 0 24px 60px rgba(15, 43, 64, .22);
+}
+
+.assign-expert-modal .modal-header {
+    background: #15577f;
+    min-height: 64px;
+}
+
+#page-content-wrapper #assignExpertModal .modal-header,
+#page-content-wrapper #assignDeveloperModal .modal-header {
+    background: linear-gradient(135deg, #15577f 0%, #0f3f60 100%) !important;
+    border-bottom-color: rgba(255, 255, 255, .1) !important;
+}
+
+#page-content-wrapper #assignExpertModal .modal-title,
+#page-content-wrapper #assignExpertModal .modal-title i,
+#page-content-wrapper #assignDeveloperModal .modal-title,
+#page-content-wrapper #assignDeveloperModal .modal-title i,
+#page-content-wrapper #assignDeveloperModal .assignment-modal-title-copy small {
+    color: #ffffff !important;
+}
+
+#page-content-wrapper #assignExpertModal .btn-close,
+#page-content-wrapper #assignDeveloperModal .btn-close {
+    filter: brightness(0) invert(1);
+    opacity: .88;
+}
+
+#page-content-wrapper #assignExpertModal .btn-close:hover,
+#page-content-wrapper #assignDeveloperModal .btn-close:hover {
+    opacity: 1;
+}
+
+.assignment-modal-title {
+    align-items: center;
+    display: flex;
+    gap: .7rem;
+}
+
+.assignment-modal-title-icon {
+    align-items: center;
+    background: rgba(255, 255, 255, .13);
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 10px;
     display: inline-flex;
     flex: 0 0 38px;
     height: 38px;
     justify-content: center;
 }
 
+.assignment-modal-title-copy {
+    display: grid;
+    gap: .08rem;
+}
+
+.assignment-modal-title-copy > span {
+    font-size: 1rem;
+    font-weight: 650;
+}
+
+.assignment-modal-title-copy small {
+    font-size: .67rem;
+    font-weight: 400;
+    opacity: .76;
+}
+
+.assign-expert-intro {
+    align-items: flex-start;
+    background: #f8fafc;
+    border: 1px solid #dbe5ec;
+    border-radius: 12px;
+    display: flex;
+    gap: .8rem;
+    margin-bottom: 1rem;
+    padding: .8rem .9rem;
+}
+
+.assign-expert-intro-icon {
+    align-items: center;
+    background: #e6f2f8;
+    border-radius: 10px;
+    color: #1f6392;
+    display: inline-flex;
+    flex: 0 0 36px;
+    height: 36px;
+    justify-content: center;
+}
+
 .assign-expert-intro-copy {
+    display: grid;
+    gap: .25rem;
     min-width: 0;
+    width: 100%;
+}
+
+.assign-expert-intro-heading {
+    align-items: center;
+    display: flex;
+    gap: .55rem;
+    justify-content: space-between;
 }
 
 .assign-expert-intro-label,
@@ -4005,17 +4841,63 @@ include '../../includes/navbar.php';
 .assign-expert-intro-label {
     color: #64748b;
     font-size: .67rem;
-    font-weight: 800;
+    font-weight: 700;
     letter-spacing: .04em;
     text-transform: uppercase;
 }
 
+.assign-expert-scope-count {
+    background: #e6f2f8;
+    border-radius: 999px;
+    color: #1f6392;
+    display: inline-flex;
+    font-size: .65rem;
+    font-weight: 700;
+    padding: .25rem .5rem;
+    white-space: nowrap;
+}
+
+.assign-expert-scope-count:empty {
+    display: none;
+}
+
 .assign-expert-intro-title {
     color: #0f172a;
-    font-size: .95rem;
-    font-weight: 800;
-    margin-top: .12rem;
+    font-size: .88rem;
+    font-weight: 650;
     overflow-wrap: anywhere;
+}
+
+.assign-expert-feature-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+
+.assign-expert-feature-preview[hidden] {
+    display: none;
+}
+
+.assign-expert-feature-chip {
+    background: #ffffff;
+    border: 1px solid #dbe5ec;
+    border-radius: 7px;
+    color: #526678;
+    display: inline-flex;
+    font-size: .66rem;
+    line-height: 1.25;
+    max-width: 180px;
+    overflow: hidden;
+    padding: .27rem .45rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.assign-expert-feature-chip.is-more {
+    background: transparent;
+    border-color: transparent;
+    color: #1f6392;
+    font-weight: 650;
 }
 
 .developer-deadline-panel {
@@ -4028,6 +4910,57 @@ include '../../includes/navbar.php';
     grid-template-columns: auto minmax(0, 1fr) minmax(170px, 220px);
     margin-bottom: 1.15rem;
     padding: .8rem .9rem;
+}
+
+#assignDeveloperModal .modal-body {
+    padding: 1.15rem 1.25rem;
+}
+
+#assignDeveloperModal .developer-assignment-context {
+    border-bottom: 1px solid #dbe5ec;
+    display: grid;
+    gap: 1.2rem;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, .58fr);
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+}
+
+#assignDeveloperModal .assign-expert-intro,
+#assignDeveloperModal .developer-deadline-panel {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+}
+
+#assignDeveloperModal .assign-expert-intro {
+    padding: 0;
+}
+
+#assignDeveloperModal .developer-deadline-panel {
+    border-left: 1px solid #dbe5ec;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 0 0 0 1.2rem;
+}
+
+#assignDeveloperModal .developer-deadline-panel input {
+    grid-column: 1 / -1;
+}
+
+#assignDeveloperModal .expert-selection-table-wrap {
+    border-left: 0;
+    border-radius: 0;
+    border-right: 0;
+    max-height: 300px;
+}
+
+#assignDeveloperModal .expert-selection-table th:first-child { width: 45%; }
+#assignDeveloperModal .expert-selection-table th:nth-child(2) { width: 25%; }
+#assignDeveloperModal .expert-selection-table th:nth-child(3) { width: 20%; }
+#assignDeveloperModal .expert-selection-table th:nth-child(4) { width: 10%; }
+
+#assignDeveloperModal .expert-choice-row.is-selected {
+    box-shadow: none;
 }
 
 .developer-deadline-icon {
@@ -4074,7 +5007,7 @@ include '../../includes/navbar.php';
 .expert-selection-heading h6 {
     color: #0f172a;
     font-size: .86rem;
-    font-weight: 800;
+    font-weight: 650;
 }
 
 .expert-selection-heading p {
@@ -4129,7 +5062,7 @@ include '../../includes/navbar.php';
     border-collapse: separate;
     border-spacing: 0;
     margin: 0;
-    min-width: 670px;
+    min-width: 650px;
     width: 100%;
 }
 
@@ -4144,12 +5077,17 @@ include '../../includes/navbar.php';
     border-bottom: 1px solid #dbe3ed;
     color: #64748b;
     font-size: .65rem;
-    font-weight: 800;
+    font-weight: 700;
     letter-spacing: .04em;
     padding: .68rem .8rem;
     text-transform: uppercase;
     white-space: nowrap;
 }
+
+#assignExpertModal .expert-selection-table th:first-child { width: 42%; }
+#assignExpertModal .expert-selection-table th:nth-child(2) { width: 25%; }
+#assignExpertModal .expert-selection-table th:nth-child(3) { width: 23%; }
+#assignExpertModal .expert-selection-table th:nth-child(4) { width: 10%; }
 
 .expert-selection-table td {
     border-bottom: 1px solid #e6ebf1;
@@ -4176,7 +5114,7 @@ include '../../includes/navbar.php';
 
 .expert-choice-row.is-selected {
     background: #eff6ff;
-    box-shadow: inset 4px 0 0 #1f6392;
+    box-shadow: inset 0 0 0 1px #9cc9e4;
 }
 
 .expert-identity {
@@ -4220,7 +5158,7 @@ include '../../includes/navbar.php';
 .expert-name {
     color: #0f172a;
     font-size: .8rem;
-    font-weight: 800;
+    font-weight: 650;
 }
 
 .expert-role {
@@ -4235,10 +5173,58 @@ include '../../includes/navbar.php';
     color: #166534;
     display: inline-flex;
     font-size: .58rem;
-    font-weight: 800;
+    font-weight: 700;
     margin-top: .28rem;
     padding: .16rem .42rem;
-    text-transform: uppercase;
+}
+
+.expert-capacity {
+    display: grid;
+    gap: .35rem;
+    min-width: 120px;
+}
+
+.expert-capacity-copy {
+    align-items: baseline;
+    display: flex;
+    gap: .4rem;
+}
+
+.expert-capacity-copy strong {
+    color: #23384b;
+    font-size: .74rem;
+    font-weight: 650;
+}
+
+.expert-capacity-copy small,
+.expert-slot-count {
+    color: #718296;
+    font-size: .63rem;
+}
+
+.expert-capacity-track {
+    background: #e7edf2;
+    border-radius: 999px;
+    display: block;
+    height: 5px;
+    max-width: 130px;
+    overflow: hidden;
+}
+
+.expert-capacity-track > span {
+    border-radius: inherit;
+    display: block;
+    height: 100%;
+    min-width: 3px;
+}
+
+.expert-capacity-track > .is-light { background: #22a65a; }
+.expert-capacity-track > .is-moderate { background: #e29a14; }
+.expert-capacity-track > .is-high { background: #dc3d3d; }
+
+.expert-slot-count {
+    display: block;
+    margin-top: .28rem;
 }
 
 .expert-active-count,
@@ -4310,6 +5296,23 @@ include '../../includes/navbar.php';
 
 .expert-selection-summary strong {
     color: #0f172a;
+}
+
+.assign-expert-modal .modal-footer {
+    align-items: center;
+    background: #fbfdff;
+    gap: .55rem;
+    padding-top: .85rem;
+}
+
+.assign-expert-modal .modal-footer .btn-outline-modern,
+.assign-expert-modal .modal-footer .btn-primary-modern {
+    min-height: 40px;
+    justify-content: center;
+}
+
+.assign-expert-modal .modal-footer .btn-primary-modern {
+    min-width: 150px;
 }
 
 .form-select-custom {
@@ -4390,6 +5393,19 @@ include '../../includes/navbar.php';
     color: #93c5fd;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .assign-expert-scope-count,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .assign-expert-feature-chip {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .assign-expert-feature-chip.is-more {
+    background: transparent;
+    border-color: transparent;
+    color: #7dd3fc;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-deadline-panel {
     background: #0a1b2c;
     border-color: rgba(31, 99, 146, 0.28);
@@ -4447,6 +5463,19 @@ include '../../includes/navbar.php';
     background: rgba(37, 99, 235, 0.24);
     border-color: #071321;
     color: #93c5fd;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-capacity-copy strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .expert-capacity-track {
+    background: rgba(157, 182, 207, .18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .assign-expert-modal .modal-footer {
+    background: #071321;
+    border-color: rgba(31, 99, 146, 0.24);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select-custom,
@@ -4568,16 +5597,20 @@ include '../../includes/navbar.php';
     color: #93c5fd;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-card,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-decision {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-card {
     background: #071321;
     border-color: rgba(31, 99, 146, 0.28);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-decision {
+    background: transparent;
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-toggle:hover,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-details {
-    background: #0a1b2c;
+    background: #071321;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-details {
@@ -4591,8 +5624,7 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost.is-primary {
-    background: rgba(29, 78, 216, 0.14);
-    border-color: rgba(96, 165, 250, 0.34);
+    background: transparent;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost.is-primary strong {
@@ -4600,8 +5632,7 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost.is-negative {
-    background: rgba(185, 28, 28, 0.14);
-    border-color: rgba(248, 113, 113, 0.32);
+    background: transparent;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-review-cost.is-negative strong {
@@ -4688,6 +5719,16 @@ include '../../includes/navbar.php';
         padding: 1rem;
     }
 
+    #assignDeveloperModal .developer-assignment-context {
+        grid-template-columns: 1fr;
+    }
+
+    #assignDeveloperModal .developer-deadline-panel {
+        border-left: 0;
+        border-top: 1px solid #dbe5ec;
+        padding: 1rem 0 0;
+    }
+
     .developer-deadline-panel {
         grid-template-columns: auto minmax(0, 1fr);
     }
@@ -4752,6 +5793,28 @@ include '../../includes/navbar.php';
     .project-review-costs,
     .project-review-decisions {
         grid-template-columns: 1fr;
+    }
+
+    .project-review-cost,
+    .project-review-cost:nth-child(3n),
+    .project-review-cost:nth-last-child(-n + 3) {
+        border-right: 0;
+        border-bottom: 1px solid var(--gray-200);
+    }
+
+    .project-review-cost:last-child {
+        border-bottom: 0;
+    }
+
+    .project-review-decision.is-revision {
+        border-top: 1px solid var(--gray-200);
+        border-left: 0;
+    }
+
+    .project-review-decision button {
+        align-self: stretch;
+        min-width: 0;
+        width: 100%;
     }
 }
 .evortix-allocation-assistant { border:1px solid #cfe4f2; border-radius:20px; background:linear-gradient(135deg,#f7fcff,#eef7fc); padding:1.25rem; margin-bottom:1.5rem; box-shadow:0 12px 30px rgba(31,99,146,.09) }
@@ -5250,7 +6313,7 @@ include '../../includes/navbar.php';
                                         <label for="approvalNote<?php echo (int) $estimate['id']; ?>">Approval note <span>(optional)</span></label>
                                         <textarea id="approvalNote<?php echo (int) $estimate['id']; ?>" name="review_comment" class="form-control-custom" rows="2" placeholder="Add a short note for Sales"></textarea>
                                         <button type="submit" name="approve_project_estimation" class="btn-success-modern">
-                                            <i class="fas fa-check"></i> Approve and Forward to Sales
+                                            <i class="fas fa-check"></i> Approve &amp; Forward
                                         </button>
                                     </form>
                                     <form method="POST" class="project-review-decision is-revision" data-generic-draft-disabled="1" data-app-loading data-loading-title="Returning estimation" data-loading-text="Sending the estimation back for revision.">
@@ -5262,7 +6325,7 @@ include '../../includes/navbar.php';
                                         <label for="revisionReason<?php echo (int) $estimate['id']; ?>">Revision reason <span>(required)</span></label>
                                         <textarea id="revisionReason<?php echo (int) $estimate['id']; ?>" name="rejection_reason" class="form-control-custom" rows="2" required placeholder="Explain what needs to be revised"></textarea>
                                         <button type="submit" name="reject_project_estimation" class="btn-warning-modern">
-                                            <i class="fas fa-rotate-left"></i> Return for Revision
+                                            <i class="fas fa-rotate-left"></i> Request Revision
                                         </button>
                                     </form>
                                 </div>
@@ -5406,9 +6469,11 @@ include '../../includes/navbar.php';
                                             <span class="allocation-deadline-note">SUL approved</span>
                                         </td>
                                         <td>
-                                            <button class="btn-outline-modern" type="button" onclick="event.stopPropagation(); viewTaskDetails(<?php echo (int) $completedExpertTask['id']; ?>)">
-                                                <i class="fas fa-eye"></i> View
-                                            </button>
+                                            <div class="allocation-table-actions" onclick="event.stopPropagation();">
+                                                <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $completedExpertTask['id']; ?>)">
+                                                    <i class="fas fa-eye"></i> View
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 <?php endwhile; ?>
@@ -5521,7 +6586,9 @@ include '../../includes/navbar.php';
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="developer-review-tab" data-bs-toggle="tab" data-bs-target="#developer-review-panel" type="button" role="tab" aria-controls="developer-review-panel" aria-selected="false">
-                        <i class="fas fa-code-pull-request"></i> SUL Code Review <span class="badge-count"><?php echo $codeReviewTasks->num_rows; ?></span>
+                        <i class="fas <?php echo $isUiUxDepartmentSul ? 'fa-palette' : 'fa-code-pull-request'; ?>"></i>
+                        <?php echo htmlspecialchars($deliveryReviewLabel); ?>
+                        <span class="badge-count"><?php echo $codeReviewTasks->num_rows; ?></span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -5810,13 +6877,16 @@ include '../../includes/navbar.php';
                 </div>
             </div>
 
-            <!-- Section 6: SUL Code Review -->
+            <!-- Section 6: SUL Department Review -->
             <div class="tab-pane fade section-card allocation-column" id="developer-review-panel" role="tabpanel" aria-labelledby="developer-review-tab">
                 <div class="section-header">
                     <h5>
-                        <i class="fas fa-code-pull-request"></i>
-                        SUL Code Review
-                        <span class="badge-count"><?php echo $codeReviewTasks->num_rows; ?> PRs</span>
+                        <i class="fas <?php echo $isUiUxDepartmentSul ? 'fa-palette' : 'fa-code-pull-request'; ?>"></i>
+                        <?php echo htmlspecialchars($deliveryReviewLabel); ?>
+                        <span class="badge-count">
+                            <?php echo $codeReviewTasks->num_rows; ?>
+                            <?php echo $isUiUxDepartmentSul ? 'submissions' : 'PRs'; ?>
+                        </span>
                     </h5>
                 </div>
                 <div class="p-3">
@@ -5827,13 +6897,13 @@ include '../../includes/navbar.php';
                     </div>
                 <?php elseif($codeReviewTasks->num_rows > 0): ?>
                     <div class="task-allocation-table-wrap">
-                        <table class="task-allocation-table developer-review-table" aria-label="Pull requests waiting for SUL review">
+                        <table class="task-allocation-table developer-review-table" aria-label="<?php echo htmlspecialchars(ucfirst($deliverySubmissionLabel)); ?>s waiting for SUL review">
                             <thead>
                                 <tr>
                                     <th scope="col">Priority</th>
                                     <th scope="col">Task</th>
                                     <th scope="col"><?php echo htmlspecialchars($deliveryAssigneeLabel); ?></th>
-                                    <th scope="col">Repository</th>
+                                    <th scope="col"><?php echo htmlspecialchars($deliveryEvidenceLabel); ?></th>
                                     <th scope="col" class="allocation-actions-heading">Review Decision</th>
                                 </tr>
                             </thead>
@@ -5847,41 +6917,47 @@ include '../../includes/navbar.php';
                                     </td>
                                     <td>
                                         <span class="allocation-task-name"><?php echo htmlspecialchars((string) $task['title']); ?></span>
-                                        <span class="allocation-task-secondary">
-                                            <i class="fas fa-folder" aria-hidden="true"></i>
-                                            <?php echo htmlspecialchars((string) $task['project_name']); ?>
-                                        </span>
+                                        <?php if (!$isUiUxDepartmentSul): ?>
+                                            <span class="allocation-task-secondary">
+                                                <i class="fas fa-folder" aria-hidden="true"></i>
+                                                <?php echo htmlspecialchars((string) $task['project_name']); ?>
+                                            </span>
+                                        <?php endif; ?>
                                         <?php echo sulTaskAllocationBulkEntityDetails($conn, $task); ?>
                                     </td>
                                     <td>
                                         <span class="allocation-deadline"><?php echo htmlspecialchars((string) $task['developer_name']); ?></span>
-                                        <span class="allocation-deadline-note">Submitted work</span>
+                                        <?php if (!$isUiUxDepartmentSul): ?>
+                                            <span class="allocation-deadline-note">Submitted work</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if (!empty($task['branch_name'])): ?>
-                                            <span class="allocation-deadline"><i class="fas fa-code-branch" aria-hidden="true"></i> <?php echo htmlspecialchars((string) $task['branch_name']); ?></span>
-                                        <?php else: ?>
-                                            <span class="allocation-deadline">Branch not linked</span>
+                                        <?php if (!$isUiUxDepartmentSul): ?>
+                                            <?php if (!empty($task['branch_name'])): ?>
+                                                <span class="allocation-deadline"><i class="fas fa-code-branch" aria-hidden="true"></i> <?php echo htmlspecialchars((string) $task['branch_name']); ?></span>
+                                            <?php else: ?>
+                                                <span class="allocation-deadline">Branch not linked</span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($task['commit_hash'])): ?>
+                                                <span class="allocation-deadline-note"><i class="fas fa-hashtag" aria-hidden="true"></i> <?php echo htmlspecialchars(substr((string) $task['commit_hash'], 0, 7)); ?></span>
+                                            <?php endif; ?>
                                         <?php endif; ?>
-                                        <?php if (!empty($task['commit_hash'])): ?>
-                                            <span class="allocation-deadline-note"><i class="fas fa-hashtag" aria-hidden="true"></i> <?php echo htmlspecialchars(substr((string) $task['commit_hash'], 0, 7)); ?></span>
-                                        <?php endif; ?>
-                                        <div class="workflow-action-row mt-2">
-                                            <?php if (!empty($task['pull_request_url'])): ?>
+                                        <div class="workflow-action-row<?php echo $isUiUxDepartmentSul ? '' : ' mt-2'; ?>">
+                                            <?php if (!$isUiUxDepartmentSul && !empty($task['pull_request_url'])): ?>
                                                 <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['pull_request_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-code-pull-request"></i> PR</a>
                                             <?php endif; ?>
-                                            <?php if (!empty($task['repository_url'])): ?>
+                                            <?php if (!$isUiUxDepartmentSul && !empty($task['repository_url'])): ?>
                                                 <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['repository_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-link"></i> Repo</a>
                                             <?php endif; ?>
                                             <button type="button" class="btn-outline-modern" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
-                                                <i class="fas fa-eye"></i> View
+                                                <i class="fas fa-eye"></i> <?php echo $isUiUxDepartmentSul ? 'Review' : 'View'; ?>
                                             </button>
                                         </div>
                                     </td>
                                     <td>
                                         <form class="workflow-decision-form" method="POST" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
                                             <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
-                                            <textarea name="review_comment" class="form-control-custom" rows="2" placeholder="Approval note or revision comments"></textarea>
+                                            <textarea name="review_comment" class="form-control-custom" rows="2" placeholder="<?php echo $isUiUxDepartmentSul ? 'UI/UX approval note or revision feedback' : 'Approval note or revision comments'; ?>"></textarea>
                                             <div class="workflow-action-row">
                                                 <button type="submit" name="sul_approve_pr" class="btn-success-modern">
                                                     <i class="fas fa-check"></i> Approve
@@ -5900,7 +6976,11 @@ include '../../includes/navbar.php';
                 <?php else: ?>
                     <div class="empty-state">
                         <i class="fas fa-code-branch"></i>
-                        <p>No Pull Requests waiting for SUL review</p>
+                        <p>
+                            <?php echo $isUiUxDepartmentSul
+                                ? 'No UI/UX submissions are waiting for SUL review'
+                                : 'No Pull Requests are waiting for SUL review'; ?>
+                        </p>
                     </div>
                 <?php endif; ?>
                 </div>
@@ -6080,7 +7160,7 @@ include '../../includes/navbar.php';
                 <h5 class="modal-title" id="assignExpertModalTitle"><i class="fas fa-user-plus me-2"></i>Assign to Expert</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" id="assignExpertForm" data-app-loading data-loading-title="Assigning expert" data-loading-text="Please wait while the expert assignment is saved.">
+            <form method="POST" id="assignExpertForm" data-generic-draft-disabled="1" data-app-loading data-loading-title="Assigning expert" data-loading-text="Please wait while the expert assignment is saved.">
                 <div class="modal-body">
                     <input type="hidden" name="assign_to_expert" value="1">
                     <input type="hidden" name="project_id" value="<?php echo (int) $projectId; ?>">
@@ -6089,17 +7169,21 @@ include '../../includes/navbar.php';
                     <div class="assign-expert-intro">
                         <span class="assign-expert-intro-icon" aria-hidden="true"><i class="fas fa-list-check"></i></span>
                         <span class="assign-expert-intro-copy">
-                            <span class="assign-expert-intro-label">Task to assign</span>
+                            <span class="assign-expert-intro-heading">
+                                <span class="assign-expert-intro-label">Assignment scope</span>
+                                <span class="assign-expert-scope-count" id="expertTaskCount"></span>
+                            </span>
                             <span class="assign-expert-intro-title" id="expertTaskTitle"></span>
+                            <span class="assign-expert-feature-preview" id="expertTaskItems" hidden></span>
                         </span>
                     </div>
 
                     <div class="expert-selection-heading">
                         <div>
-                            <h6>Choose the right expert</h6>
-                            <p>Compare current workload before assigning this task.</p>
+                            <h6>Available experts</h6>
+                            <p>Select one based on workload and available capacity.</p>
                         </div>
-                        <div class="expert-workload-legend" aria-label="Workload color guide">
+                        <div class="expert-workload-legend d-none" aria-hidden="true">
                             <span class="is-light"><i aria-hidden="true"></i>0–2 light</span>
                             <span class="is-moderate"><i aria-hidden="true"></i>3–5 moderate</span>
                             <span class="is-high"><i aria-hidden="true"></i>6+ high</span>
@@ -6110,13 +7194,12 @@ include '../../includes/navbar.php';
                         <div class="expert-selection-table-wrap">
                             <table class="expert-selection-table" aria-label="Available experts and their current workloads">
                                 <thead>
-                                    <tr>
-                                        <th scope="col">Expert</th>
-                                        <th scope="col">Role</th>
-                                        <th scope="col">Active Tasks</th>
-                                        <th scope="col">Capacity</th>
-                                        <th scope="col" class="text-center">Select</th>
-                                    </tr>
+                                     <tr>
+                                         <th scope="col">Expert</th>
+                                         <th scope="col">Current Workload</th>
+                                         <th scope="col">Availability</th>
+                                         <th scope="col" class="text-center">Select</th>
+                                     </tr>
                                 </thead>
                                 <tbody>
                                 <?php
@@ -6127,10 +7210,13 @@ include '../../includes/navbar.php';
                                         $workload = sulTaskAllocationWorkload($activeTaskCount);
                                         $expertName = (string) ($expert['full_name'] ?? 'Expert');
                                         $expertRole = trim((string) ($expert['designation'] ?? ''));
-                                        $expertRole = $expertRole !== '' ? $expertRole : 'Expert';
-                                        $profileUrl = sulTaskAllocationProfileUrl($expert['profile_pic'] ?? null);
-                                        $isRecommended = $expertPosition === 0;
-                                ?>
+                                         $expertRole = $expertRole !== '' ? $expertRole : 'Expert';
+                                         $profileUrl = sulTaskAllocationProfileUrl($expert['profile_pic'] ?? null);
+                                         $isRecommended = $expertPosition === 0;
+                                         $expertCapacity = max(1, (int) ($expert['max_concurrent_tasks'] ?? 5));
+                                         $expertUtilization = min(100, (int) round(($activeTaskCount / $expertCapacity) * 100));
+                                         $expertSlots = max(0, $expertCapacity - $activeTaskCount);
+                                 ?>
                                     <tr
                                         class="expert-choice-row"
                                         tabindex="0"
@@ -6141,7 +7227,7 @@ include '../../includes/navbar.php';
                                         data-member-skills="<?php echo htmlspecialchars((string) ($expert['skills'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
                                         data-member-availability="<?php echo htmlspecialchars((string) ($expert['availability_status'] ?? 'available'), ENT_QUOTES, 'UTF-8'); ?>"
                                         data-member-load="<?php echo $activeTaskCount; ?>"
-                                        data-member-capacity="<?php echo max(1, (int) ($expert['max_concurrent_tasks'] ?? 5)); ?>"
+                                         data-member-capacity="<?php echo $expertCapacity; ?>"
                                     >
                                         <td>
                                             <span class="expert-identity">
@@ -6151,26 +7237,32 @@ include '../../includes/navbar.php';
                                                         <img src="<?php echo htmlspecialchars($profileUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="" loading="lazy">
                                                     <?php endif; ?>
                                                 </span>
-                                                <span>
-                                                    <span class="expert-name"><?php echo htmlspecialchars($expertName); ?></span>
-                                                    <?php if ($isRecommended): ?>
-                                                        <span class="expert-recommended"><i class="fas fa-star me-1" aria-hidden="true"></i>Lightest workload</span>
-                                                    <?php endif; ?>
-                                                </span>
-                                            </span>
-                                        </td>
-                                        <td><span class="expert-role"><?php echo htmlspecialchars($expertRole); ?></span></td>
-                                        <td>
-                                            <span class="expert-active-count is-<?php echo htmlspecialchars($workload['key']); ?>">
-                                                <i class="fas fa-list-check" aria-hidden="true"></i>
-                                                <?php echo $activeTaskCount; ?> active
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="expert-workload is-<?php echo htmlspecialchars($workload['key']); ?>">
-                                                <?php echo htmlspecialchars($workload['label']); ?>
-                                            </span>
-                                        </td>
+                                                 <span>
+                                                     <span class="expert-name"><?php echo htmlspecialchars($expertName); ?></span>
+                                                     <span class="expert-role"><?php echo htmlspecialchars($expertRole); ?></span>
+                                                     <?php if ($isRecommended): ?>
+                                                         <span class="expert-recommended"><i class="fas fa-star me-1" aria-hidden="true"></i>Recommended</span>
+                                                     <?php endif; ?>
+                                                 </span>
+                                             </span>
+                                         </td>
+                                         <td>
+                                             <span class="expert-capacity">
+                                                 <span class="expert-capacity-copy">
+                                                     <strong><?php echo $activeTaskCount; ?> / <?php echo $expertCapacity; ?></strong>
+                                                     <small><?php echo $expertUtilization; ?>% used</small>
+                                                 </span>
+                                                 <span class="expert-capacity-track" aria-hidden="true">
+                                                     <span class="is-<?php echo htmlspecialchars($workload['key']); ?>" style="width: <?php echo $expertUtilization; ?>%;"></span>
+                                                 </span>
+                                             </span>
+                                         </td>
+                                         <td>
+                                             <span class="expert-workload is-<?php echo htmlspecialchars($workload['key']); ?>">
+                                                 <?php echo htmlspecialchars($workload['label']); ?>
+                                             </span>
+                                             <small class="expert-slot-count"><?php echo $expertSlots; ?> slot<?php echo $expertSlots === 1 ? '' : 's'; ?> open</small>
+                                         </td>
                                         <td class="text-center">
                                             <input
                                                 class="visually-hidden expert-choice-input"
@@ -6192,7 +7284,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="expert-assignment-note">
                             <i class="fas fa-circle-info" aria-hidden="true"></i>
-                            The selected expert will prepare the minimum, likely, and maximum day estimates.
+                            The expert will provide the three-point estimate after assignment.
                         </div>
                     <?php else: ?>
                         <div class="empty-state">
@@ -6222,7 +7314,13 @@ include '../../includes/navbar.php';
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="assignDeveloperModalTitle"><i class="fas fa-user-plus me-2"></i><?php echo htmlspecialchars($deliveryAssignmentModalTitle); ?></h5>
+                <h5 class="modal-title assignment-modal-title" id="assignDeveloperModalTitle">
+                    <span class="assignment-modal-title-icon" aria-hidden="true"><i class="fas fa-user-plus"></i></span>
+                    <span class="assignment-modal-title-copy">
+                        <span><?php echo htmlspecialchars($deliveryAssignmentModalTitle); ?></span>
+                        <small>Select the team and confirm the delivery deadline.</small>
+                    </span>
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form method="POST" id="assignDeveloperForm" data-app-loading data-loading-title="<?php echo htmlspecialchars($deliveryAssignmentLoadingTitle); ?>" data-loading-text="<?php echo htmlspecialchars($deliveryAssignmentLoadingText); ?>">
@@ -6231,21 +7329,27 @@ include '../../includes/navbar.php';
                     <input type="hidden" name="task_id" id="devTaskId">
                     <input type="hidden" name="task_ids" id="devTaskIds">
 
-                    <div class="assign-expert-intro">
-                        <span class="assign-expert-intro-icon" aria-hidden="true"><i class="fas fa-code"></i></span>
-                        <span class="assign-expert-intro-copy">
-                            <span class="assign-expert-intro-label">Task to assign</span>
-                            <span class="assign-expert-intro-title" id="devTaskTitle"></span>
-                        </span>
-                    </div>
+                    <div class="developer-assignment-context">
+                        <div class="assign-expert-intro">
+                            <span class="assign-expert-intro-icon" aria-hidden="true"><i class="fas fa-code"></i></span>
+                            <span class="assign-expert-intro-copy">
+                                <span class="assign-expert-intro-heading">
+                                    <span class="assign-expert-intro-label">Assignment scope</span>
+                                    <span class="assign-expert-scope-count" id="devTaskCount"></span>
+                                </span>
+                                <span class="assign-expert-intro-title" id="devTaskTitle"></span>
+                                <span class="assign-expert-feature-preview" id="devTaskItems" hidden></span>
+                            </span>
+                        </div>
 
-                    <div class="developer-deadline-panel">
-                        <span class="developer-deadline-icon" aria-hidden="true"><i class="far fa-calendar-check"></i></span>
-                        <label for="devDeadline">
-                            <span>Delivery deadline</span>
-                            <small id="developerDeadlineHint">Must stay inside the selected roadmap window.</small>
-                        </label>
-                        <input type="date" name="deadline" id="devDeadline" class="form-control-custom" required aria-describedby="developerDeadlineHint">
+                        <div class="developer-deadline-panel">
+                            <span class="developer-deadline-icon" aria-hidden="true"><i class="far fa-calendar-check"></i></span>
+                            <label for="devDeadline">
+                                <span>Delivery deadline</span>
+                                <small id="developerDeadlineHint">Must stay inside the selected roadmap window.</small>
+                            </label>
+                            <input type="date" name="deadline" id="devDeadline" class="form-control-custom" required aria-describedby="developerDeadlineHint">
+                        </div>
                     </div>
 
                     <div class="expert-selection-heading">
@@ -6266,9 +7370,8 @@ include '../../includes/navbar.php';
                                 <thead>
                                     <tr>
                                         <th scope="col"><?php echo htmlspecialchars($deliveryAssigneeLabel); ?></th>
-                                        <th scope="col">Role</th>
-                                        <th scope="col">Active Tasks</th>
-                                        <th scope="col">Capacity</th>
+                                        <th scope="col">Current workload</th>
+                                        <th scope="col">Availability</th>
                                         <th scope="col" class="text-center">Select</th>
                                     </tr>
                                 </thead>
@@ -6307,13 +7410,13 @@ include '../../includes/navbar.php';
                                                 </span>
                                                 <span>
                                                     <span class="expert-name"><?php echo htmlspecialchars($developerName); ?></span>
+                                                    <span class="expert-role"><?php echo htmlspecialchars($developerRole); ?></span>
                                                     <?php if ($isRecommended): ?>
                                                         <span class="expert-recommended"><i class="fas fa-star me-1" aria-hidden="true"></i>Lightest workload</span>
                                                     <?php endif; ?>
                                                 </span>
                                             </span>
                                         </td>
-                                        <td><span class="expert-role"><?php echo htmlspecialchars($developerRole); ?></span></td>
                                         <td>
                                             <span class="expert-active-count is-<?php echo htmlspecialchars($workload['key']); ?>">
                                                 <i class="fas fa-list-check" aria-hidden="true"></i>
@@ -6426,12 +7529,18 @@ include '../../includes/navbar.php';
 <?php endif; ?>
 
 <!-- Task Details Modal -->
-<div class="modal fade modal-modern" id="taskDetailsModal" tabindex="-1">
+<div class="modal fade modal-modern" id="taskDetailsModal" tabindex="-1" aria-labelledby="taskDetailsModalTitle">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-info-circle me-2"></i>Task Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title task-details-modal-title" id="taskDetailsModalTitle">
+                    <span class="task-details-modal-icon"><i class="fas fa-clipboard-check"></i></span>
+                    <span class="task-details-modal-copy">
+                        <strong>Task details</strong>
+                        <small>Project context and submitted work</small>
+                    </span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="taskDetailsContent">
                 <div class="text-center py-4">
@@ -6449,6 +7558,7 @@ const evortixAllocationQueue = <?php echo json_encode($evortixAssignmentQueue, J
 const evortixReallocationQueue = <?php echo json_encode($evortixReallocationSuggestions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 const evortixChangeImpactNotice = <?php echo json_encode($evortixChangeImpactNotice, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
 const evortixIsExpertWorkflow = <?php echo $canManageExpertWorkflow ? 'true' : 'false'; ?>;
+const sulIsUiUxReview = <?php echo $isUiUxDepartmentSul ? 'true' : 'false'; ?>;
 let evortixQueueIndex = 0;
 let evortixLastAnnouncedIndex = -1;
 
@@ -6753,7 +7863,42 @@ expertChoiceRows.forEach(row => {
 
 function openAssignExpertModal(taskId, taskTitle) {
     document.getElementById('expertTaskId').value = taskId;
-    document.getElementById('expertTaskTitle').textContent = taskTitle;
+    const taskTitleTarget = document.getElementById('expertTaskTitle');
+    const taskCountTarget = document.getElementById('expertTaskCount');
+    const taskItemsTarget = document.getElementById('expertTaskItems');
+    const bulkPrefix = /^Bulk assignment:\s*/i;
+    const isBulkAssignment = bulkPrefix.test(taskTitle);
+    const taskItems = isBulkAssignment
+        ? taskTitle.replace(bulkPrefix, '').split(',').map(item => item.trim()).filter(Boolean)
+        : [];
+
+    if (taskTitleTarget) {
+        taskTitleTarget.textContent = isBulkAssignment ? 'Bulk feature assignment' : taskTitle;
+    }
+    if (taskCountTarget) {
+        const count = isBulkAssignment ? taskItems.length : (taskTitle ? 1 : 0);
+        taskCountTarget.textContent = count > 0
+            ? `${count} feature${count === 1 ? '' : 's'}`
+            : '';
+    }
+    if (taskItemsTarget) {
+        taskItemsTarget.replaceChildren();
+        taskItemsTarget.hidden = !isBulkAssignment || taskItems.length === 0;
+        taskItems.slice(0, 4).forEach((item) => {
+            const chip = document.createElement('span');
+            chip.className = 'assign-expert-feature-chip';
+            chip.textContent = item;
+            chip.title = item;
+            taskItemsTarget.appendChild(chip);
+        });
+        if (taskItems.length > 4) {
+            const more = document.createElement('span');
+            more.className = 'assign-expert-feature-chip is-more';
+            more.textContent = `+${taskItems.length - 4} more`;
+            more.title = taskItems.slice(4).join(', ');
+            taskItemsTarget.appendChild(more);
+        }
+    }
     clearExpertChoice();
     new bootstrap.Modal(document.getElementById('assignExpertModal')).show();
 }
@@ -6849,6 +7994,18 @@ function selectDeveloperChoice(row) {
     const input = row?.querySelector('.developer-choice-input');
     if (!input) return;
 
+    const form = document.getElementById('assignDeveloperForm');
+    if (form) delete form.dataset.overloadConfirmed;
+
+    if (developerSelectionLimit === 1) {
+        developerChoiceRows.forEach(choice => {
+            const choiceInput = choice.querySelector('.developer-choice-input');
+            if (choiceInput) choiceInput.checked = choice === row;
+        });
+        updateDeveloperSelectionState();
+        return;
+    }
+
     if (input.checked) {
         input.checked = false;
     } else {
@@ -6878,9 +8035,48 @@ function openAssignDeveloperModal(taskId, taskTitle, deadline, minDate = '', max
         .map(Number)
         .filter(id => Number.isInteger(id) && id > 0)
         .join(',');
-    document.getElementById('devTaskTitle').textContent = taskTitle;
+
+    const taskTitleTarget = document.getElementById('devTaskTitle');
+    const taskCountTarget = document.getElementById('devTaskCount');
+    const taskItemsTarget = document.getElementById('devTaskItems');
+    const bulkPrefix = /^Bulk assignment:\s*/i;
+    const isBulkAssignment = bulkPrefix.test(taskTitle);
+    const taskItems = isBulkAssignment
+        ? taskTitle.replace(bulkPrefix, '').split(',').map(item => item.trim()).filter(Boolean)
+        : [];
+    const resolvedFeatureCount = Math.max(
+        1,
+        Number(featureCount) || 1,
+        isBulkAssignment ? taskItems.length : 1
+    );
+
+    if (taskTitleTarget) {
+        taskTitleTarget.textContent = isBulkAssignment ? 'Bulk feature assignment' : taskTitle;
+    }
+    if (taskCountTarget) {
+        taskCountTarget.textContent = `${resolvedFeatureCount} feature${resolvedFeatureCount === 1 ? '' : 's'}`;
+    }
+    if (taskItemsTarget) {
+        taskItemsTarget.replaceChildren();
+        taskItemsTarget.hidden = !isBulkAssignment || taskItems.length === 0;
+        taskItems.slice(0, 4).forEach(item => {
+            const chip = document.createElement('span');
+            chip.className = 'assign-expert-feature-chip';
+            chip.textContent = item;
+            chip.title = item;
+            taskItemsTarget.appendChild(chip);
+        });
+        if (taskItems.length > 4) {
+            const more = document.createElement('span');
+            more.className = 'assign-expert-feature-chip is-more';
+            more.textContent = `+${taskItems.length - 4} more`;
+            more.title = taskItems.slice(4).join(', ');
+            taskItemsTarget.appendChild(more);
+        }
+    }
+
     developerSelectionLimit = Math.max(1, Math.min(Number(selectionLimit) || 1, developerChoiceRows.length || 1));
-    developerBulkFeatureCount = Math.max(1, Number(featureCount) || 1);
+    developerBulkFeatureCount = resolvedFeatureCount;
     const deadlineInput = document.getElementById('devDeadline');
     deadlineInput.min = minDate || '';
     deadlineInput.max = maxDate || '';
@@ -6937,38 +8133,88 @@ function formatTaskDeadlineLabel(deadline) {
 }
 
 function renderSulDeveloperWork(task) {
-    const artifacts = Array.isArray(task.department_artifacts) ? task.department_artifacts : [];
+    const allArtifacts = Array.isArray(task.department_artifacts) ? task.department_artifacts : [];
+    const artifacts = sulIsUiUxReview
+        ? allArtifacts.filter((artifact) => Number(artifact.task_id || 0) === Number(task.id || 0))
+        : allArtifacts;
     const gitUpdates = Array.isArray(task.git_updates) ? task.git_updates : [];
-    const artifactRows = artifacts.map(artifact => {
-        const fileLink = artifact.file_url
-            ? `<a class="btn-outline-modern text-decoration-none" href="${escapeHtml(artifact.file_url)}" target="_blank" rel="noopener"><i class="fas fa-download"></i> ${escapeHtml(artifact.original_file_name || 'View upload')}</a>`
-            : '';
-        const externalLink = artifact.external_url
-            ? `<a class="btn-outline-modern text-decoration-none" href="${escapeHtml(artifact.external_url)}" target="_blank" rel="noopener"><i class="fas fa-external-link-alt"></i> Open link</a>`
-            : '';
-        return `<div class="border rounded-3 p-3 mb-2">
-            <div class="d-flex justify-content-between gap-2 flex-wrap">
-                <strong>${escapeHtml(artifact.title || 'Developer submission')}</strong>
-                <small class="text-muted">${escapeHtml(artifact.user_name || '')}</small>
+    const artifactRows = artifacts.map((artifact) => {
+        const hasFile = Boolean(artifact.file_url);
+        const hasReference = Boolean(artifact.external_url);
+        const typeLabel = hasFile && hasReference ? 'File + reference' : (hasFile ? 'File' : (hasReference ? 'Reference' : 'Note'));
+        const iconClass = hasFile ? 'fa-file-image' : (hasReference ? 'fa-link' : 'fa-note-sticky');
+        const title = artifact.title || artifact.original_file_name || 'Design handoff';
+        const relatedTask = artifact.source_task_title || task.title || 'Project work';
+        const notes = String(artifact.notes || '').trim();
+        const handoffKind = hasFile && hasReference
+            ? 'File + reference'
+            : (hasFile ? 'File' : (hasReference ? 'Reference' : 'Note'));
+
+        if (sulIsUiUxReview) {
+            return `<div class="task-evidence-row is-uiux-handoff">
+                <span class="task-evidence-icon"><i class="fas ${iconClass}"></i></span>
+                <div class="task-evidence-main">
+                    <div class="task-evidence-title-line">
+                        <strong>${escapeHtml(title)}</strong>
+                        <span class="task-evidence-kind">${handoffKind}</span>
+                    </div>
+                    ${notes ? `<span class="task-evidence-uiux-note" title="${escapeHtml(notes)}">${escapeHtml(notes)}</span>` : ''}
+                </div>
+                <div class="task-evidence-actions">
+                    ${hasFile ? `<a href="${escapeHtml(artifact.file_url)}" target="_blank" rel="noopener" aria-label="Open uploaded design"><i class="fas fa-arrow-up-right-from-square"></i><span>Open file</span></a>` : ''}
+                    ${hasReference ? `<a href="${escapeHtml(artifact.external_url)}" target="_blank" rel="noopener" aria-label="Open design reference"><i class="fas fa-link"></i><span>Open reference</span></a>` : ''}
+                </div>
+            </div>`;
+        }
+
+        return `<div class="task-evidence-row">
+            <span class="task-evidence-icon"><i class="fas ${iconClass}"></i></span>
+            <div class="task-evidence-main">
+                <strong>${escapeHtml(title)}</strong>
+                <span>${escapeHtml(relatedTask)}</span>
             </div>
-            ${artifact.notes ? `<p class="mb-2 mt-2">${escapeHtml(artifact.notes)}</p>` : ''}
-            <div class="d-flex gap-2 flex-wrap">${fileLink}${externalLink}</div>
+            <span class="task-evidence-type">${escapeHtml(typeLabel)}</span>
+            <p class="task-evidence-note" title="${escapeHtml(notes)}">${notes ? escapeHtml(notes) : 'No additional note'}</p>
+            <div class="task-evidence-actions">
+                ${hasFile ? `<a href="${escapeHtml(artifact.file_url)}" target="_blank" rel="noopener" aria-label="Open uploaded file"><i class="fas fa-arrow-up-right-from-square"></i><span>File</span></a>` : ''}
+                ${hasReference ? `<a href="${escapeHtml(artifact.external_url)}" target="_blank" rel="noopener" aria-label="Open design reference"><i class="fas fa-link"></i><span>Reference</span></a>` : ''}
+            </div>
         </div>`;
     }).join('');
-    const gitRows = gitUpdates.map(update => `<div class="border rounded-3 p-3 mb-2">
-        <div><strong><i class="fas fa-code-branch"></i> Branch:</strong> ${escapeHtml(update.branch_name || 'Not specified')}</div>
-        ${update.commit_hash ? `<div class="small mt-1"><strong>Commit:</strong> ${escapeHtml(update.commit_hash)}</div>` : ''}
-        ${update.notes ? `<p class="mb-2 mt-2">${escapeHtml(update.notes)}</p>` : ''}
-        <div class="d-flex gap-2 flex-wrap">
-            ${update.pull_request_url ? `<a class="btn-outline-modern text-decoration-none" href="${escapeHtml(update.pull_request_url)}" target="_blank" rel="noopener"><i class="fas fa-code-pull-request"></i> Pull request</a>` : ''}
-            ${update.repository_url ? `<a class="btn-outline-modern text-decoration-none" href="${escapeHtml(update.repository_url)}" target="_blank" rel="noopener"><i class="fas fa-link"></i> Repository</a>` : ''}
+
+    const gitRows = gitUpdates.map((update) => `<div class="task-evidence-row">
+        <span class="task-evidence-icon"><i class="fas fa-code-branch"></i></span>
+        <div class="task-evidence-main">
+            <strong>${escapeHtml(update.branch_name || 'Repository update')}</strong>
+            <span>${update.commit_hash ? escapeHtml(String(update.commit_hash).slice(0, 10)) : 'No commit reference'}</span>
+        </div>
+        <span class="task-evidence-type">Git update</span>
+        <p class="task-evidence-note" title="${escapeHtml(update.notes || '')}">${update.notes ? escapeHtml(update.notes) : 'No additional note'}</p>
+        <div class="task-evidence-actions">
+            ${update.pull_request_url ? `<a href="${escapeHtml(update.pull_request_url)}" target="_blank" rel="noopener"><i class="fas fa-code-pull-request"></i><span>PR</span></a>` : ''}
+            ${update.repository_url ? `<a href="${escapeHtml(update.repository_url)}" target="_blank" rel="noopener"><i class="fas fa-link"></i><span>Repo</span></a>` : ''}
         </div>
     </div>`).join('');
 
-    return `<div class="mt-4">
-        <h6><i class="fas fa-laptop-code me-2"></i>Developer work for review</h6>
-        ${gitRows || artifactRows ? `${gitRows}${artifactRows}` : '<div class="text-muted">No links, uploads, or Git updates have been submitted yet.</div>'}
-    </div>`;
+    const relevantGitUpdates = sulIsUiUxReview ? [] : gitUpdates;
+    const rowCount = artifacts.length + relevantGitUpdates.length;
+    const sectionTitle = sulIsUiUxReview ? 'Task design handoff' : 'Submitted delivery evidence';
+    const emptyCopy = sulIsUiUxReview
+        ? 'No design file, reference, or handoff note was submitted for this task.'
+        : 'No links, uploads, or Git updates were submitted for this task.';
+
+    return `<section class="task-detail-work${sulIsUiUxReview ? ' is-uiux-review' : ''}">
+        <div class="task-detail-work-header">
+            <div>
+                <span class="task-details-label">${sulIsUiUxReview ? 'UI/UX submission' : 'Delivery submission'}</span>
+                <strong>${sectionTitle}</strong>
+            </div>
+            <span class="task-detail-work-count">${rowCount} ${rowCount === 1 ? 'item' : 'items'}</span>
+        </div>
+        ${rowCount > 0
+            ? `<div class="task-evidence-list">${artifactRows}${sulIsUiUxReview ? '' : gitRows}</div>`
+            : `<div class="task-detail-work-empty">${emptyCopy}</div>`}
+    </section>`;
 }
 
 function viewTaskDetails(taskId) {
@@ -6981,45 +8227,96 @@ function viewTaskDetails(taskId) {
             const task = response;
             const bulkEntityCount = Number(task.bulk_entity_task_count || 0);
             const bulkEntityBadge = bulkEntityCount > 1
-                ? `<span class="bulk-entity-badge ms-2" title="Architect bulk placement: these features share one roadmap developer/entity and should move together."><i class="fas fa-layer-group" aria-hidden="true"></i> Bulk assignment: ${bulkEntityCount} features</span>`
+                ? `<span class="bulk-entity-badge" title="Architect bulk placement: these features share one roadmap developer/entity and should move together."><i class="fas fa-layer-group" aria-hidden="true"></i> ${bulkEntityCount} related features</span>`
                 : '';
+            const priority = String(task.priority || 'medium').toLowerCase().replace(/[^a-z]/g, '') || 'medium';
+            const committedDays = Number(task.sales_estimate_days || 0);
+            const committedChoice = String(task.sales_estimate_choice || '').toLowerCase();
+            const commitmentLabels = {
+                min: 'Fastest',
+                likely: 'Balanced',
+                max: 'Safest buffer'
+            };
+            const approvedDuration = committedDays > 0
+                ? `${committedDays} ${committedDays === 1 ? 'day' : 'days'}${commitmentLabels[committedChoice] ? ` \u00B7 ${commitmentLabels[committedChoice]}` : ''}`
+                : 'Not finalized';
+            const statusLabels = {
+                completed: 'Completed',
+                todo: 'Ready for assignment',
+                review: 'Ready for review',
+                for_review: 'Ready for review',
+                qa_testing: 'QA testing',
+                qa_passed: 'QA passed'
+            };
+            const statusLabel = statusLabels[String(task.status || '').toLowerCase()] || 'Record available';
+            const recordContext = String(task.status || '').toLowerCase() === 'for_review'
+                ? (sulIsUiUxReview ? 'UI/UX submission review' : 'Delivery review')
+                : 'Task record';
             let html = `
-                <div class="row g-4">
-                    <div class="col-md-8">
-                        <h5 class="mb-3 d-flex align-items-center gap-2 flex-wrap">${escapeHtml(task.title)}${bulkEntityBadge}</h5>
-                        <div class="mb-3">
-                            <strong>Description:</strong>
-                            <p class="mt-2">${escapeHtml(task.description)}</p>
+                <article class="task-details-record">
+                    <header class="task-details-heading">
+                        <div class="task-details-heading-copy">
+                            <span class="task-details-eyebrow">${recordContext}</span>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <h4>${escapeHtml(task.title || 'Untitled task')}</h4>
+                                ${bulkEntityBadge}
+                            </div>
                         </div>
-                        <div class="mb-2">
-                            <strong>Project:</strong> ${escapeHtml(task.project_name)}
+                        <div class="task-details-heading-actions">
+                            <span class="task-details-status"><i class="fas fa-circle-check"></i>${escapeHtml(statusLabel)}</span>
+                            <a class="task-details-roadmap-button" href="../roadmap/methodology.php?project_id=${Number(task.project_id || 0)}">
+                                <i class="fas fa-route"></i>
+                                <span>Project roadmap</span>
+                            </a>
                         </div>
-                        <div class="mb-2">
-                            <strong>Priority:</strong> 
-                            <span class="task-priority priority-${task.priority}">${task.priority}</span>
+                    </header>
+                    <div class="task-details-body">
+                        <div class="task-details-primary">
+                            <section class="task-details-description">
+                                <span class="task-details-label">Description</span>
+                                <p>${escapeHtml(task.description || 'No description was provided.')}</p>
+                            </section>
+                            <div class="task-details-facts">
+                                <div class="task-details-fact">
+                                    <span class="task-details-label">Project</span>
+                                    <strong>${escapeHtml(task.project_name || 'Not assigned')}</strong>
+                                </div>
+                                <div class="task-details-fact">
+                                    <span class="task-details-label">Client</span>
+                                    <strong>${escapeHtml(task.client_name || 'Not available')}</strong>
+                                </div>
+                                <div class="task-details-fact">
+                                    <span class="task-details-label">Deadline</span>
+                                    <strong>${escapeHtml(formatTaskDeadlineLabel(task.deadline))}</strong>
+                                </div>
+                                <div class="task-details-fact">
+                                    <span class="task-details-label">Priority</span>
+                                    <span class="task-priority priority-${priority}">${escapeHtml(priority.charAt(0).toUpperCase() + priority.slice(1))}</span>
+                                </div>
+                                <div class="task-details-fact">
+                                    <span class="task-details-label">${sulIsUiUxReview ? 'UI/UX designer' : 'Assigned developer'}</span>
+                                    <strong>${escapeHtml(task.assigned_to_name || 'Unassigned')}</strong>
+                                </div>
+                                <div class="task-details-fact">
+                                    <span class="task-details-label">Sales-approved duration</span>
+                                    <strong>${escapeHtml(approvedDuration)}</strong>
+                                </div>
+                            </div>
+                            ${renderSulDeveloperWork(task)}
                         </div>
-                        <div class="mb-2">
-                            <strong>Deadline:</strong> ${formatTaskDeadlineLabel(task.deadline)}
-                        </div>
-                        ${renderSulDeveloperWork(task)}
                     </div>
-                    <div class="col-md-4">
-                        <div class="p-3 bg-light rounded-3">
-                            <p><strong>Assigned To:</strong> ${task.assigned_to_name || 'Unassigned'}</p>
-                             ${task.estimated_days_min ? `
-                                 <p><strong>Estimation:</strong><br>
-                                 Min: ${task.estimated_days_min} days<br>
-                                 Likely: ${task.estimated_days_likely} days<br>
-                                 Max: ${task.estimated_days_max} days</p>
-                             ` : ''}
-                             <a class="btn-outline-modern d-inline-flex align-items-center gap-2 text-decoration-none" href="../roadmap/methodology.php?project_id=${Number(task.project_id || 0)}">
-                                 <i class="fas fa-route"></i> View Project Roadmap
-                             </a>
-                         </div>
-                    </div>
-                </div>
+                </article>
             `;
             $('#taskDetailsContent').html(html);
+            new bootstrap.Modal(document.getElementById('taskDetailsModal')).show();
+        },
+        error: function() {
+            $('#taskDetailsContent').html(`
+                <div class="empty-state">
+                    <i class="fas fa-circle-exclamation"></i>
+                    <p>Task details could not be loaded. Please try again.</p>
+                </div>
+            `);
             new bootstrap.Modal(document.getElementById('taskDetailsModal')).show();
         }
     });
@@ -7234,6 +8531,22 @@ function activateSulHashTab() {
 }
 
 activateSulHashTab();
+
+document.querySelectorAll('#expertWorkflowTabs [data-bs-toggle="tab"]').forEach((tab) => {
+    tab.addEventListener('shown.bs.tab', () => {
+        const target = tab.getAttribute('data-bs-target');
+        if (!target) return;
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${target}`);
+    });
+});
+
+document.querySelectorAll('#developerWorkflowTabs [data-bs-toggle="tab"]').forEach((tab) => {
+    tab.addEventListener('shown.bs.tab', () => {
+        const target = tab.getAttribute('data-bs-target');
+        if (!target) return;
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${target}`);
+    });
+});
 
 if (document.getElementById('expert-gantt-panel')?.classList.contains('active')) {
     initSulGanttChart();

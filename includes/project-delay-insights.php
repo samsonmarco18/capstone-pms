@@ -669,6 +669,26 @@ function delayInsightsResolveProjectIds(mysqli|PgsqlMysqliCompatConnection $conn
                 LIMIT {$limit}
             ";
             break;
+        case 'qa':
+            $sql = "
+                SELECT p.id
+                FROM projects p
+                INNER JOIN tasks t ON t.project_id = p.id
+                WHERE p.status != 'cancelled'
+                  AND (
+                      t.status IN ('qa_testing', 'qa_passed', 'qa_failed', 'architect_review', 'completed')
+                      OR t.qa_reviewed_by = {$userId}
+                  )
+                GROUP BY p.id, p.status, p.timeline_end, p.updated_at
+                ORDER BY
+                    CASE WHEN SUM(CASE WHEN t.status = 'qa_testing' THEN 1 ELSE 0 END) > 0 THEN 0 ELSE 1 END,
+                    CASE WHEN p.status = 'completed' THEN 1 ELSE 0 END,
+                    CASE WHEN p.timeline_end IS NULL THEN 1 ELSE 0 END,
+                    p.timeline_end ASC,
+                    p.updated_at DESC
+                LIMIT {$limit}
+            ";
+            break;
         case 'admin':
         case 'sales':
         default:

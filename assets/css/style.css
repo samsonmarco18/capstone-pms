@@ -1286,11 +1286,99 @@ body {
 }
 
 body {
-    background:
+    background-color: #edf4fa;
+    background-image:
         radial-gradient(circle at top left, rgba(98, 181, 245, 0.22), transparent 28%),
         radial-gradient(circle at top right, rgba(29, 112, 184, 0.12), transparent 24%),
         linear-gradient(180deg, #f7fbff 0%, #edf4fa 100%);
+    background-position: left top, right top, center;
+    background-repeat: no-repeat, no-repeat, no-repeat;
+    background-size: auto, auto, cover;
+    background-attachment: scroll, scroll, fixed;
     color: #15324d;
+    --system-circuit-content-left: 280px;
+    --system-circuit-idle-opacity: 0.58;
+    position: relative;
+    isolation: isolate;
+}
+
+/*
+ * Keep the circuit decoration at the four edges instead of tiling it through
+ * the workspace. The SVG animates its own dashes so light appears to crawl
+ * along the traces without moving the page or distracting from the content.
+ */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+        url('../images/system-circuit-lines.svg'),
+        url('../images/system-circuit-lines.svg'),
+        url('../images/system-circuit-lines.svg'),
+        url('../images/system-circuit-lines.svg');
+    background-repeat: no-repeat;
+    background-position:
+        left var(--system-circuit-content-left) top 68px,
+        right -72px top 68px,
+        left var(--system-circuit-content-left) bottom -48px,
+        right -72px bottom -48px;
+    background-size:
+        clamp(300px, 29vw, 470px) auto,
+        clamp(300px, 29vw, 470px) auto,
+        clamp(300px, 29vw, 470px) auto,
+        clamp(300px, 29vw, 470px) auto;
+    opacity: var(--system-circuit-idle-opacity);
+    animation: system-circuit-reveal 0.9s ease-out 1 both;
+}
+
+body:has(#page-content-wrapper.sidebar-collapsed) {
+    --system-circuit-content-left: 72px;
+}
+
+/* Standalone application pages do not reserve the authenticated sidebar. */
+body:not(:has(#page-content-wrapper)) {
+    --system-circuit-content-left: 0px;
+}
+
+@keyframes system-circuit-reveal {
+    from {
+        opacity: 0.08;
+        filter: saturate(0.9) brightness(0.92);
+    }
+    to {
+        opacity: var(--system-circuit-idle-opacity);
+        filter: saturate(1.16) brightness(1.04);
+    }
+}
+
+@media (max-width: 992px) {
+    body {
+        --system-circuit-content-left: 0px;
+        --system-circuit-idle-opacity: 0.48;
+    }
+
+    body::before {
+        background-position:
+            left -70px top 58px,
+            right -110px top 58px,
+            left -70px bottom -36px,
+            right -110px bottom -36px;
+        background-size:
+            310px auto,
+            310px auto,
+            310px auto,
+            310px auto;
+        opacity: var(--system-circuit-idle-opacity);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    body::before {
+        animation: none;
+        opacity: var(--system-circuit-idle-opacity);
+    }
 }
 
 #sidebar-wrapper {

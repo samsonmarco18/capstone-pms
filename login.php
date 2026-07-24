@@ -182,6 +182,10 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
             overflow-x: hidden;
         }
 
+        body.login-page::before {
+            display: none;
+        }
+
         .login-shell {
             position: relative;
             min-height: 100vh;
