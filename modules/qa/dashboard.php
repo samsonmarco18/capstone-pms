@@ -843,4 +843,406 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
+<?php if ($qaEvortixPayload): ?>
+<style>
+body.qa-evortix-page .chat-bot-speech.evortix-qa-advisor {
+    top: auto;
+    right: calc(100% + 8px);
+    bottom: 22px;
+    width: min(390px, calc(100vw - 180px));
+    min-width: 310px;
+    max-height: min(500px, calc(100vh - 100px));
+    padding: 0.9rem;
+    overflow: hidden;
+    pointer-events: auto;
+    transform: none;
+}
+
+body.qa-evortix-page .chat-bot-float.is-speaking .chat-bot-speech.evortix-qa-advisor {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    visibility: visible;
+}
+
+body.qa-evortix-page .chat-bot-speech.evortix-qa-advisor::after {
+    top: auto;
+    bottom: 48px;
+    transform: rotate(45deg);
+}
+
+.evortix-qa-head,
+.evortix-qa-title-row,
+.evortix-qa-actions,
+.evortix-qa-test {
+    display: flex;
+    align-items: center;
+}
+
+.evortix-qa-head,
+.evortix-qa-title-row {
+    justify-content: space-between;
+    gap: 0.65rem;
+}
+
+.evortix-qa-eyebrow {
+    color: #157baa;
+    font-size: 0.6rem;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.chat-bot-speech .evortix-qa-title {
+    min-height: 0;
+    padding: 0;
+    color: #083a5d;
+    font-size: 0.95rem;
+    line-height: 1.3;
+}
+
+.evortix-qa-close {
+    display: grid;
+    place-items: center;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.72);
+    color: #116c9e;
+}
+
+.evortix-qa-copy {
+    margin: 0.45rem 0 0;
+    color: #3f6e8d;
+    font-size: 0.69rem;
+    line-height: 1.42;
+}
+
+.evortix-qa-summary {
+    display: grid;
+    grid-template-columns: 0.8fr 1.2fr;
+    gap: 0.45rem;
+    margin-top: 0.6rem;
+}
+
+.evortix-qa-panel {
+    padding: 0.55rem 0.6rem;
+    border: 1px solid rgba(8, 123, 185, 0.18);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.68);
+}
+
+.evortix-qa-panel span,
+.evortix-qa-test small {
+    color: #4c7691;
+    font-size: 0.58rem;
+    font-weight: 750;
+}
+
+.evortix-qa-panel strong {
+    display: block;
+    margin-top: 0.18rem;
+    color: #083a5d;
+    font-size: 0.76rem;
+    line-height: 1.25;
+}
+
+.evortix-qa-risk-high strong { color: #b42318; }
+.evortix-qa-risk-medium strong { color: #b25e09; }
+.evortix-qa-risk-low strong { color: #087443; }
+
+.evortix-qa-tests {
+    display: grid;
+    gap: 0.35rem;
+    max-height: 210px;
+    margin-top: 0.6rem;
+    padding-right: 0.2rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.evortix-qa-test {
+    align-items: flex-start;
+    gap: 0.45rem;
+    padding: 0.46rem 0.5rem;
+    border: 1px solid rgba(8, 123, 185, 0.14);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.56);
+    color: #164f73;
+    font-size: 0.65rem;
+    line-height: 1.35;
+}
+
+.evortix-qa-test i {
+    margin-top: 0.12rem;
+    color: #1492c6;
+}
+
+.evortix-qa-test.is-added i {
+    color: #149657;
+}
+
+.evortix-qa-verdict-reason {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.55);
+    color: #356b8d;
+    font-size: 0.64rem;
+    line-height: 1.4;
+}
+
+.evortix-qa-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.6rem;
+}
+
+.evortix-qa-actions button {
+    min-height: 32px;
+    padding: 0.38rem 0.65rem;
+    border: 1px solid rgba(31, 99, 146, 0.24);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.78);
+    color: #175f8f;
+    font-size: 0.64rem;
+    font-weight: 800;
+}
+
+.evortix-qa-actions button.is-primary {
+    border-color: #1877b1;
+    background: #1877b1;
+    color: #fff;
+}
+
+@media (max-width: 600px) {
+    body.qa-evortix-page .chat-bot-speech.evortix-qa-advisor {
+        right: calc(100% + 4px);
+        bottom: 18px;
+        width: min(285px, calc(100vw - 132px));
+        min-width: 225px;
+    }
+
+    .evortix-qa-summary {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const qaEvortixBase = <?php echo json_encode($qaEvortixPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
+    if (!qaEvortixBase) return;
+    document.body.classList.add('qa-evortix-page');
+
+    const escapeQaHtml = (value) => {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    };
+    const qaStateKey = `evortix.qa.advisor.v1.${qaEvortixBase.task_id}.${qaEvortixBase.version}`;
+    let checklistChangeTimer = null;
+
+    const currentQaGuidance = () => {
+        const counts = { total: 0, passed: 0, pending: 0, failed: 0, needs_revision: 0 };
+        const issueDetails = [];
+        document.querySelectorAll('select[name^="item_status["]').forEach((select) => {
+            const status = String(select.value || 'pending');
+            counts.total++;
+            if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status]++;
+            if (status === 'failed' || status === 'needs_revision') {
+                const itemRow = select.closest('.border');
+                issueDetails.push({
+                    status,
+                    check: String(itemRow?.querySelector('.fw-semibold')?.textContent || 'Checklist issue').trim(),
+                    actual: String(itemRow?.querySelector('input[name^="item_notes["]')?.value || '').trim(),
+                });
+            }
+        });
+
+        let verdict = 'Continue Testing';
+        let reason = `${counts.pending} checklist item${counts.pending === 1 ? '' : 's'} still pending.`;
+        if (counts.failed > 0) {
+            verdict = 'Failed';
+            reason = 'At least one checklist item failed.';
+        } else if (counts.needs_revision > 0) {
+            verdict = 'Needs Revision';
+            reason = 'The checklist contains items that require developer revision.';
+        } else if (counts.total > 0 && counts.pending === 0) {
+            verdict = 'Passed';
+            reason = 'Every recorded checklist item passed.';
+        }
+
+        const defectLines = issueDetails.map((issue, issueIndex) =>
+            `${issueIndex + 1}. ${issue.check}\nActual: ${issue.actual || 'Add the observed result before submitting this decision.'}`
+        ).join('\n');
+        const severity = String(qaEvortixBase.risk?.level || 'Medium');
+        const draft = verdict === 'Failed'
+            ? `QA DEFECT REPORT\nFeature: ${qaEvortixBase.task_title}\nSeverity: ${severity}\n\nFailed checks:\n${defectLines}\n\nExpected: The feature should satisfy the approved requirement and pass the listed checks.\nSteps to reproduce: Repeat each failed checklist scenario using the recorded inputs and environment.\nDeveloper action: Correct the failed behavior, run focused regression tests, and resubmit for QA.`
+            : verdict === 'Needs Revision'
+                ? `QA REVISION REPORT\nFeature: ${qaEvortixBase.task_title}\nSeverity: ${severity}\n\nIssues requiring revision:\n${defectLines}\n\nExpected: The feature should satisfy the approved requirement without the recorded issue.\nDeveloper action: Address each item, verify related regression paths, and resubmit for QA.`
+                : verdict === 'Passed'
+                    ? `QA passed this feature. All ${counts.total} recorded checks passed, including the focused regression coverage.`
+                    : `QA testing is still in progress. Complete the remaining ${counts.pending} pending check${counts.pending === 1 ? '' : 's'} before making the final QA decision.`;
+
+        const baseIssues = Number(qaEvortixBase.counts?.failed || 0) + Number(qaEvortixBase.counts?.needs_revision || 0);
+        const currentIssues = counts.failed + counts.needs_revision;
+        const issueRiskPoints = (issueCount) => issueCount > 0 ? Math.min(25, 10 + (issueCount * 5)) : 0;
+        const liveRiskScore = Math.max(
+            0,
+            Math.min(100, Number(qaEvortixBase.risk?.score || 0) - issueRiskPoints(baseIssues) + issueRiskPoints(currentIssues))
+        );
+        const riskReasons = (qaEvortixBase.risk?.reasons || [])
+            .filter((riskReason) => !String(riskReason).includes('current checklist issue'));
+        if (currentIssues > 0) {
+            riskReasons.push(`${currentIssues} current checklist issue${currentIssues === 1 ? '' : 's'}`);
+        }
+        const risk = {
+            ...(qaEvortixBase.risk || {}),
+            score: liveRiskScore,
+            level: liveRiskScore >= 60 ? 'High' : (liveRiskScore >= 30 ? 'Medium' : 'Low'),
+            reasons: riskReasons,
+        };
+
+        return { ...qaEvortixBase, counts, risk, recommended_verdict: verdict, verdict_reason: reason, draft_comment: draft };
+    };
+
+    const showQaEvortix = (trigger = 'manual_request') => {
+        const payload = currentQaGuidance();
+        const bot = document.getElementById('chat-bot-float');
+        const speech = bot?.querySelector('.chat-bot-speech');
+        if (!bot || !speech) {
+            window.setTimeout(() => showQaEvortix(trigger), 300);
+            return;
+        }
+
+        const missingSet = new Set((payload.missing_tests || []).map((test) => String(test).toLowerCase()));
+        const testMarkup = (payload.suggested_tests || []).map((test) => {
+            const isMissing = missingSet.has(String(test).toLowerCase());
+            return `
+                <div class="evortix-qa-test ${isMissing ? '' : 'is-added'}">
+                    <i class="fas ${isMissing ? 'fa-flask' : 'fa-circle-check'}" aria-hidden="true"></i>
+                    <div>${escapeQaHtml(test)}<small class="d-block">${isMissing ? 'Suggested test' : 'Already in checklist'}</small></div>
+                </div>`;
+        }).join('');
+        const triggerCopy = {
+            task_opened: 'I reviewed this task because it was opened for QA.',
+            checklist_changed: 'I updated the guidance because a checklist result changed.',
+            manual_request: 'Here is the latest QA guidance you requested.',
+        }[trigger] || 'Here is the latest QA guidance.';
+        const riskClass = `evortix-qa-risk-${String(payload.risk?.level || 'Low').toLowerCase()}`;
+
+        speech.className = 'chat-bot-speech evortix-qa-advisor';
+        speech.hidden = false;
+        speech.setAttribute('aria-hidden', 'false');
+        speech.style.pointerEvents = 'auto';
+        speech.innerHTML = `
+            <div class="evortix-qa-head">
+                <div>
+                    <div class="evortix-qa-eyebrow">QA recommendation</div>
+                    <strong class="evortix-qa-title">${escapeQaHtml(payload.task_title)}</strong>
+                </div>
+                <button type="button" class="evortix-qa-close" data-qa-evortix-action="close" aria-label="Close Evortix recommendation"><i class="fas fa-xmark"></i></button>
+            </div>
+            <p class="evortix-qa-copy">${escapeQaHtml(triggerCopy)} QA keeps control of the final decision.</p>
+            <div class="evortix-qa-summary">
+                <div class="evortix-qa-panel ${riskClass}">
+                    <span>Testing risk</span>
+                    <strong>${escapeQaHtml(payload.risk?.level || 'Low')} · ${Number(payload.risk?.score || 0)}/100</strong>
+                </div>
+                <div class="evortix-qa-panel">
+                    <span>Recommended verdict</span>
+                    <strong>${escapeQaHtml(payload.recommended_verdict)}</strong>
+                </div>
+            </div>
+            <div class="evortix-qa-verdict-reason">${escapeQaHtml(payload.verdict_reason)} ${escapeQaHtml((payload.risk?.reasons || []).join(' · '))}</div>
+            <div class="evortix-qa-tests">${testMarkup}</div>
+            <div class="evortix-qa-actions">
+                <button type="button" data-qa-evortix-action="draft">Use draft comment</button>
+                ${(payload.missing_tests || []).length > 0
+                    ? `<button type="button" class="is-primary" data-qa-evortix-action="apply-tests">Add ${payload.missing_tests.length} suggested test${payload.missing_tests.length === 1 ? '' : 's'}</button>`
+                    : '<button type="button" class="is-primary" data-qa-evortix-action="close">Checklist ready</button>'}
+            </div>`;
+
+        bot.hidden = false;
+        bot.setAttribute('aria-hidden', 'false');
+        bot.classList.remove('is-returning-bed', 'is-preparing-speech');
+        bot.classList.add('is-speaking');
+        window.chatBotFloatRobot?.wake?.();
+        window.chatBotFloatRobot?.setEmotion?.('thinking', 0);
+        try { window.localStorage.setItem(qaStateKey, trigger); } catch (error) {}
+    };
+
+    document.getElementById('askEvortixQa')?.addEventListener('click', () => showQaEvortix('manual_request'));
+    document.querySelectorAll('select[name^="item_status["]').forEach((select) => {
+        select.addEventListener('change', () => {
+            window.clearTimeout(checklistChangeTimer);
+            checklistChangeTimer = window.setTimeout(() => showQaEvortix('checklist_changed'), 350);
+        });
+    });
+    document.querySelectorAll('input[name^="item_notes["]').forEach((input) => {
+        input.addEventListener('input', () => {
+            window.clearTimeout(checklistChangeTimer);
+            checklistChangeTimer = window.setTimeout(() => showQaEvortix('checklist_changed'), 700);
+        });
+    });
+
+    document.addEventListener('click', async (event) => {
+        const actionButton = event.target.closest('[data-qa-evortix-action]');
+        if (!actionButton) return;
+        const action = actionButton.getAttribute('data-qa-evortix-action');
+        if (action === 'close') {
+            const speech = document.querySelector('#chat-bot-float .chat-bot-speech');
+            if (speech) {
+                speech.hidden = true;
+                speech.setAttribute('aria-hidden', 'true');
+            }
+            return;
+        }
+        if (action === 'draft') {
+            const comment = document.querySelector('textarea[name="qa_comment"]');
+            if (comment) {
+                comment.value = currentQaGuidance().draft_comment;
+                comment.dispatchEvent(new Event('input', { bubbles: true }));
+                comment.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                comment.focus();
+                window.appToast?.('Evortix QA draft', 'The recommended QA comment is ready for your review.', 'info');
+            }
+            return;
+        }
+        if (action === 'apply-tests') {
+            actionButton.disabled = true;
+            actionButton.textContent = 'Adding tests...';
+            try {
+                const response = await fetch(window.location.pathname + window.location.search, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8' },
+                    body: new URLSearchParams({
+                        task_id: String(qaEvortixBase.task_id),
+                        apply_evortix_qa_suggestions: '1',
+                    }),
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.message || 'Unable to add the suggested tests.');
+                window.appToast?.('Evortix QA checklist', result.message, 'success');
+                window.setTimeout(() => {
+                    window.location.href = `${window.location.pathname}?task_id=${encodeURIComponent(qaEvortixBase.task_id)}`;
+                }, 500);
+            } catch (error) {
+                actionButton.disabled = false;
+                actionButton.textContent = 'Try adding tests again';
+                window.appToast?.('Evortix QA checklist', error.message || 'Unable to add the suggested tests.', 'danger');
+            }
+        }
+    });
+
+    let alreadyShown = false;
+    try { alreadyShown = window.localStorage.getItem(qaStateKey) !== null; } catch (error) {}
+    if (!alreadyShown) window.setTimeout(() => showQaEvortix('task_opened'), 1400);
+});
+</script>
+<?php endif; ?>
+
 <?php include '../../includes/footer.php'; ?>

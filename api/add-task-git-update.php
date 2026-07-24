@@ -142,11 +142,10 @@ if ($isPullRequestSubmission) {
     );
 
     $recipientIds = [];
-    if (!empty($task['sul_id'])) {
-        $recipientIds[] = (int) $task['sul_id'];
-    }
     if (!empty($task['assigned_by'])) {
         $recipientIds[] = (int) $task['assigned_by'];
+    } elseif (!empty($task['sul_id'])) {
+        $recipientIds[] = (int) $task['sul_id'];
     }
 
     foreach (array_unique(array_filter($recipientIds)) as $recipientId) {
@@ -160,14 +159,6 @@ if ($isPullRequestSubmission) {
         );
     }
 
-    workflowNotifyRoles(
-        $conn,
-        ['sul'],
-        'Pull Request For Review: ' . ($task['title'] ?? 'Developer task'),
-        'A developer submitted a Pull Request and it is waiting for SUL approval.',
-        BASE_URL . 'modules/sul/task-allocation.php?task_id=' . $taskId,
-        $taskId
-    );
 }
 
 $isReleaseMovement = !$isPullRequestSubmission && (in_array($gitAction, ['merged', 'deployed'], true) || $status === 'merged');

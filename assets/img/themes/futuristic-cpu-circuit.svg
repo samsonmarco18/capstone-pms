@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <style>
+    @media (prefers-reduced-motion: reduce) {
+      .signal-pulses { display: none; }
+    }
+  </style>
+  <defs>
+    <filter id="signalGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="microGrid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#6171c9" stroke-width="1" opacity="0.13"/>
+      <circle cx="1" cy="1" r="1.4" fill="#57cfff" opacity="0.20"/>
+    </pattern>
+    <path id="trace1" d="M0 190H260L350 280H560L650 370H718"/>
+    <path id="trace2" d="M0 285H220L330 395H718"/>
+    <path id="trace3" d="M0 430H300L380 400H718"/>
+    <path id="trace4" d="M0 585H245L360 470H718"/>
+    <path id="trace5" d="M1600 165H1320L1225 260H1040L950 350H882"/>
+    <path id="trace6" d="M1600 300H1370L1245 425H882"/>
+    <path id="trace7" d="M1600 470H1290L1195 440H882"/>
+    <path id="trace8" d="M1600 650H1370L1240 520H1040L960 470H882"/>
+    <path id="trace9" d="M410 0V105L525 220V300L700 380H718"/>
+    <path id="trace10" d="M690 0V150L760 220V342"/>
+    <path id="trace11" d="M1160 0V100L1030 230V300L900 380H882"/>
+    <path id="trace12" d="M370 900V770L520 620V540L700 470H718"/>
+    <path id="trace13" d="M790 900V690L780 510"/>
+    <path id="trace14" d="M1240 900V760L1080 600V540L900 470H882"/>
+    <path id="trace15" d="M0 95H330L430 195H600L680 350H718"/>
+    <path id="trace16" d="M0 705H300L420 585H610L690 485H718"/>
+    <path id="trace17" d="M1600 82H1385L1280 188H1110L970 330H882"/>
+    <path id="trace18" d="M1600 785H1350L1210 645H1050L930 490H882"/>
+    <path id="trace19" d="M225 0V145L390 310H575L680 395H718"/>
+    <path id="trace20" d="M1380 900V715L1195 530H1030L930 455H882"/>
+    <path id="trace21" d="M0 235H355L470 350H650L725 425H875L950 350H1130L1245 235H1600"/>
+    <path id="trace22" d="M0 340H430L515 425H1085L1170 340H1600"/>
+    <path id="trace23" d="M0 510H390L500 455H1100L1210 510H1600"/>
+    <path id="trace24" d="M0 675H330L455 550H650L735 465H865L950 550H1145L1270 675H1600"/>
+    <path id="trace25" d="M130 0V125L315 310H470L585 425H1015L1130 310H1285L1470 125V0"/>
+    <path id="trace26" d="M520 0V170L630 280V610L520 720V900"/>
+    <path id="trace27" d="M1080 0V170L970 280V610L1080 720V900"/>
+    <path id="trace28" d="M0 790H440L555 675H1045L1160 790H1600"/>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#microGrid)" opacity="0.34"/>
+  <g fill="#192a63" stroke="#697aff" stroke-width="1.5" opacity="0.24">
+    <path d="M605 330h390l62 62v70l-62 62H605l-62-62v-70Z"/>
+    <path d="M90 575h250l48 48v74l-48 48H90l-48-48v-74Z"/>
+    <path d="M1260 120h220l42 42v65l-42 42h-220l-42-42v-65Z"/>
+  </g>
+
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#5366ff" stroke-width="2.2" opacity="0.32">
+      <use href="#trace1"/><use href="#trace2"/><use href="#trace3"/><use href="#trace4"/>
+      <use href="#trace5"/><use href="#trace6"/><use href="#trace7"/><use href="#trace8"/>
+      <use href="#trace9"/><use href="#trace10"/><use href="#trace11"/>
+      <use href="#trace12"/><use href="#trace13"/><use href="#trace14"/>
+      <use href="#trace15"/><use href="#trace16"/><use href="#trace17"/>
+      <use href="#trace18"/><use href="#trace19"/><use href="#trace20"/>
+      <use href="#trace21"/><use href="#trace22"/><use href="#trace23"/><use href="#trace24"/>
+      <use href="#trace25"/><use href="#trace26"/><use href="#trace27"/><use href="#trace28"/>
+    </g>
+    <g class="signal-pulses" stroke="#42dcff" stroke-width="4" stroke-dasharray="72 24 18 176" opacity="0.88" filter="url(#signalGlow)">
+      <use href="#trace1"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="6.2s" repeatCount="indefinite"/></use>
+      <use href="#trace2"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="7.1s" begin="-2.2s" repeatCount="indefinite"/></use>
+      <use href="#trace3"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="5.8s" begin="-1.1s" repeatCount="indefinite"/></use>
+      <use href="#trace4"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="7.8s" begin="-3.7s" repeatCount="indefinite"/></use>
+      <use href="#trace5"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="6.7s" begin="-2.8s" repeatCount="indefinite"/></use>
+      <use href="#trace6"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="7.4s" begin="-0.8s" repeatCount="indefinite"/></use>
+      <use href="#trace7"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="6s" begin="-3.1s" repeatCount="indefinite"/></use>
+      <use href="#trace8"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="8s" begin="-4.4s" repeatCount="indefinite"/></use>
+      <use href="#trace15"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="7.6s" begin="-5.1s" repeatCount="indefinite"/></use>
+      <use href="#trace18"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="8.3s" begin="-2.6s" repeatCount="indefinite"/></use>
+      <use href="#trace21"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="9.2s" begin="-4.2s" repeatCount="indefinite"/></use>
+      <use href="#trace23"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="8.8s" begin="-1.7s" repeatCount="indefinite"/></use>
+      <use href="#trace26"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="8.5s" begin="-6.1s" repeatCount="indefinite"/></use>
+      <use href="#trace28"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="9.6s" begin="-3.5s" repeatCount="indefinite"/></use>
+    </g>
+    <g class="signal-pulses" stroke="#ad73ff" stroke-width="3.8" stroke-dasharray="64 22 16 188" opacity="0.82" filter="url(#signalGlow)">
+      <use href="#trace9"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="7.3s" begin="-2.4s" repeatCount="indefinite"/></use>
+      <use href="#trace10"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="6.5s" begin="-1.5s" repeatCount="indefinite"/></use>
+      <use href="#trace11"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="7.7s" begin="-3.8s" repeatCount="indefinite"/></use>
+      <use href="#trace12"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="8.2s" begin="-5s" repeatCount="indefinite"/></use>
+      <use href="#trace13"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="6.9s" begin="-2.7s" repeatCount="indefinite"/></use>
+      <use href="#trace14"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="7.5s" begin="-4.1s" repeatCount="indefinite"/></use>
+      <use href="#trace16"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="8.5s" begin="-3.2s" repeatCount="indefinite"/></use>
+      <use href="#trace17"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="7.9s" begin="-5.7s" repeatCount="indefinite"/></use>
+      <use href="#trace19"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="8.1s" begin="-1.9s" repeatCount="indefinite"/></use>
+      <use href="#trace20"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="8.7s" begin="-6.2s" repeatCount="indefinite"/></use>
+      <use href="#trace22"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="9.4s" begin="-5.3s" repeatCount="indefinite"/></use>
+      <use href="#trace24"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="9s" begin="-2.3s" repeatCount="indefinite"/></use>
+      <use href="#trace25"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="10.1s" begin="-7.4s" repeatCount="indefinite"/></use>
+      <use href="#trace27"><animate attributeName="stroke-dashoffset" from="290" to="0" dur="8.9s" begin="-4.7s" repeatCount="indefinite"/></use>
+    </g>
+  </g>
+
+  <g fill="#091632" stroke="#62dfff" stroke-width="2" opacity="0.50">
+    <circle cx="470" cy="350" r="6"/>
+    <circle cx="650" cy="425" r="6"/>
+    <circle cx="800" cy="425" r="8"/>
+    <circle cx="950" cy="350" r="6"/>
+    <circle cx="1130" cy="350" r="6"/>
+    <circle cx="500" cy="455" r="6"/>
+    <circle cx="1100" cy="455" r="6"/>
+    <circle cx="630" cy="610" r="6"/>
+    <circle cx="970" cy="610" r="6"/>
+  </g>
+
+</svg>

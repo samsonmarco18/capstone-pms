@@ -18,6 +18,7 @@ taskReopenEnsureSchema($conn);
 $userDepartment = trim((string) ($user['department'] ?? ''));
 $userDepartmentCanonical = projectWorkflowDepartmentLabel($userDepartment);
 $departmentProfile = departmentArtifactProfile($userDepartment);
+$isQaDepartmentDeveloper = $userDepartmentCanonical === 'QA';
 
 if (!class_exists('DeveloperTaskQueryResult')) {
     class DeveloperTaskQueryResult
@@ -321,7 +322,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     $taskId = (int) ($_POST['task_id'] ?? 0);
     $newStatus = (string) ($_POST['new_status'] ?? '');
     $allowedStatuses = ['todo', 'in_progress'];
-    if ($userDepartmentCanonical === 'UI/UX') {
+    if (in_array($userDepartmentCanonical, ['UI/UX', 'QA'], true)) {
         $allowedStatuses[] = 'for_review';
     }
 
@@ -356,8 +357,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         exit();
     }
 
-    if ($newStatus === 'for_review' && $userDepartmentCanonical !== 'UI/UX') {
+    if ($newStatus === 'for_review' && !in_array($userDepartmentCanonical, ['UI/UX', 'QA'], true)) {
         $_SESSION['error'] = "Submit a Pull Request from the Git update form to request SUL review.";
+        header('Location: task.php');
+        exit();
+    }
+    if (
+        $newStatus === 'for_review'
+        && $userDepartmentCanonical === 'QA'
+        && !in_array((string) ($task['status'] ?? ''), ['in_progress', 'sul_revision', 'qa_failed'], true)
+    ) {
+        $_SESSION['error'] = "Start testing before submitting QA test results to the QA SUL.";
         header('Location: task.php');
         exit();
     }
@@ -383,14 +393,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 
     projectWorkflowSyncRoadmap($conn, (int) ($task['project_id'] ?? 0));
     
-    workflowLogStatusChange((int) $user['id'], $taskId, (string) ($task['status'] ?? ''), $newStatus, $newStatus === 'for_review' ? 'uiux_submit_design' : 'developer_update_task_status');
+    workflowLogStatusChange(
+        (int) $user['id'],
+        $taskId,
+        (string) ($task['status'] ?? ''),
+        $newStatus,
+        $newStatus === 'for_review'
+            ? ($userDepartmentCanonical === 'QA' ? 'qa_submit_test_results' : 'uiux_submit_design')
+            : 'developer_update_task_status'
+    );
     if ($newStatus === 'for_review') {
-        workflowAddTaskComment($conn, $taskId, (int) $user['id'], 'UI/UX submitted design work for SUL review.');
-        if (!empty($task['sul_id'])) {
+        $isQaSubmission = $userDepartmentCanonical === 'QA';
+        $submissionLabel = $userDepartmentCanonical === 'QA'
+            ? 'QA Developer submitted test results for QA SUL review.'
+            : 'UI/UX submitted design work for SUL review.';
+        workflowAddTaskComment($conn, $taskId, (int) $user['id'], $submissionLabel);
+        $reviewerIds = array_values(array_filter([(int) ($task['assigned_by'] ?? 0)]));
+        if ($reviewerIds === [] && (int) ($task['sul_id'] ?? 0) > 0) {
+            $reviewerIds[] = (int) $task['sul_id'];
+        }
+        foreach ($reviewerIds as $reviewerId) {
             workflowNotifyUser(
-                (int) $task['sul_id'],
-                'Design Submitted for Review: ' . $task['title'],
-                'UI/UX submitted design files or references for review.',
+                (int) $reviewerId,
+                ($isQaSubmission ? 'QA Test Results Submitted: ' : 'Design Submitted for Review: ') . $task['title'],
+                $isQaSubmission
+                    ? 'A QA Developer submitted testing notes and evidence for QA SUL review.'
+                    : 'UI/UX submitted design files or references for review.',
                 BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($task['project_id'] ?? 0),
                 $taskId
             );
@@ -3936,7 +3964,7 @@ body.artifact-drawer-open {
             <div class="kanban-column" data-board-status="todo">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-clock text-secondary me-2"></i>To Do <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Tasks waiting for you to start. Moving from here only sets the task to In Progress."></i></span>
+                        <span><i class="fas fa-clock text-secondary me-2"></i><?php echo $isQaDepartmentDeveloper ? 'Ready for Testing' : 'To Do'; ?> <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'QA tasks assigned by the QA SUL and ready for testing.' : 'Tasks waiting for you to start. Moving from here only sets the task to In Progress.'; ?>"></i></span>
                         <span class="badge bg-secondary"><?php echo $todoTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -3974,11 +4002,11 @@ body.artifact-drawer-open {
                         <?php endif; ?>
                         <div class="kanban-card-footer">
                             <div class="kanban-card-actions">
-                                <button class="btn-action" onclick="startTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Start this task without changing the controlled review workflow.">
-                                    <i class="fas fa-play"></i> Start
+                                <button class="btn-action" onclick="startTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Start testing this task.' : 'Start this task without changing the controlled review workflow.'; ?>">
+                                    <i class="fas fa-play"></i> <?php echo $isQaDepartmentDeveloper ? 'Start Testing' : 'Start'; ?>
                                 </button>
-                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="View the task summary, saved handoffs, comments, and Git activity.">
-                                    <i class="fas fa-eye"></i> View
+                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
+                                    <i class="fas fa-eye"></i>
                                 </button>
                             </div>
                         </div>
@@ -3987,7 +4015,7 @@ body.artifact-drawer-open {
                     <?php if($todoTasks->num_rows == 0): ?>
                     <div class="empty-state-mini">
                         <i class="fas fa-check-circle"></i>
-                        <p>No tasks in To Do</p>
+                        <p><?php echo $isQaDepartmentDeveloper ? 'No tasks ready for testing' : 'No tasks in To Do'; ?></p>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -3999,7 +4027,7 @@ body.artifact-drawer-open {
             <div class="kanban-column" data-board-status="in_progress">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-spinner text-primary me-2"></i>In Progress <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Work is active here. Submit a PR from task details when it is ready for review."></i></span>
+                        <span><i class="fas fa-spinner text-primary me-2"></i><?php echo $isQaDepartmentDeveloper ? 'Testing' : 'In Progress'; ?> <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Testing is active. Record QA notes and evidence, then submit the results to the QA SUL.' : 'Work is active here. Submit a PR from task details when it is ready for review.'; ?>"></i></span>
                         <span class="badge bg-primary"><?php echo $inProgressTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -4043,15 +4071,14 @@ body.artifact-drawer-open {
                         <?php endif; ?>
                         <div class="kanban-card-footer">
                             <div class="kanban-card-actions">
-                                <button class="btn-action" onclick="openPullRequestModal(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $userDepartmentCanonical === 'UI/UX' ? 'Submit the saved design handoff for workflow review.' : 'Submit this task\'s pull request for workflow review.'; ?>">
-                                    <i class="fas <?php echo $userDepartmentCanonical === 'UI/UX' ? 'fa-paper-plane' : 'fa-code-pull-request'; ?>"></i>
-                                    <?php echo $userDepartmentCanonical === 'UI/UX' ? 'Submit Design' : 'Submit PR'; ?>
+                                <button class="btn-action" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details and submit the PR through the Git update form.">
+                                    <i class="fas fa-code-pull-request"></i> Submit PR
                                 </button>
-                                <button class="btn-action" onclick="reviewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Move this task back to To Do if work has not started cleanly.">
+                                <button class="btn-action" onclick="reviewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Move this task back to Ready for Testing.' : 'Move this task back to To Do if work has not started cleanly.'; ?>">
                                     <i class="fas fa-undo"></i> Back
                                 </button>
-                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="View the task summary, saved handoffs, comments, and Git activity.">
-                                    <i class="fas fa-eye"></i> View
+                                <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
+                                    <i class="fas fa-eye"></i>
                                 </button>
                             </div>
                         </div>
@@ -4060,7 +4087,7 @@ body.artifact-drawer-open {
                     <?php if($inProgressTasks->num_rows == 0): ?>
                     <div class="empty-state-mini">
                         <i class="fas fa-play-circle"></i>
-                        <p>No tasks in progress</p>
+                        <p><?php echo $isQaDepartmentDeveloper ? 'No tasks currently being tested' : 'No tasks in progress'; ?></p>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -4072,7 +4099,7 @@ body.artifact-drawer-open {
             <div class="kanban-column" data-board-status="review">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-check-circle text-warning me-2"></i>Workflow Review <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Tasks arrive here only through PR submission and continue through SUL, QA, and Architect review."></i></span>
+                        <span><i class="fas fa-check-circle text-warning me-2"></i><?php echo $isQaDepartmentDeveloper ? 'QA SUL Review' : 'Workflow Review'; ?> <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Submitted test results are waiting for QA SUL approval or revision.' : 'Tasks arrive here only through PR submission and continue through SUL, QA, and Architect review.'; ?>"></i></span>
                         <span class="badge bg-warning"><?php echo $reviewTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -4127,7 +4154,7 @@ body.artifact-drawer-open {
                     <?php if($reviewTasks->num_rows == 0): ?>
                     <div class="empty-state-mini">
                         <i class="fas fa-check-double"></i>
-                        <p>No tasks in review</p>
+                        <p><?php echo $isQaDepartmentDeveloper ? 'No test results awaiting QA SUL review' : 'No tasks in review'; ?></p>
                     </div>
                     <?php endif; ?>
                 </div>
@@ -4139,7 +4166,7 @@ body.artifact-drawer-open {
             <div class="kanban-column" data-board-status="completed">
                 <div class="kanban-header">
                     <h5>
-                        <span><i class="fas fa-check-double text-success me-2"></i>Completed <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Completion remains controlled by the existing SUL, QA, Architect, and release flow."></i></span>
+                        <span><i class="fas fa-check-double text-success me-2"></i><?php echo $isQaDepartmentDeveloper ? 'Testing Completed' : 'Completed'; ?> <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'QA department testing approved by the QA SUL.' : 'Completion remains controlled by the existing SUL, QA, Architect, and release flow.'; ?>"></i></span>
                         <span class="badge bg-success"><?php echo $completedTasks->num_rows; ?></span>
                     </h5>
                 </div>
@@ -4298,67 +4325,6 @@ body.artifact-drawer-open {
 const currentDepartment = <?php echo json_encode($userDepartment); ?>;
 const currentDepartmentCanonical = <?php echo json_encode($userDepartmentCanonical); ?>;
 const departmentProfile = <?php echo json_encode($departmentProfile); ?>;
-const taskProjectFilter = document.getElementById('taskProjectFilter');
-const taskColumnInitialLimit = 6;
-
-function getVisibleBoardItems(columnBody) {
-    return Array.from(columnBody?.querySelectorAll('.task-board-item') || [])
-        .filter(item => !item.hidden);
-}
-
-function applyTaskProjectFilter({ resetScroll = false } = {}) {
-    const selectedProjectId = taskProjectFilter?.value || 'all';
-
-    document.querySelectorAll('.kanban-body').forEach(columnBody => {
-        const columnItems = Array.from(columnBody.querySelectorAll('.task-board-item'));
-        columnItems.forEach(item => {
-            item.hidden = selectedProjectId !== 'all'
-                && item.dataset.projectId !== selectedProjectId;
-        });
-
-        if (resetScroll) {
-            columnBody.dataset.expanded = 'false';
-        }
-
-        const projectItems = getVisibleBoardItems(columnBody);
-        const isExpanded = columnBody.dataset.expanded === 'true';
-        projectItems.forEach((item, index) => {
-            item.classList.toggle('is-task-collapsed', !isExpanded && index >= taskColumnInitialLimit);
-        });
-
-        let moreButton = columnBody.querySelector('.task-column-more');
-        const hiddenCount = Math.max(0, projectItems.length - taskColumnInitialLimit);
-        if (!isExpanded && hiddenCount > 0) {
-            if (!moreButton) {
-                moreButton = document.createElement('button');
-                moreButton.type = 'button';
-                moreButton.className = 'task-column-more';
-                moreButton.addEventListener('click', () => {
-                    columnBody.dataset.expanded = 'true';
-                    applyTaskProjectFilter();
-                });
-                columnBody.appendChild(moreButton);
-            }
-            moreButton.innerHTML = `<i class="fas fa-chevron-down" aria-hidden="true"></i> Show ${hiddenCount} more`;
-        } else {
-            moreButton?.remove();
-        }
-
-        updateKanbanColumnCount(columnBody);
-    });
-
-    const showingAllProjects = selectedProjectId === 'all';
-    const contextOverview = document.querySelector('[data-task-project-context-overview]');
-    if (contextOverview) {
-        contextOverview.hidden = !showingAllProjects;
-    }
-
-    document.querySelectorAll('[data-task-project-context]').forEach(context => {
-        context.hidden = showingAllProjects
-            || context.dataset.taskProjectContext !== selectedProjectId;
-    });
-
-}
 
 function initTooltips(root = document) {
     if (!window.bootstrap || !bootstrap.Tooltip) {
@@ -4387,13 +4353,13 @@ function updateKanbanColumnCount(columnBody) {
 
 function getKanbanEmptyState(columnBody) {
     if (columnBody.id === 'todo-column') {
-        return { icon: 'fa-check-circle', text: 'No tasks in To Do' };
+        return { icon: 'fa-check-circle', text: isQaDepartment ? 'No tasks ready for testing' : 'No tasks in To Do' };
     }
     if (columnBody.id === 'progress-column') {
-        return { icon: 'fa-play-circle', text: 'No tasks in progress' };
+        return { icon: 'fa-play-circle', text: isQaDepartment ? 'No tasks currently being tested' : 'No tasks in progress' };
     }
     if (columnBody.id === 'review-column') {
-        return { icon: 'fa-check-double', text: 'No tasks in review' };
+        return { icon: 'fa-check-double', text: isQaDepartment ? 'No test results awaiting QA SUL review' : 'No tasks in review' };
     }
 
     return { icon: 'fa-inbox', text: 'No tasks' };
@@ -4465,15 +4431,14 @@ function transformKanbanCardForProgressColumn(card, taskId) {
     footer.innerHTML = `
         ${dueHtml}
         <div class="kanban-card-actions">
-            <button class="btn-action" onclick="openPullRequestModal(${taskId})" data-bs-toggle="tooltip" title="${currentDepartmentCanonical === 'UI/UX' ? "Submit the saved design handoff for workflow review." : "Submit this task's pull request for workflow review."}">
-                <i class="fas ${currentDepartmentCanonical === 'UI/UX' ? 'fa-paper-plane' : 'fa-code-pull-request'}"></i>
-                ${currentDepartmentCanonical === 'UI/UX' ? 'Submit Design' : 'Submit PR'}
+            <button class="btn-action" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details and submit the PR through the Git update form.">
+                <i class="fas fa-code-pull-request"></i> Submit PR
             </button>
-            <button class="btn-action" onclick="reviewTask(${taskId})" data-bs-toggle="tooltip" title="Move this task back to To Do if work has not started cleanly.">
+            <button class="btn-action" onclick="reviewTask(${taskId})" data-bs-toggle="tooltip" title="${isQaDepartment ? 'Move this task back to Ready for Testing.' : 'Move this task back to To Do if work has not started cleanly.'}">
                 <i class="fas fa-undo"></i> Back
             </button>
-            <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="View the task summary, saved handoffs, comments, and Git activity.">
-                <i class="fas fa-eye"></i> View
+            <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
+                <i class="fas fa-eye"></i>
             </button>
         </div>
     `;
@@ -4491,11 +4456,11 @@ function transformKanbanCardForTodoColumn(card, taskId) {
     footer.innerHTML = `
         ${dueHtml}
         <div class="kanban-card-actions">
-            <button class="btn-action" onclick="startTask(${taskId})" data-bs-toggle="tooltip" title="Start this task and open the UI/UX design references.">
-                <i class="fas fa-play"></i> Start
+            <button class="btn-action" onclick="startTask(${taskId})" data-bs-toggle="tooltip" title="${isQaDepartment ? 'Start testing this task.' : 'Start this task and open the UI/UX design references.'}">
+                <i class="fas fa-play"></i> ${isQaDepartment ? 'Start Testing' : 'Start'}
             </button>
-            <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="View the task summary, saved handoffs, comments, and Git activity.">
-                <i class="fas fa-eye"></i> View
+            <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="Open task details, department handoff tools, comments, and Git updates.">
+                <i class="fas fa-eye"></i>
             </button>
         </div>
     `;
@@ -4563,15 +4528,23 @@ async function updateTaskStatus(taskId, status, options = {}) {
         const confirmed = typeof window.appConfirm === 'function'
             ? await window.appConfirm({
                 title: 'Confirm Task Update',
-                subject: status === 'for_review' ? 'Submit design for review?' : (status === 'in_progress' ? 'Start this task?' : 'Update this task status?'),
+                subject: status === 'for_review'
+                    ? (isQaDepartment ? 'Submit QA test results?' : 'Submit design for review?')
+                    : (status === 'in_progress' ? (isQaDepartment ? 'Start testing?' : 'Start this task?') : 'Update this task status?'),
                 message: status === 'for_review'
-                    ? 'Your UI/UX design handoff will be sent to the SUL for approval.'
+                    ? (isQaDepartment
+                        ? 'Your QA notes and evidence will be sent to the QA SUL for approval.'
+                        : 'Your UI/UX design handoff will be sent to the SUL for approval.')
                     : status === 'in_progress'
-                        ? 'The task will move to In Progress and its UI/UX designs/uploads will open for reference.'
+                        ? (isQaDepartment
+                            ? 'The task will move to Testing and its requirements, suggested tests, and handoffs will open.'
+                            : 'The task will move to In Progress and its UI/UX designs/uploads will open for reference.')
                         : 'The task status will be saved and activity logged.',
                 icon: 'fas fa-circle-check fa-lg',
                 confirmIcon: 'fas fa-check',
-                confirmText: status === 'for_review' ? 'Submit Design' : (status === 'in_progress' ? 'Start Task' : 'Update')
+                confirmText: status === 'for_review'
+                    ? (isQaDepartment ? 'Submit Test Results' : 'Submit Design')
+                    : (status === 'in_progress' ? (isQaDepartment ? 'Start Testing' : 'Start Task') : 'Update')
             })
             : false;
         if (!confirmed) {
@@ -4591,7 +4564,7 @@ async function updateTaskStatus(taskId, status, options = {}) {
         });
 
         moveKanbanTaskToColumn(taskId, response.new_status || status);
-        if (!options.suppressDetails && (options.openDetails || status === 'in_progress' || status === 'for_review')) {
+        if (options.openDetails || status === 'in_progress' || status === 'for_review') {
             viewTask(taskId);
         }
         return response;
@@ -5064,48 +5037,18 @@ function viewTask(taskId) {
             const designReferenceStrip = buildDesignReferenceStrip(task);
             const departmentPanel = buildDepartmentPanel(task, { readOnly: true });
             const roadmapBanner = buildRoadmapReadyBanner(task);
+            const departmentRevisionBanner = buildDepartmentRevisionBanner(task);
             const reopenPanel = buildReopenRequestPanel(task);
             const isReopenedTask = Boolean(task.last_reopened_at) && String(task.status || '') === 'sul_revision';
             announceDeveloperTaskGuidance(task);
             const reopenedBadge = isReopenedTask
                 ? '<span class="reopen-indicator mb-0"><i class="fas fa-rotate-left"></i> Reopened</span>'
                 : '';
-            const overviewSupport = [reopenPanel, roadmapBanner, designReferenceStrip]
-                .filter((section) => String(section || '').trim())
-                .join('');
-            const gitUpdates = Array.isArray(task.git_updates) ? task.git_updates : [];
-            const gitActivityRows = gitUpdates.map((update, index) => {
-                const detailParts = [];
-                if (update.commit_hash) {
-                    detailParts.push(`<code title="${escapeAttribute(update.commit_hash)}">${escapeHtml(shortCommit(update.commit_hash))}</code>`);
-                }
-                if (update.commit_message) {
-                    detailParts.push(`<span>${escapeHtml(update.commit_message)}</span>`);
-                }
-                if (update.notes) {
-                    detailParts.push(`<span class="git-activity-note"><i class="far fa-note-sticky me-1"></i>${escapeHtml(update.notes)}</span>`);
-                }
-
-                const actions = [
-                    update.repository_url
-                        ? `<a href="${escapeAttribute(update.repository_url)}" target="_blank" rel="noopener" class="git-activity-action"><i class="fas fa-arrow-up-right-from-square"></i>Repository</a>`
-                        : '',
-                    update.pull_request_url
-                        ? `<a href="${escapeAttribute(update.pull_request_url)}" target="_blank" rel="noopener" class="git-activity-action"><i class="fas fa-code-pull-request"></i>Pull Request</a>`
-                        : ''
-                ].filter(Boolean).join('');
-
-                return `
-                    <article class="git-activity-row${index === 0 ? ' git-activity-row--latest' : ''}">
-                        <span class="git-activity-icon" aria-hidden="true">
-                            <i class="fas ${update.git_action === 'merged' ? 'fa-code-merge' : 'fa-code-branch'}"></i>
-                        </span>
-                        <div class="git-activity-content">
-                            <div class="git-activity-title">
-                                <span class="git-activity-branch">${escapeHtml(update.branch_name || 'Unnamed branch')}</span>
-                                ${index === 0 ? '<span class="git-activity-latest">Latest</span>' : ''}
-                                <span class="badge bg-light text-primary border">${escapeHtml(formatGitAction(update.git_action))}</span>
-                                ${formatGitStatusBadge(update.status)}
+            const gitToolsPanel = isUiUxDepartment ? '' : `
+                        <div class="task-side-panel">
+                            <div class="task-side-heading">
+                                <label class="form-label mb-0 fw-semibold">Log Git Update</label>
+                                <small class="text-muted">Branch, commit, PR</small>
                             </div>
                             <div class="git-activity-meta">
                                 ${escapeHtml(update.user_name || 'Unknown')} &middot; ${escapeHtml(formatDateTime(update.created_at))}
@@ -5155,27 +5098,91 @@ function viewTask(taskId) {
                                     </div>
                                     ${reopenedBadge}
                                 </div>
-                                <div class="task-facts-grid">
-                                    <div class="task-fact">
-                                        <div class="task-fact-label">Deadline</div>
-                                        <div class="task-fact-value">${escapeHtml(deadlineText)}</div>
+                            </div>
+                        </div>
+
+                        <div class="task-facts-grid">
+                            <div class="task-fact">
+                                <div class="task-fact-label">Deadline</div>
+                                <div class="task-fact-value">${escapeHtml(deadlineText)}</div>
+                            </div>
+                            <div class="task-fact">
+                                <div class="task-fact-label">Status</div>
+                                <div class="task-fact-value">${escapeHtml((task.status || 'todo').replaceAll('_', ' '))}</div>
+                            </div>
+                            <div class="task-fact">
+                                <div class="task-fact-label">Estimate</div>
+                                <div class="task-fact-value">${escapeHtml(estimateText)}</div>
+                            </div>
+                        </div>
+
+                        ${roadmapBanner}
+                        ${designReferenceStrip}
+                        ${departmentPanel}
+
+                        <div class="task-detail-panel">
+                            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                                <div>
+                                    <h6><i class="fas fa-code-branch me-2 text-primary"></i>Latest Git Activity</h6>
+                                    <div class="small text-muted mt-1">${task.git_updates_count} update(s) logged for this task</div>
+                                </div>
+                                ${latestGit ? `<span class="badge bg-light text-primary border">${formatGitAction(latestGit.git_action)}</span>` : ''}
+                            </div>
+                            ${latestGit ? `
+                                <div class="git-latest-grid mt-3">
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Branch</div>
+                                        <div class="git-latest-value">${escapeHtml(latestGit.branch_name)}</div>
                                     </div>
-                                    <div class="task-fact">
-                                        <div class="task-fact-label">Status</div>
-                                        <div class="task-fact-value">${escapeHtml((task.status || 'todo').replaceAll('_', ' '))}</div>
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Status</div>
+                                        <div class="git-latest-value">${formatGitStatusBadge(latestGit.status)}</div>
                                     </div>
-                                    <div class="task-fact">
-                                        <div class="task-fact-label">Committed duration</div>
-                                        <div class="task-fact-value">${escapeHtml(estimateText)}</div>
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Commit</div>
+                                        <div class="git-latest-value">${latestGit.commit_hash ? `<code>${escapeHtml(shortCommit(latestGit.commit_hash))}</code>` : '<span class="text-muted">No commit hash</span>'}</div>
+                                    </div>
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Updated By</div>
+                                        <div class="git-latest-value">${escapeHtml(latestGit.user_name || 'Unknown')}</div>
+                                    </div>
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Commit Message</div>
+                                        <div class="git-latest-value">${latestGit.commit_message ? escapeHtml(latestGit.commit_message) : '<span class="text-muted">No commit message</span>'}</div>
+                                    </div>
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Links</div>
+                                        <div class="git-latest-value d-flex gap-2 flex-wrap">
+                                            ${latestGit.repository_url ? `<a href="${escapeAttribute(latestGit.repository_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="fas fa-link me-1"></i>Repository</a>` : ''}
+                                            ${latestGit.pull_request_url ? `<a href="${escapeAttribute(latestGit.pull_request_url)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary"><i class="fas fa-code-pull-request me-1"></i>Pull Request</a>` : ''}
+                                            ${!latestGit.repository_url && !latestGit.pull_request_url ? '<span class="text-muted">No links attached</span>' : ''}
+                                        </div>
+                                    </div>
+                                    <div class="git-latest-item">
+                                        <div class="git-latest-label">Notes</div>
+                                        <div class="git-latest-value">${latestGit.notes ? escapeHtml(latestGit.notes) : '<span class="text-muted">No notes provided</span>'}</div>
                                     </div>
                                 </div>
-                            </div>
-                            ${overviewSupport ? `<div class="task-summary-overview-extras">${overviewSupport}</div>` : ''}
+                            ` : `<p class="text-muted mb-0 mt-3">No Git activity has been recorded for this task yet.</p>`}
                         </div>
-                    </section>
-                    ${departmentPanel}
-                    ${gitActivitySection}
-                    ${commentsSection}
+                    </div>
+                    <div class="col-lg-4">
+                        ${reopenPanel}
+                        ${gitToolsPanel}
+                        <div class="task-side-panel">
+                            <div class="mb-3">
+                                <label class="form-label">Add Comment</label>
+                                <textarea id="taskComment" class="form-control" rows="3"></textarea>
+                            </div>
+                            <button class="btn-primary-modern task-detail-action" onclick="addComment(${taskId})">
+                                <i class="fas fa-paper-plane"></i> Add Comment
+                            </button>
+                        </div>
+                        <div class="task-detail-panel">
+                            <h6 class="mb-2">Comments</h6>
+                            <div id="commentsList" class="small"></div>
+                        </div>
+                    </div>
                 </div>
             `;
             $('#taskDetails').html(html);
@@ -5193,7 +5200,7 @@ function viewTask(taskId) {
 
 function announceDeveloperTaskGuidance(task) {
     if (!task || !task.id) return;
-    const historyKey = `evortix.developer.task.v2.${task.id}.${task.evortix_suggestion_version || task.status || 'current'}`;
+    const historyKey = `${isQaDepartment ? 'evortix.qa-developer.testing.v1' : 'evortix.developer.task.v2'}.${task.id}.${task.evortix_suggestion_version || task.status || 'current'}`;
     if (localStorage.getItem(historyKey)) return;
 
     const guidance = [];
@@ -5228,7 +5235,7 @@ function announceDeveloperTaskGuidance(task) {
         }
         if (typeof window.evortixAnnounceNotification !== 'function') return;
         window.evortixAnnounceNotification(
-            `Developer guidance: ${task.title || 'Task'}`,
+            `${isQaDepartment ? 'QA testing guidance' : 'Developer guidance'}: ${task.title || 'Task'}`,
             guidance.join(' '),
             ''
         );
@@ -5395,8 +5402,38 @@ function buildDesignReferenceStrip(task) {
     `;
 }
 
+function buildDepartmentRevisionBanner(task) {
+    const revision = task.department_revision;
+    if (!revision || !revision.revision_notes) {
+        return '';
+    }
+
+    const department = revision.department || currentDepartmentCanonical || 'Your department';
+    const developer = revision.developer_name || task.assigned_to_name || 'Assigned developer';
+    const responsibleSul = revision.sul_name || task.assigned_by_name || 'Department SUL';
+
+    return `
+        <div class="alert alert-warning border-warning-subtle mb-3">
+            <div class="d-flex align-items-start gap-2">
+                <i class="fas fa-user-check mt-1"></i>
+                <div>
+                    <strong>${escapeHtml(department)} owns this QA revision.</strong>
+                    <div class="small mt-1">
+                        Responsible developer: <strong>${escapeHtml(developer)}</strong>
+                        · Review handler: <strong>${escapeHtml(responsibleSul)}</strong>
+                    </div>
+                    <div class="small mt-2">${escapeHtml(revision.revision_notes)}</div>
+                    <div class="small text-muted mt-2">
+                        Complete this correction and resubmit it to your department SUL. The workflow unlocks the next department only after approval.
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function buildRoadmapReadyBanner(task) {
-    if (!['Frontend', 'Backend'].includes(currentDepartmentCanonical)) {
+    if (!['Frontend', 'Backend', 'QA'].includes(currentDepartmentCanonical)) {
         return '';
     }
 
@@ -5413,7 +5450,7 @@ function buildRoadmapReadyBanner(task) {
     return `
         <div class="roadmap-ready-banner">
             <i class="fas fa-lock-open"></i>
-            <div><strong>Ready to start.</strong> Earlier roadmap phase gates are clear, so ${escapeHtml(currentDepartmentCanonical.toLowerCase())} work can begin even if the schedule was planned for later.</div>
+            <div><strong>${isQaDepartment ? 'Ready for testing.' : 'Ready to start.'}</strong> Earlier roadmap phase gates are clear, so ${isQaDepartment ? 'QA testing' : escapeHtml(currentDepartmentCanonical.toLowerCase() + ' work')} can begin.</div>
         </div>
     `;
 }
@@ -5422,6 +5459,11 @@ function buildDepartmentPanel(task, options = {}) {
     const readOnly = Boolean(options.readOnly);
     const submission = Boolean(options.submission);
     const isUiUx = currentDepartmentCanonical === 'UI/UX';
+    const isQa = currentDepartmentCanonical === 'QA';
+    const canSubmitQaResults = isQa && ['in_progress', 'sul_revision', 'qa_failed'].includes(String(task.status || ''));
+    const qaSubmissionHint = String(task.status || '') === 'for_review'
+        ? '<div class="small text-success mt-2"><i class="fas fa-circle-check me-1"></i>Test results were submitted and are awaiting QA SUL review.</div>'
+        : '<div class="small text-muted mt-2"><i class="fas fa-circle-info me-1"></i>Start testing before submitting QA results.</div>';
     const requirements = Array.isArray(task.project_requirements) ? task.project_requirements : [];
     const requirementItems = requirements.length > 0
         ? requirements.map((item) => `<li><i class="fas fa-check-circle"></i><span>${escapeHtml(item)}</span></li>`).join('')
@@ -5443,7 +5485,6 @@ function buildDepartmentPanel(task, options = {}) {
         : '';
     const panelLabel = isUiUx ? 'Client Requirements' : 'Project Inputs';
     const handoffHeading = isUiUx ? 'Department Handoffs' : 'Handoffs and UI/UX Designs';
-    const artifactCount = Array.isArray(task.department_artifacts) ? task.department_artifacts.length : 0;
 
     if (readOnly) {
         return `
@@ -5528,7 +5569,11 @@ function buildDepartmentPanel(task, options = {}) {
 
             <div class="small fw-semibold mb-2">
                 ${panelLabel}
-                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx ? 'UI/UX should review these requirements before preparing designs and wireframes.' : 'Use these requirements as context for this department without changing the task workflow.'}"></i>
+                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx
+                    ? 'UI/UX should review these requirements before preparing designs and wireframes.'
+                    : (isQa
+                        ? 'Use these requirements to prepare acceptance, negative, boundary, and regression tests.'
+                        : 'Use these requirements as context for this department without changing the task workflow.')}"></i>
             </div>
             <ul class="department-requirements">${requirementItems}</ul>
             ${additionalRequirements}
@@ -5538,16 +5583,20 @@ function buildDepartmentPanel(task, options = {}) {
                     <div class="task-side-panel task-side-panel--flat mb-0">
                         <div class="task-side-heading">
                             <label class="form-label mb-0 fw-semibold">${escapeHtml(departmentProfile.artifact_cta || 'Save Handoff')}</label>
-                            <small class="text-muted">${isUiUx ? 'Design, wireframe, notes' : 'Link, notes'}</small>
+                            <small class="text-muted">${isUiUx ? 'Design, wireframe, notes' : (isQa ? 'Test evidence, defects, notes' : 'Link, notes')}</small>
                         </div>
                         <div class="mb-2">
-                            <input id="departmentArtifactTitle" class="form-control form-control-sm" placeholder="Handoff title">
+                            <input id="departmentArtifactTitle" class="form-control form-control-sm" placeholder="${isQa ? 'QA test result title' : 'Handoff title'}">
                         </div>
                         ${uploadInput}
                         <div class="mb-2">
                             <label class="form-label">
                                 ${escapeHtml(departmentProfile.link_label || 'Reference link')}
-                                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx ? 'Paste a Figma, FigJam, wireframe, or prototype link.' : 'Paste the reference link this department needs to hand off.'}"></i>
+                                <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx
+                                    ? 'Paste a Figma, FigJam, wireframe, or prototype link.'
+                                    : (isQa
+                                        ? 'Paste a test case, screenshot, recording, or defect reference link.'
+                                        : 'Paste the reference link this department needs to hand off.')}"></i>
                             </label>
                             <input id="departmentArtifactUrl" class="form-control form-control-sm" placeholder="https://...">
                         </div>
@@ -5555,24 +5604,19 @@ function buildDepartmentPanel(task, options = {}) {
                             <label class="form-label">${escapeHtml(departmentProfile.notes_label || 'Notes')}</label>
                             <textarea id="departmentArtifactNotes" class="form-control form-control-sm" rows="3" placeholder="Short handoff notes"></textarea>
                         </div>
-                        <div class="department-handoff-actions">
-                            <button type="button" class="btn-primary-modern task-detail-action" onclick="saveDepartmentArtifact(${Number(task.id)})" data-bs-toggle="tooltip" title="Saves department-specific handoff details without moving the task status.">
-                                <i class="fas fa-floppy-disk"></i> ${escapeHtml(departmentProfile.artifact_cta || 'Save Handoff')}
+                        <button class="btn-primary-modern task-detail-action" onclick="saveDepartmentArtifact(${Number(task.id)})" data-bs-toggle="tooltip" title="Saves department-specific handoff details without moving the task status.">
+                            <i class="fas fa-floppy-disk"></i> ${escapeHtml(departmentProfile.artifact_cta || 'Save Handoff')}
+                        </button>
+                        ${isUiUx ? `
+                            <button class="btn-primary-modern task-detail-action mt-2" onclick="submitDesignForReview(${Number(task.id)})" data-bs-toggle="tooltip" title="Auto-saves the design handoff, then submits the task to the UI/UX SUL for approval.">
+                                <i class="fas fa-paper-plane"></i> Submit Design
                             </button>
-                            ${isUiUx ? `
-                                <button type="button" class="btn-primary-modern task-detail-action" onclick="submitDesignForReview(${Number(task.id)})" data-bs-toggle="tooltip" title="Auto-saves the design handoff, then submits the task to the UI/UX SUL for approval.">
-                                    <i class="fas fa-paper-plane"></i> Submit Design
-                                </button>
-                            ` : ''}
-                        </div>
+                        ` : ''}
                     </div>
                 </div>
-                <div class="col-md-6 d-flex">
-                    <div class="task-side-panel task-side-panel--flat artifact-history-panel mb-0 w-100">
-                        <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-                            <h6 class="mb-0">${handoffHeading}</h6>
-                            <span class="small text-muted">${Array.isArray(task.department_artifacts) ? task.department_artifacts.length : 0} saved</span>
-                        </div>
+                <div class="col-md-6">
+                    <div class="task-side-panel mb-0">
+                        <h6 class="mb-2">${handoffHeading}</h6>
                         <div id="departmentArtifactList" class="artifact-list">
                             ${renderDepartmentArtifacts(task.department_artifacts || [])}
                         </div>
@@ -5869,6 +5913,43 @@ async function submitDesignForReview(taskId) {
     await updateTaskStatus(taskId, 'for_review', { skipConfirm: true, openDetails: true });
 }
 
+async function submitQaResultsForReview(taskId) {
+    const notesInput = document.getElementById('departmentArtifactNotes');
+    const titleInput = document.getElementById('departmentArtifactTitle');
+    const notes = String(notesInput?.value || '').trim();
+    if (!notes) {
+        showTaskNotice('QA Test Results', 'Record the executed tests, result summary, and any defects before submitting.', 'error');
+        notesInput?.focus();
+        return;
+    }
+    if (titleInput && String(titleInput.value || '').trim() === '') {
+        titleInput.value = 'QA Test Results';
+    }
+
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Submit QA Test Results',
+            subject: 'Send testing evidence to the QA SUL?',
+            message: 'Your QA notes and evidence will be saved first. The task will then move to QA SUL Review.',
+            icon: 'fas fa-vial-circle-check fa-lg',
+            confirmIcon: 'fas fa-paper-plane',
+            confirmText: 'Submit Test Results'
+        })
+        : false;
+    if (!confirmed) return;
+
+    try {
+        await saveDepartmentArtifact(taskId, { silent: true, reloadTask: false });
+    } catch (xhr) {
+        showTaskNotice('QA Test Results', xhr.responseJSON?.error || 'Unable to save QA notes before submitting.', 'error');
+        return;
+    }
+
+    await updateTaskStatus(taskId, 'for_review', { skipConfirm: true, skipDetails: true });
+    showTaskNotice('QA Test Results', 'Testing results submitted to the QA SUL for review.');
+    window.setTimeout(() => window.location.reload(), 350);
+}
+
 function loadComments(taskId) {
     $.ajax({
         url: '../../api/get-task-comments.php',
@@ -6074,14 +6155,26 @@ function handleDrop(e) {
     const columnTitle = targetColumn.querySelector('.kanban-header h5 span:first-child').textContent.trim();
     
     let newStatus = '';
-    if(columnTitle === 'To Do') newStatus = 'todo';
-    else if(columnTitle === 'In Progress') newStatus = 'in_progress';
-    else if(columnTitle === 'Workflow Review') {
-        showTaskNotice('Workflow Review', 'Submit a Pull Request from the task Git update form to move this task For Review.', 'error');
+    if(['To Do', 'Ready for Testing'].includes(columnTitle)) newStatus = 'todo';
+    else if(['In Progress', 'Testing'].includes(columnTitle)) newStatus = 'in_progress';
+    else if(['Workflow Review', 'QA SUL Review'].includes(columnTitle)) {
+        showTaskNotice(
+            isQaDepartment ? 'QA SUL Review' : 'Workflow Review',
+            isQaDepartment
+                ? 'Open the task, record QA notes and evidence, then submit the test results to the QA SUL.'
+                : 'Submit a Pull Request from the task Git update form to move this task For Review.',
+            'error'
+        );
         return;
     }
-    else if(columnTitle === 'Completed') {
-        showTaskNotice('Completed Tasks', 'Tasks are completed only after SUL review, QA testing, and Architect merge.', 'error');
+    else if(['Completed', 'Testing Completed'].includes(columnTitle)) {
+        showTaskNotice(
+            isQaDepartment ? 'Testing Completed' : 'Completed Tasks',
+            isQaDepartment
+                ? 'Testing is completed only after the QA SUL approves the submitted results.'
+                : 'Tasks are completed only after SUL review, QA testing, and Architect merge.',
+            'error'
+        );
         return;
     }
     

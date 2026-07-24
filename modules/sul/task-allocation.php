@@ -173,6 +173,117 @@ function sulTaskAllocationExcerpt(?string $text, int $limit = 120): string
     return substr($clean, 0, $limit - 1) . '…';
 }
 
+function sulTaskAllocationDepartmentSulId(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    string $department,
+    int $preferredSulId = 0
+): int {
+    $department = projectWorkflowDepartmentLabel($department);
+    if ($department === '') {
+        return 0;
+    }
+
+    if ($preferredSulId > 0) {
+        $preferred = $conn->query("
+            SELECT u.id
+            FROM users u
+            WHERE u.id = {$preferredSulId}
+              AND u.role = 'sul'
+              AND u.status = 'active'
+              AND " . projectWorkflowUserDepartmentClause($conn, 'u', $department) . "
+            LIMIT 1
+        ");
+        if ($preferred && ($row = $preferred->fetch_assoc())) {
+            return (int) ($row['id'] ?? 0);
+        }
+    }
+
+    $result = $conn->query("
+        SELECT u.id
+        FROM users u
+        WHERE u.role = 'sul'
+          AND u.status = 'active'
+          AND " . projectWorkflowUserDepartmentClause($conn, 'u', $department) . "
+        ORDER BY u.id ASC
+        LIMIT 1
+    ");
+    $row = $result ? $result->fetch_assoc() : null;
+
+    return (int) ($row['id'] ?? 0);
+}
+
+function sulTaskAllocationQaRevisionTargets(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    int $projectId,
+    int $taskId
+): array {
+    if ($projectId <= 0 || $taskId <= 0 || !dbTableExists($conn, 'methodology_task_departments')) {
+        return [];
+    }
+
+    $result = $conn->query("
+        SELECT mtd.id, mtd.department, mtd.status, mtd.assigned_developer_id,
+               mtd.approved_by, developer.full_name AS developer_name,
+               developer.status AS developer_status,
+               COALESCE(developer.availability_status, 'available') AS developer_availability,
+               sul.full_name AS sul_name, mp.sequence_no AS phase_sequence
+        FROM methodology_task_departments mtd
+        INNER JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+        INNER JOIN methodology_phases mp ON mp.id = mt.phase_id
+        LEFT JOIN users developer ON developer.id = mtd.assigned_developer_id
+        LEFT JOIN users sul ON sul.id = mtd.approved_by
+        WHERE mtd.project_id = {$projectId}
+          AND COALESCE(mtd.workflow_task_id, mt.task_id) = {$taskId}
+          AND mtd.status = 'completed'
+        ORDER BY COALESCE(NULLIF(mp.sequence_no, 0), mp.id) ASC, mt.id ASC, mtd.id ASC
+    ");
+    if (!$result) {
+        return [];
+    }
+
+    $targets = [];
+    while ($row = $result->fetch_assoc()) {
+        $department = projectWorkflowDepartmentLabel((string) ($row['department'] ?? ''));
+        if (
+            $department === ''
+            || in_array($department, ['QA', 'Expert Department'], true)
+            || (int) ($row['assigned_developer_id'] ?? 0) <= 0
+        ) {
+            continue;
+        }
+
+        $sulId = sulTaskAllocationDepartmentSulId($conn, $department, (int) ($row['approved_by'] ?? 0));
+        $row['department_label'] = $department;
+        $row['responsible_sul_id'] = $sulId;
+        $row['is_available'] = (string) ($row['developer_status'] ?? '') === 'active'
+            && (string) ($row['developer_availability'] ?? 'available') !== 'unavailable'
+            && $sulId > 0;
+        if ($sulId > 0 && trim((string) ($row['sul_name'] ?? '')) === '') {
+            $sulRow = $conn->query("SELECT full_name FROM users WHERE id = {$sulId} LIMIT 1")->fetch_assoc();
+            $row['sul_name'] = (string) ($sulRow['full_name'] ?? '');
+        }
+        $targets[$department] = $row;
+    }
+
+    uasort($targets, static function (array $left, array $right): int {
+        return projectWorkflowDepartmentSequence((string) ($left['department_label'] ?? ''))
+            <=> projectWorkflowDepartmentSequence((string) ($right['department_label'] ?? ''));
+    });
+
+    return $targets;
+}
+
+function sulTaskAllocationDeveloperBatchKey(int $projectId, int $developerId): string
+{
+    try {
+        $token = bin2hex(random_bytes(8));
+    } catch (Throwable $exception) {
+        $token = str_replace('.', '', uniqid('', true));
+    }
+
+    return substr("assignment-{$projectId}-{$developerId}-{$token}", 0, 80);
+}
+
 function sulTaskAllocationBulkEntityCountSelect(string $taskAlias = 't'): string
 {
     $taskAlias = preg_replace('/[^A-Za-z0-9_]/', '', $taskAlias) ?: 't';
@@ -978,9 +1089,19 @@ $readyDeveloperAssignmentGroups = [];
 if ($readyForDevTasks) {
     $priorityRanks = ['critical' => 1, 'high' => 2, 'medium' => 3, 'low' => 4];
     while ($readyDeveloperTask = $readyForDevTasks->fetch_assoc()) {
+        $currentRoadmapGroupTask = projectWorkflowCurrentRoadmapTask(
+            $conn,
+            (int) ($readyDeveloperTask['project_id'] ?? 0),
+            (int) ($readyDeveloperTask['id'] ?? 0),
+            $sulDepartment
+        );
+        $currentEntityKey = trim((string) ($currentRoadmapGroupTask['developer_entity_key'] ?? ''));
+        if ($currentEntityKey !== '') {
+            $readyDeveloperTask['bulk_entity_key'] = $currentEntityKey;
+        }
+
         $entityKey = trim((string) ($readyDeveloperTask['bulk_entity_key'] ?? ''));
-        $isBulkEntity = $entityKey !== '' && (int) ($readyDeveloperTask['bulk_entity_task_count'] ?? 0) > 1;
-        $groupKey = $isBulkEntity
+        $groupKey = $entityKey !== ''
             ? 'bulk:' . (int) $readyDeveloperTask['project_id'] . ':' . $entityKey
             : 'task:' . (int) $readyDeveloperTask['id'];
 
@@ -988,7 +1109,7 @@ if ($readyForDevTasks) {
             $readyDeveloperAssignmentGroups[$groupKey] = [
                 'representative' => $readyDeveloperTask,
                 'features' => [],
-                'is_bulk' => $isBulkEntity,
+                'is_bulk' => false,
                 'priority' => (string) ($readyDeveloperTask['priority'] ?? 'medium'),
                 'deadline' => $readyDeveloperTask['deadline'] ?? null,
             ];
@@ -1010,6 +1131,12 @@ if ($readyForDevTasks) {
             $readyDeveloperAssignmentGroups[$groupKey]['deadline'] = $readyDeveloperTask['deadline'];
         }
     }
+    foreach ($readyDeveloperAssignmentGroups as &$readyDeveloperAssignmentGroup) {
+        $featureCount = count($readyDeveloperAssignmentGroup['features'] ?? []);
+        $readyDeveloperAssignmentGroup['is_bulk'] = $featureCount > 1;
+        $readyDeveloperAssignmentGroup['representative']['bulk_entity_task_count'] = $featureCount;
+    }
+    unset($readyDeveloperAssignmentGroup);
     $readyForDevTasks->data_seek(0);
 }
 $readyDeveloperAssignmentGroupCount = count($readyDeveloperAssignmentGroups);
@@ -1021,22 +1148,64 @@ $readyDeveloperAssignmentCount = array_sum(array_map(
 // Get tasks assigned to developers (in progress)
 $inProgressTasks = $conn->query("
     SELECT t.*, u.full_name as developer_name, p.name as project_name,
+           (
+               SELECT mtd_revision.revision_notes
+               FROM methodology_task_departments mtd_revision
+               LEFT JOIN methodology_tasks mt_revision ON mt_revision.id = mtd_revision.methodology_task_id
+               WHERE COALESCE(mtd_revision.workflow_task_id, mt_revision.task_id) = t.id
+                 AND mtd_revision.department IN ({$sulDepartmentAliasesSql})
+                 AND mtd_revision.assigned_developer_id = t.assigned_to
+                 AND COALESCE(mtd_revision.revision_notes, '') <> ''
+               ORDER BY mtd_revision.updated_at DESC, mtd_revision.id DESC
+               LIMIT 1
+           ) AS department_revision_notes,
            {$bulkEntityCountSelect}
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
-    WHERE t.status = 'in_progress'
+    WHERE t.status IN ('in_progress', 'sul_revision', 'qa_failed')
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
       {$selectedDeveloperProjectFilter}
     ORDER BY t.deadline ASC
 ");
+$queuedQaRevisionTasks = $conn->query("
+    SELECT DISTINCT t.id, t.title, t.priority, t.deadline, t.project_id,
+           p.name AS project_name,
+           developer.full_name AS developer_name,
+           mtd.revision_notes,
+           mtd.department
+    FROM methodology_task_departments mtd
+    INNER JOIN methodology_tasks mt ON mt.id = mtd.methodology_task_id
+    INNER JOIN tasks t ON t.id = COALESCE(mtd.workflow_task_id, mt.task_id)
+    INNER JOIN projects p ON p.id = t.project_id
+    LEFT JOIN users developer ON developer.id = mtd.assigned_developer_id
+    WHERE mtd.department IN ({$sulDepartmentAliasesSql})
+      AND mtd.status = 'planned'
+      AND COALESCE(mtd.revision_notes, '') <> ''
+      AND t.status IN ('qa_failed', 'sul_revision', 'in_progress', 'for_review')
+      AND {$sulProjectFilter}
+      {$selectedDeveloperProjectFilter}
+    ORDER BY t.deadline ASC, t.id ASC
+");
+$queuedQaRevisionCount = $queuedQaRevisionTasks ? $queuedQaRevisionTasks->num_rows : 0;
 
 // Get developer Pull Requests waiting for SUL code review
 $codeReviewTasks = $conn->query("
     SELECT t.*, u.full_name as developer_name, p.name as project_name,
            {$bulkEntityCountSelect},
            {$bulkEntityKeySelect},
+           (
+               SELECT mtd_revision.revision_notes
+               FROM methodology_task_departments mtd_revision
+               LEFT JOIN methodology_tasks mt_revision ON mt_revision.id = mtd_revision.methodology_task_id
+               WHERE COALESCE(mtd_revision.workflow_task_id, mt_revision.task_id) = t.id
+                 AND mtd_revision.department IN ({$sulDepartmentAliasesSql})
+                 AND mtd_revision.assigned_developer_id = t.assigned_to
+                 AND COALESCE(mtd_revision.revision_notes, '') <> ''
+               ORDER BY mtd_revision.updated_at DESC, mtd_revision.id DESC
+               LIMIT 1
+           ) AS department_revision_notes,
            latest_git.branch_name, latest_git.commit_hash, latest_git.pull_request_url, latest_git.repository_url, latest_git.notes AS git_notes
     FROM tasks t
     JOIN users u ON t.assigned_to = u.id
@@ -1198,6 +1367,7 @@ $developers = $conn->query("
     FROM users u
     LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
     WHERE u.role = 'developer' AND u.status = 'active'
+      AND COALESCE(u.availability_status, 'available') IN ('available', 'limited')
       {$sulUserDepartmentFilter}
     GROUP BY u.id, u.full_name, u.profile_pic, u.designation, u.department, u.skills, u.availability_status, u.max_concurrent_tasks
     ORDER BY CASE COALESCE(u.availability_status, 'available') WHEN 'available' THEN 0 WHEN 'limited' THEN 1 ELSE 2 END,
@@ -1246,7 +1416,7 @@ if ($canManageDeveloperWorkflow) {
                 FROM tasks t
                 JOIN users u ON t.assigned_to = u.id
                 WHERE t.project_id = p.id
-                  AND t.status = 'in_progress'
+                  AND t.status IN ('in_progress', 'sul_revision', 'qa_failed')
                   {$sulUserDepartmentFilter}
             ) AS in_progress_count,
             (
@@ -1285,7 +1455,7 @@ foreach ($developerProjectOptions as $developerProjectOption) {
 }
 $reopenRequests = $canManageDeveloperWorkflow ? taskReopenLoadSulRequests($conn, $sulDepartment, ($projectId && $project) ? $projectId : 0) : [];
 $developerReopenRequestCount = count($reopenRequests);
-$selectedDeveloperTaskCount = $readyDeveloperAssignmentCount + $inProgressTasks->num_rows + $codeReviewTasks->num_rows + $developerReopenRequestCount;
+$selectedDeveloperTaskCount = $readyDeveloperAssignmentCount + $inProgressTasks->num_rows + $queuedQaRevisionCount + $codeReviewTasks->num_rows + $developerReopenRequestCount;
 $developerAllocationBadgeCount = ($projectId && $project) ? $selectedDeveloperTaskCount : $developerProjectOptionTaskCount;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['evortix_review_decision'])) {
@@ -1782,6 +1952,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
              AND active_tasks.status NOT IN ('completed', 'cancelled')
             WHERE users.role = 'developer'
               AND users.status = 'active'
+              AND COALESCE(users.availability_status, 'available') IN ('available', 'limited')
               AND " . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment) . "
             GROUP BY users.id
             ORDER BY CASE WHEN users.id = {$developerId} THEN 0 ELSE 1 END,
@@ -1800,8 +1971,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
         $teamLimit = min($teamLimit, count($availableTeamIds));
         $invalidSelections = array_diff($developerIds, $availableTeamIds);
-        if ($teamLimit <= 0 || count($developerIds) !== $teamLimit || $invalidSelections !== []) {
-            $_SESSION['error'] = "Select exactly {$teamLimit} active department member" . ($teamLimit === 1 ? '' : 's') . " for this task group.";
+        if ($teamLimit <= 0 || count($developerIds) > $teamLimit || $invalidSelections !== []) {
+            $_SESSION['error'] = "Select between 1 and {$teamLimit} available department member" . ($teamLimit === 1 ? '' : 's') . " for this task group.";
             header("Location: task-allocation.php?project_id=" . $assignmentProjectId);
             exit();
         }
@@ -1811,6 +1982,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         foreach ($assignmentTaskIds as $taskIndex => $assignmentTaskId) {
             $memberId = $assignmentTeam[$taskIndex % count($assignmentTeam)];
             $tasksByDeveloper[$memberId][] = $assignmentTaskId;
+        }
+
+        $developerBatchKeys = [];
+        if (count($assignmentTeam) > 1) {
+            foreach ($assignmentTeam as $memberId) {
+                $developerBatchKeys[$memberId] = sulTaskAllocationDeveloperBatchKey(
+                    $assignmentProjectId,
+                    (int) $memberId
+                );
+            }
         }
 
         $assignmentSucceeded = true;
@@ -1863,9 +2044,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 }
                 if ($roadmapIds !== []) {
                     $roadmapIdList = implode(',', $roadmapIds);
+                    $developerBatchKeySql = '';
+                    if (isset($developerBatchKeys[$memberId])) {
+                        $safeDeveloperBatchKey = $conn->real_escape_string($developerBatchKeys[$memberId]);
+                        $developerBatchKeySql = ", developer_entity_key = '{$safeDeveloperBatchKey}'";
+                    }
                     $roadmapUpdateResult = $conn->query("
                         UPDATE methodology_tasks
-                        SET assigned_developer_id = {$memberId}, status = 'planned', updated_by = {$userId}, updated_at = CURRENT_TIMESTAMP
+                        SET assigned_developer_id = {$memberId}{$developerBatchKeySql}, status = 'planned',
+                            updated_by = {$userId}, updated_at = CURRENT_TIMESTAMP
                         WHERE id IN ({$roadmapIdList}) AND project_id = {$assignmentProjectId}
                     ");
                     if ($roadmapUpdateResult === false) {
@@ -1937,8 +2124,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    // Review developer Pull Request and move to QA or back to Developer
-    if (isset($_POST['sul_approve_pr']) || isset($_POST['sul_request_revision'])) {
+    // Review department work and move it to the next department, final QA testing,
+    // or back to the current Developer.
+    if (
+        isset($_POST['sul_approve_pr'])
+        || isset($_POST['sul_request_revision'])
+        || isset($_POST['qa_sul_pass'])
+        || isset($_POST['qa_sul_route_revision'])
+        || isset($_POST['qa_sul_request_retest'])
+    ) {
         if (!$canManageDeveloperWorkflow) {
             $_SESSION['error'] = "Department review is available only for department SULs outside Expert Department.";
             header("Location: task-allocation.php");
@@ -1947,7 +2141,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         $taskId = (int) ($_POST['task_id'] ?? 0);
         $reviewComment = trim((string) ($_POST['review_comment'] ?? ''));
-        $isApproval = isset($_POST['sul_approve_pr']);
+        $isApproval = isset($_POST['sul_approve_pr']) || isset($_POST['qa_sul_pass']);
+        $isQaDepartmentRevision = $isQaDepartmentSul && isset($_POST['qa_sul_route_revision']);
+        $hasQaOnlyDecision = isset($_POST['qa_sul_pass'])
+            || isset($_POST['qa_sul_route_revision'])
+            || isset($_POST['qa_sul_request_retest']);
+
+        if ($hasQaOnlyDecision && !$isQaDepartmentSul) {
+            $_SESSION['error'] = "Only the QA Department SUL can make QA pass, fail, or retest decisions.";
+            header("Location: task-allocation.php");
+            exit();
+        }
 
         if ($taskId <= 0 || (!$isApproval && $reviewComment === '')) {
             $_SESSION['error'] = $isApproval ? "Invalid task selected." : "Please provide revision comments.";
@@ -1972,6 +2176,251 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if (!$reviewTask) {
             $_SESSION['error'] = "Only tasks marked For Review can be reviewed by SUL.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        if ($isQaDepartmentSul && $isApproval) {
+            $projectForRouting = (int) ($reviewTask['project_id'] ?? 0);
+            $currentQaRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $projectForRouting, $taskId, 'QA');
+            if (!$currentQaRoadmapTask || projectWorkflowDepartmentLabel((string) ($currentQaRoadmapTask['department_label'] ?? '')) !== 'QA') {
+                $_SESSION['error'] = "This task is not the current QA roadmap item.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+
+            $qaProgressId = (int) ($currentQaRoadmapTask['department_progress_id'] ?? 0);
+            $conn->begin_transaction();
+            try {
+                if ($qaProgressId > 0) {
+                    $completeQaLane = $conn->prepare("
+                        UPDATE methodology_task_departments
+                        SET status = 'completed',
+                            submitted_at = COALESCE(submitted_at, NOW()),
+                            approved_by = ?,
+                            approved_at = NOW(),
+                            revision_notes = NULL,
+                            updated_by = ?,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ? AND project_id = ?
+                    ");
+                    if (!$completeQaLane) {
+                        throw new RuntimeException('Unable to prepare the QA roadmap approval.');
+                    }
+                    $completeQaLane->bind_param("iiii", $userId, $userId, $qaProgressId, $projectForRouting);
+                    if (!$completeQaLane->execute()) {
+                        throw new RuntimeException('Unable to complete the QA roadmap item.');
+                    }
+                    $completeQaLane->close();
+                }
+
+                $passQaTask = $conn->prepare("
+                    UPDATE tasks
+                    SET status = 'qa_passed',
+                        qa_reviewed_by = ?,
+                        qa_reviewed_at = NOW(),
+                        sul_reviewed_by = ?,
+                        sul_reviewed_at = NOW(),
+                        completed_at = NULL
+                    WHERE id = ? AND status = 'for_review'
+                ");
+                if (!$passQaTask) {
+                    throw new RuntimeException('Unable to prepare the QA decision.');
+                }
+                $passQaTask->bind_param("iii", $userId, $userId, $taskId);
+                if (!$passQaTask->execute() || $passQaTask->affected_rows !== 1) {
+                    throw new RuntimeException('Unable to save the QA pass decision.');
+                }
+                $passQaTask->close();
+                $conn->commit();
+            } catch (Throwable $exception) {
+                $conn->rollback();
+                error_log('QA SUL pass failed: ' . $exception->getMessage());
+                $_SESSION['error'] = "Failed to save the QA pass decision.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+
+            $passComment = $reviewComment !== ''
+                ? 'QA SUL passed testing: ' . $reviewComment
+                : 'QA SUL passed testing and sent the feature to Architect final approval.';
+            workflowAddTaskComment($conn, $taskId, $userId, $passComment);
+            workflowLogStatusChange($userId, $taskId, 'for_review', 'qa_passed', 'qa_sul_pass_feature', $reviewComment);
+            projectWorkflowSyncRoadmap($conn, $projectForRouting);
+            workflowNotifyRoles(
+                $conn,
+                ['architect'],
+                'QA Passed: ' . $reviewTask['title'],
+                'The QA SUL passed this feature. It is ready for Architect final approval.',
+                BASE_URL . 'modules/architect/final-approval.php?task_id=' . $taskId,
+                $taskId
+            );
+            $_SESSION['success'] = "QA passed the feature and sent it to Architect final approval.";
+            header("Location: task-allocation.php");
+            exit();
+        }
+
+        if ($isQaDepartmentRevision) {
+            $projectForRouting = (int) ($reviewTask['project_id'] ?? 0);
+            $availableTargets = sulTaskAllocationQaRevisionTargets($conn, $projectForRouting, $taskId);
+            $requestedDepartments = is_array($_POST['revision_departments'] ?? null)
+                ? $_POST['revision_departments']
+                : [];
+            $selectedTargets = [];
+            foreach ($requestedDepartments as $requestedDepartment) {
+                $department = projectWorkflowDepartmentLabel((string) $requestedDepartment);
+                if (isset($availableTargets[$department]) && !empty($availableTargets[$department]['is_available'])) {
+                    $selectedTargets[$department] = $availableTargets[$department];
+                }
+            }
+            uasort($selectedTargets, static function (array $left, array $right): int {
+                return projectWorkflowDepartmentSequence((string) ($left['department_label'] ?? ''))
+                    <=> projectWorkflowDepartmentSequence((string) ($right['department_label'] ?? ''));
+            });
+
+            if ($selectedTargets === []) {
+                $_SESSION['error'] = "Select at least one responsible department for the failed QA result.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+
+            $firstTarget = reset($selectedTargets);
+            $firstDepartment = (string) ($firstTarget['department_label'] ?? '');
+            $firstDeveloperId = (int) ($firstTarget['assigned_developer_id'] ?? 0);
+            $firstSulId = (int) ($firstTarget['responsible_sul_id'] ?? 0);
+            if ($firstDeveloperId <= 0 || $firstSulId <= 0) {
+                $_SESSION['error'] = "The first revision department must have its original developer and an active SUL.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+
+            $revisionOrder = array_keys($selectedTargets);
+            $routeLabel = implode(' → ', $revisionOrder) . ' → QA retest';
+            $qaRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $projectForRouting, $taskId, 'QA');
+            $qaProgressId = (int) ($qaRoadmapTask['department_progress_id'] ?? 0);
+            if ($qaProgressId <= 0) {
+                $_SESSION['error'] = "Unable to locate the QA roadmap lane for retesting.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+            $conn->begin_transaction();
+            try {
+                $position = 0;
+                $updateRevisionLane = $conn->prepare("
+                    UPDATE methodology_task_departments
+                    SET status = ?,
+                        revision_notes = ?,
+                        approved_at = NULL,
+                        submitted_at = NULL,
+                        updated_by = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND project_id = ?
+                ");
+                if (!$updateRevisionLane) {
+                    throw new RuntimeException('Unable to prepare the department revision route.');
+                }
+                foreach ($selectedTargets as $department => $target) {
+                    $position++;
+                    $laneStatus = $position === 1 ? 'for_revision' : 'planned';
+                    $laneNotes = "QA revision {$position} of " . count($selectedTargets)
+                        . " — {$department}. {$reviewComment}";
+                    $laneId = (int) ($target['id'] ?? 0);
+                    $updateRevisionLane->bind_param("ssiii", $laneStatus, $laneNotes, $userId, $laneId, $projectForRouting);
+                    if (!$updateRevisionLane->execute()) {
+                        throw new RuntimeException('Unable to save a department revision lane.');
+                    }
+                }
+                $updateRevisionLane->close();
+
+                $qaRetestNotes = 'QA retest after ' . implode(', ', $revisionOrder) . '. Original QA finding: ' . $reviewComment;
+                $queueQaRetest = $conn->prepare("
+                    UPDATE methodology_task_departments
+                    SET status = 'planned',
+                        approved_by = ?,
+                        approved_at = NULL,
+                        submitted_at = NULL,
+                        revision_notes = ?,
+                        updated_by = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ? AND project_id = ?
+                ");
+                if (!$queueQaRetest) {
+                    throw new RuntimeException('Unable to prepare QA retesting.');
+                }
+                $queueQaRetest->bind_param("isiii", $userId, $qaRetestNotes, $userId, $qaProgressId, $projectForRouting);
+                if (!$queueQaRetest->execute()) {
+                    throw new RuntimeException('Unable to queue QA retesting.');
+                }
+                $queueQaRetest->close();
+
+                $routeRevision = $conn->prepare("
+                    UPDATE tasks
+                    SET status = 'qa_failed',
+                        assigned_to = ?,
+                        assigned_by = ?,
+                        qa_reviewed_by = ?,
+                        qa_reviewed_at = NOW(),
+                        completed_at = NULL,
+                        pr_submitted_at = NULL
+                    WHERE id = ? AND status = 'for_review'
+                ");
+                if (!$routeRevision) {
+                    throw new RuntimeException('Unable to prepare the task revision assignment.');
+                }
+                $routeRevision->bind_param("iiii", $firstDeveloperId, $firstSulId, $userId, $taskId);
+                if (!$routeRevision->execute() || $routeRevision->affected_rows !== 1) {
+                    throw new RuntimeException('Unable to assign the first revision owner.');
+                }
+                $routeRevision->close();
+                $conn->commit();
+            } catch (Throwable $exception) {
+                $conn->rollback();
+                error_log('QA department revision routing failed: ' . $exception->getMessage());
+                $_SESSION['error'] = "Failed to create the QA department revision route.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+
+            workflowAddTaskComment(
+                $conn,
+                $taskId,
+                $userId,
+                "QA SUL failed testing and routed revision in this order: {$routeLabel}. QA finding: {$reviewComment}"
+            );
+            workflowLogStatusChange(
+                $userId,
+                $taskId,
+                'for_review',
+                'qa_failed',
+                'qa_sul_route_department_revision',
+                "Route: {$routeLabel}. {$reviewComment}"
+            );
+            projectWorkflowSyncRoadmap($conn, $projectForRouting);
+
+            $position = 0;
+            foreach ($selectedTargets as $department => $target) {
+                $position++;
+                $developerName = trim((string) ($target['developer_name'] ?? 'the original developer'));
+                $queueMessage = $position === 1
+                    ? "{$department} is responsible now. {$developerName} was automatically assigned to revise this feature. QA notes: {$reviewComment}"
+                    : "{$department} is revision step {$position} of " . count($selectedTargets) . ". {$developerName} remains the responsible developer and will receive the task after the earlier department is approved.";
+                projectWorkflowNotifyDepartmentSuls(
+                    $conn,
+                    $department,
+                    ($position === 1 ? 'QA Revision Assigned: ' : 'QA Revision Queued: ') . $reviewTask['title'],
+                    $queueMessage,
+                    BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectForRouting . '&task_id=' . $taskId,
+                    $projectForRouting
+                );
+            }
+            workflowNotifyUser(
+                $firstDeveloperId,
+                'QA Revision Assigned: ' . $reviewTask['title'],
+                "{$firstDepartment} is the first responsible department. Correct the QA findings and resubmit to your SUL. Notes: {$reviewComment}",
+                BASE_URL . 'modules/developer/task.php?id=' . $taskId,
+                $taskId
+            );
+            $_SESSION['success'] = "QA failed the feature. Revision was assigned in order: {$routeLabel}.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -2040,14 +2489,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $allDepartmentsComplete = $totalLanes <= 0 || $completedLanes >= $totalLanes;
                 }
 
-                if ($allDepartmentsComplete) {
-                    $nextRoadmapTask = projectWorkflowNextRoadmapTask($conn, $projectForRouting, $taskId, $currentRoadmapTaskId);
+                $candidateNextRoadmapTask = projectWorkflowNextRoadmapTask($conn, $projectForRouting, $taskId, $currentRoadmapTaskId);
+                $candidateIsRevision = trim((string) ($candidateNextRoadmapTask['revision_notes'] ?? '')) !== '';
+                if ($allDepartmentsComplete || $candidateIsRevision) {
+                    $nextRoadmapTask = $candidateNextRoadmapTask;
                     $nextDepartment = projectWorkflowDepartmentLabel($nextRoadmapTask['department_label'] ?? ($nextRoadmapTask['department'] ?? ''));
                 }
             }
 
-            $routeToQa = $allDepartmentsComplete && ($nextDepartment === 'QA' || !$nextRoadmapTask);
-            $approvedStatus = $routeToQa ? 'qa_testing' : 'todo';
+            // Projects without an explicit QA roadmap lane keep the central
+            // qa_testing fallback. Explicit QA roadmap work is decided above by
+            // its QA SUL and moves directly to qa_passed or department revision.
+            $routeToQa = $allDepartmentsComplete && !$nextRoadmapTask;
+            $nextRevisionNotes = trim((string) ($nextRoadmapTask['revision_notes'] ?? ''));
+            $nextIsRevisionHandoff = $nextRoadmapTask && $nextRevisionNotes !== '';
+            $nextRevisionDeveloperId = $nextIsRevisionHandoff
+                ? (int) ($nextRoadmapTask['assigned_developer_id'] ?? 0)
+                : 0;
+            $nextRevisionSulId = $nextIsRevisionHandoff
+                ? sulTaskAllocationDepartmentSulId(
+                    $conn,
+                    $nextDepartment,
+                    (int) ($nextRoadmapTask['approved_by'] ?? 0)
+                )
+                : 0;
+            if ($nextIsRevisionHandoff && ($nextRevisionDeveloperId <= 0 || $nextRevisionSulId <= 0)) {
+                $_SESSION['error'] = "The next revision department is missing its original developer or an active SUL.";
+                header("Location: task-allocation.php");
+                exit();
+            }
+            $approvedStatus = $routeToQa ? 'qa_testing' : ($nextIsRevisionHandoff ? 'sul_revision' : 'todo');
 
             if ($routeToQa) {
                 $stmt = $conn->prepare("
@@ -2059,6 +2530,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     WHERE id = ?
                 ");
                 $stmt->bind_param("ii", $userId, $taskId);
+            } elseif ($nextIsRevisionHandoff) {
+                $stmt = $conn->prepare("
+                    UPDATE tasks
+                    SET status = 'sul_revision',
+                        assigned_to = ?,
+                        assigned_by = ?,
+                        completed_at = NULL,
+                        pr_submitted_at = NULL,
+                        sul_reviewed_by = ?,
+                        sul_reviewed_at = NOW()
+                    WHERE id = ?
+                ");
+                $stmt->bind_param("iiii", $nextRevisionDeveloperId, $nextRevisionSulId, $userId, $taskId);
             } else {
                 $stmt = $conn->prepare("
                     UPDATE tasks
@@ -2078,7 +2562,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $approvalComment = $reviewComment !== ''
                     ? "SUL approved work: {$reviewComment}"
                     : 'SUL approved this department work.';
-                if (!$allDepartmentsComplete) {
+                if ($nextIsRevisionHandoff) {
+                    $approvalComment .= ' QA revision handoff sent to ' . $nextDepartment
+                        . ' and assigned to the original responsible developer.';
+                } elseif (!$allDepartmentsComplete) {
                     $approvalComment .= ' Waiting for remaining department work before the parent task can move forward.';
                 } elseif (!$routeToQa && $nextDepartment !== '') {
                     $approvalComment .= ' Handoff sent to ' . $nextDepartment . '.';
@@ -2096,6 +2583,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         $taskId
                     );
                     $_SESSION['success'] = "Work approved and moved to QA Testing.";
+                } elseif ($nextIsRevisionHandoff) {
+                    $nextRevisionDeveloperName = '';
+                    if ($nextRevisionDeveloperId > 0) {
+                        $nextDeveloperRow = $conn->query("SELECT full_name FROM users WHERE id = {$nextRevisionDeveloperId} LIMIT 1")->fetch_assoc();
+                        $nextRevisionDeveloperName = trim((string) ($nextDeveloperRow['full_name'] ?? ''));
+                    }
+                    projectWorkflowNotifyDepartmentSuls(
+                        $conn,
+                        $nextDepartment,
+                        'QA Revision Now Assigned: ' . $reviewTask['title'],
+                        ($nextRevisionDeveloperName !== '' ? $nextRevisionDeveloperName : 'The original responsible developer')
+                            . ' is responsible for this revision. QA notes: ' . $nextRevisionNotes,
+                        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectForRouting . '&task_id=' . $taskId,
+                        $projectForRouting
+                    );
+                    workflowNotifyUser(
+                        $nextRevisionDeveloperId,
+                        'QA Revision Assigned: ' . $reviewTask['title'],
+                        "Your {$nextDepartment} work is the next revision step. Correct the QA findings and resubmit to your SUL. Notes: {$nextRevisionNotes}",
+                        BASE_URL . 'modules/developer/task.php?id=' . $taskId,
+                        $taskId
+                    );
+                    $_SESSION['success'] = "Work approved. QA revision moved chronologically to {$nextDepartment} and its original developer.";
                 } elseif ($allDepartmentsComplete && $nextDepartment !== '') {
                     projectWorkflowNotifyDepartmentSuls(
                         $conn,
@@ -2117,8 +2627,20 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $stmt = $conn->prepare("UPDATE tasks SET status = 'sul_revision', completed_at = NULL, sul_reviewed_by = ?, sul_reviewed_at = NOW() WHERE id = ?");
             $stmt->bind_param("ii", $user['id'], $taskId);
             if ($stmt->execute()) {
-                workflowAddTaskComment($conn, $taskId, (int) $user['id'], 'SUL requested revision: ' . $reviewComment);
-                workflowLogStatusChange((int) $user['id'], $taskId, 'for_review', 'sul_revision', 'sul_request_pull_request_revision', $reviewComment);
+                workflowAddTaskComment(
+                    $conn,
+                    $taskId,
+                    (int) $user['id'],
+                    ($isQaDepartmentSul ? 'QA SUL requested retest: ' : 'SUL requested revision: ') . $reviewComment
+                );
+                workflowLogStatusChange(
+                    (int) $user['id'],
+                    $taskId,
+                    'for_review',
+                    'sul_revision',
+                    $isQaDepartmentSul ? 'qa_sul_request_retest' : 'sul_request_pull_request_revision',
+                    $reviewComment
+                );
                 projectWorkflowSyncRoadmap($conn, (int) ($reviewTask['project_id'] ?? 0));
                 workflowNotifyUser(
                     (int) $reviewTask['assigned_to'],
@@ -3320,6 +3842,52 @@ include '../../includes/navbar.php';
     display: flex;
     flex-wrap: wrap;
     gap: .45rem;
+}
+
+.qa-primary-decision-actions[hidden],
+.qa-fail-routing-panel[hidden] {
+    display: none !important;
+}
+
+.qa-fail-dialog-open {
+    overflow: hidden;
+}
+
+.qa-fail-routing-panel {
+    align-items: center;
+    background: rgba(15, 36, 56, .58);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: 1rem;
+    position: fixed;
+    z-index: 2100;
+}
+
+.qa-fail-routing-dialog {
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    border-radius: 1rem;
+    box-shadow: 0 24px 70px rgba(15, 36, 56, .3);
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    padding: 1rem;
+    width: min(560px, calc(100vw - 2rem));
+}
+
+.qa-fail-routing-header {
+    align-items: center;
+    display: flex;
+    gap: .75rem;
+    justify-content: space-between;
+    margin-bottom: .75rem;
+}
+
+.qa-fail-routing-title {
+    color: var(--gray-900);
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0;
 }
 
 .allocation-scope-single {
@@ -6581,7 +7149,7 @@ include '../../includes/navbar.php';
                 </li>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" id="developer-progress-tab" data-bs-toggle="tab" data-bs-target="#developer-progress-panel" type="button" role="tab" aria-controls="developer-progress-panel" aria-selected="false">
-                        <i class="fas fa-spinner"></i> In Progress <span class="badge-count"><?php echo $inProgressTasks->num_rows; ?></span>
+                        <i class="fas fa-spinner"></i> In Progress <span class="badge-count"><?php echo $inProgressTasks->num_rows + $queuedQaRevisionCount; ?></span>
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
@@ -6683,12 +7251,8 @@ include '../../includes/navbar.php';
                                         $groupRoadmapEnd
                                     );
                                     $distributionMemberCount = max(1, min($developerPlannedHeadcount, $availableDeveloperCount, $featureCount));
-                                    $tasksPerMember = intdiv($featureCount, $distributionMemberCount);
-                                    $distributionRemainder = $featureCount % $distributionMemberCount;
                                     $distributionCopy = $distributionMemberCount > 1
-                                        ? ($distributionRemainder === 0
-                                            ? "{$tasksPerMember} tasks each across {$distributionMemberCount} {$deliveryAssigneePluralLower}"
-                                            : "Balanced across {$distributionMemberCount} {$deliveryAssigneePluralLower} ({$tasksPerMember}–" . ($tasksPerMember + 1) . ' tasks each)')
+                                        ? "Choose up to {$distributionMemberCount} {$deliveryAssigneePluralLower}; tasks are divided evenly among those selected"
                                         : 'Ready for ' . $deliveryAssigneeLower . ' allocation';
                                     $assignmentTitle = $isBulkAssignment
                                         ? 'Bulk assignment: ' . implode(', ', $featureTitles)
@@ -6803,7 +7367,7 @@ include '../../includes/navbar.php';
                     <h5>
                         <i class="fas fa-spinner fa-pulse"></i>
                         In Progress
-                        <span class="badge-count"><?php echo $inProgressTasks->num_rows; ?> tasks</span>
+                        <span class="badge-count"><?php echo $inProgressTasks->num_rows + $queuedQaRevisionCount; ?> tasks</span>
                     </h5>
                 </div>
                 <div class="p-3 allocation-column-body">
@@ -6812,7 +7376,7 @@ include '../../includes/navbar.php';
                             <i class="fas fa-folder-open"></i>
                             <p>Select a project for active work</p>
                         </div>
-                    <?php elseif($inProgressTasks->num_rows > 0): ?>
+                    <?php elseif(($inProgressTasks->num_rows + $queuedQaRevisionCount) > 0): ?>
                         <div class="task-allocation-table-wrap">
                             <table class="task-allocation-table developer-workflow-table" aria-label="Tasks currently in progress">
                                 <thead>
@@ -6839,6 +7403,15 @@ include '../../includes/navbar.php';
                                                 <i class="fas fa-folder" aria-hidden="true"></i>
                                                 <?php echo htmlspecialchars((string) $task['project_name']); ?>
                                             </span>
+                                            <?php if (!empty($task['department_revision_notes'])): ?>
+                                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle mt-2">
+                                                    <i class="fas fa-user-check me-1"></i>
+                                                    Your department owns this QA revision
+                                                </span>
+                                                <span class="allocation-task-secondary">
+                                                    <?php echo htmlspecialchars(sulTaskAllocationExcerpt((string) $task['department_revision_notes'], 150)); ?>
+                                                </span>
+                                            <?php endif; ?>
                                             <?php echo sulTaskAllocationBulkEntityBadge($task); ?>
                                         </td>
                                         <td>
@@ -6860,6 +7433,47 @@ include '../../includes/navbar.php';
                                             <div class="allocation-table-actions" onclick="event.stopPropagation();">
                                                 <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
                                                     <i class="fas fa-eye"></i> View
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                                <?php while($queuedQaRevisionTasks && ($task = $queuedQaRevisionTasks->fetch_assoc())):
+                                    $daysLeft = sulTaskAllocationDaysLeft($task['deadline'] ?? null);
+                                    $priority = (string) ($task['priority'] ?? 'medium');
+                                ?>
+                                    <tr class="is-static-row">
+                                        <td>
+                                            <span class="task-priority priority-<?php echo htmlspecialchars($priority); ?>"><?php echo htmlspecialchars(ucfirst($priority)); ?></span>
+                                        </td>
+                                        <td>
+                                            <span class="allocation-task-name"><?php echo htmlspecialchars((string) $task['title']); ?></span>
+                                            <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle mt-2">
+                                                <i class="fas fa-hourglass-half me-1"></i>
+                                                Queued QA revision — your department is responsible
+                                            </span>
+                                            <span class="allocation-task-secondary">
+                                                Waiting for the earlier revision department to receive SUL approval.
+                                            </span>
+                                            <span class="allocation-task-secondary">
+                                                <?php echo htmlspecialchars(sulTaskAllocationExcerpt((string) $task['revision_notes'], 150)); ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="allocation-deadline"><?php echo htmlspecialchars((string) ($task['developer_name'] ?? 'Original developer')); ?></span>
+                                            <span class="allocation-deadline-note">Reserved revision owner</span>
+                                        </td>
+                                        <td>
+                                            <?php if ($daysLeft !== null): ?>
+                                                <span class="allocation-deadline"><?php echo htmlspecialchars(sulTaskAllocationFormatDeadline($task['deadline'] ?? null)); ?></span>
+                                            <?php else: ?>
+                                                <span class="allocation-deadline">No deadline</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <div class="allocation-table-actions">
+                                                <button class="btn-outline-modern" type="button" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
+                                                    <i class="fas fa-eye"></i> View QA Notes
                                                 </button>
                                             </div>
                                         </td>
@@ -6893,7 +7507,7 @@ include '../../includes/navbar.php';
                 <?php if(!$projectId || !$project): ?>
                     <div class="empty-state">
                         <i class="fas fa-folder-open"></i>
-                        <p>Select a project for code review</p>
+                        <p>Select a project for <?php echo $isQaDepartmentSul ? 'QA results review' : 'code review'; ?></p>
                     </div>
                 <?php elseif($codeReviewTasks->num_rows > 0): ?>
                     <div class="task-allocation-table-wrap">
@@ -6910,6 +7524,17 @@ include '../../includes/navbar.php';
                             <tbody>
                             <?php while($task = $codeReviewTasks->fetch_assoc()):
                                 $priority = (string) ($task['priority'] ?? 'medium');
+                                $qaRevisionTargets = $isQaDepartmentSul
+                                    ? sulTaskAllocationQaRevisionTargets(
+                                        $conn,
+                                        (int) ($task['project_id'] ?? 0),
+                                        (int) ($task['id'] ?? 0)
+                                    )
+                                    : [];
+                                $qaAvailableRevisionTargetCount = count(array_filter(
+                                    $qaRevisionTargets,
+                                    static fn(array $target): bool => !empty($target['is_available'])
+                                ));
                             ?>
                                 <tr class="is-static-row">
                                     <td>
@@ -7448,7 +8073,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="expert-assignment-note">
                             <i class="fas fa-circle-info" aria-hidden="true"></i>
-                            For bulk groups, select the required department members here. Tasks are divided evenly only among the people you select.
+                            For bulk groups, select one or more department members up to the displayed limit. Tasks are divided evenly only among the people you select.
                         </div>
                     <?php else: ?>
                         <div class="empty-state">
@@ -7960,22 +8585,25 @@ function updateDeveloperSelectionState() {
         row.setAttribute('aria-checked', checked ? 'true' : 'false');
     });
 
-    const selectionComplete = selectedRows.length === developerSelectionLimit;
+    const selectionComplete = selectedRows.length > 0 && selectedRows.length <= developerSelectionLimit;
     if (confirmDeveloperAssignment) confirmDeveloperAssignment.disabled = !selectionComplete;
     if (developerSelectionSummary) {
         if (!selectedRows.length) {
             developerSelectionSummary.textContent = developerSelectionLimit > 1
-                ? `Select ${developerSelectionLimit} developers`
+                ? `Select 1 to ${developerSelectionLimit} developers`
                 : deliveryNoSelectionText;
             return;
         }
         const names = selectedRows.map(row => row.dataset.developerName || deliveryAssigneeFallback);
-        const tasksPerDeveloper = developerSelectionLimit > 0
-            ? Math.floor(developerBulkFeatureCount / developerSelectionLimit)
+        const selectedCount = selectedRows.length;
+        const tasksPerDeveloper = selectedCount > 0
+            ? Math.floor(developerBulkFeatureCount / selectedCount)
             : developerBulkFeatureCount;
-        developerSelectionSummary.textContent = selectionComplete
-            ? `Selected: ${names.join(', ')} · ${tasksPerDeveloper} task${tasksPerDeveloper === 1 ? '' : 's'} each`
-            : `Select ${developerSelectionLimit - selectedRows.length} more developer${developerSelectionLimit - selectedRows.length === 1 ? '' : 's'}`;
+        const remainder = selectedCount > 0 ? developerBulkFeatureCount % selectedCount : 0;
+        const distributionLabel = remainder === 0
+            ? `${tasksPerDeveloper} task${tasksPerDeveloper === 1 ? '' : 's'} each`
+            : `${tasksPerDeveloper}–${tasksPerDeveloper + 1} tasks each`;
+        developerSelectionSummary.textContent = `Selected: ${names.join(', ')} · ${distributionLabel}`;
     }
 }
 
@@ -8011,7 +8639,7 @@ function selectDeveloperChoice(row) {
     } else {
         const selectedCount = developerChoiceRows.filter(choice => choice.querySelector('.developer-choice-input')?.checked).length;
         if (selectedCount >= developerSelectionLimit) {
-            window.appToast?.('Selection limit', `Select exactly ${developerSelectionLimit} developers for this assignment.`, 'warning');
+            window.appToast?.('Selection limit', `Select up to ${developerSelectionLimit} developers for this assignment.`, 'warning');
             return;
         }
         input.checked = true;
@@ -8216,6 +8844,62 @@ function renderSulDeveloperWork(task) {
             : `<div class="task-detail-work-empty">${emptyCopy}</div>`}
     </section>`;
 }
+
+function toggleQaFailPanel(taskId, show, trigger = null) {
+    const panel = document.getElementById(`qaFailPanel${Number(taskId)}`);
+    if (!panel) return;
+
+    const form = panel.closest('form');
+    const failTrigger = trigger || form?.querySelector(`[aria-controls="qaFailPanel${Number(taskId)}"]`);
+    const notes = panel.querySelector('[data-qa-fail-notes]');
+
+    panel.hidden = !show;
+    document.body.classList.toggle('qa-fail-dialog-open', show);
+    failTrigger?.setAttribute('aria-expanded', show ? 'true' : 'false');
+    if (notes) {
+        notes.required = show;
+        notes.setCustomValidity('');
+    }
+
+    if (show) {
+        window.setTimeout(() => notes?.focus(), 0);
+    } else {
+        failTrigger?.focus();
+    }
+}
+
+function validateQaFailRouting(taskId) {
+    const panel = document.getElementById(`qaFailPanel${Number(taskId)}`);
+    if (!panel || panel.hidden) return false;
+
+    const selectedDepartments = panel.querySelectorAll('input[name="revision_departments[]"]:checked');
+    const notes = panel.querySelector('[data-qa-fail-notes]');
+    if (selectedDepartments.length === 0) {
+        if (typeof window.appToast === 'function') {
+            window.appToast('QA Fail Routing', 'Select at least one responsible department.', 'error');
+        }
+        panel.querySelector('input[name="revision_departments[]"]:not(:disabled)')?.focus();
+        return false;
+    }
+
+    if (!String(notes?.value || '').trim()) {
+        notes?.setCustomValidity('Enter the failed test, actual result, expected result, and required correction.');
+        notes?.reportValidity();
+        return false;
+    }
+
+    notes?.setCustomValidity('');
+    return true;
+}
+
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+
+    const openPanel = document.querySelector('.qa-fail-routing-panel:not([hidden])');
+    if (openPanel) {
+        toggleQaFailPanel(Number(String(openPanel.id).replace('qaFailPanel', '')), false);
+    }
+});
 
 function viewTaskDetails(taskId) {
     $.ajax({

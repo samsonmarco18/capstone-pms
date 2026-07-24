@@ -2306,7 +2306,7 @@ include '../../includes/navbar.php';
 .feature-bulk-table {
     border-collapse: separate;
     border-spacing: 0;
-    min-width: 1040px;
+    min-width: 900px;
     table-layout: fixed;
     width: 100%;
 }
@@ -2330,13 +2330,13 @@ include '../../includes/navbar.php';
     z-index: 1;
 }
 
-.feature-bulk-table th:nth-child(1) { width: 18%; }
-.feature-bulk-table th:nth-child(2) { width: 28%; }
+.feature-bulk-table th:nth-child(1) { width: 19%; }
+.feature-bulk-table th:nth-child(2) { width: 26%; }
 .feature-bulk-table th:nth-child(3),
 .feature-bulk-table th:nth-child(4),
-.feature-bulk-table th:nth-child(5) { width: 9%; }
-.feature-bulk-table th:nth-child(6) { width: 17%; }
-.feature-bulk-table th:nth-child(7) { width: 10%; }
+.feature-bulk-table th:nth-child(5) { width: 7%; }
+.feature-bulk-table th:nth-child(6) { width: 22%; }
+.feature-bulk-table th:nth-child(7) { width: 12%; }
 
 .feature-bulk-table tbody tr:last-child td {
     border-bottom: 0;
@@ -2391,6 +2391,16 @@ include '../../includes/navbar.php';
     white-space: nowrap;
 }
 
+.feature-bulk-apply-all {
+    align-items: center;
+    border-radius: 8px;
+    display: inline-flex;
+    font-size: 0.68rem;
+    font-weight: 700;
+    gap: 0.35rem;
+    justify-content: center;
+}
+
 .feature-bulk-table th:nth-child(6),
 .feature-bulk-table th:nth-child(7),
 .feature-bulk-table td:nth-child(6),
@@ -2435,12 +2445,32 @@ include '../../includes/navbar.php';
 }
 
 .feature-bulk-actions {
+    align-items: center;
     bottom: 0.75rem;
     display: flex;
+    gap: 0.65rem;
     justify-content: flex-end;
     padding: 0.25rem 0;
     position: sticky;
     z-index: 8;
+}
+
+.feature-bulk-apply-all {
+    background: #f1f8fc;
+    border: 1px solid rgba(31, 99, 146, 0.3);
+    color: var(--theme-primary);
+    min-height: 40px;
+    padding: 0.6rem 0.9rem;
+}
+
+.feature-bulk-apply-all:hover {
+    background: #e5f3fa;
+}
+
+.feature-bulk-apply-all.is-applied {
+    background: #ecfdf3;
+    border-color: #86efac;
+    color: #15803d;
 }
 
 .feature-bulk-save-button {
@@ -3103,6 +3133,11 @@ textarea.form-control-custom {
     color: #d7e4f2;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-apply-all {
+    background: #102a3f;
+    border-color: #315872;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-header h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .phase-header h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .setup-section-header h6,
@@ -3278,7 +3313,13 @@ textarea.form-control-custom {
         text-align: left;
     }
 
-    .feature-bulk-save-button {
+    .feature-bulk-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .feature-bulk-save-button,
+    .feature-bulk-apply-all {
         width: 100%;
     }
 
@@ -3402,6 +3443,7 @@ textarea.form-control-custom {
                 $evortixLikelyDays = max(1, (int) ceil($evortixMaxDays * 0.85));
                 $evortixMinDays = max(1, (int) ceil($evortixMaxDays * 0.70));
                 $evortixEstimateSource = 'Architect roadmap duration';
+                $evortixMatchedPayload = [];
                 foreach ($taskRecommendations as $taskRecommendation) {
                     $historyPayload = is_array($taskRecommendation['payload'] ?? null) ? $taskRecommendation['payload'] : [];
                     $historyMin = max(0, (int) ($historyPayload['min_days'] ?? 0));
@@ -3415,15 +3457,39 @@ textarea.form-control-custom {
                     $evortixLikelyDays = min($evortixMaxDays, max(1, $historyLikely));
                     $evortixMinDays = min($evortixLikelyDays, max(1, $historyMin));
                     $evortixEstimateSource = 'Similar completed feature: ' . (string) ($taskRecommendation['label'] ?? 'past estimate');
+                    $evortixMatchedPayload = $historyPayload;
                     break;
                 }
+                $evortixExpectation = trim((string) ($evortixMatchedPayload['expectation'] ?? ''));
+                if ($evortixExpectation === '') {
+                    $evortixExpectation = trim((string) ($task['description'] ?? ''));
+                }
+                if ($evortixExpectation === '') {
+                    $evortixExpectation = 'Deliver ' . trim((string) ($task['title'] ?? 'this feature'))
+                        . ' according to the approved requirements, acceptance criteria, and roadmap scope.';
+                }
+                $evortixInvolvementPlan = !empty($architectPlan['involvement_plan'])
+                    ? (array) $architectPlan['involvement_plan']
+                    : (array) ($evortixMatchedPayload['involvement_plan'] ?? []);
+                $evortixComponentPlan = !empty($architectPlan['component_plan'])
+                    ? (array) $architectPlan['component_plan']
+                    : (array) ($evortixMatchedPayload['component_plan'] ?? []);
+                $evortixPlannedStart = trim((string) ($architectPlan['planned_start'] ?? '')) ?: $featureWindowStart;
+                $evortixPlannedEnd = trim((string) ($architectPlan['planned_end'] ?? '')) ?: $featureWindowEnd;
                 $evortixEstimatePayload = [
+                    'expectation' => $evortixExpectation,
                     'min_days' => $evortixMinDays,
                     'likely_days' => $evortixLikelyDays,
                     'max_days' => $evortixMaxDays,
+                    'pert_days' => round(($evortixMinDays + (4 * $evortixLikelyDays) + $evortixMaxDays) / 6, 1),
                     'basis' => $featureEstimateBasisLabel,
                     'source' => $evortixEstimateSource,
                     'phase_name' => $featurePhaseName,
+                    'planned_start' => $evortixPlannedStart,
+                    'planned_end' => $evortixPlannedEnd,
+                    'involvement_plan' => $evortixInvolvementPlan,
+                    'component_plan' => $evortixComponentPlan,
+                    'confidence' => $evortixMatchedPayload !== [] ? 'Historical match' : 'Roadmap-based',
                 ];
                 $architectPlanStartValue = trim((string) ($architectPlan['planned_start'] ?? ''));
                 $architectPlanEndValue = trim((string) ($architectPlan['planned_end'] ?? ''));
@@ -3645,7 +3711,7 @@ const expertWorkspaceStorageKey = 'expert-estimation-active-workspace';
 const selectedFeatureProjectId = <?php echo json_encode((string) max(0, (int) ($_GET['project_estimation_id'] ?? 0))); ?>;
 const featureSubmittedMessage = <?php echo json_encode((string) ($_SESSION['feature_estimation_submitted'] ?? '')); unset($_SESSION['feature_estimation_submitted']); ?>;
 const evortixFeatureEstimateReplay = document.getElementById('evortixFeatureEstimateReplay');
-let evortixFeatureReview = { projectId: '', items: [], index: 0, accepted: 0, skipped: 0, state: {} };
+let evortixFeatureReview = { projectId: '', items: [], accepted: 0, skipped: 0, state: {} };
 let evortixFeatureReviewTimer = null;
 
 function updateFeatureProjectView(hasProject) {
@@ -3666,7 +3732,9 @@ function mountFeatureEstimationEditors() {
         ? selectedFeatureProjectId
         : String(currentProjectId || '');
     const matchingRows = Array.from(source.querySelectorAll('.estimation-card')).filter((row) => {
-        return projectId !== '' && row.getAttribute('data-project-id') === projectId;
+        return projectId !== ''
+            && row.getAttribute('data-project-id') === projectId
+            && row.getAttribute('data-readonly') !== '1';
     });
 
     if (!matchingRows.length) {
@@ -3698,12 +3766,17 @@ function mountFeatureEstimationEditors() {
         const maxDays = inputValue(row, 'input[name="max_days"]');
         const plannedStart = inputValue(row, 'input[name="planned_start"]');
         const plannedEnd = inputValue(row, 'input[name="planned_end"]');
+        const evortixSuggestion = safeJsonParse(row.getAttribute('data-evortix-estimate') || '{}', {});
         const initialPert = minDays && likelyDays && maxDays
             ? ((Number(minDays) + (4 * Number(likelyDays)) + Number(maxDays)) / 6).toFixed(1)
             : '—';
 
         return `
-            <tr data-feature-bulk-row>
+            <tr
+                data-feature-bulk-row
+                data-task-id="${escapeAttribute(taskId)}"
+                data-evortix-suggestion="${escapeAttribute(JSON.stringify(evortixSuggestion))}"
+            >
                 <td>
                     <span class="feature-bulk-name">${escapeHtml(title)}</span>
                     <span class="feature-bulk-phase">${escapeHtml(phase)}</span>
@@ -3794,6 +3867,10 @@ function mountFeatureEstimationEditors() {
             </table>
         </div>
         <div class="feature-bulk-actions">
+            <button type="button" class="feature-bulk-apply-all" data-evortix-open-review>
+                <i class="fas fa-robot" aria-hidden="true"></i>
+                <span>Ask Evortix for suggestions</span>
+            </button>
             <button type="submit" class="feature-bulk-save-button">
                 <i class="fas fa-floppy-disk" aria-hidden="true"></i>
                 <span>Save feature estimates</span>
@@ -3849,6 +3926,13 @@ function mountFeatureEstimationEditors() {
             saveButton.dataset.totalPert = totalPert.toFixed(1);
         }
     };
+
+    bulkForm.addEventListener('click', (event) => {
+        const askEvortixButton = event.target.closest('[data-evortix-open-review]');
+        if (!askEvortixButton) return;
+        event.preventDefault();
+        startEvortixFeatureReview(projectId, true);
+    });
 
     bulkForm.addEventListener('input', updateBulkSummary);
     bulkForm.addEventListener('change', updateBulkSummary);
@@ -3941,6 +4025,7 @@ function mountFeatureEstimationEditors() {
         bulkForm.requestSubmit(saveButton || undefined);
     });
     updateBulkSummary();
+    scheduleEvortixFeatureReview(projectId);
 }
 
 function setExpertWorkspace(workspace, persist = true) {
@@ -4027,7 +4112,7 @@ function loadProjectSetup() {
 
     updateFeatureProjectView(true);
     filterFeatureList();
-    if (!document.getElementById('featureEstimationWorkspace')?.hidden) {
+    if (document.querySelector('#featureEstimationEditorSlot [data-feature-bulk-row]')) {
         scheduleEvortixFeatureReview(projectId);
     }
 }
@@ -4380,6 +4465,27 @@ function highlightManualRecommendationPanel(card, sourceLabel = '') {
         : 'You can save this manual version as a reusable recommendation for later.';
 }
 
+function applyEvortixPayloadToBulkRow(taskId, payload) {
+    const normalizedTaskId = String(taskId || '').replace(/\D+/g, '');
+    if (!normalizedTaskId) return;
+    const row = document.querySelector(
+        `#bulkFeatureEstimationForm [data-feature-bulk-row][data-task-id="${normalizedTaskId}"]`
+    );
+    if (!row || !payload) return;
+
+    const expectationInput = row.querySelector('textarea');
+    const numberInputs = Array.from(row.querySelectorAll('input[type="number"]'));
+    if (expectationInput && String(payload.expectation || '').trim() !== '') {
+        expectationInput.value = String(payload.expectation);
+    }
+    if (numberInputs[0]) numberInputs[0].value = String(payload.min_days || '');
+    if (numberInputs[1]) numberInputs[1].value = String(payload.likely_days || '');
+    if (numberInputs[2]) numberInputs[2].value = String(payload.max_days || '');
+
+    row.classList.add('is-evortix-applied');
+    (expectationInput || numberInputs[0])?.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function applyRecommendationToCard(card, payload, sourceType, sourceId) {
     if (!card || !payload) return;
     const taskId = card.getAttribute('data-task-id');
@@ -4413,6 +4519,16 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
     if (acceptedTypeInput) acceptedTypeInput.value = sourceType || '';
     if (acceptedIdInput) acceptedIdInput.value = String(sourceId || '');
     card.setAttribute('data-evortix-estimate-accepted', sourceType === 'evortix' ? '1' : '0');
+    if (sourceType === 'evortix') {
+        applyEvortixPayloadToBulkRow(taskId, payload);
+    }
+
+    if (Array.isArray(payload.involvement_plan) && payload.involvement_plan.length > 0) {
+        setFeatureInvolvementPlan(taskId, payload.involvement_plan);
+    }
+    if (Array.isArray(payload.component_plan) && payload.component_plan.length > 0) {
+        setFeatureComponentPlan(taskId, payload.component_plan);
+    }
 
     const rejectedEntries = getRejectedRecommendations(taskId).filter(entry => {
         return !(entry?.source_type === sourceType && String(entry?.source_id) === String(sourceId));
@@ -4437,7 +4553,7 @@ function applyRecommendationToCard(card, payload, sourceType, sourceId) {
 }
 
 function evortixFeatureStateKey(projectId) {
-    return `evortix.dss.expert.${currentExpertId}.feature-estimation.project.${projectId}`;
+    return `evortix.dss.expert.${currentExpertId}.feature-estimation.bulk-v2.project.${projectId}`;
 }
 
 function evortixFeaturePayload(card) {
@@ -4478,13 +4594,20 @@ function closeEvortixFeatureSpeech() {
 }
 
 function showEvortixFeatureDecision() {
-    const item = evortixFeatureReview.items[evortixFeatureReview.index] || null;
-    if (!item) {
+    const pendingItems = evortixFeatureReview.items
+        .map((item, itemIndex) => ({ ...item, itemIndex }))
+        .filter((item) => {
+            const decision = evortixFeatureReview.state[item.taskId] || null;
+            return !decision || decision.signature !== item.signature;
+        });
+
+    if (pendingItems.length === 0) {
         const total = evortixFeatureReview.accepted + evortixFeatureReview.skipped;
+        closeEvortixFeatureSpeech();
         if (total > 0) {
             window.evortixAnnounceNotification?.(
-                'Feature estimates reviewed',
-                `I reviewed ${total} feature${total === 1 ? '' : 's'} with you: ${evortixFeatureReview.accepted} accepted and ${evortixFeatureReview.skipped} skipped.`,
+                'Bulk feature estimates reviewed',
+                `${evortixFeatureReview.accepted} estimate${evortixFeatureReview.accepted === 1 ? '' : 's'} applied and ${evortixFeatureReview.skipped} left for later.`,
                 ''
             );
         }
@@ -4498,26 +4621,65 @@ function showEvortixFeatureDecision() {
         return;
     }
 
-    const payload = item.payload;
-    const phasePoint = String(payload.phase_name || '').trim() !== ''
-        ? `<li>Phase: ${escapeHtml(payload.phase_name)}</li>`
-        : '';
+    const featureMessages = pendingItems.map((item) => {
+        const payload = item.payload;
+        const staffingText = Array.isArray(payload.involvement_plan) && payload.involvement_plan.length > 0
+            ? payload.involvement_plan.map((entry) => {
+                const role = String(entry?.role || '').trim();
+                const count = Math.max(0, Number(entry?.required_count || 0));
+                return role ? `${role}${count > 0 ? ` ×${count}` : ''}` : '';
+            }).filter(Boolean).join(', ')
+            : '';
+        const componentText = Array.isArray(payload.component_plan) && payload.component_plan.length > 0
+            ? payload.component_plan.map((entry) => String(entry?.name || '').trim()).filter(Boolean).join(', ')
+            : '';
+        const planningFacts = [
+            ['Phase', String(payload.phase_name || '').trim()],
+            ['Schedule', payload.planned_start && payload.planned_end ? `${payload.planned_start} to ${payload.planned_end}` : ''],
+            ['Staffing', staffingText],
+            ['Components', componentText],
+            ['Basis', String(payload.basis || 'Architect roadmap')],
+            ['Source', String(payload.source || 'Project planning data')]
+        ].filter(([, value]) => String(value || '').trim() !== '');
+
+        return `
+            <article class="evortix-feature-message-card">
+                <span class="evortix-feature-message-title">${escapeHtml(item.title)}</span>
+                <span class="evortix-feature-message-copy">${escapeHtml(payload.expectation || 'Deliver the approved feature scope and acceptance criteria.')}</span>
+                <div class="evortix-feature-estimate-chips" aria-label="Suggested estimate for ${escapeHtml(item.title)}">
+                    <span>Min<strong>${payload.min_days}d</strong></span>
+                    <span>Likely<strong>${payload.likely_days}d</strong></span>
+                    <span>Max<strong>${payload.max_days}d</strong></span>
+                    <span>PERT<strong>${Number(payload.pert_days || 0).toFixed(1)}d</strong></span>
+                </div>
+                <details class="evortix-feature-message-details">
+                    <summary>Roadmap details</summary>
+                    <div class="evortix-feature-message-facts">
+                        ${planningFacts.map(([label, value]) => `
+                            <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
+                        `).join('')}
+                    </div>
+                </details>
+                <div class="evortix-feature-message-actions">
+                    <button type="button" data-evortix-feature-choice="skip" data-evortix-feature-index="${item.itemIndex}">Not now</button>
+                    <button type="button" data-evortix-feature-choice="accept" data-evortix-feature-index="${item.itemIndex}">Apply</button>
+                </div>
+            </article>`;
+    }).join('');
+
     speech.className = 'chat-bot-speech evortix-project-notification evortix-architect-dss';
     speech.hidden = false;
     speech.setAttribute('aria-hidden', 'false');
     speech.style.pointerEvents = 'auto';
     speech.innerHTML = `
-        <strong class="evortix-dss-heading"><i class="fas fa-robot me-1"></i>Feature ${evortixFeatureReview.index + 1} of ${evortixFeatureReview.items.length}: ${escapeHtml(item.title)}</strong>
-        <span class="evortix-dss-copy">I recommend <strong>${payload.min_days} minimum</strong>, <strong>${payload.likely_days} likely</strong>, and <strong>${payload.max_days} maximum</strong> working days for this feature.</span>
-        <ul class="evortix-dss-points">
-            <li>Basis: ${escapeHtml(payload.basis || 'Architect roadmap')}</li>
-            <li>Source: ${escapeHtml(payload.source || 'Project planning data')}</li>
-            ${phasePoint}
-        </ul>
+        <strong class="evortix-dss-heading"><i class="fas fa-robot me-1"></i>${pendingItems.length} feature suggestion${pendingItems.length === 1 ? '' : 's'} ready</strong>
+        <span class="evortix-feature-message-intro">Here are all estimates for this bulk selection. Review them together or apply them all now.</span>
+        <div class="evortix-feature-message-list">${featureMessages}</div>
         <div class="evortix-dss-actions">
-            <button type="button" class="btn btn-light btn-sm" data-evortix-feature-choice="skip">Skip this</button>
-            <button type="button" class="btn btn-primary btn-sm" data-evortix-feature-choice="accept">Accept estimate</button>
+            <button type="button" class="btn btn-light btn-sm" data-evortix-feature-choice="close">Review later</button>
+            <button type="button" class="btn btn-primary btn-sm" data-evortix-feature-choice="accept-all">Apply all ${pendingItems.length}</button>
         </div>`;
+
     bot.hidden = false;
     bot.setAttribute('aria-hidden', 'false');
     bot.classList.remove('is-returning-bed', 'is-preparing-speech');
@@ -4554,7 +4716,8 @@ function startEvortixFeatureReview(projectId, replay = false) {
             payload,
             signature: evortixFeatureSignature(card, payload)
         };
-    }).filter((item) => {
+    });
+    const hasPendingSuggestions = items.some((item) => {
         const decision = state[item.taskId] || null;
         return !decision || decision.signature !== item.signature;
     });
@@ -4562,13 +4725,12 @@ function startEvortixFeatureReview(projectId, replay = false) {
     evortixFeatureReview = {
         projectId: normalizedProjectId,
         items,
-        index: 0,
         accepted: 0,
         skipped: 0,
         state
     };
     if (evortixFeatureEstimateReplay) evortixFeatureEstimateReplay.hidden = cards.length === 0;
-    if (items.length === 0) {
+    if (items.length === 0 || !hasPendingSuggestions) {
         closeEvortixFeatureSpeech();
         return;
     }
@@ -4595,23 +4757,38 @@ document.addEventListener('click', (event) => {
     if (!choice) return;
     event.preventDefault();
     event.stopPropagation();
-    const item = evortixFeatureReview.items[evortixFeatureReview.index] || null;
-    if (!item) return;
-
-    const accepted = choice.getAttribute('data-evortix-feature-choice') === 'accept';
-    if (accepted) {
-        applyRecommendationToCard(item.card, item.payload, 'evortix', item.taskId);
-        evortixFeatureReview.accepted++;
-    } else {
-        evortixFeatureReview.skipped++;
+    const action = choice.getAttribute('data-evortix-feature-choice') || '';
+    if (action === 'close') {
+        closeEvortixFeatureSpeech();
+        return;
     }
-    evortixFeatureReview.state[item.taskId] = {
-        status: accepted ? 'accepted' : 'skipped',
-        signature: item.signature,
-        payload: item.payload
-    };
+
+    const pendingItems = evortixFeatureReview.items.filter((item) => {
+        const decision = evortixFeatureReview.state[item.taskId] || null;
+        return !decision || decision.signature !== item.signature;
+    });
+    const selectedIndex = Number(choice.getAttribute('data-evortix-feature-index') || -1);
+    const selectedItem = selectedIndex >= 0 ? evortixFeatureReview.items[selectedIndex] : null;
+    const targets = action === 'accept-all'
+        ? pendingItems
+        : (selectedItem && pendingItems.includes(selectedItem) ? [selectedItem] : []);
+    if (targets.length === 0) return;
+
+    const accepted = action === 'accept' || action === 'accept-all';
+    targets.forEach((item) => {
+        if (accepted) {
+            applyRecommendationToCard(item.card, item.payload, 'evortix', item.taskId);
+            evortixFeatureReview.accepted++;
+        } else {
+            evortixFeatureReview.skipped++;
+        }
+        evortixFeatureReview.state[item.taskId] = {
+            status: accepted ? 'accepted' : 'skipped',
+            signature: item.signature,
+            payload: item.payload
+        };
+    });
     saveEvortixFeatureState();
-    evortixFeatureReview.index++;
     window.chatBotFloatRobot?.setEmotion?.(accepted ? 'happy' : 'thinking', 650);
     window.setTimeout(showEvortixFeatureDecision, 260);
 }, true);
@@ -5289,5 +5466,198 @@ if (featureSubmittedMessage) {
 $architectDssAssistantConfig = ['items' => []];
 include '../../includes/architect-dss-assistant.php';
 ?>
+
+<style>
+body.expert-feature-estimation-page .chat-bot-speech.evortix-architect-dss {
+    top: auto;
+    right: calc(100% + 6px);
+    bottom: 22px;
+    width: min(340px, calc(100vw - 175px));
+    min-width: 280px;
+    max-height: min(420px, calc(100vh - 110px));
+    transform: none;
+}
+
+body.expert-feature-estimation-page .chat-bot-float.is-speaking .chat-bot-speech.evortix-architect-dss {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    visibility: visible;
+}
+
+body.expert-feature-estimation-page .chat-bot-speech.evortix-architect-dss::after {
+    top: auto;
+    bottom: 48px;
+    transform: rotate(45deg);
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-title {
+    margin-top: 0.5rem;
+    color: #083a5d;
+    font-size: 0.9rem;
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-intro {
+    margin-top: 0.35rem;
+    color: #175f8f;
+    font-size: 0.72rem;
+    line-height: 1.35;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-list {
+    display: grid;
+    gap: 0.55rem;
+    max-height: 270px;
+    margin-top: 0.55rem;
+    padding-right: 0.2rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-card {
+    padding: 0.6rem;
+    border: 1px solid rgba(77, 190, 238, 0.24);
+    border-radius: 14px 14px 14px 5px;
+    background: rgba(255, 255, 255, 0.48);
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-card .evortix-feature-message-title {
+    margin-top: 0;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-copy {
+    margin-top: 0.35rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid rgba(77, 190, 238, 0.22);
+    border-radius: 12px 12px 12px 4px;
+    background: rgba(255, 255, 255, 0.62);
+    color: #175f8f;
+    font-size: 0.76rem;
+    line-height: 1.4;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-actions button {
+    min-height: 29px;
+    padding: 0.3rem 0.65rem;
+    border: 1px solid rgba(31, 99, 146, 0.24);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.76);
+    color: #175f8f;
+    font-size: 0.66rem;
+    font-weight: 800;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-actions button:last-child {
+    border-color: #1877b1;
+    background: #1877b1;
+    color: #fff;
+}
+
+body.expert-feature-estimation-page .evortix-feature-estimate-chips {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.3rem;
+    margin-top: 0.55rem;
+}
+
+body.expert-feature-estimation-page .evortix-feature-estimate-chips span {
+    min-height: 0;
+    padding: 0.3rem 0.2rem;
+    border: 1px solid rgba(77, 190, 238, 0.24);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.74);
+    color: #397397;
+    font-size: 0.58rem;
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+}
+
+body.expert-feature-estimation-page .evortix-feature-estimate-chips strong {
+    display: block;
+    min-height: 0;
+    padding: 0.12rem 0 0;
+    color: #083a5d;
+    font-size: 0.76rem;
+    line-height: 1.1;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-details {
+    margin-top: 0.5rem;
+    color: #175f8f;
+    font-size: 0.7rem;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-details summary {
+    cursor: pointer;
+    font-weight: 800;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-facts {
+    display: grid;
+    gap: 0.3rem;
+    margin-top: 0.4rem;
+    padding: 0.5rem;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.54);
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-facts div {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 0.4rem;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-facts span,
+body.expert-feature-estimation-page .evortix-feature-message-facts strong {
+    min-height: 0;
+    padding: 0;
+    font-size: 0.66rem;
+    line-height: 1.3;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-facts span {
+    color: #397397;
+    font-weight: 700;
+}
+
+body.expert-feature-estimation-page .evortix-feature-message-facts strong {
+    color: #083a5d;
+    overflow-wrap: anywhere;
+}
+
+body.expert-feature-estimation-page .chat-bot-speech.evortix-architect-dss .evortix-dss-actions {
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+}
+
+body.expert-feature-estimation-page .chat-bot-speech.evortix-architect-dss .evortix-dss-actions .btn {
+    min-height: 34px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+}
+
+@media (max-width: 600px) {
+    body.expert-feature-estimation-page .chat-bot-speech.evortix-architect-dss {
+        right: calc(100% + 4px);
+        bottom: 18px;
+        width: min(270px, calc(100vw - 132px));
+        min-width: 215px;
+        max-height: min(390px, calc(100vh - 80px));
+    }
+}
+</style>
+<script>
+document.body.classList.add('expert-feature-estimation-page');
+</script>
 
 <?php include '../../includes/footer.php'; ?>
