@@ -1,0 +1,19 @@
+#!/bin/sh
+PMS_URL="http://localhost/erni-pms/api/version-control/sync.php?token=dc092529f62c21f0a192dacb985854542e177b21"
+command -v curl >/dev/null 2>&1 || exit 0
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\n' ' '
+}
+while read OLD_REV NEW_REV REF_NAME; do
+  [ "$NEW_REV" = "0000000000000000000000000000000000000000" ] && continue
+  BRANCH=${REF_NAME#refs/heads/}
+  TITLE=$(git log -1 --pretty=%s "$NEW_REV")
+  BODY=$(git log -1 --pretty=%B "$NEW_REV")
+  AUTHOR_NAME=$(git log -1 --pretty=%an "$NEW_REV")
+  AUTHOR_EMAIL=$(git log -1 --pretty=%ae "$NEW_REV")
+  REMOTE_URL="http://localhost/erni-pms/git/sdfsdf.git"
+  FILE_CHANGES_B64=$(git show --pretty="" --name-status "$NEW_REV" | base64 | tr -d '\n')
+  FILE_STATS_B64=$(git show --pretty="" --numstat "$NEW_REV" | base64 | tr -d '\n')
+  PAYLOAD=$(printf '{"event_type":"push","branch_name":"%s","commit_hash":"%s","commit_title":"%s","commit_message":"%s","author_name":"%s","author_email":"%s","remote_url":"%s","platform":"server-git","file_changes_b64":"%s","file_stats_b64":"%s"}' "$(json_escape "$BRANCH")" "$(json_escape "$NEW_REV")" "$(json_escape "$TITLE")" "$(json_escape "$BODY")" "$(json_escape "$AUTHOR_NAME")" "$(json_escape "$AUTHOR_EMAIL")" "$(json_escape "$REMOTE_URL")" "$(json_escape "$FILE_CHANGES_B64")" "$(json_escape "$FILE_STATS_B64")")
+  curl -s -X POST "$PMS_URL" -H "Content-Type: application/json" -d "$PAYLOAD" >/dev/null 2>&1
+done

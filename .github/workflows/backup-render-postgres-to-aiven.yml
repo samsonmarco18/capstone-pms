@@ -1,0 +1,98 @@
+name: Backup Render PostgreSQL to Aiven
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-postgres-to-aiven-backup
+  cancel-in-progress: false
+
+jobs:
+  mirror-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
+      BACKUP_DATABASE_URL: ${{ secrets.AIVEN_DATABASE_URL }}
+
+    steps:
+      - name: Validate backup configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_DATABASE_URL" || { echo "::error::RENDER_DATABASE_URL is not configured."; exit 1; }
+          test -n "$BACKUP_DATABASE_URL" || { echo "::error::AIVEN_DATABASE_URL is not configured."; exit 1; }
+          [[ "$SOURCE_DATABASE_URL" == *".render.com"* ]] || { echo "::error::The source must be a Render PostgreSQL external URL."; exit 1; }
+          [[ "$BACKUP_DATABASE_URL" == *".aivencloud.com"* ]] || { echo "::error::The backup target must be an Aiven PostgreSQL URL."; exit 1; }
+          [[ "$SOURCE_DATABASE_URL" != "$BACKUP_DATABASE_URL" ]] || { echo "::error::Source and backup URLs must be different."; exit 1; }
+
+      - name: Export Render PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e DATABASE_URL="$SOURCE_DATABASE_URL" \
+            postgres:18 \
+            sh -c 'pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges' \
+            > "$GITHUB_WORKSPACE/render-postgres.dump"
+          test -s "$GITHUB_WORKSPACE/render-postgres.dump"
+
+      - name: Verify backup archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/backup:ro" \
+            postgres:18 \
+            pg_restore --list /backup/render-postgres.dump > /dev/null
+
+      - name: Replace Aiven recovery database
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e DATABASE_URL="$BACKUP_DATABASE_URL" \
+            -v "$GITHUB_WORKSPACE:/backup:ro" \
+            postgres:18 \
+            sh -c 'pg_restore \
+              --dbname="$DATABASE_URL" \
+              --clean \
+              --if-exists \
+              --no-owner \
+              --no-privileges \
+              --single-transaction \
+              --exit-on-error \
+              /backup/render-postgres.dump'
+
+      - name: Verify recovery database
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e DATABASE_URL="$BACKUP_DATABASE_URL" \
+            postgres:18 \
+            sh -c 'test "$(psql "$DATABASE_URL" -X -A -t -v ON_ERROR_STOP=1 \
+              -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '\''public'\'';")" -gt 0'
+
+      - name: Write backup summary
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "### PostgreSQL recovery mirror updated"
+            echo ""
+            echo "- Source: Render PostgreSQL"
+            echo "- Target: Aiven PostgreSQL"
+            echo "- Completed: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "- Schedule: every 6 hours"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary dump
+        if: always()
+        shell: bash
+        run: rm -f "$GITHUB_WORKSPACE/render-postgres.dump"

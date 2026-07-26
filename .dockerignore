@@ -1,0 +1,16 @@
+.git
+.gitignore
+.codex-session-test
+logs
+tmp
+temp
+cache
+.cache
+node_modules
+vendor
+uploads
+git
+git-workspaces
+temp-dashboard.html
+temp-profile.html
+temp-cookies.txt

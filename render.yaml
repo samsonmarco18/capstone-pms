@@ -1,0 +1,61 @@
+services:
+  - type: web
+    name: erni-pms
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: oregon
+    plan: free
+    autoDeployTrigger: commit
+    healthCheckPath: /healthz.php
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEBUG_MODE
+        value: false
+      - key: APP_URL
+        value: https://erni-pms.onrender.com
+      - key: AUTO_INIT_DB
+        value: "1"
+      - key: DB_DRIVER
+        value: pgsql
+      - key: DATABASE_URL
+        fromDatabase:
+          name: erni-pms-db
+          property: connectionString
+      - key: MAIL_ENABLED
+        value: "1"
+      - key: MAIL_DELIVERY_METHOD
+        sync: false
+      - key: MAIL_HOST
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_ENCRYPTION
+        value: tls
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM_EMAIL
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: ERNI Development Center Philippines Inc.
+      - key: MAIL_VERIFY_PEER
+        value: "1"
+      - key: MAIL_TIMEOUT
+        value: "8"
+      - key: GMAIL_CLIENT_ID
+        sync: false
+      - key: GMAIL_CLIENT_SECRET
+        sync: false
+      - key: GMAIL_REFRESH_TOKEN
+        sync: false
+      - key: GMAIL_USER
+        sync: false
+
+databases:
+  - name: erni-pms-db
+    plan: free
+    region: oregon
+    databaseName: erni_pms
+    user: erni_user

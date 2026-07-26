@@ -3,6 +3,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../config/database.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/project-folder-context.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -11,6 +12,7 @@ if (!isLoggedIn()) {
 }
 
 $conn = getConnection();
+$user = getCurrentUser();
 $folderId = isset($_GET['folder_id']) ? (int) $_GET['folder_id'] : 0;
 
 if ($folderId <= 0) {
@@ -23,11 +25,15 @@ if ($folderId <= 0) {
     exit();
 }
 
-function getFolderBreadcrumb(mysqli $conn, int $folderId): array
+function getFolderBreadcrumb(mysqli|PgsqlMysqliCompatConnection $conn, int $folderId): array
 {
     $path = [];
     $currentId = $folderId;
     $stmt = $conn->prepare('SELECT id, parent_id, name, folder_type FROM folders WHERE id = ? LIMIT 1');
+    if ($stmt === false) {
+        error_log('Folder breadcrumb prepare failed: ' . ($conn->error ?? 'unknown error'));
+        return [];
+    }
 
     while ($currentId > 0) {
         $stmt->bind_param('i', $currentId);
@@ -52,52 +58,83 @@ function getFolderBreadcrumb(mysqli $conn, int $folderId): array
     return $path;
 }
 
-$currentFolderStmt = $conn->prepare(
-    'SELECT f.*, u.full_name AS owner_name
-     FROM folders f
-     LEFT JOIN users u ON u.id = f.created_by
-     WHERE f.id = ?
-     LIMIT 1'
-);
-$currentFolderStmt->bind_param('i', $folderId);
-$currentFolderStmt->execute();
-$currentFolder = $currentFolderStmt->get_result()->fetch_assoc();
-$currentFolderStmt->close();
+try {
+    $currentFolderStmt = $conn->prepare(
+        'SELECT f.*, u.full_name AS owner_name
+         FROM folders f
+         LEFT JOIN users u ON u.id = f.created_by
+         WHERE f.id = ?
+         LIMIT 1'
+    );
 
-if (!$currentFolder) {
-    http_response_code(404);
-    echo json_encode(['error' => 'Folder not found']);
-    exit();
+    if ($currentFolderStmt === false) {
+        throw new RuntimeException('Failed to prepare current folder query: ' . ($conn->error ?? 'unknown error'));
+    }
+
+    $currentFolderStmt->bind_param('i', $folderId);
+    $currentFolderStmt->execute();
+    $currentFolder = $currentFolderStmt->get_result()->fetch_assoc();
+    $currentFolderStmt->close();
+
+    if (!$currentFolder) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Folder not found']);
+        exit();
+    }
+
+    $folderStmt = $conn->prepare(
+        'SELECT f.*, u.full_name AS owner_name
+         FROM folders f
+         LEFT JOIN users u ON u.id = f.created_by
+         WHERE f.parent_id = ?
+         ORDER BY f.name'
+    );
+
+    if ($folderStmt === false) {
+        throw new RuntimeException('Failed to prepare child folders query: ' . ($conn->error ?? 'unknown error'));
+    }
+
+    $folderStmt->bind_param('i', $folderId);
+    $folderStmt->execute();
+    $folders = $folderStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $folderStmt->close();
+
+    $fileStmt = $conn->prepare(
+        'SELECT f.*, u.full_name AS owner_name
+         FROM files f
+         LEFT JOIN users u ON u.id = f.uploaded_by
+         WHERE f.folder_id = ?
+         ORDER BY f.created_at DESC'
+    );
+
+    if ($fileStmt === false) {
+        throw new RuntimeException('Failed to prepare files query: ' . ($conn->error ?? 'unknown error'));
+    }
+
+    $fileStmt->bind_param('i', $folderId);
+    $fileStmt->execute();
+    $files = $fileStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $fileStmt->close();
+
+    $projectContext = null;
+    $projectId = resolveFolderProjectId($conn, $currentFolder);
+    if ($projectId > 0) {
+        $projectContext = fetchProjectContext($conn, $projectId, $user);
+    }
+
+    echo json_encode([
+        'folders' => $folders,
+        'files' => $files,
+        'current_folder' => $currentFolder,
+        'breadcrumb' => getFolderBreadcrumb($conn, $folderId),
+        'project_context' => $projectContext,
+        'project_details' => $projectContext,
+        'project_id' => $projectId > 0 ? $projectId : null,
+    ]);
+} catch (Throwable $e) {
+    error_log('Folder contents API failed: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode([
+        'error' => 'Unable to load this folder right now.',
+    ]);
 }
-
-$folderStmt = $conn->prepare(
-    'SELECT f.*, u.full_name AS owner_name
-     FROM folders f
-     LEFT JOIN users u ON u.id = f.created_by
-     WHERE f.parent_id = ?
-     ORDER BY f.name'
-);
-$folderStmt->bind_param('i', $folderId);
-$folderStmt->execute();
-$folders = $folderStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$folderStmt->close();
-
-$fileStmt = $conn->prepare(
-    'SELECT f.*, u.full_name AS owner_name
-     FROM files f
-     LEFT JOIN users u ON u.id = f.uploaded_by
-     WHERE f.folder_id = ?
-     ORDER BY f.created_at DESC'
-);
-$fileStmt->bind_param('i', $folderId);
-$fileStmt->execute();
-$files = $fileStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$fileStmt->close();
-
-echo json_encode([
-    'folders' => $folders,
-    'files' => $files,
-    'current_folder' => $currentFolder,
-    'breadcrumb' => getFolderBreadcrumb($conn, $folderId),
-]);
-?>

@@ -19,6 +19,9 @@ if (isLoggedIn()) {
         case 'sul':
             header('Location: modules/sul/dashboard.php');
             break;
+        case 'qa':
+            header('Location: modules/qa/dashboard.php');
+            break;
         case 'expert':
             header('Location: modules/expert/dashboard.php');
             break;

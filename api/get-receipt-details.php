@@ -4,14 +4,17 @@ require_once '../includes/auth.php';
 requireRole('sales');
 
 $conn = getConnection();
-$id = $_GET['id'] ?? 0;
+$id = (int) ($_GET['id'] ?? 0);
 
 if (!$id) {
     die('Receipt ID required');
 }
 
 $receipt = $conn->query("
-    SELECT r.*, sr.*, p.name as project_name, c.name as client_name, c.email, c.contact_person, c.phone, c.address, u.full_name as generated_by 
+    SELECT r.*, sr.total_cost, sr.project_id, p.name as project_name,
+           COALESCE(NULLIF(r.client_name, ''), c.name) as client_name,
+           COALESCE(NULLIF(r.client_email, ''), c.email) as email,
+           c.contact_person, c.phone, c.address, u.full_name as generated_by
     FROM receipts r 
     JOIN sales_reports sr ON r.report_id = sr.id 
     JOIN projects p ON sr.project_id = p.id 
@@ -64,6 +67,12 @@ while ($alloc = $allocQuery->fetch_assoc()) {
 }
 
 $totalAmount = $receipt['amount_due'] ?? $receipt['total_cost'];
+$receiptStatus = (string) ($receipt['status'] ?? 'draft');
+$isOfficialReceipt = $receiptStatus === 'paid';
+$receiptTitle = $isOfficialReceipt ? 'OFFICIAL PAID RECEIPT' : 'BILLING RECEIPT FOR PAYMENT REVIEW';
+$paymentNotice = $isOfficialReceipt
+    ? '<p style="margin: 12px 0; padding: 10px 12px; background: #d4edda; color: #155724; border-radius: 8px;">Payment verified by Sales. This is the official paid receipt.</p>'
+    : '<p style="margin: 12px 0; padding: 10px 12px; background: #fff3cd; color: #856404; border-radius: 8px;">This is not yet an official paid receipt. The official receipt will be issued after Sales verifies the client payment proof.</p>';
 
 echo '
 <!DOCTYPE html>
@@ -94,9 +103,10 @@ echo '
     <div class="receipt-container">
         <div class="header">
             <div class="company">ERNI Development Center Philippines Inc.</div>
-            <div style="font-size: 18px; margin: 10px 0;">OFFICIAL RECEIPT</div>
+            <div style="font-size: 18px; margin: 10px 0;">' . htmlspecialchars($receiptTitle) . '</div>
             <div style="font-size: 16px; margin-bottom: 10px;">Receipt # ' . htmlspecialchars($receipt['receipt_number']) . '</div>
             <div>Date: ' . date('F d, Y') . ' | Time: ' . date('h:i A') . '</div>
+            ' . $paymentNotice . '
         </div>
 
         <div class="receipt-info">

@@ -2,7 +2,7 @@
 require_once 'config/database.php';
 
 $email = 'admin@erni-pms.com';
-$password = 'test123';
+$password = 'password';
 
 echo "Testing login for: $email\n\n";
 
@@ -30,8 +30,8 @@ if ($user = $result->fetch_assoc()) {
         echo "You can now login!\n";
     } else {
         echo "❌ Password verification failed!\n";
-        echo "The password hash in database doesn't match 'test123'.\n";
-        echo "Please run fix_passwords.php to update passwords.\n";
+        echo "The password hash in database doesn't match the seeded default password.\n";
+        echo "If you intentionally changed passwords, use the updated password instead.\n";
     }
 } else {
     echo "❌ User not found with email: $email\n";

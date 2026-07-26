@@ -1,78 +1,93 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/project-workflow.php';
 requireRole('sul');
 
 $conn = getConnection();
 $user = getCurrentUser();
+$sulDepartment = projectWorkflowDepartmentLabel((string) ($user['department'] ?? ''));
+$sulMissingDepartment = $sulDepartment === '';
+$resourceDepartmentFilter = ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment);
+$resourceDepartmentWhere = ' AND ' . projectWorkflowUserDepartmentClause($conn, 'users', $sulDepartment);
+$assignedTaskDepartmentFilter = projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true);
+$taskProjectDepartmentFilter = projectWorkflowProjectDepartmentClause($conn, 'p_task_scope', $sulDepartment);
+$developerTaskJoinFilter = "
+    AND {$assignedTaskDepartmentFilter}
+    AND EXISTS (
+        SELECT 1
+        FROM projects p_task_scope
+        WHERE p_task_scope.id = t.project_id
+          AND {$taskProjectDepartmentFilter}
+    )";
 
-// Get all resources (experts and developers)
-$resources = $conn->query("
+if ($sulMissingDepartment) {
+    $_SESSION['error'] = 'Your SUL account must be assigned to a department before managing resources.';
+}
+
+function sulQueryRows($conn, $sql, $label): array
+{
+    $result = $conn->query($sql);
+    if ($result === false) {
+        error_log("Resource Management {$label} query failed: " . $conn->error);
+        return [];
+    }
+
+    $rows = [];
+    while ($row = $result->fetch_assoc()) {
+        $rows[] = $row;
+    }
+
+    return $rows;
+}
+
+// Get developers
+$developers = sulQueryRows($conn, "
     SELECT u.*, 
            COUNT(t.id) as total_tasks,
            SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-           SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as active_tasks,
+           SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks,
            SUM(CASE WHEN t.status = 'todo' THEN 1 ELSE 0 END) as pending_tasks,
            SUM(CASE WHEN t.status != 'completed' AND t.deadline < NOW() THEN 1 ELSE 0 END) as overdue_tasks,
-           ROUND(AVG(CASE WHEN t.status = 'completed' AND t.completed_at IS NOT NULL 
+           AVG(CASE WHEN t.status = 'completed' AND t.completed_at IS NOT NULL
                THEN TIMESTAMPDIFF(HOUR, t.created_at, t.completed_at) / 24 
-               ELSE NULL END), 1) as avg_completion_days
+               ELSE NULL END) as avg_completion_days
     FROM users u
-    LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
+     LEFT JOIN tasks t ON u.id = t.assigned_to{$developerTaskJoinFilter}
+     WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
     GROUP BY u.id
     ORDER BY active_tasks DESC
-");
+", 'developers');
 
-// Get workload distribution by role
-$workloadByRole = $conn->query("
-    SELECT u.role, 
-           COUNT(DISTINCT u.id) as member_count,
-           COUNT(t.id) as total_tasks,
-           SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
-           SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
+// Get available developers (not already in SUL's team)
+$availableDevelopers = sulQueryRows($conn, "
+    SELECT u.id, u.full_name, u.email, u.department
     FROM users u
-    LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role IN ('expert', 'developer') AND u.status = 'active'
-    GROUP BY u.role
-");
-
-// Get skill distribution
-$skills = $conn->query("
-    SELECT 
-        SUM(CASE WHEN role = 'expert' THEN 1 ELSE 0 END) as experts,
-        SUM(CASE WHEN role = 'developer' THEN 1 ELSE 0 END) as developers,
-        COUNT(*) as total
-    FROM users 
-    WHERE role IN ('expert', 'developer') AND status = 'active'
-")->fetch_assoc();
-
-// Get projects with resource allocation
-$projects = $conn->query("
-    SELECT p.*, c.name as client_name,
-           COUNT(DISTINCT t.id) as total_tasks,
-           COUNT(DISTINCT t.assigned_to) as assigned_resources,
-           SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
-    FROM projects p
-    JOIN clients c ON p.client_id = c.id
-    LEFT JOIN tasks t ON p.id = t.project_id
-    WHERE p.status != 'completed'
-    GROUP BY p.id
-    ORDER BY p.created_at DESC
-    LIMIT 10
-");
+    WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
+    ORDER BY u.full_name
+", 'availableDevelopers');
 
 // Handle resource updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if ($sulMissingDepartment) {
+        header('Location: resource-management.php');
+        exit();
+    }
+
     if (isset($_POST['update_allocation'])) {
-        $userId = $_POST['user_id'];
-        $maxTasks = $_POST['max_tasks'];
-        
-        $stmt = $conn->prepare("UPDATE users SET max_concurrent_tasks = ? WHERE id = ?");
+        $userId = (int) ($_POST['user_id'] ?? 0);
+        $maxTasks = max(1, min(10, (int) ($_POST['max_tasks'] ?? 5)));
+
+        $stmt = $conn->prepare("UPDATE users SET max_concurrent_tasks = ? WHERE id = ? AND role = 'developer'{$resourceDepartmentWhere}");
         $stmt->bind_param("ii", $maxTasks, $userId);
         $stmt->execute();
-        
-        logActivity($user['id'], 'update_resource_allocation', 'users', $userId, null, $_POST);
-        $_SESSION['success'] = "Resource allocation updated successfully";
+
+        if ($stmt->affected_rows > 0) {
+            logActivity($user['id'], 'update_resource_allocation', 'users', $userId, null, $_POST);
+            $_SESSION['success'] = "Resource allocation updated successfully";
+        } else {
+            $_SESSION['error'] = "Developer not found in your department or no changes were made";
+        }
+        $stmt->close();
         header('Location: resource-management.php');
         exit();
     }
@@ -81,12 +96,39 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $userId = $_POST['user_id'];
         $status = $_POST['availability_status'];
         
-        $stmt = $conn->prepare("UPDATE users SET availability_status = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE users SET availability_status = ? WHERE id = ? AND role = 'developer'{$resourceDepartmentWhere}");
         $stmt->bind_param("si", $status, $userId);
         $stmt->execute();
         
         logActivity($user['id'], 'update_availability', 'users', $userId, null, $_POST);
         $_SESSION['success'] = "Availability status updated successfully";
+        header('Location: resource-management.php');
+        exit();
+    }
+
+    if (isset($_POST['add_resource'])) {
+        $userId = (int) $_POST['user_id'];
+        $role = $_POST['role'];
+
+        if ($role !== 'developer') {
+            $_SESSION['error'] = "Invalid role selected";
+        } else {
+            // Check if user exists and is the correct role
+            $stmt = $conn->prepare("SELECT id, full_name, role FROM users WHERE id = ? AND role = ? AND status = 'active'{$resourceDepartmentWhere}");
+            $stmt->bind_param("is", $userId, $role);
+            $stmt->execute();
+            $existingUser = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if (!$existingUser) {
+                $_SESSION['error'] = "Selected user not found or not available";
+            } else {
+                // Check if user is already in SUL's team (you might want to add a team assignment table)
+                // For now, just log the assignment
+                logActivity($user['id'], 'assign_resource_to_team', 'users', $userId, null, ['assigned_by_sul' => $user['id'], 'role' => $role]);
+                $_SESSION['success'] = ucfirst($role) . " " . htmlspecialchars($existingUser['full_name']) . " has been assigned to your team";
+            }
+        }
         header('Location: resource-management.php');
         exit();
     }
@@ -97,270 +139,938 @@ include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
 ?>
 
-<div class="row">
-    <div class="col-12 mb-4">
-        <h2>Resource Management</h2>
-        <p class="text-muted">Manage team resources, workload, and availability</p>
-    </div>
-</div>
+<?php
+$flashSuccess = $_SESSION['success'] ?? null;
+$flashError = $_SESSION['error'] ?? null;
+unset($_SESSION['success'], $_SESSION['error']);
+?>
 
-<!-- Summary Cards -->
-<div class="row">
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);">
-            <p>Total Resources</p>
-            <h3><?php echo $skills['total']; ?></h3>
-            <small><?php echo $skills['experts']; ?> Experts | <?php echo $skills['developers']; ?> Developers</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);">
-            <p>Active Tasks</p>
-            <h3><?php 
-                $activeTotal = 0;
-                $workloadByRole->data_seek(0);
-                while($row = $workloadByRole->fetch_assoc()) {
-                    $activeTotal += $row['active_tasks'];
-                }
-                echo $activeTotal;
-            ?></h3>
-            <small>Across all resources</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);">
-            <p>Avg Completion Time</p>
-            <h3><?php 
-                $avgTime = $conn->query("
-                    SELECT AVG(TIMESTAMPDIFF(DAY, created_at, completed_at)) as avg_days 
-                    FROM tasks 
-                    WHERE status = 'completed' AND completed_at IS NOT NULL
-                ")->fetch_assoc()['avg_days'];
-                echo round($avgTime ?? 0, 1);
-            ?> days</h3>
-            <small>Average task completion</small>
-        </div>
-    </div>
-    <div class="col-md-3 mb-4">
-        <div class="stat-card" style="background: linear-gradient(135deg, #dc3545 0%, #bb2d3b 100%);">
-            <p>Overdue Tasks</p>
-            <h3><?php 
-                $overdue = $conn->query("
-                    SELECT COUNT(*) as count FROM tasks 
-                    WHERE status != 'completed' AND deadline < NOW()
-                ")->fetch_assoc()['count'];
-                echo $overdue;
-            ?></h3>
-            <small>Need immediate attention</small>
-        </div>
-    </div>
-</div>
+<style>
+:root {
+    --theme-primary: #1f6392;
+    --theme-dark: #184f73;
+    --theme-light: #3a7ca3;
+    --gray-50: #f8f9fa;
+    --gray-100: #f1f3f5;
+    --gray-200: #e9ecef;
+    --gray-300: #dee2e6;
+    --gray-600: #6c757d;
+    --gray-900: #212529;
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
+    --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.02);
+}
 
-<div class="row">
-    <div class="col-md-8 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Resource Workload Overview</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="workloadChart" height="300"></canvas>
-            </div>
-        </div>
-    </div>
+/* Page Header */
+.page-header-modern {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.page-header-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 300px;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1));
+    pointer-events: none;
+}
+
+.page-header-modern h2 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: white;
+}
+
+.page-header-modern h2 i {
+    color: white;
+}
+
+.page-header-modern p {
+    opacity: 0.9;
+    margin-bottom: 0;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* Stats Cards */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card-modern {
+    background: white;
+    border-radius: 20px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--gray-200);
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-card-modern:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.stat-card-modern .stat-icon {
+    position: absolute;
+    right: 1rem;
+    top: 1rem;
+    opacity: 0.65;
+    font-size: 1.6rem;
+    color: var(--theme-primary);
+}
+
+.stat-card-modern .stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--gray-600);
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.stat-card-modern .stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--theme-primary);
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.stat-card-modern .stat-sub {
+    font-size: 0.7rem;
+    color: var(--gray-600);
+}
+
+/* Cards */
+.card {
+    background: white;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.card-header {
+    padding: 1.25rem 1.5rem;
+    background: white;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.card-header h5 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.card-header h5 i {
+    color: var(--theme-primary);
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+/* Table Styles */
+.table-container {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table thead {
+    background: var(--gray-50);
+}
+
+.data-table th {
+    padding: 1rem 1.25rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--gray-600);
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.data-table td {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--gray-200);
+    vertical-align: middle;
+}
+
+.data-table tr:hover {
+    background: var(--gray-50);
+}
+
+.resource-workload-card .card-body {
+    padding: 0;
+}
+
+.resource-workload-card {
+    border-radius: 14px;
+    box-shadow: 0 4px 14px rgba(30, 64, 95, 0.06);
+}
+
+.resource-workload-header {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+}
+
+.resource-workload-heading {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.resource-workload-heading-icon {
+    align-items: center;
+    background: #eaf4fb;
+    border-radius: 9px;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 36px;
+    height: 36px;
+    justify-content: center;
+    width: 36px;
+}
+
+.resource-workload-heading h5 {
+    margin: 0;
+}
+
+.resource-workload-heading small {
+    color: var(--gray-600);
+    display: block;
+    font-size: 0.7rem;
+    margin-top: 0.12rem;
+}
+
+.resource-workload-header .btn-primary-modern {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 0.55rem 0.85rem;
+}
+
+.resource-workload-card .table-container {
+    border-top: 1px solid var(--gray-200);
+}
+
+.resource-workload-table thead {
+    background: #fafbfd;
+}
+
+.resource-workload-table tbody {
+    background: #ffffff;
+}
+
+.resource-workload-table th {
+    font-size: 0.68rem;
+    letter-spacing: 0.035em;
+    white-space: nowrap;
+}
+
+.resource-workload-table td {
+    color: #334e68;
+    height: 66px;
+}
+
+.resource-workload-table th,
+.resource-workload-table td,
+.resource-workload-card .table-container {
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.resource-workload-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.resource-workload-table {
+    min-width: 1160px;
+    table-layout: fixed;
+}
+
+.resource-workload-table th,
+.resource-workload-table td {
+    padding: 0.7rem 0.75rem;
+}
+
+.resource-workload-table th:first-child,
+.resource-workload-table td:first-child {
+    padding-left: 1.25rem;
+    width: 26%;
+}
+
+.resource-workload-table th:nth-child(n+2):nth-child(-n+6),
+.resource-workload-table td:nth-child(n+2):nth-child(-n+6) {
+    text-align: center;
+}
+
+.resource-workload-table th:nth-child(2),
+.resource-workload-table td:nth-child(2) { width: 6.5%; }
+.resource-workload-table th:nth-child(3),
+.resource-workload-table td:nth-child(3) { width: 9%; }
+.resource-workload-table th:nth-child(4),
+.resource-workload-table td:nth-child(4) { width: 7%; }
+.resource-workload-table th:nth-child(5),
+.resource-workload-table td:nth-child(5) { width: 7%; }
+.resource-workload-table th:nth-child(6),
+.resource-workload-table td:nth-child(6) { width: 7.5%; }
+
+.resource-workload-table th:nth-child(7),
+.resource-workload-table td:nth-child(7) {
+    width: 14%;
+}
+
+.resource-workload-table th:nth-child(8),
+.resource-workload-table td:nth-child(8) {
+    width: 10%;
+}
+
+.resource-workload-table th:last-child,
+.resource-workload-table td:last-child {
+    padding-right: 1.25rem;
+    text-align: right;
+    width: 11%;
+}
+
+.resource-workload-table tbody tr {
+    box-shadow: inset 3px 0 0 transparent;
+    transition: background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.resource-workload-table tbody tr:hover {
+    background: #f7fafc;
+    box-shadow: inset 2px 0 0 var(--theme-primary);
+}
+
+.resource-profile {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.resource-profile-avatar {
+    align-items: center;
+    background: linear-gradient(145deg, #dff1fb 0%, #c8e4f4 100%);
+    border: 1px solid #bedcec;
+    border-radius: 50%;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 36px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    height: 36px;
+    justify-content: center;
+    letter-spacing: 0.03em;
+    width: 36px;
+}
+
+.resource-profile-copy {
+    min-width: 0;
+}
+
+.resource-profile-name {
+    color: var(--gray-900);
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0;
+}
+
+.resource-profile-email {
+    color: var(--gray-600);
+    display: block;
+    font-size: 0.68rem;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-metric {
+    color: #334e68;
+    font-size: 0.84rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+}
+
+.resource-workload {
+    min-width: 110px;
+}
+
+.resource-workload .progress-modern {
+    width: 100%;
+}
+
+.resource-workload-value {
+    color: var(--gray-600);
+    display: block;
+    font-size: 0.68rem;
+    margin-top: 0.3rem;
+}
+
+.badge-status-overloaded,
+.badge-status-busy,
+.badge-status-available,
+.badge-status-free {
+    align-items: center;
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 0.68rem;
+    font-weight: 600;
+    justify-content: center;
+    min-width: 68px;
+    padding: 0.32rem 0.6rem;
+}
+
+.resource-actions {
+    display: inline-flex;
+    gap: 0.4rem;
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+
+.resource-action-btn {
+    align-items: center;
+    border-radius: 8px;
+    display: inline-flex;
+    height: 34px;
+    justify-content: center;
+    padding: 0;
+    width: 34px;
+}
+
+/* Progress Bar */
+.progress-modern {
+    height: 8px;
+    background: var(--gray-200);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar-modern {
+    height: 100%;
+    border-radius: 10px;
+    transition: width 0.3s ease;
+}
+
+.badge-status-overloaded {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.badge-status-busy {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.badge-status-available {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.badge-status-free {
+    background: #d1fae5;
+    color: #059669;
+}
+
+/* Buttons */
+.btn-primary-modern {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: white;
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.btn-primary-modern:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
+    color: white;
+}
+
+.btn-secondary-modern {
+    background: #e9ecef;
+    color: var(--gray-700);
+    border: none;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+}
+
+.btn-secondary-modern:hover {
+    background: var(--gray-300);
+}
+
+/* Keep the navbar burger neutral on this page */
+#menu-toggle-desktop,
+#menu-toggle-mobile {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+#menu-toggle-desktop:hover,
+#menu-toggle-mobile:hover,
+#menu-toggle-desktop:focus,
+#menu-toggle-mobile:focus {
+    background: #eef7fd !important;
+    box-shadow: none !important;
+}
+
+#menu-toggle-desktop:active,
+#menu-toggle-mobile:active,
+#menu-toggle-desktop.is-active,
+#menu-toggle-mobile.is-active {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Tabs */
+.nav-tabs {
+    border-bottom: 2px solid var(--gray-200);
+    margin-bottom: 0;
+}
+
+.nav-tabs .nav-link {
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--gray-600);
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.2s;
+}
+
+.nav-tabs .nav-link:hover {
+    border-bottom-color: var(--theme-light);
+    color: var(--theme-primary);
+}
+
+.nav-tabs .nav-link.active {
+    background: none;
+    border-bottom-color: var(--theme-primary);
+    color: var(--theme-primary);
+}
+
+.nav-tabs .nav-link .badge {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+}
+
+/* Tab Content */
+.tab-content {
+    padding-top: 1rem;
+}
+
+/* List Group */
+.list-group-item {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--gray-200);
+    border-left: none;
+    border-right: none;
+    border-top: none;
+}
+
+.list-group-item:last-child {
+    border-bottom: none;
+}
+
+.list-group-item:hover {
+    background: var(--gray-50);
+}
+
+/* Modal */
+.modal-modern .modal-content {
+    border-radius: 24px;
+    border: none;
+    overflow: hidden;
+}
+
+.modal-modern .modal-header {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
+    color: white;
+    padding: 1.5rem;
+    border: none;
+}
+
+.modal-modern .modal-header .modal-title,
+.modal-modern .modal-header .modal-title i {
+    color: #ffffff !important;
+}
+
+.modal-modern .modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+.modal-modern .modal-body {
+    padding: 2rem;
+}
+
+.modal-modern .modal-footer {
+    padding: 1rem 2rem 2rem;
+    border-top: 1px solid var(--gray-200);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .container-fluid {
+    background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-content {
+    background: #071321 !important;
+    border: 1px solid rgba(31, 99, 146, 0.24) !important;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern::before {
+    background: linear-gradient(90deg, transparent, rgba(31, 99, 146, 0.16));
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table thead,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern h2,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern h2 i,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item strong {
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern .stat-sub,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .text-muted,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) small {
+    color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td {
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-card .table-container,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-header {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-table tbody {
+    background: #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-heading-icon {
+    background: #102a40;
+    color: #8cc7ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-table tbody tr:hover {
+    background: rgba(31, 99, 146, 0.12) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-profile-avatar {
+    background: #102a40;
+    border-color: #214764;
+    color: #8cc7ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-profile-name,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-metric {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-profile-email,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-workload-value {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
+    background-color: #071321;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .nav-tabs {
+    border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .nav-tabs .nav-link {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .nav-tabs .nav-link.active {
+    background: rgba(31, 99, 146, 0.16);
+    border-color: rgba(31, 99, 146, 0.24);
+    color: #7cc0ee;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .bg-light {
+    background: #0a1b2c !important;
+    border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+/* Chat launcher override for resource management */
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #chat-widget-minimized,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #chat-widget {
+    z-index: 99999 !important;
+    position: fixed !important;
+    right: 28px !important;
+    bottom: 28px !important;
+    transform: none !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #chat-widget-minimized {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 74px !important;
+    height: 74px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #chat-widget {
+    display: none !important;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .page-header-modern {
+        padding: 1.5rem;
+    }
+
+    .resource-workload-header {
+        align-items: stretch !important;
+        flex-direction: column;
+    }
+
+    .resource-workload-header .btn-primary-modern {
+        justify-content: center;
+        width: 100%;
+    }
     
-    <div class="col-md-4 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Workload by Role</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="roleWorkloadChart" height="250"></canvas>
-                <div class="mt-3">
-                    <?php 
-                    $workloadByRole->data_seek(0);
-                    while($role = $workloadByRole->fetch_assoc()): 
-                        $avgPerMember = $role['member_count'] > 0 ? round($role['active_tasks'] / $role['member_count'], 1) : 0;
-                    ?>
-                    <div class="mb-2">
-                        <div class="d-flex justify-content-between">
-                            <span><strong><?php echo ucfirst($role['role']); ?></strong> (<?php echo $role['member_count']; ?> members)</span>
-                            <span><?php echo $role['active_tasks']; ?> active tasks</span>
-                        </div>
-                        <div class="progress">
-                            <div class="progress-bar bg-primary" style="width: <?php echo min(100, ($role['active_tasks'] / ($role['member_count'] * 5)) * 100); ?>%">
-                                <?php echo $avgPerMember; ?> avg per member
-                            </div>
-                        </div>
-                    </div>
-                    <?php endwhile; ?>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-12 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Resource Details & Workload</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            32
-                                <th>Resource</th>
-                                <th>Role</th>
-                                <th>Active Tasks</th>
-                                <th>Completed</th>
-                                <th>Pending</th>
-                                <th>Overdue</th>
-                                <th>Avg Days</th>
-                                <th>Workload</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php while($resource = $resources->fetch_assoc()): 
-                                $workloadPercent = min(100, ($resource['active_tasks'] / 5) * 100);
-                                $statusColor = $resource['active_tasks'] >= 5 ? 'danger' : ($resource['active_tasks'] >= 3 ? 'warning' : 'success');
-                                $statusText = $resource['active_tasks'] >= 5 ? 'Overloaded' : ($resource['active_tasks'] >= 3 ? 'Busy' : ($resource['active_tasks'] > 0 ? 'Available' : 'Free'));
-                            ?>
-                            <tr>
-                                <td>
-                                    <strong><?php echo htmlspecialchars($resource['full_name']); ?></strong>
-                                    <br>
-                                    <small class="text-muted"><?php echo htmlspecialchars($resource['email']); ?></small>
-                                </td>
-                                <td>
-                                    <span class="badge bg-<?php echo $resource['role'] == 'expert' ? 'warning' : 'info'; ?>">
-                                        <?php echo strtoupper($resource['role']); ?>
-                                    </span>
-                                </td>
-                                <td><?php echo $resource['active_tasks']; ?></td>
-                                <td><?php echo $resource['completed_tasks']; ?></td>
-                                <td><?php echo $resource['pending_tasks']; ?></td>
-                                <td>
-                                    <?php if($resource['overdue_tasks'] > 0): ?>
-                                        <span class="badge bg-danger"><?php echo $resource['overdue_tasks']; ?></span>
-                                    <?php else: ?>
-                                        <span class="text-muted">0</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?php echo $resource['avg_completion_days'] ?? 'N/A'; ?> days</td>
-                                <td>
-                                    <div class="progress" style="height: 20px;">
-                                        <div class="progress-bar bg-<?php echo $statusColor; ?>" style="width: <?php echo $workloadPercent; ?>%">
-                                            <?php echo $workloadPercent; ?>%
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="badge bg-<?php echo $statusColor; ?>">
-                                        <?php echo $statusText; ?>
-                                    </span>
-                                </td>
-                                <td>
-                                    <button class="btn btn-sm btn-primary" onclick="editAllocation(<?php echo $resource['id']; ?>, '<?php echo htmlspecialchars($resource['full_name']); ?>', <?php echo $resource['active_tasks']; ?>)">
-                                        <i class="fas fa-sliders-h"></i> Allocate
-                                    </button>
-                                    <button class="btn btn-sm btn-info" onclick="viewResourceTasks(<?php echo $resource['id']; ?>)">
-                                        <i class="fas fa-tasks"></i> Tasks
-                                    </button>
-                                </td>
-                            </tr>
-                            <?php endwhile; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Projects with Active Resources</h5>
-            </div>
-            <div class="card-body">
-                <div class="list-group">
-                    <?php while($project = $projects->fetch_assoc()): ?>
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-1"><?php echo htmlspecialchars($project['name']); ?></h6>
-                                <small class="text-muted">Client: <?php echo htmlspecialchars($project['client_name']); ?></small>
-                                <br>
-                                <small>
-                                    <i class="fas fa-users"></i> <?php echo $project['assigned_resources']; ?> resources | 
-                                    <i class="fas fa-tasks"></i> <?php echo $project['active_tasks']; ?> active tasks
-                                </small>
-                            </div>
-                            <a href="task-allocation.php?project_id=<?php echo $project['id']; ?>" class="btn btn-sm btn-primary">
-                                <i class="fas fa-chart-line"></i> Manage
-                            </a>
-                        </div>
-                        <div class="mt-2">
-                            <div class="progress">
-                                <?php 
-                                $completionPercent = $project['total_tasks'] > 0 ? round(($project['total_tasks'] - $project['active_tasks']) / $project['total_tasks'] * 100) : 0;
-                                ?>
-                                <div class="progress-bar bg-success" style="width: <?php echo $completionPercent; ?>%">
-                                    <?php echo $completionPercent; ?>% Complete
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <?php endwhile; ?>
-                </div>
-            </div>
-        </div>
-    </div>
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
     
-    <div class="col-md-6 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5>Resource Utilization</h5>
-            </div>
-            <div class="card-body">
-                <canvas id="utilizationChart" height="250"></canvas>
-                <div class="mt-3">
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i>
-                        <strong>Utilization Rate:</strong> 
-                        <?php 
-                        $totalResources = $skills['total'];
-                        $overloaded = $conn->query("
-                            SELECT COUNT(*) as count FROM (
-                                SELECT u.id, COUNT(t.id) as task_count
-                                FROM users u
-                                LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
-                                WHERE u.role IN ('expert', 'developer')
-                                GROUP BY u.id
-                                HAVING task_count >= 5
-                            ) as overloaded
-                        ")->fetch_assoc()['count'];
-                        
-                        $utilizationRate = $totalResources > 0 ? round(($overloaded / $totalResources) * 100) : 0;
-                        ?>
-                        <strong><?php echo $overloaded; ?></strong> out of <strong><?php echo $totalResources; ?></strong> resources are overloaded (<?php echo $utilizationRate; ?>%)
-                    </div>
+    .stat-card-modern .stat-number {
+        font-size: 2rem;
+    }
+}
+</style>
+
+<div class="container-fluid px-4 py-4">
+    <!-- Page Header -->
+    <div class="page-header-modern">
+        <div>
+            <h2>
+                <i class="fas fa-users me-2"></i> 
+                Resource Management
+            </h2>
+            <p>Manage team resources, workload, and availability</p>
+        </div>
+    </div>
+
+    <!-- Flash Messages -->
+    <?php if ($flashSuccess): ?><div class="alert alert-success"><?php echo htmlspecialchars($flashSuccess); ?></div><?php endif; ?>
+    <?php if ($flashError): ?><div class="alert alert-danger border-0"><?php echo htmlspecialchars($flashError); ?></div><?php endif; ?>
+
+    <!-- Resource Details Table -->
+    <div class="card mb-4 resource-workload-card">
+        <div class="card-header resource-workload-header">
+            <div class="resource-workload-heading">
+                <span class="resource-workload-heading-icon"><i class="fas fa-list" aria-hidden="true"></i></span>
+                <div>
+                    <h5>Resource Details &amp; Workload</h5>
+                    <small class="text-muted"><?php echo count($developers); ?> active profile<?php echo count($developers) === 1 ? '' : 's'; ?> in <?php echo htmlspecialchars($sulDepartment); ?></small>
                 </div>
             </div>
+            <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#addDeveloperModal">
+                <i class="fas fa-user-plus" aria-hidden="true"></i>Assign Developer
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-container">
+                        <table class="data-table resource-workload-table">
+                            <thead>
+                                <tr>
+                                    <th>Resource</th>
+                                    <th>Active</th>
+                                    <th>Completed</th>
+                                    <th>Pending</th>
+                                    <th>Overdue</th>
+                                    <th>Avg Days</th>
+                                    <th>Workload</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if ($developers !== []): ?>
+                                    <?php foreach ($developers as $resource):
+                                        $resourceName = trim((string) ($resource['full_name'] ?? 'Developer'));
+                                        $resourceNameParts = preg_split('/\s+/', $resourceName) ?: [];
+                                        $resourceInitial = static function (string $value): string {
+                                            return strtoupper(function_exists('mb_substr') ? mb_substr($value, 0, 1) : substr($value, 0, 1));
+                                        };
+                                        $resourceInitials = $resourceInitial((string) ($resourceNameParts[0] ?? 'D'));
+                                        if (count($resourceNameParts) > 1) {
+                                            $resourceInitials .= $resourceInitial((string) end($resourceNameParts));
+                                        }
+                                        $resourceActiveTasks = (int) ($resource['active_tasks'] ?? 0);
+                                        $workloadPercent = (int) round(min(100, ($resourceActiveTasks / 5) * 100));
+                                        $statusClass = $resourceActiveTasks >= 5 ? 'overloaded' : ($resourceActiveTasks >= 3 ? 'busy' : ($resourceActiveTasks > 0 ? 'available' : 'free'));
+                                        $statusText = $resourceActiveTasks >= 5 ? 'Overloaded' : ($resourceActiveTasks >= 3 ? 'Busy' : ($resourceActiveTasks > 0 ? 'Available' : 'Free'));
+                                    ?>
+                                    <tr>
+                                        <td>
+                                            <div class="resource-profile">
+                                                <span class="resource-profile-avatar" aria-hidden="true"><?php echo htmlspecialchars($resourceInitials); ?></span>
+                                                <div class="resource-profile-copy">
+                                                    <p class="resource-profile-name"><?php echo htmlspecialchars($resourceName); ?></p>
+                                                    <span class="resource-profile-email" title="<?php echo htmlspecialchars((string) $resource['email']); ?>"><?php echo htmlspecialchars((string) $resource['email']); ?></span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td><span class="resource-metric"><?php echo $resourceActiveTasks; ?></span></td>
+                                        <td><span class="resource-metric"><?php echo (int) ($resource['completed_tasks'] ?? 0); ?></span></td>
+                                        <td><span class="resource-metric"><?php echo (int) ($resource['pending_tasks'] ?? 0); ?></span></td>
+                                        <td><span class="resource-metric<?php echo (int) ($resource['overdue_tasks'] ?? 0) > 0 ? ' text-danger' : ''; ?>"><?php echo (int) ($resource['overdue_tasks'] ?? 0); ?></span></td>
+                                        <td><span class="resource-metric"><?php echo $resource['avg_completion_days'] !== null ? round((float) $resource['avg_completion_days'], 1) . 'd' : 'N/A'; ?></span></td>
+                                        <td>
+                                            <div class="resource-workload">
+                                                <div class="progress-modern">
+                                                    <div class="progress-bar-modern" style="width: <?php echo $workloadPercent; ?>%; background: <?php echo $resourceActiveTasks >= 5 ? '#dc2626' : ($resourceActiveTasks >= 3 ? '#f59e0b' : '#10b981'); ?>;"></div>
+                                                </div>
+                                                <span class="resource-workload-value"><?php echo $workloadPercent; ?>% capacity</span>
+                                            </div>
+                                        </td>
+                                        <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
+                                        <td>
+                                            <div class="resource-actions">
+                                                <button type="button" class="btn-primary-modern resource-action-btn" title="Edit allocation" aria-label="Edit allocation for <?php echo htmlspecialchars($resourceName); ?>" onclick="editAllocation(<?php echo (int) $resource['id']; ?>, <?php echo htmlspecialchars(json_encode($resourceName), ENT_QUOTES, 'UTF-8'); ?>, <?php echo $resourceActiveTasks; ?>)">
+                                                    <i class="fas fa-sliders-h" aria-hidden="true"></i>
+                                                </button>
+                                                <button type="button" class="btn-secondary-modern resource-action-btn" title="View assigned tasks" aria-label="View tasks for <?php echo htmlspecialchars($resourceName); ?>" onclick="viewResourceTasks(<?php echo (int) $resource['id']; ?>)">
+                                                    <i class="fas fa-list-check" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <tr><td colspan="9" class="text-center text-muted py-4">No developer data available.</td></tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Add Developer Modal -->
+<div class="modal fade modal-modern" id="addDeveloperModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-code me-2"></i>Assign Developer to Team</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="role" value="developer">
+                    <div class="mb-3">
+                        <label class="form-label">Select Developer</label>
+                            <select name="user_id" class="form-select" required>
+                                <option value="">Choose a developer...</option>
+                            <?php foreach ($availableDevelopers as $dev): ?>
+                                <option value="<?php echo $dev['id']; ?>">
+                                    <?php echo htmlspecialchars($dev['full_name']); ?> 
+                                    (<?php echo htmlspecialchars($dev['email']); ?>)
+                                    <?php if($dev['department']): ?> - <?php echo htmlspecialchars($dev['department']); ?><?php endif; ?>
+                                </option>
+                            <?php endforeach; ?>
+                            </select>
+                        <small class="text-muted">Only developers created by admin are available for assignment</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary-modern" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="add_resource" class="btn-primary-modern">Assign Developer</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
 <!-- Edit Allocation Modal -->
-<div class="modal fade" id="editAllocationModal" tabindex="-1">
-    <div class="modal-dialog">
+<div class="modal fade modal-modern" id="editAllocationModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Edit Resource Allocation</h5>
+                <h5 class="modal-title"><i class="fas fa-sliders-h me-2"></i>Edit Resource Allocation</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST">
@@ -384,8 +1094,8 @@ include '../../includes/navbar.php';
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="update_allocation" class="btn btn-primary">Update Allocation</button>
+                    <button type="button" class="btn-secondary-modern" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="update_allocation" class="btn-primary-modern">Update Allocation</button>
                 </div>
             </form>
         </div>
@@ -393,190 +1103,25 @@ include '../../includes/navbar.php';
 </div>
 
 <!-- Resource Tasks Modal -->
-<div class="modal fade" id="resourceTasksModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+<div class="modal fade modal-modern" id="resourceTasksModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Resource Tasks</h5>
+                <h5 class="modal-title"><i class="fas fa-tasks me-2"></i>Resource Tasks</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="resourceTasksContent">
-                <!-- Tasks will be loaded here -->
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-// Workload Chart
-const workloadData = <?php 
-    $names = [];
-    $active = [];
-    $completed = [];
-    $resources->data_seek(0);
-    while($row = $resources->fetch_assoc()) {
-        $names[] = $row['full_name'];
-        $active[] = $row['active_tasks'];
-        $completed[] = $row['completed_tasks'];
-    }
-    echo json_encode(['names' => $names, 'active' => $active, 'completed' => $completed]);
-?>;
-
-const workloadCtx = document.getElementById('workloadChart').getContext('2d');
-new Chart(workloadCtx, {
-    type: 'bar',
-    data: {
-        labels: workloadData.names,
-        datasets: [
-            {
-                label: 'Active Tasks',
-                data: workloadData.active,
-                backgroundColor: '#ffc107',
-                borderRadius: 4
-            },
-            {
-                label: 'Completed Tasks',
-                data: workloadData.completed,
-                backgroundColor: '#28a745',
-                borderRadius: 4
-            }
-        ]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        scales: {
-            y: {
-                beginAtZero: true,
-                title: {
-                    display: true,
-                    text: 'Number of Tasks'
-                }
-            },
-            x: {
-                ticks: {
-                    maxRotation: 45,
-                    minRotation: 45
-                }
-            }
-        },
-        plugins: {
-            tooltip: {
-                mode: 'index',
-                intersect: false
-            }
-        }
-    }
-});
-
-// Role Workload Chart
-const roleData = <?php 
-    $roles = [];
-    $activeTasks = [];
-    $workloadByRole->data_seek(0);
-    while($row = $workloadByRole->fetch_assoc()) {
-        $roles[] = ucfirst($row['role']);
-        $activeTasks[] = $row['active_tasks'];
-    }
-    echo json_encode(['roles' => $roles, 'active' => $activeTasks]);
-?>;
-
-const roleCtx = document.getElementById('roleWorkloadChart').getContext('2d');
-new Chart(roleCtx, {
-    type: 'pie',
-    data: {
-        labels: roleData.roles,
-        datasets: [{
-            data: roleData.active,
-            backgroundColor: ['#0d6efd', '#20c997'],
-            borderWidth: 2,
-            borderColor: '#fff'
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: {
-                position: 'bottom'
-            },
-            tooltip: {
-                callbacks: {
-                    label: function(context) {
-                        const label = context.label || '';
-                        const value = context.parsed;
-                        return `${label}: ${value} active tasks`;
-                    }
-                }
-            }
-        }
-    }
-});
-
-// Utilization Chart
-const utilCtx = document.getElementById('utilizationChart').getContext('2d');
-new Chart(utilCtx, {
-    type: 'doughnut',
-    data: {
-        labels: ['Underutilized (0-2 tasks)', 'Optimal (3-4 tasks)', 'Overloaded (5+ tasks)'],
-        datasets: [{
-            data: [
-                <?php 
-                    $underutilized = $conn->query("
-                        SELECT COUNT(*) as count FROM (
-                            SELECT u.id, COUNT(t.id) as task_count
-                            FROM users u
-                            LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
-                            WHERE u.role IN ('expert', 'developer')
-                            GROUP BY u.id
-                            HAVING task_count <= 2
-                        ) as under
-                    ")->fetch_assoc()['count'];
-                    echo $underutilized;
-                ?>,
-                <?php 
-                    $optimal = $conn->query("
-                        SELECT COUNT(*) as count FROM (
-                            SELECT u.id, COUNT(t.id) as task_count
-                            FROM users u
-                            LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
-                            WHERE u.role IN ('expert', 'developer')
-                            GROUP BY u.id
-                            HAVING task_count BETWEEN 3 AND 4
-                        ) as opt
-                    ")->fetch_assoc()['count'];
-                    echo $optimal;
-                ?>,
-                <?php 
-                    $overloaded = $conn->query("
-                        SELECT COUNT(*) as count FROM (
-                            SELECT u.id, COUNT(t.id) as task_count
-                            FROM users u
-                            LEFT JOIN tasks t ON u.id = t.assigned_to AND t.status != 'completed'
-                            WHERE u.role IN ('expert', 'developer')
-                            GROUP BY u.id
-                            HAVING task_count >= 5
-                        ) as over
-                    ")->fetch_assoc()['count'];
-                    echo $overloaded;
-                ?>
-            ],
-            backgroundColor: ['#28a745', '#ffc107', '#dc3545'],
-            borderWidth: 2,
-            borderColor: '#fff'
-        }]
-    },
-    options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-            legend: {
-                position: 'bottom'
-            }
-        }
-    }
-});
-
 function editAllocation(userId, userName, currentTasks) {
     document.getElementById('alloc_user_id').value = userId;
     document.getElementById('alloc_user_name').textContent = userName;
@@ -590,64 +1135,46 @@ function viewResourceTasks(userId) {
         url: '../../api/get-resource-tasks.php',
         method: 'GET',
         data: { user_id: userId },
+        dataType: 'json',
         success: function(response) {
-            const tasks = JSON.parse(response);
-            let html = '<div class="table-responsive"><table class="table">';
-            html += `
-                <thead>
-                    <tr>
-                        <th>Task</th>
-                        <th>Project</th>
-                        <th>Priority</th>
-                        <th>Status</th>
-                        <th>Deadline</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-            `;
-            
+            if (!Array.isArray(response)) {
+                $('#resourceTasksContent').html(`<div class="alert alert-danger mb-0">${escapeHtml(response.error || 'Unable to load tasks.')}</div>`);
+                new bootstrap.Modal(document.getElementById('resourceTasksModal')).show();
+                return;
+            }
+
+            const tasks = response;
+            let html = '<div class="table-responsive"><table class="data-table">';
+            html += '<thead><tr><th>Task</th><th>Project</th><th>Priority</th><th>Status</th><th>Deadline</th><th>Actions</th></tr></thead><tbody>';
             tasks.forEach(task => {
-                const statusColor = task.status == 'completed' ? 'success' : 
-                                   (task.status == 'in_progress' ? 'info' : 
-                                   (task.status == 'todo' ? 'secondary' : 'warning'));
-                const priorityColor = task.priority == 'high' ? 'danger' : 
-                                     (task.priority == 'medium' ? 'warning' : 'success');
-                
+                const description = String(task.description || '').substring(0, 60);
+                const deadline = task.deadline ? new Date(task.deadline).toLocaleDateString() : 'Not set';
                 html += `
                     <tr>
-                        <td>
-                            <strong>${escapeHtml(task.title)}</strong>
-                            <br>
-                            <small>${escapeHtml(task.description.substring(0, 80))}</small>
-                        </td>
+                        <td><div class="fw-semibold">${escapeHtml(task.title || '')}</div><small>${escapeHtml(description)}</small></td>
                         <td>${escapeHtml(task.project_name)}</td>
-                        <td><span class="badge bg-${priorityColor}">${task.priority}</span></td>
-                        <td><span class="badge bg-${statusColor}">${task.status}</span></td>
-                        <td>${new Date(task.deadline).toLocaleDateString()}</td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" onclick="viewTaskDetail(${task.id})">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                        </td>
+                        <td>${escapeHtml(task.priority || '')}</td>
+                        <td>${escapeHtml(task.status || '')}</td>
+                        <td>${escapeHtml(deadline)}</td>
+                        <td><button class="btn-primary-modern btn-sm-modern" onclick="viewProjectTasks(${Number(task.project_id)})"><i class="fas fa-eye"></i></button></td>
                     </tr>
                 `;
             });
-            
             html += '</tbody></table></div>';
-            
-            if(tasks.length === 0) {
-                html = '<p class="text-muted text-center">No tasks assigned to this resource</p>';
-            }
-            
+            if(tasks.length === 0) html = '<p class="text-center text-muted py-4">No tasks assigned to this resource</p>';
             $('#resourceTasksContent').html(html);
+            new bootstrap.Modal(document.getElementById('resourceTasksModal')).show();
+        },
+        error: function(xhr) {
+            const message = xhr.responseJSON?.error || 'Unable to load tasks for this resource.';
+            $('#resourceTasksContent').html(`<div class="alert alert-danger mb-0">${escapeHtml(message)}</div>`);
             new bootstrap.Modal(document.getElementById('resourceTasksModal')).show();
         }
     });
 }
 
-function viewTaskDetail(taskId) {
-    window.location.href = '../../modules/developer/task.php?id=' + taskId;
+function viewProjectTasks(projectId) {
+    window.location.href = 'task-allocation.php?project_id=' + projectId;
 }
 
 function escapeHtml(text) {

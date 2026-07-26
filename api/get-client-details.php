@@ -1,6 +1,7 @@
 <?php
 header('Content-Type: application/json');
 require_once '../includes/auth.php';
+require_once '../includes/project-progress.php';
 requireRole('sales');
 
 $conn = getConnection();
@@ -12,7 +13,25 @@ if (!$id) {
     exit;
 }
 
-$stmt = $conn->prepare("SELECT * FROM clients WHERE id = ?");
+$featureCondition = projectProgressFeatureCondition('t');
+$mergedCondition = projectProgressMergedCondition('t');
+$stmt = $conn->prepare("
+    SELECT
+        c.*,
+        COALESCE(cp.total_features, 0) AS total_features,
+        COALESCE(cp.merged_features, 0) AS merged_features
+    FROM clients c
+    LEFT JOIN (
+        SELECT
+            p.client_id,
+            COUNT(t.id) AS total_features,
+            SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END) AS merged_features
+        FROM projects p
+        LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
+        GROUP BY p.client_id
+    ) cp ON cp.client_id = c.id
+    WHERE c.id = ?
+");
 $stmt->bind_param("i", $id);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -24,6 +43,7 @@ if (!$client) {
     exit;
 }
 
+$client['progress'] = projectProgressPercent((int) ($client['total_features'] ?? 0), (int) ($client['merged_features'] ?? 0));
 echo json_encode($client);
 ?>
 

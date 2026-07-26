@@ -13,19 +13,35 @@ CREATE TABLE users (
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     department VARCHAR(100),
-    role ENUM('admin', 'sales', 'architect', 'sul', 'expert', 'developer') NOT NULL,
+    role ENUM('admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer') NOT NULL,
     status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
     profile_pic VARCHAR(255),
     phone VARCHAR(20),
     address TEXT,
     designation VARCHAR(100),
+    skills TEXT NULL,
+    availability_status VARCHAR(30) DEFAULT 'available',
+    max_concurrent_tasks INT DEFAULT 5,
+    password_changed_at DATETIME NULL,
     last_login DATETIME NULL,
     email_notifications BOOLEAN DEFAULT TRUE,
     task_reminders BOOLEAN DEFAULT TRUE,
     project_updates BOOLEAN DEFAULT TRUE,
+    in_app_notifications BOOLEAN DEFAULT TRUE,
+    theme_preference VARCHAR(20) DEFAULT 'system',
+    accent_color VARCHAR(20) DEFAULT 'blue',
+    evortix_enabled BOOLEAN DEFAULT TRUE,
+    evortix_suggestions BOOLEAN DEFAULT TRUE,
+    evortix_sound BOOLEAN DEFAULT FALSE,
+    timezone VARCHAR(64) DEFAULT 'Asia/Manila',
+    date_format VARCHAR(20) DEFAULT 'M d, Y',
+    session_version INT DEFAULT 1,
+    sessions_invalid_before DATETIME NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_role (role),
+    INDEX idx_department (department),
+    INDEX idx_role_department_status (role, department, status),
     INDEX idx_status (status),
     INDEX idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -84,10 +100,23 @@ CREATE TABLE projects (
     description TEXT,
     status ENUM('pending', 'requirements_gathering', 'architectural_review', 'tech_recommendation', 'developer_allocation', 'arch_documentation', 'in_development', 'review', 'in_progress', 'completed', 'cancelled') DEFAULT 'pending',
     timeline_start DATE,
+    timeline_start_time TIME NULL,
     timeline_end DATE,
+    timeline_end_time TIME NULL,
+    project_phases LONGTEXT,
+    methodology_template VARCHAR(80) NULL,
     meeting_notes TEXT,
     mom TEXT,
     requested_features LONGTEXT,
+    included_departments LONGTEXT,
+    project_type VARCHAR(80) NULL,
+    project_template_id INT NULL,
+    project_template_snapshot LONGTEXT NULL,
+    sales_budget DECIMAL(15, 2) NULL,
+    cloud_platform VARCHAR(100),
+    database_server VARCHAR(100),
+    storage_requirements VARCHAR(255),
+    additional_services TEXT,
     complexity_level ENUM('simple', 'medium', 'complex') DEFAULT 'medium',
     created_by INT NOT NULL,
     architect_id INT,
@@ -101,6 +130,55 @@ CREATE TABLE projects (
     INDEX idx_status (status),
     INDEX idx_client_id (client_id),
     INDEX idx_architect_id (architect_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- PROJECT TEMPLATES TABLE
+-- =====================================================
+CREATE TABLE project_templates (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    project_type VARCHAR(120) NOT NULL,
+    normalized_type VARCHAR(120) NOT NULL,
+    template_version INT NOT NULL DEFAULT 1,
+    duration_label VARCHAR(80) NULL,
+    duration_min_weeks INT DEFAULT 0,
+    duration_max_weeks INT DEFAULT 0,
+    budget_min DECIMAL(15, 2) DEFAULT 0,
+    budget_max DECIMAL(15, 2) DEFAULT 0,
+    methodology VARCHAR(80) NULL,
+    core_features LONGTEXT NULL,
+    tech_stack LONGTEXT NULL,
+    team_composition LONGTEXT NULL,
+    complexity_level VARCHAR(40) DEFAULT 'medium',
+    payment_terms VARCHAR(255) NULL,
+    sales_notes LONGTEXT NULL,
+    integrations LONGTEXT NULL,
+    security_requirements LONGTEXT NULL,
+    architecture_notes LONGTEXT NULL,
+    workload_estimate VARCHAR(120) NULL,
+    project_description LONGTEXT NULL,
+    suggested_milestones LONGTEXT NULL,
+    default_project_phases LONGTEXT NULL,
+    functional_requirements LONGTEXT NULL,
+    non_functional_requirements LONGTEXT NULL,
+    third_party_services LONGTEXT NULL,
+    hosting_platform VARCHAR(120) NULL,
+    deployment_environment VARCHAR(120) NULL,
+    database_technology VARCHAR(120) NULL,
+    auth_method VARCHAR(160) NULL,
+    backup_recovery_strategy LONGTEXT NULL,
+    developer_roles_allocation LONGTEXT NULL,
+    testing_requirements LONGTEXT NULL,
+    documentation_requirements LONGTEXT NULL,
+    maintenance_support LONGTEXT NULL,
+    risk_assessment LONGTEXT NULL,
+    implementation_notes LONGTEXT NULL,
+    source VARCHAR(40) DEFAULT 'seed',
+    usage_count INT DEFAULT 0,
+    learned_from_project_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_project_template_type (normalized_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -134,13 +212,14 @@ CREATE TABLE developer_allocations (
     skill_level VARCHAR(50),
     required_count INT DEFAULT 1,
     allocated_count INT DEFAULT 0,
-    complexity_level ENUM('simple', 'medium', 'complex') DEFAULT 'medium',
+    complexity_level ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     INDEX idx_project_id (project_id),
-    INDEX idx_role (role)
+    INDEX idx_role (role),
+    INDEX idx_project_role (project_id, role)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -162,12 +241,94 @@ CREATE TABLE developer_allocation_assignments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- METHODOLOGY ROADMAP PHASES TABLE
+-- =====================================================
+CREATE TABLE methodology_phases (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    project_id INT NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    description TEXT,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    developer_count INT DEFAULT 0,
+    sequence_no INT DEFAULT 0,
+    status ENUM('planned', 'in_progress', 'completed', 'on_hold') DEFAULT 'planned',
+    created_by INT NULL,
+    updated_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_methodology_phase_project (project_id),
+    INDEX idx_methodology_phase_dates (start_date, end_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- METHODOLOGY ROADMAP TASKS TABLE
+-- =====================================================
+CREATE TABLE methodology_tasks (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    phase_id INT NOT NULL,
+    project_id INT NOT NULL,
+    task_id INT NULL,
+    title VARCHAR(255) NOT NULL,
+    component_name VARCHAR(150),
+    department VARCHAR(100),
+    description TEXT,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    developer_entity_key VARCHAR(80) NULL,
+    assigned_developer_id INT NULL,
+    expert_people_count INT DEFAULT 0,
+    expert_developer_type VARCHAR(100) NULL,
+    expert_notes TEXT,
+    status ENUM('planned', 'in_progress', 'completed', 'blocked') DEFAULT 'planned',
+    created_by INT NULL,
+    updated_by INT NULL,
+    expert_updated_by INT NULL,
+    expert_updated_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (phase_id) REFERENCES methodology_phases(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (assigned_developer_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (expert_updated_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_methodology_task_project (project_id),
+    INDEX idx_methodology_task_phase (phase_id),
+    INDEX idx_methodology_task_workflow_task (task_id),
+    INDEX idx_methodology_task_entity (developer_entity_key),
+    INDEX idx_methodology_task_dates (start_date, end_date),
+    INDEX idx_methodology_task_developer (assigned_developer_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- METHODOLOGY ROADMAP TASK DEPARTMENT REQUIREMENTS TABLE
+-- =====================================================
+CREATE TABLE methodology_task_departments (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    methodology_task_id INT NOT NULL,
+    project_id INT NOT NULL,
+    department VARCHAR(100) NOT NULL,
+    required_count INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (methodology_task_id) REFERENCES methodology_tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_methodology_task_department (methodology_task_id, department),
+    INDEX idx_methodology_task_department_project (project_id),
+    INDEX idx_methodology_task_department_name (department)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- ARCHITECTURE DOCUMENTS TABLE
 -- =====================================================
 CREATE TABLE architecture_documents (
     id INT PRIMARY KEY AUTO_INCREMENT,
     project_id INT NOT NULL,
-    document_type ENUM('architecture_plan', 'workflow_diagram', 'system_design', 'technical_spec') NOT NULL,
+    document_type ENUM('architecture_plan', 'workflow_diagram', 'system_flow', 'deployment_diagram', 'database_schema') NOT NULL,
     file_name VARCHAR(255) NOT NULL,
     file_path VARCHAR(500) NOT NULL,
     description TEXT,
@@ -190,7 +351,7 @@ CREATE TABLE tasks (
     task_type ENUM('feature', 'bug_fix', 'enhancement', 'documentation') DEFAULT 'feature',
     assigned_to INT,
     assigned_by INT,
-    status ENUM('todo', 'in_progress', 'in_review', 'review', 'completed', 'overdue', 'blocked') DEFAULT 'todo',
+    status ENUM('todo', 'in_progress', 'in_review', 'review', 'for_review', 'sul_revision', 'qa_testing', 'qa_failed', 'qa_passed', 'architect_review', 'merged', 'ready_for_release', 'completed', 'overdue', 'blocked') DEFAULT 'todo',
     priority ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
     estimated_days_min INT,
     estimated_days_likely INT,
@@ -201,6 +362,20 @@ CREATE TABLE tasks (
     deadline DATE,
     started_at DATETIME,
     completed_at DATETIME,
+    sales_approved TINYINT(1) DEFAULT 0,
+    sales_approved_by INT,
+    sales_approved_at DATETIME,
+    sales_estimate_choice ENUM('min','likely','max') DEFAULT NULL,
+    sales_estimate_days INT DEFAULT NULL,
+    pr_submitted_at DATETIME NULL,
+    sul_reviewed_by INT NULL,
+    sul_reviewed_at DATETIME NULL,
+    qa_reviewed_by INT NULL,
+    qa_reviewed_at DATETIME NULL,
+    architect_reviewed_by INT NULL,
+    architect_reviewed_at DATETIME NULL,
+    merged_at DATETIME NULL,
+    release_notified_at DATETIME NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -208,7 +383,34 @@ CREATE TABLE tasks (
     FOREIGN KEY (assigned_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_status (status),
     INDEX idx_assigned_to (assigned_to),
-    INDEX idx_project_id (project_id)
+    INDEX idx_project_id (project_id),
+    INDEX idx_project_status_assigned (project_id, status, assigned_to)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- TASK DEPARTMENT ARTIFACTS TABLE
+-- =====================================================
+CREATE TABLE task_department_artifacts (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    task_id INT NOT NULL,
+    project_id INT NOT NULL,
+    user_id INT NULL,
+    department VARCHAR(100) NOT NULL,
+    artifact_type VARCHAR(50) NOT NULL DEFAULT 'department_handoff',
+    title VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500),
+    original_file_name VARCHAR(255),
+    file_type VARCHAR(100),
+    file_size BIGINT,
+    external_url VARCHAR(500),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_task_id (task_id),
+    INDEX idx_project_id (project_id),
+    INDEX idx_department (department)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -222,6 +424,9 @@ CREATE TABLE feature_estimations (
     min_days INT,
     likely_days INT,
     max_days INT,
+    phase_name VARCHAR(150),
+    involvement_plan_json LONGTEXT,
+    component_plan_json LONGTEXT,
     expectation_description LONGTEXT,
     status ENUM('pending', 'in_progress', 'completed', 'submitted') DEFAULT 'pending',
     submitted_at DATETIME,
@@ -231,6 +436,53 @@ CREATE TABLE feature_estimations (
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
     FOREIGN KEY (expert_id) REFERENCES users(id) ON DELETE RESTRICT,
     UNIQUE KEY unique_task_expert (task_id, expert_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- FEATURE ESTIMATION MANUAL RECOMMENDATIONS TABLE
+-- =====================================================
+CREATE TABLE feature_estimation_manual_recommendations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    feature_signature VARCHAR(190) NOT NULL,
+    feature_title VARCHAR(255) NOT NULL,
+    recommendation_name VARCHAR(255) NOT NULL,
+    source_project_id INT NULL,
+    source_task_id INT NULL,
+    phase_name VARCHAR(150),
+    expectation_description LONGTEXT,
+    min_days INT NOT NULL,
+    likely_days INT NOT NULL,
+    max_days INT NOT NULL,
+    involvement_plan_json LONGTEXT,
+    component_plan_json LONGTEXT,
+    created_by INT NOT NULL,
+    updated_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_manual_feature_recommendation (created_by, feature_signature, recommendation_name),
+    KEY idx_manual_feature_signature (feature_signature),
+    FOREIGN KEY (source_project_id) REFERENCES projects(id) ON DELETE SET NULL,
+    FOREIGN KEY (source_task_id) REFERENCES tasks(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- FEATURE ESTIMATION RECOMMENDATION FEEDBACK TABLE
+-- =====================================================
+CREATE TABLE feature_estimation_recommendation_feedback (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    task_id INT NOT NULL,
+    source_type ENUM('history', 'manual') NOT NULL,
+    source_id INT NOT NULL,
+    action ENUM('accepted', 'rejected') NOT NULL,
+    acted_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_task_recommendation_feedback (task_id, source_type, source_id),
+    KEY idx_feedback_task (task_id),
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (acted_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -266,6 +518,41 @@ CREATE TABLE cost_estimations (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
     INDEX idx_project_id (project_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- EXPERT PROJECT ESTIMATIONS TABLE
+-- =====================================================
+CREATE TABLE expert_project_estimations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    project_id INT NOT NULL,
+    expert_id INT NOT NULL,
+    status ENUM('draft','submitted','sul_rejected','sul_approved','sales_rejected','sales_approved') DEFAULT 'draft',
+    project_duration_months INT DEFAULT 1,
+    project_complexity VARCHAR(40) DEFAULT 'Medium',
+    allocation_json LONGTEXT,
+    additional_costs DECIMAL(15, 2) DEFAULT 0,
+    total_developer_cost DECIMAL(15, 2) DEFAULT 0,
+    total_technology_stack_cost DECIMAL(15, 2) DEFAULT 0,
+    overall_estimated_project_cost DECIMAL(15, 2) DEFAULT 0,
+    remaining_budget DECIMAL(15, 2) DEFAULT 0,
+    sul_reviewed_by INT NULL,
+    sul_reviewed_at DATETIME NULL,
+    sul_comment TEXT,
+    sales_reviewed_by INT NULL,
+    sales_reviewed_at DATETIME NULL,
+    sales_comment TEXT,
+    submitted_at DATETIME NULL,
+    approved_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_project_estimation (project_id),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (expert_id) REFERENCES users(id) ON DELETE RESTRICT,
+    FOREIGN KEY (sul_reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (sales_reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_project_estimation_status (status),
+    INDEX idx_project_estimation_expert (expert_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -309,10 +596,16 @@ CREATE TABLE receipts (
     amount_paid DECIMAL(12, 2) DEFAULT 0,
     due_date DATE,
     status ENUM('draft', 'sent', 'viewed', 'paid', 'overdue') DEFAULT 'draft',
+    payment_proof_path VARCHAR(500),
+    payment_proof_name VARCHAR(255),
+    payment_verified_by INT,
+    payment_verified_at DATETIME,
+    email_sent_at DATETIME,
     generated_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (report_id) REFERENCES sales_reports(id) ON DELETE CASCADE,
+    FOREIGN KEY (payment_verified_by) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY (generated_by) REFERENCES users(id) ON DELETE RESTRICT,
     INDEX idx_status (status),
     INDEX idx_due_date (due_date)
@@ -444,6 +737,7 @@ CREATE TABLE chat_group_members (
     role ENUM('member', 'moderator', 'admin') DEFAULT 'member',
     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     left_at DATETIME,
+    last_read_message_id INT NOT NULL DEFAULT 0,
     UNIQUE KEY unique_group_user (group_id, user_id),
     FOREIGN KEY (group_id) REFERENCES chat_groups(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -476,6 +770,19 @@ CREATE TABLE messages (
 -- =====================================================
 -- AUDIT LOG TABLE
 -- =====================================================
+CREATE TABLE evortix_sul_suggestion_history (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    sul_id INT NOT NULL,
+    task_id INT NOT NULL,
+    project_id INT NOT NULL,
+    decision VARCHAR(30) NOT NULL,
+    recommended_user_id INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_evortix_sul_task (sul_id, task_id),
+    INDEX idx_evortix_sul_decision (sul_id, decision)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE audit_logs (
     id INT PRIMARY KEY AUTO_INCREMENT,
     user_id INT,
@@ -548,20 +855,261 @@ CREATE TABLE task_comments (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- QA CHECKLIST ITEMS TABLE
+-- =====================================================
+CREATE TABLE qa_checklist_items (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    task_id INT NOT NULL,
+    feature_name VARCHAR(150) NOT NULL,
+    item_text VARCHAR(255) NOT NULL,
+    status ENUM('pending', 'passed', 'failed', 'needs_revision') DEFAULT 'pending',
+    notes TEXT,
+    developer_id INT NULL,
+    qa_user_id INT NULL,
+    reviewed_at DATETIME NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (developer_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (qa_user_id) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_task_id (task_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- TASK GIT UPDATES TABLE
+-- =====================================================
+CREATE TABLE task_git_updates (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    task_id INT NOT NULL,
+    user_id INT NOT NULL,
+    repository_url VARCHAR(255),
+    branch_name VARCHAR(150) NOT NULL,
+    commit_hash VARCHAR(64),
+    commit_message VARCHAR(255),
+    pull_request_url VARCHAR(255),
+    git_action ENUM('branch_created', 'commit_pushed', 'pull_request_opened', 'merged', 'deployed', 'note') DEFAULT 'commit_pushed',
+    status ENUM('active', 'in_review', 'merged', 'closed') DEFAULT 'active',
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_task_id (task_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_branch_name (branch_name),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- PROJECT REPOSITORIES TABLE
+-- =====================================================
+CREATE TABLE project_repositories (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    project_id INT NOT NULL,
+    parent_repository_id INT NULL,
+    name VARCHAR(150) NOT NULL,
+    slug VARCHAR(180) NOT NULL,
+    description TEXT,
+    external_remote_url VARCHAR(255),
+    sync_mode ENUM('manual', 'git_hook', 'provider_webhook') DEFAULT 'manual',
+    sync_provider VARCHAR(50),
+    webhook_token VARCHAR(80) NOT NULL,
+    visibility ENUM('private', 'internal', 'public') DEFAULT 'internal',
+    default_branch_name VARCHAR(150) DEFAULT 'main',
+    repository_status ENUM('active', 'archived') DEFAULT 'active',
+    last_activity_at DATETIME NULL,
+    created_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_project_repo_slug (project_id, slug),
+    UNIQUE KEY unique_repository_webhook_token (webhook_token),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_repository_id) REFERENCES project_repositories(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+    INDEX idx_project_id (project_id),
+    INDEX idx_created_by (created_by),
+    INDEX idx_repo_status (repository_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- REPOSITORY BRANCHES TABLE
+-- =====================================================
+CREATE TABLE repository_branches (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    repository_id INT NOT NULL,
+    source_branch_id INT NULL,
+    name VARCHAR(150) NOT NULL,
+    last_commit_hash VARCHAR(64),
+    branch_status ENUM('active', 'merged', 'deleted') DEFAULT 'active',
+    is_default BOOLEAN DEFAULT FALSE,
+    is_protected BOOLEAN DEFAULT FALSE,
+    created_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_repository_branch (repository_id, name),
+    FOREIGN KEY (repository_id) REFERENCES project_repositories(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_branch_id) REFERENCES repository_branches(id) ON DELETE SET NULL,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
+    INDEX idx_repository_id (repository_id),
+    INDEX idx_branch_status (branch_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- REPOSITORY COMMITS TABLE
+-- =====================================================
+CREATE TABLE repository_commits (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    repository_id INT NOT NULL,
+    branch_id INT NOT NULL,
+    parent_commit_id INT NULL,
+    commit_hash VARCHAR(64) NOT NULL UNIQUE,
+    commit_title VARCHAR(255) NOT NULL,
+    commit_message TEXT,
+    files_changed INT DEFAULT 0,
+    lines_added INT DEFAULT 0,
+    lines_removed INT DEFAULT 0,
+    commit_kind ENUM('commit', 'merge', 'sync') DEFAULT 'commit',
+    authored_by INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (repository_id) REFERENCES project_repositories(id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_id) REFERENCES repository_branches(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_commit_id) REFERENCES repository_commits(id) ON DELETE SET NULL,
+    FOREIGN KEY (authored_by) REFERENCES users(id) ON DELETE RESTRICT,
+    INDEX idx_commit_repository_id (repository_id),
+    INDEX idx_commit_branch_id (branch_id),
+    INDEX idx_commit_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- REPOSITORY COMMIT FILES TABLE
+-- =====================================================
+CREATE TABLE repository_commit_files (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    commit_id INT NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    previous_file_path VARCHAR(500) NULL,
+    change_type ENUM('added', 'modified', 'deleted', 'renamed') DEFAULT 'modified',
+    additions INT DEFAULT 0,
+    deletions INT DEFAULT 0,
+    diff_excerpt LONGTEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (commit_id) REFERENCES repository_commits(id) ON DELETE CASCADE,
+    INDEX idx_commit_file_commit_id (commit_id),
+    INDEX idx_commit_file_change_type (change_type),
+    INDEX idx_commit_file_path (file_path)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- REPOSITORY MERGES TABLE
+-- =====================================================
+CREATE TABLE repository_merges (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    repository_id INT NOT NULL,
+    source_branch_id INT NOT NULL,
+    target_branch_id INT NOT NULL,
+    merge_commit_id INT NULL,
+    merged_by INT NOT NULL,
+    merge_status ENUM('pending', 'merged', 'rejected') DEFAULT 'merged',
+    summary VARCHAR(255),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (repository_id) REFERENCES project_repositories(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_branch_id) REFERENCES repository_branches(id) ON DELETE RESTRICT,
+    FOREIGN KEY (target_branch_id) REFERENCES repository_branches(id) ON DELETE RESTRICT,
+    FOREIGN KEY (merge_commit_id) REFERENCES repository_commits(id) ON DELETE SET NULL,
+    FOREIGN KEY (merged_by) REFERENCES users(id) ON DELETE RESTRICT,
+    INDEX idx_merge_repository_id (repository_id),
+    INDEX idx_merge_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- REPOSITORY OPERATIONS TABLE
+-- =====================================================
+CREATE TABLE repository_operations (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    repository_id INT NOT NULL,
+    branch_id INT NULL,
+    commit_id INT NULL,
+    user_id INT NOT NULL,
+    operation_type ENUM('create_repository', 'fork_repository', 'create_branch', 'commit', 'push', 'pull', 'merge') NOT NULL,
+    related_repository_id INT NULL,
+    related_branch_id INT NULL,
+    metadata LONGTEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (repository_id) REFERENCES project_repositories(id) ON DELETE CASCADE,
+    FOREIGN KEY (branch_id) REFERENCES repository_branches(id) ON DELETE SET NULL,
+    FOREIGN KEY (commit_id) REFERENCES repository_commits(id) ON DELETE SET NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+    FOREIGN KEY (related_repository_id) REFERENCES project_repositories(id) ON DELETE SET NULL,
+    FOREIGN KEY (related_branch_id) REFERENCES repository_branches(id) ON DELETE SET NULL,
+    INDEX idx_operation_repository_id (repository_id),
+    INDEX idx_operation_branch_id (branch_id),
+    INDEX idx_operation_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- INSERT SAMPLE DATA FOR TESTING
 -- =====================================================
 
 -- Insert default admin user (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('admin', 'admin@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', 'Administration', 'admin', 'active', 'Admin');
+('admin', 'admin@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', NULL, 'admin', 'active', 'Admin');
 
 -- Insert Sample Users for Each Role (password: password)
 INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
-('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', 'Sales', 'sales', 'active', 'Sales Manager'),
-('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', 'Architecture', 'architect', 'active', 'System Architect'),
-('sul_user', 'sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Robert SUL', 'Service Unit', 'sul', 'active', 'Service Unit Leader'),
-('expert', 'expert@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Dr. Expert Senior', 'Development', 'expert', 'active', 'Senior Expert'),
-('developer', 'developer@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'David Developer', 'Development', 'developer', 'active', 'Software Developer');
+('sales_user', 'sales@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Sales Manager', NULL, 'sales', 'active', 'Sales Manager'),
+('architect', 'architect@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Maria Architect', NULL, 'architect', 'active', 'System Architect'),
+('sul_user', 'sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Robert Frontend SUL', 'Frontend Developer', 'sul', 'active', 'Service Unit Leader'),
+('qa_user', 'qa@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Quinn QA Engineer', 'QA Engineer', 'qa', 'active', 'QA Engineer'),
+('expert', 'expert@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Dr. Frontend Expert', 'Frontend Developer', 'expert', 'active', 'Frontend Expert'),
+('developer', 'developer@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'David Frontend Developer', 'Frontend Developer', 'developer', 'active', 'Frontend Developer');
+
+-- Department dummy teams (password: password)
+INSERT INTO users (username, email, password, full_name, department, role, status, designation) VALUES
+('expert_sul_1', 'expert.sul@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Evelyn Expert SUL', 'Expert Department', 'sul', 'active', 'Expert Service Unit Leader'),
+('expert_dept_1', 'expert.dept1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Rafael Estimation Expert', 'Expert Department', 'expert', 'active', 'Solution Estimation Expert'),
+('expert_dept_2', 'expert.dept2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Mina Senior Estimator', 'Expert Department', 'expert', 'active', 'Senior Estimation Expert'),
+('frontend_sul_2', 'frontend.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ana Frontend SUL', 'Frontend Developer', 'sul', 'active', 'Service Unit Leader'),
+('frontend_dev_2', 'frontend.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Liam Frontend Developer', 'Frontend Developer', 'developer', 'active', 'Frontend Developer'),
+('frontend_dev_3', 'frontend.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Mia Frontend Developer', 'Frontend Developer', 'developer', 'active', 'Frontend Developer'),
+('backend_sul_1', 'backend.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Noel Backend SUL', 'Backend Developer', 'sul', 'active', 'Service Unit Leader'),
+('backend_sul_2', 'backend.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Rina Backend SUL', 'Backend Developer', 'sul', 'active', 'Service Unit Leader'),
+('backend_expert_1', 'backend.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Elena Backend Expert', 'Backend Developer', 'expert', 'active', 'Backend Expert'),
+('backend_dev_1', 'backend.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Carlo Backend Developer', 'Backend Developer', 'developer', 'active', 'Backend Developer'),
+('backend_dev_2', 'backend.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Jessa Backend Developer', 'Backend Developer', 'developer', 'active', 'Backend Developer'),
+('backend_dev_3', 'backend.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Paolo Backend Developer', 'Backend Developer', 'developer', 'active', 'Backend Developer'),
+('fullstack_sul_1', 'fullstack.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Grace Full Stack SUL', 'Full Stack Developer', 'sul', 'active', 'Service Unit Leader'),
+('fullstack_sul_2', 'fullstack.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Marco Full Stack SUL', 'Full Stack Developer', 'sul', 'active', 'Service Unit Leader'),
+('fullstack_expert_1', 'fullstack.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Sofia Full Stack Expert', 'Full Stack Developer', 'expert', 'active', 'Full Stack Expert'),
+('fullstack_dev_1', 'fullstack.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Arvin Full Stack Developer', 'Full Stack Developer', 'developer', 'active', 'Full Stack Developer'),
+('fullstack_dev_2', 'fullstack.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Bianca Full Stack Developer', 'Full Stack Developer', 'developer', 'active', 'Full Stack Developer'),
+('fullstack_dev_3', 'fullstack.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ken Full Stack Developer', 'Full Stack Developer', 'developer', 'active', 'Full Stack Developer'),
+('qaeng_sul_1', 'qaeng.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Iris QA SUL', 'QA Engineer', 'sul', 'active', 'Service Unit Leader'),
+('qaeng_sul_2', 'qaeng.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Owen QA SUL', 'QA Engineer', 'sul', 'active', 'Service Unit Leader'),
+('qaeng_expert_1', 'qaeng.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Nina QA Expert', 'QA Engineer', 'expert', 'active', 'QA Expert'),
+('qaeng_dev_1', 'qaeng.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Sam QA Developer', 'QA Engineer', 'developer', 'active', 'QA Automation Developer'),
+('qaeng_dev_2', 'qaeng.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Tara QA Developer', 'QA Engineer', 'developer', 'active', 'QA Automation Developer'),
+('qaeng_dev_3', 'qaeng.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Vince QA Developer', 'QA Engineer', 'developer', 'active', 'QA Automation Developer'),
+('uiux_sul_1', 'uiux.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Lara UI UX SUL', 'UI/UX Designer', 'sul', 'active', 'Service Unit Leader'),
+('uiux_sul_2', 'uiux.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ramon UI UX SUL', 'UI/UX Designer', 'sul', 'active', 'Service Unit Leader'),
+('uiux_expert_1', 'uiux.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Celine UI UX Expert', 'UI/UX Designer', 'expert', 'active', 'UI/UX Expert'),
+('uiux_dev_1', 'uiux.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Diane UI UX Developer', 'UI/UX Designer', 'developer', 'active', 'UI/UX Developer'),
+('uiux_dev_2', 'uiux.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Evan UI UX Developer', 'UI/UX Designer', 'developer', 'active', 'UI/UX Developer'),
+('uiux_dev_3', 'uiux.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Faye UI UX Developer', 'UI/UX Designer', 'developer', 'active', 'UI/UX Developer'),
+('devops_sul_1', 'devops.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Gio DevOps SUL', 'DevOps Engineer', 'sul', 'active', 'Service Unit Leader'),
+('devops_sul_2', 'devops.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Hanna DevOps SUL', 'DevOps Engineer', 'sul', 'active', 'Service Unit Leader'),
+('devops_expert_1', 'devops.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Ivan DevOps Expert', 'DevOps Engineer', 'expert', 'active', 'DevOps Expert'),
+('devops_dev_1', 'devops.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Jude DevOps Developer', 'DevOps Engineer', 'developer', 'active', 'DevOps Developer'),
+('devops_dev_2', 'devops.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Kara DevOps Developer', 'DevOps Engineer', 'developer', 'active', 'DevOps Developer'),
+('devops_dev_3', 'devops.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Luis DevOps Developer', 'DevOps Engineer', 'developer', 'active', 'DevOps Developer'),
+('database_sul_1', 'database.sul1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Mara Database SUL', 'Database Administrator', 'sul', 'active', 'Service Unit Leader'),
+('database_sul_2', 'database.sul2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Nico Database SUL', 'Database Administrator', 'sul', 'active', 'Service Unit Leader'),
+('database_expert_1', 'database.expert1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Olive Database Expert', 'Database Administrator', 'expert', 'active', 'Database Expert'),
+('database_dev_1', 'database.dev1@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Pia Database Developer', 'Database Administrator', 'developer', 'active', 'Database Developer'),
+('database_dev_2', 'database.dev2@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Quincy Database Developer', 'Database Administrator', 'developer', 'active', 'Database Developer'),
+('database_dev_3', 'database.dev3@erni-pms.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Reese Database Developer', 'Database Administrator', 'developer', 'active', 'Database Developer');
 
 -- Insert Technologies
 INSERT INTO technologies (name, category, price, status, expiry_date, renewal_cost, description, created_by) VALUES
@@ -571,7 +1119,34 @@ INSERT INTO technologies (name, category, price, status, expiry_date, renewal_co
 ('React.js Framework', 'Frontend', 0.00, 'active', '2030-12-31', 0.00, 'JavaScript library for UI', 1),
 ('Node.js Runtime', 'Backend', 0.00, 'active', '2030-12-31', 0.00, 'JavaScript runtime', 1),
 ('Azure App Service', 'Cloud Platform', 100.00, 'active', DATE_ADD(NOW(), INTERVAL 6 MONTH), 100.00, 'Cloud app hosting', 1),
-('Azure SQL Database', 'Database', 150.00, 'active', DATE_ADD(NOW(), INTERVAL 8 MONTH), 150.00, 'SQL Database service', 1);
+('Azure SQL Database', 'Database', 150.00, 'active', DATE_ADD(NOW(), INTERVAL 8 MONTH), 150.00, 'SQL Database service', 1),
+('HTML/CSS', 'Frontend', 0.00, 'active', NULL, 0.00, 'Standards-based responsive web interface', 1),
+('JavaScript', 'Frontend', 0.00, 'active', NULL, 0.00, 'Browser application language', 1),
+('React', 'Frontend', 0.00, 'active', NULL, 0.00, 'Component-based web interface library', 1),
+('Vue.js', 'Frontend', 0.00, 'active', NULL, 0.00, 'Progressive web interface framework', 1),
+('Angular', 'Frontend', 0.00, 'active', NULL, 0.00, 'Enterprise frontend framework', 1),
+('Bootstrap', 'Frontend', 0.00, 'active', NULL, 0.00, 'Responsive interface component toolkit', 1),
+('PHP/Laravel', 'Backend', 0.00, 'active', NULL, 0.00, 'PHP application framework and runtime', 1),
+('Laravel', 'Backend', 0.00, 'active', NULL, 0.00, 'PHP web application framework', 1),
+('Node.js', 'Backend', 0.00, 'active', NULL, 0.00, 'JavaScript server runtime', 1),
+('ASP.NET Core', 'Backend', 0.00, 'active', NULL, 0.00, 'Cross-platform .NET application framework', 1),
+('Django', 'Backend', 0.00, 'active', NULL, 0.00, 'Python web application framework', 1),
+('Flutter', 'Mobile', 0.00, 'active', NULL, 0.00, 'Cross-platform mobile application framework', 1),
+('Kotlin', 'Mobile', 0.00, 'active', NULL, 0.00, 'Native Android development language', 1),
+('Kotlin/Flutter', 'Mobile', 0.00, 'active', NULL, 0.00, 'Native or cross-platform mobile delivery option', 1),
+('MySQL', 'Database', 0.00, 'active', NULL, 0.00, 'Relational application database', 1),
+('PostgreSQL', 'Database', 0.00, 'active', NULL, 0.00, 'Advanced open-source relational database', 1),
+('Firebase / Firestore', 'Database', 0.00, 'active', NULL, 0.00, 'Managed realtime document database', 1),
+('AWS Application Hosting', 'Hosting', 150.00, 'active', NULL, 150.00, 'Managed AWS application hosting baseline', 1),
+('Google Cloud Run', 'Hosting', 100.00, 'active', NULL, 100.00, 'Managed container application hosting', 1),
+('Managed VPS Hosting', 'Hosting', 100.00, 'active', NULL, 100.00, 'Managed virtual server hosting', 1),
+('OAuth / OpenID Connect', 'Security', 0.00, 'active', NULL, 0.00, 'Standards-based authentication and authorization', 1),
+('Managed Web Application Firewall', 'Security', 100.00, 'active', NULL, 100.00, 'Managed application traffic protection', 1),
+('Payment Gateway API', 'Integration', 0.00, 'active', NULL, 0.00, 'Online payment service integration', 1),
+('Email/SMS Notification API', 'Integration', 0.00, 'active', NULL, 0.00, 'Transactional notification integration', 1),
+('Push Notification Service', 'Integration', 0.00, 'active', NULL, 0.00, 'Mobile and web push messaging', 1),
+('Maps and GPS API', 'Integration', 0.00, 'active', NULL, 0.00, 'Mapping, geocoding, and location services', 1),
+('Reporting and Export Service', 'Integration', 0.00, 'active', NULL, 0.00, 'Document, spreadsheet, and analytics export support', 1);
 
 -- Insert Sample Clients
 INSERT INTO clients (name, contact_person, email, phone, address, company_type, industry, status, deadline, created_by) VALUES
@@ -579,9 +1154,26 @@ INSERT INTO clients (name, contact_person, email, phone, address, company_type, 
 ('Healthcare Inc', 'Maria Santos', 'maria@healthcare.com', '+63 917 1234 567', 'Quezon City, Philippines', 'Company', 'Healthcare', 'active', '2026-12-15', 1);
 
 -- Insert Sample Projects
-INSERT INTO projects (client_id, name, description, status, timeline_start, timeline_end, complexity_level, created_by, architect_id, sul_id) VALUES
-(1, 'E-Commerce Platform', 'Complete e-commerce solution with payment gateway', 'requirements_gathering', '2026-03-01', '2026-12-31', 'complex', 1, 3, 4),
-(2, 'Patient Management System', 'Hospital management and patient tracking system', 'pending', '2026-04-01', '2027-03-31', 'complex', 1, NULL, NULL);
+INSERT INTO projects (client_id, name, description, status, timeline_start, timeline_end, requested_features, included_departments, complexity_level, created_by, architect_id, sul_id) VALUES
+(1, 'E-Commerce Platform', 'Complete e-commerce solution with payment gateway', 'requirements_gathering', '2026-03-01', '2026-12-31', 'Product Catalog
+Cart and Checkout
+Payment Gateway Integration
+Loyalty Rewards', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","DevOps Engineer","Database Administrator"]', 'complex', 1, 3, 4),
+(2, 'Patient Management System', 'Hospital management and patient tracking system', 'pending', '2026-04-01', '2027-03-31', 'Patient Registration
+Appointment Scheduling
+Medical Records
+Insurance Export', '["Expert Department","Frontend Developer","Backend Developer","QA Engineer","UI/UX Designer","Database Administrator"]', 'complex', 1, NULL, NULL);
+
+-- Sample project feature checklist data
+INSERT INTO tasks (project_id, title, description, task_type, assigned_to, assigned_by, status, priority, deadline, completed_at, architect_reviewed_by, architect_reviewed_at, merged_at, release_notified_at) VALUES
+(1, 'Product Catalog', 'Customer can browse products by category and search terms.', 'feature', (SELECT id FROM users WHERE username = 'developer'), 3, 'completed', 'high', '2026-06-15', NOW(), 3, NOW(), NOW(), NOW()),
+(1, 'Cart and Checkout', 'Customer can manage cart items and complete checkout.', 'feature', (SELECT id FROM users WHERE username = 'frontend_dev_2'), 3, 'completed', 'critical', '2026-07-15', NOW(), 3, NOW(), NOW(), NOW()),
+(1, 'Payment Gateway Integration', 'Online payment provider integration with transaction logging.', 'feature', (SELECT id FROM users WHERE username = 'backend_dev_1'), 3, 'in_progress', 'critical', '2026-08-15', NULL, NULL, NULL, NULL, NULL),
+(1, 'Additional Loyalty Rewards', 'Additional client request: points-based rewards and vouchers.', 'enhancement', (SELECT id FROM users WHERE username = 'developer'), 3, 'qa_passed', 'medium', '2026-09-15', NULL, NULL, NULL, NULL, NULL),
+(2, 'Patient Registration', 'Staff can register patient profiles and emergency contacts.', 'feature', (SELECT id FROM users WHERE username = 'backend_dev_2'), 3, 'completed', 'high', '2026-07-20', NOW(), 3, NOW(), NOW(), NOW()),
+(2, 'Appointment Scheduling', 'Clinic staff can create and update appointment schedules.', 'feature', (SELECT id FROM users WHERE username = 'frontend_dev_3'), 3, 'in_progress', 'high', '2026-08-30', NULL, NULL, NULL, NULL, NULL),
+(2, 'Medical Records', 'Secure medical history and consultation notes module.', 'feature', (SELECT id FROM users WHERE username = 'database_dev_1'), 3, 'todo', 'critical', '2026-10-15', NULL, NULL, NULL, NULL, NULL),
+(2, 'Additional Insurance Export', 'Additional architect request: export insurance claim summaries.', 'enhancement', (SELECT id FROM users WHERE username = 'database_dev_2'), 3, 'completed', 'medium', '2026-11-15', NOW(), 3, NOW(), NOW(), NOW());
 
 -- Default Settings
 INSERT INTO settings (setting_key, setting_value, description, setting_type) VALUES

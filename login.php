@@ -1,5 +1,4 @@
 <?php
-session_start();
 require_once 'config/database.php';
 require_once 'includes/auth.php';
 
@@ -13,6 +12,7 @@ if (isLoggedIn()) {
         case 'sales': header('Location: modules/sales/dashboard.php'); break;
         case 'architect': header('Location: modules/architect/dashboard.php'); break;
         case 'sul': header('Location: modules/sul/dashboard.php'); break;
+        case 'qa': header('Location: modules/qa/dashboard.php'); break;
         case 'expert': header('Location: modules/expert/dashboard.php'); break;
         case 'developer': header('Location: modules/developer/dashboard.php'); break;
         default: header('Location: index.php');
@@ -24,6 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $password = trim($_POST['password'] ?? '');
     $selectedRole = trim($_POST['role'] ?? '');
+    $securitySettings = getSecuritySettings();
+    $maxLoginAttempts = (int) ($securitySettings['max_login_attempts'] ?? 5);
 
     if ($email === '') {
         $error = 'Email address is required.';
@@ -34,67 +36,116 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $conn = getConnection();
         $ipAddress = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+        $stmt = $conn->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
+        $stmt->bind_param('s', $email);
+        $stmt->execute();
+        $result = $stmt->get_result();
 
-        $attemptStmt = $conn->prepare("SELECT COUNT(*) AS attempts FROM audit_logs WHERE action = 'login_failed' AND ip_address = ? AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)");
-        $attemptStmt->bind_param('s', $ipAddress);
-        $attemptStmt->execute();
-        $attempts = (int) ($attemptStmt->get_result()->fetch_assoc()['attempts'] ?? 0);
-        $attemptStmt->close();
+        if ($user = $result->fetch_assoc()) {
+            $attemptStmt = $conn->prepare(
+                "SELECT COUNT(*) AS attempts
+                 FROM audit_logs
+                 WHERE user_id = ?
+                   AND action IN ('login_failed_wrong_password', 'login_failed_inactive', 'login_failed_locked', 'login_failed_user_not_found')
+                   AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
+            );
+            $attemptStmt->bind_param('i', $user['id']);
+            $attemptStmt->execute();
+            $attempts = (int) ($attemptStmt->get_result()->fetch_assoc()['attempts'] ?? 0);
+            $attemptStmt->close();
 
-        if ($attempts >= 5) {
-            $error = 'Too many failed login attempts. Please try again after 15 minutes.';
-        } else {
-            $stmt = $conn->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
-            $stmt->bind_param('s', $email);
-            $stmt->execute();
-            $result = $stmt->get_result();
+            if ($attempts >= $maxLoginAttempts) {
+                $error = 'Too many failed login attempts. Please try again later.';
+                logActivity((int) $user['id'], 'login_failed_locked', 'users', (int) $user['id'], null, ['email' => $email], 'failed');
+            } elseif ($user['status'] !== 'active') {
+                $error = 'Your account is ' . $user['status'] . '. Please contact the administrator.';
+                logActivity((int) $user['id'], 'login_failed_inactive', 'users', (int) $user['id'], null, null, 'failed');
+            } elseif (!password_verify($password, $user['password'])) {
+                $error = 'Invalid email or password.';
+                logActivity((int) $user['id'], 'login_failed_wrong_password', 'users', (int) $user['id'], null, null, 'failed');
+            } elseif ($selectedRole !== '' && $user['role'] !== $selectedRole) {
+                $error = 'The selected role does not match this account.';
+            } else {
+                session_regenerate_id(true);
 
-            if ($user = $result->fetch_assoc()) {
-                if ($user['status'] !== 'active') {
-                    $error = 'Your account is ' . $user['status'] . '. Please contact the administrator.';
-                    logActivity((int) $user['id'], 'login_failed_inactive', 'users', (int) $user['id'], null, null, 'failed');
-                } elseif (!password_verify($password, $user['password'])) {
-                    $error = 'Invalid email or password.';
-                    logActivity((int) $user['id'], 'login_failed_wrong_password', 'users', (int) $user['id'], null, null, 'failed');
-                } elseif ($selectedRole !== '' && $user['role'] !== $selectedRole) {
-                    $error = 'The selected role does not match this account.';
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user_role'] = $user['role'];
+                $_SESSION['user_name'] = $user['full_name'];
+                $_SESSION['user_email'] = $user['email'];
+                $_SESSION['login_time'] = time();
+                $_SESSION['last_activity'] = time();
+                $_SESSION['session_version'] = (int) ($user['session_version'] ?? 1);
+                $_SESSION['ip_address'] = $ipAddress;
+                if ($user['role'] === 'sales') {
+                    $_SESSION['evortix_sales_dashboard_welcome_pending'] = true;
+                }
+                if ($user['role'] === 'sul') {
+                    $_SESSION['evortix_sul_dashboard_welcome_pending'] = true;
+                }
+                if (!in_array($user['role'], ['sales', 'sul'], true)) {
+                    $_SESSION['evortix_role_dashboard_welcome_pending'] = true;
+                }
+
+                $updateStmt = $conn->prepare('UPDATE users SET last_login = NOW() WHERE id = ?');
+                $updateStmt->bind_param('i', $user['id']);
+                $updateStmt->execute();
+                $updateStmt->close();
+
+                $forcePasswordChange = isPasswordExpiredForUser($user);
+                if ($forcePasswordChange) {
+                    $_SESSION['force_password_change'] = true;
+                    logActivity((int) $user['id'], 'login_password_expired', 'users', (int) $user['id'], null, ['email' => $email], 'warning');
                 } else {
-                    session_regenerate_id(true);
+                    unset($_SESSION['force_password_change']);
+                }
 
-                    $_SESSION['user_id'] = $user['id'];
-                    $_SESSION['user_role'] = $user['role'];
-                    $_SESSION['user_name'] = $user['full_name'];
-                    $_SESSION['user_email'] = $user['email'];
-                    $_SESSION['login_time'] = time();
-                    $_SESSION['ip_address'] = $ipAddress;
+                logActivity((int) $user['id'], 'login_success', 'users', (int) $user['id']);
 
-                    $updateStmt = $conn->prepare('UPDATE users SET last_login = NOW() WHERE id = ?');
-                    $updateStmt->bind_param('i', $user['id']);
-                    $updateStmt->execute();
-                    $updateStmt->close();
-
-                    logActivity((int) $user['id'], 'login_success', 'users', (int) $user['id']);
-
-                    switch ($user['role']) {
-                        case 'admin': header('Location: modules/admin/dashboard.php'); break;
-                        case 'sales': header('Location: modules/sales/dashboard.php'); break;
-                        case 'architect': header('Location: modules/architect/dashboard.php'); break;
-                        case 'sul': header('Location: modules/sul/dashboard.php'); break;
-                        case 'expert': header('Location: modules/expert/dashboard.php'); break;
-                        case 'developer': header('Location: modules/developer/dashboard.php'); break;
-                        default: header('Location: index.php');
-                    }
+                if ($forcePasswordChange) {
+                    header('Location: settings.php');
                     exit();
                 }
+
+                switch ($user['role']) {
+                    case 'admin': header('Location: modules/admin/dashboard.php'); break;
+                    case 'sales': header('Location: modules/sales/dashboard.php'); break;
+                    case 'architect': header('Location: modules/architect/dashboard.php'); break;
+                    case 'sul': header('Location: modules/sul/dashboard.php'); break;
+                    case 'qa': header('Location: modules/qa/dashboard.php'); break;
+                    case 'expert': header('Location: modules/expert/dashboard.php'); break;
+                    case 'developer': header('Location: modules/developer/dashboard.php'); break;
+                    default: header('Location: index.php');
+                }
+                exit();
+            }
+        } else {
+            $attemptStmt = $conn->prepare(
+                "SELECT COUNT(*) AS attempts
+                 FROM audit_logs
+                 WHERE ip_address = ?
+                   AND action LIKE 'login_failed%'
+                   AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
+            );
+            $attemptStmt->bind_param('s', $ipAddress);
+            $attemptStmt->execute();
+            $attempts = (int) ($attemptStmt->get_result()->fetch_assoc()['attempts'] ?? 0);
+            $attemptStmt->close();
+
+            if ($attempts >= $maxLoginAttempts) {
+                $error = 'Too many failed login attempts. Please try again later.';
             } else {
                 $error = 'Invalid email or password.';
-                logActivity(null, 'login_failed_user_not_found', 'users', null, null, ['email' => $email], 'failed');
             }
 
-            $stmt->close();
+            logActivity(null, 'login_failed_user_not_found', 'users', null, null, ['email' => $email], 'failed');
         }
     }
 }
+
+$loginLogoPath = __DIR__ . '/assets/img/erniLogo_white.png';
+$loginLogoVersion = file_exists($loginLogoPath) ? (string) filemtime($loginLogoPath) : '1';
+$faviconPath = __DIR__ . '/assets/img/logoInside.png';
+$faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) : '1';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -102,9 +153,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In | ERNI PMS</title>
+    <link rel="icon" type="image/png" href="assets/img/logoInside.png?v=<?php echo $faviconVersion; ?>">
+    <link rel="shortcut icon" type="image/png" href="assets/img/logoInside.png?v=<?php echo $faviconVersion; ?>">
+    <link rel="apple-touch-icon" href="assets/img/logoInside.png?v=<?php echo $faviconVersion; ?>">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="assets/css/style.css">
     <style>
         :root {
             --login-primary: #0d6786;
@@ -125,14 +180,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             min-height: 100vh;
             font-family: 'Source Sans 3', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #0b617b;
+            overflow-x: hidden;
+        }
+
+        body.login-page::before {
+            display: none;
         }
 
         .login-shell {
             position: relative;
             min-height: 100vh;
+            min-height: 100svh;
+            min-height: 100dvh;
             display: grid;
             grid-template-columns: 58% 42%;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
             background:
                 linear-gradient(120deg, rgba(7, 70, 90, 0.9), rgba(12, 108, 136, 0.88)),
                 url('assets/img/loginBackground.png');
@@ -167,7 +230,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             align-items: flex-start;
             justify-content: center;
             padding: 90px 64px 64px;
-            margin-top: 20;
+            margin-top: 20px;
             text-align: left;
         }
 
@@ -179,6 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: flex;
             flex-direction: column;
             align-items: flex-start;
+            padding-left: 150px;
         }
 
         .brand-logo {
@@ -186,7 +250,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             height: auto;
             display: block;
             margin-bottom: 30px;
-            margin-left: 120px;
+            transform: translateX(-30px);
             filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.18));
         }
 
@@ -197,7 +261,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size: 1rem;
             gap: 16px;
             margin-bottom: 0;
-            margin-left: 150px;
         }
 
         .brand-name {
@@ -228,7 +291,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-top: 6px;
             margin-bottom: 0;
             text-align: left;
-            margin-left: 150px;
         }
 
         .login-form-wrap {
@@ -237,8 +299,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 44px 72px 44px -20px;
-            margin-right: 150px;
+            padding: 44px 150px 44px 72px;
         }
 
         .login-card {
@@ -248,7 +309,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 20px;
             box-shadow: 0 26px 60px rgba(0, 0, 0, 0.22);
             padding: 36px 40px 32px;
-            margin-left: -30px;
+            transform: translateX(-30px);
         }
 
         .login-card-header {
@@ -285,12 +346,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             position: relative;
         }
 
-        .form-control,
-        .form-select {
+        .login-card .form-control,
+        .login-card .form-select {
             border: 0;
             border-bottom: 1.5px solid var(--login-line);
             border-radius: 0;
-            padding: 8px 34px 8px 0;
+            padding: 8px 0;
             background: transparent;
             box-shadow: none !important;
             min-height: 0;
@@ -298,20 +359,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             color: #17324d;
         }
 
-        .form-control:focus,
-        .form-select:focus {
+        .login-card .form-control:focus,
+        .login-card .form-select:focus {
             border-bottom-color: var(--login-accent);
             background: transparent;
         }
 
+        .input-wrap .form-control {
+            padding-right: 38px;
+        }
+
         .password-toggle {
             position: absolute;
-            right: 0;
+            right: 2px;
             top: 50%;
             transform: translateY(-50%);
             border: 0;
             background: transparent;
             color: #0f83be;
+            padding: 0;
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.92rem;
+            line-height: 1;
+        }
+
+        .password-toggle:hover,
+        .password-toggle:focus-visible {
+            color: #0a557b;
+        }
+
+        .password-toggle:focus-visible {
+            outline: 2px solid rgba(26, 158, 224, 0.3);
+            outline-offset: 4px;
         }
 
         .login-row {
@@ -376,14 +459,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .role-select {
-            width: 140px;
+            width: 100%;
+            max-width: 100%;
             padding-right: 26px;
             color: #42738b;
-            font-size: 0.78rem;
+            font-size: 0.85rem;
+            border: 0 !important;
+            border-top: 0 !important;
+            border-right: 0 !important;
+            border-left: 0 !important;
+            border-bottom: 1.5px solid var(--login-line) !important;
+            border-radius: 0;
+            background-color: transparent;
+            box-shadow: none !important;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: linear-gradient(45deg, transparent 50%, #0f83be 50%),
+                linear-gradient(135deg, #0f83be 50%, transparent 50%);
+            background-position: calc(100% - 12px) 55%, calc(100% - 7px) 55%;
+            background-size: 6px 6px, 6px 6px;
+            background-repeat: no-repeat;
+        }
+
+        .role-select:focus {
+            border-top: 0 !important;
+            border-right: 0 !important;
+            border-left: 0 !important;
+            border-bottom: 1.5px solid var(--login-accent) !important;
+            box-shadow: none !important;
         }
 
         .login-actions {
             margin-top: 14px;
+        }
+
+        .login-loading-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(6, 10, 18, 0.72);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+
+        .login-loading-overlay.is-visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+
+        .login-loading-spinner {
+            width: 3.25rem;
+            height: 3.25rem;
+            border-width: 0.3em;
+            color: #66c8ff;
+        }
+
+        .login-loading-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: #fff;
+        }
+
+        .login-loading-title {
+            margin: 18px 0 6px;
+            font-family: 'Montserrat', 'Source Sans 3', sans-serif;
+            font-size: 1.05rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .login-loading-text {
+            margin: 0;
+            font-size: 0.92rem;
+            color: rgba(255, 255, 255, 0.78);
         }
 
         @media (max-width: 1100px) {
@@ -393,12 +554,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             .login-brand {
                 justify-content: center;
-                min-height: 44vh;
-                padding: 36px 28px 12px;
+                min-height: auto;
+                padding: 32px 24px 8px;
+            }
+
+            .brand-panel {
+                padding-left: 0;
+                align-items: center;
+                text-align: center;
+            }
+
+            .brand-logo {
+                transform: translateX(0);
+                width: min(280px, 72vw);
             }
 
             .login-form-wrap {
-                padding: 12px 20px 28px;
+                padding: 16px 20px 32px;
+            }
+
+            .login-card {
+                transform: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .brand-logo {
+                width: min(240px, 68vw);
+                margin-bottom: 18px;
+            }
+
+            .brand-name {
+                font-size: 2.4rem;
+            }
+
+            .brand-subtitle {
+                font-size: 0.95rem;
+            }
+
+            .brand-system {
+                font-size: 0.82rem;
+                max-width: 18rem;
+                text-align: center;
+            }
+
+            .login-form-wrap {
+                padding-top: 8px;
+            }
+
+            .login-card {
+                padding: 26px 22px 22px;
+                border-radius: 18px;
+            }
+
+            .login-row {
+                justify-content: flex-end;
             }
         }
 
@@ -409,18 +619,104 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 padding-right: 18px;
             }
 
+            .login-brand {
+                padding-top: 24px;
+            }
+
+            .brand-logo {
+                width: min(200px, 64vw);
+                margin-bottom: 14px;
+            }
+
+            .brand-name {
+                font-size: 2rem;
+            }
+
+            .brand-lockup {
+                gap: 10px;
+            }
+
+            .brand-subtitle {
+                font-size: 0.88rem;
+                line-height: 1.3;
+            }
+
+            .brand-system {
+                font-size: 0.76rem;
+                max-width: 15rem;
+            }
+
             .login-card {
                 max-width: 100%;
-                padding: 28px 24px 24px;
+                padding: 24px 18px 20px;
+                border-radius: 16px;
+            }
+
+            .login-card h1 {
+                font-size: 1.1rem;
+            }
+
+            .login-card p {
+                font-size: 0.7rem;
+            }
+
+            .form-group {
+                margin-bottom: 18px;
+            }
+
+            .login-row {
+                margin-top: 4px;
+                margin-bottom: 10px;
+            }
+
+            .forgot-password {
+                font-size: 0.76rem;
+            }
+
+            .btn-signin {
+                padding: 12px 18px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .login-form-wrap,
+            .login-brand {
+                padding-left: 14px;
+                padding-right: 14px;
+            }
+
+            .brand-logo {
+                width: min(175px, 60vw);
+            }
+
+            .brand-name {
+                font-size: 1.8rem;
+            }
+
+            .brand-subtitle {
+                font-size: 0.82rem;
+            }
+
+            .login-card {
+                padding: 22px 16px 18px;
+            }
+
+            .password-toggle {
+                width: 24px;
+                height: 24px;
+                right: 0;
+            }
+
+            .input-wrap .form-control {
+                padding-right: 32px;
             }
         }
     </style>
-</head>
-<body>
+<body class="login-page">
     <div class="login-shell">
         <section class="login-brand">
             <div class="brand-panel">
-                <img class="brand-logo" src="assets/img/erniLogo_white.png" alt="ERNI logo">
+                <img class="brand-logo" src="assets/img/erniLogo_white.png?v=<?php echo rawurlencode($loginLogoVersion); ?>" alt="ERNI logo">
                 <div class="brand-lockup">
                     <div class="brand-name"><strong>ERNI</strong></div>
                     <div class="brand-subtitle">Development<br>Center&nbsp;&nbsp;Philippines, Inc.</div>
@@ -456,7 +752,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             name="email"
                             class="form-control"
                             value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>"
-                            placeholder=""
+                            placeholder="Enter your email"
                             autocomplete="email"
                             required
                         >
@@ -470,12 +766,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 name="password"
                                 id="password"
                                 class="form-control"
-                                placeholder=""
+                                placeholder="Enter your password"
                                 autocomplete="current-password"
                                 required
                             >
-                            <button type="button" class="password-toggle" onclick="togglePassword()">
-                                <i class="fas fa-eye" id="toggleIcon"></i>
+                            <button
+                                type="button"
+                                class="password-toggle"
+                                id="passwordToggle"
+                                onclick="togglePassword()"
+                                aria-controls="password"
+                                aria-label="Show password"
+                            >
+                                <i class="fa-solid fa-eye" id="toggleIcon" aria-hidden="true"></i>
                             </button>
                         </div>
                         <div class="login-row justify-content-end">
@@ -485,7 +788,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     <div class="form-group">
                         <select name="role" class="form-select role-select">
-                            <option value="">Select role</option>
+                            <option value="" disabled <?php echo empty($_POST['role']) ? 'selected' : ''; ?>>Select role</option>
                             <option value="admin" <?php echo ($_POST['role'] ?? '') === 'admin' ? 'selected' : ''; ?>>Admin</option>
                             <option value="sales" <?php echo ($_POST['role'] ?? '') === 'sales' ? 'selected' : ''; ?>>Sales</option>
                             <option value="architect" <?php echo ($_POST['role'] ?? '') === 'architect' ? 'selected' : ''; ?>>Architect</option>
@@ -516,23 +819,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="sendResetLink()">Send Reset Link</button>
+                    <button type="button" class="btn btn-primary" id="resetRequestBtn" onclick="sendResetLink()">Send Request</button>
                 </div>
             </div>
         </div>
     </div>
 
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1100;">
+        <div id="loginToast" class="toast align-items-center text-white bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="4000">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <strong id="loginToastTitle">Notice</strong><br>
+                    <span id="loginToastMessage"></span>
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
+    <div class="login-loading-overlay" id="loginLoadingOverlay" aria-hidden="true">
+        <div class="login-loading-content" role="status" aria-live="polite" aria-label="Signing in">
+            <div class="spinner-border login-loading-spinner" role="presentation"></div>
+            <div class="login-loading-title">Signing you in</div>
+            <p class="login-loading-text">Please wait while we verify your account.</p>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const loginForm = document.getElementById('loginForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const loginLoadingOverlay = document.getElementById('loginLoadingOverlay');
+
+        function showLoginToast(title, message, type = 'success') {
+            const toastElement = document.getElementById('loginToast');
+            const titleElement = document.getElementById('loginToastTitle');
+            const messageElement = document.getElementById('loginToastMessage');
+            const mappedType = type === 'error' ? 'danger' : type;
+
+            toastElement.classList.remove('bg-primary', 'bg-success', 'bg-danger', 'bg-warning', 'bg-info');
+            toastElement.classList.add(`bg-${mappedType}`);
+            titleElement.textContent = title;
+            messageElement.textContent = message;
+            bootstrap.Toast.getOrCreateInstance(toastElement).show();
+        }
+
+        function showLoginLoading() {
+            if (!loginLoadingOverlay) {
+                return;
+            }
+
+            loginLoadingOverlay.classList.add('is-visible');
+            loginLoadingOverlay.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function hideLoginLoading() {
+            if (!loginLoadingOverlay) {
+                return;
+            }
+
+            loginLoadingOverlay.classList.remove('is-visible');
+            loginLoadingOverlay.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+        }
+
         function togglePassword() {
             const input = document.getElementById('password');
+            const toggle = document.getElementById('passwordToggle');
             const icon = document.getElementById('toggleIcon');
             if (input.type === 'password') {
                 input.type = 'text';
-                icon.classList.replace('fa-eye', 'fa-eye-slash');
+                toggle.setAttribute('aria-label', 'Hide password');
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
             } else {
                 input.type = 'password';
-                icon.classList.replace('fa-eye-slash', 'fa-eye');
+                toggle.setAttribute('aria-label', 'Show password');
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
             }
         }
 
@@ -540,20 +905,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             new bootstrap.Modal(document.getElementById('forgotPasswordModal')).show();
         }
 
-        function sendResetLink() {
+        async function sendResetLink() {
             const email = document.getElementById('resetEmail').value;
+            const button = document.getElementById('resetRequestBtn');
             if (!email) {
-                alert('Please enter your email address');
+                showLoginToast('Email required', 'Enter your email address to request a password reset.', 'warning');
+                document.getElementById('resetEmail').focus();
                 return;
             }
-            alert('Password reset request recorded for ' + email + '.');
-            bootstrap.Modal.getInstance(document.getElementById('forgotPasswordModal')).hide();
+
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
+
+            try {
+                const response = await fetch('api/request-password-reset.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email })
+                });
+
+                const result = await response.json();
+                showLoginToast(
+                    result.success ? 'Request sent' : 'Request failed',
+                    result.message || 'If the account exists, your password reset request has been sent to the administrator.',
+                    result.success ? 'success' : 'error'
+                );
+                document.getElementById('resetEmail').value = '';
+                bootstrap.Modal.getInstance(document.getElementById('forgotPasswordModal')).hide();
+            } catch (error) {
+                showLoginToast('Request failed', 'Unable to send the request right now. Please try again in a moment.', 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = 'Send Request';
+            }
         }
 
-        document.getElementById('loginForm').addEventListener('submit', function () {
-            const btn = document.getElementById('loginBtn');
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing in...';
-            btn.disabled = true;
+        if (loginForm) {
+            loginForm.addEventListener('submit', function () {
+                if (loginBtn) {
+                    loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Signing in...';
+                    loginBtn.disabled = true;
+                }
+
+                showLoginLoading();
+            });
+        }
+
+        window.addEventListener('pageshow', function () {
+            hideLoginLoading();
+            if (loginBtn) {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = 'Sign in';
+            }
         });
 
     </script>

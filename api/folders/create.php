@@ -21,6 +21,12 @@ if ($name === '') {
     exit();
 }
 
+if ($parentId <= 0) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Open a client or shared project folder before creating a folder.']);
+    exit();
+}
+
 $parentFolder = null;
 if ($parentId > 0) {
     $parentStmt = $conn->prepare('SELECT client_id, project_id, role FROM folders WHERE id = ?');
@@ -32,7 +38,7 @@ if ($parentId > 0) {
 
 $clientId = $parentFolder['client_id'] ?? null;
 $projectId = $parentFolder['project_id'] ?? null;
-$role = $parentFolder['role'] ?? $user['role'];
+$role = $parentFolder !== null ? $parentFolder['role'] : $user['role'];
 $folderType = $parentId > 0 ? 'general' : 'project';
 $parentIdValue = $parentId > 0 ? $parentId : null;
 if ($parentIdValue === null) {

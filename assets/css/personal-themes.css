@@ -1,0 +1,2091 @@
+/*
+ * Optional user themes.
+ * These rules change colors, backgrounds, borders, and shadows only.
+ * Layout, spacing, dimensions, typography sizing, logos, and component
+ * structure intentionally remain controlled by the existing stylesheets.
+ */
+
+/* =====================================================
+   TROPICAL COAST
+   ===================================================== */
+
+html[data-app-theme="tropical"] {
+    --light-color: #f4fcff;
+    --border-color: rgba(7, 151, 181, 0.20);
+    --text-muted: #567d8d;
+    --shadow: 0 5px 22px rgba(3, 111, 139, 0.11);
+    --shadow-hover: 0 9px 30px rgba(3, 111, 139, 0.16);
+    --secondary-color: #16a8c6;
+    --accent-blue: #27b9d5;
+}
+
+html[data-app-theme="tropical"] body {
+    background-color: #eefbff;
+    background-image:
+        linear-gradient(rgba(247, 253, 255, 0.82), rgba(235, 249, 253, 0.76)),
+        url("../img/themes/tropical-coast-background.png");
+    background-attachment: fixed;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    color: #123b54;
+}
+
+html[data-app-theme="tropical"] #wrapper {
+    background: rgba(239, 251, 255, 0.34);
+}
+
+html[data-app-theme="tropical"] #page-content-wrapper {
+    background: rgba(246, 253, 255, 0.45);
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper {
+    background-color: rgba(255, 255, 255, 0.96);
+    background-image:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(241, 252, 255, 0.90) 62%, rgba(224, 248, 252, 0.82) 100%),
+        url("../img/themes/tropical-coast-background.png");
+    background-position: center, 15% bottom;
+    background-repeat: no-repeat;
+    background-size: cover;
+    border-color: rgba(7, 151, 181, 0.16);
+    box-shadow: 4px 0 24px rgba(3, 111, 139, 0.10);
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .menu-item,
+html[data-app-theme="tropical"] #sidebar-wrapper .list-group-item {
+    color: #16435a;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .menu-item:hover,
+html[data-app-theme="tropical"] #sidebar-wrapper .menu-item.active,
+html[data-app-theme="tropical"] #sidebar-wrapper .list-group-item:hover,
+html[data-app-theme="tropical"] #sidebar-wrapper .list-group-item.active {
+    background-color: rgba(22, 168, 198, 0.12);
+    border-color: #0797b5;
+    color: #067e99;
+}
+
+html[data-app-theme="tropical"] .app-navbar {
+    background: rgba(255, 255, 255, 0.91) !important;
+    border-color: rgba(7, 151, 181, 0.15);
+    box-shadow: 0 7px 22px rgba(3, 111, 139, 0.09) !important;
+}
+
+html[data-app-theme="tropical"] .nav-icon-link,
+html[data-app-theme="tropical"] .nav-user-name {
+    color: #123b54 !important;
+}
+
+html[data-app-theme="tropical"] .card,
+html[data-app-theme="tropical"] .modal-content,
+html[data-app-theme="tropical"] .dropdown-menu,
+html[data-app-theme="tropical"] .table-responsive {
+    background-color: rgba(255, 255, 255, 0.93);
+    border-color: rgba(7, 151, 181, 0.16) !important;
+    box-shadow: 0 10px 28px rgba(3, 111, 139, 0.09);
+}
+
+html[data-app-theme="tropical"] .card-header,
+html[data-app-theme="tropical"] .modal-header,
+html[data-app-theme="tropical"] .table thead,
+html[data-app-theme="tropical"] .table thead th {
+    background-color: rgba(234, 250, 253, 0.88) !important;
+    border-color: rgba(7, 151, 181, 0.15) !important;
+    color: #08738b;
+}
+
+html[data-app-theme="tropical"] .form-control,
+html[data-app-theme="tropical"] .form-select {
+    background-color: rgba(255, 255, 255, 0.92);
+    border-color: rgba(7, 151, 181, 0.22);
+    color: #123b54;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell {
+    --role-dashboard-primary: #087f99;
+    --role-dashboard-border: rgba(7, 151, 181, 0.16);
+    --role-dashboard-border-strong: rgba(7, 151, 181, 0.28);
+    --role-dashboard-surface: rgba(255, 255, 255, 0.91);
+    --role-dashboard-head: rgba(232, 249, 253, 0.94);
+    --role-dashboard-card-glow: rgba(35, 185, 207, 0.12);
+    --role-dashboard-card-tint: rgba(35, 185, 207, 0.08);
+    --role-dashboard-grid-line: rgba(7, 151, 181, 0.07);
+    --role-dashboard-node: rgba(7, 151, 181, 0.16);
+}
+
+html[data-app-theme="tropical"] #page-content-wrapper :is(
+    .page-header-modern,
+    .vc-header,
+    .insights-hero,
+    .process-history-hero,
+    .profile-hero,
+    .calendar-hero
+) {
+    background-image:
+        linear-gradient(100deg, rgba(6, 126, 153, 0.92), rgba(31, 178, 202, 0.76)),
+        url("../img/themes/tropical-coast-background.png") !important;
+    background-position: center !important;
+    background-size: cover !important;
+}
+
+/* =====================================================
+   FUTURISTIC NEON
+   ===================================================== */
+
+html[data-app-theme="futuristic"] {
+    --light-color: #071225;
+    --border-color: rgba(126, 91, 255, 0.26);
+    --text-muted: #9eb3d5;
+    --shadow: 0 7px 26px rgba(34, 17, 103, 0.30);
+    --shadow-hover: 0 12px 36px rgba(88, 52, 205, 0.34);
+    --secondary-color: #2c9fe8;
+    --accent-blue: #25baff;
+}
+
+html[data-app-theme="futuristic"] body {
+    background-color: #030a19;
+    background-image:
+        linear-gradient(rgba(3, 9, 27, 0.70), rgba(4, 11, 30, 0.78)),
+        url("../img/themes/futuristic-circuit-background.png");
+    background-attachment: fixed;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    color: #e8edff;
+}
+
+html[data-app-theme="futuristic"] #wrapper {
+    background: rgba(2, 8, 24, 0.22);
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper {
+    background: rgba(4, 10, 29, 0.40);
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper {
+    background-color: rgba(3, 10, 29, 0.97);
+    background-image:
+        linear-gradient(180deg, rgba(2, 8, 25, 0.97), rgba(5, 14, 42, 0.93)),
+        url("../img/themes/futuristic-circuit-background.png");
+    background-position: center, left bottom;
+    background-repeat: no-repeat;
+    background-size: cover;
+    border-color: rgba(126, 91, 255, 0.24);
+    box-shadow: 5px 0 28px rgba(20, 8, 72, 0.40);
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .sidebar-heading,
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-item,
+html[data-app-theme="futuristic"] #sidebar-wrapper .list-group-item {
+    color: #cbd5f5;
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-item:hover,
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-item.active,
+html[data-app-theme="futuristic"] #sidebar-wrapper .list-group-item:hover,
+html[data-app-theme="futuristic"] #sidebar-wrapper .list-group-item.active {
+    background-color: rgba(109, 74, 255, 0.17);
+    border-color: #8d67ff;
+    color: #a98cff;
+    box-shadow: inset 0 0 18px rgba(109, 74, 255, 0.10);
+}
+
+html[data-app-theme="futuristic"] .app-navbar {
+    background: rgba(5, 13, 36, 0.91) !important;
+    border-color: rgba(126, 91, 255, 0.19);
+    box-shadow: 0 7px 24px rgba(15, 7, 61, 0.35) !important;
+}
+
+html[data-app-theme="futuristic"] .nav-icon-link,
+html[data-app-theme="futuristic"] .nav-user-name,
+html[data-app-theme="futuristic"] .nav-user-role {
+    color: #dfe7ff !important;
+}
+
+html[data-app-theme="futuristic"] .card,
+html[data-app-theme="futuristic"] .modal-content,
+html[data-app-theme="futuristic"] .dropdown-menu,
+html[data-app-theme="futuristic"] .table-responsive {
+    background-color: rgba(5, 15, 42, 0.90) !important;
+    border-color: rgba(126, 91, 255, 0.23) !important;
+    box-shadow: 0 12px 34px rgba(8, 3, 35, 0.38), 0 0 24px rgba(109, 74, 255, 0.07) !important;
+    color: #e8edff;
+}
+
+html[data-app-theme="futuristic"] .card-header,
+html[data-app-theme="futuristic"] .modal-header,
+html[data-app-theme="futuristic"] .table thead,
+html[data-app-theme="futuristic"] .table thead th {
+    background-color: rgba(8, 20, 53, 0.94) !important;
+    border-color: rgba(126, 91, 255, 0.20) !important;
+    color: #cfc3ff !important;
+}
+
+html[data-app-theme="futuristic"] .card-footer,
+html[data-app-theme="futuristic"] .modal-footer,
+html[data-app-theme="futuristic"] .table td {
+    background-color: rgba(5, 15, 42, 0.72);
+    border-color: rgba(126, 91, 255, 0.16) !important;
+    color: #d9e2ff;
+}
+
+html[data-app-theme="futuristic"] .form-control,
+html[data-app-theme="futuristic"] .form-select {
+    background-color: rgba(4, 13, 36, 0.94) !important;
+    border-color: rgba(126, 91, 255, 0.28) !important;
+    color: #edf2ff !important;
+}
+
+html[data-app-theme="futuristic"] .form-control::placeholder {
+    color: #8295b9;
+}
+
+html[data-app-theme="futuristic"] .text-muted,
+html[data-app-theme="futuristic"] .settings-option-copy small {
+    color: #9eb3d5 !important;
+}
+
+html[data-app-theme="futuristic"] .role-dashboard-shell {
+    --role-dashboard-primary: #a98cff;
+    --role-dashboard-border: rgba(126, 91, 255, 0.24);
+    --role-dashboard-border-strong: rgba(147, 111, 255, 0.42);
+    --role-dashboard-surface: rgba(5, 15, 42, 0.90);
+    --role-dashboard-head: rgba(8, 20, 53, 0.94);
+    --role-dashboard-card-glow: rgba(109, 74, 255, 0.17);
+    --role-dashboard-card-tint: rgba(65, 145, 255, 0.09);
+    --role-dashboard-grid-line: rgba(126, 91, 255, 0.10);
+    --role-dashboard-node: rgba(43, 184, 255, 0.20);
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper :is(
+    .page-header-modern,
+    .vc-header,
+    .insights-hero,
+    .process-history-hero,
+    .profile-hero,
+    .calendar-hero
+) {
+    background-image:
+        linear-gradient(105deg, rgba(20, 13, 72, 0.94), rgba(54, 34, 132, 0.82)),
+        url("../img/themes/futuristic-circuit-background.png") !important;
+    background-position: center !important;
+    background-size: cover !important;
+    border-color: rgba(147, 111, 255, 0.30) !important;
+}
+
+html[data-app-theme="futuristic"] .btn-primary {
+    background-color: #6d4aff;
+    border-color: #8466ff;
+    box-shadow: 0 0 18px rgba(109, 74, 255, 0.22);
+}
+
+html[data-app-theme="futuristic"] .btn-outline-primary {
+    border-color: #8d67ff;
+    color: #b7a3ff;
+}
+
+/* =====================================================
+   NOTICEABLE DASHBOARD TREATMENTS
+   ===================================================== */
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero,
+html[data-app-theme="tropical"] .sales-dashboard-hero {
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 254, 255, 0.93) 44%, rgba(227, 250, 253, 0.56) 70%, rgba(88, 205, 219, 0.16) 100%),
+        url("../img/themes/tropical-coast-background.png") center 72% / cover no-repeat !important;
+    border-color: rgba(5, 151, 178, 0.30) !important;
+    box-shadow: 0 8px 0 rgba(7, 151, 181, 0.10), 0 24px 44px rgba(3, 111, 139, 0.16) !important;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero::before,
+html[data-app-theme="tropical"] .sales-dashboard-hero::before {
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.18), transparent 62%),
+        radial-gradient(circle at 86% 18%, rgba(255, 208, 92, 0.28), transparent 15%) !important;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(1),
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(1) .card {
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(222, 249, 247, 0.91)),
+        var(--role-dashboard-surface) !important;
+    border-color: rgba(15, 160, 149, 0.28) !important;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(2),
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(2) .card {
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(218, 243, 255, 0.92)),
+        var(--role-dashboard-surface) !important;
+    border-color: rgba(37, 153, 218, 0.28) !important;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(3),
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(3) .card {
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(215, 250, 245, 0.92)),
+        var(--role-dashboard-surface) !important;
+    border-color: rgba(17, 175, 139, 0.28) !important;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(4),
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(4) .card {
+    background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(255, 240, 218, 0.92)),
+        var(--role-dashboard-surface) !important;
+    border-color: rgba(239, 150, 63, 0.28) !important;
+}
+
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero,
+html[data-app-theme="futuristic"] .sales-dashboard-hero {
+    background:
+        linear-gradient(96deg, rgba(7, 16, 48, 0.98) 0%, rgba(15, 24, 66, 0.94) 46%, rgba(45, 27, 106, 0.66) 74%, rgba(75, 44, 166, 0.42) 100%),
+        url("../img/themes/futuristic-circuit-background.png") center / cover no-repeat !important;
+    border-color: rgba(145, 104, 255, 0.42) !important;
+    box-shadow: 0 7px 0 rgba(86, 50, 194, 0.18), 0 26px 52px rgba(12, 6, 51, 0.44), 0 0 34px rgba(96, 67, 255, 0.13) !important;
+}
+
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero::before,
+html[data-app-theme="futuristic"] .sales-dashboard-hero::before {
+    background:
+        linear-gradient(100deg, rgba(35, 186, 255, 0.06), transparent 42%),
+        radial-gradient(circle at 85% 22%, rgba(143, 84, 255, 0.34), transparent 22%),
+        radial-gradient(circle at 72% 72%, rgba(36, 190, 255, 0.18), transparent 25%) !important;
+}
+
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(1),
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(1) .card {
+    background: linear-gradient(145deg, rgba(12, 24, 64, 0.96), rgba(44, 24, 100, 0.91)) !important;
+    border-color: rgba(148, 102, 255, 0.38) !important;
+}
+
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(2),
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(2) .card {
+    background: linear-gradient(145deg, rgba(9, 25, 61, 0.96), rgba(13, 63, 112, 0.90)) !important;
+    border-color: rgba(36, 184, 255, 0.36) !important;
+}
+
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(3),
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(3) .card {
+    background: linear-gradient(145deg, rgba(7, 31, 61, 0.96), rgba(9, 83, 98, 0.88)) !important;
+    border-color: rgba(31, 211, 201, 0.34) !important;
+}
+
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(4),
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(4) .card {
+    background: linear-gradient(145deg, rgba(27, 20, 68, 0.96), rgba(84, 24, 95, 0.88)) !important;
+    border-color: rgba(232, 84, 195, 0.34) !important;
+}
+
+/* =====================================================
+   TROPICAL COAST — DARK MODE
+   ===================================================== */
+
+html[data-theme="dark"][data-app-theme="tropical"] {
+    --light-color: #061d28;
+    --border-color: rgba(73, 207, 213, 0.24);
+    --text-muted: #8fb8c2;
+    --secondary-color: #1ab3bd;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] body {
+    background-color: #041821;
+    background-image:
+        linear-gradient(rgba(3, 23, 31, 0.80), rgba(4, 31, 39, 0.84)),
+        url("../img/themes/tropical-coast-background.png");
+    color: #e2f7f7;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #wrapper,
+html[data-theme="dark"][data-app-theme="tropical"] #page-content-wrapper {
+    background: rgba(3, 24, 32, 0.30);
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper {
+    background-color: rgba(4, 29, 39, 0.97);
+    background-image:
+        linear-gradient(180deg, rgba(3, 24, 34, 0.98), rgba(5, 45, 51, 0.91)),
+        url("../img/themes/tropical-coast-background.png");
+    background-position: center, center bottom;
+    background-size: cover, auto 48%;
+    border-color: rgba(73, 207, 213, 0.22);
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper .sidebar-heading,
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper .menu-item,
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper .list-group-item,
+html[data-theme="dark"][data-app-theme="tropical"] .nav-icon-link,
+html[data-theme="dark"][data-app-theme="tropical"] .nav-user-name {
+    color: #d7f3f3 !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .app-navbar {
+    background: rgba(3, 25, 36, 0.93) !important;
+    border-color: rgba(73, 207, 213, 0.20);
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .card,
+html[data-theme="dark"][data-app-theme="tropical"] .modal-content,
+html[data-theme="dark"][data-app-theme="tropical"] .dropdown-menu,
+html[data-theme="dark"][data-app-theme="tropical"] .table-responsive {
+    background-color: rgba(5, 36, 46, 0.91) !important;
+    border-color: rgba(73, 207, 213, 0.20) !important;
+    color: #e2f7f7;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .card-header,
+html[data-theme="dark"][data-app-theme="tropical"] .modal-header,
+html[data-theme="dark"][data-app-theme="tropical"] .table thead,
+html[data-theme="dark"][data-app-theme="tropical"] .table thead th {
+    background-color: rgba(7, 48, 59, 0.94) !important;
+    border-color: rgba(73, 207, 213, 0.18) !important;
+    color: #88e6e4 !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell {
+    --role-dashboard-primary: #78e2e0;
+    --role-dashboard-surface: rgba(5, 36, 46, 0.91);
+    --role-dashboard-head: rgba(7, 48, 59, 0.94);
+    --role-dashboard-border: rgba(73, 207, 213, 0.20);
+    --role-dashboard-border-strong: rgba(93, 232, 224, 0.38);
+    --role-dashboard-card-sheen: rgba(124, 237, 226, 0.05);
+    --role-dashboard-card-sheen-soft: rgba(124, 237, 226, 0.03);
+    --role-dashboard-card-tint: rgba(22, 174, 181, 0.10);
+    --role-dashboard-card-glow: rgba(35, 204, 196, 0.14);
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero,
+html[data-theme="dark"][data-app-theme="tropical"] .sales-dashboard-hero {
+    background:
+        linear-gradient(94deg, rgba(3, 33, 43, 0.98) 0%, rgba(5, 53, 61, 0.93) 50%, rgba(6, 91, 96, 0.68) 78%, rgba(19, 135, 136, 0.48) 100%),
+        url("../img/themes/tropical-coast-background.png") center 72% / cover no-repeat !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-hero h1,
+html[data-theme="dark"][data-app-theme="tropical"] .sales-dashboard-hero h1 {
+    color: #edffff !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(1),
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(1) .card {
+    background: linear-gradient(145deg, rgba(5, 45, 52, 0.96), rgba(5, 70, 65, 0.90)) !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(2),
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(2) .card {
+    background: linear-gradient(145deg, rgba(5, 42, 55, 0.96), rgba(8, 69, 88, 0.90)) !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(3),
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(3) .card {
+    background: linear-gradient(145deg, rgba(4, 46, 49, 0.96), rgba(7, 76, 68, 0.90)) !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(4),
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(4) .card {
+    background: linear-gradient(145deg, rgba(41, 43, 44, 0.96), rgba(90, 61, 41, 0.88)) !important;
+}
+
+/* =====================================================
+   FUTURISTIC NEON — LIGHT MODE
+   ===================================================== */
+
+html[data-theme="light"][data-app-theme="futuristic"] {
+    --light-color: #f4f5ff;
+    --border-color: rgba(104, 78, 214, 0.20);
+    --text-muted: #68769a;
+    --secondary-color: #307de2;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] body {
+    background-color: #f3f5ff;
+    background-image:
+        linear-gradient(rgba(248, 249, 255, 0.86), rgba(238, 242, 255, 0.84)),
+        url("../img/themes/futuristic-circuit-background.png");
+    color: #172242;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #wrapper,
+html[data-theme="light"][data-app-theme="futuristic"] #page-content-wrapper {
+    background: rgba(241, 244, 255, 0.34);
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper {
+    background-color: rgba(250, 251, 255, 0.97);
+    background-image:
+        linear-gradient(180deg, rgba(253, 253, 255, 0.98), rgba(239, 242, 255, 0.92)),
+        url("../img/themes/futuristic-circuit-background.png");
+    background-position: center, center bottom;
+    background-size: cover, auto 48%;
+    border-color: rgba(104, 78, 214, 0.19);
+    box-shadow: 5px 0 26px rgba(65, 46, 145, 0.12);
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .sidebar-heading,
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .menu-item,
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .list-group-item {
+    color: #2c3457;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .app-navbar {
+    background: rgba(253, 253, 255, 0.94) !important;
+    border-color: rgba(104, 78, 214, 0.16);
+    box-shadow: 0 7px 24px rgba(65, 46, 145, 0.10) !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .nav-icon-link,
+html[data-theme="light"][data-app-theme="futuristic"] .nav-user-name,
+html[data-theme="light"][data-app-theme="futuristic"] .nav-user-role {
+    color: #20294c !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .card,
+html[data-theme="light"][data-app-theme="futuristic"] .modal-content,
+html[data-theme="light"][data-app-theme="futuristic"] .dropdown-menu,
+html[data-theme="light"][data-app-theme="futuristic"] .table-responsive {
+    background-color: rgba(253, 253, 255, 0.94) !important;
+    border-color: rgba(104, 78, 214, 0.18) !important;
+    box-shadow: 0 12px 32px rgba(65, 46, 145, 0.11), 0 0 24px rgba(93, 74, 219, 0.06) !important;
+    color: #172242;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .card-header,
+html[data-theme="light"][data-app-theme="futuristic"] .modal-header,
+html[data-theme="light"][data-app-theme="futuristic"] .table thead,
+html[data-theme="light"][data-app-theme="futuristic"] .table thead th {
+    background-color: rgba(242, 242, 255, 0.94) !important;
+    border-color: rgba(104, 78, 214, 0.16) !important;
+    color: #5540b7 !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .card-footer,
+html[data-theme="light"][data-app-theme="futuristic"] .modal-footer,
+html[data-theme="light"][data-app-theme="futuristic"] .table td {
+    background-color: rgba(249, 250, 255, 0.74);
+    border-color: rgba(104, 78, 214, 0.13) !important;
+    color: #283252;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .form-control,
+html[data-theme="light"][data-app-theme="futuristic"] .form-select {
+    background-color: rgba(255, 255, 255, 0.96) !important;
+    border-color: rgba(104, 78, 214, 0.23) !important;
+    color: #20294c !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .text-muted,
+html[data-theme="light"][data-app-theme="futuristic"] .settings-option-copy small {
+    color: #68769a !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell {
+    --role-dashboard-primary: #684ed6;
+    --role-dashboard-surface: rgba(253, 253, 255, 0.94);
+    --role-dashboard-head: rgba(242, 242, 255, 0.94);
+    --role-dashboard-border: rgba(104, 78, 214, 0.18);
+    --role-dashboard-border-strong: rgba(104, 78, 214, 0.34);
+    --role-dashboard-card-sheen: rgba(255, 255, 255, 0.84);
+    --role-dashboard-card-sheen-soft: rgba(255, 255, 255, 0.48);
+    --role-dashboard-card-tint: rgba(104, 78, 214, 0.07);
+    --role-dashboard-card-glow: rgba(109, 74, 255, 0.12);
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero,
+html[data-theme="light"][data-app-theme="futuristic"] .sales-dashboard-hero {
+    background:
+        linear-gradient(94deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 248, 255, 0.94) 46%, rgba(230, 229, 255, 0.68) 76%, rgba(213, 205, 255, 0.52) 100%),
+        url("../img/themes/futuristic-circuit-background.png") center / cover no-repeat !important;
+    border-color: rgba(112, 78, 222, 0.30) !important;
+    box-shadow: 0 7px 0 rgba(105, 74, 203, 0.10), 0 24px 48px rgba(65, 46, 145, 0.16) !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-hero h1,
+html[data-theme="light"][data-app-theme="futuristic"] .sales-dashboard-hero h1 {
+    color: #151d3c !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(1),
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(1) .card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(239, 231, 255, 0.94)) !important;
+    color: #20294c !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(2),
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(2) .card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(225, 242, 255, 0.94)) !important;
+    color: #20294c !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(3),
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(3) .card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(224, 250, 249, 0.94)) !important;
+    color: #20294c !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(4),
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(4) .card {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(253, 232, 248, 0.94)) !important;
+    color: #20294c !important;
+}
+
+/* =====================================================
+   STRONGER THEME POLISH AND UNIFIED SIDEBAR
+   ===================================================== */
+
+/* The themed sidebar is one continuous surface. Explicit border declarations
+   prevent the base shell's dark divider from showing through. */
+html[data-app-theme="tropical"] #sidebar-wrapper,
+html[data-app-theme="futuristic"] #sidebar-wrapper {
+    border: 0 !important;
+    border-right: 1px solid transparent !important;
+    background-clip: padding-box !important;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .sidebar-brand,
+html[data-app-theme="futuristic"] #sidebar-wrapper .sidebar-brand {
+    background: transparent !important;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .menu-icon,
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-icon {
+    width: 28px;
+    height: 28px;
+    margin-right: 12px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper.collapsed .menu-icon,
+html[data-app-theme="futuristic"] #sidebar-wrapper.collapsed .menu-icon {
+    margin-right: 0 !important;
+}
+
+/* Tropical Coast - brighter water, stronger teal, and warmer highlights. */
+html[data-app-theme="tropical"] body {
+    background-image:
+        linear-gradient(rgba(244, 253, 255, 0.72), rgba(224, 247, 252, 0.70)),
+        url("../img/themes/tropical-coast-background.png");
+}
+
+html[data-app-theme="tropical"] #page-content-wrapper {
+    background:
+        radial-gradient(circle at 94% 10%, rgba(255, 200, 76, 0.15), transparent 20%),
+        linear-gradient(145deg, rgba(235, 252, 255, 0.62), rgba(247, 253, 255, 0.42));
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper {
+    background-color: #f7fdff !important;
+    background-image:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(232, 250, 253, 0.94) 58%, rgba(194, 239, 244, 0.84) 100%),
+        url("../img/themes/tropical-coast-background.png") !important;
+    background-position: center, 18% bottom !important;
+    background-repeat: no-repeat !important;
+    background-size: cover, auto 52% !important;
+    border-right-color: rgba(0, 145, 175, 0.34) !important;
+    box-shadow: 8px 0 30px rgba(0, 112, 142, 0.16) !important;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .sidebar-brand {
+    border-bottom-color: rgba(0, 145, 175, 0.20) !important;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .brand-copy .brand-title {
+    color: #008eb3 !important;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .brand-copy small,
+html[data-app-theme="tropical"] #sidebar-wrapper .sidebar-role span {
+    color: #568092 !important;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .sidebar-role strong {
+    color: #006f8c !important;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .menu-item {
+    color: #214d61 !important;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .menu-icon {
+    color: #007f9f !important;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.86), rgba(168, 232, 238, 0.72));
+    box-shadow: inset 0 0 0 1px rgba(0, 145, 175, 0.15), 0 4px 10px rgba(0, 112, 142, 0.10);
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .menu-item:hover {
+    color: #006f8c !important;
+    background: linear-gradient(135deg, rgba(184, 240, 245, 0.72), rgba(228, 251, 252, 0.88)) !important;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .menu-item.active {
+    color: #006781 !important;
+    background: linear-gradient(135deg, rgba(130, 223, 233, 0.45), rgba(221, 249, 251, 0.94)) !important;
+    box-shadow: inset 0 0 0 1px rgba(0, 145, 175, 0.22), 0 7px 16px rgba(0, 112, 142, 0.13) !important;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .menu-item::before {
+    background: linear-gradient(180deg, #00a9c7, #20bd9b) !important;
+}
+
+html[data-app-theme="tropical"] #sidebar-wrapper .menu-item:hover .menu-icon,
+html[data-app-theme="tropical"] #sidebar-wrapper .menu-item.active .menu-icon {
+    color: #ffffff !important;
+    background: linear-gradient(145deg, #00a7c4, #18b795);
+    box-shadow: 0 6px 14px rgba(0, 142, 158, 0.25);
+}
+
+html[data-app-theme="tropical"] .card,
+html[data-app-theme="tropical"] .modal-content,
+html[data-app-theme="tropical"] .dropdown-menu,
+html[data-app-theme="tropical"] .table-responsive {
+    background-color: rgba(250, 255, 255, 0.95) !important;
+    border-color: rgba(0, 151, 181, 0.24) !important;
+    box-shadow: 0 12px 30px rgba(0, 111, 139, 0.13) !important;
+}
+
+html[data-app-theme="tropical"] .card-header,
+html[data-app-theme="tropical"] .modal-header,
+html[data-app-theme="tropical"] .table thead,
+html[data-app-theme="tropical"] .table thead th {
+    background-color: rgba(211, 245, 249, 0.94) !important;
+    color: #007b97 !important;
+}
+
+/* Futuristic Neon - the reference uses a dark navigation rail even when the
+   content area is in light mode, so the rail stays navy in both modes. */
+html[data-app-theme="futuristic"] #sidebar-wrapper,
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper {
+    background-color: #03091c !important;
+    background-image:
+        linear-gradient(180deg, rgba(2, 7, 24, 0.98) 0%, rgba(4, 13, 39, 0.96) 58%, rgba(11, 14, 52, 0.93) 100%),
+        url("../img/themes/futuristic-circuit-background.png") !important;
+    background-position: center, left bottom !important;
+    background-repeat: no-repeat !important;
+    background-size: cover, auto 58% !important;
+    border-right-color: rgba(119, 83, 255, 0.56) !important;
+    box-shadow: 9px 0 34px rgba(16, 7, 65, 0.38), 2px 0 0 rgba(42, 190, 255, 0.08) !important;
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .sidebar-brand {
+    border-bottom-color: rgba(120, 91, 255, 0.26) !important;
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .brand-copy .brand-title {
+    color: #28baff !important;
+    text-shadow: 0 0 18px rgba(40, 186, 255, 0.30);
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .brand-copy small,
+html[data-app-theme="futuristic"] #sidebar-wrapper .sidebar-role span {
+    color: #91a5cc !important;
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .sidebar-role strong {
+    color: #a78bfa !important;
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-item,
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .menu-item {
+    color: #ced9f7 !important;
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-icon {
+    color: #70cfff !important;
+    background: linear-gradient(145deg, rgba(27, 45, 89, 0.90), rgba(52, 31, 105, 0.86));
+    box-shadow: inset 0 0 0 1px rgba(101, 126, 255, 0.28), 0 0 12px rgba(43, 184, 255, 0.10);
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-item:hover {
+    color: #f0ecff !important;
+    background: linear-gradient(135deg, rgba(31, 73, 126, 0.58), rgba(76, 38, 145, 0.62)) !important;
+    box-shadow: inset 0 0 0 1px rgba(101, 180, 255, 0.16), 0 8px 18px rgba(4, 2, 24, 0.28) !important;
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-item.active {
+    color: #ffffff !important;
+    background: linear-gradient(135deg, rgba(40, 90, 158, 0.78), rgba(105, 51, 196, 0.78)) !important;
+    box-shadow: inset 0 0 0 1px rgba(145, 117, 255, 0.48), 0 0 22px rgba(100, 66, 255, 0.23) !important;
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-item::before {
+    background: linear-gradient(180deg, #28c2ff, #9c62ff) !important;
+    box-shadow: 0 0 11px rgba(80, 180, 255, 0.72);
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-item:hover .menu-icon,
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-item.active .menu-icon {
+    color: #ffffff !important;
+    background: linear-gradient(145deg, #238fea, #8e4cff);
+    box-shadow: 0 0 18px rgba(92, 96, 255, 0.38);
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] body {
+    background-image:
+        linear-gradient(rgba(247, 248, 255, 0.72), rgba(231, 235, 255, 0.72)),
+        url("../img/themes/futuristic-circuit-background.png");
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #page-content-wrapper {
+    background:
+        radial-gradient(circle at 96% 12%, rgba(117, 72, 255, 0.18), transparent 24%),
+        linear-gradient(145deg, rgba(240, 243, 255, 0.76), rgba(250, 250, 255, 0.52));
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .card,
+html[data-theme="light"][data-app-theme="futuristic"] .modal-content,
+html[data-theme="light"][data-app-theme="futuristic"] .dropdown-menu,
+html[data-theme="light"][data-app-theme="futuristic"] .table-responsive {
+    background-color: rgba(249, 249, 255, 0.96) !important;
+    border-color: rgba(108, 73, 225, 0.27) !important;
+    box-shadow: 0 13px 34px rgba(55, 37, 132, 0.16), 0 0 28px rgba(96, 67, 255, 0.08) !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .card-header,
+html[data-theme="light"][data-app-theme="futuristic"] .modal-header,
+html[data-theme="light"][data-app-theme="futuristic"] .table thead,
+html[data-theme="light"][data-app-theme="futuristic"] .table thead th {
+    background: linear-gradient(135deg, rgba(232, 232, 255, 0.98), rgba(240, 236, 255, 0.96)) !important;
+    color: #593dcc !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper {
+    background:
+        radial-gradient(circle at 96% 12%, rgba(119, 70, 255, 0.19), transparent 25%),
+        rgba(3, 8, 26, 0.48);
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .card,
+html[data-theme="dark"][data-app-theme="futuristic"] .modal-content,
+html[data-theme="dark"][data-app-theme="futuristic"] .dropdown-menu,
+html[data-theme="dark"][data-app-theme="futuristic"] .table-responsive {
+    background-color: rgba(7, 15, 44, 0.94) !important;
+    border-color: rgba(130, 91, 255, 0.32) !important;
+    box-shadow: 0 14px 38px rgba(3, 1, 20, 0.48), 0 0 30px rgba(102, 67, 255, 0.11) !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper {
+    background-color: #03232c !important;
+    background-image:
+        linear-gradient(180deg, rgba(2, 24, 33, 0.98), rgba(3, 48, 55, 0.94)),
+        url("../img/themes/tropical-coast-background.png") !important;
+    border-right-color: rgba(62, 220, 215, 0.38) !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] body {
+    background-image:
+        linear-gradient(rgba(2, 22, 30, 0.76), rgba(3, 35, 42, 0.82)),
+        url("../img/themes/tropical-coast-background.png");
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #page-content-wrapper {
+    background:
+        radial-gradient(circle at 95% 12%, rgba(24, 188, 180, 0.16), transparent 24%),
+        rgba(2, 25, 33, 0.48);
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper .brand-copy small,
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper .sidebar-role span {
+    color: #8bbec3 !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper .sidebar-role strong {
+    color: #71e0dc !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper .menu-item {
+    color: #d3f3f2 !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper .menu-icon {
+    color: #76e7e1 !important;
+    background: linear-gradient(145deg, rgba(12, 69, 75, 0.94), rgba(8, 94, 88, 0.82));
+    box-shadow: inset 0 0 0 1px rgba(94, 232, 222, 0.24), 0 0 14px rgba(35, 204, 196, 0.13);
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper .menu-item:hover {
+    color: #ecffff !important;
+    background: linear-gradient(135deg, rgba(9, 86, 91, 0.82), rgba(8, 60, 72, 0.88)) !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #sidebar-wrapper .menu-item.active {
+    color: #ffffff !important;
+    background: linear-gradient(135deg, rgba(8, 122, 121, 0.86), rgba(9, 75, 88, 0.92)) !important;
+    box-shadow: inset 0 0 0 1px rgba(93, 232, 224, 0.34), 0 0 20px rgba(35, 204, 196, 0.17) !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .card,
+html[data-theme="dark"][data-app-theme="tropical"] .modal-content,
+html[data-theme="dark"][data-app-theme="tropical"] .dropdown-menu,
+html[data-theme="dark"][data-app-theme="tropical"] .table-responsive {
+    background-color: rgba(5, 36, 46, 0.94) !important;
+    border-color: rgba(73, 207, 213, 0.27) !important;
+    box-shadow: 0 14px 36px rgba(0, 11, 16, 0.38), 0 0 26px rgba(35, 204, 196, 0.07) !important;
+    color: #e2f7f7;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .card-header,
+html[data-theme="dark"][data-app-theme="tropical"] .modal-header,
+html[data-theme="dark"][data-app-theme="tropical"] .table thead,
+html[data-theme="dark"][data-app-theme="tropical"] .table thead th {
+    background: linear-gradient(135deg, rgba(7, 53, 63, 0.98), rgba(7, 67, 70, 0.94)) !important;
+    border-color: rgba(73, 207, 213, 0.22) !important;
+    color: #8de8e4 !important;
+}
+
+/* =====================================================
+   TROPICAL COAST - REFERENCE ART DIRECTION
+   ===================================================== */
+
+html[data-theme="light"][data-app-theme="tropical"] {
+    --primary-color: #0698b5 !important;
+    --primary-light: #55cbd8 !important;
+    --primary-dark: #05748d !important;
+    --theme-primary: #0698b5 !important;
+    --theme-light: #55cbd8 !important;
+    --theme-dark: #05748d !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] body {
+    background-color: #f5fcfe;
+    background-image:
+        radial-gradient(circle at 96% 8%, rgba(87, 213, 225, 0.20), transparent 24%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(235, 249, 252, 0.94));
+    color: #0c3151;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] #page-content-wrapper {
+    background:
+        radial-gradient(circle at 92% 13%, rgba(74, 206, 219, 0.16), transparent 23%),
+        linear-gradient(180deg, rgba(249, 254, 255, 0.80), rgba(236, 249, 252, 0.76));
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .app-navbar {
+    background: rgba(255, 255, 255, 0.96) !important;
+    border-bottom-color: rgba(5, 151, 181, 0.15) !important;
+    box-shadow: 0 8px 24px rgba(0, 117, 145, 0.08) !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] #sidebar-wrapper {
+    background-color: #ffffff !important;
+    background-image:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.995) 0%, rgba(255, 255, 255, 0.985) 68%, rgba(242, 252, 253, 0.92) 78%, rgba(219, 246, 248, 0.66) 100%),
+        url("../img/themes/tropical-dashboard-hero-v2.png") !important;
+    background-position: center, 70% bottom !important;
+    background-size: cover, auto 34% !important;
+    border-right-color: rgba(4, 148, 177, 0.20) !important;
+    box-shadow: 8px 0 30px rgba(0, 116, 142, 0.10) !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] #sidebar-wrapper .menu-icon {
+    color: #0797b5 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] #sidebar-wrapper .menu-item:hover {
+    background: rgba(81, 203, 216, 0.12) !important;
+    box-shadow: none !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] #sidebar-wrapper .menu-item.active {
+    color: #047e99 !important;
+    background: linear-gradient(135deg, rgba(205, 245, 248, 0.92), rgba(229, 250, 251, 0.96)) !important;
+    box-shadow: inset 0 0 0 1px rgba(5, 151, 181, 0.14), 0 8px 18px rgba(0, 116, 142, 0.09) !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] #sidebar-wrapper .menu-item:hover .menu-icon,
+html[data-theme="light"][data-app-theme="tropical"] #sidebar-wrapper .menu-item.active .menu-icon {
+    color: #0490ae !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero,
+html[data-theme="light"][data-app-theme="tropical"] .sales-dashboard-hero {
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.99) 0%, rgba(255, 255, 255, 0.97) 38%, rgba(246, 253, 254, 0.58) 55%, rgba(222, 248, 250, 0.08) 100%),
+        url("../img/themes/tropical-dashboard-hero-v2.png") center / cover no-repeat !important;
+    border-color: rgba(5, 151, 181, 0.24) !important;
+    box-shadow: 0 16px 38px rgba(0, 116, 142, 0.13) !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero::before,
+html[data-theme="light"][data-app-theme="tropical"] .sales-dashboard-hero::before {
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.12), transparent 64%),
+        radial-gradient(circle at 78% 18%, rgba(255, 202, 73, 0.20), transparent 14%) !important;
+    opacity: 1 !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-hero h1,
+html[data-theme="light"][data-app-theme="tropical"] .sales-dashboard-hero h1 {
+    color: #092b4d !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .sales-overview-badge,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-hero .badge {
+    background: linear-gradient(135deg, #0797b5, #07a9b6) !important;
+    color: #ffffff !important;
+    box-shadow: 0 8px 18px rgba(0, 134, 160, 0.20) !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row .card {
+    background-color: rgba(255, 255, 255, 0.97) !important;
+    border-color: rgba(4, 148, 177, 0.18) !important;
+    box-shadow: 0 13px 28px rgba(0, 116, 142, 0.10) !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell .stat-card-modern .stat-icon {
+    border: 1px solid rgba(4, 148, 177, 0.18);
+    border-radius: 14px;
+    background: rgba(247, 254, 255, 0.82);
+    box-shadow: 0 8px 18px rgba(0, 116, 142, 0.10);
+    color: #0797b5;
+    padding: 0.58rem;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell .stat-projects .stat-icon,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell .stat-projects .stat-number {
+    color: #2786e8 !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell .stat-active .stat-icon,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell .stat-active .stat-number {
+    color: #0aa88d !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell .stat-overdue .stat-icon,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell .stat-overdue .stat-number {
+    color: #f06c82 !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell :is(.chart-card, .list-card, .dashboard-chart-card) {
+    background-color: rgba(255, 255, 255, 0.97) !important;
+    border-color: rgba(4, 148, 177, 0.18) !important;
+    box-shadow: 0 15px 34px rgba(0, 116, 142, 0.10) !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell :is(.chart-card, .list-card, .dashboard-chart-card)::before {
+    background:
+        radial-gradient(circle at 92% 10%, rgba(75, 205, 217, 0.10), transparent 22%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(239, 252, 253, 0.54)) !important;
+    opacity: 0.72 !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell :is(.chart-card, .list-card, .dashboard-chart-card) > .card-header {
+    background: rgba(250, 255, 255, 0.92) !important;
+    border-bottom-color: rgba(4, 148, 177, 0.15) !important;
+    color: #075577 !important;
+}
+
+/* =====================================================
+   THEME MOTION, UNIQUE CARD ART, AND DARK HOVER FIXES
+   ===================================================== */
+
+@keyframes futuristicCircuitFlow {
+    0% {
+        background-position: 12% 12%, 0 0, 0 0, center;
+    }
+    50% {
+        background-position: 88% 42%, 34px 18px, 18px 34px, center;
+    }
+    100% {
+        background-position: 12% 12%, 68px 36px, 36px 68px, center;
+    }
+}
+
+@keyframes themeHeroAmbientSweep {
+    0%,
+    100% {
+        transform: translate3d(-0.8%, 0, 0) scale(1.02);
+        opacity: 0.72;
+    }
+    50% {
+        transform: translate3d(0.8%, -0.5%, 0) scale(1.035);
+        opacity: 1;
+    }
+}
+
+@keyframes futuristicPanelFlow {
+    0% {
+        background-position: 12% 12%, 0 0, 0 0;
+    }
+    50% {
+        background-position: 86% 38%, 22px 11px, 11px 22px;
+    }
+    100% {
+        background-position: 12% 12%, 44px 22px, 22px 44px;
+    }
+}
+
+@keyframes tropicalDecorationFloat {
+    0%,
+    100% {
+        transform: translate3d(0, 0, 0) rotate(-0.4deg);
+    }
+    50% {
+        transform: translate3d(0, -4px, 0) rotate(0.6deg);
+    }
+}
+
+/*
+ * Theme stat cards stay dimensional without taking over the dashboard.
+ * These rules only adjust spacing and presentation; the existing grid and
+ * dashboard markup remain unchanged.
+ */
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid {
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern {
+    min-height: 132px;
+    padding: 1.05rem 1.15rem;
+    border-radius: 18px;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card {
+    min-height: 132px !important;
+    border-radius: 18px;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card > .card-body,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card > .card-body {
+    min-height: 130px;
+    padding: 1.05rem 1.15rem !important;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:hover,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card:hover,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:hover,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card:hover {
+    transform: perspective(1400px) translate3d(0, -4px, 10px) rotateX(0.45deg) !important;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-number,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-number,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card .h1,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card.card .h1 {
+    font-size: 2.15rem;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-icon,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-icon {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.74);
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    border-radius: 13px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92), 0 7px 14px rgba(15, 76, 129, 0.10);
+    display: flex;
+    height: 42px;
+    justify-content: center;
+    right: 0.85rem;
+    top: 0.85rem;
+    transform: translateZ(8px);
+    width: 42px;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-icon,
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stat-card-modern .stat-icon {
+    background: rgba(8, 20, 43, 0.72);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+/* Light mode uses a calmer, upright icon tile instead of the deeper rotated block. */
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern .stat-icon,
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern .stat-icon,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .ms-3,
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .ms-3,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .qa-stat-icon,
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .qa-stat-icon {
+    background: rgba(255, 255, 255, 0.68) !important;
+    border-radius: 12px;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.94),
+        0 3px 0 rgba(31, 99, 146, 0.055),
+        0 7px 14px rgba(31, 99, 146, 0.08) !important;
+    height: 40px;
+    padding: 0 !important;
+    transform: translateZ(7px) rotate(0deg) !important;
+    width: 40px;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern .stat-icon,
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern .stat-icon,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .ms-3 i,
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .ms-3 i,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .qa-stat-icon,
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .qa-stat-icon {
+    font-size: 1.3rem !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:hover .stat-icon,
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:hover .stat-icon,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:hover .ms-3,
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:hover .ms-3,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:hover .qa-stat-icon,
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card:hover .qa-stat-icon {
+    transform: translateZ(10px) translateY(-1px) rotate(0deg) scale(1.015) !important;
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper {
+    isolation: isolate;
+    position: relative;
+    background-color: rgba(4, 10, 29, 0.48);
+    background-image:
+        radial-gradient(circle at 18% 12%, rgba(41, 190, 255, 0.13), transparent 17%),
+        repeating-linear-gradient(90deg, rgba(73, 104, 255, 0.045) 0 1px, transparent 1px 68px),
+        repeating-linear-gradient(0deg, rgba(138, 83, 255, 0.04) 0 1px, transparent 1px 68px),
+        url("../img/themes/futuristic-circuit-background.png");
+    background-repeat: no-repeat, repeat, repeat, no-repeat;
+    background-size: 180% 180%, 68px 68px, 68px 68px, cover;
+    animation: futuristicCircuitFlow 32s linear infinite;
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper::before {
+    background: url("../img/themes/futuristic-cpu-circuit.svg") center top / cover no-repeat;
+    content: "";
+    inset: 0;
+    min-height: 100vh;
+    mix-blend-mode: screen;
+    opacity: 0.46;
+    pointer-events: none;
+    position: absolute;
+    z-index: 0;
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper::after {
+    content: none;
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper > .container,
+html[data-app-theme="futuristic"] #page-content-wrapper > .container-fluid,
+html[data-app-theme="futuristic"] #page-content-wrapper > main,
+html[data-app-theme="futuristic"] #page-content-wrapper > .page-content,
+html[data-app-theme="futuristic"] #page-content-wrapper > .content-wrapper {
+    position: relative;
+    z-index: 1;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #page-content-wrapper {
+    background-color: rgba(241, 244, 255, 0.76);
+    background-image:
+        radial-gradient(circle at 18% 12%, rgba(94, 68, 255, 0.12), transparent 18%),
+        repeating-linear-gradient(90deg, rgba(77, 75, 190, 0.035) 0 1px, transparent 1px 68px),
+        repeating-linear-gradient(0deg, rgba(37, 166, 226, 0.035) 0 1px, transparent 1px 68px),
+        url("../img/themes/futuristic-circuit-background.png");
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #page-content-wrapper::before {
+    filter: saturate(0.82) contrast(0.88);
+    mix-blend-mode: multiply;
+    opacity: 0.36;
+}
+
+/* Richer light-mode surfaces so the themes do not wash out to plain white. */
+html[data-theme="light"][data-app-theme="tropical"] body {
+    background-color: #dff6f8;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] #page-content-wrapper {
+    background-color: #e4f8fa !important;
+    background-image:
+        radial-gradient(circle at 88% 8%, rgba(255, 201, 83, 0.20), transparent 18%),
+        radial-gradient(circle at 12% 30%, rgba(26, 184, 198, 0.16), transparent 28%),
+        linear-gradient(145deg, rgba(218, 246, 249, 0.94), rgba(239, 252, 250, 0.86)) !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .app-navbar {
+    background: rgba(237, 251, 251, 0.96) !important;
+    border-color: rgba(4, 148, 177, 0.22) !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] #sidebar-wrapper {
+    background-color: #e6f7f8 !important;
+    background-image:
+        linear-gradient(180deg, rgba(244, 253, 253, 0.98) 0%, rgba(222, 246, 247, 0.96) 68%, rgba(192, 235, 239, 0.90) 100%),
+        url("../img/themes/tropical-dashboard-hero-v2.png") !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] :is(
+    .card:not(.role-dashboard-hero),
+    .modal-content,
+    .dropdown-menu,
+    .table-responsive
+) {
+    background-color: rgba(240, 251, 250, 0.97) !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell :is(
+    .card.card:not(.role-dashboard-hero),
+    .stat-card.stat-card,
+    .stat-card-modern.stat-card-modern,
+    .qa-stat-card.qa-stat-card,
+    .dashboard-mini-stat.dashboard-mini-stat
+) {
+    background-color: rgba(239, 251, 251, 0.96) !important;
+}
+
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell :is(
+    .chart-card,
+    .list-card,
+    .dashboard-chart-card
+) {
+    background-color: rgba(242, 252, 251, 0.97) !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] body {
+    background-color: #e7eaf3 !important;
+    background-image:
+        radial-gradient(circle at 86% 8%, rgba(102, 85, 190, 0.10), transparent 24%),
+        linear-gradient(145deg, #e5e9f2, #eef0f6) !important;
+    color: #18233f !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #page-content-wrapper {
+    background-color: #e8ebf4 !important;
+    background-image:
+        radial-gradient(circle at 18% 12%, rgba(104, 78, 214, 0.10), transparent 22%),
+        radial-gradient(circle at 82% 34%, rgba(42, 160, 205, 0.08), transparent 28%),
+        repeating-linear-gradient(90deg, rgba(74, 80, 145, 0.026) 0 1px, transparent 1px 68px),
+        repeating-linear-gradient(0deg, rgba(46, 126, 165, 0.024) 0 1px, transparent 1px 68px) !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .app-navbar {
+    background: rgba(237, 239, 247, 0.97) !important;
+    border-bottom-color: rgba(76, 75, 137, 0.17) !important;
+    box-shadow: 0 6px 20px rgba(42, 48, 89, 0.09) !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .app-navbar :is(
+    .nav-icon-link,
+    .nav-user-name,
+    .nav-user-role
+) {
+    color: #172441 !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper {
+    background-color: #e5e8f2 !important;
+    background-image:
+        radial-gradient(circle at 8% 88%, rgba(91, 103, 190, 0.10), transparent 30%),
+        linear-gradient(180deg, rgba(236, 238, 246, 0.99), rgba(221, 225, 238, 0.98)) !important;
+    border-right-color: rgba(78, 76, 150, 0.20) !important;
+    box-shadow: 5px 0 20px rgba(43, 47, 87, 0.10) !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .brand-copy strong,
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .brand-title {
+    color: #087da9 !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .brand-copy small,
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .sidebar-heading,
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .sidebar-role span {
+    color: #586683 !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .sidebar-role strong {
+    color: #694cc4 !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .menu-item,
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .list-group-item {
+    color: #273653 !important;
+    text-shadow: none !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .menu-item .menu-label {
+    color: inherit !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .menu-icon {
+    background: linear-gradient(145deg, #e7edfa, #d9dff2) !important;
+    box-shadow: inset 0 0 0 1px rgba(71, 92, 156, 0.20), 0 4px 10px rgba(52, 62, 110, 0.08) !important;
+    color: #286ca2 !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .menu-item:hover {
+    background: rgba(103, 84, 190, 0.10) !important;
+    color: #3c2e83 !important;
+    box-shadow: inset 0 0 0 1px rgba(103, 84, 190, 0.14) !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .menu-item.active {
+    background: linear-gradient(135deg, #5d74cc, #7655bd) !important;
+    color: #ffffff !important;
+    box-shadow: 0 7px 16px rgba(76, 64, 145, 0.20) !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .menu-item:hover:not(.active) .menu-icon {
+    background: linear-gradient(145deg, #d2d9ed, #c6cfe7) !important;
+    box-shadow: inset 0 0 0 1px rgba(69, 72, 139, 0.24), 0 4px 10px rgba(52, 62, 110, 0.10) !important;
+    color: #44378d !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .menu-item.active .menu-icon,
+html[data-theme="light"][data-app-theme="futuristic"] #sidebar-wrapper .menu-item.active:hover .menu-icon {
+    background: linear-gradient(145deg, #4453a6, #55358e) !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24), 0 5px 12px rgba(45, 32, 108, 0.30) !important;
+    color: #ffffff !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] :is(
+    .card:not(.role-dashboard-hero),
+    .modal-content,
+    .dropdown-menu,
+    .table-responsive
+) {
+    background-color: rgba(242, 243, 248, 0.97) !important;
+    border-color: rgba(78, 76, 150, 0.18) !important;
+    box-shadow: 0 10px 24px rgba(45, 50, 91, 0.10) !important;
+    color: #192542 !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+    .card.card:not(.role-dashboard-hero),
+    .stat-card.stat-card,
+    .stat-card-modern.stat-card-modern,
+    .qa-stat-card.qa-stat-card,
+    .dashboard-mini-stat.dashboard-mini-stat
+) {
+    background-color: rgba(241, 242, 248, 0.97) !important;
+}
+
+/* Content surfaces remain opaque; only the page-level circuit layer is translucent. */
+html[data-theme="light"][data-app-theme="futuristic"] #page-content-wrapper :is(
+    .card:not(.role-dashboard-hero),
+    .section-card,
+    .filter-card,
+    .overview-control-card,
+    .overview-project-card,
+    .metric-card,
+    .toolbar-menu,
+    .insight-item,
+    .modal-content,
+    .dropdown-menu,
+    .table-responsive
+) {
+    background-color: rgba(241, 242, 247, 0.97) !important;
+    background-blend-mode: normal !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #page-content-wrapper :is(
+    .card-header,
+    .section-card .card-header,
+    .modal-header,
+    .table thead,
+    .table thead th
+) {
+    background-color: #e8eaf3 !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #page-content-wrapper :is(
+    .role-dashboard-hero,
+    .sales-dashboard-hero,
+    .insights-hero
+) {
+    background:
+        linear-gradient(105deg, rgba(236, 238, 245, 0.99) 0%, rgba(230, 231, 242, 0.98) 54%, rgba(222, 220, 240, 0.97) 100%) !important;
+    color: #17213e !important;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] #page-content-wrapper .insights-hero p {
+    color: #52607d !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper :is(
+    .card:not(.role-dashboard-hero),
+    .section-card,
+    .filter-card,
+    .overview-control-card,
+    .overview-project-card,
+    .metric-card,
+    .toolbar-menu,
+    .insight-item,
+    .modal-content,
+    .dropdown-menu,
+    .table-responsive
+) {
+    background-color: rgba(7, 21, 43, 0.96) !important;
+    background-blend-mode: normal !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper :is(
+    .card-header,
+    .section-card .card-header,
+    .modal-header,
+    .table thead,
+    .table thead th
+) {
+    background-color: #0b1b38 !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper :is(
+    .role-dashboard-hero,
+    .sales-dashboard-hero,
+    .insights-hero
+) {
+    background:
+        linear-gradient(105deg, rgba(16, 29, 72, 0.99) 0%, rgba(27, 33, 88, 0.98) 56%, rgba(52, 32, 109, 0.97) 100%) !important;
+    color: #e6ecff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper .insights-hero p {
+    color: #b7c5e1 !important;
+}
+
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+    .card.card:not(.role-dashboard-hero),
+    .stat-card.stat-card,
+    .stat-card-modern.stat-card-modern,
+    .qa-stat-card.qa-stat-card,
+    .admin-stat-card,
+    .dashboard-mini-stat.dashboard-mini-stat
+) {
+    background-image:
+        radial-gradient(circle at 88% 12%, rgba(75, 194, 255, 0.10), transparent 20%),
+        repeating-linear-gradient(90deg, rgba(105, 93, 255, 0.032) 0 1px, transparent 1px 44px),
+        repeating-linear-gradient(0deg, rgba(43, 184, 255, 0.028) 0 1px, transparent 1px 44px) !important;
+    background-size: 170% 170%, 44px 44px, 44px 44px !important;
+    animation: futuristicPanelFlow 34s linear infinite;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell :is(
+    .card.card:not(.role-dashboard-hero),
+    .stat-card.stat-card,
+    .stat-card-modern.stat-card-modern,
+    .qa-stat-card.qa-stat-card,
+    .admin-stat-card,
+    .dashboard-mini-stat.dashboard-mini-stat
+) {
+    background-image:
+        radial-gradient(circle at 92% 10%, rgba(83, 207, 218, 0.10), transparent 22%),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.70), rgba(223, 248, 250, 0.15)) !important;
+}
+
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero::before,
+html[data-app-theme="futuristic"] .sales-dashboard-hero::before,
+html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero::before,
+html[data-theme="light"][data-app-theme="tropical"] .sales-dashboard-hero::before {
+    animation: themeHeroAmbientSweep 18s ease-in-out infinite;
+    transform-origin: center;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern::before {
+    background:
+        radial-gradient(circle at 90% 15%, rgba(72, 207, 219, 0.13), transparent 24%),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(222, 249, 250, 0.20)) !important;
+    opacity: 1 !important;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern::after,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card::after,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card::after {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    right: -5px;
+    bottom: -10px;
+    width: 36%;
+    height: 64%;
+    pointer-events: none;
+    background-position: right bottom;
+    background-repeat: no-repeat;
+    background-size: contain;
+    opacity: 0.54;
+    filter: saturate(0.9);
+    animation: tropicalDecorationFloat 10s ease-in-out infinite;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(1)::after,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(1) > .card::after,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card:nth-child(1)::after {
+    right: -7px;
+    bottom: -18px;
+    width: 34%;
+    height: 88%;
+    background-image: url("../img/themes/tropical-card-palm.png");
+    opacity: 0.5;
+    animation-delay: -2s;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(2)::after,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(2) > .card::after,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card:nth-child(2)::after {
+    right: 1px;
+    bottom: -10px;
+    width: 33%;
+    height: 65%;
+    background-image: url("../img/themes/tropical-card-sailboat.png");
+    animation-delay: -5s;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(3)::after,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(3) > .card::after,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card:nth-child(3)::after {
+    right: 0;
+    bottom: -18px;
+    width: 29%;
+    height: 74%;
+    background-image: url("../img/themes/tropical-card-surfboards.png");
+    opacity: 0.5;
+    animation-delay: -7s;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern:nth-child(4)::after,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > :nth-child(4) > .card::after,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card:nth-child(4)::after {
+    right: -8px;
+    bottom: -16px;
+    width: 38%;
+    height: 68%;
+    background-image: url("../img/themes/tropical-card-crab.png");
+    opacity: 0.52;
+    animation-delay: -3.5s;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern > *,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card > *,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Keep metric icons in the upper-right, independent of decorative card art. */
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern > .stat-icon,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern > .stat-icon {
+    left: auto !important;
+    margin: 0 !important;
+    position: absolute !important;
+    right: 0.85rem !important;
+    top: 0.85rem !important;
+    z-index: 3;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern > .stat-label,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern > .stat-label {
+    max-width: calc(100% - 3.45rem);
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .ms-3,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .qa-stat-icon,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .ms-3,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .qa-stat-icon {
+    left: auto !important;
+    margin: 0 !important;
+    position: absolute !important;
+    right: 0.85rem !important;
+    top: 0.85rem !important;
+    z-index: 3;
+}
+
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .flex-grow-1,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card .flex-grow-1,
+html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .qa-stat-card .card-body > div:first-child,
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .qa-stat-card .card-body > div:first-child {
+    padding-right: 3.55rem;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern::after,
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card::after,
+html[data-theme="dark"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card::after {
+    opacity: 0.38;
+    filter: saturate(0.82) brightness(0.88);
+}
+
+@media (max-width: 767.98px) {
+    html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern,
+    html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern {
+        min-height: 124px;
+    }
+
+    html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern::after,
+    html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card::after {
+        opacity: 0.42;
+        transform: scale(0.92);
+        transform-origin: right bottom;
+    }
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar .nav-user-link:hover,
+html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar .nav-user-link:focus,
+html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar .nav-user-link.show,
+html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar #navbarUserMenu[aria-expanded="true"] {
+    background: linear-gradient(135deg, rgba(17, 38, 83, 0.98), rgba(54, 29, 106, 0.98)) !important;
+    color: #ffffff !important;
+    box-shadow: inset 0 0 0 1px rgba(126, 112, 255, 0.42), 0 8px 24px rgba(2, 4, 20, 0.40) !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar .nav-user-link:hover .nav-user-name,
+html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar .nav-user-link:hover .nav-user-role,
+html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar .nav-user-link:focus .nav-user-name,
+html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar .nav-user-link:focus .nav-user-role,
+html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar #navbarUserMenu[aria-expanded="true"] .nav-user-name,
+html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar #navbarUserMenu[aria-expanded="true"] .nav-user-role {
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .app-navbar .nav-user-link:hover,
+html[data-theme="dark"][data-app-theme="tropical"] .app-navbar .nav-user-link:focus,
+html[data-theme="dark"][data-app-theme="tropical"] .app-navbar .nav-user-link.show,
+html[data-theme="dark"][data-app-theme="tropical"] .app-navbar #navbarUserMenu[aria-expanded="true"] {
+    background: linear-gradient(135deg, rgba(5, 62, 72, 0.98), rgba(6, 91, 90, 0.98)) !important;
+    color: #ffffff !important;
+    box-shadow: inset 0 0 0 1px rgba(91, 230, 221, 0.34), 0 8px 22px rgba(0, 16, 20, 0.38) !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] .app-navbar .nav-user-link:hover .nav-user-name,
+html[data-theme="dark"][data-app-theme="tropical"] .app-navbar .nav-user-link:hover .nav-user-role,
+html[data-theme="dark"][data-app-theme="tropical"] .app-navbar .nav-user-link:focus .nav-user-name,
+html[data-theme="dark"][data-app-theme="tropical"] .app-navbar .nav-user-link:focus .nav-user-role,
+html[data-theme="dark"][data-app-theme="tropical"] .app-navbar #navbarUserMenu[aria-expanded="true"] .nav-user-name,
+html[data-theme="dark"][data-app-theme="tropical"] .app-navbar #navbarUserMenu[aria-expanded="true"] .nav-user-role {
+    color: #ffffff !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-app-theme="futuristic"] #page-content-wrapper,
+    html[data-app-theme="futuristic"] #page-content-wrapper::before,
+    html[data-app-theme="futuristic"] #page-content-wrapper::after,
+    html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero::before,
+    html[data-app-theme="futuristic"] .sales-dashboard-hero::before,
+    html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+        .card.card:not(.role-dashboard-hero),
+        .stat-card.stat-card,
+        .stat-card-modern.stat-card-modern,
+        .qa-stat-card.qa-stat-card,
+        .admin-stat-card,
+        .dashboard-mini-stat.dashboard-mini-stat
+    ),
+    html[data-theme="light"][data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero::before,
+    html[data-theme="light"][data-app-theme="tropical"] .sales-dashboard-hero::before,
+    html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .stats-grid > .stat-card-modern::after,
+    html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .role-stats-row > [class*="col-"] > .card::after,
+    html[data-app-theme="tropical"] .role-dashboard-shell.role-dashboard-shell .admin-stats-grid > .admin-stat-card::after {
+        animation: none !important;
+    }
+}
+
+/* System-wide readable text layer
+ * Keep component layout and semantic colors intact while giving every visual
+ * mode a dependable foreground and muted-text contrast pair. */
+:root {
+    --app-readable-text: #17324a;
+    --app-readable-heading: #0b2942;
+    --app-readable-muted: #526f86;
+    --app-readable-link: #096f9d;
+    --app-readable-input: #132f47;
+    --app-readable-placeholder: #6b8295;
+}
+
+html[data-theme="dark"] {
+    --app-readable-text: #dce8f5;
+    --app-readable-heading: #f3f7ff;
+    --app-readable-muted: #a9bdd1;
+    --app-readable-link: #69c9ff;
+    --app-readable-input: #eef6ff;
+    --app-readable-placeholder: #91a9bf;
+}
+
+html[data-app-theme="tropical"] {
+    --app-readable-text: #16445a;
+    --app-readable-heading: #08364d;
+    --app-readable-muted: #527487;
+    --app-readable-link: #007f99;
+    --app-readable-input: #103d53;
+    --app-readable-placeholder: #678696;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] {
+    --app-readable-text: #d9f3f1;
+    --app-readable-heading: #f1fffd;
+    --app-readable-muted: #a7ceca;
+    --app-readable-link: #67e4dc;
+    --app-readable-input: #effffd;
+    --app-readable-placeholder: #91bcb9;
+}
+
+html[data-app-theme="futuristic"] {
+    --app-readable-text: #dce6ff;
+    --app-readable-heading: #f4f6ff;
+    --app-readable-muted: #acbce1;
+    --app-readable-link: #72d7ff;
+    --app-readable-input: #edf3ff;
+    --app-readable-placeholder: #9eadd0;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] {
+    --app-readable-text: #253352;
+    --app-readable-heading: #111f43;
+    --app-readable-muted: #596987;
+    --app-readable-link: #5144c7;
+    --app-readable-input: #1c2948;
+    --app-readable-placeholder: #71809b;
+}
+
+#page-content-wrapper {
+    color: var(--app-readable-text);
+}
+
+#page-content-wrapper :is(
+    .text-muted,
+    .form-text,
+    .small.text-secondary,
+    .text-secondary,
+    .card-subtitle,
+    .modal-body > p,
+    .dropdown-header,
+    .table td small
+) {
+    color: var(--app-readable-muted) !important;
+}
+
+#page-content-wrapper :is(
+    .form-label,
+    legend,
+    .modal-title,
+    .card-title,
+    .table th,
+    .accordion-button
+) {
+    color: var(--app-readable-heading);
+}
+
+#page-content-wrapper :is(.form-control, .form-select) {
+    color: var(--app-readable-input);
+}
+
+#page-content-wrapper :is(.form-control, .form-select)::placeholder {
+    color: var(--app-readable-placeholder) !important;
+    opacity: 1;
+}
+
+#page-content-wrapper a:not(.btn):not(.badge):not(.menu-item) {
+    color: var(--app-readable-link);
+}
+
+html[data-theme="dark"] #page-content-wrapper :is(
+    p,
+    li,
+    dd,
+    .card-body,
+    .modal-body,
+    .accordion-body,
+    .dropdown-item,
+    .table td
+) {
+    color: inherit;
+}
+
+#sidebar-wrapper .menu-item {
+    color: var(--app-readable-text) !important;
+}
+
+#sidebar-wrapper .sidebar-role-label,
+#sidebar-wrapper .sidebar-footer small {
+    color: var(--app-readable-muted) !important;
+}
+
+#sidebar-wrapper .menu-item:hover,
+#sidebar-wrapper .menu-item.active {
+    color: var(--app-readable-link) !important;
+}
+
+html[data-theme="dark"] #sidebar-wrapper .menu-item:hover,
+html[data-theme="dark"] #sidebar-wrapper .menu-item.active,
+html[data-app-theme="futuristic"]:not([data-theme="light"]) #sidebar-wrapper .menu-item:hover,
+html[data-app-theme="futuristic"]:not([data-theme="light"]) #sidebar-wrapper .menu-item.active {
+    color: #ffffff !important;
+}
+
+/* Evortix speech panels use a saturated surface in every theme. Their list
+   content previously inherited a page color that became nearly invisible. */
+.chat-bot-speech.evortix-architect-dss {
+    color: #eaf7ff !important;
+}
+
+.chat-bot-speech.evortix-architect-dss :is(
+    .evortix-dss-heading,
+    .evortix-dss-copy,
+    .evortix-dss-points,
+    .evortix-dss-points li
+) {
+    color: #eaf7ff !important;
+    opacity: 1 !important;
+}
+
+.chat-bot-speech.evortix-architect-dss .evortix-dss-copy {
+    color: #bfe6fb !important;
+}
+
+/* Futuristic dark consistency
+ * Process History is the reference treatment: solid navy working surfaces,
+ * a clear blue page banner, restrained cyan borders, and no grey glass cards.
+ * These rules intentionally come last so page-local dashboard CSS cannot
+ * replace the selected theme. */
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell {
+    --role-dashboard-primary: #5bc8f5;
+    --role-dashboard-surface: #0b1d2d;
+    --role-dashboard-head: #10273b;
+    --role-dashboard-border: rgba(71, 183, 232, 0.24);
+    --role-dashboard-border-strong: rgba(71, 201, 244, 0.42);
+    --role-dashboard-card-sheen: rgba(255, 255, 255, 0.025);
+    --role-dashboard-card-sheen-soft: rgba(49, 151, 203, 0.035);
+    --role-dashboard-card-glow: rgba(39, 179, 229, 0.08);
+    --role-dashboard-card-tint: rgba(25, 105, 153, 0.06);
+    --role-dashboard-shadow: 0 5px 0 rgba(1, 8, 17, 0.62), 0 16px 30px rgba(0, 0, 0, 0.22);
+    --role-dashboard-shadow-hover: 0 7px 0 rgba(1, 8, 17, 0.66), 0 22px 38px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero {
+    background: linear-gradient(105deg, #1f6392 0%, #2d79a7 68%, #3c87b2 100%) !important;
+    border-color: rgba(103, 207, 244, 0.34) !important;
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero :is(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    p,
+    small,
+    .text-muted
+) {
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero p {
+    color: #d8edf8 !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+    .card.card:not(.role-dashboard-hero),
+    .stat-card.stat-card,
+    .stat-card-modern.stat-card-modern,
+    .qa-stat-card.qa-stat-card,
+    .admin-stat-card,
+    .dashboard-mini-stat.dashboard-mini-stat
+) {
+    background:
+        radial-gradient(circle at 92% 8%, rgba(58, 174, 224, 0.055), transparent 24%),
+        linear-gradient(180deg, rgba(16, 39, 59, 0.34), transparent 52%),
+        #0b1d2d !important;
+    border-color: rgba(71, 183, 232, 0.22) !important;
+    color: #dce9f5 !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+    .card-header,
+    .section-header,
+    .dashboard-card-header
+) {
+    background: #10273b !important;
+    border-color: rgba(71, 183, 232, 0.18) !important;
+    color: #eaf5ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+    .stat-label,
+    .stat-card-label,
+    .qa-stat-label,
+    .card-header h5,
+    .card-header h6
+) {
+    color: #a9bfd3 !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+    .stat-value,
+    .stat-number,
+    .qa-stat-value,
+    .card-title
+) {
+    color: #f2f8ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-role-dashboard-summary {
+    background: #0d2a3f !important;
+    border-color: rgba(79, 198, 239, 0.38) !important;
+    color: #e8f5ff !important;
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36), 0 0 24px rgba(37, 178, 225, 0.10) !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-role-dashboard-summary::after {
+    background: #0d2a3f !important;
+    border-color: rgba(79, 198, 239, 0.22) !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-role-dashboard-summary :is(
+    .evortix-role-summary-title,
+    .evortix-role-summary-intro,
+    .evortix-role-summary-eyebrow
+) {
+    color: #e8f5ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .evortix-role-summary-metric,
+html[data-theme="dark"][data-app-theme="futuristic"] .evortix-role-planning-suggestion {
+    background: #102c40 !important;
+    border-color: rgba(79, 198, 239, 0.22) !important;
+    box-shadow: none !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .evortix-role-summary-metric :is(
+    .evortix-role-summary-value,
+    .evortix-role-summary-label
+),
+html[data-theme="dark"][data-app-theme="futuristic"] .evortix-role-planning-suggestion :is(
+    .evortix-role-planning-title,
+    .evortix-role-planning-eyebrow
+) {
+    color: #eaf6ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] :is(
+    .evortix-role-summary-meta,
+    .evortix-role-planning-copy
+) {
+    color: #a9c2d5 !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-allocation-bubble {
+    background: #0d2a3f !important;
+    border-color: rgba(79, 198, 239, 0.38) !important;
+    color: #e8f5ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-allocation-bubble::after {
+    background: #0d2a3f !important;
+    border-color: rgba(79, 198, 239, 0.22) !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-allocation-bubble :is(
+    .evortix-bubble-eyebrow,
+    .evortix-bubble-title,
+    .evortix-bubble-reason
+) {
+    color: #e8f5ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-allocation-bubble .evortix-bubble-task {
+    background: #102c40 !important;
+    border-color: rgba(79, 198, 239, 0.24) !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-allocation-bubble .evortix-bubble-task :is(
+    strong,
+    span
+) {
+    color: #dff3ff !important;
+    opacity: 1 !important;
+}
