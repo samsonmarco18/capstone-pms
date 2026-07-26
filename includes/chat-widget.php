@@ -434,6 +434,10 @@ document.addEventListener('DOMContentLoaded', function () {
     let botFloatPointer = null;
     let botTypeTimer = null;
     let botTransitionTimer = null;
+    let evortixSpeechTimer = null;
+    let lastEvortixSpeech = '';
+    let lastEvortixSpeechAt = 0;
+    let pendingEvortixSpeech = '';
 
     if (!widget || !minimized) return;
 
@@ -465,22 +469,133 @@ document.addEventListener('DOMContentLoaded', function () {
             const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
             if (!AudioContextConstructor) return;
             const context = new AudioContextConstructor();
-            const oscillator = context.createOscillator();
-            const gain = context.createGain();
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(620, context.currentTime);
-            gain.gain.setValueAtTime(0.0001, context.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.16);
-            oscillator.connect(gain);
-            gain.connect(context.destination);
-            oscillator.start();
-            oscillator.stop(context.currentTime + 0.18);
-            oscillator.addEventListener('ended', () => context.close().catch(() => {}), { once: true });
+            const startTime = context.currentTime;
+            const masterGain = context.createGain();
+            const filter = context.createBiquadFilter();
+            masterGain.gain.setValueAtTime(0.0001, startTime);
+            masterGain.gain.exponentialRampToValueAtTime(0.09, startTime + 0.015);
+            masterGain.gain.setValueAtTime(0.09, startTime + 0.08);
+            masterGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.42);
+            filter.type = 'bandpass';
+            filter.frequency.value = 1150;
+            filter.Q.value = 3.5;
+            filter.connect(masterGain);
+            masterGain.connect(context.destination);
+
+            const staticLength = Math.ceil(context.sampleRate * 0.43);
+            const staticBuffer = context.createBuffer(1, staticLength, context.sampleRate);
+            const staticData = staticBuffer.getChannelData(0);
+            for (let index = 0; index < staticLength; index += 1) {
+                const fade = 1 - (index / staticLength);
+                staticData[index] = (Math.random() * 2 - 1) * fade;
+            }
+            const staticSource = context.createBufferSource();
+            const staticGain = context.createGain();
+            const staticFilter = context.createBiquadFilter();
+            staticSource.buffer = staticBuffer;
+            staticFilter.type = 'highpass';
+            staticFilter.frequency.value = 1800;
+            staticGain.gain.setValueAtTime(0.018, startTime);
+            staticGain.gain.exponentialRampToValueAtTime(0.004, startTime + 0.32);
+            staticGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.43);
+            staticSource.connect(staticFilter);
+            staticFilter.connect(staticGain);
+            staticGain.connect(context.destination);
+            staticSource.start(startTime);
+            staticSource.stop(startTime + 0.43);
+
+            const tones = [
+                { type: 'square', frequency: 310, detune: -12 },
+                { type: 'sawtooth', frequency: 620, detune: 9 }
+            ];
+            tones.forEach((tone, index) => {
+                const oscillator = context.createOscillator();
+                oscillator.type = tone.type;
+                oscillator.detune.value = tone.detune;
+                oscillator.frequency.setValueAtTime(tone.frequency, startTime);
+                oscillator.frequency.setValueAtTime(tone.frequency * 1.45, startTime + 0.09);
+                oscillator.frequency.setValueAtTime(tone.frequency * 0.82, startTime + 0.18);
+                oscillator.frequency.setValueAtTime(tone.frequency * 1.7, startTime + 0.27);
+                oscillator.connect(filter);
+                oscillator.start(startTime + (index * 0.012));
+                oscillator.stop(startTime + 0.43);
+                if (index === tones.length - 1) {
+                    oscillator.addEventListener('ended', () => context.close().catch(() => {}), { once: true });
+                }
+            });
         } catch (error) {
             // Browser audio restrictions should not interrupt Evortix guidance.
         }
     };
+
+    const getEvortixVoice = function () {
+        if (!('speechSynthesis' in window)) return null;
+        const voices = window.speechSynthesis.getVoices();
+        return voices.find(voice => /^en(-|_)/i.test(voice.lang) && /aria|jenny|zira|samantha|female|google us english/i.test(voice.name))
+            || voices.find(voice => /^en(-|_)/i.test(voice.lang))
+            || voices[0]
+            || null;
+    };
+
+    const speakEvortix = function (text) {
+        const spokenText = String(text || '').replace(/\s+/g, ' ').trim();
+        if (!evortixSoundEnabled || !spokenText || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return;
+
+        pendingEvortixSpeech = spokenText;
+        const now = Date.now();
+        if (spokenText === lastEvortixSpeech && now - lastEvortixSpeechAt < 3000) return;
+        lastEvortixSpeech = spokenText;
+        lastEvortixSpeechAt = now;
+
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(spokenText);
+        const voice = getEvortixVoice();
+        const isWarning = /\b(warning|overdue|failed|failure|risk|urgent|issue|error|revision|attention)\b/i.test(spokenText);
+        const isPositive = /\b(great|good|success|successful|approved|complete|completed|ready|excellent|congratulations)\b/i.test(spokenText);
+        if (voice) utterance.voice = voice;
+        utterance.lang = voice?.lang || 'en-US';
+        utterance.rate = isWarning ? 0.94 : (isPositive ? 1.14 : 1.06);
+        utterance.pitch = isWarning ? 1.12 : (isPositive ? 1.38 : 1.28);
+        utterance.volume = 0.88;
+        utterance.addEventListener('start', () => {
+            pendingEvortixSpeech = '';
+        }, { once: true });
+        utterance.addEventListener('error', event => {
+            if (event.error === 'not-allowed' || event.error === 'audio-busy') {
+                pendingEvortixSpeech = spokenText;
+            }
+            lastEvortixSpeech = '';
+        }, { once: true });
+        window.speechSynthesis.speak(utterance);
+        window.setTimeout(() => {
+            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+        }, 80);
+    };
+
+    const announceEvortixAudio = function (text) {
+        if (!evortixSoundEnabled) return;
+        clearTimeout(evortixSpeechTimer);
+        playEvortixSuggestionSound();
+        evortixSpeechTimer = window.setTimeout(() => speakEvortix(text), 480);
+    };
+
+    window.evortixSpeak = announceEvortixAudio;
+
+    if (evortixSoundEnabled && 'speechSynthesis' in window) {
+        const unlockEvortixVoice = function () {
+            window.speechSynthesis.resume();
+            if (!pendingEvortixSpeech) return;
+            const queuedSpeech = pendingEvortixSpeech;
+            lastEvortixSpeech = '';
+            speakEvortix(queuedSpeech);
+        };
+        ['pointerdown', 'keydown', 'touchstart'].forEach(eventName => {
+            document.addEventListener(eventName, unlockEvortixVoice, { passive: true });
+        });
+        window.speechSynthesis.addEventListener?.('voiceschanged', () => {
+            if (pendingEvortixSpeech && document.hasFocus()) unlockEvortixVoice();
+        });
+    }
 
     const setSharedChatOpen = function (isOpen) {
         widget.classList.toggle('chat-widget-open', isOpen);
@@ -589,7 +704,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         botFloat.hidden = false;
         botFloat.setAttribute('aria-hidden', 'false');
-        playEvortixSuggestionSound();
+        announceEvortixAudio(`${heading || 'Project update'}. ${message || ''}`);
         window.chatBotWidgetRobot?.wake?.();
         window.chatBotFloatRobot?.wink?.('right');
         typeBotSpeech(180);
@@ -623,13 +738,44 @@ document.addEventListener('DOMContentLoaded', function () {
                 ${evortixRoleDashboardSummary.suggestion ? `<div class="evortix-role-planning-suggestion"><div class="evortix-role-planning-eyebrow">${escapeSummary(evortixRoleDashboardSummary.suggestion.eyebrow)}</div><strong class="evortix-role-planning-title">${escapeSummary(evortixRoleDashboardSummary.suggestion.title)}</strong><p class="evortix-role-planning-copy">${escapeSummary(evortixRoleDashboardSummary.suggestion.message)}</p>${evortixRoleDashboardSummary.suggestion.action_url ? `<a class="evortix-role-planning-action" href="${escapeSummary(evortixRoleDashboardSummary.suggestion.action_url)}"><i class="fas fa-arrow-right"></i>${escapeSummary(evortixRoleDashboardSummary.suggestion.action_label)}</a>` : ''}</div>` : ''}`;
             botFloat.hidden = false;
             botFloat.setAttribute('aria-hidden', 'false');
-            playEvortixSuggestionSound();
+            const metricSpeech = (evortixRoleDashboardSummary.metrics || [])
+                .map(metric => `${metric.label}: ${metric.value}. ${metric.meta || ''}`)
+                .join(' ');
+            announceEvortixAudio(`${evortixRoleDashboardSummary.title}. ${metricSpeech}`);
             window.chatBotFloatRobot?.point?.('left', 6500);
             speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', () => {
                 speech.hidden = true;
                 speech.setAttribute('aria-hidden', 'true');
             });
         }, 800);
+    }
+
+    if (botFloat && evortixSoundEnabled) {
+        let observedSpeechText = '';
+        let observedSpeechTimer = null;
+        const speechObserver = new MutationObserver(() => {
+            clearTimeout(observedSpeechTimer);
+            observedSpeechTimer = window.setTimeout(() => {
+                const speech = botFloat.querySelector('.chat-bot-speech');
+                if (!speech || speech.hidden || speech.getAttribute('aria-hidden') === 'true') return;
+                if (![...speech.classList].some(className => className.startsWith('evortix-'))) return;
+
+                const clone = speech.cloneNode(true);
+                clone.querySelectorAll('button, a, [aria-hidden="true"]').forEach(node => node.remove());
+                const text = clone.textContent.replace(/\s+/g, ' ').trim();
+                if (!text || text === observedSpeechText) return;
+                observedSpeechText = text;
+                if (Date.now() - lastEvortixSpeechAt < 1500) return;
+                announceEvortixAudio(text);
+            }, 450);
+        });
+        speechObserver.observe(botFloat, {
+            subtree: true,
+            childList: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ['class', 'hidden', 'aria-hidden']
+        });
     }
 
     const evortixGuidanceParams = new URLSearchParams(window.location.search);

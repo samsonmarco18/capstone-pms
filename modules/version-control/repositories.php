@@ -656,9 +656,20 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 <?php if (!$merges): ?><div class="empty-box">No merge history yet.</div><?php else: ?>
                                 <?php foreach ($merges as $merge): ?>
                                 <div class="merge-card">
-                                    <div class="fw-semibold"><?php echo htmlspecialchars($merge['summary'] ?: ($merge['source_branch_name'] . ' -> ' . $merge['target_branch_name'])); ?></div>
+                                    <div class="d-flex align-items-center justify-content-between gap-2">
+                                        <div class="fw-semibold"><?php echo htmlspecialchars($merge['summary'] ?: ($merge['source_branch_name'] . ' -> ' . $merge['target_branch_name'])); ?></div>
+                                        <span class="badge <?php echo $merge['merge_status'] === 'merged' ? 'text-bg-success' : ($merge['merge_status'] === 'pending' ? 'text-bg-warning' : 'text-bg-secondary'); ?>">
+                                            <?php echo $merge['merge_status'] === 'pending' ? 'Conflict' : htmlspecialchars(ucfirst((string) $merge['merge_status'])); ?>
+                                        </span>
+                                    </div>
                                     <div class="small text-muted mt-1"><?php echo htmlspecialchars($merge['source_branch_name']); ?> -> <?php echo htmlspecialchars($merge['target_branch_name']); ?></div>
                                     <div class="small text-muted mt-1"><?php echo htmlspecialchars($merge['merged_by_name']); ?> | <?php echo date('M d, Y h:i A', strtotime($merge['created_at'])); ?></div>
+                                    <?php if ($merge['merge_status'] === 'pending' && trim((string) $merge['notes']) !== ''): ?>
+                                        <div class="alert alert-warning py-2 px-3 mt-2 mb-0 small">
+                                            <strong>Resolve on the source branch, push the fix, then retry.</strong><br>
+                                            <?php echo nl2br(htmlspecialchars((string) $merge['notes'])); ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                                 <?php endforeach; ?>
                                 <?php endif; ?>

@@ -5027,6 +5027,14 @@ function openPullRequestModal(taskId) {
             const latestGit = task.latest_git_update || {};
             const branchValue = latestGit.branch_name || '';
             const repositoryValue = latestGit.repository_url || '';
+            const repositoryBranches = Array.isArray(task.repository_branches) ? task.repository_branches : [];
+            const branchOptions = repositoryBranches.map(branch => `
+                <option
+                    value="${escapeAttribute(branch.name || '')}"
+                    data-repository-url="${escapeAttribute(branch.repository_url || '')}"
+                    ${String(branch.name || '') === String(branchValue) ? 'selected' : ''}
+                >${escapeHtml(branch.name || 'Unnamed branch')}${repositoryBranches.some(other => other.repository_id !== branch.repository_id) ? ` — ${escapeHtml(branch.repository_name || 'Repository')}` : ''}</option>
+            `).join('');
             const commitHashValue = latestGit.commit_hash || '';
             const commitMessageValue = latestGit.commit_message || '';
             const pullRequestValue = latestGit.pull_request_url || '';
@@ -5045,7 +5053,11 @@ function openPullRequestModal(taskId) {
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label" for="prBranchName">Branch name</label>
-                        <input id="prBranchName" class="form-control" value="${escapeAttribute(branchValue)}" placeholder="feature/task-name" autocomplete="off" required>
+                        <select id="prBranchName" class="form-select" required ${repositoryBranches.length ? '' : 'disabled'}>
+                            <option value="">${repositoryBranches.length ? 'Select an available feature branch' : 'No feature branches available'}</option>
+                            ${branchOptions}
+                        </select>
+                        <small class="pr-field-help">${repositoryBranches.length ? 'Choose a branch prepared for this project.' : 'Ask the Architect to prepare the project repository and feature branches.'}</small>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" for="prPullRequestUrl">Pull request URL</label>
@@ -5096,13 +5108,22 @@ function openPullRequestModal(taskId) {
                         <span class="pr-form-footer__notice"><i class="fas fa-circle-info"></i> Your task data and estimates are not changed.</span>
                         <div class="pr-form-footer__actions">
                             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-primary" id="submitPullRequestButton">
+                            <button type="submit" class="btn btn-primary" id="submitPullRequestButton" ${!isUiUxSubmission && !repositoryBranches.length ? 'disabled' : ''}>
                                 <i class="fas fa-paper-plane"></i> ${isUiUxSubmission ? 'Submit Design' : 'Submit for Review'}
                             </button>
                         </div>
                     </div>
                 </form>
             `;
+            const branchSelect = document.getElementById('prBranchName');
+            const syncSelectedRepository = () => {
+                const selectedOption = branchSelect?.selectedOptions?.[0];
+                const selectedRepositoryUrl = selectedOption?.dataset?.repositoryUrl || repositoryValue;
+                const repositoryInput = document.getElementById('prRepositoryUrl');
+                if (repositoryInput) repositoryInput.value = selectedRepositoryUrl;
+            };
+            branchSelect?.addEventListener('change', syncSelectedRepository);
+            syncSelectedRepository();
         },
         error: function(xhr) {
             const message = xhr.responseJSON?.error || 'Unable to prepare the pull request form';
@@ -5141,7 +5162,7 @@ async function submitPullRequest(event, taskId) {
             data: {
                 task_id: taskId,
                 git_action: 'pull_request_opened',
-                branch_name: $('#prBranchName').val().trim(),
+                branch_name: String($('#prBranchName').val() || '').trim(),
                 commit_hash: $('#prCommitHash').val().trim(),
                 commit_message: $('#prCommitMessage').val().trim(),
                 pull_request_url: $('#prPullRequestUrl').val().trim(),

@@ -3,6 +3,7 @@ require_once '../../includes/auth.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/project-workflow.php';
 require_once '../../includes/task-reopen.php';
+require_once '../../includes/version-control-actions.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -53,6 +54,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_task'])) {
         exit();
     }
 
+    $sourceBranchNameStmt = $conn->prepare(
+        "SELECT branch_name
+         FROM task_git_updates
+         WHERE task_id = ? AND branch_name <> 'main'
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1"
+    );
+    $sourceBranchNameStmt->bind_param('i', $taskId);
+    $sourceBranchNameStmt->execute();
+    $sourceBranchName = (string) ($sourceBranchNameStmt->get_result()->fetch_assoc()['branch_name'] ?? '');
+    $sourceBranchNameStmt->close();
+
+    $repositoryBranchStmt = $conn->prepare(
+        "SELECT pr.id AS repository_id, source_branch.id AS source_branch_id, main_branch.id AS target_branch_id
+         FROM project_repositories pr
+         INNER JOIN repository_branches source_branch
+             ON source_branch.repository_id = pr.id AND source_branch.name = ?
+         INNER JOIN repository_branches main_branch
+             ON main_branch.repository_id = pr.id AND main_branch.is_default = 1
+         WHERE pr.project_id = ? AND pr.repository_status = 'active'
+         LIMIT 1"
+    );
+    $repositoryBranchStmt->bind_param('si', $sourceBranchName, $task['project_id']);
+    $repositoryBranchStmt->execute();
+    $repositoryBranch = $repositoryBranchStmt->get_result()->fetch_assoc() ?: null;
+    $repositoryBranchStmt->close();
+    if (!$repositoryBranch) {
+        $_SESSION['error'] = 'The feature branch or main branch is unavailable. Verify the project repository before final merge.';
+        header('Location: final-approval.php' . ($selectedProjectId > 0 ? '?project_id=' . $selectedProjectId : ''));
+        exit();
+    }
+
+    try {
+        $mergeResult = vcHandlePostAction($conn, $user, [
+            'action' => 'merge_branches',
+            'project_id' => (int) $task['project_id'],
+            'repository_id' => (int) $repositoryBranch['repository_id'],
+            'source_branch_id' => (int) $repositoryBranch['source_branch_id'],
+            'target_branch_id' => (int) $repositoryBranch['target_branch_id'],
+            'merge_summary' => 'Merge ' . $task['title'] . ' into main',
+            'merge_notes' => $mergeNotes,
+            'close_source_branch' => '1',
+        ]);
+    } catch (Throwable $mergeError) {
+        $_SESSION['error'] = $mergeError->getMessage();
+        header('Location: final-approval.php' . ($selectedProjectId > 0 ? '?project_id=' . $selectedProjectId : ''));
+        exit();
+    }
+
     $stmt = $conn->prepare("
         UPDATE tasks
         SET status = 'completed',
@@ -68,11 +118,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_task'])) {
     $stmt->close();
 
     $gitStmt = $conn->prepare("
-        INSERT INTO task_git_updates (task_id, user_id, branch_name, git_action, status, notes)
-        VALUES (?, ?, 'main', 'merged', 'merged', ?)
+        INSERT INTO task_git_updates (task_id, user_id, branch_name, commit_hash, git_action, status, notes)
+        VALUES (?, ?, 'main', ?, 'merged', 'merged', ?)
     ");
     $gitNote = $mergeNotes !== '' ? $mergeNotes : 'Architect approved and merged to main.';
-    $gitStmt->bind_param('iis', $taskId, $user['id'], $gitNote);
+    $actualMergeHash = (string) ($mergeResult['commit_hash'] ?? '');
+    $gitStmt->bind_param('iiss', $taskId, $user['id'], $actualMergeHash, $gitNote);
     $gitStmt->execute();
     $gitStmt->close();
 

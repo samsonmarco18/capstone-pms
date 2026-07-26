@@ -3,6 +3,133 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/version-control.php';
 
+function vcProvisionProjectPlanningRepository(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    array $user,
+    int $projectId,
+    string $projectName
+): array {
+    $repositoryStmt = $conn->prepare(
+        "SELECT id, slug
+         FROM project_repositories
+         WHERE project_id = ? AND repository_status = 'active'
+         ORDER BY id ASC
+         LIMIT 1"
+    );
+    $repositoryStmt->bind_param('i', $projectId);
+    $repositoryStmt->execute();
+    $repository = $repositoryStmt->get_result()->fetch_assoc() ?: null;
+    $repositoryStmt->close();
+
+    if (!$repository) {
+        $created = vcHandlePostAction($conn, $user, [
+            'action' => 'create_repository',
+            'project_id' => $projectId,
+            'repository_name' => $projectName,
+            'repository_slug' => $projectName . '-' . $projectId,
+            'repository_description' => 'Managed repository generated from the approved Architect plan.',
+            'repository_visibility' => 'internal',
+            'default_branch_name' => 'main',
+        ]);
+        $repositoryId = (int) ($created['repository_id'] ?? 0);
+    } else {
+        $repositoryId = (int) $repository['id'];
+    }
+
+    if ($repositoryId <= 0) {
+        throw new RuntimeException('The project repository could not be prepared.');
+    }
+
+    $defaultBranch = vcGetDefaultBranch($conn, $repositoryId);
+    if (!$defaultBranch) {
+        throw new RuntimeException('The main repository branch could not be found.');
+    }
+    $repositoryDetails = vcGetRepository($conn, $repositoryId);
+    $repositoryUrl = vcGenerateRepositoryHttpCloneUrl((string) ($repositoryDetails['slug'] ?? ''));
+
+    $featureStmt = $conn->prepare(
+        "SELECT id, title
+         FROM tasks
+         WHERE project_id = ? AND task_type = 'feature'
+         ORDER BY id ASC"
+    );
+    $featureStmt->bind_param('i', $projectId);
+    $featureStmt->execute();
+    $features = $featureStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $featureStmt->close();
+
+    $createdBranches = [];
+    $usedNames = ['main' => true];
+    foreach ($features as $feature) {
+        $baseName = vcGenerateSlug((string) ($feature['title'] ?? 'feature'));
+        $branchName = $baseName;
+        $suffix = 2;
+        while (isset($usedNames[$branchName])) {
+            $branchName = $baseName . '-' . $suffix;
+            $suffix++;
+        }
+        $usedNames[$branchName] = true;
+
+        $branchCheck = $conn->prepare(
+            'SELECT id FROM repository_branches WHERE repository_id = ? AND name = ? LIMIT 1'
+        );
+        $branchCheck->bind_param('is', $repositoryId, $branchName);
+        $branchCheck->execute();
+        $existingBranch = $branchCheck->get_result()->fetch_assoc();
+        $branchCheck->close();
+        if (!$existingBranch) {
+            vcHandlePostAction($conn, $user, [
+                'action' => 'create_branch',
+                'project_id' => $projectId,
+                'repository_id' => $repositoryId,
+                'branch_name' => $branchName,
+                'source_branch_id' => (int) $defaultBranch['id'],
+            ]);
+            $createdBranches[] = $branchName;
+        }
+
+        $taskId = (int) ($feature['id'] ?? 0);
+        $gitUpdateCheck = $conn->prepare(
+            "SELECT id
+             FROM task_git_updates
+             WHERE task_id = ? AND branch_name = ? AND git_action = 'branch_created'
+             LIMIT 1"
+        );
+        $gitUpdateCheck->bind_param('is', $taskId, $branchName);
+        $gitUpdateCheck->execute();
+        $hasGitUpdate = (bool) $gitUpdateCheck->get_result()->fetch_assoc();
+        $gitUpdateCheck->close();
+        if (!$hasGitUpdate) {
+            $gitAction = 'branch_created';
+            $gitStatus = 'active';
+            $notes = 'Feature branch generated automatically from the completed Architect plan.';
+            $gitUpdateStmt = $conn->prepare(
+                'INSERT INTO task_git_updates (
+                    task_id, user_id, repository_url, branch_name, git_action, status, notes
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?)'
+            );
+            $gitUpdateStmt->bind_param(
+                'iisssss',
+                $taskId,
+                $user['id'],
+                $repositoryUrl,
+                $branchName,
+                $gitAction,
+                $gitStatus,
+                $notes
+            );
+            $gitUpdateStmt->execute();
+            $gitUpdateStmt->close();
+        }
+    }
+
+    return [
+        'repository_id' => $repositoryId,
+        'feature_count' => count($features),
+        'created_branches' => $createdBranches,
+    ];
+}
+
 function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $user, array $post): array
 {
     $action = trim((string) ($post['action'] ?? ''));
@@ -356,7 +483,18 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
         }
 
         $conn->begin_transaction();
+        $createdGitRef = false;
         try {
+            $bareRepositoryPath = vcGetRepositoryBarePath((string) ($repository['slug'] ?? ''));
+            if (is_dir($bareRepositoryPath) && $lastCommitHash) {
+                vcRunGitCommand(
+                    ['--git-dir=' . $bareRepositoryPath, 'branch', $branchName, $lastCommitHash],
+                    APP_ROOT_PATH
+                );
+                vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'update-server-info'], APP_ROOT_PATH);
+                $createdGitRef = true;
+            }
+
             $branchStatus = 'active';
             $isDefault = 0;
             $stmt = $conn->prepare(
@@ -388,6 +526,16 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
             return ['project_id' => $projectId, 'repository_id' => $repositoryId, 'message' => 'Branch created successfully.'];
         } catch (Throwable $e) {
             $conn->rollback();
+            if ($createdGitRef) {
+                try {
+                    vcRunGitCommand(
+                        ['--git-dir=' . vcGetRepositoryBarePath((string) ($repository['slug'] ?? '')), 'branch', '-D', $branchName],
+                        APP_ROOT_PATH
+                    );
+                } catch (Throwable $ignored) {
+                    // Preserve the original branch-creation error.
+                }
+            }
             throw $e;
         }
     }
@@ -546,6 +694,43 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
             throw new RuntimeException('Source or target branch was not found.');
         }
 
+        $mergeTitle = $summary !== '' ? $summary : 'Merge ' . $sourceBranch['name'] . ' into ' . $targetBranch['name'];
+        $gitMerge = vcMergeManagedBranches(
+            (string) ($repository['slug'] ?? ''),
+            (string) $sourceBranch['name'],
+            (string) $targetBranch['name'],
+            $mergeTitle
+        );
+        if (($gitMerge['status'] ?? '') === 'conflict') {
+            $conflictFiles = array_values($gitMerge['conflicted_files'] ?? []);
+            $conflictNotes = trim($notes . PHP_EOL . 'Conflicted files: ' . implode(', ', $conflictFiles));
+            $mergeStatus = 'pending';
+            $mergeCommitId = null;
+            $conflictStmt = $conn->prepare(
+                'INSERT INTO repository_merges (
+                    repository_id, source_branch_id, target_branch_id, merge_commit_id,
+                    merged_by, merge_status, summary, notes
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $conflictStmt->bind_param(
+                'iiiiisss',
+                $repositoryId,
+                $sourceBranchId,
+                $targetBranchId,
+                $mergeCommitId,
+                $user['id'],
+                $mergeStatus,
+                $mergeTitle,
+                $conflictNotes
+            );
+            $conflictStmt->execute();
+            $conflictStmt->close();
+            throw new RuntimeException(
+                'Merge blocked by conflicts. Resolve these files on ' . $sourceBranch['name']
+                . ' and try again: ' . implode(', ', $conflictFiles)
+            );
+        }
+
         $parentCommitId = null;
         if (!empty($targetBranch['last_commit_hash'])) {
             $parentStmt = $conn->prepare('SELECT id FROM repository_commits WHERE commit_hash = ? LIMIT 1');
@@ -557,35 +742,43 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
 
         $conn->begin_transaction();
         try {
-            $mergeTitle = $summary !== '' ? $summary : 'Merge ' . $sourceBranch['name'] . ' into ' . $targetBranch['name'];
-            $mergeHash = vcGenerateCommitHash($repositoryId, $targetBranchId, (int) $user['id'], $mergeTitle);
+            $mergeHash = (string) ($gitMerge['commit_hash'] ?? '');
+            $mergeFiles = array_values($gitMerge['files'] ?? []);
             $commitKind = 'merge';
-            $filesChanged = 0;
-            $linesAdded = 0;
-            $linesRemoved = 0;
-            $commitStmt = $conn->prepare(
-                'INSERT INTO repository_commits (
-                    repository_id, branch_id, parent_commit_id, commit_hash, commit_title,
-                    commit_message, files_changed, lines_added, lines_removed, commit_kind, authored_by
-                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            $commitStmt->bind_param(
-                'iiisssiiisi',
-                $repositoryId,
-                $targetBranchId,
-                $parentCommitId,
-                $mergeHash,
-                $mergeTitle,
-                $notes,
-                $filesChanged,
-                $linesAdded,
-                $linesRemoved,
-                $commitKind,
-                $user['id']
-            );
-            $commitStmt->execute();
-            $mergeCommitId = (int) $commitStmt->insert_id;
-            $commitStmt->close();
+            $filesChanged = count($mergeFiles);
+            $linesAdded = array_sum(array_column($mergeFiles, 'additions'));
+            $linesRemoved = array_sum(array_column($mergeFiles, 'deletions'));
+            $existingCommit = vcFindCommitByHash($conn, $repositoryId, $mergeHash);
+            if ($existingCommit) {
+                $mergeCommitId = (int) $existingCommit['id'];
+            } else {
+                $commitStmt = $conn->prepare(
+                    'INSERT INTO repository_commits (
+                        repository_id, branch_id, parent_commit_id, commit_hash, commit_title,
+                        commit_message, files_changed, lines_added, lines_removed, commit_kind, authored_by
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $commitStmt->bind_param(
+                    'iiisssiiisi',
+                    $repositoryId,
+                    $targetBranchId,
+                    $parentCommitId,
+                    $mergeHash,
+                    $mergeTitle,
+                    $notes,
+                    $filesChanged,
+                    $linesAdded,
+                    $linesRemoved,
+                    $commitKind,
+                    $user['id']
+                );
+                $commitStmt->execute();
+                $mergeCommitId = (int) $commitStmt->insert_id;
+                $commitStmt->close();
+                if ($mergeFiles) {
+                    vcSaveCommitFiles($conn, $mergeCommitId, $mergeFiles);
+                }
+            }
 
             $updateTargetStmt = $conn->prepare('UPDATE repository_branches SET last_commit_hash = ?, updated_at = NOW() WHERE id = ?');
             $updateTargetStmt->bind_param('si', $mergeHash, $targetBranchId);
@@ -617,7 +810,13 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
             logActivity((int) $user['id'], 'merge_branches', 'repository_merges', $mergeId, null, ['repository_id' => $repositoryId, 'source_branch_id' => $sourceBranchId, 'target_branch_id' => $targetBranchId]);
             $conn->commit();
 
-            return ['project_id' => $projectId, 'repository_id' => $repositoryId, 'message' => 'Branches merged successfully.'];
+            return [
+                'project_id' => $projectId,
+                'repository_id' => $repositoryId,
+                'merge_id' => $mergeId,
+                'commit_hash' => $mergeHash,
+                'message' => 'Branches merged successfully.',
+            ];
         } catch (Throwable $e) {
             $conn->rollback();
             throw $e;

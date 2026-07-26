@@ -6,6 +6,7 @@ require_once __DIR__ . '/../includes/department-artifacts.php';
 require_once __DIR__ . '/../includes/methodology-roadmap.php';
 require_once __DIR__ . '/../includes/project-workflow.php';
 require_once __DIR__ . '/../includes/task-reopen.php';
+require_once __DIR__ . '/../includes/version-control.php';
 
 if (!isLoggedIn()) {
     http_response_code(401);
@@ -116,6 +117,30 @@ if ($task = $result->fetch_assoc()) {
     }
     $task['latest_git_update'] = $task['git_updates'][0] ?? null;
     $latestGitStmt->close();
+
+    $task['repository_branches'] = [];
+    if (dbTableExists($conn, 'project_repositories') && dbTableExists($conn, 'repository_branches')) {
+        $taskProjectId = (int) ($task['project_id'] ?? 0);
+        $branchStmt = $conn->prepare(
+            "SELECT rb.id, rb.name, pr.id AS repository_id, pr.name AS repository_name, pr.slug
+             FROM project_repositories pr
+             INNER JOIN repository_branches rb ON rb.repository_id = pr.id
+             WHERE pr.project_id = ?
+               AND pr.repository_status = 'active'
+               AND rb.branch_status = 'active'
+               AND rb.is_default = 0
+             ORDER BY pr.id ASC, rb.created_at ASC, rb.id ASC"
+        );
+        $branchStmt->bind_param('i', $taskProjectId);
+        $branchStmt->execute();
+        $branchResult = $branchStmt->get_result();
+        while ($branch = $branchResult->fetch_assoc()) {
+            $branch['repository_url'] = vcGenerateRepositoryHttpCloneUrl((string) ($branch['slug'] ?? ''));
+            unset($branch['slug']);
+            $task['repository_branches'][] = $branch;
+        }
+        $branchStmt->close();
+    }
 
     $task['project_requirements'] = departmentArtifactParseRequirements($task['requested_features'] ?? '');
     $task['additional_requirements'] = departmentArtifactAdditionalRequirements($task['requested_features'] ?? '');
