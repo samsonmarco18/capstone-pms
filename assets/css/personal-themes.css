@@ -1773,3 +1773,319 @@ html[data-theme="dark"][data-app-theme="tropical"] .app-navbar #navbarUserMenu[a
         animation: none !important;
     }
 }
+
+/* System-wide readable text layer
+ * Keep component layout and semantic colors intact while giving every visual
+ * mode a dependable foreground and muted-text contrast pair. */
+:root {
+    --app-readable-text: #17324a;
+    --app-readable-heading: #0b2942;
+    --app-readable-muted: #526f86;
+    --app-readable-link: #096f9d;
+    --app-readable-input: #132f47;
+    --app-readable-placeholder: #6b8295;
+}
+
+html[data-theme="dark"] {
+    --app-readable-text: #dce8f5;
+    --app-readable-heading: #f3f7ff;
+    --app-readable-muted: #a9bdd1;
+    --app-readable-link: #69c9ff;
+    --app-readable-input: #eef6ff;
+    --app-readable-placeholder: #91a9bf;
+}
+
+html[data-app-theme="tropical"] {
+    --app-readable-text: #16445a;
+    --app-readable-heading: #08364d;
+    --app-readable-muted: #527487;
+    --app-readable-link: #007f99;
+    --app-readable-input: #103d53;
+    --app-readable-placeholder: #678696;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] {
+    --app-readable-text: #d9f3f1;
+    --app-readable-heading: #f1fffd;
+    --app-readable-muted: #a7ceca;
+    --app-readable-link: #67e4dc;
+    --app-readable-input: #effffd;
+    --app-readable-placeholder: #91bcb9;
+}
+
+html[data-app-theme="futuristic"] {
+    --app-readable-text: #dce6ff;
+    --app-readable-heading: #f4f6ff;
+    --app-readable-muted: #acbce1;
+    --app-readable-link: #72d7ff;
+    --app-readable-input: #edf3ff;
+    --app-readable-placeholder: #9eadd0;
+}
+
+html[data-theme="light"][data-app-theme="futuristic"] {
+    --app-readable-text: #253352;
+    --app-readable-heading: #111f43;
+    --app-readable-muted: #596987;
+    --app-readable-link: #5144c7;
+    --app-readable-input: #1c2948;
+    --app-readable-placeholder: #71809b;
+}
+
+#page-content-wrapper {
+    color: var(--app-readable-text);
+}
+
+#page-content-wrapper :is(
+    .text-muted,
+    .form-text,
+    .small.text-secondary,
+    .text-secondary,
+    .card-subtitle,
+    .modal-body > p,
+    .dropdown-header,
+    .table td small
+) {
+    color: var(--app-readable-muted) !important;
+}
+
+#page-content-wrapper :is(
+    .form-label,
+    legend,
+    .modal-title,
+    .card-title,
+    .table th,
+    .accordion-button
+) {
+    color: var(--app-readable-heading);
+}
+
+#page-content-wrapper :is(.form-control, .form-select) {
+    color: var(--app-readable-input);
+}
+
+#page-content-wrapper :is(.form-control, .form-select)::placeholder {
+    color: var(--app-readable-placeholder) !important;
+    opacity: 1;
+}
+
+#page-content-wrapper a:not(.btn):not(.badge):not(.menu-item) {
+    color: var(--app-readable-link);
+}
+
+html[data-theme="dark"] #page-content-wrapper :is(
+    p,
+    li,
+    dd,
+    .card-body,
+    .modal-body,
+    .accordion-body,
+    .dropdown-item,
+    .table td
+) {
+    color: inherit;
+}
+
+#sidebar-wrapper .menu-item {
+    color: var(--app-readable-text) !important;
+}
+
+#sidebar-wrapper .sidebar-role-label,
+#sidebar-wrapper .sidebar-footer small {
+    color: var(--app-readable-muted) !important;
+}
+
+#sidebar-wrapper .menu-item:hover,
+#sidebar-wrapper .menu-item.active {
+    color: var(--app-readable-link) !important;
+}
+
+html[data-theme="dark"] #sidebar-wrapper .menu-item:hover,
+html[data-theme="dark"] #sidebar-wrapper .menu-item.active,
+html[data-app-theme="futuristic"]:not([data-theme="light"]) #sidebar-wrapper .menu-item:hover,
+html[data-app-theme="futuristic"]:not([data-theme="light"]) #sidebar-wrapper .menu-item.active {
+    color: #ffffff !important;
+}
+
+/* Evortix speech panels use a saturated surface in every theme. Their list
+   content previously inherited a page color that became nearly invisible. */
+.chat-bot-speech.evortix-architect-dss {
+    color: #eaf7ff !important;
+}
+
+.chat-bot-speech.evortix-architect-dss :is(
+    .evortix-dss-heading,
+    .evortix-dss-copy,
+    .evortix-dss-points,
+    .evortix-dss-points li
+) {
+    color: #eaf7ff !important;
+    opacity: 1 !important;
+}
+
+.chat-bot-speech.evortix-architect-dss .evortix-dss-copy {
+    color: #bfe6fb !important;
+}
+
+/* Futuristic dark consistency
+ * Process History is the reference treatment: solid navy working surfaces,
+ * a clear blue page banner, restrained cyan borders, and no grey glass cards.
+ * These rules intentionally come last so page-local dashboard CSS cannot
+ * replace the selected theme. */
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell {
+    --role-dashboard-primary: #5bc8f5;
+    --role-dashboard-surface: #0b1d2d;
+    --role-dashboard-head: #10273b;
+    --role-dashboard-border: rgba(71, 183, 232, 0.24);
+    --role-dashboard-border-strong: rgba(71, 201, 244, 0.42);
+    --role-dashboard-card-sheen: rgba(255, 255, 255, 0.025);
+    --role-dashboard-card-sheen-soft: rgba(49, 151, 203, 0.035);
+    --role-dashboard-card-glow: rgba(39, 179, 229, 0.08);
+    --role-dashboard-card-tint: rgba(25, 105, 153, 0.06);
+    --role-dashboard-shadow: 0 5px 0 rgba(1, 8, 17, 0.62), 0 16px 30px rgba(0, 0, 0, 0.22);
+    --role-dashboard-shadow-hover: 0 7px 0 rgba(1, 8, 17, 0.66), 0 22px 38px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero {
+    background: linear-gradient(105deg, #1f6392 0%, #2d79a7 68%, #3c87b2 100%) !important;
+    border-color: rgba(103, 207, 244, 0.34) !important;
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero :is(
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    p,
+    small,
+    .text-muted
+) {
+    color: #ffffff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero p {
+    color: #d8edf8 !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+    .card.card:not(.role-dashboard-hero),
+    .stat-card.stat-card,
+    .stat-card-modern.stat-card-modern,
+    .qa-stat-card.qa-stat-card,
+    .admin-stat-card,
+    .dashboard-mini-stat.dashboard-mini-stat
+) {
+    background:
+        radial-gradient(circle at 92% 8%, rgba(58, 174, 224, 0.055), transparent 24%),
+        linear-gradient(180deg, rgba(16, 39, 59, 0.34), transparent 52%),
+        #0b1d2d !important;
+    border-color: rgba(71, 183, 232, 0.22) !important;
+    color: #dce9f5 !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+    .card-header,
+    .section-header,
+    .dashboard-card-header
+) {
+    background: #10273b !important;
+    border-color: rgba(71, 183, 232, 0.18) !important;
+    color: #eaf5ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+    .stat-label,
+    .stat-card-label,
+    .qa-stat-label,
+    .card-header h5,
+    .card-header h6
+) {
+    color: #a9bfd3 !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+    .stat-value,
+    .stat-number,
+    .qa-stat-value,
+    .card-title
+) {
+    color: #f2f8ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-role-dashboard-summary {
+    background: #0d2a3f !important;
+    border-color: rgba(79, 198, 239, 0.38) !important;
+    color: #e8f5ff !important;
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36), 0 0 24px rgba(37, 178, 225, 0.10) !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-role-dashboard-summary::after {
+    background: #0d2a3f !important;
+    border-color: rgba(79, 198, 239, 0.22) !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-role-dashboard-summary :is(
+    .evortix-role-summary-title,
+    .evortix-role-summary-intro,
+    .evortix-role-summary-eyebrow
+) {
+    color: #e8f5ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .evortix-role-summary-metric,
+html[data-theme="dark"][data-app-theme="futuristic"] .evortix-role-planning-suggestion {
+    background: #102c40 !important;
+    border-color: rgba(79, 198, 239, 0.22) !important;
+    box-shadow: none !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .evortix-role-summary-metric :is(
+    .evortix-role-summary-value,
+    .evortix-role-summary-label
+),
+html[data-theme="dark"][data-app-theme="futuristic"] .evortix-role-planning-suggestion :is(
+    .evortix-role-planning-title,
+    .evortix-role-planning-eyebrow
+) {
+    color: #eaf6ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] :is(
+    .evortix-role-summary-meta,
+    .evortix-role-planning-copy
+) {
+    color: #a9c2d5 !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-allocation-bubble {
+    background: #0d2a3f !important;
+    border-color: rgba(79, 198, 239, 0.38) !important;
+    color: #e8f5ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-allocation-bubble::after {
+    background: #0d2a3f !important;
+    border-color: rgba(79, 198, 239, 0.22) !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-allocation-bubble :is(
+    .evortix-bubble-eyebrow,
+    .evortix-bubble-title,
+    .evortix-bubble-reason
+) {
+    color: #e8f5ff !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-allocation-bubble .evortix-bubble-task {
+    background: #102c40 !important;
+    border-color: rgba(79, 198, 239, 0.24) !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-allocation-bubble .evortix-bubble-task :is(
+    strong,
+    span
+) {
+    color: #dff3ff !important;
+    opacity: 1 !important;
+}

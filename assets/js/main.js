@@ -754,7 +754,7 @@ function initTooltips() {
     }
 
     document.querySelectorAll('[title]').forEach(function (element) {
-        bootstrap.Tooltip.getOrCreateInstance(element, { trigger: 'hover focus' });
+        bootstrap.Tooltip.getOrCreateInstance(element, { trigger: 'hover' });
     });
 }
 

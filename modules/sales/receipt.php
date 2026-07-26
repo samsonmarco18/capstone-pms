@@ -1113,6 +1113,18 @@ function viewReceipt(id) {
     window.open(`../../api/get-receipt-details.php?id=${id}`, '_blank');
 }
 
+function showReceiptModal(modalId) {
+    const modalElement = document.getElementById(modalId);
+    if (!modalElement) return;
+
+    // Theme containers create their own stacking contexts. Bootstrap modals
+    // must be direct body children so their backdrop cannot cover the fields.
+    if (modalElement.parentElement !== document.body) {
+        document.body.appendChild(modalElement);
+    }
+    bootstrap.Modal.getOrCreateInstance(modalElement).show();
+}
+
 function editReceipt(receipt) {
     document.getElementById('edit_receipt_id').value = receipt.id || '';
     document.getElementById('edit_receipt_number').value = receipt.receipt_number || '';
@@ -1121,13 +1133,13 @@ function editReceipt(receipt) {
     document.getElementById('edit_receipt_amount_due').value = receipt.amount_due || '0.00';
     document.getElementById('edit_receipt_due_date').value = receipt.due_date || '';
     document.getElementById('edit_receipt_status').value = receipt.status || 'draft';
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('editReceiptModal')).show();
+    showReceiptModal('editReceiptModal');
 }
 
 function verifyPayment(id, receiptNumber) {
     document.getElementById('verify_receipt_id').value = id || '';
     document.getElementById('verify_receipt_number').value = receiptNumber || '';
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('verifyPaymentModal')).show();
+    showReceiptModal('verifyPaymentModal');
 }
 </script>
 

@@ -774,7 +774,12 @@ function projectTemplateCaptureProject(mysqli|PgsqlMysqliCompatConnection $conn,
                 developer_roles_allocation, testing_requirements, documentation_requirements,
                 maintenance_support, risk_assessment, implementation_notes, source, usage_count,
                 learned_from_project_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'learned', 1, ?)
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                'learned', 1, ?
+            )
         ");
         $types = 'ssi' . 'siidd' . str_repeat('s', 22) . 'i';
         $stmt->bind_param(

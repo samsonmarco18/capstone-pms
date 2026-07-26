@@ -140,6 +140,37 @@ $developerCompletedRoadmapAssignmentSql = "
     )
 ";
 
+$developerActiveRoadmapAssignmentSql = "
+    (
+        EXISTS (
+            SELECT 1
+            FROM methodology_tasks mt_active_assignment
+            WHERE mt_active_assignment.task_id = t.id
+              AND mt_active_assignment.assigned_developer_id = {$user['id']}
+              AND mt_active_assignment.status <> 'completed'
+        )
+        OR EXISTS (
+            SELECT 1
+            FROM methodology_task_departments mtd_active_assignment
+            LEFT JOIN methodology_tasks mt_active_assignment_parent
+              ON mt_active_assignment_parent.id = mtd_active_assignment.methodology_task_id
+            WHERE mtd_active_assignment.assigned_developer_id = {$user['id']}
+              AND (
+                  mtd_active_assignment.workflow_task_id = t.id
+                  OR mt_active_assignment_parent.task_id = t.id
+              )
+              AND mtd_active_assignment.status <> 'completed'
+        )
+    )
+";
+
+$developerCurrentTaskOwnershipSql = "
+    (
+        t.assigned_to = {$user['id']}
+        OR {$developerActiveRoadmapAssignmentSql}
+    )
+";
+
 // Check if project_phases column exists
 $hasProjectPhases = dbColumnExists($conn, 'projects', 'project_phases');
 
@@ -149,16 +180,14 @@ $todoTasks = developerTaskQuery(
     $taskBaseQuery . "
         WHERE {$developerTaskAccessSql}
           AND t.status = 'todo'
-          AND (
-              t.assigned_to = {$user['id']}
-              OR NOT {$developerCompletedRoadmapAssignmentSql}
-          )
+          AND {$developerCurrentTaskOwnershipSql}
         ORDER BY t.deadline ASC
     ",
     'todo'
 );
 $inProgressTasks = developerTaskQuery($conn, $taskBaseQuery . "
     WHERE {$developerTaskAccessSql}
+      AND {$developerCurrentTaskOwnershipSql}
       AND (
           t.status IN ('in_progress', 'qa_failed')
           OR (
@@ -182,7 +211,13 @@ $inProgressTasks = developerTaskQuery($conn, $taskBaseQuery . "
       )
     ORDER BY last_reopened_at DESC, t.updated_at DESC, t.deadline ASC
 ", 'in_progress');
-$reviewTasks = developerTaskQuery($conn, $taskBaseQuery . " WHERE {$developerTaskAccessSql} AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release') ORDER BY t.deadline ASC", 'review');
+$reviewTasks = developerTaskQuery($conn, $taskBaseQuery . "
+    WHERE {$developerTaskAccessSql}
+      AND {$developerCurrentTaskOwnershipSql}
+      AND t.status IN ('for_review', 'qa_testing', 'qa_passed', 'architect_review', 'merged', 'ready_for_release')
+      AND NOT {$developerCompletedRoadmapAssignmentSql}
+    ORDER BY t.deadline ASC
+", 'review');
 $completedTasks = developerTaskQuery($conn, $taskBaseQuery . "
     WHERE (
           (t.assigned_to = {$user['id']} AND t.status = 'completed')
@@ -192,7 +227,11 @@ $completedTasks = developerTaskQuery($conn, $taskBaseQuery . "
               WHERE mt_done.task_id = t.id
                 AND mt_done.assigned_developer_id = {$user['id']}
                 AND mt_done.status = 'completed'
-                AND NOT (t.status = 'todo' AND COALESCE(t.assigned_to, 0) = {$user['id']})
+                AND NOT {$developerActiveRoadmapAssignmentSql}
+                AND NOT (
+                    t.status IN ('todo', 'in_progress', 'sul_revision', 'qa_failed', 'blocked')
+                    AND COALESCE(t.assigned_to, 0) = {$user['id']}
+                )
                 AND NOT EXISTS (
                     SELECT 1
                     FROM task_reopen_requests rr_mine_done
@@ -208,7 +247,11 @@ $completedTasks = developerTaskQuery($conn, $taskBaseQuery . "
               WHERE mtd_done.assigned_developer_id = {$user['id']}
                 AND (mtd_done.workflow_task_id = t.id OR mt_done_department.task_id = t.id)
                 AND mtd_done.status = 'completed'
-                AND NOT (t.status = 'todo' AND COALESCE(t.assigned_to, 0) = {$user['id']})
+                AND NOT {$developerActiveRoadmapAssignmentSql}
+                AND NOT (
+                    t.status IN ('todo', 'in_progress', 'sul_revision', 'qa_failed', 'blocked')
+                    AND COALESCE(t.assigned_to, 0) = {$user['id']}
+                )
                 AND NOT EXISTS (
                     SELECT 1
                     FROM task_reopen_requests rr_mine_department_done
@@ -1162,6 +1205,20 @@ include '../../includes/navbar.php';
     margin-bottom: 0.6rem;
 }
 
+.revision-indicator {
+    align-items: center;
+    background: #fee2e2;
+    border-radius: 999px;
+    color: #b42318;
+    display: inline-flex;
+    font-size: .65rem;
+    font-weight: 700;
+    gap: .25rem;
+    margin-bottom: .6rem;
+    padding: .22rem .5rem;
+    width: fit-content;
+}
+
 .kanban-card-title {
     color: var(--gray-900);
     font-size: .86rem;
@@ -1241,6 +1298,26 @@ include '../../includes/navbar.php';
     font-size: .68rem;
     padding: .34rem .46rem;
     white-space: nowrap;
+}
+
+/* In-progress cards have three actions. Give the primary submission action
+   its own row so labels never clip inside the narrow kanban lane. */
+.kanban-card-actions:has(> :nth-child(3)) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .38rem;
+}
+
+.kanban-card-actions:has(> :nth-child(3)) > :first-child {
+    grid-column: 1 / -1;
+    justify-content: center;
+    width: 100%;
+}
+
+.kanban-card-actions:has(> :nth-child(3)) > :nth-child(2) {
+    justify-content: center;
+    min-width: 0;
+    width: 100%;
 }
 
 .task-board-item[hidden] {
@@ -3456,6 +3533,13 @@ body.artifact-drawer-open {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-action {
     background: rgba(31, 99, 146, 0.14) !important;
     border-color: rgba(31, 99, 146, 0.28) !important;
+    color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-action:hover {
+    background: var(--theme-primary) !important;
+    border-color: var(--theme-primary) !important;
+    color: #ffffff !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-outline-modern,
@@ -3486,6 +3570,11 @@ body.artifact-drawer-open {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .reopen-indicator {
     background: rgba(245, 158, 11, 0.2);
     color: #fbbf24;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .revision-indicator {
+    background: rgba(248, 113, 113, .18);
+    color: #fca5a5;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .my-projects-header h5,
@@ -4002,7 +4091,7 @@ body.artifact-drawer-open {
                         <?php endif; ?>
                         <div class="kanban-card-footer">
                             <div class="kanban-card-actions">
-                                <button class="btn-action" onclick="startTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Start testing this task.' : 'Start this task without changing the controlled review workflow.'; ?>">
+                                <button type="button" class="btn-action" onclick="startTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="<?php echo $isQaDepartmentDeveloper ? 'Start testing this task.' : 'Start this task without changing the controlled review workflow.'; ?>">
                                     <i class="fas fa-play"></i> <?php echo $isQaDepartmentDeveloper ? 'Start Testing' : 'Start'; ?>
                                 </button>
                                 <button class="btn-action-view" onclick="viewTask(<?php echo $task['id']; ?>)" data-bs-toggle="tooltip" title="View the task summary, saved handoffs, comments, and Git activity.">
@@ -4035,6 +4124,8 @@ body.artifact-drawer-open {
                     <?php while($task = $inProgressTasks->fetch_assoc()): ?>
                     <?php
                         $isReopenedTask = !empty($task['last_reopened_at']) && (string) ($task['status'] ?? '') === 'sul_revision';
+                        $isRevisionTask = in_array((string) ($task['status'] ?? ''), ['qa_failed', 'sul_revision'], true)
+                            && !$isReopenedTask;
                         $taskProjectName = trim((string) ($task['project_name'] ?? '')) ?: 'Project not specified';
                         $taskDescription = trim((string) ($task['description'] ?? ''));
                         $showTaskDescription = $taskDescription !== ''
@@ -4050,6 +4141,10 @@ body.artifact-drawer-open {
                         <?php if ($isReopenedTask): ?>
                             <span class="reopen-indicator" data-bs-toggle="tooltip" title="Architect approved a reopen request for this task.">
                                 <i class="fas fa-rotate-left"></i> Reopened
+                            </span>
+                        <?php elseif ($isRevisionTask): ?>
+                            <span class="revision-indicator" data-bs-toggle="tooltip" title="QA returned this task for correction using the saved revision notes.">
+                                <i class="fas fa-screwdriver-wrench"></i> Revision
                             </span>
                         <?php endif; ?>
                         <h6 class="kanban-card-title"><?php echo htmlspecialchars($task['title']); ?></h6>
@@ -4179,6 +4274,7 @@ body.artifact-drawer-open {
                     ?>
                     <div
                         class="completed-card task-board-item"
+                        data-task-id="<?php echo (int) $task['id']; ?>"
                         data-project-id="<?php echo (int) ($task['project_id'] ?? 0); ?>"
                         data-project-name="<?php echo htmlspecialchars($taskProjectName, ENT_QUOTES, 'UTF-8'); ?>"
                     >
@@ -4325,6 +4421,7 @@ body.artifact-drawer-open {
 <script>
 const currentDepartment = <?php echo json_encode($userDepartment); ?>;
 const currentDepartmentCanonical = <?php echo json_encode($userDepartmentCanonical); ?>;
+const isQaDepartment = currentDepartmentCanonical === 'QA';
 const departmentProfile = <?php echo json_encode($departmentProfile); ?>;
 const taskProjectFilter = document.getElementById('taskProjectFilter');
 const taskColumnInitialLimit = 6;
@@ -4394,9 +4491,24 @@ function initTooltips(root = document) {
     }
 
     root.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((element) => {
-        bootstrap.Tooltip.getOrCreateInstance(element);
+        const existingTooltip = bootstrap.Tooltip.getInstance(element);
+        if (existingTooltip) {
+            existingTooltip.dispose();
+        }
+        bootstrap.Tooltip.getOrCreateInstance(element, { trigger: 'hover' });
     });
 }
+
+document.addEventListener('click', (event) => {
+    if (!window.bootstrap || !bootstrap.Tooltip) {
+        return;
+    }
+
+    const tooltipTrigger = event.target.closest('[data-bs-toggle="tooltip"]');
+    if (tooltipTrigger) {
+        bootstrap.Tooltip.getInstance(tooltipTrigger)?.hide();
+    }
+});
 
 function updateKanbanColumnCount(columnBody) {
     if (!columnBody) {
@@ -4519,7 +4631,7 @@ function transformKanbanCardForTodoColumn(card, taskId) {
     footer.innerHTML = `
         ${dueHtml}
         <div class="kanban-card-actions">
-            <button class="btn-action" onclick="startTask(${taskId})" data-bs-toggle="tooltip" title="${isQaDepartment ? 'Start testing this task.' : 'Start this task and open the UI/UX design references.'}">
+            <button type="button" class="btn-action" onclick="startTask(${taskId})" data-bs-toggle="tooltip" title="${isQaDepartment ? 'Start testing this task.' : 'Start this task and open the UI/UX design references.'}">
                 <i class="fas fa-play"></i> ${isQaDepartment ? 'Start Testing' : 'Start'}
             </button>
             <button class="btn-action-view" onclick="viewTask(${taskId})" data-bs-toggle="tooltip" title="View the task summary, saved handoffs, comments, and Git activity.">
@@ -4530,6 +4642,14 @@ function transformKanbanCardForTodoColumn(card, taskId) {
 }
 
 function moveKanbanTaskToColumn(taskId, status) {
+    if (status !== 'completed') {
+        document.querySelectorAll(`.completed-card[data-task-id="${String(taskId)}"]`).forEach((completedCard) => {
+            const completedColumn = completedCard.closest('.kanban-body');
+            completedCard.remove();
+            updateKanbanColumnCount(completedColumn);
+        });
+    }
+
     const card = document.querySelector(`.kanban-card[data-task-id="${String(taskId)}"]`);
     const targetColumn = status === 'todo'
         ? document.getElementById('todo-column')
@@ -4565,7 +4685,10 @@ function moveKanbanTaskToReview(taskId) {
 }
 
 function startTask(taskId) {
-    updateTaskStatus(taskId, 'in_progress', { openDetails: true });
+    updateTaskStatus(taskId, 'in_progress', {
+        openDetails: true,
+        skipConfirm: true
+    });
 }
 
 function reviewTask(taskId) {
@@ -4588,8 +4711,7 @@ function showTaskNotice(title, message, type = 'success') {
 
 async function updateTaskStatus(taskId, status, options = {}) {
     if (!options.skipConfirm) {
-        const confirmed = typeof window.appConfirm === 'function'
-            ? await window.appConfirm({
+        const confirmOptions = {
                 title: 'Confirm Task Update',
                 subject: status === 'for_review'
                     ? (isQaDepartment ? 'Submit QA test results?' : 'Submit design for review?')
@@ -4608,32 +4730,45 @@ async function updateTaskStatus(taskId, status, options = {}) {
                 confirmText: status === 'for_review'
                     ? (isQaDepartment ? 'Submit Test Results' : 'Submit Design')
                     : (status === 'in_progress' ? (isQaDepartment ? 'Start Testing' : 'Start Task') : 'Update')
-            })
-            : false;
+            };
+        const confirmed = typeof window.appConfirm === 'function'
+            ? await window.appConfirm(confirmOptions)
+            : window.confirm(`${confirmOptions.subject}\n\n${confirmOptions.message}`);
         if (!confirmed) {
             return;
         }
     }
 
     try {
-        const response = await $.ajax({
-            url: '../../api/update-task-status.php',
-            method: 'POST',
-            dataType: 'json',
-            data: {
-                task_id: taskId,
-                new_status: status
-            }
+        const requestBody = new URLSearchParams({
+            task_id: String(taskId),
+            new_status: status
         });
+        const endpoint = `${String(window.BASE_URL || '../../').replace(/\/?$/, '/')}api/update-task-status.php`;
+        const request = await fetch(endpoint, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: requestBody.toString()
+        });
+        const response = await request.json().catch(() => ({}));
+        if (!request.ok) {
+            const requestError = new Error(response.error || 'Unable to update task status.');
+            requestError.responseJSON = response;
+            throw requestError;
+        }
 
         moveKanbanTaskToColumn(taskId, response.new_status || status);
         if (!options.suppressDetails && (options.openDetails || status === 'in_progress' || status === 'for_review')) {
             viewTask(taskId);
         }
         return response;
-    } catch (xhr) {
-        showTaskNotice('Task Update', xhr.responseJSON?.error || 'Unable to update task status.', 'error');
-        throw xhr;
+    } catch (error) {
+        showTaskNotice('Task Update', error.responseJSON?.error || error.message || 'Unable to update task status.', 'error');
+        throw error;
     }
 }
 
@@ -5103,9 +5238,13 @@ function viewTask(taskId) {
             const departmentRevisionBanner = buildDepartmentRevisionBanner(task);
             const reopenPanel = buildReopenRequestPanel(task);
             const isReopenedTask = Boolean(task.last_reopened_at) && String(task.status || '') === 'sul_revision';
+            const isRevisionTask = ['qa_failed', 'sul_revision'].includes(String(task.status || '')) && !isReopenedTask;
             announceDeveloperTaskGuidance(task);
             const reopenedBadge = isReopenedTask
                 ? '<span class="reopen-indicator mb-0"><i class="fas fa-rotate-left"></i> Reopened</span>'
+                : '';
+            const revisionBadge = isRevisionTask
+                ? '<span class="revision-indicator mb-0"><i class="fas fa-screwdriver-wrench"></i> Revision</span>'
                 : '';
             const overviewSupport = [reopenPanel, roadmapBanner, designReferenceStrip]
                 .filter((section) => String(section || '').trim())
@@ -5190,7 +5329,7 @@ function viewTask(taskId) {
                                         <h5 class="task-detail-title">${escapeHtml(task.title)}</h5>
                                         <p class="task-detail-desc">${task.description ? escapeHtml(task.description) : 'No description provided.'}</p>
                                     </div>
-                                    ${reopenedBadge}
+                                    ${reopenedBadge || revisionBadge}
                                 </div>
                                 <div class="task-facts-grid">
                                     <div class="task-fact">

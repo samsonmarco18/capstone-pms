@@ -679,6 +679,7 @@ $sulDepartmentAliasesSql = $sulDepartmentAliases !== []
 $sulMissingDepartment = $sulDepartment === '';
 $isExpertDepartmentSul = $sulDepartmentLabel === 'Expert Department';
 $isUiUxDepartmentSul = $sulDepartmentLabel === 'UI/UX';
+$isQaDepartmentSul = $sulDepartmentLabel === 'QA';
 $canManageExpertWorkflow = !$sulMissingDepartment && $isExpertDepartmentSul;
 $canManageDeveloperWorkflow = !$sulMissingDepartment && !$isExpertDepartmentSul;
 $departmentAssigneeLabels = [
@@ -704,9 +705,15 @@ $deliveryAssigneeFallback = $deliveryAssigneeCopy['fallback'];
 $deliveryAssigneeLower = $deliveryAssigneeCopy['lower'];
 $deliveryAssigneePluralLower = $deliveryAssigneeCopy['plural'];
 $deliveryWorkflowLabel = $deliveryAssigneeLabel . ' Workflow';
-$deliveryReviewLabel = $isUiUxDepartmentSul ? 'SUL UI/UX Review' : 'SUL Code Review';
-$deliveryEvidenceLabel = $isUiUxDepartmentSul ? 'Design Handoff' : 'Repository';
-$deliverySubmissionLabel = $isUiUxDepartmentSul ? 'UI/UX submission' : 'pull request';
+$deliveryReviewLabel = $isQaDepartmentSul
+    ? 'QA SUL Review'
+    : ($isUiUxDepartmentSul ? 'SUL UI/UX Review' : 'SUL Code Review');
+$deliveryEvidenceLabel = $isQaDepartmentSul
+    ? 'Testing Evidence'
+    : ($isUiUxDepartmentSul ? 'Design Handoff' : 'Repository');
+$deliverySubmissionLabel = $isQaDepartmentSul
+    ? 'test result'
+    : ($isUiUxDepartmentSul ? 'UI/UX submission' : 'pull request');
 $deliveryAssignmentAction = 'Assign ' . $deliveryAssigneeLabel;
 $deliveryAssignmentModalTitle = 'Assign to ' . $deliveryAssigneeLabel;
 $deliveryAssignmentLoadingTitle = 'Assigning ' . $deliveryAssigneeLabel;
@@ -2266,11 +2273,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $requestedDepartments = is_array($_POST['revision_departments'] ?? null)
                 ? $_POST['revision_departments']
                 : [];
+            $normalizedRequestedDepartments = array_values(array_unique(array_filter(array_map(
+                static fn($department): string => projectWorkflowDepartmentLabel((string) $department),
+                $requestedDepartments
+            ))));
+            $uiUxCascadeRequired = in_array('UI/UX', $normalizedRequestedDepartments, true);
+            if ($uiUxCascadeRequired) {
+                // A UI/UX correction changes the implementation contract. Keep the
+                // revision chain complete and ordered through both delivery layers.
+                $normalizedRequestedDepartments[] = 'Frontend';
+                $normalizedRequestedDepartments[] = 'Backend';
+                $normalizedRequestedDepartments = array_values(array_unique($normalizedRequestedDepartments));
+            }
             $selectedTargets = [];
-            foreach ($requestedDepartments as $requestedDepartment) {
+            foreach ($normalizedRequestedDepartments as $requestedDepartment) {
                 $department = projectWorkflowDepartmentLabel((string) $requestedDepartment);
                 if (isset($availableTargets[$department]) && !empty($availableTargets[$department]['is_available'])) {
                     $selectedTargets[$department] = $availableTargets[$department];
+                }
+            }
+            if ($uiUxCascadeRequired) {
+                $missingCascadeDepartments = array_values(array_diff(
+                    ['UI/UX', 'Frontend', 'Backend'],
+                    array_keys($selectedTargets)
+                ));
+                if ($missingCascadeDepartments !== []) {
+                    $_SESSION['error'] = 'UI/UX revision requires available UI/UX, Frontend, and Backend handlers. Missing: '
+                        . implode(', ', $missingCascadeDepartments) . '.';
+                    header("Location: task-allocation.php");
+                    exit();
                 }
             }
             uasort($selectedTargets, static function (array $left, array $right): int {
@@ -3888,6 +3919,87 @@ include '../../includes/navbar.php';
     font-size: 1rem;
     font-weight: 700;
     margin: 0;
+}
+
+.qa-fail-routing-copy {
+    color: var(--gray-600);
+    font-size: .75rem;
+    line-height: 1.45;
+    margin: 0 0 .8rem;
+}
+
+.qa-revision-target-list {
+    display: grid;
+    gap: .55rem;
+    margin-bottom: .8rem;
+}
+
+.qa-revision-target {
+    align-items: flex-start;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: .75rem;
+    cursor: pointer;
+    display: flex;
+    gap: .65rem;
+    padding: .7rem .75rem;
+}
+
+.qa-revision-target input {
+    flex: 0 0 auto;
+    margin-top: .2rem;
+}
+
+.qa-revision-target-copy {
+    display: grid;
+    gap: .12rem;
+    min-width: 0;
+}
+
+.qa-revision-target-copy strong {
+    color: var(--gray-900);
+    font-size: .78rem;
+}
+
+.qa-revision-target-copy span {
+    color: var(--gray-600);
+    font-size: .7rem;
+    line-height: 1.35;
+}
+
+.qa-revision-target.is-unavailable {
+    cursor: not-allowed;
+    opacity: .62;
+}
+
+.qa-fail-routing-empty {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: .75rem;
+    color: #9a3412;
+    font-size: .74rem;
+    margin-bottom: .8rem;
+    padding: .7rem .75rem;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-fail-routing-dialog {
+    background: #071321;
+    border-color: rgba(138, 210, 255, .2);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-fail-routing-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-revision-target-copy strong {
+    color: #e5f2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-fail-routing-copy,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-revision-target-copy span {
+    color: #9fb8ce;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .qa-revision-target {
+    background: #0a1b2d;
+    border-color: rgba(138, 210, 255, .16);
 }
 
 .allocation-scope-single {
@@ -7495,11 +7607,11 @@ include '../../includes/navbar.php';
             <div class="tab-pane fade section-card allocation-column" id="developer-review-panel" role="tabpanel" aria-labelledby="developer-review-tab">
                 <div class="section-header">
                     <h5>
-                        <i class="fas <?php echo $isUiUxDepartmentSul ? 'fa-palette' : 'fa-code-pull-request'; ?>"></i>
+                        <i class="fas <?php echo $isQaDepartmentSul ? 'fa-vial-circle-check' : ($isUiUxDepartmentSul ? 'fa-palette' : 'fa-code-pull-request'); ?>"></i>
                         <?php echo htmlspecialchars($deliveryReviewLabel); ?>
                         <span class="badge-count">
                             <?php echo $codeReviewTasks->num_rows; ?>
-                            <?php echo $isUiUxDepartmentSul ? 'submissions' : 'PRs'; ?>
+                            <?php echo $isQaDepartmentSul ? 'results' : ($isUiUxDepartmentSul ? 'submissions' : 'PRs'); ?>
                         </span>
                     </h5>
                 </div>
@@ -7557,7 +7669,10 @@ include '../../includes/navbar.php';
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if (!$isUiUxDepartmentSul): ?>
+                                        <?php if ($isQaDepartmentSul): ?>
+                                            <span class="allocation-deadline">QA notes and evidence</span>
+                                            <span class="allocation-deadline-note">Open the task to inspect the submitted testing handoff</span>
+                                        <?php elseif (!$isUiUxDepartmentSul): ?>
                                             <?php if (!empty($task['branch_name'])): ?>
                                                 <span class="allocation-deadline"><i class="fas fa-code-branch" aria-hidden="true"></i> <?php echo htmlspecialchars((string) $task['branch_name']); ?></span>
                                             <?php else: ?>
@@ -7568,10 +7683,10 @@ include '../../includes/navbar.php';
                                             <?php endif; ?>
                                         <?php endif; ?>
                                         <div class="workflow-action-row<?php echo $isUiUxDepartmentSul ? '' : ' mt-2'; ?>">
-                                            <?php if (!$isUiUxDepartmentSul && !empty($task['pull_request_url'])): ?>
+                                            <?php if (!$isUiUxDepartmentSul && !$isQaDepartmentSul && !empty($task['pull_request_url'])): ?>
                                                 <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['pull_request_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-code-pull-request"></i> PR</a>
                                             <?php endif; ?>
-                                            <?php if (!$isUiUxDepartmentSul && !empty($task['repository_url'])): ?>
+                                            <?php if (!$isUiUxDepartmentSul && !$isQaDepartmentSul && !empty($task['repository_url'])): ?>
                                                 <a class="btn-outline-modern" href="<?php echo htmlspecialchars((string) $task['repository_url']); ?>" target="_blank" rel="noopener"><i class="fas fa-link"></i> Repo</a>
                                             <?php endif; ?>
                                             <button type="button" class="btn-outline-modern" onclick="viewTaskDetails(<?php echo (int) $task['id']; ?>)">
@@ -7580,18 +7695,107 @@ include '../../includes/navbar.php';
                                         </div>
                                     </td>
                                     <td>
-                                        <form class="workflow-decision-form" method="POST" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
-                                            <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
-                                            <textarea name="review_comment" class="form-control-custom" rows="2" placeholder="<?php echo $isUiUxDepartmentSul ? 'UI/UX approval note or revision feedback' : 'Approval note or revision comments'; ?>"></textarea>
-                                            <div class="workflow-action-row">
-                                                <button type="submit" name="sul_approve_pr" class="btn-success-modern">
-                                                    <i class="fas fa-check"></i> Approve
-                                                </button>
-                                                <button type="submit" name="sul_request_revision" class="btn-warning-modern">
-                                                    <i class="fas fa-undo"></i> Request Revision
-                                                </button>
-                                            </div>
-                                        </form>
+                                        <?php if ($isQaDepartmentSul): ?>
+                                            <form class="workflow-decision-form" method="POST" data-app-loading data-loading-title="Saving QA decision" data-loading-text="Please wait while the QA review decision is saved.">
+                                                <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
+                                                <div class="workflow-action-row qa-primary-decision-actions">
+                                                    <button type="submit" name="qa_sul_pass" class="btn-success-modern">
+                                                        <i class="fas fa-check"></i> Pass
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        class="btn-warning-modern"
+                                                        aria-controls="qaFailPanel<?php echo (int) $task['id']; ?>"
+                                                        aria-expanded="false"
+                                                        onclick="toggleQaFailPanel(<?php echo (int) $task['id']; ?>, true, this)"
+                                                    >
+                                                        <i class="fas fa-xmark"></i> Fail
+                                                    </button>
+                                                </div>
+
+                                                <div
+                                                    class="qa-fail-routing-panel"
+                                                    id="qaFailPanel<?php echo (int) $task['id']; ?>"
+                                                    role="dialog"
+                                                    aria-modal="true"
+                                                    aria-labelledby="qaFailTitle<?php echo (int) $task['id']; ?>"
+                                                    hidden
+                                                    onclick="if (event.target === this) toggleQaFailPanel(<?php echo (int) $task['id']; ?>, false)"
+                                                >
+                                                    <div class="qa-fail-routing-dialog">
+                                                        <div class="qa-fail-routing-header">
+                                                            <h6 class="qa-fail-routing-title" id="qaFailTitle<?php echo (int) $task['id']; ?>">Fail testing and route revision</h6>
+                                                            <button type="button" class="btn-close" aria-label="Close" onclick="toggleQaFailPanel(<?php echo (int) $task['id']; ?>, false)"></button>
+                                                        </div>
+                                                        <p class="qa-fail-routing-copy">Select the responsible departments. The system sends the work chronologically to each original developer and SUL, then returns it to QA for retesting. Selecting UI/UX also includes Frontend and Backend.</p>
+
+                                                        <?php if ($qaRevisionTargets !== []): ?>
+                                                            <div class="qa-revision-target-list" role="group" aria-label="Responsible revision departments">
+                                                                <?php $qaTargetNumber = 0; ?>
+                                                                <?php foreach ($qaRevisionTargets as $qaDepartment => $qaTarget): ?>
+                                                                    <?php
+                                                                    $qaTargetNumber++;
+                                                                    $qaTargetAvailable = !empty($qaTarget['is_available']);
+                                                                    $qaTargetId = 'qaRevision' . (int) $task['id'] . $qaTargetNumber;
+                                                                    ?>
+                                                                    <label class="qa-revision-target<?php echo $qaTargetAvailable ? '' : ' is-unavailable'; ?>" for="<?php echo $qaTargetId; ?>">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            id="<?php echo $qaTargetId; ?>"
+                                                                            name="revision_departments[]"
+                                                                            value="<?php echo htmlspecialchars((string) $qaDepartment); ?>"
+                                                                            <?php echo $qaTargetAvailable ? '' : 'disabled'; ?>
+                                                                        >
+                                                                        <span class="qa-revision-target-copy">
+                                                                            <strong><?php echo $qaTargetNumber; ?>. <?php echo htmlspecialchars((string) $qaDepartment); ?></strong>
+                                                                            <span>Responsible developer: <?php echo htmlspecialchars((string) ($qaTarget['developer_name'] ?? 'Not assigned')); ?></span>
+                                                                            <span>Department SUL: <?php echo htmlspecialchars((string) ($qaTarget['sul_name'] ?? 'Not available')); ?><?php echo $qaTargetAvailable ? '' : ' — unavailable for routing'; ?></span>
+                                                                        </span>
+                                                                    </label>
+                                                                <?php endforeach; ?>
+                                                            </div>
+                                                        <?php else: ?>
+                                                            <div class="qa-fail-routing-empty"><i class="fas fa-triangle-exclamation me-1"></i>No completed responsible department handoffs are available for revision routing.</div>
+                                                        <?php endif; ?>
+
+                                                        <label class="form-label" for="qaFailNotes<?php echo (int) $task['id']; ?>">QA failure and revision notes</label>
+                                                        <textarea
+                                                            id="qaFailNotes<?php echo (int) $task['id']; ?>"
+                                                            name="review_comment"
+                                                            class="form-control-custom"
+                                                            rows="4"
+                                                            data-qa-fail-notes
+                                                            placeholder="Describe the failed test, actual result, expected result, and required correction."
+                                                        ></textarea>
+                                                        <div class="workflow-action-row justify-content-end mt-3">
+                                                            <button type="button" class="btn-outline-modern" onclick="toggleQaFailPanel(<?php echo (int) $task['id']; ?>, false)">Cancel</button>
+                                                            <button
+                                                                type="submit"
+                                                                name="qa_sul_route_revision"
+                                                                class="btn-warning-modern"
+                                                                onclick="return validateQaFailRouting(<?php echo (int) $task['id']; ?>)"
+                                                                <?php echo $qaAvailableRevisionTargetCount > 0 ? '' : 'disabled'; ?>
+                                                            >
+                                                                <i class="fas fa-route"></i> Route Revision
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </form>
+                                        <?php else: ?>
+                                            <form class="workflow-decision-form" method="POST" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
+                                                <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
+                                                <textarea name="review_comment" class="form-control-custom" rows="2" placeholder="<?php echo $isUiUxDepartmentSul ? 'UI/UX approval note or revision feedback' : 'Approval note or revision comments'; ?>"></textarea>
+                                                <div class="workflow-action-row">
+                                                    <button type="submit" name="sul_approve_pr" class="btn-success-modern">
+                                                        <i class="fas fa-check"></i> Approve
+                                                    </button>
+                                                    <button type="submit" name="sul_request_revision" class="btn-warning-modern">
+                                                        <i class="fas fa-undo"></i> Request Revision
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endwhile; ?>
@@ -8867,6 +9071,25 @@ function toggleQaFailPanel(taskId, show, trigger = null) {
         failTrigger?.focus();
     }
 }
+
+function syncQaRevisionDependencies(changedInput) {
+    if (!changedInput || changedInput.value !== 'UI/UX' || !changedInput.checked) return;
+
+    const panel = changedInput.closest('.qa-fail-routing-panel');
+    if (!panel) return;
+
+    ['Frontend', 'Backend'].forEach(department => {
+        const downstreamInput = Array.from(
+            panel.querySelectorAll('input[name="revision_departments[]"]:not(:disabled)')
+        ).find(input => input.value === department);
+        if (downstreamInput) downstreamInput.checked = true;
+    });
+}
+
+document.addEventListener('change', event => {
+    const input = event.target.closest?.('input[name="revision_departments[]"]');
+    if (input) syncQaRevisionDependencies(input);
+});
 
 function validateQaFailRouting(taskId) {
     const panel = document.getElementById(`qaFailPanel${Number(taskId)}`);

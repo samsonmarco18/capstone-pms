@@ -493,6 +493,21 @@ $appUserContext = [
             background: #06111e !important;
             border-top-color: rgba(138, 210, 255, 0.08) !important;
         }
+
+        /* The futuristic theme isolates the content wrapper for its animated
+           background. Release only that stacking context while this dialog is
+           visible so the same-page logout confirmation stays above its backdrop. */
+        body:has(#logoutConfirmModal.show) #page-content-wrapper {
+            isolation: auto !important;
+        }
+
+        #logoutConfirmModal {
+            z-index: 1060;
+        }
+
+        body:has(#logoutConfirmModal.show) > .modal-backdrop {
+            z-index: 1055;
+        }
     </style>
 
     <div class="modal fade app-logout-modal" id="logoutConfirmModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" aria-hidden="true">

@@ -1033,7 +1033,14 @@ body {
     z-index: 1080;
 }
 
-.app-confirm-modal.show ~ .modal-backdrop {
+/* Some personalized themes isolate the page wrapper for their background
+   effects. Release only that stacking context while the shared confirmation
+   is open so actions such as Start remain clickable on every page. */
+body:has(#appConfirmModal.show) #page-content-wrapper {
+    isolation: auto !important;
+}
+
+body:has(#appConfirmModal.show) > .modal-backdrop {
     z-index: 1070;
 }
 

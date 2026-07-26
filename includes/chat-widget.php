@@ -40,7 +40,14 @@ if (function_exists('isLoggedIn') && isLoggedIn()) {
                  FROM notifications
                  WHERE user_id = ?
                    AND is_read = FALSE
-                   AND (title LIKE '%Revision Requested:%' OR message LIKE 'SUL requested revision%')
+                   AND (
+                       title LIKE '%Revision Requested:%'
+                       OR message LIKE 'SUL requested revision%'
+                       OR title LIKE 'QA Revision Assigned:%'
+                       OR title LIKE 'QA Revision Queued:%'
+                       OR title LIKE 'QA Revision Now Assigned:%'
+                       OR title LIKE 'QA Passed:%'
+                   )
                  ORDER BY created_at DESC, id DESC
                  LIMIT 1"
             );
@@ -693,26 +700,43 @@ document.addEventListener('DOMContentLoaded', function () {
             sessionStorage.setItem(revisionStorageKey, '1');
             window.setTimeout(() => {
                 const isExpertRevision = evortixSulRevisionNotification.related_table === 'expert_project_estimations';
+                const notificationTitle = String(evortixSulRevisionNotification.title || '');
+                const isQaRevision = notificationTitle.startsWith('QA Revision');
+                const isQaPassed = notificationTitle.startsWith('QA Passed:');
                 const guidance = isExpertRevision
                     ? 'Review the SUL reason, update the affected estimates, staffing, cost, and timeline, then save and resubmit the project estimation.'
-                    : 'Review the SUL comment, update the implementation and evidence, then resubmit the task or pull request for SUL review.';
+                    : isQaRevision
+                        ? 'Evortix is relaying the QA decision. Review the QA notes, follow the assigned department order, correct the finding, and resubmit the work to your SUL.'
+                        : isQaPassed
+                            ? 'QA passed this feature. Review the result and continue with Architect final approval.'
+                            : 'Review the SUL comment, update the implementation and evidence, then resubmit the task or pull request for SUL review.';
                 window.evortixAnnounceNotification?.(
-                    evortixSulRevisionNotification.title || 'SUL revision requested',
+                    notificationTitle || (isQaRevision ? 'QA revision received' : 'SUL revision requested'),
                     `${evortixSulRevisionNotification.message || 'Your SUL requested changes.'} ${guidance}`,
                     evortixSulRevisionNotification.action_url || ''
                 );
                 const action = document.querySelector('#chat-bot-float .evortix-project-notification-action');
-                if (action) action.textContent = 'Review revision';
+                if (action) {
+                    action.textContent = isQaPassed
+                        ? 'Review QA result'
+                        : (isQaRevision ? 'Open QA revision' : 'Review revision');
+                }
 
                 const currentPath = window.location.pathname;
+                let actionUrl = null;
                 const actionPath = (() => {
                     try {
-                        const url = new URL(evortixSulRevisionNotification.action_url || '', window.location.origin);
-                        return url.pathname;
+                        actionUrl = new URL(evortixSulRevisionNotification.action_url || '', window.location.origin);
+                        return actionUrl.pathname;
                     } catch (error) { return ''; }
                 })();
                 if (actionPath && currentPath === actionPath) {
-                    const taskId = String(evortixSulRevisionNotification.related_id || '').replace(/[^0-9]/g, '');
+                    const taskId = String(
+                        actionUrl?.searchParams.get('task_id')
+                        || actionUrl?.searchParams.get('id')
+                        || evortixSulRevisionNotification.related_id
+                        || ''
+                    ).replace(/[^0-9]/g, '');
                     const target = (taskId ? document.querySelector(`[data-task-id="${taskId}"]`) : null)
                         || document.querySelector('.estimation-card:not([style*="display: none"])')
                         || document.querySelector('main form, #page-content-wrapper form');

@@ -1757,6 +1757,13 @@ include '../../includes/navbar.php';
     overflow-y: auto;
 }
 
+/* Theme backgrounds isolate the page for their ambient effects. Temporarily
+   release that stacking context so Bootstrap's backdrop stays behind these
+   full-page forms instead of blocking every field and action. */
+body:has(#addClientModal.show, #addProjectModal.show) #page-content-wrapper {
+    isolation: auto !important;
+}
+
 #page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal {
     left: var(--shell-sidebar-collapsed-width);
     width: calc(100vw - var(--shell-sidebar-collapsed-width));
@@ -6380,6 +6387,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                 </h5>
             </div>
             <form method="POST" id="addClientForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Sending to Architect" data-loading-text="Please wait while the qualified client intake, project folder, and Architect notification are saved.">
+                <input type="hidden" name="add_client" value="1">
                 <input type="hidden" name="client_draft_id" data-client-draft-id value="">
                 <div class="modal-body">
                     <div class="add-client-stepper" aria-label="Add client progress">

@@ -1410,7 +1410,7 @@ include '../../includes/navbar.php';
 }
 
 .feature-approval-workspace.has-active-review .feature-approval-layout {
-    grid-template-columns: minmax(680px, 1.35fr) minmax(420px, 0.85fr);
+    grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.85fr);
 }
 
 .feature-approval-queue {
@@ -1443,9 +1443,9 @@ include '../../includes/navbar.php';
     text-transform: uppercase;
 }
 
-.feature-approval-table th:first-child { width: 46%; }
-.feature-approval-table th:nth-child(2) { width: 32%; }
-.feature-approval-table th:nth-child(3) { width: 22%; }
+.feature-approval-table th:first-child { width: 43%; }
+.feature-approval-table th:nth-child(2) { width: 27%; }
+.feature-approval-table th:nth-child(3) { width: 30%; }
 
 .feature-approval-row {
     cursor: pointer;
