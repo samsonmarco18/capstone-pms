@@ -2982,15 +2982,24 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 }
 
 #addClientForm .add-client-priority-insight-shell {
-    flex: 0 0 420px;
-    width: 420px;
-    max-width: 100%;
+    flex: 0 0 50%;
+    width: 50%;
+    max-width: 50%;
 }
 
 #addClientForm .add-client-attachment-shell {
-    flex: 0 0 420px;
-    width: 420px;
-    max-width: 100%;
+    flex: 0 0 50%;
+    width: 50%;
+    max-width: 50%;
+}
+
+@media (max-width: 575.98px) {
+    #addClientForm .add-client-priority-insight-shell,
+    #addClientForm .add-client-attachment-shell {
+        flex-basis: 100%;
+        width: 100%;
+        max-width: 100%;
+    }
 }
 
 #addClientForm .priority-select-wrap .form-select {
@@ -7283,7 +7292,11 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                              </div>
                                              <div>
                                                  <label class="form-label">Minutes of the Meeting (MOM)</label>
-                                                 <textarea name="mom" class="form-control" rows="6" placeholder="Topic:&#10;Date:&#10;Company Name:&#10;Location:&#10;Attendees:"></textarea>
+                                                 <textarea name="mom" class="form-control" rows="3">Topic:
+Date:
+Company Name:
+Location:
+Attendees:</textarea>
                                              </div>
                                          </div>
                                         <div class="add-project-intake-column">
@@ -7669,7 +7682,11 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                              </div>
                                              <div>
                                                  <label class="form-label">Minutes of the Meeting (MOM)</label>
-                                                 <textarea name="mom" class="form-control" rows="6" placeholder="Topic:&#10;Date:&#10;Company Name:&#10;Location:&#10;Attendees:"></textarea>
+                                                 <textarea name="mom" class="form-control" rows="3">Topic:
+Date:
+Company Name:
+Location:
+Attendees:</textarea>
                                              </div>
                                          </div>
                                         <div class="add-project-intake-column">
