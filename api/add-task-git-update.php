@@ -5,6 +5,7 @@ require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/workflow.php';
 require_once __DIR__ . '/../includes/project-workflow.php';
+require_once __DIR__ . '/../includes/version-control.php';
 
 requireLogin();
 
@@ -75,13 +76,38 @@ if ($user['role'] === 'developer' && (int) ($task['assigned_to'] ?? 0) !== (int)
     exit();
 }
 
+$isPullRequestSubmission = $gitAction === 'pull_request_opened' || $pullRequestUrl !== '' || $status === 'in_review';
+if ($isPullRequestSubmission) {
+    $taskProjectId = (int) ($task['project_id'] ?? 0);
+    $branchStmt = $conn->prepare(
+        "SELECT pr.slug
+         FROM project_repositories pr
+         INNER JOIN repository_branches rb ON rb.repository_id = pr.id
+         WHERE pr.project_id = ?
+           AND pr.repository_status = 'active'
+           AND rb.name = ?
+           AND rb.branch_status = 'active'
+           AND rb.is_default = 0
+         LIMIT 1"
+    );
+    $branchStmt->bind_param('is', $taskProjectId, $branchName);
+    $branchStmt->execute();
+    $availableBranch = $branchStmt->get_result()->fetch_assoc() ?: null;
+    $branchStmt->close();
+    if (!$availableBranch) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Select one of the available project feature branches before submitting the pull request.']);
+        exit();
+    }
+    $repositoryUrl = vcGenerateRepositoryHttpCloneUrl((string) $availableBranch['slug']);
+}
+
 $repositoryUrl = $repositoryUrl !== '' ? $repositoryUrl : null;
 $commitHash = $commitHash !== '' ? substr($commitHash, 0, 64) : null;
 $commitMessage = $commitMessage !== '' ? $commitMessage : null;
 $pullRequestUrl = $pullRequestUrl !== '' ? $pullRequestUrl : null;
 $notes = $notes !== '' ? $notes : null;
 
-$isPullRequestSubmission = $gitAction === 'pull_request_opened' || $pullRequestUrl !== null || $status === 'in_review';
 if ($isPullRequestSubmission) {
     $currentStatus = (string) ($task['status'] ?? '');
     $developerOwnedStatuses = ['todo', 'in_progress', 'sul_revision', 'qa_failed', 'blocked'];

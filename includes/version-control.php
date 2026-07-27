@@ -509,6 +509,76 @@ function vcTryGitCommand(array $arguments, ?string $workingDirectory = null): bo
     }
 }
 
+function vcMergeManagedBranches(
+    string $repositorySlug,
+    string $sourceBranch,
+    string $targetBranch,
+    string $mergeTitle
+): array {
+    $bareRepositoryPath = vcGetRepositoryBarePath($repositorySlug);
+    if (!is_dir($bareRepositoryPath)) {
+        throw new RuntimeException('The managed Git repository is unavailable on this server.');
+    }
+
+    $workingPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'erni-pms-merge-' . bin2hex(random_bytes(6));
+    try {
+        vcRunGitCommand(['clone', $bareRepositoryPath, $workingPath], APP_ROOT_PATH);
+        vcRunGitCommand(['config', 'user.name', 'ERNI PMS Architect'], $workingPath);
+        vcRunGitCommand(['config', 'user.email', 'noreply@erni-pms.local'], $workingPath);
+        vcRunGitCommand(['checkout', $targetBranch], $workingPath);
+
+        $mergeResult = vcRunProcess(
+            [vcGetGitBinary(), 'merge', '--no-ff', 'origin/' . $sourceBranch, '-m', $mergeTitle],
+            $workingPath
+        );
+        if ((int) ($mergeResult['exit_code'] ?? 1) !== 0) {
+            $conflictResult = vcRunProcess(
+                [vcGetGitBinary(), 'diff', '--name-only', '--diff-filter=U'],
+                $workingPath
+            );
+            $conflictedFiles = array_values(array_filter(array_map(
+                'trim',
+                preg_split('/\R/', (string) ($conflictResult['stdout'] ?? '')) ?: []
+            )));
+            vcRunProcess([vcGetGitBinary(), 'merge', '--abort'], $workingPath);
+
+            if ($conflictedFiles) {
+                return [
+                    'status' => 'conflict',
+                    'conflicted_files' => $conflictedFiles,
+                    'message' => 'Merge conflict in: ' . implode(', ', $conflictedFiles),
+                ];
+            }
+            throw new RuntimeException(
+                trim((string) ($mergeResult['stderr'] ?? $mergeResult['stdout'] ?? 'Git merge failed.'))
+            );
+        }
+
+        $mergeHash = trim((string) vcRunGitCommand(['rev-parse', 'HEAD'], $workingPath)['stdout']);
+        vcRunGitCommand(['push', 'origin', 'HEAD:refs/heads/' . $targetBranch], $workingPath);
+        vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'update-server-info'], APP_ROOT_PATH);
+
+        $nameStatus = vcRunGitCommand(['show', '--pretty=', '--name-status', $mergeHash], $workingPath);
+        $numstat = vcRunGitCommand(['show', '--pretty=', '--numstat', $mergeHash], $workingPath);
+        $changes = vcParseNameStatusOutput((string) ($nameStatus['stdout'] ?? ''));
+        $stats = vcParseNumstatOutput((string) ($numstat['stdout'] ?? ''));
+        foreach ($stats as $changeKey => $fileStats) {
+            if (isset($changes[$changeKey])) {
+                $changes[$changeKey]['additions'] = (int) ($fileStats['additions'] ?? 0);
+                $changes[$changeKey]['deletions'] = (int) ($fileStats['deletions'] ?? 0);
+            }
+        }
+
+        return [
+            'status' => 'merged',
+            'commit_hash' => $mergeHash,
+            'files' => array_values($changes),
+        ];
+    } finally {
+        vcDeleteDirectoryRecursive($workingPath);
+    }
+}
+
 function vcWriteTextFile(string $path, string $contents): void
 {
     vcEnsureDirectory(dirname($path));

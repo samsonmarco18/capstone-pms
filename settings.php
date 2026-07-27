@@ -625,7 +625,7 @@ include 'includes/navbar.php';
                             $evortixSettings = [
                                 'evortix_enabled' => ['Show Evortix robot', 'Keep the assistant available beside the chat button.'],
                                 'evortix_suggestions' => ['Show suggestions', 'Allow automatic guidance and important recommendations.'],
-                                'evortix_sound' => ['Suggestion sound', 'Play a short sound when Evortix presents guidance.'],
+                                'evortix_sound' => ['Sound and voice', 'Play a short alert and let Evortix read guidance aloud.'],
                             ];
                             ?>
                             <?php foreach ($evortixSettings as $key => [$label, $description]): ?>

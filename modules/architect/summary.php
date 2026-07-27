@@ -6,6 +6,7 @@ require_once '../../includes/methodology-roadmap.php';
 require_once '../../includes/project-workflow.php';
 require_once '../../includes/project-template.php';
 require_once '../../includes/project-compilation.php';
+require_once '../../includes/version-control-actions.php';
 requireRole('architect');
 
 $conn = getConnection();
@@ -174,6 +175,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
+    try {
+        $planningRepository = vcProvisionProjectPlanningRepository(
+            $conn,
+            $user,
+            $projectId,
+            (string) $project['name']
+        );
+    } catch (Throwable $repositoryError) {
+        error_log('Architect repository provisioning failed: ' . $repositoryError->getMessage());
+        $_SESSION['error'] = 'The plan is ready, but its repository and feature branches could not be created: '
+            . $repositoryError->getMessage();
+        header('Location: summary.php?id=' . $projectId);
+        exit();
+    }
+
     $submitStatement = $conn->prepare("
         UPDATE projects
         SET status = 'in_progress', workflow_status = 'architect_submitted'
@@ -215,7 +231,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     );
     
     logActivity($user['id'], 'submit_architecture', 'projects', $projectId);
-    $_SESSION['success'] = 'Architecture compilation #' . $submittedCompilationNo . ' submitted successfully. The Expert Department SUL has been notified for estimation assignment.';
+    $_SESSION['success'] = 'Architecture compilation #' . $submittedCompilationNo
+        . ' submitted successfully. The managed repository is ready with main and '
+        . (int) ($planningRepository['feature_count'] ?? 0)
+        . ' feature branch'
+        . ((int) ($planningRepository['feature_count'] ?? 0) === 1 ? '' : 'es')
+        . '. The Expert Department SUL has been notified for estimation assignment.';
     
     header('Location: projects.php?submitted=' . $projectId);
     exit();
