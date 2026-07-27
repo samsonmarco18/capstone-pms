@@ -8924,6 +8924,19 @@ function editClient(client) {
     new bootstrap.Modal(document.getElementById('editClientModal')).show();
 }
 
+const SALES_MOM_TEMPLATE = `Topic:
+Date:
+Company Name:
+Location:
+Attendees:`;
+
+function ensureMomTemplate(form) {
+    const field = form?.elements?.mom;
+    if (field && !String(field.value || '').trim()) {
+        field.value = SALES_MOM_TEMPLATE;
+    }
+}
+
 function openAddProjectModal(clientId, clientName) {
     const modalElement = document.getElementById('addProjectModal');
     const form = document.getElementById('addProjectForm');
@@ -8935,6 +8948,7 @@ function openAddProjectModal(clientId, clientName) {
     }
 
     form.reset();
+    ensureMomTemplate(form);
     clientIdField.value = clientId;
     renderAddProjectFeatureRows('');
     resetAddProjectTemplateState();
@@ -11150,7 +11164,9 @@ if (addClientModalElement && addClientForm) {
 
     function clearProjectTypeProgress() {
         ['project_description', 'meeting_notes', 'mom', 'additional_requirements', 'sales_notes', 'sales_budget', 'timeline_start', 'timeline_start_time', 'timeline_end', 'timeline_end_time'].forEach((name) => {
-            if (addClientForm.elements[name]) addClientForm.elements[name].value = '';
+            if (addClientForm.elements[name]) {
+                addClientForm.elements[name].value = name === 'mom' ? SALES_MOM_TEMPLATE : '';
+            }
         });
         renderRequestedFeatureRows('');
         if (addClientForm.elements.timeline_end) {
@@ -11804,6 +11820,7 @@ if (addClientModalElement && addClientForm) {
                 field.value = typeof value === 'string' ? value : '';
             }
         });
+        ensureMomTemplate(addClientForm);
         resizeAdditionalRequirementsField();
         resizeSalesNotesField();
         updateAttachmentSummary();
