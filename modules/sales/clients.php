@@ -963,34 +963,6 @@ if ($clientTotalPages <= 5) {
 $totalClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients");
 $activeClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients WHERE status = 'active'");
 $pendingClients = salesClientsFetchCount($conn, "SELECT COUNT(*) as count FROM clients WHERE status = 'pending'");
-$nextActionPendingProjects = salesClientsFetchRows($conn, "
-    SELECT p.id, p.client_id, p.name AS project_name, c.name AS client_name
-    FROM projects p
-    INNER JOIN clients c ON c.id = p.client_id
-    WHERE p.status = 'pending'
-    ORDER BY p.created_at ASC, p.id ASC
-");
-$nextActionInactiveClients = salesClientsFetchRows($conn, "
-    SELECT id, name AS client_name
-    FROM clients
-    WHERE status = 'inactive'
-    ORDER BY name ASC
-");
-$nextActionOverdueDeliverables = salesClientsFetchRows($conn, "
-    SELECT p.id, p.client_id, p.name AS project_name, p.timeline_end, c.name AS client_name,
-           COUNT(t.id) AS total_features,
-           COALESCE(SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END), 0) AS merged_features
-    FROM projects p
-    INNER JOIN clients c ON c.id = p.client_id
-    LEFT JOIN tasks t ON t.project_id = p.id AND {$featureCondition}
-    WHERE p.timeline_end IS NOT NULL
-      AND p.timeline_end < CURRENT_DATE
-      AND p.status NOT IN ('completed', 'cancelled')
-    GROUP BY p.id, p.client_id, p.name, p.timeline_end, c.name
-    HAVING COUNT(t.id) = 0 OR COALESCE(SUM(CASE WHEN {$mergedCondition} THEN 1 ELSE 0 END), 0) < COUNT(t.id)
-    ORDER BY p.timeline_end ASC, p.id ASC
-");
-
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
@@ -7311,7 +7283,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                              </div>
                                              <div>
                                                  <label class="form-label">Minutes of the Meeting (MOM)</label>
-                                                 <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
+                                                 <textarea name="mom" class="form-control" rows="6" placeholder="Topic:&#10;Date:&#10;Company Name:&#10;Location:&#10;Attendees:"></textarea>
                                              </div>
                                          </div>
                                         <div class="add-project-intake-column">
@@ -7697,7 +7669,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                              </div>
                                              <div>
                                                  <label class="form-label">Minutes of the Meeting (MOM)</label>
-                                                 <textarea name="mom" class="form-control" rows="3" placeholder="Formal MOM summary for the architect"></textarea>
+                                                 <textarea name="mom" class="form-control" rows="6" placeholder="Topic:&#10;Date:&#10;Company Name:&#10;Location:&#10;Attendees:"></textarea>
                                              </div>
                                          </div>
                                         <div class="add-project-intake-column">
@@ -7735,7 +7707,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                                         <span>Requires more planning, testing, and attention than the standard development process.</span>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-sm-6">
                                     <label class="form-label">Attachments <span class="optional-label">(Optional)</span></label>
                                     <input type="file" name="project_attachments[]" class="form-control" multiple>
                                 </div>
@@ -8154,12 +8126,6 @@ body.dark-mode.sales-assistant-open .sales-bot-action-link small { color:#8eabc5
 <script>
 const savedClientDraftId = <?php echo json_encode($savedClientDraftId); ?>;
 const projectTemplates = <?php echo json_encode($projectTemplates, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
-const salesClientNextActions = <?php echo json_encode([
-    'pending_projects' => $nextActionPendingProjects,
-    'inactive_clients' => $nextActionInactiveClients,
-    'overdue_deliverables' => $nextActionOverdueDeliverables,
-], JSON_UNESCAPED_SLASHES); ?>;
-
 function getPriorityAdjustedTemplateWeeks(template, priorityValue = 'medium') {
     let minimumWeeks = Math.max(0, Math.round(Number(template?.duration_min_weeks || 0)));
     let maximumWeeks = Math.max(0, Math.round(Number(template?.duration_max_weeks || 0)));
@@ -8600,7 +8566,7 @@ const salesTemplateAssistant = (() => {
         if (!matches.length && query) {
             matches = projectTemplates.filter(template => normalizeSalesTemplateType(template.project_type).split(' ').some(word => query.includes(word) || word.includes(query)));
         }
-        const choices = matches.slice(0, 8).map(template => ({
+        const choices = matches.map(template => ({
             label:template.project_type,
             field:'project_type',
             version:`V${Number(template.template_version || 1)}${Number(template.template_version || 1) === Math.max(...projectTemplates.filter(item => item.project_type === template.project_type).map(item => Number(item.template_version || 1))) ? ' · Latest' : ''}`,
@@ -8857,10 +8823,6 @@ const salesTemplateAssistant = (() => {
     return { forField, close, announceNextActions };
 })();
 
-window.addEventListener('DOMContentLoaded', () => {
-    window.setTimeout(() => salesTemplateAssistant.announceNextActions(salesClientNextActions), 900);
-});
-
 document.addEventListener('click', async event => {
     const button = event.target.closest('[data-notify-project-team]');
     if (!button) return;
@@ -8974,7 +8936,13 @@ let addProjectAutoBudgetBase = null;
 let addProjectAutoBudgetFromTemplate = false;
 
 function normalizeSalesTemplateType(value) {
-    return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    return String(value || '')
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/gi, ' ')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
 }
 
 function escapeClientHtml(value) {
@@ -9140,10 +9108,6 @@ function initProjectTemplatePicker(picker) {
         if (versions.length === 1) versionSelect.value = String(versions[0].id || '');
     };
     const renderMenu = () => {
-        if (picker.closest('#addClientForm, #addProjectForm')) {
-            menu.hidden = true;
-            return;
-        }
         if (selectingTemplate) {
             return;
         }
@@ -9155,8 +9119,7 @@ function initProjectTemplatePicker(picker) {
                     return true;
                 }
                 return normalizeSalesTemplateType(name).includes(query);
-            })
-            .slice(0, 8);
+            });
 
         menu.innerHTML = matches.length
             ? matches.map((name) => `

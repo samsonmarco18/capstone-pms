@@ -105,6 +105,36 @@ $activeProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE sta
 $completedProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status = 'completed'")->fetch_assoc()['count'];
 $overdueProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE timeline_end IS NOT NULL AND timeline_end < CURDATE() AND status NOT IN ('completed', 'cancelled')")->fetch_assoc()['count'];
 $insightProjectCount = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status != 'cancelled'")->fetch_assoc()['count'];
+$fetchEvortixRows = static function ($result): array {
+    $rows = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+    }
+    return $rows;
+};
+$evortixPendingProjects = $fetchEvortixRows($conn->query("
+    SELECT p.id, p.client_id, p.name AS project_name, c.name AS client_name
+    FROM projects p
+    INNER JOIN clients c ON c.id = p.client_id
+    WHERE p.status = 'pending'
+    ORDER BY p.created_at ASC, p.id ASC
+"));
+$evortixInactiveClients = $fetchEvortixRows($conn->query("
+    SELECT id, name AS client_name FROM clients
+    WHERE status = 'inactive'
+    ORDER BY name ASC
+"));
+$evortixOverdueProjects = $fetchEvortixRows($conn->query("
+    SELECT p.id, p.client_id, p.name AS project_name, p.timeline_end, c.name AS client_name
+    FROM projects p
+    INNER JOIN clients c ON c.id = p.client_id
+    WHERE p.timeline_end IS NOT NULL
+      AND p.timeline_end < CURDATE()
+      AND p.status NOT IN ('completed', 'cancelled')
+    ORDER BY p.timeline_end ASC, p.id ASC
+"));
 
 // Get recent clients
 $recentClients = $conn->query("SELECT * FROM clients ORDER BY created_at DESC LIMIT 5");
@@ -2229,6 +2259,63 @@ body.dark-mode .evortix-3d-platform {
     font-weight: 700;
 }
 
+.evortix-live-actions {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    gap: .45rem;
+    max-height: 285px;
+    overflow-y: auto;
+}
+
+.evortix-live-action {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    min-width: 0;
+    padding: .65rem .75rem;
+    border: 1px solid rgba(8, 123, 185, .2);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, .82);
+    color: #0b466d;
+    text-decoration: none;
+    box-shadow: 0 5px 14px rgba(15, 119, 183, .08);
+}
+
+.evortix-live-action:hover,
+.evortix-live-action:focus-visible {
+    border-color: rgba(8, 123, 185, .45);
+    background: #fff;
+    color: #083a5d;
+}
+
+.evortix-live-action > i {
+    flex: 0 0 auto;
+    color: #138ac1;
+}
+
+.evortix-live-action span {
+    display: grid;
+    min-width: 0;
+}
+
+.evortix-live-action strong,
+.evortix-live-action small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.evortix-live-action strong {
+    font-size: .75rem;
+}
+
+.evortix-live-action small {
+    color: #5b7f97;
+    font-size: .64rem;
+    font-weight: 700;
+}
+
 .evortix-dashboard-summary-grid {
     position: relative;
     z-index: 2;
@@ -2792,32 +2879,10 @@ body.dark-mode .evortix-3d-platform {
 <script>
 const evortixDashboardWelcomeData = <?php echo json_encode([
     'enabled' => $showEvortixLoginWelcome,
-    'metrics' => [
-        [
-            'label' => 'Total Clients',
-            'value' => (int) $totalClients,
-            'meta' => (int) $activeClients . ' active clients',
-            'icon' => 'fa-users',
-        ],
-        [
-            'label' => 'Total Projects',
-            'value' => (int) $totalProjects,
-            'meta' => (int) $completedProjects . ' completed',
-            'icon' => 'fa-project-diagram',
-        ],
-        [
-            'label' => 'Active Projects',
-            'value' => (int) $activeProjects,
-            'meta' => 'Currently ongoing',
-            'icon' => 'fa-play-circle',
-        ],
-        [
-            'label' => 'Overdue',
-            'value' => (int) $overdueProjects,
-            'meta' => (int) $overdueProjects > 0 ? 'Needs immediate follow-up' : 'No overdue projects',
-            'icon' => 'fa-heart-pulse',
-            'overdue' => (int) $overdueProjects > 0,
-        ],
+    'actions' => [
+        'pending_projects' => $evortixPendingProjects,
+        'inactive_clients' => $evortixInactiveClients,
+        'overdue_projects' => $evortixOverdueProjects,
     ],
 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
 window.evortixDashboardWelcomeActive = Boolean(evortixDashboardWelcomeData.enabled);
@@ -2944,27 +3009,48 @@ document.addEventListener('DOMContentLoaded', async () => {
         speech.setAttribute('aria-hidden', 'false');
         speech.setAttribute('role', 'status');
         speech.style.pointerEvents = 'auto';
-        const metricsMarkup = evortixDashboardWelcomeData.metrics.map(metric => `
-            <div class="evortix-dashboard-summary-metric${metric.overdue ? ' is-overdue' : ''}">
-                <div class="evortix-dashboard-summary-metric-top">
-                    <i class="fas ${escapeSummaryHtml(metric.icon)}" aria-hidden="true"></i>
-                    <strong class="evortix-dashboard-summary-value">${escapeSummaryHtml(metric.value)}</strong>
-                </div>
-                <div class="evortix-dashboard-summary-label">${escapeSummaryHtml(metric.label)}</div>
-                <div class="evortix-dashboard-summary-meta">${escapeSummaryHtml(metric.meta)}</div>
-            </div>`).join('');
+        const actions = evortixDashboardWelcomeData.actions || {};
+        const pending = Array.isArray(actions.pending_projects) ? actions.pending_projects : [];
+        const inactive = Array.isArray(actions.inactive_clients) ? actions.inactive_clients : [];
+        const overdue = Array.isArray(actions.overdue_projects) ? actions.overdue_projects : [];
+        const actionItems = [
+            ...pending.map(item => ({
+                label: `Follow up: ${item.project_name}`,
+                meta: `${item.client_name} · Pending project`,
+                icon: 'fa-clock',
+                url: `clients.php?view=${encodeURIComponent(item.client_id)}&project=${encodeURIComponent(item.id)}`
+            })),
+            ...inactive.map(item => ({
+                label: `Send proposal: ${item.client_name}`,
+                meta: 'Inactive client',
+                icon: 'fa-paper-plane',
+                url: `clients.php?view=${encodeURIComponent(item.id)}`
+            })),
+            ...overdue.map(item => ({
+                label: `Review: ${item.project_name}`,
+                meta: `${item.client_name} · Due ${item.timeline_end}`,
+                icon: 'fa-triangle-exclamation',
+                url: `clients.php?view=${encodeURIComponent(item.client_id)}&project=${encodeURIComponent(item.id)}`
+            }))
+        ];
+        const actionsMarkup = actionItems.length
+            ? actionItems.slice(0, 8).map(item => `
+                <a class="evortix-live-action" href="${escapeSummaryHtml(item.url)}">
+                    <i class="fas ${escapeSummaryHtml(item.icon)}" aria-hidden="true"></i>
+                    <span><strong>${escapeSummaryHtml(item.label)}</strong><small>${escapeSummaryHtml(item.meta)}</small></span>
+                </a>`).join('')
+            : '<div class="evortix-dashboard-summary-intro">You are all caught up. No items need attention.</div>';
         speech.innerHTML = `
             <div class="evortix-dashboard-summary-head">
                 <div>
-                    <div class="evortix-dashboard-summary-eyebrow">Live overview</div>
-                    <strong class="evortix-dashboard-summary-title">Your sales dashboard snapshot</strong>
+                    <strong class="evortix-dashboard-summary-title">Live Overview</strong>
                 </div>
                 <button type="button" class="evortix-dashboard-summary-close" aria-label="Dismiss dashboard overview">
                     <i class="fas fa-xmark" aria-hidden="true"></i>
                 </button>
             </div>
-            <div class="evortix-dashboard-summary-intro">Here is what your summary cards are reporting right now.</div>
-            <div class="evortix-dashboard-summary-grid">${metricsMarkup}</div>`;
+            <div class="evortix-dashboard-summary-intro">${pending.length} pending, ${inactive.length} inactive, and ${overdue.length} overdue. Select an item to open it.</div>
+            <div class="evortix-live-actions">${actionsMarkup}</div>`;
 
         statsGrid?.classList.add('is-evortix-highlight');
         window.setTimeout(() => statsGrid?.classList.remove('is-evortix-highlight'), 3800);
