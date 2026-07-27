@@ -834,22 +834,42 @@ if (isset($_SESSION['clear_client_draft_id'])) {
 // Get all clients
 $search = isset($_GET['search']) ? $_GET['search'] : '';
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
+$allowedClientPageSizes = [10, 25, 50];
+$clientPageSize = isset($_GET['per_page']) ? (int) $_GET['per_page'] : 10;
+if (!in_array($clientPageSize, $allowedClientPageSizes, true)) {
+    $clientPageSize = 10;
+}
+$clientCurrentPage = max(1, isset($_GET['page']) ? (int) $_GET['page'] : 1);
 
 $featureCondition = projectProgressFeatureCondition('t');
 $mergedCondition = projectProgressMergedCondition('t');
+$clientWhereSql = " WHERE 1=1";
+if ($search) {
+    $clientWhereSql .= " AND (c.name LIKE '%$search%' OR c.email LIKE '%$search%' OR c.contact_person LIKE '%$search%')";
+}
+if ($statusFilter) {
+    $clientWhereSql .= " AND c.status = '$statusFilter'";
+}
+
+$totalFilteredClients = 0;
+$clientCountResult = salesClientsQuery($conn, "SELECT COUNT(*) AS total FROM clients c{$clientWhereSql}");
+if ($clientCountResult) {
+    $clientCountRow = $clientCountResult->fetch_assoc();
+    $totalFilteredClients = (int) ($clientCountRow['total'] ?? 0);
+}
+
+$clientTotalPages = max(1, (int) ceil($totalFilteredClients / $clientPageSize));
+$clientCurrentPage = min($clientCurrentPage, $clientTotalPages);
+$clientPageOffset = ($clientCurrentPage - 1) * $clientPageSize;
+
 $query = "
     SELECT
         c.*
     FROM clients c
-    WHERE 1=1
+    {$clientWhereSql}
+    ORDER BY c.created_at DESC
+    LIMIT {$clientPageSize} OFFSET {$clientPageOffset}
 ";
-if ($search) {
-    $query .= " AND (c.name LIKE '%$search%' OR c.email LIKE '%$search%' OR c.contact_person LIKE '%$search%')";
-}
-if ($statusFilter) {
-    $query .= " AND c.status = '$statusFilter'";
-}
-$query .= " ORDER BY c.created_at DESC";
 
 $clients = salesClientsQuery($conn, $query);
 $clientRows = [];
@@ -894,6 +914,49 @@ if ($clientRows) {
             }
         }
     }
+}
+
+$clientPageStart = $totalFilteredClients > 0 ? $clientPageOffset + 1 : 0;
+$clientPageEnd = min($clientPageOffset + count($clientRows), $totalFilteredClients);
+$buildClientPageUrl = static function (int $page, ?int $pageSize = null) use ($search, $statusFilter, $clientPageSize): string {
+    $params = [];
+
+    if ($search !== '') {
+        $params['search'] = $search;
+    }
+    if ($statusFilter !== '') {
+        $params['status'] = $statusFilter;
+    }
+
+    $params['per_page'] = $pageSize ?? $clientPageSize;
+    if ($page > 1) {
+        $params['page'] = $page;
+    }
+
+    return 'clients.php?' . http_build_query($params);
+};
+
+$clientPaginationPages = [];
+if ($clientTotalPages <= 5) {
+    // Keep the control visually consistent; unavailable page positions render disabled.
+    $clientPaginationPages = range(1, 5);
+} elseif ($clientTotalPages <= 7) {
+    $clientPaginationPages = range(1, $clientTotalPages);
+} else {
+    $clientPaginationPages = [
+        1,
+        2,
+        $clientCurrentPage - 1,
+        $clientCurrentPage,
+        $clientCurrentPage + 1,
+        $clientTotalPages - 1,
+        $clientTotalPages,
+    ];
+    $clientPaginationPages = array_values(array_unique(array_filter(
+        $clientPaginationPages,
+        static fn($page) => $page >= 1 && $page <= $clientTotalPages
+    )));
+    sort($clientPaginationPages);
 }
 
 // Get statistics
@@ -1039,52 +1102,97 @@ include '../../includes/navbar.php';
     color: rgba(255, 255, 255, 0.9);
 }
 
-/* Stats Row */
-.stats-row {
-    display: flex;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
+/* Unified client workspace */
+.client-directory-workspace {
+    background: #ffffff;
+    border: 1px solid rgba(31, 99, 146, 0.12);
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(15, 64, 91, 0.06);
 }
 
-.stat-card-modern {
-    background: white;
-    border-radius: 20px;
-    padding: 1.25rem 1.5rem;
-    flex: 1;
-    min-width: 180px;
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--gray-200);
-    transition: all 0.2s ease;
+/* Keep the unified Client Data workspace stationary. The shared app-wide
+ * surface effect may still enhance the shadow, but it must not lift this
+ * full-page table container when the pointer enters it. */
+#page-content-wrapper .client-directory-workspace > .main-card.app-3d-surface,
+#page-content-wrapper .client-directory-workspace > .main-card.app-3d-surface:hover,
+#page-content-wrapper .client-directory-workspace > .main-card.app-3d-surface:focus-within {
+    transform: none !important;
+}
+
+/* Client summary cards sit independently between the banner and directory. */
+.client-summary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+    margin: 0 0 2rem;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+}
+
+.client-summary-cell {
     position: relative;
+    display: block;
+    min-width: 0;
+    min-height: 70px;
+    padding: 0.85rem 3.75rem 0.8rem 1rem;
+    background: linear-gradient(135deg, #ffffff 0%, #fbfdff 58%, #edf9fc 100%);
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 12px;
+    box-shadow: 0 7px 0 rgba(31, 99, 146, 0.08), 0 0 18px rgba(34, 211, 238, 0.05);
+    outline: 0;
+    transform: none !important;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.stat-card-modern:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+.client-summary-cell:hover,
+.client-summary-cell:focus-within {
+    border-color: rgba(31, 99, 146, 0.2);
+    box-shadow: 0 7px 0 rgba(31, 99, 146, 0.08), 0 0 18px rgba(34, 211, 238, 0.08);
+    transform: none !important;
 }
 
-.stat-card-modern .stat-icon {
+.client-summary-icon {
     position: absolute;
+    top: 0.75rem;
     right: 1rem;
-    top: 1rem;
-    opacity: 0.65;
-    font-size: 1.6rem;
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: #e9f3f8;
     color: var(--theme-primary);
+    font-size: 0.95rem;
 }
 
-.stat-card-modern .stat-label {
-    font-size: 0.75rem;
+.client-summary-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.client-summary-label {
+    display: block;
+    font-size: 0.68rem;
     text-transform: uppercase;
     font-weight: 600;
     color: var(--gray-600);
-    letter-spacing: 0.5px;
-    margin-bottom: 0.5rem;
+    letter-spacing: 0.55px;
+    line-height: 1.2;
+    margin: 0;
 }
 
-.stat-card-modern .stat-number {
-    font-size: 2rem;
-    font-weight: 700;
+.client-summary-value {
+    display: block;
+    font-size: 1.4rem;
+    font-weight: 600;
     color: var(--theme-primary);
     line-height: 1;
 }
@@ -1092,16 +1200,16 @@ include '../../includes/navbar.php';
 /* Main Card */
 .main-card {
     background: white;
-    border-radius: 24px;
-    border: 1px solid var(--gray-200);
+    border-radius: 0;
+    border: 0;
     overflow: hidden;
-    box-shadow: var(--shadow-sm);
+    box-shadow: none;
 }
 
 .card-header-modern {
-    padding: 1.5rem 2rem;
+    padding: 0.8rem 1.5rem 0.65rem;
     background: #ffffff;
-    border-bottom: 1px solid var(--gray-200);
+    border-bottom: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1126,15 +1234,15 @@ include '../../includes/navbar.php';
 
 /* Filter Section */
 .filter-section {
-    padding: 0.85rem 2rem 1rem;
+    padding: 0.75rem 1.5rem 0.9rem;
     background: #ffffff;
     border-bottom: 1px solid var(--gray-200);
 }
 
 .client-tabs {
     display: flex;
-    gap: 0.5rem;
-    padding: 1rem 2rem 0;
+    gap: 0.35rem;
+    padding: 0 1.5rem;
     background: #ffffff;
     border-bottom: 1px solid var(--gray-200);
 }
@@ -1160,7 +1268,7 @@ include '../../includes/navbar.php';
     border: none;
     background: transparent;
     color: var(--gray-600);
-    padding: 0.75rem 0.9rem;
+    padding: 0.55rem 0.7rem;
     border-bottom: 2px solid transparent;
     font-size: 0.88rem;
     font-weight: 700;
@@ -1193,82 +1301,226 @@ include '../../includes/navbar.php';
 }
 
 .client-drafts-panel {
-    padding: 1.5rem 2rem 2rem;
+    padding: 1.25rem 1.5rem 1.5rem;
     background: var(--gray-50);
 }
 
 .client-draft-list {
-    display: grid;
-    gap: 1rem;
+    display: block;
     margin-bottom: 1rem;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+}
+
+.client-draft-table__head,
+.client-draft-card {
+    display: grid;
+    grid-template-columns:
+        minmax(210px, 1.15fr)
+        minmax(170px, 0.95fr)
+        minmax(180px, 1fr)
+        minmax(150px, 0.75fr)
+        minmax(190px, auto);
+    gap: 1rem;
+    align-items: center;
+}
+
+.client-draft-table__head {
+    padding: 0.78rem 1.15rem;
+    background: #f6f8fa;
+    border-bottom: 1px solid var(--gray-200);
+    color: var(--gray-600);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+}
+
+.client-draft-table__head span:last-child {
+    text-align: right;
 }
 
 .client-draft-card {
-    background: #ffffff;
-    border: 1px solid var(--gray-200);
-    border-radius: 18px;
-    padding: 1.25rem 1.5rem;
-    box-shadow: var(--shadow-sm);
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: flex-start;
+    padding: 0.9rem 1.15rem;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--gray-200);
+    border-radius: 0;
+    box-shadow: none;
+    transform: none !important;
+    transition: background-color 0.16s ease;
 }
 
-.client-draft-card__meta {
-    flex: 1;
+.client-draft-card:last-child {
+    border-bottom: 0;
+}
+
+.client-draft-card:hover,
+.client-draft-card:focus-within {
+    background: #f7fbfd;
+    box-shadow: none;
+    transform: none !important;
+}
+
+.client-draft-card__identity {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
     min-width: 0;
+}
+
+.client-draft-card__icon {
+    width: 2.3rem;
+    height: 2.3rem;
+    flex: 0 0 2.3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    background: #eaf4fa;
+    color: var(--theme-primary);
 }
 
 .client-draft-card__title {
     font-size: 1rem;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--gray-900);
-    margin-bottom: 0.3rem;
+    margin: 0;
     word-break: break-word;
 }
 
+.client-draft-card__cell,
 .client-draft-card__subtitle {
     font-size: 0.82rem;
     color: var(--gray-600);
-    margin-bottom: 0.7rem;
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
-.client-draft-card__summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-}
-
-.client-draft-card__summary span {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.25rem 0.55rem;
-    border-radius: 999px;
-    background: var(--gray-100);
-    color: var(--gray-700);
-    font-size: 0.74rem;
-    font-weight: 600;
+.client-draft-card__empty {
+    color: var(--gray-500);
 }
 
 .client-draft-card__actions {
     display: flex;
     gap: 0.5rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
 }
 
 .client-draft-card__actions .btn {
-    border-radius: 999px;
+    min-width: 82px;
+    border-radius: 8px;
     font-weight: 600;
+}
+
+.client-draft-card__actions .btn:hover,
+.client-draft-card__actions .btn:focus-visible {
+    transform: none !important;
+}
+
+@media (max-width: 980px) {
+    .client-draft-table__head {
+        display: none;
+    }
+
+    .client-draft-card {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.5rem 1rem;
+        padding: 1rem;
+    }
+
+    .client-draft-card__identity,
+    .client-draft-card__cell,
+    .client-draft-card__subtitle {
+        grid-column: 1;
+    }
+
+    .client-draft-card__cell::before,
+    .client-draft-card__subtitle::before {
+        content: attr(data-label) ": ";
+        color: var(--gray-500);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .client-draft-card__actions {
+        grid-column: 2;
+        grid-row: 1 / span 4;
+        align-self: center;
+    }
+}
+
+@media (max-width: 620px) {
+    .client-draft-card {
+        grid-template-columns: 1fr;
+    }
+
+    .client-draft-card__actions {
+        grid-column: 1;
+        grid-row: auto;
+        justify-content: flex-start;
+        margin-top: 0.35rem;
+    }
 }
 
 .filter-group {
     display: grid;
-    grid-template-columns: minmax(0, 520px) 190px;
+    grid-template-columns: minmax(280px, 520px) minmax(0, 1fr);
     gap: 1.25rem;
     align-items: center;
-    justify-content: space-between;
+}
+
+.client-filter-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.client-filter-actions .filter-input {
+    flex: 0 1 210px;
+    width: 210px;
+}
+
+.btn-add-client-toolbar {
+    min-height: 42px;
+    padding: 0.62rem 1.15rem;
+    border: 1px solid var(--theme-primary);
+    border-radius: 10px;
+    background: var(--theme-primary);
+    color: #ffffff;
+    font-size: 0.84rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    box-shadow: 0 6px 14px rgba(31, 99, 146, 0.16);
+    transition: background-color 0.18s ease, border-color 0.18s ease,
+        box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.btn-add-client-toolbar:hover,
+.btn-add-client-toolbar:focus-visible {
+    border-color: var(--theme-primary-dark);
+    background: var(--theme-primary-dark);
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.22);
+    transform: translateY(-1px);
+}
+
+.btn-add-client-toolbar:focus-visible {
+    outline: 3px solid rgba(31, 99, 146, 0.2);
+    outline-offset: 2px;
 }
 
 .filter-input {
@@ -1329,6 +1581,11 @@ include '../../includes/navbar.php';
     overflow-x: auto;
 }
 
+.client-directory-workspace .client-tab-panel[data-client-panel="clients"] > .table-container {
+    margin: 1rem 1.5rem 0;
+    overflow: visible;
+}
+
 .client-table {
     width: 100%;
     border-collapse: collapse;
@@ -1362,6 +1619,269 @@ include '../../includes/navbar.php';
 .client-table tbody .client-row:hover {
     background: #f6fbfe;
     box-shadow: inset 3px 0 0 #4b94ba;
+}
+
+.client-table th:last-child,
+.client-table td:last-child {
+    width: 4.5rem;
+    text-align: right;
+}
+
+.client-contact-link,
+.client-contact-empty {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 18rem;
+    color: var(--gray-600);
+    font-size: 0.8rem;
+    line-height: 1.35;
+    text-decoration: none;
+}
+
+.client-contact-link i {
+    flex: 0 0 auto;
+    color: var(--theme-primary);
+}
+
+.client-contact-link span {
+    overflow-wrap: anywhere;
+}
+
+.client-contact-link:hover {
+    color: var(--theme-primary-dark);
+}
+
+.client-table .action-buttons {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+}
+
+.client-action-menu {
+    position: relative;
+}
+
+.client-action-menu > summary {
+    display: grid;
+    width: 2.4rem;
+    height: 2.4rem;
+    margin-left: auto;
+    padding: 0;
+    place-items: center;
+    list-style: none;
+    border: 1px solid var(--gray-200);
+    border-radius: 0.65rem;
+    background: #fff;
+    color: var(--theme-primary);
+    cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.client-action-menu > summary::-webkit-details-marker {
+    display: none;
+}
+
+.client-action-menu > summary:hover,
+.client-action-menu[open] > summary {
+    border-color: #9bc6dd;
+    background: #edf7fc;
+    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.12);
+}
+
+.client-action-menu__panel {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    right: 0;
+    z-index: 50;
+    min-width: 12rem;
+    padding: 0.35rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 0.75rem;
+    background: #fff;
+    box-shadow: 0 14px 32px rgba(15, 43, 68, 0.16);
+}
+
+.client-action-menu__item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    width: 100%;
+    padding: 0.65rem 0.75rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--gray-800);
+    font: inherit;
+    font-size: 0.82rem;
+    line-height: 1.2;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.client-action-menu__item:hover {
+    background: var(--gray-50);
+}
+
+.client-action-menu__item i {
+    width: 1rem;
+    color: var(--theme-primary);
+    text-align: center;
+}
+
+.client-action-menu__item--danger,
+.client-action-menu__item--danger i {
+    color: #dc2626;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-contact-link,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-contact-empty {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-contact-link i {
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-action-menu > summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-action-menu__panel {
+    border-color: rgba(126, 165, 197, 0.28);
+    background: #102235;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-action-menu__item {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-action-menu__item:hover {
+    background: rgba(75, 148, 186, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-action-menu__item--danger,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-action-menu__item--danger i {
+    color: #fca5a5;
+}
+
+.client-pagination {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) auto minmax(220px, 1fr);
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--gray-200);
+    background: #fff;
+}
+
+.client-pagination__size {
+    justify-self: start;
+}
+
+.client-pagination__size select {
+    min-width: 106px;
+    height: 40px;
+    padding: 0 2rem 0 0.75rem;
+    border: 1px solid var(--gray-300);
+    border-radius: 9px;
+    background: #fff;
+    color: var(--gray-800);
+    font: inherit;
+}
+
+.client-pagination__pages,
+.client-pagination__steps {
+    display: flex;
+    align-items: center;
+}
+
+.client-pagination__pages {
+    justify-self: center;
+    overflow: hidden;
+    border: 1px solid var(--gray-300);
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 2px 7px rgba(15, 64, 91, 0.05);
+}
+
+.client-pagination__steps {
+    justify-self: end;
+    gap: 0.55rem;
+}
+
+.client-pagination__page,
+.client-pagination__step {
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    color: var(--gray-700);
+    text-decoration: none;
+    transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.client-pagination__page {
+    min-width: 42px;
+    padding: 0 0.7rem;
+    border-right: 1px solid transparent;
+}
+
+.client-pagination__page:last-child {
+    border-right: 0;
+}
+
+.client-pagination__page:hover {
+    color: var(--gray-900);
+    background: #f5f7f9;
+}
+
+.client-pagination__page.is-current {
+    background: #f3f5f7;
+    color: var(--gray-900) !important;
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px rgba(15, 64, 91, 0.04);
+}
+
+.client-pagination__page.is-disabled {
+    color: var(--gray-300);
+    background: #fff;
+    cursor: default;
+    pointer-events: none;
+}
+
+.client-pagination__step {
+    padding: 0 0.9rem;
+    border: 1px solid var(--gray-300);
+    border-radius: 9px;
+    background: #fff;
+}
+
+.client-pagination__step:hover {
+    color: var(--theme-primary);
+    border-color: rgba(31, 99, 146, 0.45);
+    box-shadow: 0 5px 14px rgba(15, 64, 91, 0.1);
+    transform: translateY(-1px);
+}
+
+.client-pagination__step.is-disabled {
+    color: var(--gray-400);
+    background: var(--gray-50);
+    border-color: var(--gray-200);
+    opacity: 0.72;
+    pointer-events: none;
+    box-shadow: none;
+}
+
+.client-pagination__ellipsis {
+    min-width: 36px;
+    height: 40px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0 0.5rem;
+    border-right: 1px solid var(--gray-200);
+    color: var(--gray-500);
 }
 
 .client-name {
@@ -1720,6 +2240,63 @@ include '../../includes/navbar.php';
 
 .modal-modern .modal-header .btn-close {
     filter: brightness(0) invert(1);
+}
+
+#editClientModal.modal-modern .modal-content {
+    border: 1px solid rgba(13, 103, 134, 0.18);
+    border-radius: 22px;
+    box-shadow: 0 26px 70px rgba(7, 35, 54, 0.28);
+}
+
+#editClientModal.modal-modern .modal-header {
+    min-height: 76px;
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, #0d6786 0%, #0a5570 68%, #083f58 100%) !important;
+    color: #ffffff !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 8px 24px rgba(8, 63, 88, 0.16);
+}
+
+#editClientModal.modal-modern .modal-title {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    color: #ffffff !important;
+    font-size: 1.28rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+#editClientModal.modal-modern .modal-title i {
+    display: inline-grid;
+    width: 38px;
+    height: 38px;
+    margin-right: 0.75rem !important;
+    place-items: center;
+    color: #ffffff !important;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 11px;
+}
+
+#editClientModal.modal-modern .modal-header .btn-close {
+    width: 38px;
+    height: 38px;
+    margin: 0;
+    padding: 0;
+    background-size: 15px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 11px;
+    filter: brightness(0) invert(1);
+    opacity: 0.88;
+    transition: background-color 0.18s ease, opacity 0.18s ease;
+}
+
+#editClientModal.modal-modern .modal-header .btn-close:hover,
+#editClientModal.modal-modern .modal-header .btn-close:focus-visible {
+    background-color: rgba(255, 255, 255, 0.18);
+    opacity: 1;
 }
 
 .modal-modern .modal-body {
@@ -4360,6 +4937,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-directory-workspace,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .main-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card,
@@ -4370,6 +4948,28 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     border-color: rgba(31, 99, 146, 0.24);
     box-shadow: 0 16px 36px rgba(3, 14, 25, 0.26);
     color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-directory-workspace {
+    border-color: #2a3b4f;
+    background: #071321;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-summary-strip {
+    background: transparent;
+    border-color: transparent;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-summary-cell {
+    background: #102437;
+    border-color: #2a3b4f;
+    box-shadow: 0 7px 0 rgba(0, 0, 0, 0.22), 0 0 18px rgba(34, 211, 238, 0.04);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-summary-icon {
+    background: rgba(90, 159, 196, 0.14);
+    color: #8ed4f5;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
@@ -4788,7 +5388,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern .text-muted,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern .stat-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-summary-label,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tab-btn,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-table th,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-email,
@@ -4896,6 +5496,39 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-detail-panel,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-project-item {
     border-color: rgba(31, 99, 146, 0.24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-list {
+    background: #071321;
+    border-color: #2a3b4f;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-table__head {
+    background: #0b1d2d;
+    border-color: #2a3b4f;
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card {
+    background: transparent;
+    border-color: #2a3b4f;
+    box-shadow: none;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card:focus-within {
+    background: rgba(31, 99, 146, 0.12);
+    box-shadow: none;
+    transform: none !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__icon {
+    background: rgba(31, 99, 146, 0.2);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-draft-card__cell {
+    color: #b9cad9;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input,
@@ -6080,25 +6713,56 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
         padding: 1.5rem;
     }
     
-    .stats-row {
-        flex-direction: column;
+    .client-summary-strip {
+        grid-template-columns: 1fr;
+        gap: 0.55rem;
+        margin: 0 0 1.5rem;
     }
     
-    .stat-card-modern {
+    .client-summary-cell {
         min-width: auto;
+        min-height: 62px;
+        padding: 0.7rem 3.5rem 0.7rem 0.85rem;
+        border: 1px solid var(--gray-200);
+    }
+
+    .client-summary-icon {
+        top: 0.65rem;
+        right: 0.85rem;
+        width: 34px;
+        height: 34px;
+    }
+
+    .client-directory-workspace {
+        border-radius: 18px;
     }
     
     .card-header-modern {
         flex-direction: column;
         align-items: stretch;
+        padding: 0.75rem 1rem 0.55rem;
     }
     
     .filter-group {
         grid-template-columns: minmax(0, 1fr);
     }
 
+    .client-filter-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .client-filter-actions .filter-input {
+        flex: 1 1 auto;
+        width: auto;
+    }
+
+    .btn-add-client-toolbar {
+        flex: 0 0 auto;
+    }
+
     .client-tabs {
-        padding: 0.85rem 1rem 0;
+        padding: 0 1rem;
         overflow-x: auto;
     }
 
@@ -6114,11 +6778,67 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     .client-table td {
         padding: 0.75rem 1rem;
     }
+
+    .client-directory-workspace .client-tab-panel[data-client-panel="clients"] > .table-container {
+        margin: 0.75rem 1rem 0;
+    }
+
+    .client-pagination {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        padding: 1rem;
+    }
+
+    .client-pagination__pages {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        justify-self: center;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .client-pagination__size {
+        grid-row: 2;
+        justify-self: start;
+    }
+
+    .client-pagination__steps {
+        grid-row: 2;
+        justify-self: end;
+    }
     
     .action-buttons {
         flex-direction: column;
         gap: 0.25rem;
     }
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__pages,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__size select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__step {
+    background: #102435;
+    border-color: rgba(148, 163, 184, 0.24);
+    color: #d9e7f1;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__page {
+    border-color: rgba(148, 163, 184, 0.2);
+    color: #d9e7f1;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__page:hover {
+    background: #173247;
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__page.is-current {
+    background: #28445a;
+    color: #fff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__page.is-disabled {
+    background: transparent;
+    color: #60778a;
 }
 </style>
 
@@ -6153,42 +6873,46 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                 </h2>
                 <p>Manage client relationships, track progress, and monitor project deadlines</p>
             </div>
-            <div class="mt-3 mt-md-0">
-                <button class="btn-add-modern" data-bs-toggle="modal" data-bs-target="#addClientModal">
-                    <i class="fas fa-plus me-2"></i> Add New Client
-                </button>
-            </div>
         </div>
     </div>
 
-    <!-- Statistics Cards -->
-    <div class="stats-row">
-        <div class="stat-card-modern">
-            <i class="fas fa-users stat-icon"></i>
-            <div class="stat-label">Total Clients</div>
-            <div class="stat-number"><?php echo $totalClients; ?></div>
+    <!-- Client summary -->
+    <div class="client-summary-strip" aria-label="Client summary">
+        <div class="client-summary-cell">
+            <span class="client-summary-icon" aria-hidden="true"><i class="fas fa-users"></i></span>
+            <span class="client-summary-copy">
+                <span class="client-summary-label">Total Clients</span>
+                <strong class="client-summary-value"><?php echo $totalClients; ?></strong>
+            </span>
         </div>
-        <div class="stat-card-modern">
-            <i class="fas fa-user-check stat-icon"></i>
-            <div class="stat-label">Active Clients</div>
-            <div class="stat-number"><?php echo $activeClients; ?></div>
+        <div class="client-summary-cell">
+            <span class="client-summary-icon" aria-hidden="true"><i class="fas fa-user-check"></i></span>
+            <span class="client-summary-copy">
+                <span class="client-summary-label">Active Clients</span>
+                <strong class="client-summary-value"><?php echo $activeClients; ?></strong>
+            </span>
         </div>
-        <div class="stat-card-modern">
-            <i class="fas fa-hourglass-half stat-icon"></i>
-            <div class="stat-label">Pending</div>
-            <div class="stat-number"><?php echo $pendingClients; ?></div>
+        <div class="client-summary-cell">
+            <span class="client-summary-icon" aria-hidden="true"><i class="fas fa-hourglass-half"></i></span>
+            <span class="client-summary-copy">
+                <span class="client-summary-label">Pending</span>
+                <strong class="client-summary-value"><?php echo $pendingClients; ?></strong>
+            </span>
         </div>
     </div>
 
-    <!-- Main Content Card -->
-    <div class="main-card">
+    <section class="client-directory-workspace" aria-label="Client directory workspace">
+        <!-- Client directory -->
+        <div class="main-card">
         <div class="card-header-modern">
             <h5>
                 <i class="fas fa-list me-2"></i>
-                Client Directory
+                Client Data
             </h5>
             <div>
-                <span class="text-muted small">Showing <?php echo count($clientRows); ?> clients</span>
+                <span class="text-muted small">
+                    Showing <?php echo $clientPageStart; ?>&ndash;<?php echo $clientPageEnd; ?> of <?php echo $totalFilteredClients; ?> clients
+                </span>
             </div>
         </div>
 
@@ -6221,19 +6945,25 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                     <i class="fas fa-search" aria-hidden="true"></i>
                     <input type="search" id="searchInput" placeholder="Search by name, email, or contact person" value="<?php echo htmlspecialchars($search); ?>" autocomplete="off">
                 </div>
-                <div class="filter-input">
-                    <label class="visually-hidden" for="statusFilter">Filter clients by status</label>
-                    <i class="fas fa-filter" aria-hidden="true"></i>
-                    <select id="statusFilter">
-                        <option value="">All statuses</option>
-                        <option value="active" <?php echo $statusFilter == 'active' ? 'selected' : ''; ?>>Active</option>
-                        <option value="inactive" <?php echo $statusFilter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                        <option value="pending" <?php echo $statusFilter == 'pending' ? 'selected' : ''; ?>>Pending</option>
-                    </select>
+                <div class="client-filter-actions">
+                    <div class="filter-input">
+                        <label class="visually-hidden" for="statusFilter">Filter clients by status</label>
+                        <i class="fas fa-filter" aria-hidden="true"></i>
+                        <select id="statusFilter">
+                            <option value="">All statuses</option>
+                            <option value="active" <?php echo $statusFilter == 'active' ? 'selected' : ''; ?>>Active</option>
+                            <option value="inactive" <?php echo $statusFilter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                            <option value="pending" <?php echo $statusFilter == 'pending' ? 'selected' : ''; ?>>Pending</option>
+                        </select>
+                    </div>
+                    <button type="button" class="btn-add-client-toolbar" data-bs-toggle="modal" data-bs-target="#addClientModal">
+                        <i class="fas fa-plus" aria-hidden="true"></i>
+                        <span>Add New</span>
+                    </button>
                 </div>
             </div>
         </div>
-        
+
         <!-- Clients Table -->
         <div class="table-container">
             <?php if(count($clientRows) > 0): ?>
@@ -6242,6 +6972,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                     <tr>
                         <th>Client</th>
                         <th>Contact Person</th>
+                        <th>Contact Info</th>
                         <th>Status</th>
                         <th>Projects</th>
                         <th>Actions</th>
@@ -6253,13 +6984,23 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     $clientId = (int) ($client['id'] ?? 0);
     $clientProjects = $projectsByClient[(int) $client['id']] ?? [];
     $projectPanelId = 'clientProjectsPanel' . $clientId;
+    $clientEmail = trim((string) ($client['email'] ?? ''));
     ?>
     <tr class="client-row <?php echo $clientProjects ? 'has-projects' : ''; ?>" <?php echo $clientProjects ? 'data-project-row="' . $projectPanelId . '"' : ''; ?>>
         <td>
             <div class="client-name"><?php echo htmlspecialchars($client['name']); ?></div>
-            <div class="client-email"><?php echo htmlspecialchars($client['email']); ?></div>
         </td>
         <td><?php echo htmlspecialchars($client['contact_person'] ?: '—'); ?></td>
+        <td>
+            <?php if($clientEmail !== ''): ?>
+                <a class="client-contact-link" href="mailto:<?php echo htmlspecialchars($clientEmail); ?>">
+                    <i class="fas fa-envelope" aria-hidden="true"></i>
+                    <span><?php echo htmlspecialchars($clientEmail); ?></span>
+                </a>
+            <?php else: ?>
+                <span class="client-contact-empty">Not provided</span>
+            <?php endif; ?>
+        </td>
         <td>
             <span class="badge-status <?php echo $client['status']; ?>">
                 <?php echo ucfirst($client['status']); ?>
@@ -6280,24 +7021,35 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
         </td>
         <td>
             <div class="action-buttons">
-                <button class="btn-icon view" onclick="viewClient(<?php echo $client['id']; ?>)">
-                    <i class="fas fa-eye"></i>
-                </button>
-                <button class="btn-icon edit" onclick="editClient(<?php echo htmlspecialchars(json_encode($client)); ?>)">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn-icon add-project" title="Add project" onclick="openAddProjectModal(<?php echo (int) $client['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $client['name'])); ?>)">
-                    <i class="fas fa-folder-plus"></i>
-                </button>
-                <button class="btn-icon delete" onclick="openDeleteClientModal(<?php echo (int) $client['id']; ?>, <?php echo htmlspecialchars(json_encode($client['name'])); ?>)">
-                    <i class="fas fa-trash"></i>
-                </button>
+                <details class="client-action-menu">
+                    <summary aria-label="Open actions for <?php echo htmlspecialchars((string) $client['name']); ?>" title="Client actions">
+                        <i class="fas fa-ellipsis-v" aria-hidden="true"></i>
+                    </summary>
+                    <div class="client-action-menu__panel">
+                        <button type="button" class="client-action-menu__item" onclick="viewClient(<?php echo $client['id']; ?>)">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                            <span>View details</span>
+                        </button>
+                        <button type="button" class="client-action-menu__item" onclick="editClient(<?php echo htmlspecialchars(json_encode($client)); ?>)">
+                            <i class="fas fa-edit" aria-hidden="true"></i>
+                            <span>Edit client</span>
+                        </button>
+                        <button type="button" class="client-action-menu__item" onclick="openAddProjectModal(<?php echo (int) $client['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $client['name'])); ?>)">
+                            <i class="fas fa-folder-plus" aria-hidden="true"></i>
+                            <span>Add project</span>
+                        </button>
+                        <button type="button" class="client-action-menu__item client-action-menu__item--danger" onclick="openDeleteClientModal(<?php echo (int) $client['id']; ?>, <?php echo htmlspecialchars(json_encode($client['name'])); ?>)">
+                            <i class="fas fa-trash" aria-hidden="true"></i>
+                            <span>Delete client</span>
+                        </button>
+                    </div>
+                </details>
             </div>
         </td>
     </tr>
     <?php if($clientProjects): ?>
     <tr class="project-expansion-row" id="<?php echo $projectPanelId; ?>">
-        <td colspan="5">
+        <td colspan="6">
             <div class="project-expansion-shell">
                 <div class="project-expansion-inner">
                     <div class="project-expansion-list">
@@ -6373,8 +7125,71 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
             </div>
             <?php endif; ?>
         </div>
+        <?php if ($totalFilteredClients > 0): ?>
+        <div class="client-pagination" aria-label="Client directory pagination">
+            <div class="client-pagination__size">
+                <label class="visually-hidden" for="clientPageSize">Clients per page</label>
+                <select id="clientPageSize" aria-label="Clients per page">
+                    <?php foreach ($allowedClientPageSizes as $pageSizeOption): ?>
+                        <option value="<?php echo $pageSizeOption; ?>" <?php echo $clientPageSize === $pageSizeOption ? 'selected' : ''; ?>>
+                            <?php echo $pageSizeOption; ?> items
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <nav class="client-pagination__pages" aria-label="Client pages">
+                <?php $previousRenderedPage = 0; ?>
+                <?php foreach ($clientPaginationPages as $pageNumber): ?>
+                    <?php if ($previousRenderedPage > 0 && $pageNumber > $previousRenderedPage + 1): ?>
+                        <span class="client-pagination__ellipsis" aria-hidden="true">&hellip;</span>
+                    <?php endif; ?>
+                    <?php if ($pageNumber > $clientTotalPages): ?>
+                    <span
+                        class="client-pagination__page is-disabled"
+                        aria-disabled="true"
+                    ><?php echo $pageNumber; ?></span>
+                    <?php else: ?>
+                    <a
+                        class="client-pagination__page<?php echo $pageNumber === $clientCurrentPage ? ' is-current' : ''; ?>"
+                        href="<?php echo htmlspecialchars($buildClientPageUrl($pageNumber)); ?>"
+                        <?php echo $pageNumber === $clientCurrentPage ? 'aria-current="page"' : ''; ?>
+                    ><?php echo $pageNumber; ?></a>
+                    <?php endif; ?>
+                    <?php $previousRenderedPage = $pageNumber; ?>
+                <?php endforeach; ?>
+            </nav>
+
+            <div class="client-pagination__steps">
+                <?php if ($clientCurrentPage > 1): ?>
+                    <a class="client-pagination__step" href="<?php echo htmlspecialchars($buildClientPageUrl($clientCurrentPage - 1)); ?>">
+                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                        <span>Previous</span>
+                    </a>
+                <?php else: ?>
+                    <span class="client-pagination__step is-disabled" aria-disabled="true">
+                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                        <span>Previous</span>
+                    </span>
+                <?php endif; ?>
+
+                <?php if ($clientCurrentPage < $clientTotalPages): ?>
+                    <a class="client-pagination__step" href="<?php echo htmlspecialchars($buildClientPageUrl($clientCurrentPage + 1)); ?>">
+                        <span>Next</span>
+                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                    </a>
+                <?php else: ?>
+                    <span class="client-pagination__step is-disabled" aria-disabled="true">
+                        <span>Next</span>
+                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                    </span>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
         </div>
     </div>
+    </section>
 </div>
 
 <!-- Add Client Modal (same content as before) -->
@@ -7119,7 +7934,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                 <h5 class="modal-title">
                     <i class="fas fa-edit me-2"></i> Edit Client
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form method="POST" data-app-loading data-loading-title="Updating client" data-loading-text="Please wait while the client details are updated.">
                 <input type="hidden" name="id" id="edit_id">
@@ -8107,10 +8922,12 @@ document.querySelectorAll('#addClientModal, #addProjectModal').forEach(modal => 
 function applyFilters() {
     const search = document.getElementById('searchInput')?.value.trim() || '';
     const status = document.getElementById('statusFilter')?.value || '';
+    const pageSize = document.getElementById('clientPageSize')?.value || '';
     const params = new URLSearchParams();
 
     if (search) params.set('search', search);
     if (status) params.set('status', status);
+    if (pageSize) params.set('per_page', pageSize);
 
     const query = params.toString();
     window.location.href = 'clients.php' + (query ? '?' + query : '');
@@ -9504,6 +10321,13 @@ function setProjectRowExpanded(panelId, shouldExpand) {
 }
 
 document.addEventListener('click', function (event) {
+    const clickedActionMenu = event.target.closest('.client-action-menu');
+    document.querySelectorAll('.client-action-menu[open]').forEach(function (menu) {
+        if (menu !== clickedActionMenu || event.target.closest('.client-action-menu__item')) {
+            menu.removeAttribute('open');
+        }
+    });
+
     const toggle = event.target.closest('[data-project-toggle]');
     if (toggle) {
         event.stopPropagation();
@@ -10838,32 +11662,45 @@ if (addClientModalElement && addClientForm) {
             return;
         }
 
-        draftList.innerHTML = drafts.map((draft) => {
+        const rows = drafts.map((draft) => {
             const companyName = String(draft.data?.name || '').trim();
             const contactPerson = String(draft.data?.contact_person || '').trim();
             const projectName = String(draft.data?.project_name || '').trim();
-            const summaryBits = [
-                companyName ? 'Company: ' + escapeHtml(companyName) : '',
-                contactPerson ? 'Contact: ' + escapeHtml(contactPerson) : '',
-                projectName ? 'Project: ' + escapeHtml(projectName) : ''
-            ].filter(Boolean);
+            const savedAt = formatDraftDate(draft.savedAt).replace(/^Saved\s+/i, '');
 
             return `
-                <div class="client-draft-card" data-draft-id="${escapeHtml(draft.id)}">
-                    <div class="client-draft-card__meta">
+                <div class="client-draft-card" data-draft-id="${escapeHtml(draft.id)}" role="row">
+                    <div class="client-draft-card__identity" role="cell">
+                        <span class="client-draft-card__icon" aria-hidden="true">
+                            <i class="fas fa-file-alt"></i>
+                        </span>
                         <div class="client-draft-card__title">${companyName ? escapeHtml(companyName) : 'Untitled draft'}</div>
-                        <div class="client-draft-card__subtitle">${escapeHtml(formatDraftDate(draft.savedAt))}</div>
-                        <div class="client-draft-card__summary">
-                            ${summaryBits.map((item) => `<span>${item}</span>`).join('')}
-                        </div>
                     </div>
-                    <div class="client-draft-card__actions">
+                    <div class="client-draft-card__cell" data-label="Contact" role="cell">
+                        ${contactPerson ? escapeHtml(contactPerson) : '<span class="client-draft-card__empty">Not provided</span>'}
+                    </div>
+                    <div class="client-draft-card__cell" data-label="Project" role="cell">
+                        ${projectName ? escapeHtml(projectName) : '<span class="client-draft-card__empty">Not added yet</span>'}
+                    </div>
+                    <div class="client-draft-card__subtitle" data-label="Saved" role="cell">${escapeHtml(savedAt)}</div>
+                    <div class="client-draft-card__actions" role="cell">
                         <button type="button" class="btn btn-outline-primary btn-sm" data-draft-action="continue">Continue</button>
                         <button type="button" class="btn btn-outline-danger btn-sm" data-draft-action="delete">Delete</button>
                     </div>
                 </div>
             `;
         }).join('');
+
+        draftList.innerHTML = `
+            <div class="client-draft-table__head" role="row">
+                <span role="columnheader">Draft</span>
+                <span role="columnheader">Contact</span>
+                <span role="columnheader">Project</span>
+                <span role="columnheader">Saved</span>
+                <span role="columnheader">Actions</span>
+            </div>
+            ${rows}
+        `;
     }
 
     function showClientTab(tabName) {
@@ -11830,6 +12667,7 @@ if (addClientModalElement && addClientForm) {
 
 const clientSearchInput = document.getElementById('searchInput');
 const clientStatusFilter = document.getElementById('statusFilter');
+const clientPageSizeSelect = document.getElementById('clientPageSize');
 let clientFilterTimer = null;
 
 clientSearchInput?.addEventListener('input', function() {
@@ -11848,6 +12686,13 @@ clientSearchInput?.addEventListener('keydown', function(event) {
 clientStatusFilter?.addEventListener('change', function() {
     window.clearTimeout(clientFilterTimer);
     applyFilters();
+});
+
+clientPageSizeSelect?.addEventListener('change', function() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('per_page', this.value);
+    params.delete('page');
+    window.location.href = 'clients.php?' + params.toString();
 });
 
 document.addEventListener('DOMContentLoaded', function() {
