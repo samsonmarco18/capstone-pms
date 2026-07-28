@@ -2249,7 +2249,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     throw new RuntimeException('Unable to prepare the QA decision.');
                 }
                 $passQaTask->bind_param("iii", $userId, $userId, $taskId);
-                if (!$passQaTask->execute() || $passQaTask->affected_rows !== 1) {
+                $passExecuted = $passQaTask->execute();
+                $passAffectedRows = (int) ($conn->affected_rows ?? 0);
+                if (!$passExecuted || $passAffectedRows !== 1) {
                     throw new RuntimeException('Unable to save the QA pass decision.');
                 }
                 $passQaTask->close();
@@ -2413,7 +2415,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     throw new RuntimeException('Unable to prepare the task revision assignment.');
                 }
                 $routeRevision->bind_param("iiii", $firstDeveloperId, $firstSulId, $userId, $taskId);
-                if (!$routeRevision->execute() || $routeRevision->affected_rows !== 1) {
+                $revisionExecuted = $routeRevision->execute();
+                $revisionAffectedRows = (int) ($conn->affected_rows ?? 0);
+                if (!$revisionExecuted || $revisionAffectedRows !== 1) {
                     throw new RuntimeException('Unable to assign the first revision owner.');
                 }
                 $routeRevision->close();
