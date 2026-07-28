@@ -576,37 +576,58 @@ include '../../includes/navbar.php';
 .summary-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0;
-    margin: 0;
-    border-bottom: 1px solid var(--gray-200);
+    gap: 0.85rem;
+    margin: 0 0 1.5rem;
+    padding: 0;
+    background: transparent;
+    border: 0;
 }
 
 .release-metric {
+    position: relative;
     min-width: 0;
-    padding: 1.05rem 1.35rem;
-    border: 0;
-    border-right: 1px solid var(--gray-200);
-    border-radius: 0;
-    background: #fbfdff;
-    box-shadow: none;
+    min-height: 76px;
+    padding: 0.9rem 3.75rem 0.85rem 1rem;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 12px;
+    background: linear-gradient(135deg, #ffffff 0%, #fbfdff 58%, #edf9fc 100%);
+    box-shadow: 0 7px 0 rgba(31, 99, 146, 0.08), 0 0 18px rgba(34, 211, 238, 0.05);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.release-metric:last-child {
-    border-right: 0;
+.release-metric:hover {
+    border-color: rgba(31, 99, 146, 0.2);
+    box-shadow: 0 7px 0 rgba(31, 99, 146, 0.08), 0 0 18px rgba(34, 211, 238, 0.08);
+}
+
+.release-metric-icon {
+    position: absolute;
+    top: 0.8rem;
+    right: 0.95rem;
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: #e9f3f8;
+    color: var(--theme-primary);
+    font-size: 0.95rem;
 }
 
 .summary-label {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--gray-500);
-    font-weight: 700;
-    margin-bottom: 0.35rem;
+    letter-spacing: 0.55px;
+    color: var(--gray-600);
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    line-height: 1.2;
 }
 
 .summary-value {
-    font-size: 1.55rem;
-    font-weight: 700;
+    font-size: 1.4rem;
+    font-weight: 600;
     color: var(--theme-primary);
     line-height: 1;
 }
@@ -1013,8 +1034,26 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .release-metric {
-    background: #081827;
+    background: linear-gradient(135deg, #0a1b2c 0%, #081827 100%);
     border-color: rgba(31, 99, 146, 0.24);
+    box-shadow: 0 7px 0 rgba(2, 11, 20, 0.5), 0 0 18px rgba(34, 211, 238, 0.04);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-grid {
+    background: transparent;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .release-metric-icon {
+    background: rgba(31, 99, 146, 0.2);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-label {
+    color: #90aeca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-value {
+    color: #8fd3ff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-list-head,
@@ -1146,14 +1185,7 @@ include '../../includes/navbar.php';
 @media (max-width: 992px) {
     .summary-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .release-metric:nth-child(2) {
-        border-right: 0;
-    }
-
-    .release-metric:nth-child(-n + 2) {
-        border-bottom: 1px solid var(--gray-200);
+        gap: 0.7rem;
     }
 
     .feature-list-head,
@@ -1170,6 +1202,9 @@ include '../../includes/navbar.php';
 
     .summary-grid {
         grid-template-columns: 1fr;
+        gap: 0.55rem;
+        margin-bottom: 1.25rem;
+        padding: 0;
     }
 
     .release-filter-grid {
@@ -1182,14 +1217,16 @@ include '../../includes/navbar.php';
         flex-wrap: wrap;
     }
 
-    .release-metric,
-    .release-metric:nth-child(2) {
-        border-right: 0;
-        border-bottom: 1px solid var(--gray-200);
+    .release-metric {
+        min-height: 68px;
+        padding: 0.75rem 3.5rem 0.75rem 0.85rem;
     }
 
-    .release-metric:last-child {
-        border-bottom: 0;
+    .release-metric-icon {
+        top: 0.7rem;
+        right: 0.8rem;
+        width: 34px;
+        height: 34px;
     }
 
     .checklist-body {
@@ -1241,6 +1278,35 @@ include '../../includes/navbar.php';
         <h2 class="mb-1"><i class="fas fa-bullhorn me-2"></i>Release Status</h2>
         <p class="mb-0">Track approved features through final release.</p>
     </div>
+
+    <?php if ($selectedProject): ?>
+    <div class="summary-grid" aria-label="Release summary">
+        <div class="release-metric">
+            <span class="release-metric-icon" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
+            <div class="summary-label">Completed</div>
+            <div class="summary-value"><?php echo $projectCompleteCount; ?></div>
+            <div class="summary-sub">Checklist items finished</div>
+        </div>
+        <div class="release-metric">
+            <span class="release-metric-icon" aria-hidden="true"><i class="fas fa-hourglass-half"></i></span>
+            <div class="summary-label">Pending</div>
+            <div class="summary-value"><?php echo max(0, $projectTotalCount - $projectCompleteCount); ?></div>
+            <div class="summary-sub">Still waiting for release</div>
+        </div>
+        <div class="release-metric">
+            <span class="release-metric-icon" aria-hidden="true"><i class="fas fa-list-check"></i></span>
+            <div class="summary-label">Additional Requirements</div>
+            <div class="summary-value"><?php echo $projectAdditionalCount; ?></div>
+            <div class="summary-sub">Architect enhancement items</div>
+        </div>
+        <div class="release-metric">
+            <span class="release-metric-icon" aria-hidden="true"><i class="fas fa-chart-line"></i></span>
+            <div class="summary-label">Checklist Progress</div>
+            <div class="summary-value"><?php echo $projectProgress; ?>%</div>
+            <div class="summary-sub">Architect checklist completion</div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <section class="release-workspace">
         <form method="GET" class="filter-card">
@@ -1337,29 +1403,6 @@ include '../../includes/navbar.php';
         </form>
 
     <?php if ($selectedProject): ?>
-        <div class="summary-grid">
-            <div class="release-metric">
-                <div class="summary-label">Completed</div>
-                <div class="summary-value"><?php echo $projectCompleteCount; ?></div>
-                <div class="summary-sub">Checklist items finished</div>
-            </div>
-            <div class="release-metric">
-                <div class="summary-label">Pending</div>
-                <div class="summary-value"><?php echo max(0, $projectTotalCount - $projectCompleteCount); ?></div>
-                <div class="summary-sub">Still waiting for release</div>
-            </div>
-            <div class="release-metric">
-                <div class="summary-label">Additional Requirements</div>
-                <div class="summary-value"><?php echo $projectAdditionalCount; ?></div>
-                <div class="summary-sub">Architect enhancement items</div>
-            </div>
-            <div class="release-metric">
-                <div class="summary-label">Checklist Progress</div>
-                <div class="summary-value"><?php echo $projectProgress; ?>%</div>
-                <div class="summary-sub">Architect checklist completion</div>
-            </div>
-        </div>
-
         <div class="checklist-card" id="insight-task-problems">
             <?php if (
                 ($selectedProjectReceipt && (int) ($selectedProjectReceipt['receipt_id'] ?? 0) > 0)

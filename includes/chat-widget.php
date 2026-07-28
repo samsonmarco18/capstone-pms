@@ -82,15 +82,48 @@ if (
                     return 0;
                 }
             };
+            $adminPasswordRequests = 0;
+            $adminTechnologyCount = 0;
+            $adminUserCount = 0;
+            $adminSecurityReports = 0;
+            $adminOverviewItem = null;
+            if ($summaryRole === 'admin') {
+                $adminPasswordRequests = dbTableExists($summaryConn, 'password_reset_requests')
+                    ? $summaryCount("SELECT COUNT(*) AS count FROM password_reset_requests WHERE status = 'pending'")
+                    : 0;
+                $adminTechnologyCount = $summaryCount("SELECT COUNT(*) AS count FROM technologies");
+                $adminUserCount = $summaryCount("SELECT COUNT(*) AS count FROM users");
+                $adminSecurityReports = $summaryCount("SELECT COUNT(*) AS count FROM audit_logs WHERE action LIKE '%security%'");
+                if ($adminPasswordRequests > 0) {
+                    $adminOverviewItem = [
+                        'icon' => 'fa-heart-pulse',
+                        'title' => 'Review password requests',
+                        'meta' => "{$adminPasswordRequests} pending account recovery",
+                        'action_url' => BASE_URL . 'modules/admin/password-reset-requests.php',
+                    ];
+                } elseif ($adminSecurityReports > 0) {
+                    $adminOverviewItem = [
+                        'icon' => 'fa-shield-halved',
+                        'title' => 'Review security reports',
+                        'meta' => "{$adminSecurityReports} audit-backed security events",
+                        'action_url' => BASE_URL . 'modules/admin/audit-log.php?search=security#auditDirectory',
+                    ];
+                } else {
+                    $adminOverviewItem = [
+                        'icon' => 'fa-users',
+                        'title' => 'Open user directory',
+                        'meta' => "{$adminUserCount} users · Manage roles and access",
+                        'action_url' => BASE_URL . 'modules/admin/user-management.php',
+                    ];
+                }
+            }
             $roleSummaries = [
                 'admin' => [
-                    'title' => 'Your admin dashboard snapshot',
-                    'metrics' => [
-                        ['icon' => 'fa-users', 'label' => 'Active Users', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM users WHERE status = 'active'"), 'meta' => 'Enabled accounts'],
-                        ['icon' => 'fa-diagram-project', 'label' => 'Active Projects', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM projects WHERE status NOT IN ('completed','cancelled')"), 'meta' => 'Across the platform'],
-                        ['icon' => 'fa-key', 'label' => 'Pending Resets', 'value' => dbTableExists($summaryConn, 'password_reset_requests') ? $summaryCount("SELECT COUNT(*) AS count FROM password_reset_requests WHERE status = 'pending'") : 0, 'meta' => 'Awaiting review'],
-                        ['icon' => 'fa-shield-halved', 'label' => 'Security Events', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM audit_logs WHERE action LIKE '%security%'"), 'meta' => 'Recorded events'],
-                    ],
+                    'variant' => 'compact',
+                    'title' => 'Live Overview',
+                    'intro' => "{$adminPasswordRequests} password requests, {$adminTechnologyCount} services, {$adminUserCount} users, and {$adminSecurityReports} security reports.",
+                    'item' => $adminOverviewItem,
+                    'metrics' => [],
                 ],
                 'architect' => [
                     'title' => 'Your architect dashboard snapshot',
@@ -129,6 +162,60 @@ if (
                     ],
                 ],
             ];
+            $compactMetricIndexesByRole = [
+                'architect' => [1, 2, 3],
+                'qa' => [0, 1, 3],
+                'expert' => [0, 1, 3],
+                'developer' => [1, 2, 3],
+            ];
+            foreach ($compactMetricIndexesByRole as $compactRole => $metricIndexes) {
+                $compactMetrics = array_values(array_filter(array_map(
+                    static fn(int $index): ?array => $roleSummaries[$compactRole]['metrics'][$index] ?? null,
+                    $metricIndexes
+                )));
+                $introParts = array_map(
+                    static fn(array $metric): string => (int) ($metric['value'] ?? 0)
+                        . ' '
+                        . strtolower((string) ($metric['label'] ?? 'items')),
+                    $compactMetrics
+                );
+                $lastIntroPart = array_pop($introParts);
+                $compactIntro = $lastIntroPart === null
+                    ? 'No dashboard items need attention.'
+                    : ($introParts === []
+                        ? $lastIntroPart . '.'
+                        : implode(', ', $introParts) . ', and ' . $lastIntroPart . '.');
+                $primaryMetric = null;
+                foreach ($compactMetrics as $metric) {
+                    if (!empty($metric['overdue']) && (int) ($metric['value'] ?? 0) > 0) {
+                        $primaryMetric = $metric;
+                        break;
+                    }
+                }
+                if ($primaryMetric === null) {
+                    foreach ($compactMetrics as $metric) {
+                        if ((int) ($metric['value'] ?? 0) > 0) {
+                            $primaryMetric = $metric;
+                            break;
+                        }
+                    }
+                }
+                $primaryMetric ??= $compactMetrics[0] ?? [
+                    'icon' => 'fa-circle-check',
+                    'label' => 'All clear',
+                    'value' => 0,
+                    'meta' => 'No action needed',
+                ];
+                $roleSummaries[$compactRole]['variant'] = 'compact';
+                $roleSummaries[$compactRole]['title'] = 'Live Overview';
+                $roleSummaries[$compactRole]['intro'] = $compactIntro;
+                $roleSummaries[$compactRole]['item'] = [
+                    'icon' => (string) ($primaryMetric['icon'] ?? 'fa-circle-info'),
+                    'title' => (string) ($primaryMetric['label'] ?? 'Current status'),
+                    'meta' => (int) ($primaryMetric['value'] ?? 0) . ' · ' . (string) ($primaryMetric['meta'] ?? ''),
+                    'action_url' => '',
+                ];
+            }
             $evortixRoleDashboardSummary = $roleSummaries[$summaryRole] ?? null;
             if ($summaryRole === 'architect' && $evortixRoleDashboardSummary) {
                 $planningResult = $summaryConn->query("
@@ -147,22 +234,18 @@ if (
                     $planningDeadline = !empty($planningProject['timeline_end'])
                         ? date('M d, Y', strtotime((string) $planningProject['timeline_end']))
                         : 'No target deadline';
-                    $evortixRoleDashboardSummary['suggestion'] = [
-                        'eyebrow' => 'Project planning suggestion',
-                        'title' => (string) $planningProject['name'] . ' needs architecture planning',
-                        'message' => ($planningStarted
-                            ? 'Continue the existing plan and validate features, technology, allocation, documents, and roadmap.'
-                            : 'Start with the Sales intake, validate requested features, then prepare the technical plan.')
-                            . ' Target: ' . $planningDeadline . '.',
-                        'action_label' => $planningStarted ? 'Continue planning' : 'Start project review',
+                    $evortixRoleDashboardSummary['item'] = [
+                        'icon' => 'fa-diagram-project',
+                        'title' => ($planningStarted ? 'Continue: ' : 'Start: ') . (string) $planningProject['name'],
+                        'meta' => ($planningStarted ? 'Planning underway' : 'Awaiting architecture review')
+                            . ' · Target ' . $planningDeadline,
                         'action_url' => BASE_URL . 'modules/architect/project-review.php?id=' . (int) $planningProject['id'],
                     ];
                 } else {
-                    $evortixRoleDashboardSummary['suggestion'] = [
-                        'eyebrow' => 'Project planning suggestion',
-                        'title' => 'No project is waiting for architecture planning',
-                        'message' => 'Your current planning intake is clear.',
-                        'action_label' => '',
+                    $evortixRoleDashboardSummary['item'] = [
+                        'icon' => 'fa-circle-check',
+                        'title' => 'Architecture queue clear',
+                        'meta' => 'No project is waiting for planning',
                         'action_url' => '',
                     ];
                 }
@@ -262,8 +345,19 @@ document.addEventListener('DOMContentLoaded', () => {
 .evortix-role-planning-copy { margin:.25rem 0 0; color:#426f8c; font-size:.66rem; line-height:1.45 }
 .evortix-role-planning-action { display:inline-flex; align-items:center; gap:.35rem; margin-top:.5rem; padding:.42rem .65rem; border-radius:9px; background:#137eb3; color:#fff !important; font-size:.67rem; font-weight:800; text-decoration:none }
 .evortix-role-summary-metric.is-overdue .evortix-role-summary-value,.evortix-role-summary-metric.is-overdue i { color:#c2413b }
+.chat-bot-speech.evortix-role-dashboard-summary.is-compact { width:min(470px,calc(100vw - 190px)); min-width:390px; padding:.95rem 1rem 1rem }
+.evortix-role-summary-head.is-compact { align-items:center }
+.chat-bot-speech .evortix-role-summary-head.is-compact .evortix-role-summary-title { font-size:1rem }
+.evortix-role-summary-intro.is-compact { margin:.65rem 0 .75rem; font-size:.73rem; line-height:1.45 }
+.evortix-role-summary-item { align-items:center; background:rgba(255,255,255,.82); border:1px solid rgba(8,123,185,.16); border-radius:13px; color:inherit; display:grid; gap:.68rem; grid-template-columns:32px minmax(0,1fr); padding:.68rem .78rem; text-decoration:none; transition:transform .18s ease,background .18s ease,border-color .18s ease }
+.evortix-role-summary-item:hover { background:#fff; border-color:rgba(8,123,185,.3); color:inherit; transform:translateY(-1px) }
+.chat-bot-speech .evortix-role-summary-item-icon { align-items:center; align-self:center; background:#e4f4fb; border:1px solid rgba(8,123,185,.14); border-radius:9px; color:#157baa; display:inline-flex; font-size:.78rem; height:32px; justify-content:center; margin:0; padding:0; position:static; transform:none; width:32px }
+.chat-bot-speech .evortix-role-summary-item-icon i { color:inherit; font-size:.78rem; line-height:1; margin:0; position:static; transform:none }
+.evortix-role-summary-item-copy { min-width:0 }
+.evortix-role-summary-item-title { color:#083a5d; display:block; font-size:.75rem; font-weight:850; line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.evortix-role-summary-item-meta { color:#5b7f97; display:block; font-size:.65rem; font-weight:700; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 @keyframes evortixRoleSummaryReveal { from { opacity:0; transform:translateY(-50%) translateX(18px) scale(.94) } to { opacity:1; transform:translateY(-50%) translateX(0) scale(1) } }
-@media(max-width:640px){.chat-bot-speech.evortix-role-dashboard-summary{right:calc(100% + 9px);width:min(270px,calc(100vw - 145px));min-width:220px}.evortix-role-summary-grid{grid-template-columns:1fr;max-height:238px;overflow-y:auto}}
+@media(max-width:640px){.chat-bot-speech.evortix-role-dashboard-summary,.chat-bot-speech.evortix-role-dashboard-summary.is-compact{right:calc(100% + 9px);width:min(270px,calc(100vw - 145px));min-width:220px}.evortix-role-summary-grid{grid-template-columns:1fr;max-height:238px;overflow-y:auto}.evortix-role-summary-item-title,.evortix-role-summary-item-meta{white-space:normal}}
 @keyframes evortixGuidancePulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
     50% { box-shadow: 0 0 0 10px rgba(14, 165, 233, .16); }
@@ -414,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 
 <button id="chat-widget-minimized" class="chat-widget-minimized" type="button" title="Open chat" style="display: block;" onclick="document.getElementById('chat-widget').style.display='flex'; this.style.display='none';">
-    <i class="fas fa-comments"></i>
+    <span class="chat-launcher-glyph" aria-hidden="true"></span>
     <span id="chatUnreadBadge" class="chat-unread-badge d-none" aria-live="polite">0</span>
 </button>
 
@@ -726,12 +820,22 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="evortix-role-summary-label">${escapeSummary(metric.label)}</div>
                     <div class="evortix-role-summary-meta">${escapeSummary(metric.meta)}</div>
                 </div>`).join('');
-            speech.className = 'chat-bot-speech evortix-role-dashboard-summary';
+            const isCompactSummary = evortixRoleDashboardSummary.variant === 'compact';
+            const compactItem = evortixRoleDashboardSummary.item || {};
+            const compactItemTag = compactItem.action_url ? 'a' : 'div';
+            const compactItemHref = compactItem.action_url ? ` href="${escapeSummary(compactItem.action_url)}"` : '';
+            speech.className = `chat-bot-speech evortix-role-dashboard-summary${isCompactSummary ? ' is-compact' : ''}`;
             speech.hidden = false;
             speech.style.pointerEvents = 'auto';
             speech.setAttribute('aria-hidden', 'false');
             speech.setAttribute('role', 'status');
-            speech.innerHTML = `
+            speech.innerHTML = isCompactSummary ? `
+                <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+                <div class="evortix-role-summary-intro is-compact">${escapeSummary(evortixRoleDashboardSummary.intro)}</div>
+                <${compactItemTag} class="evortix-role-summary-item"${compactItemHref}>
+                    <span class="evortix-role-summary-item-icon"><i class="fas ${escapeSummary(compactItem.icon || 'fa-circle-info')}"></i></span>
+                    <span class="evortix-role-summary-item-copy"><strong class="evortix-role-summary-item-title">${escapeSummary(compactItem.title)}</strong><span class="evortix-role-summary-item-meta">${escapeSummary(compactItem.meta)}</span></span>
+                </${compactItemTag}>` : `
                 <div class="evortix-role-summary-head"><div><div class="evortix-role-summary-eyebrow">Live overview</div><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong></div><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
                 <div class="evortix-role-summary-intro">Here is the information most relevant to your role right now.</div>
                 <div class="evortix-role-summary-grid">${metricMarkup}</div>
@@ -740,9 +844,11 @@ document.addEventListener('DOMContentLoaded', function () {
             window.chatBotFloatRobot?.setMode?.('standing');
             botFloat.hidden = false;
             botFloat.setAttribute('aria-hidden', 'false');
-            const metricSpeech = (evortixRoleDashboardSummary.metrics || [])
-                .map(metric => `${metric.label}: ${metric.value}. ${metric.meta || ''}`)
-                .join(' ');
+            const metricSpeech = isCompactSummary
+                ? `${evortixRoleDashboardSummary.intro || ''} ${compactItem.title || ''}. ${compactItem.meta || ''}`
+                : (evortixRoleDashboardSummary.metrics || [])
+                    .map(metric => `${metric.label}: ${metric.value}. ${metric.meta || ''}`)
+                    .join(' ');
             announceEvortixAudio(`${evortixRoleDashboardSummary.title}. ${metricSpeech}`);
             window.chatBotFloatRobot?.point?.('left', 6500);
             speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', () => {

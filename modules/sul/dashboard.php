@@ -2352,23 +2352,29 @@ document.addEventListener('DOMContentLoaded', () => {
         const float = document.getElementById('chat-bot-float');
         const speech = float?.querySelector('.chat-bot-speech');
         if (!float || !speech) return;
-        speech.className = 'chat-bot-speech evortix-dashboard-summary';
+        speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact';
         const metrics = [
-            ['fa-play', '<?php echo $inProgressTasks; ?>', 'In progress', 'Active delivery work', false],
-            ['fa-user-plus', '<?php echo $unassignedTasks; ?>', 'Unassigned', 'Waiting for an owner', false],
-            ['fa-triangle-exclamation', '<?php echo $overdueTasks; ?>', 'Overdue', 'Needs immediate attention', true],
-            ['fa-diagram-project', '<?php echo $activeProjects; ?>', 'Active projects', 'Current portfolio', false]
+            { icon: 'fa-play', value: <?php echo (int) $inProgressTasks; ?>, label: 'In progress', meta: 'Active delivery work' },
+            { icon: 'fa-user-plus', value: <?php echo (int) $unassignedTasks; ?>, label: 'Unassigned', meta: 'Waiting for an owner' },
+            { icon: 'fa-triangle-exclamation', value: <?php echo (int) $overdueTasks; ?>, label: 'Overdue', meta: 'Needs immediate attention', overdue: true },
+            { icon: 'fa-diagram-project', value: <?php echo (int) $activeProjects; ?>, label: 'Active projects', meta: 'Current portfolio' }
         ];
+        const primaryMetric = metrics.find(metric => metric.overdue && metric.value > 0)
+            || metrics.find(metric => metric.value > 0)
+            || metrics[0];
         speech.innerHTML = `
-            <div class="evortix-dashboard-summary-head"><div><div class="evortix-dashboard-summary-eyebrow">Live overview</div><strong class="evortix-dashboard-summary-title">Your SUL dashboard snapshot</strong></div><button type="button" class="evortix-dashboard-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
-            <div class="evortix-dashboard-summary-intro">Here is what your delivery summary is reporting right now.</div>
-            <div class="evortix-dashboard-summary-grid">${metrics.map(metric => `<div class="evortix-dashboard-summary-metric${metric[4] ? ' is-overdue' : ''}"><div class="evortix-dashboard-summary-metric-top"><i class="fas ${metric[0]}"></i><strong class="evortix-dashboard-summary-value">${metric[1]}</strong></div><div class="evortix-dashboard-summary-label">${metric[2]}</div><div class="evortix-dashboard-summary-meta">${metric[3]}</div></div>`).join('')}</div>`;
+            <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+            <div class="evortix-role-summary-intro is-compact"><?php echo (int) $inProgressTasks; ?> in progress, <?php echo (int) $unassignedTasks; ?> unassigned, and <?php echo (int) $overdueTasks; ?> overdue.</div>
+            <div class="evortix-role-summary-item">
+                <span class="evortix-role-summary-item-icon"><i class="fas ${primaryMetric.icon}"></i></span>
+                <span class="evortix-role-summary-item-copy"><strong class="evortix-role-summary-item-title">${primaryMetric.label}</strong><span class="evortix-role-summary-item-meta">${primaryMetric.value} · ${primaryMetric.meta}</span></span>
+            </div>`;
         window.chatBotWidgetRobot?.setMode?.('empty-bed');
         window.chatBotFloatRobot?.setMode?.('standing');
         float.hidden = false;
         float.setAttribute('aria-hidden', 'false');
         speech.setAttribute('aria-hidden', 'false');
-        speech.querySelector('.evortix-dashboard-summary-close')?.addEventListener('click', () => {
+        speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', () => {
             speech.hidden = true;
             speech.setAttribute('aria-hidden', 'true');
         });

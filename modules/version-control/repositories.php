@@ -311,9 +311,24 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .setup-note{font-size:.82rem;color:var(--gray-600);line-height:1.5;}
 .setup-chip-row{display:flex;flex-wrap:wrap;gap:.45rem;}
 .setup-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.38rem .8rem;border-radius:999px;border:1px solid var(--gray-200);background:#fff;font-size:.76rem;font-weight:600;}
-.clone-action-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin-bottom:1rem;}
-.clone-action-row .btn{border-radius:14px;padding:.72rem .95rem;font-weight:700;}
-.clone-feedback{display:none;font-size:.8rem;color:#047857;margin-bottom:.75rem;}
+.workspace-tools-card .card-head{padding:1rem 1.15rem;background:#fbfdff;}
+.workspace-tools-card .card-head>div>div:last-child{color:var(--gray-900);font-size:1rem;font-weight:700;}
+.workspace-tools-body{padding:1.1rem;}
+.repository-access-panel{border-radius:14px;padding:1rem;background:#fff;}
+.repository-access-heading{display:flex;align-items:center;gap:.7rem;margin-bottom:1rem;}
+.repository-access-heading-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:var(--theme-soft);color:var(--theme-primary);}
+.repository-access-heading h6{margin:0;color:var(--gray-900);font-size:.92rem;font-weight:700;}
+.repository-access-heading p{margin:.15rem 0 0;color:var(--gray-600);font-size:.72rem;}
+.clone-action-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:center;gap:.6rem;margin-bottom:1rem;}
+.clone-action-row form{margin:0;}
+.clone-action-row .btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;width:100%;min-height:42px;border-radius:10px;padding:.58rem .7rem;font-size:.76rem;font-weight:700;line-height:1.2;white-space:nowrap;box-shadow:none;}
+.clone-action-row .btn i{margin:0!important;}
+.repository-access-fields{display:grid;gap:.75rem;}
+.repository-access-field{min-width:0;}
+.repository-access-panel .repository-access-field .form-label{margin:0 0 .22rem;color:var(--gray-600);font-size:.64rem;letter-spacing:.055em;}
+.repository-access-panel .repository-access-field .form-control[readonly]{min-height:36px;padding:.42rem 0;border-width:0 0 1px;border-style:solid;border-color:var(--gray-300);border-radius:0;background:transparent;color:var(--gray-700);box-shadow:none;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:.72rem;text-overflow:ellipsis;}
+.repository-access-panel .setup-note{margin-top:1rem;padding:.65rem .75rem;border-left:3px solid var(--theme-primary);border-radius:8px;background:#eef6fb;color:#526678;}
+.clone-feedback{display:none;padding:.5rem .65rem;border-radius:8px;background:#ecfdf5;font-size:.76rem;color:#047857;margin-bottom:.75rem;}
 .clone-feedback.show{display:block;}
 .hook-box{background:#0d1117;color:#c9d1d9;border-radius:16px;padding:1rem;overflow:auto;font-size:.78rem;line-height:1.45;max-height:320px;}
 .vc-sidebar{position:sticky;top:1.25rem;}
@@ -433,6 +448,27 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .diff-bar {
     background: rgba(157, 182, 207, 0.18);
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workspace-tools-card .card-head,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repository-access-panel {
+    background:#071321 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repository-access-heading-icon {
+    background:rgba(31,99,146,.2);
+    color:#8fd3ff;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repository-access-heading h6,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .workspace-tools-card .card-head>div>div:last-child {
+    color:#d7e4f2;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repository-access-panel .repository-access-field .form-control[readonly] {
+    background:transparent !important;
+    border-color:rgba(138,210,255,.18) !important;
+    color:#b9ccdc !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .repository-access-panel .setup-note {
+    background:rgba(31,99,146,.14);
+    color:#9db6cf;
 }
 @media (max-width: 1199.98px){.vc-sidebar{position:static;}}
 @media (max-width: 575.98px){.clone-action-row{grid-template-columns:1fr;}}
@@ -779,18 +815,24 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 
         <div class="col-xl-4">
             <div class="vc-sidebar">
-            <div class="vc-card">
+            <div class="vc-card workspace-tools-card">
                 <div class="card-head">
                     <div>
                         <div class="section-kicker">Workspace Tools</div>
                         <div>Actions</div>
                     </div>
                 </div>
-                <div class="p-4">
+                <div class="workspace-tools-body">
                     <?php if ($selectedRepository): ?>
                     <div class="setup-stack mb-4">
-                        <div class="setup-panel">
-                            <h6 class="fw-semibold mb-3">Repository Access</h6>
+                        <div class="setup-panel repository-access-panel">
+                            <div class="repository-access-heading">
+                                <span class="repository-access-heading-icon" aria-hidden="true"><i class="fas fa-code-branch"></i></span>
+                                <div>
+                                    <h6>Repository Access</h6>
+                                    <p>Clone and workspace details</p>
+                                </div>
+                            </div>
                             <div id="cloneFeedback" class="clone-feedback">Clone URL copied.</div>
                             <div class="clone-action-row">
                                 <button type="button" class="btn btn-primary" onclick="copyCloneUrl('<?php echo htmlspecialchars($selectedRepositoryDisplayRemoteUrl, ENT_QUOTES); ?>')">
@@ -803,12 +845,12 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                     <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
                                     <input type="hidden" name="repository_id" value="<?php echo $selectedRepositoryId; ?>">
                                     <button type="submit" class="btn btn-outline-primary w-100">
-                                        <i class="fas fa-folder-plus me-2"></i>Create Working Folder
+                                        <i class="fas fa-folder-plus me-2"></i>Create Folder
                                     </button>
                                 </form>
                                 <?php else: ?>
                                 <button type="button" class="btn btn-outline-primary w-100" disabled title="Git operations not available on this server">
-                                    <i class="fas fa-folder-plus me-2"></i>Create Working Folder (Unavailable)
+                                    <i class="fas fa-folder-plus me-2"></i>Folder Unavailable
                                 </button>
                                 <?php endif; ?>
                                 <?php else: ?>
@@ -817,25 +859,27 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </a>
                                 <?php endif; ?>
                             </div>
-                            <div class="mb-2">
+                            <div class="repository-access-fields">
+                            <div class="repository-access-field">
                                 <label class="form-label">Working Folder</label>
                                 <input class="form-control" readonly value="<?php echo htmlspecialchars($selectedRepositoryWorkspacePath); ?>">
                             </div>
-                            <div class="mb-2">
+                            <div class="repository-access-field">
                                 <label class="form-label"><?php echo htmlspecialchars(vcGetRepositoryManagedCloneLabel()); ?></label>
                                 <input class="form-control" id="httpCloneUrlField" readonly value="<?php echo htmlspecialchars(vcResolveManagedRepositoryDisplayUrl((string) $selectedRepository['slug'])); ?>">
                             </div>
-                            <div class="mb-2">
+                            <div class="repository-access-field">
                                 <label class="form-label">Server Repository Path</label>
                                 <input class="form-control" readonly value="<?php echo htmlspecialchars($selectedRepositoryLocalClonePath); ?>">
                             </div>
-                            <div class="mb-2">
+                            <div class="repository-access-field">
                                 <label class="form-label"><?php echo htmlspecialchars(vcGetRepositoryExternalRemoteLabel()); ?></label>
                                 <input class="form-control" readonly value="<?php echo htmlspecialchars($selectedRepositoryExternalRemoteUrl); ?>" placeholder="<?php echo htmlspecialchars(vcGetRepositoryExternalRemotePlaceholder()); ?>">
                             </div>
-                            <div class="mb-2">
+                            <div class="repository-access-field">
                                 <label class="form-label">File Clone URL</label>
                                 <input class="form-control" readonly value="<?php echo htmlspecialchars($selectedRepositoryFileCloneUrl); ?>">
+                            </div>
                             </div>
                             <div class="setup-note">
                                 <?php if ($selectedRepositoryHasWorkspace): ?>

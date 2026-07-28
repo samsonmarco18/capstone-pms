@@ -831,20 +831,34 @@ include '../../includes/navbar.php';
 
 /* View Button */
 .btn-view {
+    align-items: center;
     background: rgba(31, 99, 146, 0.08);
     border: 1px solid rgba(31, 99, 146, 0.18);
     color: var(--theme-primary);
+    display: inline-flex;
+    gap: 0.35rem;
+    justify-content: center;
     padding: 0.38rem 0.85rem;
     border-radius: 10px;
     font-size: 0.72rem;
     font-weight: 600;
     text-decoration: none;
-    transition: background 0.2s ease, color 0.2s ease;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.btn-view:hover {
+.btn-view:hover,
+.btn-view:focus-visible {
     background: var(--theme-primary);
-    color: white;
+    border-color: var(--theme-primary);
+    box-shadow: 0 5px 12px rgba(31, 99, 146, 0.18);
+    color: #ffffff !important;
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+.btn-view:hover i,
+.btn-view:focus-visible i {
+    color: #ffffff !important;
 }
 
 /* Empty State */
@@ -903,12 +917,23 @@ include '../../includes/navbar.php';
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.18s ease, color 0.18s ease;
+    text-decoration: none;
+    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
-.agenda-open-btn:hover {
+.agenda-open-btn:hover,
+.agenda-open-btn:focus-visible {
     background: var(--theme-primary);
-    color: #ffffff;
+    border-color: var(--theme-primary);
+    box-shadow: 0 6px 14px rgba(31, 99, 146, 0.2);
+    color: #ffffff !important;
+    outline: none;
+    transform: translateY(-1px);
+}
+
+.agenda-open-btn:hover i,
+.agenda-open-btn:focus-visible i {
+    color: #ffffff !important;
 }
 
 .agenda-summary {
@@ -1993,6 +2018,18 @@ body.dark-mode .agenda-more-btn {
     background: rgba(31, 99, 146, 0.16);
     border-color: rgba(31, 99, 146, 0.3);
     box-shadow: none;
+}
+
+html[data-theme="dark"] .agenda-open-btn:hover,
+html[data-theme="dark"] .agenda-open-btn:focus-visible,
+body[data-theme="dark"] .agenda-open-btn:hover,
+body[data-theme="dark"] .agenda-open-btn:focus-visible,
+body.dark-mode .agenda-open-btn:hover,
+body.dark-mode .agenda-open-btn:focus-visible {
+    background: var(--theme-primary);
+    border-color: var(--theme-primary);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.24);
+    color: #ffffff !important;
 }
 
 html[data-theme="dark"] .release-feature,

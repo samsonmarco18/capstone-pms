@@ -1341,24 +1341,64 @@ if ($selectedProject) {
     }
 
     $taskDepartmentRequirements = [];
+    $taskEntityAssignedDevelopers = [];
     $requirementRows = $conn->query("
-        SELECT methodology_task_id, department, required_count, status,
-               assigned_developer_id, submitted_at, approved_at, revision_notes
-        FROM methodology_task_departments
-        WHERE project_id = {$selectedProjectId}
-        ORDER BY id ASC
+        SELECT mtd.methodology_task_id, mtd.department, mtd.required_count, mtd.status,
+               mtd.assigned_developer_id, mtd.submitted_at, mtd.approved_at, mtd.revision_notes,
+               mt_requirement.developer_entity_key,
+               requirement_assignee.full_name AS assigned_developer_name,
+               requirement_assignee.profile_pic AS assigned_developer_profile_pic,
+               requirement_assignee.designation AS assigned_developer_designation,
+               requirement_assignee.role AS assigned_developer_role
+        FROM methodology_task_departments mtd
+        INNER JOIN methodology_tasks mt_requirement ON mt_requirement.id = mtd.methodology_task_id
+        LEFT JOIN users requirement_assignee ON requirement_assignee.id = mtd.assigned_developer_id
+        WHERE mtd.project_id = {$selectedProjectId}
+        ORDER BY mtd.id ASC
     ");
     while ($requirement = $requirementRows->fetch_assoc()) {
         $methodologyTaskId = (int) $requirement['methodology_task_id'];
-        $taskDepartmentRequirements[$methodologyTaskId][] = [
+        $requirementData = [
             'department' => projectWorkflowDepartmentLabel((string) $requirement['department']),
             'required_count' => max(0, (int) $requirement['required_count']),
             'status' => (string) ($requirement['status'] ?? 'planned'),
             'assigned_developer_id' => (int) ($requirement['assigned_developer_id'] ?? 0),
+            'assigned_developer_name' => (string) ($requirement['assigned_developer_name'] ?? ''),
+            'assigned_developer_profile_pic' => (string) ($requirement['assigned_developer_profile_pic'] ?? ''),
+            'assigned_developer_designation' => (string) ($requirement['assigned_developer_designation'] ?? ''),
+            'assigned_developer_role' => (string) ($requirement['assigned_developer_role'] ?? ''),
             'submitted_at' => (string) ($requirement['submitted_at'] ?? ''),
             'approved_at' => (string) ($requirement['approved_at'] ?? ''),
             'revision_notes' => (string) ($requirement['revision_notes'] ?? ''),
         ];
+        $taskDepartmentRequirements[$methodologyTaskId][] = $requirementData;
+
+        $entityKey = trim((string) ($requirement['developer_entity_key'] ?? ''));
+        $entityDeveloperId = (int) ($requirementData['assigned_developer_id'] ?? 0);
+        if ($entityKey === '' || $entityDeveloperId <= 0) {
+            continue;
+        }
+        if (!isset($taskEntityAssignedDevelopers[$entityKey][$entityDeveloperId])) {
+            $entityDeveloperName = trim((string) ($requirementData['assigned_developer_name'] ?? ''));
+            $entityDeveloperProfilePic = (string) ($requirementData['assigned_developer_profile_pic'] ?? '');
+            $taskEntityAssignedDevelopers[$entityKey][$entityDeveloperId] = [
+                'id' => $entityDeveloperId,
+                'name' => $entityDeveloperName !== '' ? $entityDeveloperName : 'Team Member',
+                'profile_pic' => $entityDeveloperProfilePic,
+                'profile_url' => roadmapMonitoringProfileUrl($entityDeveloperProfilePic),
+                'initials' => roadmapMonitoringInitials($entityDeveloperName),
+                'designation' => (string) ($requirementData['assigned_developer_designation'] ?? ''),
+                'role' => (string) ($requirementData['assigned_developer_role'] ?? 'developer'),
+                'departments' => [],
+            ];
+        }
+        $entityDepartment = (string) ($requirementData['department'] ?? '');
+        if (
+            $entityDepartment !== ''
+            && !in_array($entityDepartment, $taskEntityAssignedDevelopers[$entityKey][$entityDeveloperId]['departments'], true)
+        ) {
+            $taskEntityAssignedDevelopers[$entityKey][$entityDeveloperId]['departments'][] = $entityDepartment;
+        }
     }
 
     $taskRows = $conn->query("
@@ -1387,6 +1427,10 @@ if ($selectedProject) {
                 'required_count' => 1,
                 'status' => (string) ($row['status'] ?? 'planned'),
                 'assigned_developer_id' => (int) ($row['assigned_developer_id'] ?? 0),
+                'assigned_developer_name' => (string) ($row['assigned_developer_name'] ?? ''),
+                'assigned_developer_profile_pic' => (string) ($row['assigned_developer_profile_pic'] ?? ''),
+                'assigned_developer_designation' => (string) ($row['assigned_developer_designation'] ?? ''),
+                'assigned_developer_role' => (string) ($row['assigned_developer_role'] ?? ''),
                 'submitted_at' => '',
                 'approved_at' => '',
                 'revision_notes' => '',
@@ -1401,6 +1445,56 @@ if ($selectedProject) {
                     . projectWorkflowPhaseStatusLabel((string) ($requirement['status'] ?? 'planned')),
                 $requirements
             ));
+        $taskEntityKey = trim((string) ($row['developer_entity_key'] ?? ''));
+        $assignedDevelopers = $taskEntityKey !== ''
+            ? ($taskEntityAssignedDevelopers[$taskEntityKey] ?? [])
+            : [];
+        foreach ($requirements as $requirement) {
+            $assignedDeveloperId = (int) ($requirement['assigned_developer_id'] ?? 0);
+            if ($assignedDeveloperId <= 0) {
+                continue;
+            }
+
+            if (!isset($assignedDevelopers[$assignedDeveloperId])) {
+                $assignedDeveloperName = trim((string) ($requirement['assigned_developer_name'] ?? ''));
+                $assignedDeveloperProfilePic = (string) ($requirement['assigned_developer_profile_pic'] ?? '');
+                $assignedDevelopers[$assignedDeveloperId] = [
+                    'id' => $assignedDeveloperId,
+                    'name' => $assignedDeveloperName !== '' ? $assignedDeveloperName : 'Team Member',
+                    'profile_pic' => $assignedDeveloperProfilePic,
+                    'profile_url' => roadmapMonitoringProfileUrl($assignedDeveloperProfilePic),
+                    'initials' => roadmapMonitoringInitials($assignedDeveloperName),
+                    'designation' => (string) ($requirement['assigned_developer_designation'] ?? ''),
+                    'role' => (string) ($requirement['assigned_developer_role'] ?? 'developer'),
+                    'departments' => [],
+                ];
+            }
+
+            $assignedDepartment = projectWorkflowDepartmentLabel((string) ($requirement['department'] ?? ''));
+            if (
+                $assignedDepartment !== ''
+                && !in_array($assignedDepartment, $assignedDevelopers[$assignedDeveloperId]['departments'], true)
+            ) {
+                $assignedDevelopers[$assignedDeveloperId]['departments'][] = $assignedDepartment;
+            }
+        }
+
+        $workflowAssigneeId = (int) ($row['workflow_assigned_to'] ?? 0);
+        if ($workflowAssigneeId > 0 && $assignedDevelopers === []) {
+            $workflowAssigneeName = trim((string) ($row['assigned_developer_name'] ?? ''));
+            $workflowAssigneeProfilePic = (string) ($row['assigned_developer_profile_pic'] ?? '');
+            $assignedDevelopers[$workflowAssigneeId] = [
+                'id' => $workflowAssigneeId,
+                'name' => $workflowAssigneeName !== '' ? $workflowAssigneeName : 'Team Member',
+                'profile_pic' => $workflowAssigneeProfilePic,
+                'profile_url' => roadmapMonitoringProfileUrl($workflowAssigneeProfilePic),
+                'initials' => roadmapMonitoringInitials($workflowAssigneeName),
+                'designation' => (string) ($row['assigned_developer_designation'] ?? ''),
+                'role' => (string) ($row['assigned_developer_role'] ?? 'developer'),
+                'departments' => [],
+            ];
+        }
+        $row['assigned_developers'] = array_values($assignedDevelopers);
         $row['is_sul_department_task'] = $isSulMonitoring && $sulDepartmentLabel !== '' && count(array_filter(
             $requirements,
             static fn(array $requirement): bool => strcasecmp(
@@ -3148,6 +3242,22 @@ include '../../includes/navbar.php';
     width: 24px;
 }
 
+.task-owner-stack {
+    align-items: center;
+    isolation: isolate;
+}
+
+.task-owner-stack .task-owner-avatar + .task-owner-avatar {
+    margin-left: -7px;
+}
+
+.task-owner-stack .task-owner-avatar.is-overflow {
+    background: #0f5f78;
+    color: #fff;
+    font-size: .56rem;
+    letter-spacing: -.02em;
+}
+
 .table-task-owner-marker {
     cursor: help;
     display: inline-flex;
@@ -4866,17 +4976,29 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                                 </div>
                                 <?php if ($isSulMonitoring): ?>
                                     <?php
-                                        $taskOwnerName = trim((string) ($task['assigned_developer_name'] ?? ''));
-                                        $taskOwnerRole = trim((string) ($task['assigned_developer_designation'] ?? ''));
-                                        if ($taskOwnerRole === '') {
-                                            $taskOwnerRole = ucwords(str_replace('_', ' ', (string) ($task['assigned_developer_role'] ?? 'Developer')));
+                                        $taskOwners = is_array($task['assigned_developers'] ?? null)
+                                            ? $task['assigned_developers']
+                                            : [];
+                                        $visibleTaskOwners = array_slice($taskOwners, 0, 4);
+                                        $taskOwnerLabels = [];
+                                        foreach ($taskOwners as $taskOwner) {
+                                            $taskOwnerName = trim((string) ($taskOwner['name'] ?? 'Team Member'));
+                                            $taskOwnerDepartments = array_filter($taskOwner['departments'] ?? []);
+                                            $taskOwnerRole = trim((string) ($taskOwner['designation'] ?? ''));
+                                            if ($taskOwnerRole === '') {
+                                                $taskOwnerRole = ucwords(str_replace('_', ' ', (string) ($taskOwner['role'] ?? 'Developer')));
+                                            }
+                                            $taskOwnerContext = $taskOwnerDepartments !== []
+                                                ? implode(' / ', $taskOwnerDepartments)
+                                                : $taskOwnerRole;
+                                            $taskOwnerLabels[] = $taskOwnerName . ' - ' . $taskOwnerContext;
                                         }
-                                        $taskOwnerTooltip = $taskOwnerName !== ''
-                                            ? $taskOwnerName . ' · ' . $taskOwnerRole
-                                            : 'Unassigned · Needs a team member';
+                                        $taskOwnerTooltip = $taskOwners !== []
+                                            ? 'Assigned team: ' . implode(', ', $taskOwnerLabels)
+                                            : 'Unassigned - needs a team member';
                                     ?>
                                     <span
-                                        class="gantt-task-owner-marker <?php echo $taskOwnerName === '' ? 'is-unassigned' : ''; ?>"
+                                        class="gantt-task-owner-marker task-owner-stack <?php echo $taskOwners === [] ? 'is-unassigned' : ''; ?>"
                                         style="left: <?php echo $taskLeft; ?>%;"
                                         tabindex="0"
                                         data-bs-toggle="tooltip"
@@ -4885,16 +5007,23 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                                         title="<?php echo htmlspecialchars($taskOwnerTooltip); ?>"
                                         aria-label="<?php echo htmlspecialchars($taskOwnerTooltip); ?>"
                                     >
-                                        <span class="task-owner-avatar">
-                                            <?php if ($taskOwnerName !== ''): ?>
-                                                <span><?php echo htmlspecialchars((string) ($task['assigned_developer_initials'] ?? '?')); ?></span>
-                                                <?php if (!empty($task['assigned_developer_profile_url'])): ?>
-                                                    <img src="<?php echo htmlspecialchars((string) $task['assigned_developer_profile_url']); ?>" alt="" loading="lazy">
-                                                <?php endif; ?>
-                                            <?php else: ?>
-                                                <i class="fas fa-user-slash" aria-hidden="true"></i>
+                                        <?php if ($taskOwners !== []): ?>
+                                            <?php foreach ($visibleTaskOwners as $taskOwner): ?>
+                                                <span class="task-owner-avatar">
+                                                    <span><?php echo htmlspecialchars((string) ($taskOwner['initials'] ?? '?')); ?></span>
+                                                    <?php if (!empty($taskOwner['profile_url'])): ?>
+                                                        <img src="<?php echo htmlspecialchars((string) $taskOwner['profile_url']); ?>" alt="" loading="lazy">
+                                                    <?php endif; ?>
+                                                </span>
+                                            <?php endforeach; ?>
+                                            <?php if (count($taskOwners) > count($visibleTaskOwners)): ?>
+                                                <span class="task-owner-avatar is-overflow">+<?php echo count($taskOwners) - count($visibleTaskOwners); ?></span>
                                             <?php endif; ?>
-                                        </span>
+                                        <?php else: ?>
+                                            <span class="task-owner-avatar">
+                                                <i class="fas fa-user-slash" aria-hidden="true"></i>
+                                            </span>
+                                        <?php endif; ?>
                                     </span>
                                 <?php endif; ?>
                             </div>
@@ -5023,17 +5152,29 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                                     <?php endif; ?>
                                     <?php if ($isSulMonitoring): ?>
                                         <?php
-                                            $tableOwnerName = trim((string) ($task['assigned_developer_name'] ?? ''));
-                                            $tableOwnerRole = trim((string) ($task['assigned_developer_designation'] ?? ''));
-                                            if ($tableOwnerRole === '') {
-                                                $tableOwnerRole = ucwords(str_replace('_', ' ', (string) ($task['assigned_developer_role'] ?? 'Developer')));
+                                            $tableOwners = is_array($task['assigned_developers'] ?? null)
+                                                ? $task['assigned_developers']
+                                                : [];
+                                            $visibleTableOwners = array_slice($tableOwners, 0, 4);
+                                            $tableOwnerLabels = [];
+                                            foreach ($tableOwners as $tableOwner) {
+                                                $tableOwnerName = trim((string) ($tableOwner['name'] ?? 'Team Member'));
+                                                $tableOwnerDepartments = array_filter($tableOwner['departments'] ?? []);
+                                                $tableOwnerRole = trim((string) ($tableOwner['designation'] ?? ''));
+                                                if ($tableOwnerRole === '') {
+                                                    $tableOwnerRole = ucwords(str_replace('_', ' ', (string) ($tableOwner['role'] ?? 'Developer')));
+                                                }
+                                                $tableOwnerContext = $tableOwnerDepartments !== []
+                                                    ? implode(' / ', $tableOwnerDepartments)
+                                                    : $tableOwnerRole;
+                                                $tableOwnerLabels[] = $tableOwnerName . ' - ' . $tableOwnerContext;
                                             }
-                                            $tableOwnerTooltip = $tableOwnerName !== ''
-                                                ? $tableOwnerName . ' · ' . $tableOwnerRole
-                                                : 'Unassigned · Needs a team member';
+                                            $tableOwnerTooltip = $tableOwners !== []
+                                                ? 'Assigned team: ' . implode(', ', $tableOwnerLabels)
+                                                : 'Unassigned - needs a team member';
                                         ?>
                                         <span
-                                            class="table-task-owner-marker <?php echo $tableOwnerName === '' ? 'is-unassigned' : ''; ?>"
+                                            class="table-task-owner-marker task-owner-stack <?php echo $tableOwners === [] ? 'is-unassigned' : ''; ?>"
                                             tabindex="0"
                                             data-bs-toggle="tooltip"
                                             data-bs-placement="top"
@@ -5041,16 +5182,23 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                                             title="<?php echo htmlspecialchars($tableOwnerTooltip); ?>"
                                             aria-label="<?php echo htmlspecialchars($tableOwnerTooltip); ?>"
                                         >
-                                            <span class="task-owner-avatar">
-                                                <?php if ($tableOwnerName !== ''): ?>
-                                                    <span><?php echo htmlspecialchars((string) ($task['assigned_developer_initials'] ?? '?')); ?></span>
-                                                    <?php if (!empty($task['assigned_developer_profile_url'])): ?>
-                                                        <img src="<?php echo htmlspecialchars((string) $task['assigned_developer_profile_url']); ?>" alt="" loading="lazy">
-                                                    <?php endif; ?>
-                                                <?php else: ?>
-                                                    <i class="fas fa-user-slash" aria-hidden="true"></i>
+                                            <?php if ($tableOwners !== []): ?>
+                                                <?php foreach ($visibleTableOwners as $tableOwner): ?>
+                                                    <span class="task-owner-avatar">
+                                                        <span><?php echo htmlspecialchars((string) ($tableOwner['initials'] ?? '?')); ?></span>
+                                                        <?php if (!empty($tableOwner['profile_url'])): ?>
+                                                            <img src="<?php echo htmlspecialchars((string) $tableOwner['profile_url']); ?>" alt="" loading="lazy">
+                                                        <?php endif; ?>
+                                                    </span>
+                                                <?php endforeach; ?>
+                                                <?php if (count($tableOwners) > count($visibleTableOwners)): ?>
+                                                    <span class="task-owner-avatar is-overflow">+<?php echo count($tableOwners) - count($visibleTableOwners); ?></span>
                                                 <?php endif; ?>
-                                            </span>
+                                            <?php else: ?>
+                                                <span class="task-owner-avatar">
+                                                    <i class="fas fa-user-slash" aria-hidden="true"></i>
+                                                </span>
+                                            <?php endif; ?>
                                         </span>
                                     <?php endif; ?>
                                 </td>

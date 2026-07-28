@@ -745,13 +745,21 @@ function renderChatMessages(messages) {
         }
 
         const mineClass = message.is_mine ? 'sent' : 'received';
-        const sender = message.is_mine ? 'You' : escapeHtml(message.sender_name || 'User');
+        const senderName = message.is_mine ? 'You' : (message.sender_name || 'User');
+        const sender = escapeHtml(senderName);
+        const senderInitials = escapeHtml(getConversationInitials(senderName, 'user'));
+        const avatarMarkup = `<span class="message-avatar ${mineClass}" title="${sender}" aria-label="${sender}">${senderInitials}</span>`;
 
         html += `
-            <div class="message ${mineClass}">
-                <div class="small fw-semibold mb-1">${sender}</div>
-                <div>${escapeHtml(message.message)}</div>
-                <div class="small text-muted mt-1">${escapeHtml(time)}</div>
+            <div class="message-row ${mineClass}">
+                ${message.is_mine ? '' : avatarMarkup}
+                <div class="message-stack">
+                    ${message.is_mine ? '' : `<div class="message-sender">${sender}</div>`}
+                    <div class="message ${mineClass}">
+                        <div>${escapeHtml(message.message)}</div>
+                        <div class="small text-muted mt-1">${escapeHtml(time)}</div>
+                    </div>
+                </div>
             </div>
         `;
     });
