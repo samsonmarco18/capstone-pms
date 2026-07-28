@@ -1117,9 +1117,18 @@ if ($readyForDevTasks) {
                 'representative' => $readyDeveloperTask,
                 'features' => [],
                 'is_bulk' => false,
+                'required_count' => max(1, (int) ($currentRoadmapGroupTask['required_count'] ?? 1)),
                 'priority' => (string) ($readyDeveloperTask['priority'] ?? 'medium'),
                 'deadline' => $readyDeveloperTask['deadline'] ?? null,
             ];
+        } else {
+            // Every feature in an entity should have the same lane headcount. Use
+            // the lowest saved value if legacy data differs so we never assign
+            // more people than one of the grouped tasks permits.
+            $readyDeveloperAssignmentGroups[$groupKey]['required_count'] = min(
+                max(1, (int) ($readyDeveloperAssignmentGroups[$groupKey]['required_count'] ?? 1)),
+                max(1, (int) ($currentRoadmapGroupTask['required_count'] ?? 1))
+            );
         }
 
         $readyDeveloperAssignmentGroups[$groupKey]['features'][(int) $readyDeveloperTask['id']] = $readyDeveloperTask;
@@ -1381,18 +1390,6 @@ $developers = $conn->query("
              assigned_tasks ASC, u.full_name ASC
 ");
 $availableDeveloperCount = $developers ? $developers->num_rows : 0;
-$developerPlannedHeadcount = 1;
-if ($canManageDeveloperWorkflow && $projectId > 0) {
-    $plannedHeadcountResult = $conn->query("
-        SELECT COALESCE(SUM(required_count), 0) AS required_count
-        FROM developer_allocations
-        WHERE project_id = {$projectId}
-          AND role IN ({$sulDepartmentAliasesSql})
-    ");
-    if ($plannedHeadcountResult) {
-        $developerPlannedHeadcount = max(1, (int) ($plannedHeadcountResult->fetch_assoc()['required_count'] ?? 1));
-    }
-}
 
 $developerProjectOptions = [];
 if ($canManageDeveloperWorkflow) {
@@ -1942,13 +1939,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $assignmentTaskIds = array_values(array_unique(array_map('intval', $assignmentTaskIds)));
         sort($assignmentTaskIds);
 
-        $plannedHeadcountRow = $conn->query("
-            SELECT COALESCE(SUM(required_count), 0) AS required_count
-            FROM developer_allocations
-            WHERE project_id = {$assignmentProjectId}
-              AND role IN ({$sulDepartmentAliasesSql})
-        ")->fetch_assoc();
-        $plannedHeadcount = max(1, (int) ($plannedHeadcountRow['required_count'] ?? 1));
+        $plannedHeadcount = 0;
+        if ($currentRoadmapTask) {
+            $entityHeadcounts = [];
+            foreach ($roadmapEntityRows as $roadmapEntityRow) {
+                $requiredCount = (int) ($roadmapEntityRow['required_count'] ?? 0);
+                if ($requiredCount > 0) {
+                    $entityHeadcounts[] = $requiredCount;
+                }
+            }
+            if ($entityHeadcounts !== []) {
+                // Be conservative with inconsistent legacy rows: a bulk group
+                // must respect the smallest headcount saved for any of its tasks.
+                $plannedHeadcount = min($entityHeadcounts);
+            }
+        }
+        if ($plannedHeadcount <= 0) {
+            $plannedHeadcountRow = $conn->query("
+                SELECT COALESCE(SUM(required_count), 0) AS required_count
+                FROM developer_allocations
+                WHERE project_id = {$assignmentProjectId}
+                  AND role IN ({$sulDepartmentAliasesSql})
+            ")->fetch_assoc();
+            $plannedHeadcount = max(1, (int) ($plannedHeadcountRow['required_count'] ?? 1));
+        }
         $teamLimit = min($plannedHeadcount, count($assignmentTaskIds));
 
         $teamRows = $conn->query("
@@ -7362,7 +7376,8 @@ include '../../includes/navbar.php';
                                         $groupRoadmapStart,
                                         $groupRoadmapEnd
                                     );
-                                    $distributionMemberCount = max(1, min($developerPlannedHeadcount, $availableDeveloperCount, $featureCount));
+                                    $groupRequiredCount = max(1, (int) ($assignmentGroup['required_count'] ?? 1));
+                                    $distributionMemberCount = max(1, min($groupRequiredCount, $availableDeveloperCount, $featureCount));
                                     $distributionCopy = $distributionMemberCount > 1
                                         ? "Choose up to {$distributionMemberCount} {$deliveryAssigneePluralLower}; tasks are divided evenly among those selected"
                                         : 'Ready for ' . $deliveryAssigneeLower . ' allocation';
