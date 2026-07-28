@@ -1719,9 +1719,9 @@ html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar .nav-user-link:
 html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar .nav-user-link:focus,
 html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar .nav-user-link.show,
 html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar #navbarUserMenu[aria-expanded="true"] {
-    background: linear-gradient(135deg, rgba(17, 38, 83, 0.98), rgba(54, 29, 106, 0.98)) !important;
+    background: transparent !important;
     color: #ffffff !important;
-    box-shadow: inset 0 0 0 1px rgba(126, 112, 255, 0.42), 0 8px 24px rgba(2, 4, 20, 0.40) !important;
+    box-shadow: none !important;
 }
 
 html[data-theme="dark"][data-app-theme="futuristic"] .app-navbar .nav-user-link:hover .nav-user-name,
@@ -1737,9 +1737,9 @@ html[data-theme="dark"][data-app-theme="tropical"] .app-navbar .nav-user-link:ho
 html[data-theme="dark"][data-app-theme="tropical"] .app-navbar .nav-user-link:focus,
 html[data-theme="dark"][data-app-theme="tropical"] .app-navbar .nav-user-link.show,
 html[data-theme="dark"][data-app-theme="tropical"] .app-navbar #navbarUserMenu[aria-expanded="true"] {
-    background: linear-gradient(135deg, rgba(5, 62, 72, 0.98), rgba(6, 91, 90, 0.98)) !important;
+    background: transparent !important;
     color: #ffffff !important;
-    box-shadow: inset 0 0 0 1px rgba(91, 230, 221, 0.34), 0 8px 22px rgba(0, 16, 20, 0.38) !important;
+    box-shadow: none !important;
 }
 
 html[data-theme="dark"][data-app-theme="tropical"] .app-navbar .nav-user-link:hover .nav-user-name,
