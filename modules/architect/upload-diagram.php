@@ -659,9 +659,13 @@ a.progress-step:hover {
 
 .document-actions .btn-success-modern {
     background: linear-gradient(135deg, #10a977 0%, #07845e 100%);
-    color: white;
+    color: #ffffff !important;
     border: 1px solid transparent;
     box-shadow: 0 5px 14px rgba(5, 150, 105, 0.2);
+}
+
+.document-actions .btn-success-modern :is(span, i) {
+    color: inherit !important;
 }
 
 .document-actions .btn-upload:hover,
@@ -683,7 +687,7 @@ a.progress-step:hover {
 
 .document-actions .btn-success-modern:hover {
     box-shadow: 0 8px 18px rgba(5, 150, 105, 0.27);
-    color: white;
+    color: #ffffff !important;
 }
 
 .document-actions :is(button, a):focus-visible {
@@ -693,7 +697,7 @@ a.progress-step:hover {
 
 .document-actions .btn-success-modern.disabled {
     background: var(--gray-200);
-    color: var(--gray-500);
+    color: var(--gray-500) !important;
     border-color: var(--gray-300);
     box-shadow: none;
     cursor: not-allowed;

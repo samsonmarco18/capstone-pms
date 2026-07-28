@@ -100,13 +100,57 @@ document.addEventListener('DOMContentLoaded', () => {
     let itemIndex = 0;
     let acceptedCount = 0;
     let skippedCount = 0;
+    let reviewCompleted = false;
     const replayTrigger = document.querySelector('[data-evortix-dss-replay]');
+    const hideSourceControls = () => {
+        document.querySelectorAll('.architect-dss-source-controls').forEach((controls) => {
+            controls.hidden = true;
+        });
+    };
     if (replayTrigger) replayTrigger.hidden = false;
+    if (items.length === 0) {
+        reviewCompleted = true;
+        hideSourceControls();
+    }
+
+    document.addEventListener('evortix:dss-bulk-decision', (event) => {
+        const accepted = event.detail?.accepted === true;
+        reviewCompleted = true;
+        itemIndex = items.length;
+        acceptedCount = accepted ? items.length : 0;
+        skippedCount = accepted ? 0 : items.length;
+        items.forEach((item) => {
+            savedDecisions[itemDecisionKey(item)] = accepted ? 'accepted' : 'skipped';
+        });
+        if (persistDecisions) {
+            try { localStorage.setItem(stateKey, JSON.stringify(savedDecisions)); } catch (error) {}
+        }
+        hideSourceControls();
+        if (replayTrigger) replayTrigger.hidden = false;
+
+        const bot = document.getElementById('chat-bot-float');
+        const speech = bot?.querySelector('.chat-bot-speech.evortix-architect-dss');
+        if (speech) {
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+        }
+        bot?.classList.remove('is-speaking');
+        window.chatBotFloatRobot?.setEmotion?.(accepted ? 'happy' : 'sad', 900);
+    });
 
     const escapeDss = (value) => {
         const node = document.createElement('div');
         node.textContent = String(value || '');
         return node.innerHTML;
+    };
+
+    const showMessagePose = () => {
+        const robot = window.chatBotFloatRobot;
+        if (config.pointAtMessage && typeof robot?.point === 'function') {
+            robot.point(config.pointSide === 'right' ? 'right' : 'left', 0);
+            return;
+        }
+        robot?.setEmotion?.('thinking', 0);
     };
 
     window.evortixConfirm = (options = {}) => new Promise((resolve) => {
@@ -137,8 +181,9 @@ document.addEventListener('DOMContentLoaded', () => {
         bot.setAttribute('aria-hidden', 'false');
         bot.classList.remove('is-returning-bed', 'is-preparing-speech');
         bot.classList.add('is-speaking');
-        window.chatBotFloatRobot?.wake?.();
-        window.chatBotFloatRobot?.setEmotion?.('thinking', 0);
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
+        showMessagePose();
 
         const handleConfirmation = (event) => {
             const choice = event.target.closest('[data-evortix-confirm-choice]');
@@ -155,6 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const showDecision = () => {
+        if (reviewCompleted) return;
         const bot = document.getElementById('chat-bot-float');
         const speech = bot?.querySelector('.chat-bot-speech');
         if (!bot || !speech) return;
@@ -178,8 +224,9 @@ document.addEventListener('DOMContentLoaded', () => {
         bot.setAttribute('aria-hidden', 'false');
         bot.classList.remove('is-returning-bed', 'is-preparing-speech');
         bot.classList.add('is-speaking');
-        window.chatBotFloatRobot?.wake?.();
-        window.chatBotFloatRobot?.setEmotion?.('thinking', 0);
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
+        showMessagePose();
     };
 
     const applyItemDecision = (item, accepted) => {
@@ -210,7 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         const choice = event.target.closest('[data-evortix-dss-choice]');
-        if (!choice) return;
+        if (!choice || reviewCompleted) return;
         event.preventDefault();
         event.stopPropagation();
         const accepted = choice.dataset.evortixDssChoice === 'accept';
@@ -232,12 +279,16 @@ document.addEventListener('DOMContentLoaded', () => {
             window.setTimeout(showDecision, 260);
             return;
         }
+        reviewCompleted = true;
         const heading = config.completedTitle || 'DSS review complete';
         const message = `I reviewed ${items.length} suggestion${items.length === 1 ? '' : 's'} with you: ${acceptedCount} accepted and ${skippedCount} skipped. Review your selections before continuing.`;
+        hideSourceControls();
         if (replayTrigger) replayTrigger.hidden = false;
         window.evortixAnnounceNotification?.(heading, message, '');
     }, true);
 
-    if (config.title && config.message && items.length > 0) window.setTimeout(showDecision, 650);
+    if (config.title && config.message && items.length > 0) {
+        window.setTimeout(showDecision, Math.max(0, Number(config.startDelay ?? 650)));
+    }
 });
 </script>

@@ -565,7 +565,7 @@ include '../../includes/navbar.php';
 /* Action Button */
 .btn-review {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
-    color: white;
+    color: #fff !important;
     border: none;
     min-height: 36px;
     padding: 0.42rem 0.78rem;
@@ -579,10 +579,14 @@ include '../../includes/navbar.php';
     text-decoration: none;
 }
 
+.btn-review i {
+    color: inherit !important;
+}
+
 .btn-review:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
-    color: white;
+    color: #fff !important;
 }
 
 .btn-secondary-action {

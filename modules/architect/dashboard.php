@@ -288,7 +288,7 @@ include '../../includes/navbar.php';
 
 .btn-review {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
-    color: white;
+    color: #fff !important;
     border: 1px solid rgba(255, 255, 255, 0.12);
     min-width: 126px;
     min-height: 44px;
@@ -308,11 +308,16 @@ include '../../includes/navbar.php';
     flex: 0 0 auto;
 }
 
+.btn-review i,
+.btn-review span {
+    color: inherit !important;
+}
+
 .btn-review:hover {
     transform: translateY(-2px);
     box-shadow: 0 7px 0 rgba(9, 55, 84, 0.5), 0 14px 24px rgba(15, 74, 110, 0.28);
     filter: brightness(1.06);
-    color: white;
+    color: #fff !important;
     text-decoration: none !important;
 }
 

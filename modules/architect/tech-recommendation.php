@@ -1260,6 +1260,22 @@ body.tech-review-drawer-open {
         transition: none;
     }
 }
+
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss .evortix-dss-heading {
+    color: #083a5d !important;
+    opacity: 1 !important;
+}
+
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss :is(
+        .evortix-dss-copy,
+        .evortix-dss-points,
+        .evortix-dss-points li
+    ) {
+    color: #175f8f !important;
+    opacity: 1 !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -1735,6 +1751,10 @@ $(document).ready(function() {
         'title' => 'Technology recommendations ready',
         'message' => 'I prepared the frontend, backend, database, hosting, security, and integration recommendations with feature, cost, complexity, and alternative guidance. Review my proposed stack one item at a time.',
         'stateKey' => 'evortix.dss.technology.v2.project.' . (int) $projectId,
+        'persistDecisions' => false,
+        'startDelay' => 100,
+        'pointAtMessage' => true,
+        'pointSide' => 'left',
         'items' => $architectTechDssItems,
         'completedTitle' => 'Technology review complete',
     ];

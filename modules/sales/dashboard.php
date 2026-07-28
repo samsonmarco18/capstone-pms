@@ -2186,19 +2186,7 @@ body.dark-mode .evortix-3d-platform {
         animation: none !important;
     }
 }
-/* Evortix login flight and live dashboard briefing. */
-.chat-bot-float.is-dashboard-welcome-tour {
-    z-index: 1096;
-    pointer-events: none;
-    will-change: transform, opacity;
-}
-
-.chat-bot-float.is-dashboard-welcome-tour .chat-bot-speech {
-    opacity: 0 !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-}
-
+/* Evortix live dashboard briefing. */
 .chat-bot-speech.evortix-dashboard-summary {
     top: 42%;
     right: calc(100% + 18px);
@@ -2946,11 +2934,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, true);
 
         botFloat.classList.remove('is-leaving-bed', 'is-returning-bed', 'is-preparing-speech', 'is-speaking');
-        botFloat.classList.add('is-dashboard-welcome-tour');
         botFloat.hidden = false;
         botFloat.setAttribute('aria-hidden', 'false');
         speech.hidden = true;
-        robot?.wake?.();
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        robot?.setMode?.('standing');
         robot?.setEmotion?.('', 0);
 
         const botRect = botFloat.getBoundingClientRect();
@@ -2969,41 +2957,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         botFloat.style.right = 'auto';
         botFloat.style.bottom = 'auto';
 
-        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (!reduceMotion && typeof botFloat.animate === 'function') {
-            const finalCenterX = finalX + botRect.width / 2;
-            const finalCenterY = finalY + botRect.height / 2;
-            const radiusX = Math.min(640, Math.max(170, (window.innerWidth - botRect.width) * .43));
-            const radiusY = Math.max(70, Math.min(
-                220,
-                finalCenterY - 24,
-                window.innerHeight - finalCenterY - 24
-            ));
-            const orbitCenterX = finalCenterX - radiusX;
-            const flightFrames = [];
-            for (let step = 0; step <= 8; step++) {
-                const angle = -(Math.PI * 2 * step / 8);
-                const pointX = orbitCenterX + Math.cos(angle) * radiusX;
-                const pointY = finalCenterY + Math.sin(angle) * radiusY;
-                const tilt = step === 0 || step === 8 ? 0 : Math.sin(angle) * -7;
-                flightFrames.push({
-                    offset: step * .105,
-                    opacity: step === 0 ? 0 : 1,
-                    transform: `translate(${(pointX - finalCenterX).toFixed(1)}px, ${(pointY - finalCenterY).toFixed(1)}px) rotate(${tilt.toFixed(1)}deg) scale(${step === 0 ? '.72' : '1'})`
-                });
-            }
-            flightFrames.push({ offset:.94, opacity:1, transform:'translate(-12px, -5px) rotate(-2deg) scale(1.04)' });
-            flightFrames.push({ offset:1, opacity:1, transform:'translate(0, 0) rotate(0) scale(1)' });
-            const flight = botFloat.animate(flightFrames, {
-                duration:4400,
-                easing:'linear',
-                fill:'both'
-            });
-            await flight.finished.catch(() => undefined);
-            flight.cancel();
-        }
-
-        botFloat.classList.remove('is-dashboard-welcome-tour');
         speech.className = 'chat-bot-speech evortix-dashboard-summary';
         speech.hidden = false;
         speech.setAttribute('aria-hidden', 'false');
@@ -3073,7 +3026,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         summaryTimer = window.setTimeout(dismissSummary, 15000);
     } catch (error) {
         console.warn('Evortix dashboard welcome could not complete:', error);
-        document.getElementById('chat-bot-float')?.classList.remove('is-dashboard-welcome-tour');
         signalWelcomeComplete();
     }
 });

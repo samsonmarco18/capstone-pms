@@ -1065,6 +1065,15 @@ a.progress-step:hover {
     color: #ffffff;
 }
 
+.summary-insight-action:not(.is-secondary),
+.summary-insight-action:not(.is-secondary):hover {
+    color: #ffffff !important;
+}
+
+.summary-insight-action:not(.is-secondary) i {
+    color: inherit !important;
+}
+
 .summary-insight-action.is-secondary {
     background: #ffffff;
     border-color: #cfe1eb;

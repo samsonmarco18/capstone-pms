@@ -705,12 +705,16 @@ body,
 
 .toolbar-button.primary {
     background: linear-gradient(135deg, var(--insight-primary) 0%, var(--insight-dark) 100%);
-    color: #fff;
+    color: #fff !important;
     border-color: transparent;
 }
 
+.toolbar-button.primary :is(i, span) {
+    color: inherit !important;
+}
+
 .toolbar-button.primary:hover {
-    color: #fff;
+    color: #fff !important;
 }
 
 .filter-card .card-body {

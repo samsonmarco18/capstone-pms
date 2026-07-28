@@ -1307,7 +1307,7 @@ include '../../includes/navbar.php';
 }
 
 .client-draft-table__head span:last-child {
-    text-align: right;
+    text-align: center;
 }
 
 .client-draft-card {

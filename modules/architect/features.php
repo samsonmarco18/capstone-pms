@@ -476,6 +476,7 @@ include '../../includes/navbar.php';
 }
 .architect-dss-source-controls strong { color: #0d5f8f; }
 .architect-dss-source-controls span { color: #52758d; font-size: .78rem; }
+.architect-dss-source-controls[hidden] { display: none !important; }
 .saved-feature.is-recommended { border-color: #9edcf3; background: linear-gradient(135deg, #ffffff, #f1fbff); }
 .saved-feature-recommendation { display: inline-flex; align-items: center; gap: .3rem; margin-bottom: .35rem; padding: .2rem .48rem; border-radius: 999px; background: #e2f5fd; color: #126b9b; font-size: .64rem; font-weight: 800; }
 .saved-feature-list {
@@ -947,6 +948,22 @@ a.progress-step:hover {
     background: rgba(31, 99, 146, 0.22);
     color: #ffffff;
 }
+
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss .evortix-dss-heading {
+    color: #083a5d !important;
+    opacity: 1 !important;
+}
+
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss :is(
+        .evortix-dss-copy,
+        .evortix-dss-points,
+        .evortix-dss-points li
+    ) {
+    color: #175f8f !important;
+    opacity: 1 !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -1083,7 +1100,6 @@ a.progress-step:hover {
                                 id="salesFeature<?php echo $index; ?>"
                                 data-sales-feature-toggle
                                 data-recommended-feature="<?php echo htmlspecialchars($salesFeature); ?>"
-                                checked
                             >
                             <label class="form-check-label" for="salesFeature<?php echo $index; ?>">
                                 <span class="sales-requested-title"><?php echo htmlspecialchars($salesFeature); ?></span>
@@ -1246,6 +1262,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 checkbox.checked = accept;
                 checkbox.closest('[data-sales-requested-feature]')?.querySelectorAll('[data-sales-feature-field]').forEach((field) => { field.disabled = !accept; });
             });
+            button.closest('.architect-dss-source-controls')?.setAttribute('hidden', '');
+            document.dispatchEvent(new CustomEvent('evortix:dss-bulk-decision', {
+                detail: { accepted: accept }
+            }));
             window.appToast?.(accept ? 'Feature suggestions accepted' : 'Feature suggestions skipped', accept ? 'Review the selected features before continuing.' : 'No intake feature will be added.', accept ? 'success' : 'info');
         });
     });
@@ -1325,7 +1345,11 @@ document.addEventListener('DOMContentLoaded', () => {
         'title' => 'Feature recommendations ready',
         'message' => 'I found ' . count($architectDssItems) . ' feature recommendation' . (count($architectDssItems) === 1 ? '' : 's') . ' from the Sales intake and project template. Review them one at a time.',
         'stateKey' => 'evortix.dss.features.project.' . (int) $projectId,
+        'persistDecisions' => false,
+        'startDelay' => 100,
         'showSourceControls' => true,
+        'pointAtMessage' => true,
+        'pointSide' => 'left',
         'items' => $architectDssItems,
         'completedTitle' => 'Feature review complete',
     ];

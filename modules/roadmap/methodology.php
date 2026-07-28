@@ -4191,6 +4191,22 @@ include '../../includes/navbar.php';
         text-transform: uppercase;
     }
 }
+
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss .evortix-dss-heading {
+    color: #083a5d !important;
+    opacity: 1 !important;
+}
+
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss :is(
+        .evortix-dss-copy,
+        .evortix-dss-points,
+        .evortix-dss-points li
+    ) {
+    color: #175f8f !important;
+    opacity: 1 !important;
+}
 </style>
 
 <div class="container-fluid roadmap-shell<?php echo $isSulMonitoring ? ' roadmap-shell--monitoring' : ''; ?>">
@@ -6502,6 +6518,10 @@ restoreRoadmapEditor(roadmapEditorState);
             'title' => 'Methodology recommendation ready',
             'message' => $methodologyDetail,
             'stateKey' => 'evortix.dss.methodology.project.' . (int) ($selectedProject['id'] ?? 0),
+            'persistDecisions' => false,
+            'startDelay' => 100,
+            'pointAtMessage' => true,
+            'pointSide' => 'left',
             'items' => [[
                 'label' => $suggestedMethodologyLabel,
                 'detail' => $methodologyDetail,
