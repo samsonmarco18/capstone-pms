@@ -389,6 +389,221 @@ include 'includes/navbar.php';
     margin-top: .55rem;
 }
 
+.settings-theme-field {
+    max-width: 900px;
+}
+
+.settings-theme-field > .settings-field-note {
+    margin: .15rem 0 .85rem;
+}
+
+.theme-preview-grid {
+    display: grid;
+    gap: .85rem;
+    grid-template-columns: repeat(5, minmax(116px, 1fr));
+}
+
+.theme-preview-option {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-color);
+    font: inherit;
+    text-align: center;
+}
+
+.theme-preview-frame {
+    --preview-bg: #eef4f8;
+    --preview-window: #ffffff;
+    --preview-bar: #e7eef3;
+    --preview-sidebar: #cfe5f1;
+    --preview-line: #9fb5c2;
+    display: block;
+    height: 92px;
+    padding: 12px;
+    position: relative;
+    overflow: hidden;
+    border: 2px solid transparent;
+    border-radius: 14px;
+    background: var(--preview-bg);
+    box-shadow: inset 0 0 0 1px rgba(31, 99, 146, .1);
+    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.theme-preview-window {
+    display: grid;
+    grid-template-columns: 24% 1fr;
+    grid-template-rows: 17px 1fr;
+    height: 100%;
+    overflow: hidden;
+    border: 1px solid rgba(15, 76, 129, .12);
+    border-radius: 7px;
+    background: var(--preview-window);
+    box-shadow: 0 6px 14px rgba(15, 76, 129, .12);
+}
+
+.theme-preview-topbar {
+    grid-column: 1 / -1;
+    position: relative;
+    background: var(--preview-bar);
+}
+
+.theme-preview-topbar::before {
+    width: 16px;
+    height: 4px;
+    position: absolute;
+    top: 6px;
+    left: 7px;
+    border-radius: 999px;
+    background: var(--preview-line);
+    content: "";
+    opacity: .72;
+}
+
+.theme-preview-sidebar {
+    background: var(--preview-sidebar);
+}
+
+.theme-preview-content {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 9px 8px;
+}
+
+.theme-preview-content i {
+    display: block;
+    width: 82%;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--preview-line);
+    opacity: .7;
+}
+
+.theme-preview-content i:nth-child(2) {
+    width: 62%;
+}
+
+.theme-preview-content i:nth-child(3) {
+    width: 72%;
+}
+
+.theme-preview-option[data-theme-preview="system"] .theme-preview-frame {
+    --preview-bg: linear-gradient(90deg, #eef4f8 0 50%, #0a1b2c 50% 100%);
+    --preview-window: linear-gradient(90deg, #ffffff 0 50%, #10263a 50% 100%);
+    --preview-bar: linear-gradient(90deg, #e7eef3 0 50%, #18334b 50% 100%);
+    --preview-sidebar: linear-gradient(90deg, #cfe5f1 0 50%, #0d4e70 50% 100%);
+    --preview-line: #7ba9bf;
+}
+
+.theme-preview-option[data-theme-preview="light"] .theme-preview-frame {
+    --preview-bg: #edf4f8;
+    --preview-window: #ffffff;
+    --preview-bar: #f0f4f7;
+    --preview-sidebar: #d8edf7;
+    --preview-line: #7895a6;
+}
+
+.theme-preview-option[data-theme-preview="dark"] .theme-preview-frame {
+    --preview-bg: #071522;
+    --preview-window: #0c1f31;
+    --preview-bar: #163149;
+    --preview-sidebar: #0d4e70;
+    --preview-line: #7dbbd6;
+}
+
+.theme-preview-option[data-theme-preview="tropical"] .theme-preview-frame {
+    --preview-bg: linear-gradient(135deg, #c8f1ec, #e8f7e4);
+    --preview-window: #f9fffc;
+    --preview-bar: #d9f5ef;
+    --preview-sidebar: #33a79d;
+    --preview-line: #23877f;
+}
+
+.theme-preview-option[data-theme-preview="futuristic"] .theme-preview-frame {
+    --preview-bg: linear-gradient(135deg, #0a1532, #24104b);
+    --preview-window: #101c3b;
+    --preview-bar: #1a2a58;
+    --preview-sidebar: #4c38a7;
+    --preview-line: #66d9ff;
+}
+
+.theme-preview-check {
+    display: grid;
+    place-items: center;
+    width: 21px;
+    height: 21px;
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: #ffffff;
+    font-size: .58rem;
+    opacity: 0;
+    box-shadow: 0 4px 10px rgba(15, 76, 129, .2);
+    transform: scale(.8);
+    transition: opacity .18s ease, transform .18s ease;
+}
+
+.theme-preview-label {
+    display: block;
+    margin-top: .48rem;
+    overflow: hidden;
+    color: var(--text-muted);
+    font-size: .76rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.theme-preview-option:hover .theme-preview-frame,
+.theme-preview-option:focus-visible .theme-preview-frame {
+    border-color: rgba(31, 111, 158, .45);
+    box-shadow: 0 9px 20px rgba(15, 76, 129, .12);
+    transform: translateY(-2px);
+}
+
+.theme-preview-option:focus-visible {
+    outline: none;
+}
+
+.theme-preview-option.is-selected .theme-preview-frame {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(31, 111, 158, .11), 0 10px 22px rgba(15, 76, 129, .13);
+}
+
+.theme-preview-option.is-selected .theme-preview-check {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.theme-preview-option.is-selected .theme-preview-label {
+    color: var(--primary-color);
+    font-weight: 700;
+}
+
+[data-theme="dark"] .theme-preview-frame {
+    box-shadow: inset 0 0 0 1px rgba(138, 210, 255, .12);
+}
+
+[data-theme="dark"] .theme-preview-option:hover .theme-preview-frame,
+[data-theme="dark"] .theme-preview-option:focus-visible .theme-preview-frame {
+    border-color: rgba(125, 211, 252, .42);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, .24);
+}
+
+[data-theme="dark"] .theme-preview-option.is-selected .theme-preview-frame {
+    border-color: #64c7ef;
+    box-shadow: 0 0 0 3px rgba(100, 199, 239, .12), 0 10px 24px rgba(0, 0, 0, .24);
+}
+
+[data-theme="dark"] .theme-preview-option.is-selected .theme-preview-label {
+    color: #8fdcff;
+}
+
 .settings-option {
     align-items: center;
     border-bottom: 1px solid rgba(31, 99, 146, .09);
@@ -530,6 +745,10 @@ include 'includes/navbar.php';
     .settings-security-grid {
         grid-template-columns: 1fr;
     }
+
+    .theme-preview-grid {
+        grid-template-columns: repeat(3, minmax(120px, 1fr));
+    }
 }
 
 @media (max-width: 767.98px) {
@@ -549,6 +768,10 @@ include 'includes/navbar.php';
 
     .settings-regional-grid {
         grid-template-columns: 1fr;
+    }
+
+    .theme-preview-grid {
+        grid-template-columns: repeat(2, minmax(110px, 1fr));
     }
 
     .settings-session-action {
@@ -626,16 +849,36 @@ include 'includes/navbar.php';
                             </div>
                         </div>
                         <div class="settings-section-body">
-                            <div class="settings-field">
-                                <label class="form-label" for="themePreference">Theme</label>
-                                <select class="form-select" id="themePreference" name="theme_preference">
+                            <div class="settings-field settings-theme-field">
+                                <label class="form-label" id="themePreferenceLabel" for="themePreference">Interface theme</label>
+                                <small class="settings-field-note">Choose a preview that fits your workspace.</small>
+                                <select class="visually-hidden" id="themePreference" name="theme_preference" aria-labelledby="themePreferenceLabel">
                                     <?php foreach ($themeOptions as $value => $label): ?>
                                         <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $preferences['theme_preference'] === $value ? 'selected' : ''; ?>>
                                             <?php echo htmlspecialchars($label); ?>
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <small class="settings-field-note">Each theme includes coordinated colors and backgrounds.</small>
+                                <div class="theme-preview-grid" role="group" aria-labelledby="themePreferenceLabel">
+                                    <?php foreach ($themeOptions as $value => $label): ?>
+                                    <button
+                                        type="button"
+                                        class="theme-preview-option<?php echo $preferences['theme_preference'] === $value ? ' is-selected' : ''; ?>"
+                                        data-theme-preview="<?php echo htmlspecialchars($value); ?>"
+                                        aria-pressed="<?php echo $preferences['theme_preference'] === $value ? 'true' : 'false'; ?>"
+                                    >
+                                        <span class="theme-preview-frame" aria-hidden="true">
+                                            <span class="theme-preview-window">
+                                                <span class="theme-preview-topbar"></span>
+                                                <span class="theme-preview-sidebar"></span>
+                                                <span class="theme-preview-content"><i></i><i></i><i></i></span>
+                                            </span>
+                                            <span class="theme-preview-check"><i class="fas fa-check"></i></span>
+                                        </span>
+                                        <span class="theme-preview-label"><?php echo htmlspecialchars($value === 'system' ? 'Auto' : $label); ?></span>
+                                    </button>
+                                    <?php endforeach; ?>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -823,6 +1066,33 @@ document.addEventListener('DOMContentLoaded', function () {
     const navigationItems = Array.from(workspace.querySelectorAll('[data-settings-target]'));
     const panels = Array.from(workspace.querySelectorAll('[data-settings-panel]'));
     const preferenceForm = document.getElementById('personalPreferencesForm');
+    const themePreference = document.getElementById('themePreference');
+    const themePreviewOptions = Array.from(workspace.querySelectorAll('[data-theme-preview]'));
+
+    function selectThemePreview(themeValue) {
+        const hasTheme = themePreference
+            && Array.from(themePreference.options).some(function (option) {
+                return option.value === themeValue;
+            });
+        if (!hasTheme) {
+            return;
+        }
+
+        themePreference.value = themeValue;
+        themePreviewOptions.forEach(function (option) {
+            const isSelected = option.dataset.themePreview === themeValue;
+            option.classList.toggle('is-selected', isSelected);
+            option.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        });
+        themePreference.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    themePreviewOptions.forEach(function (option) {
+        option.addEventListener('click', function () {
+            selectThemePreview(option.dataset.themePreview || 'system');
+        });
+    });
+
     const serverSelectedPanel = <?php
         echo json_encode(
             ($isAdmin || isset($_POST['password']) || isset($_POST['logout_other_sessions']))
