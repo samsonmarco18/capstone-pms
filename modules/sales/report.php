@@ -171,14 +171,23 @@ include '../../includes/navbar.php';
     --gray-900: #212529;
     --shadow-sm: 0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+    --report-border: #dbe6ee;
+    --report-surface-soft: #f6fafc;
+    --report-text: #17324d;
+}
+
+.sales-report-shell {
+    --report-card-surface: #ffffff;
+    max-width: 1600px;
+    margin: 0 auto;
 }
 
 /* Page Header */
 .page-header-modern {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
-    border-radius: 24px;
-    padding: 2rem;
-    margin-bottom: 2rem;
+    border-radius: 18px;
+    padding: 1.45rem 1.65rem;
+    margin-bottom: 1.25rem;
     position: relative;
     overflow: hidden;
 }
@@ -195,8 +204,8 @@ include '../../includes/navbar.php';
 }
 
 .page-header-modern h2 {
-    font-size: 1.75rem;
-    font-weight: 600;
+    font-size: 1.55rem;
+    font-weight: 700;
     margin-bottom: 0.5rem;
     color: white;
 }
@@ -215,16 +224,16 @@ include '../../includes/navbar.php';
 /* Client Sidebar Card */
 .client-card {
     background: white;
-    border-radius: 24px;
-    border: none;
+    border-radius: 18px;
+    border: 1px solid var(--report-border);
     overflow: hidden;
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 10px 28px rgba(31, 99, 146, 0.08);
     position: sticky;
-    top: 20px;
+    top: 1rem;
 }
 
 .client-card .card-header {
-    padding: 1.25rem 1.5rem;
+    padding: 1rem 1.1rem;
     background: white;
     border-bottom: 1px solid var(--gray-200);
 }
@@ -245,50 +254,118 @@ include '../../includes/navbar.php';
 
 .client-list {
     padding: 0.5rem;
+    max-height: calc(100vh - 15rem);
+    min-height: 13rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: rgba(31, 99, 146, 0.28) transparent;
+    scrollbar-width: thin;
+}
+
+.client-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.client-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.client-list::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(31, 99, 146, 0.24);
 }
 
 .client-item {
-    display: block;
-    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-width: 0;
+    padding: 0.65rem 0.75rem;
     margin: 0.25rem 0;
-    border-radius: 12px;
-    color: var(--gray-700);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: #37526b;
     text-decoration: none;
-    transition: all 0.2s;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.client-item__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex: 0 0 2rem;
+    border-radius: 9px;
+    background: #edf6fb;
+    color: var(--theme-primary);
+}
+
+.client-item__name {
+    overflow: hidden;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .client-item:hover {
-    background: var(--gray-50);
+    border-color: #d8e8f1;
+    background: #f6fafc;
     color: var(--theme-primary);
 }
 
 .client-item.active {
-    background: linear-gradient(135deg, rgba(31, 99, 146, 0.1) 0%, rgba(31, 99, 146, 0.05) 100%);
+    border-color: #c7dfec;
+    background: linear-gradient(135deg, #edf7fc 0%, #e3f1f8 100%);
     color: var(--theme-primary);
-    font-weight: 500;
-    border-left: none;
+}
+
+.client-item.active .client-item__icon {
+    background: var(--theme-primary);
+    color: #fff;
 }
 
 /* Main Content Cards */
 .report-card {
     background: white;
-    border-radius: 20px;
-    border: 1px solid var(--gray-200);
+    border-radius: 16px;
+    border: 1px solid var(--report-border);
     overflow: hidden;
-    margin-bottom: 1.5rem;
-    box-shadow: var(--shadow-sm);
+    margin-bottom: 1rem;
+    box-shadow: 0 8px 24px rgba(31, 99, 146, 0.06);
+}
+
+#page-content-wrapper .sales-report-shell .client-card.app-3d-surface,
+#page-content-wrapper .sales-report-shell .report-card.app-3d-surface {
+    border-color: var(--report-border) !important;
+    border-radius: 16px;
+    background: var(--report-card-surface) !important;
+    box-shadow: 0 8px 24px rgba(31, 99, 146, 0.07) !important;
+    transform: none !important;
+}
+
+#page-content-wrapper .sales-report-shell .client-card.app-3d-surface:hover,
+#page-content-wrapper .sales-report-shell .report-card.app-3d-surface:hover {
+    border-color: #cadde8 !important;
+    box-shadow: 0 10px 28px rgba(31, 99, 146, 0.09) !important;
+    transform: none !important;
+}
+
+#page-content-wrapper .sales-report-shell .report-card .table-responsive {
+    box-shadow: none;
 }
 
 .report-card .card-header {
-    padding: 1rem 1.5rem;
-    background: var(--gray-50);
-    border-bottom: 1px solid var(--gray-200);
+    padding: 0.95rem 1.1rem 0.45rem;
+    background: white;
+    border-bottom: 0;
 }
 
 .report-card .card-header h5 {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--gray-900);
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--report-text);
     margin: 0;
     display: flex;
     align-items: center;
@@ -300,10 +377,73 @@ include '../../includes/navbar.php';
 }
 
 .report-card .card-body {
-    padding: 1.5rem;
+    padding: 0.75rem 1.1rem 1.1rem;
+}
+
+.report-cost-grid,
+.report-support-grid {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.report-cost-grid > .report-card,
+.report-support-grid > .report-card {
+    min-width: 0;
+    margin-bottom: 0;
+}
+
+@media (min-width: 1400px) {
+    .report-cost-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .report-support-grid {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+}
+
+.project-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.project-info-item {
+    min-width: 0;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid #e5edf2;
+    border-radius: 11px;
+    background: var(--report-surface-soft);
+}
+
+.project-info-item--wide {
+    grid-column: 1 / -1;
+}
+
+.project-info-item small {
+    margin-bottom: 0.25rem;
+    color: #71859a !important;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.project-info-item strong,
+.project-info-item p {
+    color: var(--report-text);
+    font-size: 0.92rem;
+    line-height: 1.5;
 }
 
 /* Tables */
+.report-card .table-responsive {
+    border: 1px solid #e3ebf0;
+    border-radius: 12px;
+}
+
 .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -314,7 +454,7 @@ include '../../includes/navbar.php';
 }
 
 .data-table th {
-    padding: 0.75rem 1rem;
+    padding: 0.7rem 0.85rem;
     text-align: left;
     font-size: 0.7rem;
     font-weight: 600;
@@ -325,8 +465,10 @@ include '../../includes/navbar.php';
 }
 
 .data-table td {
-    padding: 0.75rem 1rem;
+    padding: 0.72rem 0.85rem;
     border-bottom: 1px solid var(--gray-200);
+    color: #37526b;
+    font-size: 0.88rem;
 }
 
 .data-table tr:last-child td {
@@ -334,8 +476,9 @@ include '../../includes/navbar.php';
 }
 
 .data-table tr.total-row {
-    background: var(--gray-50);
+    background: #f1f7fa;
     font-weight: 600;
+    color: var(--report-text);
 }
 
 /* Summary Table */
@@ -345,8 +488,10 @@ include '../../includes/navbar.php';
 }
 
 .summary-table td {
-    padding: 0.75rem;
+    padding: 0.72rem 0.85rem;
     border-bottom: 1px solid var(--gray-200);
+    color: #37526b;
+    font-size: 0.9rem;
 }
 
 .summary-table tr:last-child td {
@@ -354,19 +499,71 @@ include '../../includes/navbar.php';
 }
 
 .summary-table .total-row {
-    background: var(--gray-50);
-    font-weight: 600;
+    background: #eaf5fa;
+    font-weight: 700;
     color: var(--theme-primary);
+}
+
+.summary-wrap {
+    overflow: hidden;
+    border: 1px solid #e3ebf0;
+    border-radius: 12px;
+}
+
+.report-resource-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin: 0;
+    padding: 0.85rem 1rem !important;
+    border: 1px solid #dceaf2 !important;
+    border-radius: 11px !important;
+    background: #f2f8fb !important;
+    color: #37526b;
+}
+
+.other-fee-item {
+    align-items: center;
+    margin: 0 0 0.65rem !important;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.other-fee-item .form-control {
+    min-height: 42px;
+    border-color: #d3e1ea;
+    border-radius: 9px !important;
+    color: var(--report-text);
+    font-size: 0.88rem;
+    box-shadow: none;
+}
+
+.other-fee-item .form-control:focus {
+    border-color: rgba(31, 99, 146, 0.58);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
+}
+
+.other-fees-note {
+    display: flex !important;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.75rem !important;
+    color: #71859a !important;
+    font-size: 0.78rem;
 }
 
 /* Buttons */
 .btn-save {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    min-height: 44px;
+    background: linear-gradient(135deg, #1f6392 0%, #155579 100%);
     color: white;
     border: none;
-    padding: 0.75rem 2rem;
-    border-radius: 40px;
-    font-weight: 500;
+    padding: 0.7rem 1.2rem;
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-weight: 700;
     transition: all 0.2s;
     display: inline-flex;
     align-items: center;
@@ -375,38 +572,640 @@ include '../../includes/navbar.php';
 
 .btn-save:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.24);
     color: white;
 }
 
 .btn-secondary-modern {
-    background: linear-gradient(135deg, var(--gray-600) 0%, var(--gray-700) 100%);
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 10px;
+    min-height: 40px;
+    background: #fff;
+    color: var(--theme-primary);
+    border: 1px solid #bcd5e4;
+    padding: 0.55rem 0.85rem;
+    border-radius: 9px;
     font-size: 0.8rem;
+    font-weight: 700;
     transition: all 0.2s;
 }
 
 .btn-secondary-modern:hover {
     transform: translateY(-1px);
-    color: white;
+    border-color: var(--theme-primary);
+    background: #edf6fb;
+    color: var(--theme-primary-dark);
 }
 
 .btn-danger-modern {
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-    color: white;
-    border: none;
-    padding: 0.4rem 0.8rem;
-    border-radius: 8px;
-    font-size: 0.75rem;
+    width: 100%;
+    min-height: 42px;
+    background: #fff7f7;
+    color: #dc3545;
+    border: 1px solid #f1b8be;
+    padding: 0.5rem 0.75rem;
+    border-radius: 9px;
+    font-size: 0.78rem;
+    font-weight: 700;
     transition: all 0.2s;
 }
 
 .btn-danger-modern:hover {
     transform: translateY(-1px);
-    color: white;
+    border-color: #dc3545;
+    background: #fff0f1;
+    color: #bd2635;
+}
+
+.report-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.65rem;
+    margin-top: 1rem;
+    padding: 0.9rem;
+    border: 1px solid var(--report-border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 8px 24px rgba(31, 99, 146, 0.06);
+}
+
+.report-actions [data-generic-save-draft] {
+    min-height: 44px;
+    margin-left: 0 !important;
+    padding: 0.65rem 1rem;
+    border-color: #bcd5e4;
+    border-radius: 10px;
+    color: var(--theme-primary);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+.report-actions [data-generic-draft-status] {
+    margin-left: 0 !important;
+}
+
+/* Consolidated report surface */
+.report-layout {
+    display: grid;
+    gap: 1rem;
+}
+
+.client-selector-wrap,
+.report-content {
+    min-width: 0;
+}
+
+.client-selector-wrap {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.7rem 1.25rem;
+    border-bottom: 1px solid var(--report-border);
+    background: #f8fbfd;
+}
+
+.report-client-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    width: min(100%, 32rem);
+    padding: 0;
+}
+
+.report-client-filter__label {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin: 0;
+    color: var(--report-text);
+}
+
+.report-client-filter__label small,
+.report-client-filter__label strong {
+    display: block;
+}
+
+.report-client-filter__label small {
+    margin-bottom: 0.1rem;
+    color: #7a8da0;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.report-client-filter__label strong {
+    font-size: 0.88rem;
+    font-weight: 600;
+}
+
+.report-client-filter__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9px;
+    background: #eaf5fa;
+    color: var(--theme-primary);
+}
+
+.report-client-filter__control {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+
+.report-client-filter__control .form-select {
+    min-height: 42px;
+    padding: 0.55rem 2.2rem 0.55rem 0.85rem;
+    border: 0;
+    border-bottom: 1px solid #bfd3df;
+    border-radius: 0;
+    background-color: transparent;
+    background-image: none;
+    color: var(--report-text);
+    font-size: 0.86rem;
+    font-weight: 500;
+    line-height: 1.4;
+    box-shadow: none;
+}
+
+.report-client-filter__control .form-select option {
+    font-weight: 400;
+}
+
+.report-client-filter__control .form-select:focus {
+    border-color: var(--theme-primary);
+    box-shadow: 0 2px 0 rgba(31, 99, 146, 0.14);
+}
+
+.report-client-filter__control > i {
+    position: absolute;
+    top: 50%;
+    right: 0.3rem;
+    color: #6f8799;
+    font-size: 0.75rem;
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+
+#page-content-wrapper .sales-report-shell .client-selector-bar.app-3d-surface {
+    position: static;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    border-radius: 16px;
+    background: var(--report-card-surface) !important;
+    transform: none !important;
+}
+
+#page-content-wrapper .sales-report-shell .client-selector-bar.app-3d-surface:hover {
+    transform: none !important;
+}
+
+.client-selector-bar .card-header {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    padding: 0.8rem 1rem;
+    border: 0;
+    border-right: 1px solid var(--report-border);
+    white-space: nowrap;
+}
+
+.client-selector-bar .client-list {
+    display: flex;
+    gap: 0.45rem;
+    min-height: 0;
+    max-height: none;
+    padding: 0.55rem 0.75rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.client-selector-bar .client-item {
+    flex: 0 0 auto;
+    max-width: 15rem;
+    margin: 0;
+    padding: 0.5rem 0.7rem;
+}
+
+.client-selector-bar .client-item__icon {
+    width: 1.8rem;
+    height: 1.8rem;
+    flex-basis: 1.8rem;
+}
+
+.report-workspace {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--report-border);
+    border-radius: 18px;
+    background: var(--report-card-surface);
+    box-shadow: 0 10px 30px rgba(31, 99, 146, 0.08);
+}
+
+.report-form {
+    display: flex;
+    flex-direction: column;
+}
+
+.report-workspace .report-card--project {
+    order: 1;
+}
+
+.report-workspace .report-card--summary {
+    order: 2;
+}
+
+.report-workspace .report-breakdown {
+    order: 3;
+}
+
+.report-workspace .report-support-grid {
+    order: 4;
+}
+
+.report-workspace .report-actions {
+    order: 5;
+}
+
+#page-content-wrapper .sales-report-shell .report-workspace .report-card.app-3d-surface,
+#page-content-wrapper .sales-report-shell .report-workspace .report-card.app-3d-surface:hover {
+    margin: 0;
+    border: 0 !important;
+    border-radius: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.report-workspace .report-card .card-header {
+    padding: 1rem 1.25rem 0.35rem;
+    background: transparent;
+}
+
+.report-workspace .report-card .card-body {
+    padding: 0.65rem 1.25rem 1.1rem;
+}
+
+.report-overview {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem 2rem;
+}
+
+.report-overview__kicker {
+    display: block;
+    margin-bottom: 0.18rem;
+    color: #72869a;
+    font-size: 0.67rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.report-overview h3 {
+    margin: 0;
+    color: var(--report-text);
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+.report-overview__timeline {
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+.report-overview__timeline small,
+.report-overview__timeline strong {
+    display: block;
+}
+
+.report-overview__timeline small {
+    margin-bottom: 0.18rem;
+    color: #72869a;
+    font-size: 0.67rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.report-overview__timeline strong {
+    color: var(--report-text);
+    font-size: 0.84rem;
+    font-weight: 600;
+}
+
+.report-overview__description {
+    margin: 0.75rem 0 0;
+    padding-top: 0.65rem;
+    border-top: 1px solid #e6edf2;
+    color: #536b82;
+    font-size: 0.84rem;
+    line-height: 1.55;
+}
+
+.report-overview__description-label {
+    margin-right: 0.45rem;
+    color: #72869a;
+    font-size: 0.67rem;
+    font-weight: 600;
+    letter-spacing: 0.075em;
+    text-transform: uppercase;
+}
+
+.report-breakdown {
+    border-top: 1px solid var(--report-border);
+}
+
+.report-breakdown > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.95rem 1.25rem;
+    color: var(--report-text);
+    cursor: pointer;
+    list-style: none;
+}
+
+.report-breakdown > summary::-webkit-details-marker {
+    display: none;
+}
+
+.report-breakdown__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    flex: 0 0 2.1rem;
+    border-radius: 9px;
+    background: #edf6fb;
+    color: var(--theme-primary);
+}
+
+.report-breakdown__copy {
+    min-width: 0;
+}
+
+.report-breakdown__copy strong,
+.report-breakdown__copy small {
+    display: block;
+}
+
+.report-breakdown__copy strong {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.report-breakdown__copy small {
+    margin-top: 0.1rem;
+    color: #71859a;
+    font-size: 0.74rem;
+}
+
+.report-breakdown__chevron {
+    margin-left: auto;
+    color: #71859a;
+    transition: transform 0.18s ease;
+}
+
+.report-breakdown[open] .report-breakdown__chevron {
+    transform: rotate(180deg);
+}
+
+.report-breakdown .report-cost-grid {
+    gap: 1.75rem;
+    padding: 0 1.25rem 1rem;
+    border-top: 1px solid var(--report-border);
+}
+
+.report-breakdown .report-card .card-header {
+    padding: 0.85rem 0 0.3rem;
+    background: transparent !important;
+}
+
+.report-breakdown .report-card .card-body {
+    padding: 0.35rem 0 0;
+}
+
+#page-content-wrapper .sales-report-shell .report-breakdown .report-card .table-responsive {
+    overflow-x: auto;
+    overflow-y: hidden;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none;
+}
+
+.report-breakdown .data-table thead {
+    background: transparent;
+}
+
+.report-breakdown .data-table th {
+    padding: 0.55rem 0;
+    border-bottom-color: #dfe8ee;
+    font-size: 0.66rem;
+}
+
+.report-breakdown .data-table td {
+    padding: 0.62rem 0;
+    border-bottom-color: #e8eef2;
+    font-size: 0.84rem;
+}
+
+.report-breakdown .data-table th + th,
+.report-breakdown .data-table td + td {
+    padding-left: 1rem;
+}
+
+.report-breakdown .data-table tr.total-row {
+    border-top: 1px solid #d5e1e8;
+    background: transparent;
+}
+
+.report-breakdown .data-table tr.total-row td {
+    padding-top: 0.7rem;
+    padding-bottom: 0.15rem;
+    border-bottom: 0;
+}
+
+.report-breakdown__resource {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--report-border);
+    color: #536b82;
+    font-size: 0.82rem;
+}
+
+.report-breakdown__resource span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.report-breakdown__resource i {
+    color: var(--theme-primary);
+}
+
+.report-breakdown__resource strong {
+    color: var(--report-text);
+    font-weight: 600;
+}
+
+.report-workspace .report-cost-grid {
+    position: relative;
+    gap: 2rem;
+    margin: 0;
+    border-top: 1px solid var(--report-border);
+}
+
+@media (min-width: 1400px) {
+    .report-workspace .report-cost-grid::before {
+        content: "";
+        position: absolute;
+        top: 0.75rem;
+        bottom: 0.75rem;
+        left: 50%;
+        width: 1px;
+        background: var(--report-border);
+        pointer-events: none;
+        transform: translateX(-50%);
+    }
+}
+
+.report-workspace .report-support-grid {
+    gap: 0;
+    margin: 0;
+    border-top: 1px solid var(--report-border);
+}
+
+#page-content-wrapper .sales-report-shell .report-workspace .report-card--summary.app-3d-surface {
+    border-top: 1px solid var(--report-border) !important;
+}
+
+.report-workspace .report-card--summary .card-body {
+    padding-top: 0.8rem;
+}
+
+.report-summary-title {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.75rem;
+}
+
+.report-summary-title__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex: 0 0 2rem;
+    border-radius: 9px;
+    background: #eaf5fa;
+    color: var(--theme-primary);
+}
+
+.report-summary-title strong,
+.report-summary-title small {
+    display: block;
+}
+
+.report-summary-title strong {
+    color: var(--report-text);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.report-summary-title small {
+    margin-top: 0.08rem;
+    color: #71859a;
+    font-size: 0.72rem;
+}
+
+.report-workspace .summary-wrap {
+    overflow: visible;
+    border: 0;
+}
+
+.report-workspace .summary-table {
+    display: block;
+}
+
+.report-workspace .summary-table tbody {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.7rem;
+}
+
+.report-workspace .summary-table tr {
+    display: flex;
+    min-width: 0;
+    min-height: 4.8rem;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 0.7rem 0.8rem;
+    border: 1px solid #e1eaf0;
+    border-radius: 11px;
+    background: #f7fafc;
+}
+
+.report-workspace .summary-table td {
+    display: block;
+    padding: 0;
+    border: 0;
+}
+
+.report-workspace .summary-table td:first-child {
+    color: #6f8295;
+    font-size: 0.69rem;
+    font-weight: 600;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+}
+
+.report-workspace .summary-table td:last-child {
+    margin-top: 0.5rem;
+    color: var(--report-text);
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: left !important;
+}
+
+.report-workspace .summary-table .total-row {
+    border-color: #1f6392;
+    background: linear-gradient(135deg, #1f6392 0%, #155579 100%);
+}
+
+.report-workspace .summary-table .total-row td {
+    color: #fff;
+}
+
+.report-fees {
+    order: 4 !important;
+}
+
+.report-fees__body {
+    border-top: 1px solid var(--report-border);
+}
+
+.report-fees .report-card .card-body {
+    padding: 0.9rem 1.25rem 1rem;
+}
+
+.report-workspace .report-actions {
+    margin: 0;
+    padding: 0.85rem 1.25rem;
+    border: 0;
+    border-top: 1px solid var(--report-border);
+    border-radius: 0;
+    background: #f7fafc;
+    box-shadow: none;
 }
 
 /* Alert */
@@ -438,6 +1237,13 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #page-content-wrapper {
     background: #06111e;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .sales-report-shell {
+    --report-card-surface: #071321;
+    --report-border: rgba(31, 99, 146, 0.24);
+    --report-surface-soft: #0a1b2c;
+    --report-text: #d7e4f2;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern,
@@ -515,20 +1321,185 @@ include '../../includes/navbar.php';
     color: rgba(157, 182, 207, 0.65);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-item__icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-info-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-resource-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-actions {
+    border-color: rgba(138, 210, 255, 0.12) !important;
+    background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-item.active .client-item__icon {
+    background: #1f6392 !important;
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-info-item strong,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-info-item p,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-resource-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-card .table-responsive,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-wrap {
+    border-color: rgba(138, 210, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table tr.total-row,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-table .total-row {
+    background: rgba(31, 99, 146, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-secondary-modern,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-actions [data-generic-save-draft] {
+    border-color: rgba(140, 199, 255, 0.3);
+    background: rgba(31, 99, 146, 0.12);
+    color: #8cc7ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-danger-modern {
+    border-color: rgba(244, 114, 125, 0.34);
+    background: rgba(220, 53, 69, 0.12);
+    color: #ff9ca6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-client-filter {
+    background: transparent;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-selector-wrap {
+    border-color: rgba(138, 210, 255, 0.12);
+    background: #081725;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-client-filter__icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-breakdown__icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-summary-title__icon {
+    background: rgba(31, 99, 146, 0.2);
+    color: #8cc7ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-workspace .project-info-item--wide,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-workspace .summary-table tr,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-overview__description,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-breakdown__resource {
+    border-color: rgba(138, 210, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-workspace .summary-table tr {
+    background: #0a1b2c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-workspace .summary-table td:first-child,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-breakdown__copy small,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-overview__description-label {
+    color: #90aeca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-breakdown__resource,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-overview__description {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-breakdown__resource strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-breakdown .data-table tr.total-row {
+    background: transparent;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-workspace .summary-table .total-row {
+    border-color: #2f83b9;
+    background: linear-gradient(135deg, #1f6392 0%, #155579 100%);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .report-workspace .summary-table .total-row td {
+    color: #fff;
+}
+
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 991.98px) {
     .page-header-modern {
         padding: 1.5rem;
     }
     
     .client-card {
-        margin-bottom: 1.5rem;
+        margin-bottom: 0;
         position: static;
+    }
+
+    #page-content-wrapper .sales-report-shell .client-selector-bar.app-3d-surface {
+        grid-template-columns: 1fr;
+    }
+
+    .client-selector-bar .card-header {
+        border-right: 0;
+        border-bottom: 1px solid var(--report-border);
+    }
+
+    .report-workspace .summary-table tbody {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575.98px) {
+    .sales-report-shell {
+        padding-right: 0.8rem !important;
+        padding-left: 0.8rem !important;
+    }
+
+    .client-selector-wrap {
+        padding-right: 0.85rem;
+        padding-left: 0.85rem;
+    }
+
+    .page-header-modern {
+        padding: 1.2rem;
+    }
+
+    .page-header-modern h2 {
+        font-size: 1.3rem;
+    }
+
+    .report-client-filter {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 0.65rem;
+        width: 100%;
+    }
+
+    .report-overview {
+        flex-direction: column;
+    }
+
+    .report-overview__timeline {
+        text-align: left;
+    }
+
+    .report-workspace .summary-table tbody {
+        grid-template-columns: 1fr;
+    }
+
+    .report-card .card-body {
+        padding-right: 0.85rem;
+        padding-left: 0.85rem;
+    }
+
+    .report-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .report-actions .btn-save,
+    .report-actions [data-generic-save-draft] {
+        width: 100%;
     }
 }
 </style>
 
-<div class="container-fluid px-4 py-4">
+<div class="container-fluid px-4 py-4 sales-report-shell">
     <!-- Page Header -->
     <div class="page-header-modern">
         <div>
@@ -540,68 +1511,66 @@ include '../../includes/navbar.php';
         </div>
     </div>
 
-    <div class="row g-4">
-        <!-- Client Sidebar -->
-        <div class="col-md-3">
-            <div class="client-card">
-                <div class="card-header">
-                    <h5>
-                        <i class="fas fa-building"></i>
-                        Select Client
-                    </h5>
+    <div class="report-layout">
+        <div class="report-workspace">
+        <!-- Client Selector -->
+        <div class="client-selector-wrap">
+            <form method="GET" class="report-client-filter">
+                <label for="reportClientSelect" class="report-client-filter__label">
+                    <span class="report-client-filter__icon" aria-hidden="true"><i class="fas fa-building"></i></span>
+                    <strong>Client</strong>
+                </label>
+                <div class="report-client-filter__control">
+                    <select name="client_id" id="reportClientSelect" class="form-select" onchange="this.form.submit()" <?php echo $clients->num_rows === 0 ? 'disabled' : ''; ?>>
+                        <option value="">Choose a client</option>
+                        <?php if($clients->num_rows > 0): ?>
+                            <?php while($client = $clients->fetch_assoc()): ?>
+                                <option value="<?php echo $client['id']; ?>" <?php echo $selectedClient == $client['id'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($client['name']); ?>
+                                </option>
+                            <?php endwhile; ?>
+                        <?php endif; ?>
+                    </select>
+                    <i class="fas fa-chevron-down" aria-hidden="true"></i>
                 </div>
-                <div class="client-list">
-                    <?php if($clients->num_rows > 0): ?>
-                        <?php while($client = $clients->fetch_assoc()): ?>
-                        <a href="?client_id=<?php echo $client['id']; ?>" 
-                           class="client-item <?php echo $selectedClient == $client['id'] ? 'active' : ''; ?>">
-                            <i class="fas fa-user-circle me-2"></i>
-                            <?php echo htmlspecialchars($client['name']); ?>
-                        </a>
-                        <?php endwhile; ?>
-                    <?php else: ?>
-                        <div class="text-center py-4 text-muted">
-                            <i class="fas fa-users fa-2x mb-2"></i>
-                            <p class="small mb-0">No clients with projects</p>
-                        </div>
-                    <?php endif; ?>
-                </div>
-            </div>
+                <noscript><button type="submit" class="btn-secondary-modern">View Report</button></noscript>
+            </form>
         </div>
         
         <!-- Main Content -->
-        <div class="col-md-9">
+        <div class="report-content">
             <?php if($reportData && $technologies): ?>
-            <form method="POST" id="reportForm">
+            <form method="POST" id="reportForm" class="report-form">
                 <input type="hidden" name="project_id" value="<?php echo $reportData['project']['id']; ?>">
                 <input type="hidden" name="client_id" value="<?php echo $selectedClient; ?>">
                 
                 <!-- Project Information -->
-                <div class="report-card">
-                    <div class="card-header">
-                        <h5>
-                            <i class="fas fa-info-circle"></i>
-                            Project Information
-                        </h5>
-                    </div>
+                <div class="report-card report-card--project">
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6 mb-2">
-                                <small class="text-muted d-block">Project Name</small>
-                                <strong><?php echo htmlspecialchars($reportData['project']['name']); ?></strong>
+                        <div class="report-overview">
+                            <div>
+                                <span class="report-overview__kicker">Project Report</span>
+                                <h3><?php echo htmlspecialchars($reportData['project']['name']); ?></h3>
                             </div>
-                            <div class="col-md-6 mb-2">
-                                <small class="text-muted d-block">Timeline</small>
-                                <strong><?php echo date('M d, Y', strtotime($reportData['project']['timeline_start'])); ?> - <?php echo date('M d, Y', strtotime($reportData['project']['timeline_end'])); ?></strong>
-                            </div>
-                            <div class="col-12">
-                                <small class="text-muted d-block">Description</small>
-                                <p class="mb-0"><?php echo htmlspecialchars($reportData['project']['description']); ?></p>
+                            <div class="report-overview__timeline">
+                                <small>Timeline</small>
+                                <strong><?php echo date('M d, Y', strtotime($reportData['project']['timeline_start'])); ?> – <?php echo date('M d, Y', strtotime($reportData['project']['timeline_end'])); ?></strong>
                             </div>
                         </div>
+                        <p class="report-overview__description"><span class="report-overview__description-label">Description</span><?php echo htmlspecialchars($reportData['project']['description']); ?></p>
                     </div>
                 </div>
                 
+                <details class="report-breakdown">
+                    <summary>
+                        <span class="report-breakdown__icon" aria-hidden="true"><i class="fas fa-receipt"></i></span>
+                        <span class="report-breakdown__copy">
+                            <strong>Cost Breakdown</strong>
+                            <small>View technology and developer cost details</small>
+                        </span>
+                        <i class="fas fa-chevron-down report-breakdown__chevron" aria-hidden="true"></i>
+                    </summary>
+                <div class="report-cost-grid">
                 <!-- Technology Costs -->
                 <div class="report-card">
                     <div class="card-header">
@@ -642,7 +1611,7 @@ include '../../includes/navbar.php';
                         <input type="hidden" name="technology_cost" value="<?php echo $techTotal; ?>">
                     </div>
                 </div>
-                
+
                 <!-- Developer Costs -->
                 <div class="report-card">
                     <div class="card-header">
@@ -692,33 +1661,26 @@ include '../../includes/navbar.php';
                         <input type="hidden" name="developer_cost" value="<?php echo $devTotal; ?>">
                     </div>
                 </div>
-                
-                <!-- Resource Costs -->
-                <div class="report-card">
-                    <div class="card-header">
-                        <h5>
-                            <i class="fas fa-server"></i>
-                            Resource Costs
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="alert alert-info bg-light border-0 p-3 rounded-3">
-                            <i class="fas fa-info-circle me-2 text-primary"></i>
-                            <strong>Total Resource Cost:</strong> &#8369;<?php echo number_format($techTotal, 2); ?>/month
-                        </div>
-                        <input type="hidden" name="resource_cost" value="<?php echo $techTotal; ?>">
-                    </div>
                 </div>
-                
-                <!-- Other Fees -->
-                <div class="report-card">
-                    <div class="card-header">
-                        <h5>
-                            <i class="fas fa-plus-circle"></i>
-                            Other Fees (Optional)
-                        </h5>
-                    </div>
-                    <div class="card-body">
+                <div class="report-breakdown__resource">
+                    <span><i class="fas fa-server" aria-hidden="true"></i>Resource Costs</span>
+                    <strong>&#8369;<?php echo number_format($techTotal, 2); ?>/month</strong>
+                    <input type="hidden" name="resource_cost" value="<?php echo $techTotal; ?>">
+                </div>
+                </details>
+
+                <details class="report-breakdown report-fees">
+                    <summary>
+                        <span class="report-breakdown__icon" aria-hidden="true"><i class="fas fa-plus"></i></span>
+                        <span class="report-breakdown__copy">
+                            <strong>Other Fees</strong>
+                            <small>Optional adjustments that do not appear on the receipt</small>
+                        </span>
+                        <i class="fas fa-chevron-down report-breakdown__chevron" aria-hidden="true"></i>
+                    </summary>
+                    <div class="report-fees__body">
+                    <div class="report-card">
+                        <div class="card-body">
                         <div id="otherFeesContainer">
                             <div class="other-fee-item row g-2 mb-2">
                                 <div class="col-md-6">
@@ -737,49 +1699,50 @@ include '../../includes/navbar.php';
                         <button type="button" class="btn-secondary-modern mt-2" onclick="addFee()">
                             <i class="fas fa-plus"></i> Add Another Fee
                         </button>
-                        <small class="text-muted d-block mt-2"><i class="fas fa-info-circle me-1"></i>Note: Other fees will not appear on the receipt</small>
+                        <small class="text-muted d-block mt-2 other-fees-note"><i class="fas fa-info-circle"></i>Other fees will not appear on the receipt.</small>
+                        </div>
                     </div>
-                </div>
+                    </div>
+                </details>
                 
                 <!-- Cost Summary -->
-                <div class="report-card">
-                    <div class="card-header">
-                        <h5>
-                            <i class="fas fa-calculator"></i>
-                            Cost Summary
-                        </h5>
-                    </div>
+                <div class="report-card report-card--summary">
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-8 offset-md-4">
-                                <table class="summary-table">
-                                    <tr>
-                                        <td>Technology Costs:</td>
-                                        <td class="text-end">&#8369;<span id="summaryTech"><?php echo number_format($techTotal, 2); ?></span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Developer Costs:</td>
-                                        <td class="text-end">&#8369;<span id="summaryDev"><?php echo number_format($devTotal, 2); ?></span></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Resource Costs:</td>
-                                        <td class="text-end">&#8369;<span id="summaryResource"><?php echo number_format($techTotal, 2); ?></span></td>
-                                    </tr>
-                                    <tr id="otherFeesSummary" style="display: none;">
-                                        <td>Other Fees:</td>
-                                        <td class="text-end">&#8369;<span id="summaryOther">0.00</span></td>
-                                    </tr>
-                                    <tr class="total-row">
-                                        <td><strong>Total Monthly Cost:</strong></td>
-                                        <td class="text-end"><strong>&#8369;<span id="summaryTotal"><?php echo number_format($techTotal + $devTotal + $techTotal, 2); ?></span></strong></td>
-                                    </tr>
-                                </table>
-                            </div>
+                        <div class="report-summary-title">
+                            <span class="report-summary-title__icon" aria-hidden="true"><i class="fas fa-calculator"></i></span>
+                            <span>
+                                <strong>Monthly Cost Summary</strong>
+                                <small>Complete estimated project costs</small>
+                            </span>
+                        </div>
+                        <div class="summary-wrap">
+                            <table class="summary-table">
+                                <tr>
+                                    <td>Technology Costs</td>
+                                    <td class="text-end">&#8369;<span id="summaryTech"><?php echo number_format($techTotal, 2); ?></span></td>
+                                </tr>
+                                <tr>
+                                    <td>Developer Costs</td>
+                                    <td class="text-end">&#8369;<span id="summaryDev"><?php echo number_format($devTotal, 2); ?></span></td>
+                                </tr>
+                                <tr>
+                                    <td>Resource Costs</td>
+                                    <td class="text-end">&#8369;<span id="summaryResource"><?php echo number_format($techTotal, 2); ?></span></td>
+                                </tr>
+                                <tr id="otherFeesSummary" style="display: none;">
+                                    <td>Other Fees</td>
+                                    <td class="text-end">&#8369;<span id="summaryOther">0.00</span></td>
+                                </tr>
+                                <tr class="total-row">
+                                    <td><strong>Total Monthly Cost</strong></td>
+                                    <td class="text-end"><strong>&#8369;<span id="summaryTotal"><?php echo number_format($techTotal + $devTotal + $techTotal, 2); ?></span></strong></td>
+                                </tr>
+                            </table>
                         </div>
                     </div>
                 </div>
                 
-                <div class="text-end mt-4">
+                <div class="report-actions">
                     <button type="submit" name="save_report" class="btn-save">
                         <i class="fas fa-save"></i> Save Report & Generate Receipt
                     </button>
@@ -795,9 +1758,10 @@ include '../../includes/navbar.php';
             <div class="alert-modern">
                 <i class="fas fa-hand-pointer"></i>
                 <h4>Select a Client</h4>
-                <p>Choose a client from the sidebar to generate a sales report</p>
+                <p>Choose a client from the dropdown to generate a sales report.</p>
             </div>
             <?php endif; ?>
+        </div>
         </div>
     </div>
 </div>

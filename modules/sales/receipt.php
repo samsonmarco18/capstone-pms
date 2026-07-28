@@ -314,41 +314,74 @@ if (isset($_GET['download']) && $receiptId > 0) {
 }
 
 // Get receipts for client or specific report
+$allowedReceiptPageSizes = [10, 25, 50];
+$receiptPageSize = isset($_GET['per_page']) ? (int) $_GET['per_page'] : 10;
+if (!in_array($receiptPageSize, $allowedReceiptPageSizes, true)) {
+    $receiptPageSize = 10;
+}
+$receiptCurrentPage = max(1, isset($_GET['page']) ? (int) $_GET['page'] : 1);
+$receiptWhereSql = '';
+
 if ($receiptId) {
-    $receipts = $conn->query("
-        SELECT r.*, sr.total_cost, COALESCE(NULLIF(r.client_name, ''), c.name) AS display_client_name
-        FROM receipts r 
-        JOIN sales_reports sr ON r.report_id = sr.id 
-        JOIN clients c ON sr.client_id = c.id 
-        WHERE r.id = $receiptId
-        ORDER BY r.created_at DESC
-    ");
+    $receiptWhereSql = " WHERE r.id = $receiptId";
 } elseif ($reportId) {
-    $receipts = $conn->query("
-        SELECT r.*, sr.total_cost, COALESCE(NULLIF(r.client_name, ''), c.name) AS display_client_name
-        FROM receipts r 
-        JOIN sales_reports sr ON r.report_id = sr.id 
-        JOIN clients c ON sr.client_id = c.id 
-        WHERE r.id = $reportId OR sr.id = $reportId
-        ORDER BY r.created_at DESC
-    ");
+    $receiptWhereSql = " WHERE (r.id = $reportId OR sr.id = $reportId)";
 } elseif ($clientId) {
-    $receipts = $conn->query("
-        SELECT r.*, sr.total_cost, COALESCE(NULLIF(r.client_name, ''), c.name) AS display_client_name
-        FROM receipts r 
-        JOIN sales_reports sr ON r.report_id = sr.id 
-        JOIN clients c ON sr.client_id = c.id 
-        WHERE c.id = $clientId
-        ORDER BY r.created_at DESC
-    ");
+    $receiptWhereSql = " WHERE c.id = $clientId";
+}
+
+$receiptCountResult = $conn->query("
+    SELECT COUNT(*) AS total
+    FROM receipts r
+    JOIN sales_reports sr ON r.report_id = sr.id
+    JOIN clients c ON sr.client_id = c.id
+    {$receiptWhereSql}
+");
+$totalFilteredReceipts = 0;
+if ($receiptCountResult) {
+    $receiptCountRow = $receiptCountResult->fetch_assoc();
+    $totalFilteredReceipts = (int) ($receiptCountRow['total'] ?? 0);
+}
+
+$receiptTotalPages = max(1, (int) ceil($totalFilteredReceipts / $receiptPageSize));
+$receiptCurrentPage = min($receiptCurrentPage, $receiptTotalPages);
+$receiptPageOffset = ($receiptCurrentPage - 1) * $receiptPageSize;
+$receipts = $conn->query("
+    SELECT r.*, sr.total_cost, COALESCE(NULLIF(r.client_name, ''), c.name) AS display_client_name
+    FROM receipts r
+    JOIN sales_reports sr ON r.report_id = sr.id
+    JOIN clients c ON sr.client_id = c.id
+    {$receiptWhereSql}
+    ORDER BY r.created_at DESC
+    LIMIT {$receiptPageSize} OFFSET {$receiptPageOffset}
+");
+$receiptRowsShown = $receipts ? (int) $receipts->num_rows : 0;
+$receiptPageStart = $totalFilteredReceipts > 0 ? $receiptPageOffset + 1 : 0;
+$receiptPageEnd = min($receiptPageOffset + $receiptRowsShown, $totalFilteredReceipts);
+
+$buildReceiptPageUrl = static function (int $page, ?int $pageSize = null) use ($receiptId, $reportId, $clientId, $receiptPageSize): string {
+    $params = [];
+    if ($receiptId > 0) {
+        $params['receipt_id'] = $receiptId;
+    } elseif ($reportId > 0) {
+        $params['report_id'] = $reportId;
+    } elseif ($clientId > 0) {
+        $params['client_id'] = $clientId;
+    }
+
+    $params['per_page'] = $pageSize ?? $receiptPageSize;
+    if ($page > 1) {
+        $params['page'] = $page;
+    }
+
+    return 'receipt.php?' . http_build_query($params) . '#generatedReceipts';
+};
+
+if ($receiptTotalPages <= 5) {
+    $receiptPaginationPages = range(1, $receiptTotalPages);
 } else {
-    $receipts = $conn->query("
-        SELECT r.*, sr.total_cost, COALESCE(NULLIF(r.client_name, ''), c.name) AS display_client_name
-        FROM receipts r 
-        JOIN sales_reports sr ON r.report_id = sr.id 
-        JOIN clients c ON sr.client_id = c.id 
-        ORDER BY r.created_at DESC
-    ");
+    $receiptPaginationStart = max(1, min($receiptCurrentPage - 2, $receiptTotalPages - 4));
+    $receiptPaginationPages = range($receiptPaginationStart, $receiptPaginationStart + 4);
 }
 
 // Get client name for header
@@ -539,6 +572,22 @@ include '../../includes/navbar.php';
     overflow-x: auto;
 }
 
+#page-content-wrapper .receipt-list-card.receipt-list-card {
+    overflow: visible !important;
+}
+
+.receipt-list-card .table-container {
+    overflow: visible;
+    min-height: 16rem;
+    background: #fff;
+}
+
+.receipt-list-card .table-container.is-empty {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+}
+
 .receipt-table {
     width: 100%;
     border-collapse: collapse;
@@ -688,6 +737,200 @@ include '../../includes/navbar.php';
     margin: 0;
 }
 
+.receipt-action-menu {
+    display: inline-flex;
+}
+
+.receipt-actions-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid #d2e1ea;
+    border-radius: 10px;
+    background: #f8fbfd;
+    color: var(--theme-primary);
+    transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.receipt-actions-trigger:hover,
+.receipt-actions-trigger:focus-visible,
+.receipt-actions-trigger[aria-expanded="true"] {
+    border-color: #a9c9da;
+    background: #eaf5fa;
+    color: var(--theme-primary-dark);
+    outline: none;
+}
+
+.receipt-actions-menu {
+    z-index: 1080;
+    min-width: 13rem;
+    padding: 0.4rem;
+    border: 1px solid #dce7ee;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 14px 34px rgba(31, 99, 146, 0.16);
+}
+
+.receipt-table th:last-child,
+.receipt-table td:last-child {
+    width: 1%;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.receipt-actions-menu .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    width: 100%;
+    padding: 0.58rem 0.7rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #29465f;
+    font-size: 0.82rem;
+    font-weight: 500;
+    text-align: left;
+}
+
+.receipt-actions-menu .dropdown-item i {
+    width: 1rem;
+    color: var(--theme-primary);
+    text-align: center;
+}
+
+.receipt-actions-menu .dropdown-item:hover,
+.receipt-actions-menu .dropdown-item:focus {
+    background: #edf6fb;
+    color: #15567f;
+}
+
+.receipt-actions-menu form {
+    margin: 0;
+}
+
+.receipt-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.5rem;
+    border-top: 1px solid var(--gray-200);
+    border-radius: 0 0 24px 24px;
+    background: #fff;
+}
+
+.receipt-pagination__meta,
+.receipt-pagination__controls,
+.receipt-pagination__pages {
+    display: flex;
+    align-items: center;
+}
+
+.receipt-pagination__meta {
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.receipt-pagination__summary {
+    color: var(--gray-600);
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.receipt-pagination__size {
+    height: 36px;
+    min-width: 94px;
+    padding: 0 1.8rem 0 0.7rem;
+    border: 1px solid var(--gray-300);
+    border-radius: 9px;
+    background-color: #fff;
+    color: var(--gray-700, #495057);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.receipt-pagination__controls {
+    gap: 0.55rem;
+}
+
+.receipt-pagination__pages {
+    overflow: hidden;
+    border: 1px solid var(--gray-300);
+    border-radius: 9px;
+    background: #fff;
+}
+
+.receipt-pagination__page,
+.receipt-pagination__step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    color: var(--gray-700, #495057) !important;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.receipt-pagination__page {
+    min-width: 36px;
+    padding: 0 0.55rem;
+}
+
+.receipt-pagination__page:hover,
+.receipt-pagination__page.is-current {
+    background: #edf5fa;
+    color: var(--theme-primary) !important;
+}
+
+.receipt-pagination__page.is-current {
+    box-shadow: inset 0 0 0 1px #cfe1ec;
+    pointer-events: none;
+}
+
+.receipt-pagination__step {
+    min-width: 76px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--gray-300);
+    border-radius: 9px;
+    background: #fff;
+}
+
+.receipt-pagination__step:hover {
+    border-color: #9bbdd1;
+    color: var(--theme-primary) !important;
+}
+
+.receipt-pagination__step.is-disabled {
+    background: var(--gray-50);
+    color: #adb5bd !important;
+    pointer-events: none;
+}
+
+.receipt-actions-menu .dropdown-divider {
+    margin: 0.35rem 0;
+    border-color: #e5edf2;
+}
+
+.card-header-modern .btn-receipt-nav {
+    border: 1px solid #bfd7e5 !important;
+    background: #edf6fb !important;
+    color: #15567f !important;
+    box-shadow: none !important;
+}
+
+.card-header-modern .btn-receipt-nav:hover,
+.card-header-modern .btn-receipt-nav:focus-visible {
+    border-color: #8fbbd1 !important;
+    background: #dfeff7 !important;
+    color: #0f4a6e !important;
+}
+
 .proof-link {
     display: inline-flex;
     align-items: center;
@@ -819,6 +1062,54 @@ include '../../includes/navbar.php';
     color: var(--theme-primary);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-actions-trigger,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-actions-menu {
+    border-color: rgba(138, 210, 255, 0.16);
+    background: #0a1b2c;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-actions-trigger {
+    color: #8cc7ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-actions-menu .dropdown-item {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-actions-menu .dropdown-item:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-actions-menu .dropdown-item:focus {
+    background: rgba(31, 99, 146, 0.2);
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern .btn-receipt-nav {
+    border-color: rgba(140, 199, 255, 0.28) !important;
+    background: rgba(31, 99, 146, 0.16) !important;
+    color: #8cc7ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-list-card .table-container,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-pagination,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-pagination__pages,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-pagination__step,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-pagination__size {
+    border-color: #334155;
+    background: #172033;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-pagination__summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-pagination__page,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-pagination__step,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-pagination__size {
+    color: #cbd5e1 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-pagination__page:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-pagination__page.is-current {
+    background: rgba(31, 99, 146, 0.24);
+    color: #8cc7ff !important;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .page-header-modern {
@@ -845,6 +1136,29 @@ include '../../includes/navbar.php';
     .receipt-table th,
     .receipt-table td {
         padding: 0.75rem 1rem;
+    }
+
+    .receipt-list-card .table-container.has-items {
+        overflow-x: auto;
+    }
+
+    .receipt-pagination {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 0.85rem 1rem;
+    }
+
+    .receipt-pagination__meta,
+    .receipt-pagination__controls {
+        justify-content: space-between;
+    }
+
+    .receipt-pagination__pages {
+        max-width: 100%;
+    }
+
+    .receipt-pagination__step {
+        min-width: 68px;
     }
     
     .action-buttons {
@@ -912,18 +1226,18 @@ include '../../includes/navbar.php';
     </div>
 
     <!-- Main Content Card -->
-    <div class="main-card">
+    <div class="main-card receipt-list-card" id="generatedReceipts">
         <div class="card-header-modern">
             <h5>
                 <i class="fas fa-list"></i>
                 Generated Receipts
             </h5>
             <div class="btn-group">
-                <a href="receipt.php" class="btn-secondary-modern">
+                <a href="receipt.php" class="btn-secondary-modern btn-receipt-nav">
                     <i class="fas fa-list"></i> All Receipts
                 </a>
                 <?php if ($contextClientId): ?>
-                    <a href="<?php echo htmlspecialchars($clientReceiptsUrl); ?>" class="btn-secondary-modern">
+                    <a href="<?php echo htmlspecialchars($clientReceiptsUrl); ?>" class="btn-secondary-modern btn-receipt-nav">
                         <i class="fas fa-building"></i> This Client
                     </a>
                 <?php endif; ?>
@@ -934,8 +1248,8 @@ include '../../includes/navbar.php';
         </div>
         
         <!-- Receipts Table -->
-        <div class="table-container">
-            <?php if($receipts->num_rows > 0): ?>
+        <div class="table-container <?php echo $receiptRowsShown > 0 ? 'has-items' : 'is-empty'; ?>">
+            <?php if($receiptRowsShown > 0): ?>
             <table class="receipt-table">
                 <thead>
                     <tr>
@@ -983,29 +1297,56 @@ include '../../includes/navbar.php';
                             <?php endif; ?>
                         </td>
                         <td>
-                            <div class="action-buttons">
-                                <a href="?download=1&receipt_id=<?php echo (int) $receipt['id']; ?>" class="btn-icon-sm download" target="_blank">
-                                    <i class="fas fa-download"></i>
-                                </a>
-                                <button type="button" class="btn-icon-sm edit" onclick="editReceipt(<?php echo htmlspecialchars(json_encode($receiptPayload), ENT_QUOTES, 'UTF-8'); ?>)" title="Review and edit receipt">
-                                    <i class="fas fa-pen"></i>
+                            <div class="dropdown receipt-action-menu">
+                                <button type="button"
+                                        class="receipt-actions-trigger"
+                                        data-bs-toggle="dropdown"
+                                        data-bs-boundary="viewport"
+                                        aria-expanded="false"
+                                        aria-label="Receipt actions">
+                                    <i class="fas fa-ellipsis-v" aria-hidden="true"></i>
                                 </button>
-                                <?php if ($receiptStatus === 'draft'): ?>
-                                    <form method="POST">
-                                        <input type="hidden" name="receipt_id" value="<?php echo (int) $receipt['id']; ?>">
-                                        <button type="submit" name="finalize_receipt" class="btn-icon-sm finalize" title="Finalize receipt">
-                                            <i class="fas fa-paper-plane"></i>
+                                <ul class="dropdown-menu dropdown-menu-end receipt-actions-menu">
+                                    <li>
+                                        <button type="button" class="dropdown-item" onclick="viewReceipt(<?php echo (int) $receipt['id']; ?>)">
+                                            <i class="fas fa-eye" aria-hidden="true"></i>
+                                            View Receipt
                                         </button>
-                                    </form>
-                                <?php endif; ?>
-                                <?php if (in_array($receiptStatus, ['sent', 'viewed', 'overdue'], true)): ?>
-                                    <button type="button" class="btn-icon-sm verify" onclick="verifyPayment(<?php echo (int) $receipt['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $receipt['receipt_number']), ENT_QUOTES, 'UTF-8'); ?>)" title="Verify payment proof">
-                                        <i class="fas fa-file-circle-check"></i>
-                                    </button>
-                                <?php endif; ?>
-                                <button class="btn-icon-sm view" onclick="viewReceipt(<?php echo $receipt['id']; ?>)">
-                                    <i class="fas fa-eye"></i>
-                                </button>
+                                    </li>
+                                    <li>
+                                        <button type="button" class="dropdown-item" onclick="editReceipt(<?php echo htmlspecialchars(json_encode($receiptPayload), ENT_QUOTES, 'UTF-8'); ?>)">
+                                            <i class="fas fa-pen" aria-hidden="true"></i>
+                                            Review and Edit
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <a href="?download=1&receipt_id=<?php echo (int) $receipt['id']; ?>" class="dropdown-item" target="_blank">
+                                            <i class="fas fa-download" aria-hidden="true"></i>
+                                            Download Receipt
+                                        </a>
+                                    </li>
+                                    <?php if ($receiptStatus === 'draft'): ?>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form method="POST" data-generic-draft-disabled="true">
+                                                <input type="hidden" name="receipt_id" value="<?php echo (int) $receipt['id']; ?>">
+                                                <button type="submit" name="finalize_receipt" class="dropdown-item">
+                                                    <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                                                    Finalize Receipt
+                                                </button>
+                                            </form>
+                                        </li>
+                                    <?php endif; ?>
+                                    <?php if (in_array($receiptStatus, ['sent', 'viewed', 'overdue'], true)): ?>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <button type="button" class="dropdown-item" onclick="verifyPayment(<?php echo (int) $receipt['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $receipt['receipt_number']), ENT_QUOTES, 'UTF-8'); ?>)">
+                                                <i class="fas fa-file-circle-check" aria-hidden="true"></i>
+                                                Verify Payment
+                                            </button>
+                                        </li>
+                                    <?php endif; ?>
+                                </ul>
                             </div>
                         </td>
                     </tr>
@@ -1021,6 +1362,45 @@ include '../../includes/navbar.php';
             </div>
             <?php endif; ?>
         </div>
+        <?php if ($totalFilteredReceipts > 0): ?>
+        <div class="receipt-pagination" aria-label="Receipt pagination">
+            <div class="receipt-pagination__meta">
+                <span class="receipt-pagination__summary">
+                    <?php echo $receiptPageStart; ?>&ndash;<?php echo $receiptPageEnd; ?> of <?php echo $totalFilteredReceipts; ?>
+                </span>
+                <label class="visually-hidden" for="receiptPageSize">Receipts per page</label>
+                <select class="receipt-pagination__size" id="receiptPageSize" aria-label="Receipts per page">
+                    <?php foreach ($allowedReceiptPageSizes as $pageSizeOption): ?>
+                    <option
+                        value="<?php echo htmlspecialchars($buildReceiptPageUrl(1, $pageSizeOption)); ?>"
+                        <?php echo $pageSizeOption === $receiptPageSize ? 'selected' : ''; ?>
+                    ><?php echo $pageSizeOption; ?> items</option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <nav class="receipt-pagination__controls" aria-label="Receipt pages">
+                <?php if ($receiptCurrentPage > 1): ?>
+                    <a class="receipt-pagination__step" href="<?php echo htmlspecialchars($buildReceiptPageUrl($receiptCurrentPage - 1)); ?>">Previous</a>
+                <?php else: ?>
+                    <span class="receipt-pagination__step is-disabled" aria-disabled="true">Previous</span>
+                <?php endif; ?>
+                <span class="receipt-pagination__pages">
+                    <?php foreach ($receiptPaginationPages as $pageNumber): ?>
+                    <a
+                        class="receipt-pagination__page<?php echo $pageNumber === $receiptCurrentPage ? ' is-current' : ''; ?>"
+                        href="<?php echo htmlspecialchars($buildReceiptPageUrl($pageNumber)); ?>"
+                        <?php echo $pageNumber === $receiptCurrentPage ? 'aria-current="page"' : ''; ?>
+                    ><?php echo $pageNumber; ?></a>
+                    <?php endforeach; ?>
+                </span>
+                <?php if ($receiptCurrentPage < $receiptTotalPages): ?>
+                    <a class="receipt-pagination__step" href="<?php echo htmlspecialchars($buildReceiptPageUrl($receiptCurrentPage + 1)); ?>">Next</a>
+                <?php else: ?>
+                    <span class="receipt-pagination__step is-disabled" aria-disabled="true">Next</span>
+                <?php endif; ?>
+            </nav>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -1141,6 +1521,10 @@ function verifyPayment(id, receiptNumber) {
     document.getElementById('verify_receipt_number').value = receiptNumber || '';
     showReceiptModal('verifyPaymentModal');
 }
+
+document.getElementById('receiptPageSize')?.addEventListener('change', function () {
+    window.location.href = this.value;
+});
 </script>
 
 <?php include '../../includes/footer.php'; ?>

@@ -216,6 +216,31 @@ include 'includes/navbar.php';
     gap: .65rem;
     margin: 1rem 0 0;
     padding: .85rem 1rem;
+    transition: opacity .24s ease, transform .24s ease;
+}
+
+.settings-feedback.is-dismissing {
+    opacity: 0;
+    transform: translateY(-6px);
+}
+
+.settings-feedback-close {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+    color: currentColor;
+    display: inline-flex;
+    height: 30px;
+    justify-content: center;
+    margin-left: auto;
+    opacity: .68;
+    width: 30px;
+}
+
+.settings-feedback-close:hover {
+    background: rgba(15, 23, 42, .08);
+    opacity: 1;
 }
 
 .settings-workspace {
@@ -557,9 +582,12 @@ include 'includes/navbar.php';
         </div>
     <?php endif; ?>
     <?php if ($message): ?>
-        <div class="alert alert-success settings-feedback">
+        <div class="alert alert-success settings-feedback" data-settings-feedback="success" role="status">
             <i class="fas fa-circle-check"></i>
             <span><?php echo htmlspecialchars($message); ?></span>
+            <button type="button" class="settings-feedback-close" data-settings-feedback-close aria-label="Dismiss message">
+                <i class="fas fa-xmark" aria-hidden="true"></i>
+            </button>
         </div>
     <?php endif; ?>
     <?php if ($error): ?>
@@ -771,6 +799,22 @@ include 'includes/navbar.php';
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-settings-feedback]').forEach(function (feedback) {
+        let removeTimer = null;
+        const dismissFeedback = function () {
+            window.clearTimeout(removeTimer);
+            feedback.classList.add('is-dismissing');
+            window.setTimeout(function () {
+                feedback.remove();
+            }, 240);
+        };
+
+        feedback.querySelector('[data-settings-feedback-close]')?.addEventListener('click', dismissFeedback);
+        if (feedback.dataset.settingsFeedback === 'success') {
+            removeTimer = window.setTimeout(dismissFeedback, 4200);
+        }
+    });
+
     const workspace = document.querySelector('.settings-workspace');
     if (!workspace) {
         return;

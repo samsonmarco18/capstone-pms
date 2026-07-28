@@ -167,6 +167,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     exit();
 }
 
+$documentFlashSuccess = trim((string) ($_SESSION['success'] ?? ''));
+$documentFlashError = trim((string) ($_SESSION['error'] ?? ''));
+unset($_SESSION['success'], $_SESSION['error']);
+
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
@@ -186,6 +190,32 @@ include '../../includes/navbar.php';
     --gray-900: #212529;
     --shadow-sm: 0 2px 4px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.03);
     --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+}
+
+.document-feedback {
+    align-items: center;
+    border: 1px solid transparent;
+    border-radius: 14px;
+    display: flex;
+    gap: .7rem;
+    margin: 0 0 1rem;
+    padding: .85rem 1rem;
+}
+
+.document-feedback p {
+    margin: 0;
+}
+
+.document-feedback.success {
+    background: #eaf8f0;
+    border-color: #bce8ce;
+    color: #17653a;
+}
+
+.document-feedback.error {
+    background: #fff0f0;
+    border-color: #f1c3c3;
+    color: #a12828;
 }
 
 .card { transition: transform 0.2s ease, box-shadow 0.2s ease; }
@@ -1070,6 +1100,18 @@ a.progress-step:hover {
     background: rgba(31, 99, 146, 0.2);
     color: #c4e6ff;
 }
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-feedback.success {
+    background: rgba(22, 101, 58, .2);
+    border-color: rgba(74, 222, 128, .34);
+    color: #9ae6b4;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-feedback.error {
+    background: rgba(153, 27, 27, .2);
+    border-color: rgba(248, 113, 113, .34);
+    color: #fca5a5;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -1083,6 +1125,19 @@ a.progress-step:hover {
             <p>Project: <?php echo htmlspecialchars($project['name']); ?></p>
         </div>
     </div>
+
+    <?php if ($documentFlashSuccess !== ''): ?>
+        <div class="document-feedback success" role="status">
+            <i class="fas fa-circle-check" aria-hidden="true"></i>
+            <p><?php echo htmlspecialchars($documentFlashSuccess); ?></p>
+        </div>
+    <?php endif; ?>
+    <?php if ($documentFlashError !== ''): ?>
+        <div class="document-feedback error" role="alert">
+            <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
+            <p><?php echo htmlspecialchars($documentFlashError); ?></p>
+        </div>
+    <?php endif; ?>
 
     <!-- Breadcrumb -->
     <nav aria-label="breadcrumb" class="breadcrumb-modern">
