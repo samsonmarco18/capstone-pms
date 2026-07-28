@@ -186,6 +186,47 @@ html[data-theme="dark"] #sidebar-wrapper {
     box-shadow: 16px 0 44px rgba(0, 0, 0, 0.32);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #sidebar-wrapper .brand-copy small {
+    color: #c3d5e5 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #sidebar-wrapper .sidebar-role span {
+    color: #8fa9bf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #sidebar-wrapper .sidebar-role strong {
+    color: #7dd3fc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #sidebar-wrapper .menu-item {
+    color: #cbd9e6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #sidebar-wrapper .menu-icon {
+    color: #5bb8e8;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #sidebar-wrapper .menu-item:hover {
+    color: #f4f9fd;
+    background: rgba(53, 153, 214, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #sidebar-wrapper .menu-item.active {
+    color: #ffffff;
+    background: linear-gradient(135deg, rgba(30, 136, 200, 0.42), rgba(15, 93, 146, 0.34));
+    box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.24), 0 8px 18px rgba(2, 15, 28, 0.26);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #sidebar-wrapper .menu-item:hover .menu-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #sidebar-wrapper .menu-item.active .menu-icon {
+    color: #8edcff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #sidebar-wrapper .menu-item::before {
+    background: #38bdf8;
+}
+
 html[data-theme="dark"] #sidebar-wrapper .menu-item.has-attention,
 body[data-theme="dark"] #sidebar-wrapper .menu-item.has-attention,
 body.dark-mode #sidebar-wrapper .menu-item.has-attention {

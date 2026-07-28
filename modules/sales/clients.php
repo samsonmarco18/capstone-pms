@@ -933,30 +933,14 @@ $buildClientPageUrl = static function (int $page, ?int $pageSize = null) use ($s
         $params['page'] = $page;
     }
 
-    return 'clients.php?' . http_build_query($params);
+    return 'clients.php?' . http_build_query($params) . '#clientDirectoryWorkspace';
 };
 
-$clientPaginationPages = [];
 if ($clientTotalPages <= 5) {
-    // Keep the control visually consistent; unavailable page positions render disabled.
-    $clientPaginationPages = range(1, 5);
-} elseif ($clientTotalPages <= 7) {
     $clientPaginationPages = range(1, $clientTotalPages);
 } else {
-    $clientPaginationPages = [
-        1,
-        2,
-        $clientCurrentPage - 1,
-        $clientCurrentPage,
-        $clientCurrentPage + 1,
-        $clientTotalPages - 1,
-        $clientTotalPages,
-    ];
-    $clientPaginationPages = array_values(array_unique(array_filter(
-        $clientPaginationPages,
-        static fn($page) => $page >= 1 && $page <= $clientTotalPages
-    )));
-    sort($clientPaginationPages);
+    $clientPaginationStart = max(1, min($clientCurrentPage - 2, $clientTotalPages - 4));
+    $clientPaginationPages = range($clientPaginationStart, $clientPaginationStart + 4);
 }
 
 // Get statistics
@@ -1208,15 +1192,25 @@ include '../../includes/navbar.php';
 .filter-section {
     padding: 0.75rem 1.5rem 0.9rem;
     background: #ffffff;
-    border-bottom: 1px solid var(--gray-200);
 }
 
 .client-tabs {
     display: flex;
     gap: 0.35rem;
+    position: relative;
     padding: 0 1.5rem;
     background: #ffffff;
-    border-bottom: 1px solid var(--gray-200);
+}
+
+.client-tabs::after {
+    content: "";
+    position: absolute;
+    right: 1.5rem;
+    bottom: 0;
+    left: 1.5rem;
+    height: 1px;
+    background: var(--gray-200);
+    pointer-events: none;
 }
 
 .client-detail-panel {
@@ -1237,6 +1231,8 @@ include '../../includes/navbar.php';
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+    position: relative;
+    z-index: 1;
     border: none;
     background: transparent;
     color: var(--gray-600);
@@ -1738,122 +1734,115 @@ include '../../includes/navbar.php';
 }
 
 .client-pagination {
-    display: grid;
-    grid-template-columns: minmax(120px, 1fr) auto minmax(220px, 1fr);
+    display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 1rem 1.5rem;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.25rem;
     border-top: 1px solid var(--gray-200);
     background: #fff;
 }
 
-.client-pagination__size {
-    justify-self: start;
+.client-pagination__summary {
+    color: var(--gray-600);
+    font-size: 0.78rem;
+    white-space: nowrap;
 }
 
-.client-pagination__size select {
-    min-width: 106px;
-    height: 40px;
-    padding: 0 2rem 0 0.75rem;
+.client-pagination__meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.client-pagination__size {
+    height: 36px;
+    min-width: 94px;
+    padding: 0 1.8rem 0 0.7rem;
     border: 1px solid var(--gray-300);
     border-radius: 9px;
-    background: #fff;
-    color: var(--gray-800);
+    background-color: #fff;
+    color: var(--gray-700);
     font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
 }
 
 .client-pagination__pages,
-.client-pagination__steps {
+.client-pagination__controls {
     display: flex;
     align-items: center;
 }
 
-.client-pagination__pages {
-    justify-self: center;
-    overflow: hidden;
-    border: 1px solid var(--gray-300);
-    border-radius: 10px;
-    background: #fff;
-    box-shadow: 0 2px 7px rgba(15, 64, 91, 0.05);
-}
-
-.client-pagination__steps {
-    justify-self: end;
+.client-pagination__controls {
     gap: 0.55rem;
 }
 
-.client-pagination__page,
-.client-pagination__step {
-    height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.45rem;
-    color: var(--gray-700);
-    text-decoration: none;
-    transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-}
-
-.client-pagination__page {
-    min-width: 42px;
-    padding: 0 0.7rem;
-    border-right: 1px solid transparent;
-}
-
-.client-pagination__page:last-child {
-    border-right: 0;
-}
-
-.client-pagination__page:hover {
-    color: var(--gray-900);
-    background: #f5f7f9;
-}
-
-.client-pagination__page.is-current {
-    background: #f3f5f7;
-    color: var(--gray-900) !important;
-    font-weight: 600;
-    box-shadow: inset 0 0 0 1px rgba(15, 64, 91, 0.04);
-}
-
-.client-pagination__page.is-disabled {
-    color: var(--gray-300);
-    background: #fff;
-    cursor: default;
-    pointer-events: none;
-}
-
-.client-pagination__step {
-    padding: 0 0.9rem;
+.client-pagination__pages {
+    overflow: hidden;
     border: 1px solid var(--gray-300);
     border-radius: 9px;
     background: #fff;
 }
 
+.client-pagination__page,
+.client-pagination__step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    color: var(--gray-700) !important;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.client-pagination__page {
+    min-width: 36px;
+    padding: 0 0.55rem;
+    border: 0;
+    background: transparent;
+}
+
+.client-pagination__page:hover,
+.client-pagination__page.is-current {
+    background: #edf5fa;
+    color: var(--theme-primary) !important;
+}
+
+.client-pagination__page.is-current {
+    box-shadow: inset 0 0 0 1px #cfe1ec;
+    pointer-events: none;
+}
+
+.client-pagination__step {
+    min-width: 76px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--gray-300);
+    border-radius: 9px;
+    background: #fff;
+}
+
+button.client-pagination__page,
+button.client-pagination__step {
+    cursor: pointer;
+}
+
 .client-pagination__step:hover {
-    color: var(--theme-primary);
-    border-color: rgba(31, 99, 146, 0.45);
-    box-shadow: 0 5px 14px rgba(15, 64, 91, 0.1);
-    transform: translateY(-1px);
+    border-color: #9bbdd1;
+    color: var(--theme-primary) !important;
 }
 
 .client-pagination__step.is-disabled {
-    color: var(--gray-400);
     background: var(--gray-50);
-    border-color: var(--gray-200);
-    opacity: 0.72;
+    color: var(--gray-400) !important;
     pointer-events: none;
-    box-shadow: none;
 }
 
-.client-pagination__ellipsis {
-    min-width: 36px;
-    height: 40px;
-    display: inline-grid;
-    place-items: center;
-    padding: 0 0.5rem;
-    border-right: 1px solid var(--gray-200);
-    color: var(--gray-500);
+.client-draft-pagination {
+    border-top: 0;
 }
 
 .client-name {
@@ -4968,6 +4957,10 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     border-color: rgba(31, 99, 146, 0.24);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-tabs::after {
+    background: rgba(31, 99, 146, 0.24);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal .modal-content {
     background:
         linear-gradient(135deg, rgba(13, 103, 134, 0.16), rgba(7, 19, 33, 0) 42%),
@@ -6747,6 +6740,11 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
         overflow-x: auto;
     }
 
+    .client-tabs::after {
+        right: 1rem;
+        left: 1rem;
+    }
+
     .client-drafts-panel {
         padding: 1rem;
     }
@@ -6765,26 +6763,33 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
     }
 
     .client-pagination {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        padding: 1rem;
+        align-items: stretch;
+        flex-direction: column;
+        padding: 0.9rem 1rem;
+    }
+
+    .client-pagination__summary {
+        text-align: center;
+    }
+
+    .client-pagination__meta {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .client-pagination__controls {
+        justify-content: center;
+        min-width: 0;
     }
 
     .client-pagination__pages {
-        grid-column: 1 / -1;
-        grid-row: 1;
-        justify-self: center;
         max-width: 100%;
         overflow-x: auto;
     }
 
-    .client-pagination__size {
-        grid-row: 2;
-        justify-self: start;
-    }
-
-    .client-pagination__steps {
-        grid-row: 2;
-        justify-self: end;
+    .client-pagination__step {
+        min-width: 40px;
+        padding: 0 0.65rem;
     }
     
     .action-buttons {
@@ -6795,31 +6800,28 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__pages,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__size select,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__step {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__step,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__size {
     background: #102435;
     border-color: rgba(148, 163, 184, 0.24);
-    color: #d9e7f1;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__page {
-    border-color: rgba(148, 163, 184, 0.2);
-    color: #d9e7f1;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__page,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__step,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__size {
+    color: #d9e7f1 !important;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__page:hover {
-    background: #173247;
-    color: #fff;
-}
-
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__page:hover,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__page.is-current {
-    background: #28445a;
+    background: #173247;
     color: #fff !important;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__page.is-disabled {
-    background: transparent;
-    color: #60778a;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .client-pagination__step.is-disabled {
+    background: #0b1a28;
+    color: #6f8496 !important;
 }
 </style>
 
@@ -6882,7 +6884,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
         </div>
     </div>
 
-    <section class="client-directory-workspace" aria-label="Client directory workspace">
+    <section class="client-directory-workspace" id="clientDirectoryWorkspace" aria-label="Client directory workspace">
         <!-- Client directory -->
         <div class="main-card">
         <div class="card-header-modern">
@@ -7108,64 +7110,40 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
         </div>
         <?php if ($totalFilteredClients > 0): ?>
         <div class="client-pagination" aria-label="Client directory pagination">
-            <div class="client-pagination__size">
+            <div class="client-pagination__meta">
+                <span class="client-pagination__summary">
+                    <?php echo $clientPageStart; ?>&ndash;<?php echo $clientPageEnd; ?> of <?php echo $totalFilteredClients; ?>
+                </span>
                 <label class="visually-hidden" for="clientPageSize">Clients per page</label>
-                <select id="clientPageSize" aria-label="Clients per page">
+                <select class="client-pagination__size" id="clientPageSize" aria-label="Clients per page">
                     <?php foreach ($allowedClientPageSizes as $pageSizeOption): ?>
-                        <option value="<?php echo $pageSizeOption; ?>" <?php echo $clientPageSize === $pageSizeOption ? 'selected' : ''; ?>>
-                            <?php echo $pageSizeOption; ?> items
-                        </option>
+                    <option value="<?php echo $pageSizeOption; ?>" <?php echo $pageSizeOption === $clientPageSize ? 'selected' : ''; ?>>
+                        <?php echo $pageSizeOption; ?> items
+                    </option>
                     <?php endforeach; ?>
                 </select>
             </div>
-
-            <nav class="client-pagination__pages" aria-label="Client pages">
-                <?php $previousRenderedPage = 0; ?>
-                <?php foreach ($clientPaginationPages as $pageNumber): ?>
-                    <?php if ($previousRenderedPage > 0 && $pageNumber > $previousRenderedPage + 1): ?>
-                        <span class="client-pagination__ellipsis" aria-hidden="true">&hellip;</span>
-                    <?php endif; ?>
-                    <?php if ($pageNumber > $clientTotalPages): ?>
-                    <span
-                        class="client-pagination__page is-disabled"
-                        aria-disabled="true"
-                    ><?php echo $pageNumber; ?></span>
-                    <?php else: ?>
+            <nav class="client-pagination__controls" aria-label="Client pages">
+                <?php if ($clientCurrentPage > 1): ?>
+                    <a class="client-pagination__step" href="<?php echo htmlspecialchars($buildClientPageUrl($clientCurrentPage - 1)); ?>">Previous</a>
+                <?php else: ?>
+                    <span class="client-pagination__step is-disabled" aria-disabled="true">Previous</span>
+                <?php endif; ?>
+                <span class="client-pagination__pages">
+                    <?php foreach ($clientPaginationPages as $pageNumber): ?>
                     <a
                         class="client-pagination__page<?php echo $pageNumber === $clientCurrentPage ? ' is-current' : ''; ?>"
                         href="<?php echo htmlspecialchars($buildClientPageUrl($pageNumber)); ?>"
                         <?php echo $pageNumber === $clientCurrentPage ? 'aria-current="page"' : ''; ?>
                     ><?php echo $pageNumber; ?></a>
-                    <?php endif; ?>
-                    <?php $previousRenderedPage = $pageNumber; ?>
-                <?php endforeach; ?>
-            </nav>
-
-            <div class="client-pagination__steps">
-                <?php if ($clientCurrentPage > 1): ?>
-                    <a class="client-pagination__step" href="<?php echo htmlspecialchars($buildClientPageUrl($clientCurrentPage - 1)); ?>">
-                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
-                        <span>Previous</span>
-                    </a>
-                <?php else: ?>
-                    <span class="client-pagination__step is-disabled" aria-disabled="true">
-                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
-                        <span>Previous</span>
-                    </span>
-                <?php endif; ?>
-
+                    <?php endforeach; ?>
+                </span>
                 <?php if ($clientCurrentPage < $clientTotalPages): ?>
-                    <a class="client-pagination__step" href="<?php echo htmlspecialchars($buildClientPageUrl($clientCurrentPage + 1)); ?>">
-                        <span>Next</span>
-                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
-                    </a>
+                    <a class="client-pagination__step" href="<?php echo htmlspecialchars($buildClientPageUrl($clientCurrentPage + 1)); ?>">Next</a>
                 <?php else: ?>
-                    <span class="client-pagination__step is-disabled" aria-disabled="true">
-                        <span>Next</span>
-                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
-                    </span>
+                    <span class="client-pagination__step is-disabled" aria-disabled="true">Next</span>
                 <?php endif; ?>
-            </div>
+            </nav>
         </div>
         <?php endif; ?>
         </div>
@@ -10598,6 +10576,8 @@ const addClientForm = document.getElementById('addClientForm');
 
 if (addClientModalElement && addClientForm) {
     const addClientDraftsKey = 'erniPms.sales.addClientDrafts.v1';
+    const draftPageSizeKey = 'erniPms.sales.draftPageSize';
+    const draftPageSizeOptions = [10, 25, 50];
     const legacyDraftKeys = [
         'erniPms.sales.addClientDraft.v2',
         'erniPms.sales.addClientDraft'
@@ -10633,6 +10613,11 @@ if (addClientModalElement && addClientForm) {
     let formTouched = false;
     let activeDraftLoaded = false;
     let activeDraftId = null;
+    let draftCurrentPage = 1;
+    let draftPageSize = Number(localStorage.getItem(draftPageSizeKey)) || 10;
+    if (!draftPageSizeOptions.includes(draftPageSize)) {
+        draftPageSize = 10;
+    }
     let isSubmittingClient = false;
     let appliedProjectTemplateType = '';
     let recommendedFeatureTitles = new Set();
@@ -11650,7 +11635,16 @@ if (addClientModalElement && addClientForm) {
         });
     }
 
-    function renderDraftList(drafts = getStoredDrafts()) {
+    function getDraftPaginationPages(currentPage, totalPages) {
+        if (totalPages <= 5) {
+            return Array.from({ length: totalPages }, (_, index) => index + 1);
+        }
+
+        const startPage = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+        return Array.from({ length: 5 }, (_, index) => startPage + index);
+    }
+
+    function renderDraftList(drafts = getStoredDrafts(), requestedPage = draftCurrentPage) {
         if (!draftList) {
             return;
         }
@@ -11664,11 +11658,20 @@ if (addClientModalElement && addClientForm) {
         }
 
         if (drafts.length === 0) {
+            draftCurrentPage = 1;
             draftList.innerHTML = '';
             return;
         }
 
-        const rows = drafts.map((draft) => {
+        const totalPages = Math.max(1, Math.ceil(drafts.length / draftPageSize));
+        draftCurrentPage = Math.min(totalPages, Math.max(1, Number(requestedPage) || 1));
+        const pageOffset = (draftCurrentPage - 1) * draftPageSize;
+        const pageDrafts = drafts.slice(pageOffset, pageOffset + draftPageSize);
+        const pageStart = pageOffset + 1;
+        const pageEnd = Math.min(pageOffset + pageDrafts.length, drafts.length);
+        const paginationPages = getDraftPaginationPages(draftCurrentPage, totalPages);
+
+        const rows = pageDrafts.map((draft) => {
             const companyName = String(draft.data?.name || '').trim();
             const contactPerson = String(draft.data?.contact_person || '').trim();
             const projectName = String(draft.data?.project_name || '').trim();
@@ -11697,6 +11700,18 @@ if (addClientModalElement && addClientForm) {
             `;
         }).join('');
 
+        const previousControl = draftCurrentPage > 1
+            ? `<button type="button" class="client-pagination__step" data-draft-page="${draftCurrentPage - 1}">Previous</button>`
+            : '<span class="client-pagination__step is-disabled" aria-disabled="true">Previous</span>';
+        const nextControl = draftCurrentPage < totalPages
+            ? `<button type="button" class="client-pagination__step" data-draft-page="${draftCurrentPage + 1}">Next</button>`
+            : '<span class="client-pagination__step is-disabled" aria-disabled="true">Next</span>';
+        const pageControls = paginationPages.map((pageNumber) => (
+            pageNumber === draftCurrentPage
+                ? `<span class="client-pagination__page is-current" aria-current="page">${pageNumber}</span>`
+                : `<button type="button" class="client-pagination__page" data-draft-page="${pageNumber}">${pageNumber}</button>`
+        )).join('');
+
         draftList.innerHTML = `
             <div class="client-draft-table__head" role="row">
                 <span role="columnheader">Draft</span>
@@ -11706,6 +11721,22 @@ if (addClientModalElement && addClientForm) {
                 <span role="columnheader">Actions</span>
             </div>
             ${rows}
+            <div class="client-pagination client-draft-pagination" aria-label="Draft pagination">
+                <div class="client-pagination__meta">
+                    <span class="client-pagination__summary">${pageStart}&ndash;${pageEnd} of ${drafts.length}</span>
+                    <label class="visually-hidden" for="clientDraftPageSize">Drafts per page</label>
+                    <select class="client-pagination__size" id="clientDraftPageSize" data-draft-page-size aria-label="Drafts per page">
+                        ${draftPageSizeOptions.map((pageSize) => (
+                            `<option value="${pageSize}"${pageSize === draftPageSize ? ' selected' : ''}>${pageSize} items</option>`
+                        )).join('')}
+                    </select>
+                </div>
+                <nav class="client-pagination__controls" aria-label="Draft pages">
+                    ${previousControl}
+                    <span class="client-pagination__pages">${pageControls}</span>
+                    ${nextControl}
+                </nav>
+            </div>
         `;
     }
 
@@ -12583,6 +12614,12 @@ if (addClientModalElement && addClientForm) {
 
     if (draftList) {
         draftList.addEventListener('click', (event) => {
+            const pageControl = event.target.closest('[data-draft-page]');
+            if (pageControl) {
+                renderDraftList(getStoredDrafts(), Number(pageControl.dataset.draftPage));
+                return;
+            }
+
             const button = event.target.closest('[data-draft-action]');
             const card = event.target.closest('[data-draft-id]');
             if (!button || !card) {
@@ -12606,6 +12643,23 @@ if (addClientModalElement && addClientForm) {
                 const draftLabel = draft?.data?.name || draft?.data?.project_name || 'Untitled draft';
                 openDeleteDraftModal(draftId, draftLabel);
             }
+        });
+
+        draftList.addEventListener('change', (event) => {
+            const pageSizeControl = event.target.closest('[data-draft-page-size]');
+            if (!pageSizeControl) {
+                return;
+            }
+
+            const nextPageSize = Number(pageSizeControl.value);
+            if (!draftPageSizeOptions.includes(nextPageSize)) {
+                return;
+            }
+
+            draftPageSize = nextPageSize;
+            draftCurrentPage = 1;
+            localStorage.setItem(draftPageSizeKey, String(draftPageSize));
+            renderDraftList(getStoredDrafts(), draftCurrentPage);
         });
     }
 
