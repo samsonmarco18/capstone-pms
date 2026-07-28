@@ -8170,6 +8170,8 @@ function getPriorityDurationName(priorityValue = 'medium') {
     return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
+const salesEvortixEnabled = window.APP_USER_PREFERENCES?.evortixEnabled !== false;
+
 const salesTemplateAssistant = (() => {
     let queue = [];
     let index = 0;
@@ -8604,6 +8606,10 @@ const salesTemplateAssistant = (() => {
         }]);
     };
     const forField = (form, field) => {
+        if (!salesEvortixEnabled) {
+            close();
+            return;
+        }
         const template = templateFor(form);
         if (field === 'project_type') return projectTypes(form);
         if (!template) return show(form, [{ heading:'Choose a project type first', label:'I will suggest this field after you choose a matching project type.', information:true }]);
@@ -9122,6 +9128,10 @@ function initProjectTemplatePicker(picker) {
     const menu = picker.querySelector('[data-template-picker-menu]');
     const versionSelect = picker.closest('form')?.querySelector('[data-template-version-select]');
     if (!input || !menu) {
+        return;
+    }
+    if (salesEvortixEnabled) {
+        menu.hidden = true;
         return;
     }
 
