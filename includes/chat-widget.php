@@ -736,6 +736,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div class="evortix-role-summary-intro">Here is the information most relevant to your role right now.</div>
                 <div class="evortix-role-summary-grid">${metricMarkup}</div>
                 ${evortixRoleDashboardSummary.suggestion ? `<div class="evortix-role-planning-suggestion"><div class="evortix-role-planning-eyebrow">${escapeSummary(evortixRoleDashboardSummary.suggestion.eyebrow)}</div><strong class="evortix-role-planning-title">${escapeSummary(evortixRoleDashboardSummary.suggestion.title)}</strong><p class="evortix-role-planning-copy">${escapeSummary(evortixRoleDashboardSummary.suggestion.message)}</p>${evortixRoleDashboardSummary.suggestion.action_url ? `<a class="evortix-role-planning-action" href="${escapeSummary(evortixRoleDashboardSummary.suggestion.action_url)}"><i class="fas fa-arrow-right"></i>${escapeSummary(evortixRoleDashboardSummary.suggestion.action_label)}</a>` : ''}</div>` : ''}`;
+            window.chatBotWidgetRobot?.setMode?.('empty-bed');
+            window.chatBotFloatRobot?.setMode?.('standing');
             botFloat.hidden = false;
             botFloat.setAttribute('aria-hidden', 'false');
             const metricSpeech = (evortixRoleDashboardSummary.metrics || [])

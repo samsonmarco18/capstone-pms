@@ -53,13 +53,14 @@ include '../../includes/navbar.php';
 
 .user-profile-shell {
     display: grid;
-    gap: 1.4rem;
+    gap: 1rem;
 }
 
 .profile-hero {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
-    border-radius: 28px;
-    padding: 2rem;
+    border-radius: 20px;
+    box-shadow: 0 12px 30px rgba(31, 99, 146, 0.18);
+    padding: 1.35rem 1.5rem;
     color: white;
     position: relative;
     overflow: hidden;
@@ -92,35 +93,35 @@ include '../../includes/navbar.php';
 }
 
 .profile-avatar {
-    width: 92px;
-    height: 92px;
-    border-radius: 24px;
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(255,255,255,0.16);
     border: 1px solid rgba(255,255,255,0.24);
     color: white;
-    font-size: 2rem;
+    font-size: 1.55rem;
     font-weight: 800;
 }
 
 .profile-title h1 {
-    margin: 0 0 0.3rem;
-    font-size: 2rem;
+    margin: 0 0 0.2rem;
+    font-size: 1.55rem;
     font-weight: 700;
     color: white;
 }
 
 .profile-title p {
-    margin: 0 0 0.9rem;
+    margin: 0 0 0.65rem;
     color: rgba(255,255,255,0.88);
     font-size: 0.95rem;
 }
 
 .profile-badges {
     display: flex;
-    gap: 0.6rem;
+    gap: 0.45rem;
     flex-wrap: wrap;
 }
 
@@ -128,7 +129,7 @@ include '../../includes/navbar.php';
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
-    padding: 0.45rem 0.85rem;
+    padding: 0.35rem 0.68rem;
     border-radius: 999px;
     background: rgba(255,255,255,0.14);
     border: 1px solid rgba(255,255,255,0.22);
@@ -147,8 +148,8 @@ include '../../includes/navbar.php';
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    border-radius: 999px;
-    padding: 0.78rem 1.15rem;
+    border-radius: 10px;
+    padding: 0.65rem 0.9rem;
     font-size: 0.85rem;
     font-weight: 700;
     text-decoration: none;
@@ -159,11 +160,12 @@ include '../../includes/navbar.php';
 .btn-profile.primary {
     background: white;
     color: var(--theme-primary);
+    box-shadow: 0 4px 12px rgba(5, 36, 57, 0.14);
 }
 
 .btn-profile.secondary {
     background: rgba(255,255,255,0.12);
-    color: white;
+    color: white !important;
     border-color: rgba(255,255,255,0.22);
 }
 
@@ -183,13 +185,13 @@ include '../../includes/navbar.php';
 .profile-card {
     background: white;
     border: 1px solid var(--gray-200);
-    border-radius: 24px;
+    border-radius: 18px;
     overflow: hidden;
     box-shadow: var(--shadow-sm);
 }
 
 .profile-card .card-header {
-    padding: 1.2rem 1.4rem;
+    padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--gray-200);
     background: white;
 }
@@ -209,23 +211,28 @@ include '../../includes/navbar.php';
 }
 
 .profile-card .card-body {
-    padding: 1.5rem;
+    padding: 1.2rem;
 }
 
 .profile-form-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem 1.1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.8rem;
 }
 
 .profile-field {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 13px;
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
+    gap: 0.4rem;
+    min-width: 0;
+    padding: 0.9rem 1rem;
 }
 
 .profile-field.full {
-    grid-column: 1 / -1;
+    grid-column: auto;
 }
 
 .profile-field label {
@@ -237,15 +244,15 @@ include '../../includes/navbar.php';
 }
 
 .profile-value {
-    min-height: 52px;
+    min-height: 24px;
     display: flex;
     align-items: center;
-    padding: 0.85rem 1rem;
-    border-radius: 16px;
-    background: var(--gray-50);
-    border: 1px solid var(--gray-200);
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
     color: var(--gray-900);
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 600;
     word-break: break-word;
 }
@@ -289,6 +296,12 @@ include '../../includes/navbar.php';
     color: var(--gray-600);
 }
 
+@media (max-width: 1100px) {
+    .profile-form-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
 @media (max-width: 768px) {
     .profile-hero {
         padding: 1.5rem;
@@ -307,6 +320,26 @@ include '../../includes/navbar.php';
     .profile-form-grid {
         grid-template-columns: 1fr;
     }
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .profile-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .profile-card .card-header {
+    background: #081421;
+    border-color: rgba(138, 210, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .profile-card .card-header h5,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .profile-value {
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .profile-field {
+    background: #0a1b2c;
+    border-color: rgba(138, 210, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .profile-field label {
+    color: #90aeca;
 }
 </style>
 

@@ -5,39 +5,141 @@ requireRole('admin');
 $conn = getConnection();
 
 // Get filters
-$search = isset($_GET['search']) ? $_GET['search'] : '';
-$actionFilter = isset($_GET['action']) ? $_GET['action'] : '';
-$userFilter = isset($_GET['user_id']) ? $_GET['user_id'] : '';
-$dateFrom = isset($_GET['date_from']) ? $_GET['date_from'] : '';
-$dateTo = isset($_GET['date_to']) ? $_GET['date_to'] : '';
+$search = trim((string) ($_GET['search'] ?? ''));
+$actionFilter = trim((string) ($_GET['action'] ?? ''));
+$userFilter = max(0, (int) ($_GET['user_id'] ?? 0));
+$dateFrom = trim((string) ($_GET['date_from'] ?? ''));
+$dateTo = trim((string) ($_GET['date_to'] ?? ''));
+$allowedAuditPageSizes = [25, 50, 100];
+$auditPageSize = isset($_GET['per_page']) ? (int) $_GET['per_page'] : 25;
+if (!in_array($auditPageSize, $allowedAuditPageSizes, true)) {
+    $auditPageSize = 25;
+}
+$auditCurrentPage = max(1, isset($_GET['page']) ? (int) $_GET['page'] : 1);
 
-// Build query
-$query = "
-    SELECT al.*, u.username, u.full_name 
+$auditWhereSql = ' WHERE 1=1';
+$auditParams = [];
+$auditTypes = '';
+
+if ($search !== '') {
+    $searchLike = '%' . $search . '%';
+    $auditWhereSql .= DB_DRIVER === 'pgsql'
+        ? ' AND (al.action ILIKE ? OR al.table_name ILIKE ? OR u.full_name ILIKE ?)'
+        : ' AND (al.action LIKE ? OR al.table_name LIKE ? OR u.full_name LIKE ?)';
+    $auditParams[] = $searchLike;
+    $auditParams[] = $searchLike;
+    $auditParams[] = $searchLike;
+    $auditTypes .= 'sss';
+}
+
+if ($actionFilter !== '') {
+    $auditWhereSql .= ' AND al.action = ?';
+    $auditParams[] = $actionFilter;
+    $auditTypes .= 's';
+}
+
+if ($userFilter > 0) {
+    $auditWhereSql .= ' AND al.user_id = ?';
+    $auditParams[] = $userFilter;
+    $auditTypes .= 'i';
+}
+
+if ($dateFrom !== '') {
+    $auditWhereSql .= ' AND DATE(al.created_at) >= ?';
+    $auditParams[] = $dateFrom;
+    $auditTypes .= 's';
+}
+
+if ($dateTo !== '') {
+    $auditWhereSql .= ' AND DATE(al.created_at) <= ?';
+    $auditParams[] = $dateTo;
+    $auditTypes .= 's';
+}
+
+$totalFilteredLogs = 0;
+$auditCountStmt = $conn->prepare('
+    SELECT COUNT(*) AS total
     FROM audit_logs al
     JOIN users u ON al.user_id = u.id
-    WHERE 1=1
-";
-
-if ($search) {
-    $query .= " AND (al.action LIKE '%$search%' OR al.table_name LIKE '%$search%' OR u.full_name LIKE '%$search%')";
-}
-if ($actionFilter) {
-    $query .= " AND al.action = '$actionFilter'";
-}
-if ($userFilter) {
-    $query .= " AND al.user_id = '$userFilter'";
-}
-if ($dateFrom) {
-    $query .= " AND DATE(al.created_at) >= '$dateFrom'";
-}
-if ($dateTo) {
-    $query .= " AND DATE(al.created_at) <= '$dateTo'";
+    ' . $auditWhereSql);
+if ($auditCountStmt !== false) {
+    if ($auditTypes !== '') {
+        $auditCountStmt->bind_param($auditTypes, ...$auditParams);
+    }
+    $auditCountStmt->execute();
+    $auditCountResult = $auditCountStmt->get_result();
+    $auditCountRow = $auditCountResult ? $auditCountResult->fetch_assoc() : null;
+    $totalFilteredLogs = (int) ($auditCountRow['total'] ?? 0);
+    $auditCountStmt->close();
 }
 
-$query .= " ORDER BY al.created_at DESC LIMIT 100";
+$auditTotalPages = max(1, (int) ceil($totalFilteredLogs / $auditPageSize));
+$auditCurrentPage = min($auditCurrentPage, $auditTotalPages);
+$auditPageOffset = ($auditCurrentPage - 1) * $auditPageSize;
 
-$logs = $conn->query($query);
+$auditQuery = '
+    SELECT al.*, u.username, u.full_name
+    FROM audit_logs al
+    JOIN users u ON al.user_id = u.id
+    ' . $auditWhereSql . '
+    ORDER BY al.created_at DESC
+    LIMIT ' . $auditPageSize . '
+    OFFSET ' . $auditPageOffset;
+
+$auditStmt = $conn->prepare($auditQuery);
+if ($auditStmt === false) {
+    $logs = new PgsqlMysqliCompatResult([]);
+} else {
+    if ($auditTypes !== '') {
+        $auditStmt->bind_param($auditTypes, ...$auditParams);
+    }
+    $auditStmt->execute();
+    $logs = $auditStmt->get_result();
+    $auditStmt->close();
+}
+
+$auditPageStart = $totalFilteredLogs > 0 ? $auditPageOffset + 1 : 0;
+$auditPageEnd = min($auditPageOffset + ($logs ? $logs->num_rows : 0), $totalFilteredLogs);
+$buildAuditPageUrl = static function (int $page, ?int $pageSize = null) use (
+    $search,
+    $actionFilter,
+    $userFilter,
+    $dateFrom,
+    $dateTo,
+    $auditPageSize
+): string {
+    $queryParams = [];
+
+    if ($search !== '') {
+        $queryParams['search'] = $search;
+    }
+    if ($actionFilter !== '') {
+        $queryParams['action'] = $actionFilter;
+    }
+    if ($userFilter > 0) {
+        $queryParams['user_id'] = $userFilter;
+    }
+    if ($dateFrom !== '') {
+        $queryParams['date_from'] = $dateFrom;
+    }
+    if ($dateTo !== '') {
+        $queryParams['date_to'] = $dateTo;
+    }
+
+    $queryParams['per_page'] = $pageSize ?? $auditPageSize;
+    if ($page > 1) {
+        $queryParams['page'] = $page;
+    }
+
+    return 'audit-log.php?' . http_build_query($queryParams) . '#auditDirectory';
+};
+
+if ($auditTotalPages <= 5) {
+    $auditPaginationPages = range(1, $auditTotalPages);
+} else {
+    $auditPaginationStart = max(1, min($auditCurrentPage - 2, $auditTotalPages - 4));
+    $auditPaginationPages = range($auditPaginationStart, $auditPaginationStart + 4);
+}
 
 // Get unique actions for filter
 $actions = $conn->query("SELECT DISTINCT action FROM audit_logs ORDER BY action");
@@ -185,66 +287,114 @@ include '../../includes/navbar.php';
     margin: 0;
 }
 
+.audit-directory-count {
+    color: var(--gray-600);
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
 /* Filter Section */
 .filter-section {
-    padding: 1.5rem 2rem;
-    background: var(--gray-50);
-    border-bottom: 1px solid var(--gray-200);
+    padding: 1rem 2rem 1.15rem;
+    background: #fff;
 }
 
 .filter-group {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(210px, 1.2fr) minmax(155px, 0.8fr) minmax(155px, 0.8fr) minmax(135px, 0.65fr) minmax(135px, 0.65fr) auto;
+    align-items: center;
     gap: 1rem;
-    flex-wrap: wrap;
-    align-items: flex-end;
 }
 
 .filter-input {
-    flex: 1;
-    min-width: 150px;
+    position: relative;
+    min-width: 0;
 }
 
-.filter-input label {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    font-weight: 600;
-    color: var(--gray-600);
-    letter-spacing: 0.5px;
-    margin-bottom: 0.25rem;
-    display: block;
+.filter-input > i {
+    position: absolute;
+    top: 50%;
+    left: 0.1rem;
+    z-index: 1;
+    color: #668096;
+    font-size: 0.82rem;
+    transform: translateY(-50%);
+    pointer-events: none;
 }
 
 .filter-input input,
 .filter-input select {
     width: 100%;
-    padding: 0.6rem 1rem;
-    border: 1px solid var(--gray-300);
-    border-radius: 12px;
-    font-size: 0.85rem;
-    transition: all 0.2s;
+    min-height: 42px;
+    padding: 0.52rem 1.8rem 0.52rem 1.65rem;
+    border: 0;
+    border-bottom: 1px solid #cbd8e3;
+    border-radius: 0;
+    outline: 0;
+    background: transparent;
+    color: #344b61;
+    font-size: 0.82rem;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .filter-input input:focus,
 .filter-input select:focus {
-    outline: none;
     border-color: var(--theme-primary);
-    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
+    box-shadow: 0 2px 0 rgba(31, 99, 146, 0.12);
 }
 
-.btn-apply {
-    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
-    color: white;
-    border: none;
-    padding: 0.6rem 1.5rem;
-    border-radius: 12px;
-    font-weight: 500;
-    transition: all 0.2s;
-    cursor: pointer;
+.audit-toolbar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.55rem;
+    white-space: nowrap;
 }
 
-.btn-apply:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
+.audit-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 40px;
+    padding: 0.5rem 0.25rem;
+    color: var(--gray-600);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.audit-filter-clear:hover {
+    color: var(--theme-primary);
+}
+
+.btn-audit-toolbar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 40px;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--theme-primary);
+    border-radius: 9px;
+    background: var(--theme-primary);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.btn-audit-toolbar.is-secondary {
+    background: transparent;
+    color: var(--theme-primary);
+}
+
+.btn-audit-toolbar:hover,
+.btn-audit-toolbar:focus-visible {
+    border-color: var(--theme-primary-dark);
+    background: var(--theme-primary-dark);
+    color: #fff;
 }
 
 /* Action Buttons */
@@ -365,6 +515,104 @@ include '../../includes/navbar.php';
     background: var(--gray-50);
 }
 
+.audit-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.5rem;
+    border-top: 1px solid var(--gray-200);
+    background: #fff;
+}
+
+.audit-pagination__meta,
+.audit-pagination__controls,
+.audit-pagination__pages {
+    display: flex;
+    align-items: center;
+}
+
+.audit-pagination__meta {
+    gap: 0.75rem;
+}
+
+.audit-pagination__summary {
+    color: var(--gray-600);
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.audit-pagination__size {
+    height: 36px;
+    min-width: 98px;
+    padding: 0 1.8rem 0 0.7rem;
+    border: 1px solid var(--gray-300);
+    border-radius: 9px;
+    background: #fff;
+    color: var(--gray-900);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.audit-pagination__controls {
+    gap: 0.55rem;
+}
+
+.audit-pagination__pages {
+    overflow: hidden;
+    border: 1px solid var(--gray-300);
+    border-radius: 9px;
+    background: #fff;
+}
+
+.audit-pagination__page,
+.audit-pagination__step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    color: var(--gray-900);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.audit-pagination__page {
+    min-width: 36px;
+    padding: 0 0.55rem;
+}
+
+.audit-pagination__page:hover,
+.audit-pagination__page.is-current {
+    background: #edf5fa;
+    color: var(--theme-primary);
+}
+
+.audit-pagination__page.is-current {
+    box-shadow: inset 0 0 0 1px #cfe1ec;
+    pointer-events: none;
+}
+
+.audit-pagination__step {
+    min-width: 76px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--gray-300);
+    border-radius: 9px;
+    background: #fff;
+}
+
+.audit-pagination__step:hover {
+    border-color: #9bbdd1;
+    color: var(--theme-primary);
+}
+
+.audit-pagination__step.is-disabled {
+    background: var(--gray-50);
+    color: var(--gray-600);
+    opacity: 0.55;
+    pointer-events: none;
+}
+
 .user-info {
     font-weight: 600;
     color: var(--gray-900);
@@ -442,53 +690,212 @@ include '../../includes/navbar.php';
 }
 
 /* Modal Styling */
+.modal-modern .modal-dialog {
+    max-width: 880px;
+    padding: 1rem;
+}
+
 .modal-modern .modal-content {
-    border-radius: 24px;
-    border: none;
+    background: #f8fbfd;
+    border: 1px solid #dbe7ef;
+    border-radius: 20px;
+    box-shadow: 0 24px 70px rgba(15, 43, 67, 0.22);
     overflow: hidden;
 }
 
 .modal-modern .modal-header {
-    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
-    color: white;
-    padding: 1.5rem;
-    border: none;
+    align-items: center;
+    background: linear-gradient(135deg, #1f6392 0%, #0f4a6e 100%) !important;
+    border-bottom: 0;
+    padding: 1.15rem 1.35rem;
 }
 
 .modal-modern .modal-header .modal-title {
-    color: white;
+    align-items: center;
+    color: #ffffff !important;
+    display: flex;
+    font-size: 1.15rem;
+    font-weight: 700;
+    gap: 0.75rem;
+    margin: 0;
+}
+
+.log-modal-title-icon {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    color: #ffffff;
+    display: inline-flex;
+    height: 38px;
+    justify-content: center;
+    width: 38px;
 }
 
 .modal-modern .modal-header .btn-close {
-    filter: brightness(0) invert(1);
+    box-shadow: none;
+    filter: brightness(0) invert(1) !important;
+    margin: 0;
+    opacity: 0.55;
+}
+
+.modal-modern .modal-header .btn-close:hover {
+    opacity: 0.85;
 }
 
 .modal-modern .modal-body {
-    padding: 2rem;
-    max-height: 70vh;
+    background: #f8fbfd;
+    max-height: min(72vh, 680px);
     overflow-y: auto;
+    padding: 1.35rem;
 }
 
-.modal-modern .modal-footer {
-    padding: 1rem 2rem 2rem;
-    border-top: 1px solid var(--gray-200);
+.log-details-layout {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
 }
 
-.data-preview {
-    background: var(--gray-50);
-    border-radius: 12px;
-    padding: 1rem;
-    margin-top: 1rem;
+.log-details-layout.is-single {
+    grid-template-columns: minmax(0, 1fr);
 }
 
-.data-preview pre {
+.log-detail-panel {
+    background: #ffffff;
+    border: 1px solid #dfe8ef;
+    border-radius: 15px;
+    box-shadow: 0 4px 14px rgba(30, 74, 104, 0.05);
+    min-width: 0;
+    padding: 1.15rem;
+}
+
+.log-detail-panel__title {
+    align-items: center;
+    color: #19496b;
+    display: flex;
+    font-size: 0.9rem;
+    font-weight: 700;
+    gap: 0.55rem;
+    margin: 0 0 1rem;
+}
+
+.log-detail-panel__title-icon {
+    align-items: center;
+    background: #eaf6fc;
+    border-radius: 8px;
+    color: #17658f;
+    display: inline-flex;
+    height: 30px;
+    justify-content: center;
+    width: 30px;
+}
+
+.log-detail-grid {
+    display: grid;
+    gap: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     margin: 0;
-    font-size: 0.8rem;
+}
+
+.log-detail-item {
+    border-bottom: 1px solid #edf2f6;
+    min-width: 0;
+    padding: 0.85rem 0;
+}
+
+.log-detail-item:nth-last-child(-n + 2) {
+    border-bottom: 0;
+}
+
+.log-detail-item:nth-child(odd) {
+    padding-right: 1rem;
+}
+
+.log-detail-item:nth-child(even) {
+    border-left: 1px solid #edf2f6;
+    padding-left: 1rem;
+}
+
+.log-detail-item dt {
+    color: #718398;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+}
+
+.log-detail-item dd {
+    color: #18324b;
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.45;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.log-detail-item code {
+    color: #17658f;
+    font-size: 0.86rem;
+}
+
+.log-change-list {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.log-change-preview {
+    border: 1px solid #e2e9ef;
+    border-radius: 12px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.log-change-preview__header {
+    align-items: center;
+    background: #f5f8fa;
+    border-bottom: 1px solid #e2e9ef;
+    color: #52677c;
+    display: flex;
+    font-size: 0.76rem;
+    font-weight: 700;
+    gap: 0.45rem;
+    padding: 0.65rem 0.8rem;
+    text-transform: uppercase;
+}
+
+.log-change-preview.is-before .log-change-preview__header {
+    color: #a45b08;
+}
+
+.log-change-preview.is-after .log-change-preview__header {
+    color: #087b55;
+}
+
+.log-change-preview pre {
+    background: #fbfcfd;
+    color: #334b61;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    margin: 0;
+    max-height: 250px;
+    overflow: auto;
+    padding: 0.85rem;
     white-space: pre-wrap;
     word-wrap: break-word;
 }
 
 /* Responsive */
+@media (max-width: 1250px) {
+    .filter-group {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .audit-toolbar-actions {
+        grid-column: 1 / -1;
+    }
+}
+
 @media (max-width: 768px) {
     .page-header-modern {
         padding: 1.5rem;
@@ -503,20 +910,71 @@ include '../../includes/navbar.php';
     }
     
     .filter-group {
-        flex-direction: column;
+        grid-template-columns: 1fr;
     }
     
     .filter-input {
         width: 100%;
     }
-    
-    .btn-apply {
-        width: 100%;
+
+    .audit-toolbar-actions {
+        grid-column: auto;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .audit-pagination {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 0.9rem 1rem;
+    }
+
+    .audit-pagination__meta,
+    .audit-pagination__controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .audit-pagination__pages {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .audit-pagination__step {
+        min-width: 40px;
+        padding: 0 0.65rem;
     }
     
     .audit-table th,
     .audit-table td {
         padding: 0.75rem 1rem;
+    }
+
+    .modal-modern .modal-dialog {
+        margin: 0.5rem auto;
+        padding: 0.5rem;
+    }
+
+    .modal-modern .modal-body {
+        padding: 1rem;
+    }
+
+    .log-details-layout,
+    .log-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .log-detail-item,
+    .log-detail-item:nth-child(odd),
+    .log-detail-item:nth-child(even),
+    .log-detail-item:nth-last-child(-n + 2) {
+        border-bottom: 1px solid #edf2f6;
+        border-left: 0;
+        padding: 0.75rem 0;
+    }
+
+    .log-detail-item:last-child {
+        border-bottom: 0;
     }
 }
 
@@ -539,12 +997,69 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-table thead,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-preview {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-detail-panel {
     background: #0a1b2c !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header {
+    background: linear-gradient(135deg, #1f6392 0%, #0f4a6e 100%) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-modal-title-icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-detail-panel__title-icon {
+    background: rgba(42, 148, 205, 0.16);
+    color: #8ad2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-modal-title-icon {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-detail-panel,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-change-preview,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-change-preview__header {
+    border-color: rgba(138, 210, 255, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-detail-panel__title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-detail-item dd {
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-detail-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-detail-item:nth-child(even) {
+    border-color: rgba(138, 210, 255, 0.1);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-detail-item dt {
+    color: #90aeca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-change-preview__header,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-change-preview pre {
+    background: #071321;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .log-change-preview pre {
+    color: #bdd0df;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__pages,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__step,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__size {
+    background: #071321;
+    border-color: rgba(138, 210, 255, 0.12);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
@@ -567,6 +1082,40 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-table tr:hover {
     background: rgba(31, 99, 146, 0.12);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select {
+    background: transparent;
+    border-color: rgba(138, 210, 255, 0.18);
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input > i {
+    color: #90aeca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .btn-audit-toolbar.is-secondary {
+    border-color: rgba(143, 211, 255, 0.4);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__page,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__step,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__size {
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__page:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__page.is-current {
+    background: rgba(31, 99, 146, 0.28);
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__step.is-disabled {
+    background: #0a1b2c;
+    color: #90aeca;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
@@ -634,14 +1183,6 @@ include '../../includes/navbar.php';
                 </h2>
                 <p>Track system activities, user actions, and data changes with complete audit trail</p>
             </div>
-            <div class="mt-3 mt-md-0 d-flex gap-2">
-                <button class="btn-add-modern" onclick="exportLogs()">
-                    <i class="fas fa-download"></i> Export
-                </button>
-                <button class="btn-add-modern" onclick="printLogs()">
-                    <i class="fas fa-print"></i> Print
-                </button>
-            </div>
         </div>
     </div>
 
@@ -665,67 +1206,79 @@ include '../../includes/navbar.php';
     </div>
 
     <!-- Main Content Card -->
-    <div class="main-card">
+    <div class="main-card" id="auditDirectory">
         <div class="card-header-modern">
             <h5>
                 <i class="fas fa-list me-2" style="color: var(--theme-primary);"></i>
                 Activity Logs
             </h5>
-            <div>
-                <span class="text-muted small">Showing last 100 entries</span>
-            </div>
+            <span class="audit-directory-count">
+                <?php echo $totalFilteredLogs; ?> activit<?php echo $totalFilteredLogs === 1 ? 'y' : 'ies'; ?>
+            </span>
         </div>
         
         <!-- Filter Section -->
-        <div class="filter-section">
+        <form method="GET" action="audit-log.php#auditDirectory" class="filter-section" id="auditFilterForm">
+            <input type="hidden" name="per_page" value="<?php echo $auditPageSize; ?>">
             <div class="filter-group">
                 <div class="filter-input">
-                    <label>Search</label>
-                    <input type="text" id="searchInput" placeholder="Action, table, user..." value="<?php echo htmlspecialchars($search); ?>">
+                    <label class="visually-hidden" for="searchInput">Search audit logs</label>
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input type="search" id="searchInput" name="search" placeholder="Search action, table, or user" value="<?php echo htmlspecialchars($search); ?>" autocomplete="off">
                 </div>
                 <div class="filter-input">
-                    <label>Action Type</label>
-                    <select id="actionFilter">
-                        <option value="">All Actions</option>
-                        <?php 
-                        $actions->data_seek(0);
-                        while($action = $actions->fetch_assoc()): 
-                        ?>
-                        <option value="<?php echo $action['action']; ?>" <?php echo $actionFilter == $action['action'] ? 'selected' : ''; ?>>
-                            <?php echo ucfirst(str_replace('_', ' ', $action['action'])); ?>
+                    <label class="visually-hidden" for="actionFilter">Filter by action</label>
+                    <i class="fas fa-bolt" aria-hidden="true"></i>
+                    <select id="actionFilter" name="action">
+                        <option value="">All actions</option>
+                        <?php while($action = $actions->fetch_assoc()): ?>
+                        <option value="<?php echo htmlspecialchars($action['action']); ?>" <?php echo $actionFilter === $action['action'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars(ucfirst(str_replace('_', ' ', $action['action']))); ?>
                         </option>
                         <?php endwhile; ?>
                     </select>
                 </div>
                 <div class="filter-input">
-                    <label>User</label>
-                    <select id="userFilter">
-                        <option value="">All Users</option>
-                        <?php 
-                        $users->data_seek(0);
-                        while($user = $users->fetch_assoc()): 
-                        ?>
-                        <option value="<?php echo $user['id']; ?>" <?php echo $userFilter == $user['id'] ? 'selected' : ''; ?>>
-                            <?php echo htmlspecialchars($user['full_name']); ?>
+                    <label class="visually-hidden" for="userFilter">Filter by user</label>
+                    <i class="fas fa-user" aria-hidden="true"></i>
+                    <select id="userFilter" name="user_id">
+                        <option value="">All users</option>
+                        <?php while($filterUser = $users->fetch_assoc()): ?>
+                        <option value="<?php echo (int) $filterUser['id']; ?>" <?php echo $userFilter === (int) $filterUser['id'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($filterUser['full_name']); ?>
                         </option>
                         <?php endwhile; ?>
                     </select>
                 </div>
                 <div class="filter-input">
-                    <label>Date From</label>
-                    <input type="date" id="dateFrom" value="<?php echo $dateFrom; ?>">
+                    <label class="visually-hidden" for="dateFrom">Date from</label>
+                    <i class="fas fa-calendar-day" aria-hidden="true"></i>
+                    <input type="date" id="dateFrom" name="date_from" value="<?php echo htmlspecialchars($dateFrom); ?>" aria-label="Date from">
                 </div>
                 <div class="filter-input">
-                    <label>Date To</label>
-                    <input type="date" id="dateTo" value="<?php echo $dateTo; ?>">
+                    <label class="visually-hidden" for="dateTo">Date to</label>
+                    <i class="fas fa-calendar-check" aria-hidden="true"></i>
+                    <input type="date" id="dateTo" name="date_to" value="<?php echo htmlspecialchars($dateTo); ?>" aria-label="Date to">
                 </div>
-                <div>
-                    <button class="btn-apply" onclick="applyFilters()">
-                        <i class="fas fa-search me-1"></i> Apply
+                <div class="audit-toolbar-actions">
+                    <?php if ($search !== '' || $actionFilter !== '' || $userFilter > 0 || $dateFrom !== '' || $dateTo !== ''): ?>
+                    <a class="audit-filter-clear" href="audit-log.php?per_page=<?php echo $auditPageSize; ?>#auditDirectory">
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                        <span>Clear</span>
+                    </a>
+                    <?php endif; ?>
+                    <button type="button" class="btn-audit-toolbar" onclick="exportLogs()">
+                        <i class="fas fa-download" aria-hidden="true"></i>
+                        <span>Export</span>
+                    </button>
+                    <button type="button" class="btn-audit-toolbar is-secondary" onclick="printLogs()">
+                        <i class="fas fa-print" aria-hidden="true"></i>
+                        <span>Print</span>
                     </button>
                 </div>
             </div>
-        </div>
+            <button type="submit" class="visually-hidden">Apply filters</button>
+        </form>
         
         <!-- Logs Table -->
         <div class="table-container">
@@ -743,7 +1296,7 @@ include '../../includes/navbar.php';
                     </tr>
                 </thead>
                 <tbody>
-                    <?php $displayRecordNumber = $logs->num_rows; while($log = $logs->fetch_assoc()): ?>
+                    <?php $displayRecordNumber = $totalFilteredLogs - $auditPageOffset; while($log = $logs->fetch_assoc()): ?>
                     <tr>
                         <td style="white-space: nowrap;">
                             <i class="far fa-clock me-1 text-muted"></i>
@@ -796,6 +1349,44 @@ include '../../includes/navbar.php';
             </div>
             <?php endif; ?>
         </div>
+        <?php if ($totalFilteredLogs > 0): ?>
+        <div class="audit-pagination" aria-label="Audit log pagination">
+            <div class="audit-pagination__meta">
+                <span class="audit-pagination__summary">
+                    <?php echo $auditPageStart; ?>&ndash;<?php echo $auditPageEnd; ?> of <?php echo $totalFilteredLogs; ?>
+                </span>
+                <label class="visually-hidden" for="auditPageSize">Audit entries per page</label>
+                <select class="audit-pagination__size" id="auditPageSize" aria-label="Audit entries per page">
+                    <?php foreach ($allowedAuditPageSizes as $pageSizeOption): ?>
+                    <option value="<?php echo $pageSizeOption; ?>" <?php echo $pageSizeOption === $auditPageSize ? 'selected' : ''; ?>>
+                        <?php echo $pageSizeOption; ?> items
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <nav class="audit-pagination__controls" aria-label="Audit log pages">
+                <?php if ($auditCurrentPage > 1): ?>
+                <a class="audit-pagination__step" href="<?php echo htmlspecialchars($buildAuditPageUrl($auditCurrentPage - 1)); ?>">Previous</a>
+                <?php else: ?>
+                <span class="audit-pagination__step is-disabled" aria-disabled="true">Previous</span>
+                <?php endif; ?>
+                <span class="audit-pagination__pages">
+                    <?php foreach ($auditPaginationPages as $pageNumber): ?>
+                    <a
+                        class="audit-pagination__page<?php echo $pageNumber === $auditCurrentPage ? ' is-current' : ''; ?>"
+                        href="<?php echo htmlspecialchars($buildAuditPageUrl($pageNumber)); ?>"
+                        <?php echo $pageNumber === $auditCurrentPage ? 'aria-current="page"' : ''; ?>
+                    ><?php echo $pageNumber; ?></a>
+                    <?php endforeach; ?>
+                </span>
+                <?php if ($auditCurrentPage < $auditTotalPages): ?>
+                <a class="audit-pagination__step" href="<?php echo htmlspecialchars($buildAuditPageUrl($auditCurrentPage + 1)); ?>">Next</a>
+                <?php else: ?>
+                <span class="audit-pagination__step is-disabled" aria-disabled="true">Next</span>
+                <?php endif; ?>
+            </nav>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -805,9 +1396,10 @@ include '../../includes/navbar.php';
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="fas fa-info-circle me-2"></i> Log Details
+                    <span class="log-modal-title-icon"><i class="fas fa-clipboard-list"></i></span>
+                    Log Details
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" id="logDetailsContent">
                 <div class="text-center py-4">
@@ -822,22 +1414,34 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
-function applyFilters() {
-    const search = document.getElementById('searchInput').value;
-    const action = document.getElementById('actionFilter').value;
-    const userId = document.getElementById('userFilter').value;
-    const dateFrom = document.getElementById('dateFrom').value;
-    const dateTo = document.getElementById('dateTo').value;
-    
-    let url = 'audit-log.php?';
-    if (search) url += 'search=' + encodeURIComponent(search) + '&';
-    if (action) url += 'action=' + encodeURIComponent(action) + '&';
-    if (userId) url += 'user_id=' + encodeURIComponent(userId) + '&';
-    if (dateFrom) url += 'date_from=' + encodeURIComponent(dateFrom) + '&';
-    if (dateTo) url += 'date_to=' + encodeURIComponent(dateTo);
-    
-    window.location.href = url;
+const auditFilterForm = document.getElementById('auditFilterForm');
+const auditSearchInput = document.getElementById('searchInput');
+const auditActionFilter = document.getElementById('actionFilter');
+const auditUserFilter = document.getElementById('userFilter');
+const auditDateFrom = document.getElementById('dateFrom');
+const auditDateTo = document.getElementById('dateTo');
+const auditPageSize = document.getElementById('auditPageSize');
+let auditSearchTimer = null;
+
+function submitAuditFilters() {
+    auditFilterForm?.requestSubmit();
 }
+
+auditSearchInput?.addEventListener('input', () => {
+    window.clearTimeout(auditSearchTimer);
+    auditSearchTimer = window.setTimeout(submitAuditFilters, 450);
+});
+
+[auditActionFilter, auditUserFilter, auditDateFrom, auditDateTo].forEach((control) => {
+    control?.addEventListener('change', submitAuditFilters);
+});
+
+auditPageSize?.addEventListener('change', function() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('per_page', this.value);
+    params.delete('page');
+    window.location.href = 'audit-log.php?' + params.toString() + '#auditDirectory';
+});
 
 function viewDetails(logId) {
     $.ajax({
@@ -851,33 +1455,63 @@ function viewDetails(logId) {
                 new bootstrap.Modal(document.getElementById('logDetailsModal')).show();
                 return;
             }
+            const hasChangeData = Boolean(log.old_data || log.new_data);
             let html = `
-                <div class="row g-4">
-                    <div class="col-md-6">
-                        <div class="data-preview">
-                            <h6 class="mb-3"><i class="fas fa-info-circle me-2"></i>Basic Information</h6>
-                            <p><strong>Date & Time:</strong><br> ${new Date(log.created_at).toLocaleString()}</p>
-                            <p><strong>User:</strong><br> ${log.full_name} (@${log.username})</p>
-                            <p><strong>Action:</strong><br> <span class="badge-action ${log.action.includes('delete') ? 'delete' : (log.action.includes('create') ? 'create' : (log.action.includes('update') ? 'update' : 'login'))}">${log.action}</span></p>
-                            <p><strong>Table:</strong><br> ${log.table_name}</p>
-                            <p><strong>Record ID:</strong><br> #${log.record_id}</p>
-                            <p><strong>IP Address:</strong><br> <code>${log.ip_address}</code></p>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        ${log.old_data ? `
-                            <div class="data-preview">
-                                <h6 class="mb-3 text-warning"><i class="fas fa-history me-2"></i>Before Change</h6>
-                                <pre><code>${formatJsonData(log.old_data)}</code></pre>
+                <div class="log-details-layout${hasChangeData ? '' : ' is-single'}">
+                    <section class="log-detail-panel">
+                        <h6 class="log-detail-panel__title">
+                            <span class="log-detail-panel__title-icon"><i class="fas fa-info"></i></span>
+                            Basic Information
+                        </h6>
+                        <dl class="log-detail-grid">
+                            <div class="log-detail-item">
+                                <dt>Date & Time</dt>
+                                <dd>${new Date(log.created_at).toLocaleString()}</dd>
                             </div>
-                        ` : ''}
-                        ${log.new_data ? `
-                            <div class="data-preview mt-3">
-                                <h6 class="mb-3 text-success"><i class="fas fa-save me-2"></i>After Change</h6>
-                                <pre><code>${formatJsonData(log.new_data)}</code></pre>
+                            <div class="log-detail-item">
+                                <dt>User</dt>
+                                <dd>${log.full_name} (@${log.username})</dd>
                             </div>
-                        ` : ''}
-                    </div>
+                            <div class="log-detail-item">
+                                <dt>Action</dt>
+                                <dd><span class="badge-action ${log.action.includes('delete') ? 'delete' : (log.action.includes('create') ? 'create' : (log.action.includes('update') ? 'update' : 'login'))}">${log.action}</span></dd>
+                            </div>
+                            <div class="log-detail-item">
+                                <dt>Table</dt>
+                                <dd>${log.table_name}</dd>
+                            </div>
+                            <div class="log-detail-item">
+                                <dt>Record ID</dt>
+                                <dd>#${log.record_id}</dd>
+                            </div>
+                            <div class="log-detail-item">
+                                <dt>IP Address</dt>
+                                <dd><code>${log.ip_address}</code></dd>
+                            </div>
+                        </dl>
+                    </section>
+                    ${hasChangeData ? `
+                        <section class="log-detail-panel">
+                            <h6 class="log-detail-panel__title">
+                                <span class="log-detail-panel__title-icon"><i class="fas fa-code-compare"></i></span>
+                                Record Changes
+                            </h6>
+                            <div class="log-change-list">
+                                ${log.old_data ? `
+                                    <div class="log-change-preview is-before">
+                                        <div class="log-change-preview__header"><i class="fas fa-arrow-rotate-left"></i> Before</div>
+                                        <pre><code>${formatJsonData(log.old_data)}</code></pre>
+                                    </div>
+                                ` : ''}
+                                ${log.new_data ? `
+                                    <div class="log-change-preview is-after">
+                                        <div class="log-change-preview__header"><i class="fas fa-check"></i> After</div>
+                                        <pre><code>${formatJsonData(log.new_data)}</code></pre>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </section>
+                    ` : ''}
                 </div>
             `;
             $('#logDetailsContent').html(html);
@@ -942,12 +1576,16 @@ async function restoreItem(logId, tableName, recordId) {
 
 function exportLogs() {
     const table = document.getElementById('logsTable');
+    if (!table) {
+        window.appToast?.('Nothing to export', 'No audit entries match the current filters.', 'info');
+        return;
+    }
     let csv = [];
     
     // Get headers
     let headers = [];
-    table.querySelectorAll('thead th').forEach(th => {
-        headers.push(th.textContent.trim());
+    table.querySelectorAll('thead th').forEach((th, index) => {
+        if (index < 6) headers.push(th.textContent.trim());
     });
     csv.push(headers.join(','));
     
@@ -975,7 +1613,12 @@ function exportLogs() {
 }
 
 function printLogs() {
-    const printContents = document.getElementById('logsTable').outerHTML;
+    const table = document.getElementById('logsTable');
+    if (!table) {
+        window.appToast?.('Nothing to print', 'No audit entries match the current filters.', 'info');
+        return;
+    }
+    const printContents = table.outerHTML;
     const originalContents = document.body.innerHTML;
     document.body.innerHTML = `
         <div class="container mt-4">
@@ -989,10 +1632,6 @@ function printLogs() {
     location.reload();
 }
 
-// Auto-submit on enter
-document.getElementById('searchInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') applyFilters();
-});
 </script>
 
 <?php include '../../includes/footer.php'; ?>

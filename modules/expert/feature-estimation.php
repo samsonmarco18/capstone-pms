@@ -4591,6 +4591,7 @@ function closeEvortixFeatureSpeech() {
     speech.hidden = true;
     speech.setAttribute('aria-hidden', 'true');
     speech.style.pointerEvents = 'none';
+    window.chatBotFloatRobot?.setEmotion?.('', 0);
 }
 
 function showEvortixFeatureDecision() {
@@ -4684,8 +4685,9 @@ function showEvortixFeatureDecision() {
     bot.setAttribute('aria-hidden', 'false');
     bot.classList.remove('is-returning-bed', 'is-preparing-speech');
     bot.classList.add('is-speaking');
-    window.chatBotFloatRobot?.wake?.();
-    window.chatBotFloatRobot?.setEmotion?.('thinking', 0);
+    window.chatBotWidgetRobot?.setMode?.('empty-bed');
+    window.chatBotFloatRobot?.setMode?.('standing');
+    window.chatBotFloatRobot?.point?.('left', 0);
 }
 
 function startEvortixFeatureReview(projectId, replay = false) {
@@ -5489,6 +5491,18 @@ body.expert-feature-estimation-page .chat-bot-speech.evortix-architect-dss::afte
     top: auto;
     bottom: 48px;
     transform: rotate(45deg);
+}
+
+html:not([data-theme="dark"]) body.expert-feature-estimation-page:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss .evortix-dss-heading {
+    color: #083a5d !important;
+    opacity: 1 !important;
+}
+
+html:not([data-theme="dark"]) body.expert-feature-estimation-page:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss .evortix-feature-message-intro {
+    color: #175f8f !important;
+    opacity: 1 !important;
 }
 
 body.expert-feature-estimation-page .evortix-feature-message-title {

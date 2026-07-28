@@ -2363,6 +2363,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="evortix-dashboard-summary-head"><div><div class="evortix-dashboard-summary-eyebrow">Live overview</div><strong class="evortix-dashboard-summary-title">Your SUL dashboard snapshot</strong></div><button type="button" class="evortix-dashboard-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
             <div class="evortix-dashboard-summary-intro">Here is what your delivery summary is reporting right now.</div>
             <div class="evortix-dashboard-summary-grid">${metrics.map(metric => `<div class="evortix-dashboard-summary-metric${metric[4] ? ' is-overdue' : ''}"><div class="evortix-dashboard-summary-metric-top"><i class="fas ${metric[0]}"></i><strong class="evortix-dashboard-summary-value">${metric[1]}</strong></div><div class="evortix-dashboard-summary-label">${metric[2]}</div><div class="evortix-dashboard-summary-meta">${metric[3]}</div></div>`).join('')}</div>`;
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
         float.hidden = false;
         float.setAttribute('aria-hidden', 'false');
         speech.setAttribute('aria-hidden', 'false');

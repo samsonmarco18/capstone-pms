@@ -2474,6 +2474,14 @@ include '../../includes/navbar.php';
     text-align: right;
 }
 
+.task-summary-section__body--artifacts .artifact-table-head span:last-child {
+    text-align: center;
+}
+
+.task-summary-section__body--artifacts .artifact-item__actions {
+    justify-content: center;
+}
+
 .artifact-history-panel {
     display: flex;
     flex-direction: column;

@@ -126,22 +126,157 @@ $conn->query("
         ELSE status
     END
 ");
-$technologies = $conn->query("
+
+$technologyStats = [
+    'total' => 0,
+    'active' => 0,
+    'expiring' => 0,
+    'expired' => 0,
+    'monthly_spend' => 0,
+];
+$technologyStatsResult = $conn->query("
+    SELECT
+        COUNT(*) AS total,
+        COALESCE(SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END), 0) AS active,
+        COALESCE(SUM(CASE WHEN status = 'expiring' THEN 1 ELSE 0 END), 0) AS expiring,
+        COALESCE(SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END), 0) AS expired,
+        COALESCE(SUM(price), 0) AS monthly_spend
+    FROM technologies
+");
+if ($technologyStatsResult) {
+    $technologyStatsRow = $technologyStatsResult->fetch_assoc();
+    foreach ($technologyStats as $statKey => $statValue) {
+        $technologyStats[$statKey] = $technologyStatsRow[$statKey] ?? $statValue;
+    }
+}
+
+$technologyCategories = [];
+$technologyCategoryResult = $conn->query("
+    SELECT DISTINCT category
+    FROM technologies
+    WHERE category IS NOT NULL AND category <> ''
+    ORDER BY category ASC
+");
+if ($technologyCategoryResult) {
+    while ($technologyCategoryRow = $technologyCategoryResult->fetch_assoc()) {
+        $technologyCategories[] = (string) $technologyCategoryRow['category'];
+    }
+}
+
+$technologySearch = trim((string) ($_GET['search'] ?? ''));
+$technologyCategoryFilter = trim((string) ($_GET['category'] ?? ''));
+$technologyStatusFilter = trim((string) ($_GET['status'] ?? ''));
+$allowedTechnologyPageSizes = [9, 18, 36];
+$technologyPageSize = isset($_GET['per_page']) ? (int) $_GET['per_page'] : 9;
+if (!in_array($technologyPageSize, $allowedTechnologyPageSizes, true)) {
+    $technologyPageSize = 9;
+}
+$technologyCurrentPage = max(1, isset($_GET['page']) ? (int) $_GET['page'] : 1);
+
+$technologyWhereSql = ' WHERE 1=1';
+$technologyParams = [];
+$technologyTypes = '';
+
+if ($technologySearch !== '') {
+    $technologySearchLike = '%' . $technologySearch . '%';
+    $technologyWhereSql .= DB_DRIVER === 'pgsql'
+        ? ' AND name ILIKE ?'
+        : ' AND name LIKE ?';
+    $technologyParams[] = $technologySearchLike;
+    $technologyTypes .= 's';
+}
+
+if ($technologyCategoryFilter !== '') {
+    $technologyWhereSql .= ' AND category = ?';
+    $technologyParams[] = $technologyCategoryFilter;
+    $technologyTypes .= 's';
+}
+
+if ($technologyStatusFilter !== '') {
+    $technologyWhereSql .= ' AND status = ?';
+    $technologyParams[] = $technologyStatusFilter;
+    $technologyTypes .= 's';
+}
+
+$totalFilteredTechnologies = 0;
+$technologyCountStmt = $conn->prepare('SELECT COUNT(*) AS total FROM technologies' . $technologyWhereSql);
+if ($technologyCountStmt !== false) {
+    if ($technologyTypes !== '') {
+        $technologyCountStmt->bind_param($technologyTypes, ...$technologyParams);
+    }
+    $technologyCountStmt->execute();
+    $technologyCountResult = $technologyCountStmt->get_result();
+    $technologyCountRow = $technologyCountResult ? $technologyCountResult->fetch_assoc() : null;
+    $totalFilteredTechnologies = (int) ($technologyCountRow['total'] ?? 0);
+    $technologyCountStmt->close();
+}
+
+$technologyTotalPages = max(1, (int) ceil($totalFilteredTechnologies / $technologyPageSize));
+$technologyCurrentPage = min($technologyCurrentPage, $technologyTotalPages);
+$technologyPageOffset = ($technologyCurrentPage - 1) * $technologyPageSize;
+
+$technologyQuery = '
     SELECT *
     FROM technologies
+    ' . $technologyWhereSql . '
     ORDER BY CASE status
-        WHEN 'expired' THEN 1
-        WHEN 'expiring' THEN 2
-        WHEN 'active' THEN 3
-        WHEN 'inactive' THEN 4
+        WHEN \'expired\' THEN 1
+        WHEN \'expiring\' THEN 2
+        WHEN \'active\' THEN 3
+        WHEN \'inactive\' THEN 4
         ELSE 5
     END,
     expiry_date ASC
-");
-if ($technologies === false) {
+    LIMIT ' . $technologyPageSize . '
+    OFFSET ' . $technologyPageOffset;
+
+$technologiesStmt = $conn->prepare($technologyQuery);
+if ($technologiesStmt === false) {
     error_log('Techstack list query failed: ' . ($conn->error ?? 'unknown error'));
     $_SESSION['error'] = 'Unable to load technology stack right now.';
     $technologies = new PgsqlMysqliCompatResult([]);
+} else {
+    if ($technologyTypes !== '') {
+        $technologiesStmt->bind_param($technologyTypes, ...$technologyParams);
+    }
+    $technologiesStmt->execute();
+    $technologies = $technologiesStmt->get_result();
+    $technologiesStmt->close();
+}
+
+$technologyPageStart = $totalFilteredTechnologies > 0 ? $technologyPageOffset + 1 : 0;
+$technologyPageEnd = min($technologyPageOffset + ($technologies ? $technologies->num_rows : 0), $totalFilteredTechnologies);
+$buildTechnologyPageUrl = static function (int $page, ?int $pageSize = null) use (
+    $technologySearch,
+    $technologyCategoryFilter,
+    $technologyStatusFilter,
+    $technologyPageSize
+): string {
+    $queryParams = [];
+
+    if ($technologySearch !== '') {
+        $queryParams['search'] = $technologySearch;
+    }
+    if ($technologyCategoryFilter !== '') {
+        $queryParams['category'] = $technologyCategoryFilter;
+    }
+    if ($technologyStatusFilter !== '') {
+        $queryParams['status'] = $technologyStatusFilter;
+    }
+
+    $queryParams['per_page'] = $pageSize ?? $technologyPageSize;
+    if ($page > 1) {
+        $queryParams['page'] = $page;
+    }
+
+    return 'techstack.php?' . http_build_query($queryParams) . '#technologyDirectory';
+};
+
+if ($technologyTotalPages <= 5) {
+    $technologyPaginationPages = range(1, $technologyTotalPages);
+} else {
+    $technologyPaginationStart = max(1, min($technologyCurrentPage - 2, $technologyTotalPages - 4));
+    $technologyPaginationPages = range($technologyPaginationStart, $technologyPaginationStart + 4);
 }
 
 include '../../includes/header.php';
@@ -298,11 +433,256 @@ include '../../includes/navbar.php';
     margin-top: 0.25rem;
 }
 
+.technology-directory-card {
+    overflow: hidden;
+    border: 1px solid var(--tech-border);
+    border-radius: 22px;
+    background: var(--tech-surface);
+    box-shadow: var(--tech-shadow);
+}
+
+.technology-directory-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--tech-border);
+}
+
+.technology-directory-head h5 {
+    margin: 0;
+    color: var(--tech-text);
+    font-size: 1.05rem;
+    font-weight: 600;
+}
+
+.technology-directory-head h5 i {
+    margin-right: 0.55rem;
+    color: var(--theme-primary);
+}
+
+.technology-directory-count {
+    color: var(--tech-muted);
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.technology-toolbar {
+    display: grid;
+    grid-template-columns: minmax(280px, 1.4fr) minmax(160px, 0.65fr) minmax(150px, 0.6fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.95rem 1.5rem 1.1rem;
+    background: var(--tech-surface);
+}
+
+.technology-directory-body > .tech-grid {
+    padding: 0 1.5rem 1.5rem;
+}
+
+.technology-directory-body .empty-state-modern {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.technology-filter-input {
+    position: relative;
+    min-width: 0;
+}
+
+.technology-filter-input > i {
+    position: absolute;
+    top: 50%;
+    left: 0.1rem;
+    z-index: 1;
+    color: #668096;
+    font-size: 0.82rem;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.technology-filter-input input,
+.technology-filter-input select {
+    width: 100%;
+    min-height: 42px;
+    padding: 0.52rem 1.8rem 0.52rem 1.65rem;
+    border: 0;
+    border-bottom: 1px solid #cbd8e3;
+    border-radius: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--tech-text);
+    font-size: 0.82rem;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.technology-filter-input input:focus,
+.technology-filter-input select:focus {
+    border-color: var(--theme-primary);
+    box-shadow: 0 2px 0 rgba(31, 99, 146, 0.12);
+}
+
+.technology-filter-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.65rem;
+    white-space: nowrap;
+}
+
+.technology-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 42px;
+    padding: 0.55rem 0.3rem;
+    color: var(--tech-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.technology-filter-clear:hover {
+    color: var(--theme-primary);
+}
+
+.btn-add-technology-toolbar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 42px;
+    padding: 0.62rem 1.05rem;
+    border: 1px solid var(--theme-primary);
+    border-radius: 10px;
+    background: var(--theme-primary);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 6px 14px rgba(31, 99, 146, 0.16);
+    transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.btn-add-technology-toolbar:hover,
+.btn-add-technology-toolbar:focus-visible {
+    border-color: var(--theme-primary-dark);
+    background: var(--theme-primary-dark);
+    color: #fff;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.22);
+    transform: translateY(-1px);
+}
+
 /* Technology Cards - Professional Grid */
 .tech-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 1.5rem;
+}
+
+.technology-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 0;
+    padding: 0.85rem 1.5rem;
+    border: 0;
+    border-top: 1px solid var(--tech-border);
+    border-radius: 0;
+    background: var(--tech-surface);
+    box-shadow: none;
+}
+
+.technology-pagination__meta,
+.technology-pagination__controls,
+.technology-pagination__pages {
+    display: flex;
+    align-items: center;
+}
+
+.technology-pagination__meta {
+    gap: 0.75rem;
+}
+
+.technology-pagination__summary {
+    color: var(--tech-muted);
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.technology-pagination__size {
+    height: 36px;
+    min-width: 98px;
+    padding: 0 1.8rem 0 0.7rem;
+    border: 1px solid var(--tech-border);
+    border-radius: 9px;
+    background: var(--tech-surface);
+    color: var(--tech-text);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.technology-pagination__controls {
+    gap: 0.55rem;
+}
+
+.technology-pagination__pages {
+    overflow: hidden;
+    border: 1px solid var(--tech-border);
+    border-radius: 9px;
+    background: var(--tech-surface);
+}
+
+.technology-pagination__page,
+.technology-pagination__step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    color: var(--tech-text);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.technology-pagination__page {
+    min-width: 36px;
+    padding: 0 0.55rem;
+}
+
+.technology-pagination__page:hover,
+.technology-pagination__page.is-current {
+    background: #edf5fa;
+    color: var(--theme-primary);
+}
+
+.technology-pagination__page.is-current {
+    box-shadow: inset 0 0 0 1px #cfe1ec;
+    pointer-events: none;
+}
+
+.technology-pagination__step {
+    min-width: 76px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--tech-border);
+    border-radius: 9px;
+    background: var(--tech-surface);
+}
+
+.technology-pagination__step:hover {
+    border-color: #9bbdd1;
+    color: var(--theme-primary);
+}
+
+.technology-pagination__step.is-disabled {
+    background: var(--tech-surface-alt);
+    color: var(--tech-muted);
+    opacity: 0.55;
+    pointer-events: none;
 }
 
 .tech-card-modern {
@@ -554,29 +934,54 @@ include '../../includes/navbar.php';
 
 /* Modal Styling */
 .modal-modern .modal-content {
-    border-radius: 24px;
-    border: none;
+    border: 1px solid var(--tech-border);
+    border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(15, 43, 67, 0.24);
     overflow: hidden;
 }
 
 .modal-modern .modal-header {
-    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
-    color: white;
-    padding: 1.5rem;
-    border: none;
+    background: linear-gradient(135deg, #1f6392 0%, #0f4a6e 100%) !important;
+    border: 0;
+    color: #ffffff;
+    padding: 1.1rem 1.35rem;
 }
 
 .modal-modern .modal-header .modal-title {
-    color: white;
+    align-items: center;
+    color: #ffffff !important;
+    display: flex;
+    font-size: 1.05rem;
+    font-weight: 700;
+    gap: 0.7rem;
+    margin: 0;
+}
+
+.modal-title-icon {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 9px;
+    display: inline-flex;
+    height: 34px;
+    justify-content: center;
+    width: 34px;
+}
+
+.modal-modern .modal-header .btn-close {
+    filter: brightness(0) invert(1) !important;
+    opacity: 0.75;
 }
 
 .modal-modern .modal-body {
-    padding: 2rem;
+    padding: 1.5rem;
 }
 
 .modal-modern .modal-footer {
-    padding: 1rem 2rem 2rem;
+    background: var(--tech-surface-alt);
     border-top: 1px solid var(--tech-border);
+    gap: 0.65rem;
+    padding: 1rem 1.5rem;
 }
 
 .modal-modern .modal-content {
@@ -595,11 +1000,22 @@ include '../../includes/navbar.php';
     color: var(--tech-muted) !important;
 }
 
+.modal-modern .form-label {
+    font-size: 0.72rem;
+    font-weight: 700 !important;
+    letter-spacing: 0.045em;
+    margin-bottom: 0.45rem;
+    text-transform: uppercase;
+}
+
 .modal-modern .form-control,
 .modal-modern .form-select {
     background: var(--tech-surface-alt);
     border-color: var(--tech-border);
+    border-radius: 10px;
     color: var(--tech-text);
+    min-height: 46px;
+    padding: 0.65rem 0.85rem;
 }
 
 .modal-modern .form-control:focus,
@@ -608,6 +1024,30 @@ include '../../includes/navbar.php';
     border-color: var(--theme-primary);
     color: var(--tech-text);
     box-shadow: 0 0 0 0.2rem rgba(31, 99, 146, 0.18);
+}
+
+.technology-create-modal .modal-dialog {
+    max-width: 680px;
+}
+
+.modal-secondary-action {
+    align-items: center;
+    background: transparent;
+    border: 1px solid #cbd9e4;
+    border-radius: 10px;
+    color: #405a70;
+    display: inline-flex;
+    font-size: 0.85rem;
+    font-weight: 700;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0.65rem 1.05rem;
+}
+
+.modal-secondary-action:hover {
+    background: #eef5f9;
+    border-color: #abc1d1;
+    color: #183f59;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .page-header-modern {
@@ -638,9 +1078,12 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-info h4,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern h4,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .meta-value,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .meta-value {
     color: var(--tech-text) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
+    color: #ffffff !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-mini .stat-label,
@@ -692,6 +1135,16 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer {
     border-top-color: var(--tech-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-secondary-action {
+    border-color: rgba(143, 211, 255, 0.32);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-secondary-action:hover {
+    background: rgba(31, 99, 146, 0.18);
+    color: #ffffff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control::placeholder {
@@ -773,7 +1226,33 @@ include '../../includes/navbar.php';
     color: #cfe4f4;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input input,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input select {
+    border-color: var(--tech-border);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input > i {
+    color: #90aeca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-pagination__page:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-pagination__page.is-current {
+    background: rgba(31, 99, 146, 0.28);
+    color: #fff;
+}
+
 /* Responsive */
+@media (max-width: 1100px) {
+    .technology-toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .technology-filter-input--search,
+    .technology-filter-actions {
+        grid-column: 1 / -1;
+    }
+}
+
 @media (max-width: 768px) {
     .page-header-modern {
         padding: 1.5rem;
@@ -785,6 +1264,52 @@ include '../../includes/navbar.php';
     
     .tech-grid {
         grid-template-columns: 1fr;
+    }
+
+    .technology-toolbar {
+        grid-template-columns: 1fr;
+        padding: 0.9rem 1rem 1rem;
+    }
+
+    .technology-filter-input--search,
+    .technology-filter-actions {
+        grid-column: auto;
+    }
+
+    .technology-filter-actions {
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    .technology-directory-head {
+        align-items: flex-start;
+        padding: 1rem;
+    }
+
+    .technology-directory-body > .tech-grid {
+        padding: 0 1rem 1rem;
+    }
+
+    .technology-pagination {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 0.9rem 1rem;
+    }
+
+    .technology-pagination__meta,
+    .technology-pagination__controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .technology-pagination__pages {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .technology-pagination__step {
+        min-width: 40px;
+        padding: 0 0.65rem;
     }
     
     .card-actions-modern {
@@ -808,56 +1333,95 @@ include '../../includes/navbar.php';
                 </h2>
                 <p>Manage and monitor your organization's technology stack, subscriptions, and renewals</p>
             </div>
-            <div class="mt-3 mt-md-0">
-                <button class="btn-add-modern" data-bs-toggle="modal" data-bs-target="#addTechnologyModal">
-                    <i class="fas fa-plus me-2"></i> Add Technology
-                </button>
-            </div>
         </div>
     </div>
 
     <!-- Quick Stats -->
-    <?php 
-    $activeCount = 0;
-    $expiringCount = 0;
-    $expiredCount = 0;
-    $totalValue = 0;
-    
-    $technologies->data_seek(0);
-    while($tech = $technologies->fetch_assoc()) {
-        if($tech['status'] == 'active') $activeCount++;
-        elseif($tech['status'] == 'expiring') $expiringCount++;
-        elseif($tech['status'] == 'expired') $expiredCount++;
-        $totalValue += (float) ($tech['price'] ?? 0);
-    }
-    $technologies->data_seek(0);
-    ?>
-    
     <div class="stats-row">
         <div class="stat-card-mini">
             <div class="stat-label">Total Technologies</div>
-            <div class="stat-number"><?php echo $technologies->num_rows; ?></div>
+            <div class="stat-number"><?php echo (int) $technologyStats['total']; ?></div>
         </div>
         <div class="stat-card-mini">
             <div class="stat-label">Active Services</div>
-            <div class="stat-number" style="color: #10b981;"><?php echo $activeCount; ?></div>
+            <div class="stat-number" style="color: #10b981;"><?php echo (int) $technologyStats['active']; ?></div>
         </div>
         <div class="stat-card-mini">
             <div class="stat-label">Expiring Soon</div>
-            <div class="stat-number" style="color: #f59e0b;"><?php echo $expiringCount; ?></div>
+            <div class="stat-number" style="color: #f59e0b;"><?php echo (int) $technologyStats['expiring']; ?></div>
         </div>
         <div class="stat-card-mini">
             <div class="stat-label">Expired Services</div>
-            <div class="stat-number" style="color: #ef4444;"><?php echo $expiredCount; ?></div>
+            <div class="stat-number" style="color: #ef4444;"><?php echo (int) $technologyStats['expired']; ?></div>
         </div>
         <div class="stat-card-mini">
             <div class="stat-label">Monthly Spend</div>
-            <div class="stat-number">$<?php echo number_format($totalValue, 0); ?></div>
+            <div class="stat-number">$<?php echo number_format((float) $technologyStats['monthly_spend'], 0); ?></div>
         </div>
     </div>
 
+    <section class="technology-directory-card" id="technologyDirectory">
+        <header class="technology-directory-head">
+            <h5><i class="fas fa-list"></i>Technology Directory</h5>
+            <span class="technology-directory-count">
+                <?php echo $totalFilteredTechnologies; ?> technolog<?php echo $totalFilteredTechnologies === 1 ? 'y' : 'ies'; ?>
+            </span>
+        </header>
+        <form method="GET" action="techstack.php#technologyDirectory" class="technology-toolbar" id="technologyFilterForm">
+            <input type="hidden" name="per_page" value="<?php echo $technologyPageSize; ?>">
+            <div class="technology-filter-input technology-filter-input--search">
+                <label class="visually-hidden" for="technologySearch">Search technologies</label>
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <input
+                    type="search"
+                    id="technologySearch"
+                    name="search"
+                    placeholder="Search technologies"
+                    value="<?php echo htmlspecialchars($technologySearch); ?>"
+                    autocomplete="off"
+                >
+            </div>
+            <div class="technology-filter-input">
+                <label class="visually-hidden" for="technologyCategory">Filter by category</label>
+                <i class="fas fa-layer-group" aria-hidden="true"></i>
+                <select id="technologyCategory" name="category">
+                    <option value="">All categories</option>
+                    <?php foreach ($technologyCategories as $technologyCategory): ?>
+                    <option value="<?php echo htmlspecialchars($technologyCategory); ?>" <?php echo $technologyCategoryFilter === $technologyCategory ? 'selected' : ''; ?>>
+                        <?php echo htmlspecialchars($technologyCategory); ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="technology-filter-input">
+                <label class="visually-hidden" for="technologyStatus">Filter by status</label>
+                <i class="fas fa-filter" aria-hidden="true"></i>
+                <select id="technologyStatus" name="status">
+                    <option value="">All statuses</option>
+                    <option value="active" <?php echo $technologyStatusFilter === 'active' ? 'selected' : ''; ?>>Active</option>
+                    <option value="expiring" <?php echo $technologyStatusFilter === 'expiring' ? 'selected' : ''; ?>>Expiring soon</option>
+                    <option value="expired" <?php echo $technologyStatusFilter === 'expired' ? 'selected' : ''; ?>>Expired</option>
+                    <option value="inactive" <?php echo $technologyStatusFilter === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                </select>
+            </div>
+            <div class="technology-filter-actions">
+                <?php if ($technologySearch !== '' || $technologyCategoryFilter !== '' || $technologyStatusFilter !== ''): ?>
+                <a href="techstack.php?per_page=<?php echo $technologyPageSize; ?>#technologyDirectory" class="technology-filter-clear">
+                    <i class="fas fa-xmark" aria-hidden="true"></i>
+                    <span>Clear</span>
+                </a>
+                <?php endif; ?>
+                <button type="button" class="btn-add-technology-toolbar" data-bs-toggle="modal" data-bs-target="#addTechnologyModal">
+                    <i class="fas fa-plus" aria-hidden="true"></i>
+                    <span>Add Technology</span>
+                </button>
+            </div>
+            <button type="submit" class="visually-hidden">Apply filters</button>
+        </form>
+
+        <div class="technology-directory-body">
     <!-- Technologies Grid -->
-    <?php if($technologies->num_rows > 0): ?>
+    <?php if($totalFilteredTechnologies > 0): ?>
         <div class="tech-grid">
             <?php while($tech = $technologies->fetch_assoc()): ?>
             <div class="tech-card-modern">
@@ -940,16 +1504,63 @@ include '../../includes/navbar.php';
             </div>
             <?php endwhile; ?>
         </div>
+        <div class="technology-pagination" aria-label="Technology portfolio pagination">
+            <div class="technology-pagination__meta">
+                <span class="technology-pagination__summary">
+                    <?php echo $technologyPageStart; ?>&ndash;<?php echo $technologyPageEnd; ?> of <?php echo $totalFilteredTechnologies; ?>
+                </span>
+                <label class="visually-hidden" for="technologyPageSize">Technologies per page</label>
+                <select class="technology-pagination__size" id="technologyPageSize" aria-label="Technologies per page">
+                    <?php foreach ($allowedTechnologyPageSizes as $pageSizeOption): ?>
+                    <option value="<?php echo $pageSizeOption; ?>" <?php echo $pageSizeOption === $technologyPageSize ? 'selected' : ''; ?>>
+                        <?php echo $pageSizeOption; ?> items
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <nav class="technology-pagination__controls" aria-label="Technology pages">
+                <?php if ($technologyCurrentPage > 1): ?>
+                <a class="technology-pagination__step" href="<?php echo htmlspecialchars($buildTechnologyPageUrl($technologyCurrentPage - 1)); ?>">Previous</a>
+                <?php else: ?>
+                <span class="technology-pagination__step is-disabled" aria-disabled="true">Previous</span>
+                <?php endif; ?>
+                <span class="technology-pagination__pages">
+                    <?php foreach ($technologyPaginationPages as $pageNumber): ?>
+                    <a
+                        class="technology-pagination__page<?php echo $pageNumber === $technologyCurrentPage ? ' is-current' : ''; ?>"
+                        href="<?php echo htmlspecialchars($buildTechnologyPageUrl($pageNumber)); ?>"
+                        <?php echo $pageNumber === $technologyCurrentPage ? 'aria-current="page"' : ''; ?>
+                    ><?php echo $pageNumber; ?></a>
+                    <?php endforeach; ?>
+                </span>
+                <?php if ($technologyCurrentPage < $technologyTotalPages): ?>
+                <a class="technology-pagination__step" href="<?php echo htmlspecialchars($buildTechnologyPageUrl($technologyCurrentPage + 1)); ?>">Next</a>
+                <?php else: ?>
+                <span class="technology-pagination__step is-disabled" aria-disabled="true">Next</span>
+                <?php endif; ?>
+            </nav>
+        </div>
     <?php else: ?>
         <div class="empty-state-modern">
-            <i class="fas fa-cube"></i>
-            <h4>No Technologies in Portfolio</h4>
-            <p>Get started by adding your first technology or service</p>
-            <button class="btn-primary-modern" style="padding: 0.7rem 2rem; border-radius: 40px;" data-bs-toggle="modal" data-bs-target="#addTechnologyModal">
-                <i class="fas fa-plus me-2"></i> Add Your First Technology
-            </button>
+            <?php if ((int) $technologyStats['total'] > 0): ?>
+                <i class="fas fa-search"></i>
+                <h4>No Matching Technologies</h4>
+                <p>Adjust the search or filters to view more portfolio items.</p>
+                <a class="btn-primary-modern" href="techstack.php?per_page=<?php echo $technologyPageSize; ?>#technologyDirectory">
+                    <i class="fas fa-rotate-left"></i> Clear Filters
+                </a>
+            <?php else: ?>
+                <i class="fas fa-cube"></i>
+                <h4>No Technologies in Portfolio</h4>
+                <p>Get started by adding your first technology or service.</p>
+                <button class="btn-add-technology-toolbar" data-bs-toggle="modal" data-bs-target="#addTechnologyModal">
+                    <i class="fas fa-plus"></i> Add Your First Technology
+                </button>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
+        </div>
+    </section>
 </div>
 
 <!-- Delete Technology Modal -->
@@ -1033,45 +1644,48 @@ include '../../includes/navbar.php';
 </div>
 
 <!-- Add Technology Modal -->
-<div class="modal fade modal-modern" id="addTechnologyModal" tabindex="-1">
+<div class="modal fade modal-modern technology-create-modal" id="addTechnologyModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="fas fa-plus-circle me-2"></i> Add New Technology
+                    <span class="modal-title-icon"><i class="fas fa-cubes"></i></span>
+                    Add New Technology
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form method="POST" data-app-loading data-loading-title="Adding technology" data-loading-text="Please wait while the technology item is saved.">
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Technology Name</label>
-                        <input type="text" name="name" class="form-control" placeholder="e.g., Microsoft Azure" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Category</label>
-                        <select name="category" class="form-select" required>
-                            <option value="Cloud Platform">Cloud Platform</option>
-                            <option value="Database">Database</option>
-                            <option value="Storage">Storage</option>
-                            <option value="Networking">Networking</option>
-                            <option value="AI/ML">AI/ML</option>
-                            <option value="IoT">IoT</option>
-                            <option value="DevOps">DevOps</option>
-                            <option value="Security">Security</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Monthly Price ($)</label>
-                        <input type="number" name="price" class="form-control" step="0.01" placeholder="0.00" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Expiry Date</label>
-                        <input type="date" name="expiry_date" class="form-control" required>
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="form-label">Technology Name</label>
+                            <input type="text" name="name" class="form-control" placeholder="e.g., Microsoft Azure" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Category</label>
+                            <select name="category" class="form-select" required>
+                                <option value="Cloud Platform">Cloud Platform</option>
+                                <option value="Database">Database</option>
+                                <option value="Storage">Storage</option>
+                                <option value="Networking">Networking</option>
+                                <option value="AI/ML">AI/ML</option>
+                                <option value="IoT">IoT</option>
+                                <option value="DevOps">DevOps</option>
+                                <option value="Security">Security</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Monthly Price ($)</label>
+                            <input type="number" name="price" class="form-control" step="0.01" placeholder="0.00" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Expiry Date</label>
+                            <input type="date" name="expiry_date" class="form-control" required>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="modal-secondary-action" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" name="add_technology" class="btn-primary-modern px-4">Add Technology</button>
                 </div>
             </form>
@@ -1128,6 +1742,32 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
+const technologyFilterForm = document.getElementById('technologyFilterForm');
+const technologySearchInput = document.getElementById('technologySearch');
+const technologyCategoryFilter = document.getElementById('technologyCategory');
+const technologyStatusFilter = document.getElementById('technologyStatus');
+const technologyPageSize = document.getElementById('technologyPageSize');
+let technologySearchTimer = null;
+
+function submitTechnologyFilters() {
+    technologyFilterForm?.requestSubmit();
+}
+
+technologySearchInput?.addEventListener('input', () => {
+    window.clearTimeout(technologySearchTimer);
+    technologySearchTimer = window.setTimeout(submitTechnologyFilters, 450);
+});
+
+technologyCategoryFilter?.addEventListener('change', submitTechnologyFilters);
+technologyStatusFilter?.addEventListener('change', submitTechnologyFilters);
+
+technologyPageSize?.addEventListener('change', function() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('per_page', this.value);
+    params.delete('page');
+    window.location.href = 'techstack.php?' + params.toString() + '#technologyDirectory';
+});
+
 function editTechnology(tech) {
     document.getElementById('edit_id').value = tech.id;
     document.getElementById('edit_name').value = tech.name;

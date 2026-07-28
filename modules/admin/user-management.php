@@ -81,17 +81,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 $search = trim((string) ($_GET['search'] ?? ''));
 $roleFilter = trim((string) ($_GET['role'] ?? ''));
 $statusFilter = trim((string) ($_GET['status'] ?? ''));
+$allowedUserPageSizes = [10, 25, 50];
+$userPageSize = isset($_GET['per_page']) ? (int) $_GET['per_page'] : 10;
+if (!in_array($userPageSize, $allowedUserPageSizes, true)) {
+    $userPageSize = 10;
+}
+$userCurrentPage = max(1, isset($_GET['page']) ? (int) $_GET['page'] : 1);
 
-$query = 'SELECT * FROM users WHERE 1=1';
+$userWhereSql = ' WHERE 1=1';
 $params = [];
 $types = '';
 
 if ($search !== '') {
     $searchLike = '%' . $search . '%';
     if (DB_DRIVER === 'pgsql') {
-        $query .= ' AND (username ILIKE ? OR email ILIKE ? OR full_name ILIKE ?)';
+        $userWhereSql .= ' AND (username ILIKE ? OR email ILIKE ? OR full_name ILIKE ?)';
     } else {
-        $query .= ' AND (username LIKE ? OR email LIKE ? OR full_name LIKE ?)';
+        $userWhereSql .= ' AND (username LIKE ? OR email LIKE ? OR full_name LIKE ?)';
     }
     $params[] = $searchLike;
     $params[] = $searchLike;
@@ -100,18 +106,39 @@ if ($search !== '') {
 }
 
 if ($roleFilter !== '') {
-    $query .= ' AND role = ?';
+    $userWhereSql .= ' AND role = ?';
     $params[] = $roleFilter;
     $types .= 's';
 }
 
 if ($statusFilter !== '') {
-    $query .= ' AND status = ?';
+    $userWhereSql .= ' AND status = ?';
     $params[] = $statusFilter;
     $types .= 's';
 }
 
-$query .= ' ORDER BY created_at DESC';
+$totalFilteredUsers = 0;
+$userCountStmt = $conn->prepare('SELECT COUNT(*) AS total FROM users' . $userWhereSql);
+if ($userCountStmt !== false) {
+    if ($types !== '') {
+        $userCountStmt->bind_param($types, ...$params);
+    }
+    $userCountStmt->execute();
+    $userCountResult = $userCountStmt->get_result();
+    $userCountRow = $userCountResult ? $userCountResult->fetch_assoc() : null;
+    $totalFilteredUsers = (int) ($userCountRow['total'] ?? 0);
+    $userCountStmt->close();
+}
+
+$userTotalPages = max(1, (int) ceil($totalFilteredUsers / $userPageSize));
+$userCurrentPage = min($userCurrentPage, $userTotalPages);
+$userPageOffset = ($userCurrentPage - 1) * $userPageSize;
+
+$query = 'SELECT * FROM users'
+    . $userWhereSql
+    . ' ORDER BY created_at DESC'
+    . ' LIMIT ' . $userPageSize
+    . ' OFFSET ' . $userPageOffset;
 
 $usersStmt = $conn->prepare($query);
 if ($usersStmt === false) {
@@ -125,6 +152,36 @@ if ($usersStmt === false) {
     $usersStmt->execute();
     $users = $usersStmt->get_result();
     $usersStmt->close();
+}
+
+$userPageStart = $totalFilteredUsers > 0 ? $userPageOffset + 1 : 0;
+$userPageEnd = min($userPageOffset + ($users ? $users->num_rows : 0), $totalFilteredUsers);
+$buildUserPageUrl = static function (int $page, ?int $pageSize = null) use ($search, $roleFilter, $statusFilter, $userPageSize): string {
+    $queryParams = [];
+
+    if ($search !== '') {
+        $queryParams['search'] = $search;
+    }
+    if ($roleFilter !== '') {
+        $queryParams['role'] = $roleFilter;
+    }
+    if ($statusFilter !== '') {
+        $queryParams['status'] = $statusFilter;
+    }
+
+    $queryParams['per_page'] = $pageSize ?? $userPageSize;
+    if ($page > 1) {
+        $queryParams['page'] = $page;
+    }
+
+    return 'user-management.php?' . http_build_query($queryParams) . '#userDirectory';
+};
+
+if ($userTotalPages <= 5) {
+    $userPaginationPages = range(1, $userTotalPages);
+} else {
+    $userPaginationStart = max(1, min($userCurrentPage - 2, $userTotalPages - 4));
+    $userPaginationPages = range($userPaginationStart, $userPaginationStart + 4);
 }
 
 // Get statistics
@@ -300,67 +357,112 @@ include '../../includes/navbar.php';
     color: var(--panel-muted) !important;
 }
 
+.user-directory-count {
+    color: var(--panel-muted);
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
 /* Filter Section */
 .filter-section {
-    padding: 1.5rem 2rem;
-    background: var(--panel-surface-alt);
-    border-bottom: 1px solid var(--panel-border);
+    padding: 1rem 2rem 1.15rem;
+    background: var(--panel-surface);
 }
 
 .filter-group {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(280px, 1.45fr) minmax(155px, 0.65fr) minmax(155px, 0.65fr) auto;
+    align-items: center;
     gap: 1rem;
-    flex-wrap: wrap;
-    align-items: flex-end;
 }
 
 .filter-input {
-    flex: 1;
-    min-width: 200px;
+    position: relative;
+    min-width: 0;
 }
 
-.filter-input label {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    font-weight: 600;
-    color: var(--panel-muted);
-    letter-spacing: 0.5px;
-    margin-bottom: 0.25rem;
-    display: block;
+.filter-input > i {
+    position: absolute;
+    top: 50%;
+    left: 0.1rem;
+    z-index: 1;
+    color: #668096;
+    font-size: 0.82rem;
+    transform: translateY(-50%);
+    pointer-events: none;
 }
 
 .filter-input input,
 .filter-input select {
     width: 100%;
-    padding: 0.6rem 1rem;
-    border: 1px solid var(--panel-border);
-    border-radius: 12px;
-    font-size: 0.85rem;
-    transition: all 0.2s;
-    background: var(--panel-input-bg);
+    min-height: 42px;
+    padding: 0.52rem 1.8rem 0.52rem 1.65rem;
+    border: 0;
+    border-bottom: 1px solid #cbd8e3;
+    border-radius: 0;
+    outline: 0;
+    background: transparent;
     color: var(--panel-input-text);
+    font-size: 0.82rem;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .filter-input input:focus,
 .filter-input select:focus {
-    outline: none;
     border-color: var(--theme-primary);
-    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
+    box-shadow: 0 2px 0 rgba(31, 99, 146, 0.12);
 }
 
-.btn-apply {
-    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
-    color: white;
-    border: none;
-    padding: 0.6rem 1.5rem;
-    border-radius: 12px;
-    font-weight: 500;
-    transition: all 0.2s;
+.user-filter-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.65rem;
+    white-space: nowrap;
 }
 
-.btn-apply:hover {
+.user-filter-clear {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 42px;
+    padding: 0.55rem 0.3rem;
+    color: var(--panel-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.user-filter-clear:hover {
+    color: var(--theme-primary);
+}
+
+.btn-add-user-toolbar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 42px;
+    padding: 0.62rem 1.05rem;
+    border: 1px solid var(--theme-primary);
+    border-radius: 10px;
+    background: var(--theme-primary);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 6px 14px rgba(31, 99, 146, 0.16);
+    transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.btn-add-user-toolbar:hover,
+.btn-add-user-toolbar:focus-visible {
+    border-color: var(--theme-primary-dark);
+    background: var(--theme-primary-dark);
+    color: #fff;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.22);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
 }
 
 /* Table Styles */
@@ -397,6 +499,105 @@ include '../../includes/navbar.php';
 
 .user-table tr:hover {
     background: var(--panel-row-hover);
+}
+
+.user-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.5rem;
+    border-top: 1px solid var(--panel-border);
+    background: var(--panel-surface);
+}
+
+.user-pagination__meta,
+.user-pagination__controls,
+.user-pagination__pages {
+    display: flex;
+    align-items: center;
+}
+
+.user-pagination__meta {
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.user-pagination__summary {
+    color: var(--panel-muted);
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.user-pagination__size {
+    height: 36px;
+    min-width: 94px;
+    padding: 0 1.8rem 0 0.7rem;
+    border: 1px solid var(--panel-border);
+    border-radius: 9px;
+    background: var(--panel-surface);
+    color: var(--panel-text);
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.user-pagination__controls {
+    gap: 0.55rem;
+}
+
+.user-pagination__pages {
+    overflow: hidden;
+    border: 1px solid var(--panel-border);
+    border-radius: 9px;
+    background: var(--panel-surface);
+}
+
+.user-pagination__page,
+.user-pagination__step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    color: var(--panel-text);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.user-pagination__page {
+    min-width: 36px;
+    padding: 0 0.55rem;
+}
+
+.user-pagination__page:hover,
+.user-pagination__page.is-current {
+    background: #edf5fa;
+    color: var(--theme-primary);
+}
+
+.user-pagination__page.is-current {
+    box-shadow: inset 0 0 0 1px #cfe1ec;
+    pointer-events: none;
+}
+
+.user-pagination__step {
+    min-width: 76px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--panel-border);
+    border-radius: 9px;
+    background: var(--panel-surface);
+}
+
+.user-pagination__step:hover {
+    border-color: #9bbdd1;
+    color: var(--theme-primary);
+}
+
+.user-pagination__step.is-disabled {
+    background: var(--panel-surface-alt);
+    color: var(--panel-muted);
+    opacity: 0.55;
+    pointer-events: none;
 }
 
 .user-name {
@@ -618,55 +819,108 @@ include '../../includes/navbar.php';
 
 /* Modal Styling */
 .modal-modern .modal-content {
-    border-radius: 24px;
-    border: none;
+    background: var(--panel-surface);
+    border: 1px solid var(--panel-border);
+    border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(15, 43, 67, 0.24);
     overflow: hidden;
 }
 
 .modal-modern .modal-header {
-    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-dark) 100%);
-    color: white;
-    padding: 1.5rem;
-    border: none;
+    background: linear-gradient(135deg, #1f6392 0%, #0f4a6e 100%) !important;
+    border: 0;
+    color: #ffffff;
+    padding: 1.1rem 1.35rem;
 }
 
 .modal-modern .modal-header .modal-title {
-    color: white;
+    align-items: center;
+    color: #ffffff !important;
+    display: flex;
+    font-size: 1.05rem;
+    font-weight: 700;
+    gap: 0.7rem;
+    margin: 0;
+}
+
+.modal-title-icon {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 9px;
+    display: inline-flex;
+    height: 34px;
+    justify-content: center;
+    width: 34px;
 }
 
 .modal-modern .modal-header .btn-close {
-    filter: brightness(0) invert(1);
+    filter: brightness(0) invert(1) !important;
+    opacity: 0.75;
+}
+
+.modal-modern .modal-header .btn-close:hover {
+    opacity: 1;
 }
 
 .modal-modern .modal-body {
-    padding: 2rem;
+    padding: 1.5rem;
 }
 
 .modal-modern .modal-footer {
-    padding: 1rem 2rem 2rem;
+    background: var(--panel-surface-alt);
     border-top: 1px solid var(--panel-border);
+    gap: 0.65rem;
+    padding: 1rem 1.5rem;
 }
 
 .modal-modern .form-label {
-    font-weight: 500;
     color: var(--panel-text);
-    margin-bottom: 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.045em;
+    margin-bottom: 0.45rem;
+    text-transform: uppercase;
 }
-
 
 .modal-modern .form-control,
 .modal-modern .form-select {
-    border-radius: 12px;
+    border-radius: 10px;
     border: 1px solid var(--panel-border);
-    padding: 0.6rem 1rem;
     background: var(--panel-input-bg);
     color: var(--panel-input-text);
+    min-height: 46px;
+    padding: 0.65rem 0.85rem;
 }
 
 .modal-modern .form-control:focus,
 .modal-modern .form-select:focus {
     border-color: var(--theme-primary);
     box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.1);
+}
+
+.account-create-modal .modal-dialog {
+    max-width: 760px;
+}
+
+.modal-secondary-action {
+    align-items: center;
+    background: transparent;
+    border: 1px solid #cbd9e4;
+    border-radius: 10px;
+    color: #405a70;
+    display: inline-flex;
+    font-size: 0.85rem;
+    font-weight: 700;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0.65rem 1.05rem;
+}
+
+.modal-secondary-action:hover {
+    background: #eef5f9;
+    border-color: #abc1d1;
+    color: #183f59;
 }
 
 .modal-modern .modal-content {
@@ -748,18 +1002,39 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-table thead,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-footer {
     background: var(--panel-surface-alt);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-section,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__pages,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__step,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__size {
+    background: var(--panel-surface);
+    border-color: var(--panel-border);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-name,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern h4,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .empty-state-modern h4 {
     color: var(--panel-text) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
+    color: #ffffff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-secondary-action {
+    border-color: rgba(143, 211, 255, 0.32);
+    color: #bfe6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-secondary-action:hover {
+    background: rgba(31, 99, 146, 0.18);
+    color: #ffffff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern .text-muted,
@@ -774,7 +1049,20 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select {
+    background: transparent;
+    border-color: var(--panel-border);
+    color: var(--panel-input-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input:focus,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select:focus {
+    background: transparent;
+    border-color: var(--theme-primary);
+    color: var(--panel-input-text);
+    box-shadow: 0 2px 0 rgba(138, 210, 255, 0.16);
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select {
     background: var(--panel-input-bg);
@@ -782,8 +1070,6 @@ include '../../includes/navbar.php';
     color: var(--panel-input-text);
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input input:focus,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select:focus,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-control:focus,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .form-select:focus {
     background: var(--panel-input-bg);
@@ -794,6 +1080,24 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-table tr:hover {
     background: var(--panel-row-hover);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__page,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__step,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__size {
+    color: var(--panel-text);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__page:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__page.is-current {
+    background: rgba(31, 99, 146, 0.28);
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-pagination__step.is-disabled {
+    background: var(--panel-surface-alt);
+    color: var(--panel-muted);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .badge-role,
@@ -899,6 +1203,17 @@ include '../../includes/navbar.php';
 }
 
 /* Responsive */
+@media (max-width: 1100px) {
+    .filter-group {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .filter-input--search,
+    .user-filter-actions {
+        grid-column: 1 / -1;
+    }
+}
+
 @media (max-width: 768px) {
     .page-header-modern {
         padding: 1.5rem;
@@ -918,11 +1233,43 @@ include '../../includes/navbar.php';
     }
     
     .filter-group {
-        flex-direction: column;
+        grid-template-columns: 1fr;
+    }
+
+    .filter-input--search,
+    .user-filter-actions {
+        grid-column: auto;
     }
     
     .filter-input {
         width: 100%;
+    }
+
+    .user-filter-actions {
+        justify-content: space-between;
+        flex-wrap: wrap;
+    }
+
+    .user-pagination {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 0.9rem 1rem;
+    }
+
+    .user-pagination__meta,
+    .user-pagination__controls {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .user-pagination__pages {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .user-pagination__step {
+        min-width: 40px;
+        padding: 0 0.65rem;
     }
     
     .user-table th,
@@ -948,11 +1295,6 @@ include '../../includes/navbar.php';
                 </h2>
                 <p>Manage user accounts, roles, and permissions across your organization</p>
             </div>
-            <div class="mt-3 mt-md-0">
-                <button class="btn-add-modern" data-bs-toggle="modal" data-bs-target="#createUserModal">
-                    <i class="fas fa-plus me-2"></i> Add New User
-                </button>
-            </div>
         </div>
     </div>
 
@@ -976,28 +1318,31 @@ include '../../includes/navbar.php';
     </div>
 
     <!-- Main Content Card -->
-    <div class="main-card">
+    <div class="main-card" id="userDirectory">
         <div class="card-header-modern">
             <h5>
                 <i class="fas fa-list me-2" style="color: var(--theme-primary);"></i>
                 User Directory
             </h5>
-            <div>
-                <span class="text-muted small">Showing <?php echo $users ? $users->num_rows : 0; ?> users</span>
-            </div>
+            <span class="user-directory-count">
+                <?php echo $totalFilteredUsers; ?> user<?php echo $totalFilteredUsers === 1 ? '' : 's'; ?>
+            </span>
         </div>
         
         <!-- Filter Section -->
-        <form method="GET" class="filter-section" id="userFilterForm">
+        <form method="GET" action="user-management.php#userDirectory" class="filter-section" id="userFilterForm">
+            <input type="hidden" name="per_page" value="<?php echo $userPageSize; ?>">
             <div class="filter-group">
-                <div class="filter-input">
-                    <label for="searchInput">Search</label>
-                    <input type="text" id="searchInput" name="search" placeholder="Name, email, or username..." value="<?php echo htmlspecialchars($search); ?>">
+                <div class="filter-input filter-input--search">
+                    <label class="visually-hidden" for="searchInput">Search users</label>
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input type="search" id="searchInput" name="search" placeholder="Search by name, email, or username" value="<?php echo htmlspecialchars($search); ?>" autocomplete="off">
                 </div>
                 <div class="filter-input">
-                    <label for="roleFilter">Role</label>
+                    <label class="visually-hidden" for="roleFilter">Filter users by role</label>
+                    <i class="fas fa-user-tag" aria-hidden="true"></i>
                     <select id="roleFilter" name="role">
-                        <option value="">All Roles</option>
+                        <option value="">All roles</option>
                         <option value="admin" <?php echo $roleFilter == 'admin' ? 'selected' : ''; ?>>Admin</option>
                         <option value="sales" <?php echo $roleFilter == 'sales' ? 'selected' : ''; ?>>Sales</option>
                         <option value="architect" <?php echo $roleFilter == 'architect' ? 'selected' : ''; ?>>Architect</option>
@@ -1008,21 +1353,29 @@ include '../../includes/navbar.php';
                     </select>
                 </div>
                 <div class="filter-input">
-                    <label for="statusFilter">Status</label>
+                    <label class="visually-hidden" for="statusFilter">Filter users by status</label>
+                    <i class="fas fa-filter" aria-hidden="true"></i>
                     <select id="statusFilter" name="status">
-                        <option value="">All Status</option>
+                        <option value="">All statuses</option>
                         <option value="active" <?php echo $statusFilter == 'active' ? 'selected' : ''; ?>>Active</option>
                         <option value="inactive" <?php echo $statusFilter == 'inactive' ? 'selected' : ''; ?>>Inactive</option>
                         <option value="suspended" <?php echo $statusFilter == 'suspended' ? 'selected' : ''; ?>>Suspended</option>
                     </select>
                 </div>
-                <div class="d-flex gap-2">
-                    <button type="submit" class="btn-apply">Apply Filters</button>
+                <div class="user-filter-actions">
                     <?php if ($search !== '' || $roleFilter !== '' || $statusFilter !== ''): ?>
-                    <a href="user-management.php" class="btn-apply" style="background: var(--gray-600); text-decoration: none;">Clear</a>
+                    <a href="user-management.php?per_page=<?php echo $userPageSize; ?>#userDirectory" class="user-filter-clear">
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                        <span>Clear</span>
+                    </a>
                     <?php endif; ?>
+                    <button type="button" class="btn-add-user-toolbar" data-bs-toggle="modal" data-bs-target="#createUserModal">
+                        <i class="fas fa-plus" aria-hidden="true"></i>
+                        <span>Add New</span>
+                    </button>
                 </div>
             </div>
+            <button type="submit" class="visually-hidden">Apply filters</button>
         </form>
         
         <!-- Users Table -->
@@ -1086,12 +1439,50 @@ include '../../includes/navbar.php';
                 <i class="fas fa-user-friends"></i>
                 <h4>No Users Found</h4>
                 <p>Try adjusting your filters or add a new user</p>
-                <button class="btn-add-modern mt-2" data-bs-toggle="modal" data-bs-target="#createUserModal">
+                <button class="btn-add-user-toolbar mt-2" data-bs-toggle="modal" data-bs-target="#createUserModal">
                     <i class="fas fa-plus me-2"></i> Add Your First User
                 </button>
             </div>
             <?php endif; ?>
         </div>
+        <?php if ($totalFilteredUsers > 0): ?>
+        <div class="user-pagination" aria-label="User directory pagination">
+            <div class="user-pagination__meta">
+                <span class="user-pagination__summary">
+                    <?php echo $userPageStart; ?>&ndash;<?php echo $userPageEnd; ?> of <?php echo $totalFilteredUsers; ?>
+                </span>
+                <label class="visually-hidden" for="userPageSize">Users per page</label>
+                <select class="user-pagination__size" id="userPageSize" aria-label="Users per page">
+                    <?php foreach ($allowedUserPageSizes as $pageSizeOption): ?>
+                    <option value="<?php echo $pageSizeOption; ?>" <?php echo $pageSizeOption === $userPageSize ? 'selected' : ''; ?>>
+                        <?php echo $pageSizeOption; ?> items
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <nav class="user-pagination__controls" aria-label="User pages">
+                <?php if ($userCurrentPage > 1): ?>
+                <a class="user-pagination__step" href="<?php echo htmlspecialchars($buildUserPageUrl($userCurrentPage - 1)); ?>">Previous</a>
+                <?php else: ?>
+                <span class="user-pagination__step is-disabled" aria-disabled="true">Previous</span>
+                <?php endif; ?>
+                <span class="user-pagination__pages">
+                    <?php foreach ($userPaginationPages as $pageNumber): ?>
+                    <a
+                        class="user-pagination__page<?php echo $pageNumber === $userCurrentPage ? ' is-current' : ''; ?>"
+                        href="<?php echo htmlspecialchars($buildUserPageUrl($pageNumber)); ?>"
+                        <?php echo $pageNumber === $userCurrentPage ? 'aria-current="page"' : ''; ?>
+                    ><?php echo $pageNumber; ?></a>
+                    <?php endforeach; ?>
+                </span>
+                <?php if ($userCurrentPage < $userTotalPages): ?>
+                <a class="user-pagination__step" href="<?php echo htmlspecialchars($buildUserPageUrl($userCurrentPage + 1)); ?>">Next</a>
+                <?php else: ?>
+                <span class="user-pagination__step is-disabled" aria-disabled="true">Next</span>
+                <?php endif; ?>
+            </nav>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -1129,34 +1520,35 @@ include '../../includes/navbar.php';
 </div>
 
 <!-- Create User Modal -->
-<div class="modal fade modal-modern" id="createUserModal" tabindex="-1">
+<div class="modal fade modal-modern account-create-modal" id="createUserModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
-                    <i class="fas fa-user-plus me-2"></i> Create New User
+                    <span class="modal-title-icon"><i class="fas fa-user-plus"></i></span>
+                    Create New User
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" data-app-loading data-loading-title="Creating user" data-loading-text="Please wait while the user account is created.">
+            <form method="POST" autocomplete="off" data-app-loading data-loading-title="Creating user" data-loading-text="Please wait while the user account is created.">
                 <div class="modal-body">
                     <input type="hidden" name="action" value="create">
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Username</label>
-                            <input type="text" name="username" class="form-control" required>
+                            <input type="text" name="username" class="form-control" placeholder="Enter username" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Email</label>
-                            <input type="email" name="email" class="form-control" required>
+                            <input type="email" name="email" class="form-control" placeholder="name@company.com" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Password</label>
-                            <input type="password" name="password" class="form-control" required>
+                            <input type="password" name="password" class="form-control" placeholder="Create a secure password" autocomplete="new-password" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Full Name</label>
-                            <input type="text" name="full_name" class="form-control" required>
+                            <input type="text" name="full_name" class="form-control" placeholder="Enter full name" autocomplete="off" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Department</label>
@@ -1183,7 +1575,7 @@ include '../../includes/navbar.php';
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="modal-secondary-action" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn-primary-modern">Create User</button>
                 </div>
             </form>
@@ -1192,6 +1584,32 @@ include '../../includes/navbar.php';
 </div>
 
 <script>
+const userFilterForm = document.getElementById('userFilterForm');
+const userSearchInput = document.getElementById('searchInput');
+const userRoleFilter = document.getElementById('roleFilter');
+const userStatusFilter = document.getElementById('statusFilter');
+const userPageSize = document.getElementById('userPageSize');
+let userSearchTimer = null;
+
+function submitUserFilters() {
+    userFilterForm?.requestSubmit();
+}
+
+userSearchInput?.addEventListener('input', () => {
+    window.clearTimeout(userSearchTimer);
+    userSearchTimer = window.setTimeout(submitUserFilters, 450);
+});
+
+userRoleFilter?.addEventListener('change', submitUserFilters);
+userStatusFilter?.addEventListener('change', submitUserFilters);
+
+userPageSize?.addEventListener('change', function() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('per_page', this.value);
+    params.delete('page');
+    window.location.href = 'user-management.php?' + params.toString() + '#userDirectory';
+});
+
 function viewUser(id) {
     window.location.href = 'view-user.php?id=' + id;
 }

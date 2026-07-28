@@ -3893,6 +3893,17 @@ include '../../includes/navbar.php';
     gap: .45rem;
 }
 
+#developer-review-panel .qa-primary-decision-actions {
+    justify-content: center;
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+#developer-review-panel .qa-primary-decision-actions > button {
+    justify-content: center;
+    min-width: 72px;
+}
+
 .qa-primary-decision-actions[hidden],
 .qa-fail-routing-panel[hidden] {
     display: none !important;
@@ -8458,6 +8469,8 @@ function renderEvortixBubble() {
         ${evortixChangeImpactNotice ? `<div class="evortix-bubble-warning"><i class="fas fa-code-branch me-1"></i>Change impact: ${escapeHtml(evortixChangeImpactNotice.author)} updated ${escapeHtml(evortixChangeImpactNotice.areas.join(', '))}. Recheck this decision.</div>` : ''}
         ${reallocation ? `<div class="evortix-bubble-warning"><i class="fas fa-rotate me-1"></i>Reallocation watch: ${escapeHtml(reallocation.title)} may need a new owner.</div>` : ''}
         <div class="evortix-bubble-actions"><button type="button" data-evortix-action="skip">Skip</button><button type="button" data-evortix-action="adjust">Choose another</button><button class="is-accept" type="button" data-evortix-action="accept">Accept assignment</button></div>`;
+    window.chatBotWidgetRobot?.setMode?.('empty-bed');
+    window.chatBotFloatRobot?.setMode?.('standing');
     float.hidden = false;
     float.setAttribute('aria-hidden', 'false');
     window.chatBotFloatRobot?.point?.('left', 5000);
@@ -8532,6 +8545,8 @@ document.addEventListener('DOMContentLoaded', () => window.setTimeout(() => {
         speech.hidden = false;
         speech.setAttribute('aria-hidden', 'false');
         speech.innerHTML = `<div class="evortix-bubble-head"><div><div class="evortix-bubble-eyebrow">${completedAssignment ? 'Assignment saved' : 'Decision saved'}</div><strong class="evortix-bubble-title"><i class="fas fa-circle-check me-1"></i>Successful</strong></div></div><div class="evortix-bubble-task"><span>${escapeHtml(evortixAssignmentSuccess)}</span></div><div class="evortix-bubble-reason">Evortix refreshed the queue so completed assignments, reductions, approvals, and reallocations are not repeated.</div>`;
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
         float.hidden = false;
         float.setAttribute('aria-hidden', 'false');
     }
