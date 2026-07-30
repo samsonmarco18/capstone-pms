@@ -352,12 +352,15 @@ include '../../includes/navbar.php';
 :root{--theme-primary:#1f6392;--theme-dark:#184f73;--theme-soft:#eef6fb;--theme-line:rgba(31,99,146,.16);--gray-25:#fcfdff;--gray-50:#f8f9fa;--gray-100:#f1f5f9;--gray-200:#e9ecef;--gray-300:#d9e2ec;--gray-600:#6c757d;--gray-700:#475569;--gray-900:#212529;}
 body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .vc-shell{max-width:1440px;}
-.vc-shell{position:relative!important;z-index:10!important;pointer-events:auto!important;}
+.vc-shell{position:relative!important;z-index:1040!important;pointer-events:auto!important;}
 .vc-shell :is(a,button,input,select,textarea,label,[role="button"],.accordion-button){pointer-events:auto!important;}
 .vc-shell :is(.vc-header,.vc-card,.project-picker,.repo-tile,.workspace-tools-card,.repository-access-panel){position:relative;}
 body:has(.vc-shell) :is(.sidebar-overlay,.app-global-loading-overlay,.app-logout-loading-overlay){pointer-events:none!important;}
 body:has(.vc-shell) .modal-backdrop{pointer-events:none!important;}
 body:has(.vc-shell) .modal.show{pointer-events:auto!important;}
+body:has(.vc-shell) :is(.app-global-loading-overlay,.app-logout-loading-overlay):not(.is-visible),
+body:has(.vc-shell) .modal-backdrop:not(:has(+ .modal.show)){display:none!important;}
+body:has(.vc-shell):has(.modal.show) .vc-shell{z-index:auto!important;}
 .vc-header,.vc-card{background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:24px;box-shadow:0 14px 34px rgba(15,23,42,.05);}
 .vc-header{padding:2rem;margin-bottom:1.5rem;background:linear-gradient(135deg,#19567f 0%,#1f6392 55%,#2f83b9 100%);color:#fff;position:relative;overflow:hidden;}
 .vc-header:before,.vc-header:after{content:'';position:absolute;border-radius:999px;background:rgba(255,255,255,.09);}
@@ -1342,6 +1345,8 @@ body:has(.vc-shell) .modal.show{pointer-events:auto!important;}
     <?php endif; ?>
 
 <script>
+document.documentElement.classList.add('version-control-page');
+
 function recoverVersionControlInteractions() {
     const loadingOverlay = document.getElementById('appGlobalLoadingOverlay');
     if (loadingOverlay) {
@@ -1356,13 +1361,45 @@ function recoverVersionControlInteractions() {
         document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.remove());
     }
 
-    if (window.matchMedia('(min-width: 993px)').matches) {
-        document.querySelector('.sidebar-overlay')?.classList.remove('active');
-    }
+    const sidebarOverlay = document.querySelector('.sidebar-overlay');
+    sidebarOverlay?.classList.remove('active');
+    sidebarOverlay?.setAttribute('aria-hidden', 'true');
+
+    document.querySelectorAll('.spinner-overlay').forEach((overlay) => {
+        const style = window.getComputedStyle(overlay);
+        if (style.visibility === 'hidden' || Number.parseFloat(style.opacity || '1') === 0) {
+            overlay.style.setProperty('display', 'none', 'important');
+            overlay.style.setProperty('pointer-events', 'none', 'important');
+        }
+    });
 }
 
 recoverVersionControlInteractions();
 window.addEventListener('pageshow', recoverVersionControlInteractions);
+
+/*
+ * A stale theme/widget backdrop can remain above the workspace after browser
+ * history restoration. If it receives a click that was physically over a
+ * Version Control action, forward that click to the real control underneath.
+ */
+document.addEventListener('click', function (event) {
+    const shell = document.querySelector('.vc-shell');
+    if (!shell || shell.contains(event.target)) {
+        return;
+    }
+
+    const control = document.elementsFromPoint(event.clientX, event.clientY)
+        .map((element) => element.closest?.('a,button,input,select,textarea,[role="button"]'))
+        .find((element) => element && shell.contains(element) && !element.disabled);
+
+    if (!control) {
+        return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    control.click();
+}, true);
 
 document.addEventListener('DOMContentLoaded', function () {
     recoverVersionControlInteractions();
