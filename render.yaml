@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     region: oregon
-    plan: free
+    plan: starter
     autoDeployTrigger: commit
     healthCheckPath: /healthz.php
     envVars:
@@ -16,6 +16,10 @@ services:
         value: https://erni-pms.onrender.com
       - key: AUTO_INIT_DB
         value: "1"
+      - key: GIT_STORAGE_ROOT
+        value: /var/data/git
+      - key: GIT_WORKSPACE_ROOT
+        value: /var/data/git-workspaces
       - key: DB_DRIVER
         value: pgsql
       - key: DATABASE_URL
@@ -52,6 +56,10 @@ services:
         sync: false
       - key: GMAIL_USER
         sync: false
+    disk:
+      name: erni-pms-git
+      mountPath: /var/data
+      sizeGB: 1
 
 databases:
   - name: erni-pms-db

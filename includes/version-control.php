@@ -151,7 +151,11 @@ function vcGetGitBinary(): string
 
 function vcGetRepositoryStorageRoot(): string
 {
-    return APP_ROOT_PATH . DIRECTORY_SEPARATOR . 'git';
+    $configuredRoot = trim((string) (getenv('GIT_STORAGE_ROOT') ?: ''));
+
+    return $configuredRoot !== ''
+        ? rtrim($configuredRoot, '/\\')
+        : APP_ROOT_PATH . DIRECTORY_SEPARATOR . 'git';
 }
 
 function vcGetRepositoryBarePath(string $slug): string
@@ -161,7 +165,11 @@ function vcGetRepositoryBarePath(string $slug): string
 
 function vcGetRepositoryWorkspaceRoot(): string
 {
-    return APP_ROOT_PATH . DIRECTORY_SEPARATOR . 'git-workspaces';
+    $configuredRoot = trim((string) (getenv('GIT_WORKSPACE_ROOT') ?: ''));
+
+    return $configuredRoot !== ''
+        ? rtrim($configuredRoot, '/\\')
+        : APP_ROOT_PATH . DIRECTORY_SEPARATOR . 'git-workspaces';
 }
 
 function vcGetRepositoryWorkspacePath(string $slug): string
@@ -517,7 +525,10 @@ function vcMergeManagedBranches(
 ): array {
     $bareRepositoryPath = vcGetRepositoryBarePath($repositorySlug);
     if (!is_dir($bareRepositoryPath)) {
-        throw new RuntimeException('The managed Git repository is unavailable on this server.');
+        throw new RuntimeException(
+            'The managed Git repository is missing from persistent storage. '
+            . 'Ask a repository maintainer to push the main and feature branches again, then retry the merge.'
+        );
     }
 
     $workingPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'erni-pms-merge-' . bin2hex(random_bytes(6));
