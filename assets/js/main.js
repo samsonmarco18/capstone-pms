@@ -461,25 +461,13 @@ function initDarkMode() {
     const body = $('body');
     const serverPreference = String(window.APP_USER_PREFERENCES?.theme || 'default');
     const visualTheme = ['tropical', 'futuristic'].includes(serverPreference) ? serverPreference : '';
-    let colorMode = '';
 
     try {
-        const localTheme = localStorage.getItem('theme');
-        if (localTheme === 'light' || localTheme === 'dark') {
-            colorMode = localTheme;
-        } else if (localTheme === 'tropical' || localTheme === 'futuristic') {
-            localStorage.removeItem('theme');
-        }
+        localStorage.removeItem('theme');
     } catch (error) {
-        // Use the saved server preference when browser storage is unavailable.
+        // Theme selection still works when browser storage is unavailable.
     }
 
-    const resolveTheme = preference => {
-        if (preference === 'system') {
-            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        return preference === 'dark' ? 'dark' : 'light';
-    };
     const applyTheme = theme => {
         root.attr('data-theme', theme);
         body.attr('data-theme', theme);
@@ -490,40 +478,9 @@ function initDarkMode() {
             root.removeAttr('data-app-theme');
             body.removeAttr('data-app-theme');
         }
-        updateThemeIcon(theme);
     };
 
-    applyTheme(colorMode || resolveTheme(serverPreference));
-
-    $('#darkModeToggle').on('click', function (event) {
-        event.preventDefault();
-        const nextTheme = (root.attr('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
-        applyTheme(nextTheme);
-        try {
-            localStorage.setItem('theme', nextTheme);
-        } catch (error) {
-            // The toggle still works for the current page.
-        }
-    });
-
-    if (serverPreference === 'system') {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', event => {
-            let hasLocalOverride = false;
-            try {
-                hasLocalOverride = ['light', 'dark'].includes(localStorage.getItem('theme'));
-            } catch (error) {
-                hasLocalOverride = false;
-            }
-            if (!hasLocalOverride) {
-                applyTheme(event.matches ? 'dark' : 'light');
-            }
-        });
-    }
-}
-
-function updateThemeIcon(theme) {
-    const icon = $('#darkModeToggle i');
-    icon.removeClass('fa-moon fa-sun').addClass(theme === 'dark' ? 'fa-sun' : 'fa-moon');
+    applyTheme(serverPreference === 'futuristic' ? 'dark' : 'light');
 }
 
 function initNotifications() {

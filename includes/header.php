@@ -46,22 +46,12 @@ $headerAccent = $headerThemeAccentOptions[$headerThemePreference]
             const visualTheme = ['tropical', 'futuristic'].includes(savedThemePreference)
                 ? savedThemePreference
                 : '';
-            let localColorMode = '';
             try {
-                const localTheme = window.localStorage.getItem('theme');
-                if (localTheme === 'light' || localTheme === 'dark') {
-                    localColorMode = localTheme;
-                } else if (localTheme === 'tropical' || localTheme === 'futuristic') {
-                    window.localStorage.removeItem('theme');
-                }
+                window.localStorage.removeItem('theme');
             } catch (error) {
-                // Use the saved server preference when browser storage is unavailable.
+                // Theme selection still works when browser storage is unavailable.
             }
-            const resolvedTheme = localColorMode || (
-                savedThemePreference === 'system'
-                    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-                    : (savedThemePreference === 'dark' ? 'dark' : 'light')
-            );
+            const resolvedTheme = savedThemePreference === 'futuristic' ? 'dark' : 'light';
             document.documentElement.setAttribute('data-theme', resolvedTheme);
             if (visualTheme) {
                 document.documentElement.setAttribute('data-app-theme', visualTheme);

@@ -123,12 +123,6 @@ $appUserContext = [
                     </a>
                 </li>
 
-                <li class="nav-item">
-                    <button class="btn btn-link nav-link nav-icon-link" id="darkModeToggle" type="button" title="Dark mode">
-                        <i class="fas fa-moon"></i>
-                    </button>
-                </li>
-
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 nav-user-link" href="#" id="navbarUserMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <div class="user-profile-pic d-flex align-items-center justify-content-center text-white">

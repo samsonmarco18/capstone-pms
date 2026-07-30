@@ -859,7 +859,7 @@ include 'includes/navbar.php';
                         <div class="settings-section-body">
                             <div class="settings-field settings-theme-field">
                                 <label class="form-label" id="themePreferenceLabel" for="themePreference">Interface theme</label>
-                                <small class="settings-field-note">Choose a visual skin. Use the moon button in the navbar to switch between light and dark mode.</small>
+                                <small class="settings-field-note">Default and Tropical Coast use light mode. Futuristic Neon uses dark mode.</small>
                                 <select class="visually-hidden" id="themePreference" name="theme_preference" aria-labelledby="themePreferenceLabel">
                                     <?php foreach ($themeOptions as $value => $label): ?>
                                         <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $preferences['theme_preference'] === $value ? 'selected' : ''; ?>>
@@ -1167,10 +1167,8 @@ try {
     const visualTheme = ['tropical', 'futuristic'].includes(savedThemePreference)
         ? savedThemePreference
         : '';
-    const storedColorMode = window.localStorage.getItem('theme');
-    const appliedTheme = ['light', 'dark'].includes(storedColorMode)
-        ? storedColorMode
-        : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    window.localStorage.removeItem('theme');
+    const appliedTheme = savedThemePreference === 'futuristic' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', appliedTheme);
     document.body.setAttribute('data-theme', appliedTheme);
     if (visualTheme) {
