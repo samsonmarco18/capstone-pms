@@ -2528,6 +2528,36 @@ body {
     cursor: grabbing;
 }
 
+.chat-bot-float-dismiss {
+    position: absolute;
+    top: -6px;
+    right: -7px;
+    z-index: 7;
+    display: grid;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: #175f8f;
+    font-size: 0.7rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.82;
+    touch-action: manipulation;
+    transition: color 0.18s ease, opacity 0.18s ease, transform 0.18s ease;
+}
+
+.chat-bot-float-dismiss:hover,
+.chat-bot-float-dismiss:focus-visible {
+    background: transparent;
+    color: #0d6f9f;
+    opacity: 1;
+    outline: 0;
+    transform: scale(1.06);
+}
+
 .chat-bot-float.is-preparing-speech .chat-bot-speech {
     opacity: 0;
     transform: translateY(-50%) translateX(18px);
@@ -2608,6 +2638,12 @@ body {
     pointer-events: none;
     overflow: visible;
     will-change: transform, opacity;
+}
+
+.chat-bot-speech:not([class*="evortix-"]) {
+    width: fit-content !important;
+    min-width: 0 !important;
+    max-width: min(280px, calc(100vw - 160px));
 }
 
 .chat-bot-speech::before {
@@ -4053,19 +4089,36 @@ body {
 }
 
 .create-group-modal .modal-header {
-    padding: 18px 20px 14px;
-    border-bottom: 1px solid rgba(18, 80, 127, 0.1);
-    background: #f8fbff;
+    padding: 18px 22px;
+    border-bottom: 0;
+    background: linear-gradient(135deg, #155b86 0%, #247eae 100%);
 }
 
 .create-group-modal .modal-title {
-    color: #1f344b;
+    color: #ffffff;
     font-weight: 800;
+    line-height: 1.25;
 }
 
 .create-group-subtitle {
-    color: #7c91a6;
+    color: rgba(235, 247, 255, 0.82);
     font-size: 0.82rem;
+    margin-top: 0.22rem;
+}
+
+.create-group-modal .modal-header .btn-close {
+    margin: 0;
+    padding: 0.65rem;
+    border-radius: 50%;
+    filter: invert(1) grayscale(100%) brightness(2);
+    opacity: 0.88;
+    transition: background-color 0.18s ease, opacity 0.18s ease;
+}
+
+.create-group-modal .modal-header .btn-close:hover,
+.create-group-modal .modal-header .btn-close:focus-visible {
+    background-color: rgba(255, 255, 255, 0.16);
+    opacity: 1;
 }
 
 .create-group-modal .modal-body {

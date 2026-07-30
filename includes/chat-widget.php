@@ -82,6 +82,15 @@ if (
                     return 0;
                 }
             };
+            $summaryFirstId = static function (string $sql) use ($summaryConn): int {
+                try {
+                    $result = $summaryConn->query($sql);
+                    return $result ? (int) (($result->fetch_assoc()['id'] ?? 0)) : 0;
+                } catch (Throwable $e) {
+                    error_log('Evortix dashboard navigation unavailable: ' . $e->getMessage());
+                    return 0;
+                }
+            };
             $adminPasswordRequests = 0;
             $adminTechnologyCount = 0;
             $adminUserCount = 0;
@@ -168,6 +177,9 @@ if (
                 'expert' => [0, 1, 3],
                 'developer' => [1, 2, 3],
             ];
+            $compactActionUrlsByRole = [
+                'qa' => BASE_URL . 'modules/qa/testing.php',
+            ];
             foreach ($compactMetricIndexesByRole as $compactRole => $metricIndexes) {
                 $compactMetrics = array_values(array_filter(array_map(
                     static fn(int $index): ?array => $roleSummaries[$compactRole]['metrics'][$index] ?? null,
@@ -206,6 +218,40 @@ if (
                     'value' => 0,
                     'meta' => 'No action needed',
                 ];
+                $compactActionUrl = (string) ($compactActionUrlsByRole[$compactRole] ?? '');
+                if ((int) ($primaryMetric['value'] ?? 0) > 0 && $compactRole === 'expert') {
+                    $expertTaskCondition = match ((string) ($primaryMetric['label'] ?? '')) {
+                        'Overdue' => "deadline < NOW() AND status != 'completed'",
+                        'To Estimate' => "status = 'todo'",
+                        default => "status != 'completed'",
+                    };
+                    $expertTaskId = $summaryFirstId(
+                        "SELECT id FROM tasks
+                         WHERE assigned_to = {$summaryUserId}
+                           AND {$expertTaskCondition}
+                         ORDER BY CASE WHEN deadline IS NULL THEN 1 ELSE 0 END, deadline ASC, id ASC
+                         LIMIT 1"
+                    );
+                    $compactActionUrl = $expertTaskId > 0
+                        ? BASE_URL . 'modules/expert/feature-estimation.php?task_id=' . $expertTaskId
+                        : '';
+                } elseif ((int) ($primaryMetric['value'] ?? 0) > 0 && $compactRole === 'developer') {
+                    $developerTaskCondition = match ((string) ($primaryMetric['label'] ?? '')) {
+                        'Overdue' => "deadline < NOW() AND status != 'completed'",
+                        'Completed' => "status = 'completed'",
+                        default => "status = 'in_progress'",
+                    };
+                    $developerTaskId = $summaryFirstId(
+                        "SELECT id FROM tasks
+                         WHERE assigned_to = {$summaryUserId}
+                           AND {$developerTaskCondition}
+                         ORDER BY CASE WHEN deadline IS NULL THEN 1 ELSE 0 END, deadline ASC, id ASC
+                         LIMIT 1"
+                    );
+                    $compactActionUrl = $developerTaskId > 0
+                        ? BASE_URL . 'modules/developer/task.php?id=' . $developerTaskId
+                        : '';
+                }
                 $roleSummaries[$compactRole]['variant'] = 'compact';
                 $roleSummaries[$compactRole]['title'] = 'Live Overview';
                 $roleSummaries[$compactRole]['intro'] = $compactIntro;
@@ -213,7 +259,7 @@ if (
                     'icon' => (string) ($primaryMetric['icon'] ?? 'fa-circle-info'),
                     'title' => (string) ($primaryMetric['label'] ?? 'Current status'),
                     'meta' => (int) ($primaryMetric['value'] ?? 0) . ' · ' . (string) ($primaryMetric['meta'] ?? ''),
-                    'action_url' => '',
+                    'action_url' => (int) ($primaryMetric['value'] ?? 0) > 0 ? $compactActionUrl : '',
                 ];
             }
             $evortixRoleDashboardSummary = $roleSummaries[$summaryRole] ?? null;
@@ -345,17 +391,19 @@ document.addEventListener('DOMContentLoaded', () => {
 .evortix-role-planning-copy { margin:.25rem 0 0; color:#426f8c; font-size:.66rem; line-height:1.45 }
 .evortix-role-planning-action { display:inline-flex; align-items:center; gap:.35rem; margin-top:.5rem; padding:.42rem .65rem; border-radius:9px; background:#137eb3; color:#fff !important; font-size:.67rem; font-weight:800; text-decoration:none }
 .evortix-role-summary-metric.is-overdue .evortix-role-summary-value,.evortix-role-summary-metric.is-overdue i { color:#c2413b }
-.chat-bot-speech.evortix-role-dashboard-summary.is-compact { width:min(470px,calc(100vw - 190px)); min-width:390px; padding:.95rem 1rem 1rem }
+.chat-bot-speech.evortix-role-dashboard-summary.is-compact { width:min(360px,calc(100vw - 190px)); min-width:310px; padding:.9rem .95rem .95rem }
 .evortix-role-summary-head.is-compact { align-items:center }
 .chat-bot-speech .evortix-role-summary-head.is-compact .evortix-role-summary-title { font-size:1rem }
 .evortix-role-summary-intro.is-compact { margin:.65rem 0 .75rem; font-size:.73rem; line-height:1.45 }
-.evortix-role-summary-item { align-items:center; background:rgba(255,255,255,.82); border:1px solid rgba(8,123,185,.16); border-radius:13px; color:inherit; display:grid; gap:.68rem; grid-template-columns:32px minmax(0,1fr); padding:.68rem .78rem; text-decoration:none; transition:transform .18s ease,background .18s ease,border-color .18s ease }
+.evortix-role-summary-item { align-items:center; background:rgba(255,255,255,.82); border:1px solid rgba(8,123,185,.16); border-radius:13px; color:inherit; display:grid; gap:.68rem; grid-template-columns:32px minmax(0,1fr) auto; padding:.68rem .78rem; text-decoration:none; transition:transform .18s ease,background .18s ease,border-color .18s ease }
 .evortix-role-summary-item:hover { background:#fff; border-color:rgba(8,123,185,.3); color:inherit; transform:translateY(-1px) }
+.evortix-role-summary-item:focus-visible { border-color:rgba(8,123,185,.45); box-shadow:0 0 0 3px rgba(19,126,179,.14); outline:0 }
 .chat-bot-speech .evortix-role-summary-item-icon { align-items:center; align-self:center; background:#e4f4fb; border:1px solid rgba(8,123,185,.14); border-radius:9px; color:#157baa; display:inline-flex; font-size:.78rem; height:32px; justify-content:center; margin:0; padding:0; position:static; transform:none; width:32px }
 .chat-bot-speech .evortix-role-summary-item-icon i { color:inherit; font-size:.78rem; line-height:1; margin:0; position:static; transform:none }
 .evortix-role-summary-item-copy { min-width:0 }
 .evortix-role-summary-item-title { color:#083a5d; display:block; font-size:.75rem; font-weight:850; line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .evortix-role-summary-item-meta { color:#5b7f97; display:block; font-size:.65rem; font-weight:700; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.evortix-role-summary-item-arrow { color:#157baa; font-size:.72rem }
 @keyframes evortixRoleSummaryReveal { from { opacity:0; transform:translateY(-50%) translateX(18px) scale(.94) } to { opacity:1; transform:translateY(-50%) translateX(0) scale(1) } }
 @media(max-width:640px){.chat-bot-speech.evortix-role-dashboard-summary,.chat-bot-speech.evortix-role-dashboard-summary.is-compact{right:calc(100% + 9px);width:min(270px,calc(100vw - 145px));min-width:220px}.evortix-role-summary-grid{grid-template-columns:1fr;max-height:238px;overflow-y:auto}.evortix-role-summary-item-title,.evortix-role-summary-item-meta{white-space:normal}}
 @keyframes evortixGuidancePulse {
@@ -499,6 +547,9 @@ document.addEventListener('DOMContentLoaded', () => {
 </button>
 
 <div id="chat-bot-float" class="chat-bot-float" hidden aria-hidden="true">
+    <button id="chatBotFloatDismiss" class="chat-bot-float-dismiss" type="button" aria-label="Hide Evortix" title="Hide Evortix">
+        <i class="fas fa-xmark" aria-hidden="true"></i>
+    </button>
     <div class="chat-bot-speech" aria-hidden="true">
         <strong data-chat-bot-type="title" data-chat-bot-text="Hi, good day!"></strong>
     </div>
@@ -524,6 +575,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const minimized = document.getElementById('chat-widget-minimized');
     const botWidget = document.getElementById('chat-bot-widget');
     const botFloat = document.getElementById('chat-bot-float');
+    const botFloatDismiss = document.getElementById('chatBotFloatDismiss');
     const minimizeBtn = document.getElementById('toggleChatMinimize');
     let botFloatPointer = null;
     let botTypeTimer = null;
@@ -835,6 +887,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <${compactItemTag} class="evortix-role-summary-item"${compactItemHref}>
                     <span class="evortix-role-summary-item-icon"><i class="fas ${escapeSummary(compactItem.icon || 'fa-circle-info')}"></i></span>
                     <span class="evortix-role-summary-item-copy"><strong class="evortix-role-summary-item-title">${escapeSummary(compactItem.title)}</strong><span class="evortix-role-summary-item-meta">${escapeSummary(compactItem.meta)}</span></span>
+                    ${compactItem.action_url ? '<i class="fas fa-arrow-right evortix-role-summary-item-arrow" aria-hidden="true"></i>' : ''}
                 </${compactItemTag}>` : `
                 <div class="evortix-role-summary-head"><div><div class="evortix-role-summary-eyebrow">Live overview</div><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong></div><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
                 <div class="evortix-role-summary-intro">Here is the information most relevant to your role right now.</div>
@@ -1046,6 +1099,29 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    botFloatDismiss?.addEventListener('pointerdown', function (event) {
+        event.stopPropagation();
+    });
+
+    botFloatDismiss?.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        clearTimeout(botTypeTimer);
+        clearTimeout(botTransitionTimer);
+        clearTimeout(evortixSpeechTimer);
+        window.speechSynthesis?.cancel?.();
+        botFloat?.classList.remove('is-leaving-bed', 'is-returning-bed', 'is-preparing-speech', 'is-speaking', 'is-dragging');
+        const speech = botFloat?.querySelector('.chat-bot-speech');
+        if (speech) {
+            speech.hidden = true;
+            speech.setAttribute('aria-hidden', 'true');
+        }
+        if (botFloat) {
+            botFloat.hidden = true;
+            botFloat.setAttribute('aria-hidden', 'true');
+        }
+    });
+
     const clampBotFloatPosition = function (x, y) {
         const rect = botFloat.getBoundingClientRect();
         const padding = 10;
@@ -1056,7 +1132,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     botFloat?.addEventListener('pointerdown', function (event) {
-        if (event.target instanceof Element && event.target.closest('.chat-bot-speech')) {
+        if (event.target instanceof Element && event.target.closest('.chat-bot-speech, .chat-bot-float-dismiss')) {
             return;
         }
 
