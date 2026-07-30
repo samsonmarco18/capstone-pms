@@ -2579,3 +2579,148 @@ html:not([data-app-theme]) #page-content-wrapper :is(
 ) {
     color: var(--skin-primary) !important;
 }
+
+/* Role welcome banners are pale in Default and Tropical, but dark in
+   Futuristic. Do not apply the white headline treatment indiscriminately. */
+html:not([data-app-theme]) #page-content-wrapper .role-dashboard-hero :is(
+    h1, h2, h3, h4, h5, h6, .card-title
+),
+html[data-app-theme="tropical"] #page-content-wrapper .role-dashboard-hero :is(
+    h1, h2, h3, h4, h5, h6, .card-title
+) {
+    color: var(--skin-heading) !important;
+    opacity: 1 !important;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+html:not([data-app-theme]) #page-content-wrapper .role-dashboard-hero :is(
+    p, small, .text-muted, .text-secondary
+),
+html[data-app-theme="tropical"] #page-content-wrapper .role-dashboard-hero :is(
+    p, small, .text-muted, .text-secondary
+) {
+    color: var(--skin-muted) !important;
+    opacity: 1 !important;
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper .role-dashboard-hero :is(
+    h1, h2, h3, h4, h5, h6, .card-title
+) {
+    color: #ffffff !important;
+    opacity: 1 !important;
+    text-shadow: 0 2px 14px rgba(57, 201, 255, 0.18);
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper .role-dashboard-hero :is(
+    p, small, .text-muted, .text-secondary
+) {
+    color: #c7d8f7 !important;
+    opacity: 1 !important;
+}
+
+#page-content-wrapper :is(
+    .agenda-open-btn, .schedule-calendar__open,
+    .page-header-help-btn, .stat-icon
+) i {
+    color: currentColor !important;
+    opacity: 1 !important;
+}
+
+#page-content-wrapper :is(.agenda-open-btn, .schedule-calendar__open):is(:hover, :focus-visible) i {
+    color: var(--skin-on-primary) !important;
+}
+
+/* Preserve semantic badge contrast inside every welcome banner. */
+#page-content-wrapper .role-dashboard-hero :is(
+    .badge, [class*="overview-badge"]
+) {
+    background: var(--skin-primary) !important;
+    border-color: color-mix(in srgb, var(--skin-primary) 72%, white) !important;
+    color: var(--skin-on-primary) !important;
+}
+
+/* Saturated page banners always use a light foreground. Page-specific PHP
+   styles often assign a dark h1 color with higher specificity, so keep this
+   contract at the very end of the theme stylesheet. */
+#page-content-wrapper :is(
+    .settings-page-header,
+    .page-header-modern,
+    .vc-header,
+    .insights-hero,
+    .process-hero,
+    .process-history-hero,
+    .roadmap-header,
+    .approval-header,
+    .profile-hero,
+    .calendar-hero,
+    .dashboard-header
+) :is(h1, h2, h3, h4, h5, h6, .card-title, .modal-title) {
+    color: #ffffff !important;
+    opacity: 1 !important;
+    text-shadow: 0 1px 2px rgba(4, 31, 50, 0.16);
+}
+
+#page-content-wrapper :is(
+    .settings-page-header,
+    .page-header-modern,
+    .vc-header,
+    .insights-hero,
+    .process-hero,
+    .process-history-hero,
+    .roadmap-header,
+    .approval-header,
+    .profile-hero,
+    .calendar-hero,
+    .dashboard-header
+) :is(p, small, .text-muted, .text-secondary, .subtitle) {
+    color: rgba(255, 255, 255, 0.88) !important;
+    opacity: 1 !important;
+}
+
+/* The illustrated role hero is the exception: Default and Tropical are pale
+   and therefore retain the dark foreground established immediately above. */
+html:not([data-app-theme]) #page-content-wrapper .role-dashboard-hero :is(
+    h1, h2, h3, h4, h5, h6, p, small, .text-muted, .text-secondary
+),
+html[data-app-theme="tropical"] #page-content-wrapper .role-dashboard-hero :is(
+    h1, h2, h3, h4, h5, h6, p, small, .text-muted, .text-secondary
+) {
+    color: var(--skin-heading) !important;
+}
+
+html:not([data-app-theme]) #page-content-wrapper .role-dashboard-hero :is(
+    p, small, .text-muted, .text-secondary
+),
+html[data-app-theme="tropical"] #page-content-wrapper .role-dashboard-hero :is(
+    p, small, .text-muted, .text-secondary
+) {
+    color: var(--skin-muted) !important;
+}
+
+/* Version Control controls must remain above decorative theme artwork and
+   retain normal pointer behavior in every theme. */
+#page-content-wrapper .vc-shell :is(
+    .project-picker,
+    .repository-branch-picker,
+    .repo-tile,
+    .workspace-tools-card,
+    .repository-access-panel,
+    .accordion,
+    button,
+    a,
+    select,
+    input
+) {
+    pointer-events: auto;
+}
+
+#page-content-wrapper .vc-shell :is(
+    .project-picker,
+    .repository-branch-picker,
+    .workspace-tools-card,
+    .repository-access-panel,
+    .accordion
+) {
+    position: relative;
+    z-index: 2;
+}

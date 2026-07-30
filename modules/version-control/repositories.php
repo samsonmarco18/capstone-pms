@@ -887,9 +887,12 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </div>
                             </div>
                             <div id="cloneFeedback" class="clone-feedback">Clone URL copied.</div>
-                            <div class="repository-branch-picker">
+                            <form method="GET" action="repositories.php#selectedRepositorySnapshot" class="repository-branch-picker" id="repositoryBranchPicker">
+                                <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
+                                <input type="hidden" name="repository_id" value="<?php echo (int) $selectedRepositoryId; ?>">
                                 <label class="form-label" for="repositoryAccessBranch">Branch</label>
-                                <select class="form-select" id="repositoryAccessBranch">
+                                <div class="input-group">
+                                <select class="form-select" id="repositoryAccessBranch" name="branch_id">
                                     <?php foreach ($branches as $branch): ?>
                                     <?php if ((string) ($branch['branch_status'] ?? '') !== 'deleted'): ?>
                                     <option
@@ -903,7 +906,11 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                     <?php endif; ?>
                                     <?php endforeach; ?>
                                 </select>
-                            </div>
+                                <button class="btn btn-outline-primary" type="submit">
+                                    <i class="fas fa-arrow-right me-1"></i>Open Branch
+                                </button>
+                                </div>
+                            </form>
                             <div class="clone-action-row">
                                 <button type="button" class="btn btn-primary" onclick="copyCloneUrl('<?php echo htmlspecialchars($selectedRepositoryDisplayRemoteUrl, ENT_QUOTES); ?>')">
                                     <i class="fas fa-code-branch me-2"></i>Copy Clone URL
@@ -1281,32 +1288,6 @@ function fallbackCopy(url, showFeedback) {
     showFeedback(url);
 }
 
-const repositoryProjectPicker = document.getElementById('repositoryProjectPicker');
-const repositoryProjectSelect = document.getElementById('repositoryProjectId');
-const loadRepositoryProjectButton = document.getElementById('loadRepositoryProject');
-
-function loadRepositoryProject() {
-    const projectId = Number.parseInt(repositoryProjectSelect?.value || '0', 10);
-    if (projectId <= 0) {
-        return;
-    }
-
-    if (loadRepositoryProjectButton) {
-        loadRepositoryProjectButton.disabled = true;
-        loadRepositoryProjectButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
-    }
-
-    window.location.assign('repositories.php?project_id=' + encodeURIComponent(String(projectId)));
-}
-
-if (repositoryProjectPicker && repositoryProjectSelect) {
-    repositoryProjectPicker.addEventListener('submit', function (event) {
-        event.preventDefault();
-        loadRepositoryProject();
-    });
-    repositoryProjectSelect.addEventListener('change', loadRepositoryProject);
-}
-
 const repositoryAccessBranch = document.getElementById('repositoryAccessBranch');
 const downloadRepositoryBranch = document.getElementById('downloadRepositoryBranch');
 
@@ -1324,17 +1305,6 @@ function updateRepositoryBranchActions() {
 if (repositoryAccessBranch) {
     repositoryAccessBranch.addEventListener('change', function () {
         updateRepositoryBranchActions();
-        const branchId = Number.parseInt(repositoryAccessBranch.value || '0', 10);
-        if (branchId <= 0) {
-            return;
-        }
-        const url = new URL(window.location.href);
-        url.searchParams.set('project_id', '<?php echo (int) $selectedProjectId; ?>');
-        url.searchParams.set('repository_id', '<?php echo (int) $selectedRepositoryId; ?>');
-        url.searchParams.set('branch_id', String(branchId));
-        url.searchParams.delete('commit_id');
-        url.hash = 'selectedRepositorySnapshot';
-        window.location.assign(url.toString());
     });
     updateRepositoryBranchActions();
 }
