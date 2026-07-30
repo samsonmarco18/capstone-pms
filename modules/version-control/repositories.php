@@ -511,10 +511,10 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                     </div>
                 </div>
                 <div class="p-4">
-                    <form method="GET" class="row g-3 align-items-end project-picker">
+                    <form method="GET" action="repositories.php" class="row g-3 align-items-end project-picker" id="repositoryProjectPicker">
                         <div class="col-md-8">
-                            <label class="form-label">Project</label>
-                            <select name="project_id" class="form-select">
+                            <label class="form-label" for="repositoryProjectId">Project</label>
+                            <select name="project_id" class="form-select" id="repositoryProjectId">
                                 <?php foreach ($accessibleProjects as $project): ?>
                                 <option value="<?php echo (int) $project['id']; ?>" <?php echo (int) $project['id'] === $selectedProjectId ? 'selected' : ''; ?>>
                                     <?php echo htmlspecialchars($project['name'] . ' - ' . $project['client_name']); ?>
@@ -522,11 +522,20 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-md-4"><button class="btn btn-primary w-100" type="submit">Load Project</button></div>
+                        <div class="col-md-4"><button class="btn btn-primary w-100" type="submit" id="loadRepositoryProject">Load Project</button></div>
                     </form>
 
                     <?php if (!$repositories): ?>
-                    <div class="empty-box">No repositories yet for this project.</div>
+                    <div class="empty-box">
+                        <i class="fas fa-code-branch d-block mb-2" aria-hidden="true"></i>
+                        <strong>No repositories yet for this project.</strong>
+                        <div class="mt-1">The project loaded successfully. Create a repository below to start tracking branches and commits.</div>
+                        <?php if (in_array((string) ($user['role'] ?? ''), ['admin', 'architect'], true) && $execAvailable): ?>
+                        <button class="btn btn-outline-primary mt-3" type="button" data-bs-toggle="collapse" data-bs-target="#repoAction" aria-controls="repoAction">
+                            <i class="fas fa-plus me-1"></i>Create Repository
+                        </button>
+                        <?php endif; ?>
+                    </div>
                     <?php else: ?>
                     <div class="repo-grid">
                         <?php foreach ($repositories as $repo): ?>
@@ -1205,6 +1214,32 @@ function fallbackCopy(url, showFeedback) {
     }
 
     showFeedback(url);
+}
+
+const repositoryProjectPicker = document.getElementById('repositoryProjectPicker');
+const repositoryProjectSelect = document.getElementById('repositoryProjectId');
+const loadRepositoryProjectButton = document.getElementById('loadRepositoryProject');
+
+function loadRepositoryProject() {
+    const projectId = Number.parseInt(repositoryProjectSelect?.value || '0', 10);
+    if (projectId <= 0) {
+        return;
+    }
+
+    if (loadRepositoryProjectButton) {
+        loadRepositoryProjectButton.disabled = true;
+        loadRepositoryProjectButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
+    }
+
+    window.location.assign('repositories.php?project_id=' + encodeURIComponent(String(projectId)));
+}
+
+if (repositoryProjectPicker && repositoryProjectSelect) {
+    repositoryProjectPicker.addEventListener('submit', function (event) {
+        event.preventDefault();
+        loadRepositoryProject();
+    });
+    repositoryProjectSelect.addEventListener('change', loadRepositoryProject);
 }
 
 document.querySelectorAll('.js-delete-repository-form').forEach((form) => {
