@@ -44,12 +44,33 @@ if ($userRole === 'sales') {
     exit('You do not have access to this repository.');
 }
 
+$requestedRef = trim((string) ($_GET['ref'] ?? ''));
+$archiveRef = (string) ($repository['default_branch_name'] ?: 'main');
+if ($requestedRef !== '') {
+    $branchStmt = $conn->prepare(
+        "SELECT name
+         FROM repository_branches
+         WHERE repository_id = ? AND name = ? AND branch_status != 'deleted'
+         LIMIT 1"
+    );
+    $branchStmt->bind_param('is', $repositoryId, $requestedRef);
+    $branchStmt->execute();
+    $branch = $branchStmt->get_result()->fetch_assoc();
+    $branchStmt->close();
+
+    if (!$branch) {
+        http_response_code(400);
+        exit('The selected branch is unavailable.');
+    }
+    $archiveRef = (string) $branch['name'];
+}
+
 $archive = null;
 
 try {
     $archive = vcCreateRepositoryArchive(
         (string) $repository['slug'],
-        (string) ($repository['default_branch_name'] ?: 'main'),
+        $archiveRef,
         (string) ($repository['external_remote_url'] ?? '')
     );
 

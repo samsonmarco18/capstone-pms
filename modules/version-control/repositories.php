@@ -323,6 +323,10 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .clone-action-row form{margin:0;}
 .clone-action-row .btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;width:100%;min-height:42px;border-radius:10px;padding:.58rem .7rem;font-size:.76rem;font-weight:700;line-height:1.2;white-space:nowrap;box-shadow:none;}
 .clone-action-row .btn i{margin:0!important;}
+.repository-branch-picker{margin-bottom:.75rem;}
+.repository-branch-picker .form-label{margin-bottom:.3rem;font-size:.68rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
+.repository-folder-action{margin:0 0 1rem;}
+.repository-folder-action .btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;width:100%;min-height:42px;border-radius:10px;font-size:.76rem;font-weight:700;}
 .repository-access-fields{display:grid;gap:.75rem;}
 .repository-access-field{min-width:0;}
 .repository-access-panel .repository-access-field .form-label{margin:0 0 .22rem;color:var(--gray-600);font-size:.64rem;letter-spacing:.055em;}
@@ -843,13 +847,38 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </div>
                             </div>
                             <div id="cloneFeedback" class="clone-feedback">Clone URL copied.</div>
+                            <div class="repository-branch-picker">
+                                <label class="form-label" for="repositoryAccessBranch">Branch</label>
+                                <select class="form-select" id="repositoryAccessBranch">
+                                    <?php foreach ($branches as $branch): ?>
+                                    <?php if ((string) ($branch['branch_status'] ?? '') !== 'deleted'): ?>
+                                    <option
+                                        value="<?php echo htmlspecialchars((string) $branch['name']); ?>"
+                                        <?php echo (int) ($branch['is_default'] ?? 0) === 1 ? 'selected' : ''; ?>
+                                    >
+                                        <?php echo htmlspecialchars((string) $branch['name']); ?>
+                                        <?php echo (int) ($branch['is_default'] ?? 0) === 1 ? ' (default)' : ''; ?>
+                                    </option>
+                                    <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
                             <div class="clone-action-row">
                                 <button type="button" class="btn btn-primary" onclick="copyCloneUrl('<?php echo htmlspecialchars($selectedRepositoryDisplayRemoteUrl, ENT_QUOTES); ?>')">
                                     <i class="fas fa-code-branch me-2"></i>Copy Clone URL
                                 </button>
+                                <a
+                                    class="btn btn-outline-primary"
+                                    id="downloadRepositoryBranch"
+                                    data-download-base="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . $selectedRepositoryId); ?>"
+                                    href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . $selectedRepositoryId . '&ref=' . rawurlencode((string) ($selectedRepository['default_branch_name'] ?: 'main'))); ?>"
+                                >
+                                    <i class="fas fa-download me-2"></i>Download Branch
+                                </a>
+                            </div>
                                 <?php if (!$selectedRepositoryHasWorkspace && !in_array($user['role'], ['sul', 'qa'], true)): ?>
                                 <?php if ($execAvailable): ?>
-                                <form method="POST" class="m-0">
+                                <form method="POST" class="repository-folder-action" data-generic-draft-disabled="1" data-confirm-skip="1">
                                     <input type="hidden" name="action" value="create_working_folder">
                                     <input type="hidden" name="project_id" value="<?php echo $selectedProjectId; ?>">
                                     <input type="hidden" name="repository_id" value="<?php echo $selectedRepositoryId; ?>">
@@ -862,12 +891,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                     <i class="fas fa-folder-plus me-2"></i>Folder Unavailable
                                 </button>
                                 <?php endif; ?>
-                                <?php else: ?>
-                                <a class="btn btn-outline-primary" href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?repository_id=' . $selectedRepositoryId); ?>">
-                                    <i class="fas fa-download me-2"></i>Download Files
-                                </a>
                                 <?php endif; ?>
-                            </div>
                             <div class="repository-access-fields">
                             <div class="repository-access-field">
                                 <label class="form-label">Working Folder</label>
@@ -1240,6 +1264,24 @@ if (repositoryProjectPicker && repositoryProjectSelect) {
         loadRepositoryProject();
     });
     repositoryProjectSelect.addEventListener('change', loadRepositoryProject);
+}
+
+const repositoryAccessBranch = document.getElementById('repositoryAccessBranch');
+const downloadRepositoryBranch = document.getElementById('downloadRepositoryBranch');
+
+function updateRepositoryBranchActions() {
+    if (!repositoryAccessBranch || !downloadRepositoryBranch) {
+        return;
+    }
+
+    const branchName = repositoryAccessBranch.value;
+    const downloadBase = downloadRepositoryBranch.dataset.downloadBase || '';
+    downloadRepositoryBranch.href = downloadBase + '&ref=' + encodeURIComponent(branchName);
+}
+
+if (repositoryAccessBranch) {
+    repositoryAccessBranch.addEventListener('change', updateRepositoryBranchActions);
+    updateRepositoryBranchActions();
 }
 
 document.querySelectorAll('.js-delete-repository-form').forEach((form) => {
