@@ -821,8 +821,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const speech = botFloat.querySelector('.chat-bot-speech');
-        speech?.classList.remove('evortix-project-notification', 'evortix-dashboard-summary');
         if (speech) {
+            speech.className = 'chat-bot-speech';
             speech.hidden = false;
             speech.setAttribute('aria-hidden', 'false');
             speech.style.pointerEvents = '';
