@@ -10,6 +10,23 @@ $user = getCurrentUser();
 $accessibleProjects = vcGetAccessibleProjects($conn, $user);
 $execAvailable = vcIsExecAvailable();
 
+foreach ($accessibleProjects as &$accessibleProject) {
+    $accessibleProjectId = (int) ($accessibleProject['id'] ?? 0);
+    $accessibleProject['repository_count'] = 0;
+    if ($accessibleProjectId <= 0) {
+        continue;
+    }
+    $repositoryCountStmt = $conn->prepare(
+        'SELECT COUNT(*) AS repository_count FROM project_repositories WHERE project_id = ?'
+    );
+    $repositoryCountStmt->bind_param('i', $accessibleProjectId);
+    $repositoryCountStmt->execute();
+    $repositoryCountRow = $repositoryCountStmt->get_result()->fetch_assoc();
+    $repositoryCountStmt->close();
+    $accessibleProject['repository_count'] = (int) ($repositoryCountRow['repository_count'] ?? 0);
+}
+unset($accessibleProject);
+
 function vcPageUrl(int $projectId = 0, int $repositoryId = 0, int $commitId = 0, int $branchId = 0): string
 {
     $params = [];
@@ -62,6 +79,7 @@ $flashError = $_SESSION['error'] ?? null;
 unset($_SESSION['success'], $_SESSION['error']);
 
 $repositories = [];
+$otherAccessibleRepositories = [];
 if ($selectedProjectId > 0) {
     $repoStmt = $conn->prepare(
         "SELECT pr.*, parent_repo.name AS parent_repository_name,
@@ -87,6 +105,33 @@ if ($selectedProjectId > 0) {
     $repoStmt->execute();
     $repositories = $repoStmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $repoStmt->close();
+
+    if (!$repositories) {
+        $accessibleProjectIds = array_fill_keys(
+            array_map(static fn(array $project): int => (int) ($project['id'] ?? 0), $accessibleProjects),
+            true
+        );
+        $otherRepoResult = $conn->query(
+            "SELECT pr.id, pr.project_id, pr.name, pr.slug, pr.repository_status,
+                    p.name AS project_name, c.name AS client_name
+             FROM project_repositories pr
+             INNER JOIN projects p ON p.id = pr.project_id
+             INNER JOIN clients c ON c.id = p.client_id
+             ORDER BY COALESCE(pr.last_activity_at, pr.updated_at) DESC, pr.id DESC"
+        );
+        if ($otherRepoResult) {
+            while ($otherRepository = $otherRepoResult->fetch_assoc()) {
+                $otherProjectId = (int) ($otherRepository['project_id'] ?? 0);
+                if ($otherProjectId === $selectedProjectId || !isset($accessibleProjectIds[$otherProjectId])) {
+                    continue;
+                }
+                $otherAccessibleRepositories[] = $otherRepository;
+                if (count($otherAccessibleRepositories) >= 6) {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 if ($selectedRepositoryId <= 0 && $repositories) {
@@ -551,7 +596,14 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                             <select name="project_id" class="form-select" id="repositoryProjectId">
                                 <?php foreach ($accessibleProjects as $project): ?>
                                 <option value="<?php echo (int) $project['id']; ?>" <?php echo (int) $project['id'] === $selectedProjectId ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($project['name'] . ' - ' . $project['client_name']); ?>
+                                    <?php
+                                    $repositoryCount = (int) ($project['repository_count'] ?? 0);
+                                    echo htmlspecialchars(
+                                        $project['name'] . ' - ' . $project['client_name']
+                                        . ' (' . $repositoryCount . ' '
+                                        . ($repositoryCount === 1 ? 'repository' : 'repositories') . ')'
+                                    );
+                                    ?>
                                 </option>
                                 <?php endforeach; ?>
                             </select>
@@ -563,7 +615,36 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                     <div class="empty-box">
                         <i class="fas fa-code-branch d-block mb-2" aria-hidden="true"></i>
                         <strong>No repositories yet for this project.</strong>
-                        <div class="mt-1">The project loaded successfully. Create a repository below to start tracking branches and commits.</div>
+                        <div class="mt-1">
+                            The project loaded successfully, but no repository record is registered to this project.
+                            Repositories created for another project stay with that project.
+                        </div>
+                        <?php if ($otherAccessibleRepositories): ?>
+                        <div class="mt-4 text-start">
+                            <div class="section-kicker mb-2">Repositories in your other accessible projects</div>
+                            <div class="d-grid gap-2">
+                                <?php foreach ($otherAccessibleRepositories as $otherRepository): ?>
+                                <a
+                                    class="btn btn-outline-primary d-flex align-items-center justify-content-between gap-3 text-start"
+                                    href="<?php echo htmlspecialchars(vcPageUrl((int) $otherRepository['project_id'], (int) $otherRepository['id'])); ?>"
+                                >
+                                    <span>
+                                        <strong class="d-block"><?php echo htmlspecialchars((string) $otherRepository['name']); ?></strong>
+                                        <small><?php echo htmlspecialchars((string) $otherRepository['project_name'] . ' - ' . (string) $otherRepository['client_name']); ?></small>
+                                    </span>
+                                    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                        <a
+                            class="btn btn-outline-primary mt-3"
+                            href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?project_id=' . $selectedProjectId); ?>"
+                            download
+                        >
+                            <i class="fas fa-download me-1"></i>Download Stored Git History
+                        </a>
                         <?php if (in_array((string) ($user['role'] ?? ''), ['admin', 'architect'], true) && $execAvailable): ?>
                         <button class="btn btn-outline-primary mt-3" type="button" data-bs-toggle="collapse" data-bs-target="#repoAction" aria-controls="repoAction">
                             <i class="fas fa-plus me-1"></i>Create Repository
@@ -1193,15 +1274,36 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                             </div></div>
                         </div>
                         <?php endif; ?>
-                        <?php endif; ?>
+                    <?php else: ?>
+                    <div class="setup-panel repository-access-panel">
+                        <div class="repository-access-heading">
+                            <span class="repository-access-heading-icon" aria-hidden="true"><i class="fas fa-code-branch"></i></span>
+                            <div>
+                                <h6>No registered repository</h6>
+                                <p>This project has no repository record to clone or archive.</p>
+                            </div>
+                        </div>
+                        <a
+                            class="btn btn-outline-primary w-100"
+                            href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?project_id=' . $selectedProjectId); ?>"
+                            download
+                        >
+                            <i class="fas fa-download me-2"></i>Download Stored Git History
+                        </a>
+                        <div class="setup-note mt-3">
+                            This downloads the branch, commit, pull-request, and merge records retained by ERNI PMS.
+                            A source-code ZIP becomes available after an Architect or Admin registers the managed repository.
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     </div>
                 </div>
             </div>
             </div>
-        </div>
-    </div>
+                            </div>
+                        </div>
+                </div>
     <?php endif; ?>
-</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
