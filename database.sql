@@ -544,6 +544,7 @@ CREATE TABLE expert_project_estimations (
     sales_comment TEXT,
     submitted_at DATETIME NULL,
     approved_at DATETIME NULL,
+    workflow_version INT DEFAULT 2,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY unique_project_estimation (project_id),

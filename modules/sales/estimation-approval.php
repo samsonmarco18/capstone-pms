@@ -48,55 +48,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             SELECT e.*, p.name AS project_name
             FROM expert_project_estimations e
             JOIN projects p ON p.id = e.project_id
-            WHERE e.id = {$estimationId} AND e.status = 'sul_approved'
+            WHERE e.id = {$estimationId} AND e.status = 'submitted'
             LIMIT 1
         ")->fetch_assoc() : null;
 
         if (!$estimation) {
-            $_SESSION['error'] = "Please select a SUL-approved project estimation.";
+            $_SESSION['error'] = "Please select an Expert-submitted project estimation.";
             header('Location: estimation-approval.php');
             exit();
         }
 
         $stmt = $conn->prepare("
             UPDATE expert_project_estimations
-            SET status = 'sales_approved', sales_reviewed_by = ?, sales_reviewed_at = NOW(), sales_comment = ?, approved_at = NOW()
+            SET status = 'sales_approved', sales_reviewed_by = ?, sales_reviewed_at = NOW(), sales_comment = ?
             WHERE id = ?
         ");
         $stmt->bind_param('isi', $user['id'], $comment, $estimationId);
         if ($stmt->execute()) {
-            $projectId = (int) $estimation['project_id'];
-            projectEstimationCompletePlanningPhase($conn, $projectId, (int) $user['id']);
-            $conn->query("UPDATE projects SET status = 'in_development' WHERE id = {$projectId} AND status != 'completed'");
-            projectWorkflowSyncRoadmap($conn, $projectId);
-            $projectDetails = $conn->query("SELECT * FROM projects WHERE id = {$projectId} LIMIT 1")->fetch_assoc() ?: [];
-            $roadmapUrl = BASE_URL . 'modules/roadmap/methodology.php?project_id=' . $projectId;
-
-            $architectId = (int) ($projectDetails['architect_id'] ?? 0);
-            if ($architectId > 0) {
-                createNotification(
-                    $architectId,
-                    'Project Estimation Approved',
-                    'Sales approved the project estimation. Planning is complete and the next project phase is now active.',
-                    'approval',
-                    'projects',
-                    $projectId,
-                    $roadmapUrl
-                );
-            } else {
-                workflowNotifyRoles(
-                    $conn,
-                    ['architect'],
-                    'Project Estimation Approved',
-                    'Sales approved the project estimation. Planning is complete and the next project phase is now active.',
-                    $roadmapUrl,
-                    $projectId,
-                    'approval',
-                    'projects'
-                );
-            }
+            workflowNotifyRoles(
+                $conn,
+                ['sul'],
+                'Project Estimation Ready for Final Review',
+                'Sales approved the project cost estimation. SUL can now complete the estimation flow.',
+                BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) $estimation['project_id'],
+                (int) $estimation['project_id'],
+                'approval',
+                'projects'
+            );
             logActivity((int) $user['id'], 'sales_approve_project_estimation', 'expert_project_estimations', $estimationId, null, $_POST);
-            $_SESSION['success'] = "Project estimation approved. Planning phase completed and the next phase is active.";
+            $_SESSION['success'] = "Project estimation approved and sent to SUL for final review.";
         } else {
             $_SESSION['error'] = "Failed to approve project estimation.";
         }
@@ -113,7 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             SELECT e.*, p.name AS project_name
             FROM expert_project_estimations e
             JOIN projects p ON p.id = e.project_id
-            WHERE e.id = {$estimationId} AND e.status = 'sul_approved'
+            WHERE e.id = {$estimationId} AND e.status = 'submitted'
             LIMIT 1
         ")->fetch_assoc() : null;
 
@@ -203,17 +183,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($stmt->execute()) {
                 $taskDetails = $conn->query("SELECT title, project_id FROM tasks WHERE id = $taskId")->fetch_assoc();
-                $targetDepartment = projectWorkflowTaskDepartment($conn, $taskId);
-                if ($targetDepartment !== '') {
-                    projectWorkflowNotifyDepartmentSuls(
-                        $conn,
-                        $targetDepartment,
-                        "Sales Approved Estimation: " . ($taskDetails['title'] ?? 'Task'),
-                        "Sales approved the estimation. Task is ready for SUL review.",
-                        BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($taskDetails['project_id'] ?? 0),
-                        (int) ($taskDetails['project_id'] ?? 0)
-                    );
-                }
+                projectWorkflowNotifyDepartmentSuls(
+                    $conn,
+                    'Expert Department',
+                    "Sales Approved Estimation: " . ($taskDetails['title'] ?? 'Task'),
+                    "Sales approved the estimation. Task is ready for Expert SUL review.",
+                    BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($taskDetails['project_id'] ?? 0) . '#expert-review-panel',
+                    (int) ($taskDetails['project_id'] ?? 0)
+                );
                 logActivity($user['id'], 'sales_approve_estimation', 'tasks', $taskId, null, $_POST);
                 $_SESSION['success'] = "Estimation approved and sent to SUL.";
             } else {
@@ -266,8 +243,8 @@ $pendingProjectEstimations = $conn->query("
     JOIN projects p ON p.id = e.project_id
     JOIN clients c ON c.id = p.client_id
     JOIN users u ON u.id = e.expert_id
-    WHERE e.status = 'sul_approved'
-    ORDER BY e.sul_reviewed_at ASC, e.id ASC
+    WHERE e.status = 'submitted'
+    ORDER BY e.submitted_at ASC, e.id ASC
 ");
 
 $projectEstimationsByProject = [];
@@ -2395,8 +2372,8 @@ include '../../includes/navbar.php';
                         <section class="sales-project-cost-review" aria-labelledby="projectCostReviewTitle_<?php echo (int) $pid; ?>">
                             <div class="sales-project-cost-head">
                                 <div>
-                                    <h6 id="projectCostReviewTitle_<?php echo (int) $pid; ?>"><i class="fas fa-file-invoice-dollar me-1" aria-hidden="true"></i> Final Project Cost Review</h6>
-                                    <p>Approve the overall project budget or return it for revision.</p>
+                                    <h6 id="projectCostReviewTitle_<?php echo (int) $pid; ?>"><i class="fas fa-file-invoice-dollar me-1" aria-hidden="true"></i> Project Cost Review</h6>
+                                    <p>Approve the overall project budget for SUL completion or return it for revision.</p>
                                 </div>
                                 <span class="sales-project-cost-total"><span>Overall estimate</span><strong><?php echo projectEstimationPeso((float) $estimate['overall_estimated_project_cost']); ?></strong></span>
                             </div>
@@ -2412,21 +2389,16 @@ include '../../includes/navbar.php';
                                 <div class="sales-cost-metric"><span>Additional costs</span><strong><?php echo projectEstimationPeso((float) $estimate['additional_costs']); ?></strong></div>
                             </div>
 
-                            <div class="sales-sul-note">
-                                <i class="fas fa-message" aria-hidden="true"></i>
-                                <span><strong>SUL review note:</strong> <?php echo !empty($estimate['sul_comment']) ? htmlspecialchars((string) $estimate['sul_comment']) : 'No additional comment was provided.'; ?></span>
-                            </div>
-
                             <div class="sales-cost-decisions">
-                                <form method="POST" class="sales-decision-card is-approve" data-generic-draft-disabled="1" data-app-loading data-loading-title="Approving project estimation" data-loading-text="Completing Planning and opening the next phase.">
+                                <form method="POST" class="sales-decision-card is-approve" data-generic-draft-disabled="1" data-app-loading data-loading-title="Approving project estimation" data-loading-text="Sending the approved estimate to SUL.">
                                     <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
                                     <div class="sales-decision-head">
                                         <i class="fas fa-circle-check" aria-hidden="true"></i>
-                                        <span><strong>Approve project estimate</strong><span>Finalize the cost, complete Planning, and activate the next roadmap phase.</span></span>
+                                        <span><strong>Approve project estimate</strong><span>Confirm the cost and send it to SUL for final completion.</span></span>
                                     </div>
                                     <label for="salesApprovalNote<?php echo (int) $estimate['id']; ?>">Sales note <span>(optional)</span></label>
-                                    <textarea id="salesApprovalNote<?php echo (int) $estimate['id']; ?>" name="approval_comment" class="form-control" rows="2" placeholder="Add a short final approval note"></textarea>
-                                    <button class="btn-action btn-approve" type="submit" name="approve_project_estimation"><i class="fas fa-check me-1"></i> Final Approve</button>
+                                    <textarea id="salesApprovalNote<?php echo (int) $estimate['id']; ?>" name="approval_comment" class="form-control" rows="2" placeholder="Add a short note for SUL"></textarea>
+                                    <button class="btn-action btn-approve" type="submit" name="approve_project_estimation"><i class="fas fa-check me-1"></i> Approve &amp; Send to SUL</button>
                                 </form>
 
                                 <form method="POST" class="sales-decision-card is-revision" data-generic-draft-disabled="1" data-app-loading data-loading-title="Rejecting project estimation" data-loading-text="Returning the estimation to the expert.">

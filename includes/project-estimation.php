@@ -22,6 +22,28 @@ function projectEstimationDeveloperLevel(string $value): string
 function projectEstimationEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
 {
     if (dbTableExists($conn, 'expert_project_estimations')) {
+        if (!dbColumnExists($conn, 'expert_project_estimations', 'workflow_version')) {
+            try {
+                $conn->query("ALTER TABLE expert_project_estimations ADD COLUMN workflow_version INT DEFAULT 1");
+            } catch (Throwable $e) {
+                error_log('Project estimation workflow migration column failed: ' . $e->getMessage());
+            }
+        }
+        if (dbColumnExists($conn, 'expert_project_estimations', 'workflow_version')) {
+            // Convert the previous Expert -> SUL -> Sales statuses once.
+            // Old sales_approved rows were complete; old sul_approved rows
+            // still need to enter the new Sales -> SUL review sequence.
+            $conn->query("
+                UPDATE expert_project_estimations
+                SET status = CASE
+                        WHEN status = 'sales_approved' THEN 'sul_approved'
+                        WHEN status = 'sul_approved' THEN 'submitted'
+                        ELSE status
+                    END,
+                    workflow_version = 2
+                WHERE COALESCE(workflow_version, 1) < 2
+            ");
+        }
         return;
     }
 
@@ -55,6 +77,7 @@ function projectEstimationEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn)
             sales_comment TEXT NULL,
             submitted_at {$dateType} NULL,
             approved_at {$dateType} NULL,
+            workflow_version INT DEFAULT 2,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" . (DB_DRIVER === 'pgsql' ? '' : ' ON UPDATE CURRENT_TIMESTAMP') . ",
             {$uniqueSql}
@@ -573,15 +596,15 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
     $statusLabels = [
         'draft' => 'Draft',
-        'submitted' => 'Submitted',
+        'submitted' => 'Awaiting Sales',
         'sul_rejected' => 'Changes Requested',
-        'sul_approved' => 'SUL Approved',
+        'sul_approved' => 'Completed',
         'sales_rejected' => 'Sales Changes Requested',
-        'sales_approved' => 'Sales Approved',
+        'sales_approved' => 'Awaiting SUL',
     ];
     $estimationStatusLabel = $statusLabels[$estimationStatus] ?? ucwords(str_replace('_', ' ', $estimationStatus));
-    $sulReviewComplete = in_array($estimationStatus, ['sul_approved', 'sales_approved'], true);
-    $salesReviewComplete = $estimationStatus === 'sales_approved';
+    $salesReviewComplete = in_array($estimationStatus, ['sales_approved', 'sul_approved'], true);
+    $sulReviewComplete = $estimationStatus === 'sul_approved';
     $featureProgressTotal = 0;
     $featureProgressEstimated = 0;
     if ($selectedProjectId > 0 && $project) {
@@ -627,12 +650,12 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     $developerAllocationComplete = $allocatedDeveloperCount > 0;
     $developerCostComplete = $developerAllocationComplete;
     $projectCostSummaryComplete = $estimationLockedForReview;
-    $reviewHeadline = 'Sent to Expert SUL for review';
-    $reviewMessage = 'Your estimate is safely submitted. Editing is locked while the Expert SUL checks the cost breakdown.';
-    if ($estimationStatus === 'sul_approved') {
-        $reviewHeadline = 'Approved by Expert SUL';
-        $reviewMessage = 'The SUL review is complete and the estimate has moved to Sales for the next decision.';
-    } elseif ($estimationStatus === 'sales_approved') {
+    $reviewHeadline = 'Sent to Sales for review';
+    $reviewMessage = 'Your estimate is safely submitted. Editing is locked while Sales checks the cost breakdown.';
+    if ($estimationStatus === 'sales_approved') {
+        $reviewHeadline = 'Approved by Sales';
+        $reviewMessage = 'The Sales review is complete and the estimate has moved to SUL for final completion.';
+    } elseif ($estimationStatus === 'sul_approved') {
         $reviewHeadline = 'Project estimation approved';
         $reviewMessage = 'The estimate completed both review stages. No further action is required from you.';
     }
