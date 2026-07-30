@@ -124,7 +124,8 @@ try {
     $archive = vcCreateRepositoryArchive(
         (string) $repository['slug'],
         $archiveRef,
-        (string) ($repository['external_remote_url'] ?? '')
+        (string) ($repository['external_remote_url'] ?? ''),
+        (string) ($repository['webhook_token'] ?? '')
     );
 
     $archivePath = (string) $archive['archive_path'];

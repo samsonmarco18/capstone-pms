@@ -18,6 +18,8 @@ services:
         value: "1"
       - key: GIT_STORAGE_ROOT
         value: /tmp/erni-pms/git
+      - key: GIT_PROJECT_ROOT
+        value: /tmp/erni-pms/git
       - key: GIT_WORKSPACE_ROOT
         value: /tmp/erni-pms/git-workspaces
       - key: DB_DRIVER
