@@ -151,8 +151,8 @@ if ($selectedProjectId > 0) {
                 }
             ));
 
-            if (count($matchingRepositories) === 1) {
-                $matchingRepository = $matchingRepositories[0];
+            $matchingRepository = $matchingRepositories[0] ?? $otherAccessibleRepositories[0] ?? null;
+            if ($matchingRepository) {
                 header('Location: ' . vcPageUrl(
                     (int) $matchingRepository['project_id'],
                     (int) $matchingRepository['id']
@@ -355,6 +355,9 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .vc-shell{position:relative!important;z-index:10!important;pointer-events:auto!important;}
 .vc-shell *{pointer-events:auto;}
 .vc-shell :is(.vc-header,.vc-card,.project-picker,.repo-tile,.workspace-tools-card,.repository-access-panel){position:relative;}
+body:has(.vc-shell) :is(.sidebar-overlay,.app-global-loading-overlay,.app-logout-loading-overlay){pointer-events:none!important;}
+body:has(.vc-shell) .modal-backdrop{pointer-events:none!important;}
+body:has(.vc-shell) .modal.show{pointer-events:auto!important;}
 .vc-header,.vc-card{background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:24px;box-shadow:0 14px 34px rgba(15,23,42,.05);}
 .vc-header{padding:2rem;margin-bottom:1.5rem;background:linear-gradient(135deg,#19567f 0%,#1f6392 55%,#2f83b9 100%);color:#fff;position:relative;overflow:hidden;}
 .vc-header:before,.vc-header:after{content:'';position:absolute;border-radius:999px;background:rgba(255,255,255,.09);}
