@@ -172,13 +172,15 @@ body.dark-mode {
 html[data-theme="dark"] body::before,
 body[data-theme="dark"]::before,
 body.dark-mode::before {
-    opacity: 0.96 !important;
-    filter:
-        drop-shadow(0 0 5px rgba(53, 197, 255, 0.74))
-        brightness(1.75)
-        saturate(1.38)
-        contrast(1.08) !important;
-    mix-blend-mode: screen;
+    background-image:
+        linear-gradient(180deg, rgba(2, 20, 37, 0.10), rgba(2, 13, 27, 0.34)),
+        url('../img/themes/futuristic-circuit-background-v2.png') !important;
+    background-position: center top !important;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+    opacity: 1 !important;
+    filter: saturate(1.08) contrast(1.04) !important;
+    mix-blend-mode: normal;
 }
 
 html[data-theme="dark"] #sidebar-wrapper {
@@ -1134,6 +1136,40 @@ body.dark-mode .chat-bot-widget-speech span {
     :is(.evortix-role-summary-item, .evortix-live-action):focus-visible {
     border-color: rgba(125, 211, 252, 0.38);
     background: var(--evortix-summary-panel-hover);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech
+    :is(.evortix-project-status-tab, .evortix-project-link, .evortix-project-list-empty) {
+    background: var(--evortix-summary-panel);
+    border-color: var(--evortix-summary-border);
+    color: var(--evortix-summary-copy);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech
+    :is(.evortix-project-status-tab:hover, .evortix-project-status-tab:focus-visible, .evortix-project-status-tab.is-active, .evortix-project-link:hover, .evortix-project-link:focus-visible) {
+    background: var(--evortix-summary-panel-hover);
+    border-color: rgba(125, 211, 252, 0.38);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech
+    :is(.evortix-project-status-tab, .evortix-project-list-head, .evortix-project-link-copy strong) {
+    color: var(--evortix-summary-heading) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech
+    :is(.evortix-project-list-head span, .evortix-project-link-copy small, .evortix-project-list-empty) {
+    color: var(--evortix-summary-muted) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech
+    .evortix-project-status-tab strong {
+    background: rgba(114, 210, 245, 0.12);
+    color: var(--evortix-summary-accent);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)

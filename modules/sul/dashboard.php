@@ -100,6 +100,76 @@ $completedTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM t
 $todoTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE status = 'todo'");
 $activeProjects = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM projects WHERE status NOT IN ('completed', 'cancelled')");
 
+$evortixSulProjectGroups = [
+    'overdue' => [],
+    'unassigned' => [],
+    'in_progress' => [],
+];
+$evortixSulProjectRows = sulDashboardQuery($conn, "
+    SELECT
+        p.id,
+        p.name,
+        c.name AS client_name,
+        SUM(CASE
+            WHEN t.deadline < NOW() AND t.status != 'completed'
+            THEN 1 ELSE 0
+        END) AS overdue_count,
+        SUM(CASE
+            WHEN t.assigned_to IS NULL OR t.assigned_to = 0
+            THEN 1 ELSE 0
+        END) AS unassigned_count,
+        SUM(CASE
+            WHEN t.status = 'in_progress'
+            THEN 1 ELSE 0
+        END) AS in_progress_count
+    FROM projects p
+    INNER JOIN tasks t ON t.project_id = p.id
+    LEFT JOIN clients c ON c.id = p.client_id
+    WHERE {$sulProjectDepartmentClause}
+      AND {$sulTaskDepartmentClause}
+    GROUP BY p.id, p.name, c.name
+    HAVING
+        SUM(CASE WHEN t.deadline < NOW() AND t.status != 'completed' THEN 1 ELSE 0 END) > 0
+        OR SUM(CASE WHEN t.assigned_to IS NULL OR t.assigned_to = 0 THEN 1 ELSE 0 END) > 0
+        OR SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) > 0
+");
+if ($evortixSulProjectRows) {
+    $evortixCountFields = [
+        'overdue' => 'overdue_count',
+        'unassigned' => 'unassigned_count',
+        'in_progress' => 'in_progress_count',
+    ];
+    while ($evortixProject = $evortixSulProjectRows->fetch_assoc()) {
+        foreach ($evortixCountFields as $statusKey => $countField) {
+            $taskCount = (int) ($evortixProject[$countField] ?? 0);
+            if ($taskCount <= 0) {
+                continue;
+            }
+            $projectId = (int) ($evortixProject['id'] ?? 0);
+            $evortixSulProjectGroups[$statusKey][] = [
+                'id' => $projectId,
+                'name' => (string) ($evortixProject['name'] ?? 'Project'),
+                'client' => (string) ($evortixProject['client_name'] ?? 'No client'),
+                'task_count' => $taskCount,
+                'url' => 'task-allocation.php?project_id=' . $projectId . '&evortix_auto=1',
+            ];
+        }
+    }
+}
+foreach ($evortixSulProjectGroups as &$evortixProjects) {
+    usort($evortixProjects, static function (array $left, array $right): int {
+        $countComparison = ((int) ($right['task_count'] ?? 0)) <=> ((int) ($left['task_count'] ?? 0));
+        return $countComparison !== 0
+            ? $countComparison
+            : strcasecmp((string) ($left['name'] ?? ''), (string) ($right['name'] ?? ''));
+    });
+}
+unset($evortixProjects);
+$evortixSulStatusTotals = array_map(
+    static fn(array $projects): int => array_sum(array_column($projects, 'task_count')),
+    $evortixSulProjectGroups
+);
+
 // Get tasks by priority
 $highPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE priority = 'high' AND status != 'completed'");
 $mediumPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE priority = 'medium' AND status != 'completed'");
@@ -2352,24 +2422,77 @@ document.addEventListener('DOMContentLoaded', () => {
         const float = document.getElementById('chat-bot-float');
         const speech = float?.querySelector('.chat-bot-speech');
         if (!float || !speech) return;
-        speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact';
-        const metrics = [
-            { icon: 'fa-play', value: <?php echo (int) $inProgressTasks; ?>, label: 'In progress', meta: 'Active delivery work', url: 'task-allocation.php?evortix_auto=1' },
-            { icon: 'fa-user-plus', value: <?php echo (int) $unassignedTasks; ?>, label: 'Unassigned', meta: 'Waiting for an owner', url: 'task-allocation.php?evortix_auto=1' },
-            { icon: 'fa-triangle-exclamation', value: <?php echo (int) $overdueTasks; ?>, label: 'Overdue', meta: 'Needs immediate attention', overdue: true, url: 'task-allocation.php?evortix_auto=1' },
-            { icon: 'fa-diagram-project', value: <?php echo (int) $activeProjects; ?>, label: 'Active projects', meta: 'Current portfolio', url: 'resource-management.php' }
-        ];
-        const primaryMetric = metrics.find(metric => metric.overdue && metric.value > 0)
-            || metrics.find(metric => metric.value > 0)
-            || metrics[0];
+        speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact has-project-list';
+        const projectGroups = <?php echo json_encode(
+            $evortixSulProjectGroups,
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        ); ?>;
+        const statusConfig = {
+            overdue: {
+                label: 'Overdue',
+                icon: 'fa-triangle-exclamation',
+                total: <?php echo (int) ($evortixSulStatusTotals['overdue'] ?? 0); ?>
+            },
+            unassigned: {
+                label: 'Unassigned',
+                icon: 'fa-user-plus',
+                total: <?php echo (int) ($evortixSulStatusTotals['unassigned'] ?? 0); ?>
+            },
+            in_progress: {
+                label: 'In progress',
+                icon: 'fa-play',
+                total: <?php echo (int) ($evortixSulStatusTotals['in_progress'] ?? 0); ?>
+            }
+        };
+        const statusOrder = ['overdue', 'unassigned', 'in_progress'];
+        const initialStatus = statusOrder.find(status => statusConfig[status].total > 0) || 'overdue';
         speech.innerHTML = `
             <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
-            <div class="evortix-role-summary-intro is-compact"><?php echo (int) $inProgressTasks; ?> in progress, <?php echo (int) $unassignedTasks; ?> unassigned, and <?php echo (int) $overdueTasks; ?> overdue.</div>
-            <a class="evortix-role-summary-item" href="${primaryMetric.url}">
-                <span class="evortix-role-summary-item-icon"><i class="fas ${primaryMetric.icon}"></i></span>
-                <span class="evortix-role-summary-item-copy"><strong class="evortix-role-summary-item-title">${primaryMetric.label}</strong><span class="evortix-role-summary-item-meta">${primaryMetric.value} · ${primaryMetric.meta}</span></span>
-                <i class="fas fa-arrow-right evortix-role-summary-item-arrow" aria-hidden="true"></i>
-            </a>`;
+            <div class="evortix-role-summary-intro is-compact">${statusConfig.in_progress.total} in progress, ${statusConfig.unassigned.total} unassigned, and ${statusConfig.overdue.total} overdue.</div>
+            <div class="evortix-project-status-tabs" role="tablist" aria-label="Project attention status">
+                ${statusOrder.map(status => `
+                    <button type="button" class="evortix-project-status-tab" data-evortix-project-status="${status}" role="tab" aria-selected="false">
+                        <i class="fas ${statusConfig[status].icon}" aria-hidden="true"></i>
+                        <span>${statusConfig[status].label}</span>
+                        <strong>${statusConfig[status].total}</strong>
+                    </button>
+                `).join('')}
+            </div>
+            <div class="evortix-project-list-head">
+                <strong data-evortix-project-list-title></strong>
+                <span data-evortix-project-list-count></span>
+            </div>
+            <div class="evortix-project-list" data-evortix-project-list></div>`;
+        const renderProjectList = status => {
+            const config = statusConfig[status];
+            const projects = Array.isArray(projectGroups[status]) ? projectGroups[status] : [];
+            speech.querySelectorAll('[data-evortix-project-status]').forEach(tab => {
+                const isSelected = tab.dataset.evortixProjectStatus === status;
+                tab.classList.toggle('is-active', isSelected);
+                tab.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+            });
+            const title = speech.querySelector('[data-evortix-project-list-title]');
+            const count = speech.querySelector('[data-evortix-project-list-count]');
+            const list = speech.querySelector('[data-evortix-project-list]');
+            if (title) title.textContent = `${config.label} projects`;
+            if (count) count.textContent = `${projects.length} project${projects.length === 1 ? '' : 's'}`;
+            if (!list) return;
+            list.innerHTML = projects.length
+                ? projects.map(project => `
+                    <a class="evortix-project-link" href="${escapeHtml(project.url)}">
+                        <span class="evortix-project-link-copy">
+                            <strong>${escapeHtml(project.name)}</strong>
+                            <small>${escapeHtml(project.client)} · ${Number(project.task_count) || 0} task${Number(project.task_count) === 1 ? '' : 's'}</small>
+                        </span>
+                        <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                    </a>
+                `).join('')
+                : '<div class="evortix-project-list-empty">No projects need attention here.</div>';
+        };
+        speech.querySelectorAll('[data-evortix-project-status]').forEach(tab => {
+            tab.addEventListener('click', () => renderProjectList(tab.dataset.evortixProjectStatus));
+        });
+        renderProjectList(initialStatus);
         window.chatBotWidgetRobot?.setMode?.('empty-bed');
         window.chatBotFloatRobot?.setMode?.('standing');
         float.hidden = false;
