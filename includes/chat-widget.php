@@ -607,7 +607,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </button>
 
 <div id="chat-bot-float" class="chat-bot-float" hidden aria-hidden="true">
-    <button id="chatBotFloatDismiss" class="chat-bot-float-dismiss" type="button" aria-label="Hide Evortix" title="Hide Evortix">
+    <button id="chatBotFloatDismiss" class="chat-bot-float-dismiss" type="button" aria-label="Return Evortix home" title="Return Evortix home">
         <i class="fas fa-xmark" aria-hidden="true"></i>
     </button>
     <div class="chat-bot-speech" aria-hidden="true">
@@ -821,9 +821,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const speech = botFloat.querySelector('.chat-bot-speech');
-        speech?.classList.remove('evortix-project-notification', 'evortix-dashboard-summary');
         if (speech) {
+            speech.className = 'chat-bot-speech';
             speech.hidden = false;
+            speech.setAttribute('aria-hidden', 'false');
             speech.style.pointerEvents = '';
             speech.removeAttribute('role');
             speech.removeAttribute('data-dashboard-summary-dismissed');
@@ -1121,6 +1122,35 @@ document.addEventListener('DOMContentLoaded', function () {
         openChatMessages();
     });
 
+    const returnEvortixHome = function () {
+        clearTimeout(botTransitionTimer);
+        clearTimeout(botTypeTimer);
+        clearTimeout(evortixSpeechTimer);
+        window.speechSynthesis?.cancel?.();
+        botFloat?.classList.remove('is-leaving-bed', 'is-preparing-speech', 'is-speaking', 'is-dragging');
+        const speech = botFloat?.querySelector('.chat-bot-speech');
+        if (speech) {
+            speech.setAttribute('aria-hidden', 'true');
+        }
+        if (botFloat) {
+            botFloat.setAttribute('aria-hidden', 'true');
+            botFloat.classList.add('is-returning-bed');
+        }
+        window.chatBotWidgetRobot?.sleep?.();
+        botTransitionTimer = window.setTimeout(function () {
+            if (!botFloat) {
+                return;
+            }
+
+            botFloat.hidden = true;
+            botFloat.classList.remove('is-returning-bed');
+            botFloat.style.removeProperty('left');
+            botFloat.style.removeProperty('top');
+            botFloat.style.removeProperty('right');
+            botFloat.style.removeProperty('bottom');
+        }, 760);
+    };
+
     botWidget?.addEventListener('click', function () {
         if (!botFloat) {
             return;
@@ -1148,14 +1178,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }, 520);
             }, 760);
         } else {
-            botFloat.setAttribute('aria-hidden', 'true');
-            botFloat.classList.add('is-returning-bed');
-            window.chatBotWidgetRobot?.sleep?.();
-            clearTimeout(botTypeTimer);
-            botTransitionTimer = window.setTimeout(function () {
-                botFloat.hidden = true;
-                botFloat.classList.remove('is-returning-bed');
-            }, 660);
+            returnEvortixHome();
         }
     });
 
@@ -1166,20 +1189,7 @@ document.addEventListener('DOMContentLoaded', function () {
     botFloatDismiss?.addEventListener('click', function (event) {
         event.preventDefault();
         event.stopPropagation();
-        clearTimeout(botTypeTimer);
-        clearTimeout(botTransitionTimer);
-        clearTimeout(evortixSpeechTimer);
-        window.speechSynthesis?.cancel?.();
-        botFloat?.classList.remove('is-leaving-bed', 'is-returning-bed', 'is-preparing-speech', 'is-speaking', 'is-dragging');
-        const speech = botFloat?.querySelector('.chat-bot-speech');
-        if (speech) {
-            speech.hidden = true;
-            speech.setAttribute('aria-hidden', 'true');
-        }
-        if (botFloat) {
-            botFloat.hidden = true;
-            botFloat.setAttribute('aria-hidden', 'true');
-        }
+        returnEvortixHome();
     });
 
     const clampBotFloatPosition = function (x, y) {

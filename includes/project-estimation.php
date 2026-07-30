@@ -1193,11 +1193,6 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                 <?php else: ?>
                                     <div class="project-estimation-submit-note"><i class="fas fa-circle-info" aria-hidden="true"></i><span>Review all amounts before submitting. The estimate will be locked and sent to the Expert SUL.</span></div>
                                     <div class="project-estimation-action-buttons">
-                                        <span class="project-estimation-draft-status" data-project-estimation-draft-status aria-live="polite"></span>
-                                        <button type="button" class="project-estimation-draft" data-project-estimation-save-draft>
-                                            <i class="fas fa-floppy-disk" aria-hidden="true"></i>
-                                            <span>Save Draft</span>
-                                        </button>
                                         <button type="submit" class="btn-save-phases project-estimation-submit" form="projectCostEstimationForm"><i class="fas fa-paper-plane"></i>Submit for SUL Review</button>
                                     </div>
                                 <?php endif; ?>
@@ -1220,9 +1215,8 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         const estimationForm = document.getElementById('projectCostEstimationForm');
         const estimationModule = document.getElementById('projectEstimationModule');
         const submissionStatus = document.querySelector('[data-project-estimation-submitted]');
-        const draftButton = document.querySelector('[data-project-estimation-save-draft]');
-        const draftStatus = document.querySelector('[data-project-estimation-draft-status]');
         const draftKey = `erniPms.formDraft.${location.pathname}.projectCostEstimationForm`;
+        let draftSaveTimer = null;
 
         function readProjectEstimationDraft() {
             const data = {};
@@ -1249,7 +1243,6 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         field.value = value;
                     }
                 });
-                if (draftStatus) draftStatus.textContent = 'Draft restored';
                 return true;
             } catch (error) {
                 localStorage.removeItem(draftKey);
@@ -1257,15 +1250,23 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             }
         }
 
-        draftButton?.addEventListener('click', () => {
+        function saveProjectEstimationDraft() {
             const data = readProjectEstimationDraft();
             try {
                 localStorage.setItem(draftKey, JSON.stringify({ savedAt: new Date().toISOString(), data }));
-                if (draftStatus) draftStatus.textContent = 'Draft saved';
             } catch (error) {
-                if (draftStatus) draftStatus.textContent = 'Draft could not be saved';
+                // Estimation remains usable when browser storage is unavailable.
             }
-        });
+        }
+
+        function queueProjectEstimationDraftSave() {
+            window.clearTimeout(draftSaveTimer);
+            draftSaveTimer = window.setTimeout(saveProjectEstimationDraft, 250);
+        }
+
+        estimationForm?.addEventListener('input', queueProjectEstimationDraftSave);
+        estimationForm?.addEventListener('change', queueProjectEstimationDraftSave);
+        window.addEventListener('pagehide', saveProjectEstimationDraft);
 
         estimationModule?.querySelectorAll('.estimation-section-toggle').forEach((toggle) => {
             toggle.addEventListener('click', () => {

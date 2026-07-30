@@ -7165,7 +7165,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
                     <i class="fas fa-user-plus me-2"></i> Add New Client
                 </h5>
             </div>
-            <form method="POST" id="addClientForm" enctype="multipart/form-data" novalidate data-app-loading data-loading-title="Sending to Architect" data-loading-text="Please wait while the qualified client intake, project folder, and Architect notification are saved.">
+            <form method="POST" id="addClientForm" enctype="multipart/form-data" novalidate data-generic-draft-disabled="1" data-app-loading data-loading-title="Sending to Architect" data-loading-text="Please wait while the qualified client intake, project folder, and Architect notification are saved.">
                 <input type="hidden" name="add_client" value="1">
                 <input type="hidden" name="client_draft_id" data-client-draft-id value="">
                 <div class="modal-body">
@@ -7554,7 +7554,6 @@ Attendees:</textarea>
                         <span class="draft-status" data-draft-status>Draft not started</span>
                         <div class="add-client-actions">
                             <button type="button" class="btn btn-outline-secondary add-client-close">Cancel</button>
-                            <button type="button" class="btn btn-outline-primary" data-save-draft disabled>Save Draft</button>
                             <button type="button" class="btn btn-outline-secondary" data-client-prev hidden>Previous</button>
                             <button type="button" class="btn-add-modern" data-client-next>Next</button>
                             <button type="submit" name="add_client" class="btn-add-modern" data-client-submit hidden><i class="fas fa-paper-plane me-1"></i> Add &amp; Send to Architect</button>
@@ -7567,9 +7566,6 @@ Attendees:</textarea>
                             <div class="unsaved-close-panel__actions">
                                 <button type="button" class="btn btn-light" data-keep-editing>Keep Editing</button>
                                 <button type="button" class="btn btn-outline-danger" data-discard-unsaved>Discard</button>
-                                <button type="button" class="btn-add-modern" data-save-close-draft>
-                                    <i class="fas fa-save me-1"></i> Save Draft
-                                </button>
                             </div>
                         </div>
                         </div>
@@ -10598,7 +10594,6 @@ if (addClientModalElement && addClientForm) {
     const previousButton = addClientModalElement.querySelector('[data-client-prev]');
     const nextButton = addClientModalElement.querySelector('[data-client-next]');
     const submitButton = addClientModalElement.querySelector('[data-client-submit]');
-    const saveDraftButton = addClientModalElement.querySelector('[data-save-draft]');
     const generatedComplexityField = addClientModalElement.querySelector('[data-generated-complexity]');
     const closeButtons = Array.from(addClientModalElement.querySelectorAll('.add-client-close'));
     const draftStatus = addClientModalElement.querySelector('[data-draft-status]');
@@ -10606,7 +10601,6 @@ if (addClientModalElement && addClientForm) {
     const unsavedClosePanel = addClientModalElement.querySelector('[data-unsaved-close-panel]');
     const keepEditingButton = addClientModalElement.querySelector('[data-keep-editing]');
     const discardUnsavedButton = addClientModalElement.querySelector('[data-discard-unsaved]');
-    const saveCloseDraftButton = addClientModalElement.querySelector('[data-save-close-draft]');
     const architectHandoffNote = addClientModalElement.querySelector('.architect-handoff-note');
     const templateReviewOverlay = addClientModalElement.querySelector('[data-template-review-overlay]');
     const summaryFields = Array.from(addClientModalElement.querySelectorAll('[data-summary-field]'));
@@ -12244,6 +12238,8 @@ if (addClientModalElement && addClientForm) {
         formTouched = true;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
+        window.clearTimeout(addClientForm._draftSaveTimer);
+        addClientForm._draftSaveTimer = window.setTimeout(() => saveAddClientDraft(false), 250);
     });
 
     addClientForm.addEventListener('focusin', (event) => {
@@ -12286,6 +12282,8 @@ if (addClientModalElement && addClientForm) {
         formTouched = true;
         hideUnsavedClosePanel();
         updateDraftStatus(false);
+        window.clearTimeout(addClientForm._draftSaveTimer);
+        addClientForm._draftSaveTimer = window.setTimeout(() => saveAddClientDraft(false), 250);
     });
 
     addClientForm.addEventListener('click', (event) => {
@@ -12510,25 +12508,6 @@ if (addClientModalElement && addClientForm) {
         button.addEventListener('click', requestAddClientClose);
     });
 
-    if (saveDraftButton) {
-        saveDraftButton.addEventListener('click', () => {
-            if (!hasDraftValues()) {
-                if (activeDraftId) {
-                    const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== activeDraftId);
-                    saveStoredDrafts(remainingDrafts);
-                    activeDraftId = null;
-                }
-                formTouched = false;
-                updateDraftStatus(false);
-                return;
-            }
-
-            saveAddClientDraft(true);
-            formTouched = false;
-            hideUnsavedClosePanel();
-        });
-    }
-
     if (keepEditingButton) {
         keepEditingButton.addEventListener('click', hideUnsavedClosePanel);
     }
@@ -12537,15 +12516,6 @@ if (addClientModalElement && addClientForm) {
         discardUnsavedButton.addEventListener('click', () => {
             resetCurrentClientInput();
             addClientModal.hide();
-        });
-    }
-
-    if (saveCloseDraftButton) {
-        saveCloseDraftButton.addEventListener('click', () => {
-            saveAddClientDraft(true);
-            resetCurrentClientInput();
-            addClientModal.hide();
-            showClientTab('drafts');
         });
     }
 
