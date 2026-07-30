@@ -5858,8 +5858,11 @@ function buildDepartmentPanel(task, options = {}) {
                         </div>
                     ` : ''}
                     <div class="${isUiUx ? 'col-md-6' : 'col-12'}">
-                        <label class="form-label" for="departmentArtifactUrl">${escapeHtml(departmentProfile.link_label || 'Reference link')}</label>
-                        <input id="departmentArtifactUrl" class="form-control" type="url" placeholder="https://...">
+                        <label class="form-label" for="departmentArtifactUrl">
+                            ${escapeHtml(departmentProfile.link_label || 'Reference link')}
+                            ${isUiUx ? '<span class="text-danger" aria-hidden="true">*</span>' : ''}
+                        </label>
+                        <input id="departmentArtifactUrl" class="form-control" type="url" placeholder="https://..." ${isUiUx ? 'required aria-required="true"' : ''}>
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="departmentArtifactNotes">${escapeHtml(departmentProfile.notes_label || 'Handoff notes')}</label>
@@ -5910,13 +5913,14 @@ function buildDepartmentPanel(task, options = {}) {
                         <div class="mb-2">
                             <label class="form-label">
                                 ${escapeHtml(departmentProfile.link_label || 'Reference link')}
+                                ${isUiUx ? '<span class="text-danger" aria-hidden="true">*</span>' : ''}
                                 <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx
                                     ? 'Paste a Figma, FigJam, wireframe, or prototype link.'
                                     : (isQa
                                         ? 'Paste a test case, screenshot, recording, or defect reference link.'
                                         : 'Paste the reference link this department needs to hand off.')}"></i>
                             </label>
-                            <input id="departmentArtifactUrl" class="form-control form-control-sm" placeholder="https://...">
+                            <input id="departmentArtifactUrl" class="form-control form-control-sm" type="url" placeholder="https://..." ${isUiUx ? 'required aria-required="true"' : ''}>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">${escapeHtml(departmentProfile.notes_label || 'Notes')}</label>
@@ -6184,9 +6188,20 @@ function buildDepartmentArtifactFormData(taskId) {
 }
 
 function saveDepartmentArtifact(taskId, options = {}) {
-    const formData = buildDepartmentArtifactFormData(taskId);
     const reloadTask = options.reloadTask !== false;
     const silent = Boolean(options.silent);
+    const wireframeInput = document.getElementById('departmentArtifactUrl');
+    const wireframeUrl = String(wireframeInput?.value || '').trim();
+    if ((departmentProfile.artifact_type || '') === 'design_handoff' && wireframeUrl === '') {
+        const error = 'Wireframe link is required for a design handoff.';
+        wireframeInput?.focus();
+        if (!silent) {
+            showTaskNotice('Design Handoff', error, 'error');
+        }
+        return $.Deferred().reject({ responseJSON: { error } }).promise();
+    }
+
+    const formData = buildDepartmentArtifactFormData(taskId);
 
     return $.ajax({
         url: '../../api/add-department-artifact.php',
