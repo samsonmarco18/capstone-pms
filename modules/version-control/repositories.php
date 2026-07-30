@@ -418,7 +418,11 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .workspace-tools-card .card-head{padding:1rem 1.15rem;background:#fbfdff;}
 .workspace-tools-card .card-head>div>div:last-child{color:var(--gray-900);font-size:1rem;font-weight:700;}
 .workspace-tools-body{padding:1.1rem;}
-.repository-access-panel{border-radius:14px;padding:1rem;background:#fff;}
+.repository-access-panel{border-radius:14px;padding:1rem;background:#fff;isolation:isolate;position:relative;transform:none!important;transform-style:flat!important;}
+.repository-access-panel::before,.repository-access-panel::after{pointer-events:none!important;}
+.repository-access-panel :is(.repository-branch-picker,.input-group,.clone-action-row,.repository-folder-action){position:relative;z-index:3;transform:none!important;transform-style:flat!important;}
+.repository-access-panel :is(a,button,select){position:relative;z-index:4;pointer-events:auto!important;touch-action:manipulation;cursor:pointer;}
+.vc-sidebar,.workspace-tools-card,.workspace-tools-body,.setup-stack{transform:none!important;transform-style:flat!important;}
 .repository-access-heading{display:flex;align-items:center;gap:.7rem;margin-bottom:1rem;}
 .repository-access-heading-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:var(--theme-soft);color:var(--theme-primary);}
 .repository-access-heading h6{margin:0;color:var(--gray-900);font-size:.92rem;font-weight:700;}
