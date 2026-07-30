@@ -12580,11 +12580,12 @@ if (addClientModalElement && addClientForm) {
     function shouldProtectAddClientProgress() {
         return !isSubmittingClient
             && addClientModalElement.classList.contains('show')
+            && (formTouched || activeDraftLoaded || Boolean(activeDraftId))
             && hasDraftValues();
     }
 
     function preserveAddClientProgress() {
-        if (!isSubmittingClient && hasDraftValues()) {
+        if (shouldProtectAddClientProgress()) {
             saveAddClientDraft(false);
         }
     }
@@ -12670,18 +12671,6 @@ if (addClientModalElement && addClientForm) {
 
             try {
                 removeStoredDraft(draftIdToDelete);
-                pendingDeleteDraftId = null;
-
-                bootstrap.Modal.getOrCreateInstance(deleteDraftModalElement).hide();
-
-                if (deletingActiveDraft) {
-                    resetCurrentClientInput();
-                } else {
-                    renderDraftList(getStoredDrafts(), draftCurrentPage);
-                    updateDraftStatus(hasStoredDraft());
-                }
-
-                window.appToast?.('Draft deleted', 'The saved draft was removed from this browser.', 'success');
             } catch (error) {
                 console.error('Unable to delete saved client draft:', error);
                 window.appToast?.(
@@ -12689,9 +12678,27 @@ if (addClientModalElement && addClientForm) {
                     'Browser storage could not be updated. Check that storage access is allowed and try again.',
                     'error'
                 );
-            } finally {
                 deleteDraftConfirmBtn.disabled = false;
+                return;
             }
+
+            pendingDeleteDraftId = null;
+            bootstrap.Modal.getOrCreateInstance(deleteDraftModalElement).hide();
+
+            try {
+                if (deletingActiveDraft) {
+                    resetCurrentClientInput();
+                } else {
+                    renderDraftList(getStoredDrafts(), draftCurrentPage);
+                    updateDraftStatus(hasStoredDraft());
+                }
+            } catch (uiError) {
+                console.warn('Draft was deleted, but the draft list could not be fully refreshed:', uiError);
+                renderDraftList(getStoredDrafts(), draftCurrentPage);
+            }
+
+            deleteDraftConfirmBtn.disabled = false;
+            window.appToast?.('Draft deleted', 'The saved draft was removed from this browser.', 'success');
         });
     }
 
