@@ -1309,35 +1309,19 @@ body {
     isolation: isolate;
 }
 
-/*
- * Keep the circuit decoration at the four edges instead of tiling it through
- * the workspace. The SVG animates its own dashes so light appears to crawl
- * along the traces without moving the page or distracting from the content.
- */
+/* Light-mode companion to the full-page futuristic circuit backdrop. */
 body::before {
     content: "";
     position: fixed;
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background-image:
-        url('../images/system-circuit-lines.svg'),
-        url('../images/system-circuit-lines.svg'),
-        url('../images/system-circuit-lines.svg'),
-        url('../images/system-circuit-lines.svg');
+    background-image: url('../img/themes/futuristic-circuit-background-light.png');
     background-repeat: no-repeat;
-    background-position:
-        left var(--system-circuit-content-left) top 68px,
-        right -72px top 68px,
-        left var(--system-circuit-content-left) bottom -48px,
-        right -72px bottom -48px;
-    background-size:
-        clamp(300px, 29vw, 470px) auto,
-        clamp(300px, 29vw, 470px) auto,
-        clamp(300px, 29vw, 470px) auto,
-        clamp(300px, 29vw, 470px) auto;
-    opacity: var(--system-circuit-idle-opacity);
-    animation: system-circuit-reveal 0.9s ease-out 1 both;
+    background-position: center top;
+    background-size: cover;
+    opacity: 1;
+    animation: none;
 }
 
 body:has(#page-content-wrapper.sidebar-collapsed) {
@@ -1367,24 +1351,16 @@ body:not(:has(#page-content-wrapper)) {
     }
 
     body::before {
-        background-position:
-            left -70px top 58px,
-            right -110px top 58px,
-            left -70px bottom -36px,
-            right -110px bottom -36px;
-        background-size:
-            310px auto,
-            310px auto,
-            310px auto,
-            310px auto;
-        opacity: var(--system-circuit-idle-opacity);
+        background-position: center top;
+        background-size: cover;
+        opacity: 1;
     }
 }
 
 @media (prefers-reduced-motion: reduce) {
     body::before {
         animation: none;
-        opacity: var(--system-circuit-idle-opacity);
+        opacity: 1;
     }
 }
 

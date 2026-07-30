@@ -404,8 +404,27 @@ document.addEventListener('DOMContentLoaded', () => {
 .evortix-role-summary-item-title { color:#083a5d; display:block; font-size:.75rem; font-weight:850; line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .evortix-role-summary-item-meta { color:#5b7f97; display:block; font-size:.65rem; font-weight:700; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .evortix-role-summary-item-arrow { color:#157baa; font-size:.72rem }
+.chat-bot-speech.evortix-role-dashboard-summary.has-project-list { width:min(430px,calc(100vw - 190px)); min-width:380px }
+.evortix-project-status-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.38rem; margin-bottom:.68rem }
+.evortix-project-status-tab { align-items:center; background:rgba(255,255,255,.58); border:1px solid rgba(8,123,185,.14); border-radius:10px; color:#426f8c; display:grid; font-size:.6rem; font-weight:800; gap:.18rem; grid-template-columns:auto minmax(0,1fr) auto; min-width:0; padding:.46rem .48rem; text-align:left; transition:background .16s ease,border-color .16s ease,color .16s ease }
+.evortix-project-status-tab i { color:#1784b6; font-size:.61rem }
+.evortix-project-status-tab span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.evortix-project-status-tab strong { background:#e5f4fa; border-radius:999px; color:#0d668f; font-size:.58rem; min-width:20px; padding:.14rem .3rem; text-align:center }
+.evortix-project-status-tab:hover,.evortix-project-status-tab:focus-visible { background:rgba(255,255,255,.84); border-color:rgba(8,123,185,.3); color:#0b466d; outline:0 }
+.evortix-project-status-tab.is-active { background:#fff; border-color:rgba(8,123,185,.38); box-shadow:0 4px 12px rgba(15,119,183,.1); color:#083a5d }
+.evortix-project-list-head { align-items:center; color:#0b466d; display:flex; font-size:.64rem; justify-content:space-between; margin:0 .12rem .38rem }
+.evortix-project-list-head strong { font-size:.66rem; font-weight:850 }
+.evortix-project-list-head span { color:#66869b; font-weight:700 }
+.evortix-project-list { display:grid; gap:.34rem; max-height:190px; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; padding-right:.16rem; scrollbar-color:rgba(18,126,177,.44) transparent; scrollbar-width:thin }
+.evortix-project-link { align-items:center; background:rgba(255,255,255,.76); border:1px solid rgba(8,123,185,.14); border-radius:10px; color:inherit; display:grid; gap:.55rem; grid-template-columns:minmax(0,1fr) auto; padding:.52rem .62rem; text-decoration:none; transition:background .16s ease,border-color .16s ease,transform .16s ease }
+.evortix-project-link:hover,.evortix-project-link:focus-visible { background:#fff; border-color:rgba(8,123,185,.3); color:inherit; outline:0; transform:translateY(-1px) }
+.evortix-project-link-copy { min-width:0 }
+.evortix-project-link-copy strong { color:#083a5d; display:block; font-size:.67rem; font-weight:850; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.evortix-project-link-copy small { color:#5b7f97; display:block; font-size:.58rem; font-weight:700; margin-top:.1rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.evortix-project-link > i { color:#157baa; font-size:.63rem }
+.evortix-project-list-empty { background:rgba(255,255,255,.52); border:1px dashed rgba(8,123,185,.18); border-radius:10px; color:#5b7f97; font-size:.62rem; font-weight:700; padding:.7rem; text-align:center }
 @keyframes evortixRoleSummaryReveal { from { opacity:0; transform:translateY(-50%) translateX(18px) scale(.94) } to { opacity:1; transform:translateY(-50%) translateX(0) scale(1) } }
-@media(max-width:640px){.chat-bot-speech.evortix-role-dashboard-summary,.chat-bot-speech.evortix-role-dashboard-summary.is-compact{right:calc(100% + 9px);width:min(270px,calc(100vw - 145px));min-width:220px}.evortix-role-summary-grid{grid-template-columns:1fr;max-height:238px;overflow-y:auto}.evortix-role-summary-item-title,.evortix-role-summary-item-meta{white-space:normal}}
+@media(max-width:640px){.chat-bot-speech.evortix-role-dashboard-summary,.chat-bot-speech.evortix-role-dashboard-summary.is-compact,.chat-bot-speech.evortix-role-dashboard-summary.has-project-list{right:calc(100% + 9px);width:min(290px,calc(100vw - 145px));min-width:230px}.evortix-role-summary-grid{grid-template-columns:1fr;max-height:238px;overflow-y:auto}.evortix-role-summary-item-title,.evortix-role-summary-item-meta{white-space:normal}.evortix-project-status-tab{grid-template-columns:minmax(0,1fr) auto;padding:.42rem .38rem}.evortix-project-status-tab i{display:none}.evortix-project-list{max-height:164px}}
 @keyframes evortixGuidancePulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
     50% { box-shadow: 0 0 0 10px rgba(14, 165, 233, .16); }
