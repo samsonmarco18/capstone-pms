@@ -12577,17 +12577,34 @@ if (addClientModalElement && addClientForm) {
         formTouched = false;
     });
 
-    window.addEventListener('beforeunload', () => {
-        if (isSubmittingClient || !formTouched || !hasDraftValues()) {
+    function shouldProtectAddClientProgress() {
+        return !isSubmittingClient
+            && addClientModalElement.classList.contains('show')
+            && (formTouched || activeDraftLoaded || Boolean(activeDraftId))
+            && hasDraftValues();
+    }
+
+    function preserveAddClientProgress() {
+        if (shouldProtectAddClientProgress()) {
+            saveAddClientDraft(false);
+        }
+    }
+
+    window.addEventListener('beforeunload', (event) => {
+        if (!shouldProtectAddClientProgress()) {
             return;
         }
 
-        saveAddClientDraft(false);
+        preserveAddClientProgress();
+        event.preventDefault();
+        event.returnValue = '';
     });
 
-    window.addEventListener('pagehide', () => {
-        if (!isSubmittingClient && hasDraftValues()) {
-            saveAddClientDraft(false);
+    window.addEventListener('pagehide', preserveAddClientProgress);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden' && addClientModalElement.classList.contains('show')) {
+            preserveAddClientProgress();
         }
     });
 
@@ -12648,18 +12665,40 @@ if (addClientModalElement && addClientForm) {
                 return;
             }
 
-            const remainingDrafts = getStoredDrafts().filter((draft) => draft.id !== pendingDeleteDraftId);
-            saveStoredDrafts(remainingDrafts);
+            const draftIdToDelete = pendingDeleteDraftId;
+            const deletingActiveDraft = activeDraftId === draftIdToDelete;
+            deleteDraftConfirmBtn.disabled = true;
 
-            if (activeDraftId === pendingDeleteDraftId) {
-                resetCurrentClientInput();
+            try {
+                removeStoredDraft(draftIdToDelete);
+            } catch (error) {
+                console.error('Unable to delete saved client draft:', error);
+                window.appToast?.(
+                    'Unable to delete draft',
+                    'Browser storage could not be updated. Check that storage access is allowed and try again.',
+                    'error'
+                );
+                deleteDraftConfirmBtn.disabled = false;
+                return;
             }
 
             pendingDeleteDraftId = null;
-            updateDraftStatus(hasStoredDraft());
-            if (deleteDraftModalElement) {
-                bootstrap.Modal.getInstance(deleteDraftModalElement)?.hide();
+            bootstrap.Modal.getOrCreateInstance(deleteDraftModalElement).hide();
+
+            try {
+                if (deletingActiveDraft) {
+                    resetCurrentClientInput();
+                } else {
+                    renderDraftList(getStoredDrafts(), draftCurrentPage);
+                    updateDraftStatus(hasStoredDraft());
+                }
+            } catch (uiError) {
+                console.warn('Draft was deleted, but the draft list could not be fully refreshed:', uiError);
+                renderDraftList(getStoredDrafts(), draftCurrentPage);
             }
+
+            deleteDraftConfirmBtn.disabled = false;
+            window.appToast?.('Draft deleted', 'The saved draft was removed from this browser.', 'success');
         });
     }
 
