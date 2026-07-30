@@ -45,6 +45,35 @@ function sulDashboardQuery($conn, string $sql)
     return (is_object($result) && method_exists($result, 'fetch_assoc')) ? $result : null;
 }
 
+function sulDashboardProfileUrl(?string $profilePic): string
+{
+    $profilePic = trim((string) $profilePic);
+    if ($profilePic === '') {
+        return '';
+    }
+
+    if (preg_match('#^https?://#i', $profilePic)) {
+        return $profilePic;
+    }
+
+    return BASE_URL . ltrim(str_replace('\\', '/', $profilePic), '/');
+}
+
+function sulDashboardInitials(?string $name): string
+{
+    $parts = preg_split('/\s+/', trim((string) $name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if ($parts === []) {
+        return '?';
+    }
+
+    $substring = function_exists('mb_substr') ? 'mb_substr' : 'substr';
+    $uppercase = function_exists('mb_strtoupper') ? 'mb_strtoupper' : 'strtoupper';
+    $first = $substring((string) $parts[0], 0, 1);
+    $last = count($parts) > 1 ? $substring((string) $parts[count($parts) - 1], 0, 1) : '';
+
+    return $uppercase($first . $last);
+}
+
 function sulDashboardBulkEntityCountSelect(string $taskAlias = 't'): string
 {
     $taskAlias = preg_replace('/[^A-Za-z0-9_]/', '', $taskAlias) ?: 't';
@@ -177,7 +206,7 @@ $lowPriority = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM task
 
 // Get expert/developer availability
 $expertAvailability = sulDashboardQuery($conn, "
-    SELECT u.id, u.full_name, u.role, 
+    SELECT u.id, u.full_name, u.role, u.profile_pic,
            COUNT(t.id) as assigned_tasks,
            SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
     FROM users u
@@ -817,6 +846,46 @@ include '../../includes/navbar.php';
     background: var(--gray-50);
 }
 
+.team-member-profile {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.team-member-avatar {
+    align-items: center;
+    background: linear-gradient(145deg, #dff1fb 0%, #c8e4f4 100%);
+    border: 1px solid #bedcec;
+    border-radius: 50%;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 38px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    height: 38px;
+    justify-content: center;
+    letter-spacing: 0.03em;
+    overflow: hidden;
+    position: relative;
+    width: 38px;
+}
+
+.team-member-avatar img {
+    height: 100%;
+    inset: 0;
+    object-fit: cover;
+    position: absolute;
+    width: 100%;
+}
+
+.team-member-name {
+    color: var(--gray-900);
+    font-weight: 600;
+    line-height: 1.3;
+    min-width: 0;
+}
+
 /* List Group Items */
 .list-group-item {
     padding: 1rem 1.5rem;
@@ -1449,9 +1518,16 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .recent-task-title,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .allocation-project-title,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-member-name,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .fw-semibold,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-body strong {
     color: #d7e4f2 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .team-member-avatar {
+    background: linear-gradient(145deg, #12344d 0%, #0d283d 100%);
+    border-color: rgba(138, 210, 255, 0.22);
+    color: #8ad8ff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-modern .stat-label,
@@ -1975,9 +2051,22 @@ include '../../includes/navbar.php';
                             <?php
                                 $statusClass = $expert['active_tasks'] >= 5 ? 'overloaded' : ($expert['active_tasks'] >= 3 ? 'busy' : ($expert['active_tasks'] > 0 ? 'available' : 'free'));
                                 $statusText = $expert['active_tasks'] >= 5 ? 'Overloaded' : ($expert['active_tasks'] >= 3 ? 'Busy' : ($expert['active_tasks'] > 0 ? 'Available' : 'Free'));
+                                $expertName = trim((string) ($expert['full_name'] ?? 'Team member'));
+                                $expertInitials = sulDashboardInitials($expertName);
+                                $expertProfileUrl = sulDashboardProfileUrl($expert['profile_pic'] ?? null);
                             ?>
                             <tr>
-                                <td class="fw-semibold"><?php echo htmlspecialchars($expert['full_name']); ?></td>
+                                <td>
+                                    <div class="team-member-profile">
+                                        <span class="team-member-avatar" aria-hidden="true">
+                                            <span><?php echo htmlspecialchars($expertInitials); ?></span>
+                                            <?php if ($expertProfileUrl !== ''): ?>
+                                                <img src="<?php echo htmlspecialchars($expertProfileUrl); ?>" alt="" onerror="this.remove()">
+                                            <?php endif; ?>
+                                        </span>
+                                        <span class="team-member-name"><?php echo htmlspecialchars($expertName); ?></span>
+                                    </div>
+                                </td>
                                 <td><span class="badge-role-<?php echo $expert['role']; ?>"><?php echo strtoupper($expert['role']); ?></span></td>
                                 <td><?php echo $expert['active_tasks']; ?></td>
                                 <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
