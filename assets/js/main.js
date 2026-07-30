@@ -461,9 +461,14 @@ function initDarkMode() {
     const body = $('body');
     const serverPreference = String(window.APP_USER_PREFERENCES?.theme || 'default');
     const visualTheme = ['tropical', 'futuristic'].includes(serverPreference) ? serverPreference : '';
+    let defaultColorMode = 'light';
 
     try {
-        localStorage.removeItem('theme');
+        if (serverPreference === 'default') {
+            defaultColorMode = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
+        } else {
+            localStorage.removeItem('theme');
+        }
     } catch (error) {
         // Theme selection still works when browser storage is unavailable.
     }
@@ -478,9 +483,26 @@ function initDarkMode() {
             root.removeAttr('data-app-theme');
             body.removeAttr('data-app-theme');
         }
+        const icon = $('#darkModeToggle i');
+        icon.removeClass('fa-moon fa-sun').addClass(theme === 'dark' ? 'fa-sun' : 'fa-moon');
     };
 
-    applyTheme(serverPreference === 'futuristic' ? 'dark' : 'light');
+    applyTheme(serverPreference === 'futuristic'
+        ? 'dark'
+        : (serverPreference === 'default' ? defaultColorMode : 'light'));
+
+    if (serverPreference === 'default') {
+        $('#darkModeToggle').on('click', function (event) {
+            event.preventDefault();
+            const nextTheme = (root.attr('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
+            applyTheme(nextTheme);
+            try {
+                localStorage.setItem('theme', nextTheme);
+            } catch (error) {
+                // The mode still changes for the current page.
+            }
+        });
+    }
 }
 
 function initNotifications() {
