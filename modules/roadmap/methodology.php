@@ -2318,6 +2318,9 @@ include '../../includes/navbar.php';
 
 .roadmap-task-plan-modal-header {
     padding: .9rem 1.1rem;
+    border-bottom: 0;
+    background: linear-gradient(135deg, var(--roadmap-primary) 0%, var(--roadmap-primary-dark) 100%) !important;
+    color: #fff;
 }
 
 .roadmap-task-plan-modal-title {
@@ -2334,13 +2337,13 @@ include '../../includes/navbar.php';
 }
 
 .roadmap-task-plan-modal-title .modal-title {
-    color: var(--roadmap-ink);
+    color: #fff;
     font-size: 1rem;
     font-weight: 700;
 }
 
 .roadmap-task-plan-modal-title small {
-    color: var(--roadmap-muted);
+    color: rgba(255, 255, 255, .76);
     font-size: .75rem;
 }
 
@@ -2352,8 +2355,23 @@ include '../../includes/navbar.php';
     height: 36px;
     flex: 0 0 36px;
     border-radius: 9px;
-    background: #edf7fc;
-    color: var(--roadmap-primary);
+    background: rgba(255, 255, 255, .14);
+    color: #fff;
+}
+
+.roadmap-task-plan-modal-header .btn-close {
+    margin: 0;
+    padding: .55rem;
+    border-radius: 9px;
+    background-color: rgba(255, 255, 255, .14);
+    filter: invert(1) grayscale(1) brightness(2);
+    opacity: .9;
+}
+
+.roadmap-task-plan-modal-header .btn-close:hover,
+.roadmap-task-plan-modal-header .btn-close:focus-visible {
+    background-color: rgba(255, 255, 255, .24);
+    opacity: 1;
 }
 
 .roadmap-task-plan-table {
@@ -2443,28 +2461,28 @@ include '../../includes/navbar.php';
 }
 
 .roadmap-stat--monitoring {
-    align-items: center;
-    display: grid;
-    gap: .75rem;
-    grid-template-columns: 38px minmax(0, 1fr);
-    min-height: 88px;
+    display: block;
+    min-height: 78px;
     overflow: hidden;
-    padding: .75rem .9rem;
+    padding: .7rem 3.65rem .7rem .85rem;
     position: relative;
-    border-left: 3px solid transparent;
-    border-radius: 14px;
-    transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+    border: 1px solid #dbe7ef;
+    border-radius: 12px;
+    background:
+        linear-gradient(135deg, rgba(31, 99, 146, .035), rgba(255, 255, 255, .96)),
+        #fff;
+    box-shadow: 0 4px 12px rgba(15, 76, 129, .055);
+    transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
 }
 
 .roadmap-stat--monitoring:hover {
-    border-left-color: var(--monitor-accent, var(--roadmap-primary));
-    box-shadow: 0 9px 22px rgba(15, 76, 129, .09);
-    transform: translateY(-2px);
+    border-color: rgba(31, 99, 146, .28);
+    background: #fff;
+    box-shadow: 0 7px 16px rgba(15, 76, 129, .09);
 }
 
 .monitoring-stat-icon {
     align-items: center;
-    align-self: start;
     background: var(--monitor-soft, #edf7fc);
     border-radius: 11px;
     color: var(--monitor-accent, var(--roadmap-primary)) !important;
@@ -2472,6 +2490,9 @@ include '../../includes/navbar.php';
     font-size: .95rem !important;
     height: 38px;
     justify-content: center;
+    position: absolute;
+    right: .75rem;
+    top: .65rem;
     width: 38px;
 }
 
@@ -2489,7 +2510,8 @@ include '../../includes/navbar.php';
 }
 
 .roadmap-stat--monitoring strong {
-    font-size: 1.5rem;
+    margin-top: .12rem;
+    font-size: 1.25rem;
     font-weight: 600;
 }
 
@@ -2672,7 +2694,7 @@ include '../../includes/navbar.php';
     background: #fff;
 }
 
-.architect-workspace-roadmap .phase-card-roadmap {
+:is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-card-roadmap {
     --phase-surface: #f5f7fa;
     --phase-surface-hover: #f0f3f7;
     --phase-surface-dark: rgba(100, 116, 139, .14);
@@ -2685,64 +2707,60 @@ include '../../includes/navbar.php';
     box-shadow: none;
 }
 
-.architect-workspace-roadmap .phase-tone-1 {
+:is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-tone-1 {
     --phase-surface: #eef6ff;
     --phase-surface-hover: #e7f1fc;
     --phase-surface-dark: rgba(47, 111, 237, .14);
     --phase-strong: #2f6fed;
 }
 
-.architect-workspace-roadmap .phase-tone-2 {
+:is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-tone-2 {
     --phase-surface: #eefaf8;
     --phase-surface-hover: #e5f6f3;
     --phase-surface-dark: rgba(20, 125, 117, .15);
     --phase-strong: #147d75;
 }
 
-.architect-workspace-roadmap .phase-tone-3 {
+:is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-tone-3 {
     --phase-surface: #f5f1ff;
     --phase-surface-hover: #efe9fc;
     --phase-surface-dark: rgba(124, 90, 199, .16);
     --phase-strong: #7c5ac7;
 }
 
-.architect-workspace-roadmap .phase-tone-4 {
+:is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-tone-4 {
     --phase-surface: #fff8e8;
     --phase-surface-hover: #fff3d8;
     --phase-surface-dark: rgba(196, 123, 20, .16);
     --phase-strong: #c47b14;
 }
 
-.architect-workspace-roadmap .phase-tone-5 {
+:is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-tone-5 {
     --phase-surface: #fff1f4;
     --phase-surface-hover: #fce8ed;
     --phase-surface-dark: rgba(191, 92, 116, .16);
     --phase-strong: #bf5c74;
 }
 
-.architect-workspace-roadmap .phase-tone-6 {
+:is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-tone-6 {
     --phase-surface: #edf9fc;
     --phase-surface-hover: #e4f5f9;
     --phase-surface-dark: rgba(43, 132, 157, .16);
     --phase-strong: #2b849d;
 }
 
-.architect-workspace-roadmap .phase-card-roadmap:last-child {
+:is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-card-roadmap:last-child {
     border-bottom: 0;
 }
 
-.architect-workspace-roadmap .phase-card-roadmap:hover {
+:is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-card-roadmap:hover {
     background: var(--phase-surface-hover);
     border-color: var(--roadmap-line);
     transform: none;
 }
 
-.architect-workspace-roadmap .gantt-row.phase-tone {
+:is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .gantt-row.phase-tone {
     background: var(--phase-surface);
-}
-
-.architect-workspace-roadmap .gantt-row.phase-tone .gantt-bar-phase {
-    background: var(--phase-strong);
 }
 
 .architect-workspace-roadmap .roadmap-gantt {
@@ -4540,7 +4558,7 @@ include '../../includes/navbar.php';
     box-shadow: 0 5px 14px rgba(0, 0, 0, .2);
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-workspace-roadmap .phase-card-roadmap {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-card-roadmap {
     background: var(--phase-surface-dark) !important;
     box-shadow: none;
 }
@@ -4551,11 +4569,11 @@ include '../../includes/navbar.php';
     box-shadow: 0 8px 18px rgba(0, 0, 0, .28);
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-workspace-roadmap .phase-card-roadmap:hover {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-card-roadmap:hover {
     background: var(--phase-surface-dark) !important;
 }
 
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-workspace-roadmap .gantt-row.phase-tone {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .gantt-row.phase-tone {
     background: var(--phase-surface-dark) !important;
 }
 
@@ -4573,6 +4591,87 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-view-toggle .btn:not(.active) {
     color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-filters .form-label {
+    color: #b9ccdc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-filter-grid > div:not(.monitoring-quick-filters) {
+    position: relative;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-filter-grid > div:not(.monitoring-quick-filters)::after {
+    position: absolute;
+    right: 1rem;
+    bottom: 1.05rem;
+    width: .48rem;
+    height: .48rem;
+    border-right: 2px solid #8ad2ff;
+    border-bottom: 2px solid #8ad2ff;
+    content: "";
+    pointer-events: none;
+    transform: rotate(45deg);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-filters .form-select {
+    color-scheme: dark;
+    background-color: #0d2236 !important;
+    border-color: #284860 !important;
+    color: #e2edf6 !important;
+    background-image: none !important;
+    padding-right: 2.75rem;
+    box-shadow: none !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-filters .form-select:focus {
+    background-color: #102b42 !important;
+    border-color: #4cb8ff !important;
+    box-shadow: 0 0 0 3px rgba(76, 184, 255, .13) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-filters .form-select option {
+    background: #0d2236;
+    color: #e2edf6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-filters .form-check-label {
+    color: #c8d8e6;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-filters .form-check-input {
+    width: 2.5rem;
+    height: 1.25rem;
+    margin-top: .05rem;
+    background-color: #091b2b !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3ccircle cx='8' cy='8' r='6' fill='%2387a9c0'/%3e%3c/svg%3e") !important;
+    background-position: left .12rem center;
+    background-repeat: no-repeat;
+    background-size: 1rem 1rem;
+    border-color: #355873 !important;
+    box-shadow: none !important;
+    cursor: pointer;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-workspace-filters .form-check-input:checked {
+    background-color: #258ac2 !important;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3ccircle cx='8' cy='8' r='6' fill='%23ffffff'/%3e%3c/svg%3e") !important;
+    background-position: right .12rem center;
+    border-color: #4cb8ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #resetMonitoringFilters {
+    background: #0d2236;
+    border-color: #31536c;
+    color: #9edcff;
+    box-shadow: none;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #resetMonitoringFilters:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #resetMonitoringFilters:focus-visible {
+    background: #173a54;
+    border-color: #4cb8ff;
+    color: #fff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .monitoring-department-icon,
@@ -4834,6 +4933,15 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-task-plan-modal-title .modal-title {
     color: #f8fafc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-task-plan-modal-header .roadmap-task-plan-modal-icon {
+    background: rgba(255, 255, 255, .14);
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-task-plan-modal-title small {
+    color: rgba(255, 255, 255, .76);
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .roadmap-task-plan-table thead th {
@@ -5617,7 +5725,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                             : roadmapPhaseIndicator((string) ($phase['status'] ?? 'planned'));
                         $phaseHasHeadcount = (int) ($phase['developer_count'] ?? 0) > 0;
                         $isFinalPhase = (int) ($phase['id'] ?? 0) === $finalPhaseId;
-                        $phaseToneClass = $isSulMonitoring ? '' : 'phase-tone phase-tone-' . (((int) $phaseIndex % 6) + 1);
+                        $phaseToneClass = 'phase-tone phase-tone-' . (((int) $phaseIndex % 6) + 1);
                     ?>
                     <div
                         class="roadmap-card phase-card-roadmap <?php echo htmlspecialchars($phaseToneClass); ?> phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?> <?php echo $canEditArchitecture ? ($phaseHasHeadcount ? '' : 'is-headcount-pending') : 'is-readonly'; ?>"
@@ -5759,7 +5867,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                             ? roadmapMonitoringPhaseIndicator($phase, true)
                             : roadmapPhaseIndicator((string) ($phase['status'] ?? 'planned'));
                         $phaseHasHeadcount = (int) ($phase['developer_count'] ?? 0) > 0;
-                        $phaseToneClass = $isSulMonitoring ? '' : 'phase-tone phase-tone-' . (((int) $phaseIndex % 6) + 1);
+                        $phaseToneClass = 'phase-tone phase-tone-' . (((int) $phaseIndex % 6) + 1);
                         $phaseOffset = max(0, (int) $timelineStart->diff(roadmapParseDate($phase['start_date']))->format('%r%a'));
                         $phaseDays = roadmapDaysBetween((string) $phase['start_date'], (string) $phase['end_date']);
                         $phaseLeft = ($phaseOffset / $timelineTotalDays) * 100;

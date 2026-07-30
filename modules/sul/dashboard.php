@@ -2354,10 +2354,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!float || !speech) return;
         speech.className = 'chat-bot-speech evortix-role-dashboard-summary is-compact';
         const metrics = [
-            { icon: 'fa-play', value: <?php echo (int) $inProgressTasks; ?>, label: 'In progress', meta: 'Active delivery work' },
-            { icon: 'fa-user-plus', value: <?php echo (int) $unassignedTasks; ?>, label: 'Unassigned', meta: 'Waiting for an owner' },
-            { icon: 'fa-triangle-exclamation', value: <?php echo (int) $overdueTasks; ?>, label: 'Overdue', meta: 'Needs immediate attention', overdue: true },
-            { icon: 'fa-diagram-project', value: <?php echo (int) $activeProjects; ?>, label: 'Active projects', meta: 'Current portfolio' }
+            { icon: 'fa-play', value: <?php echo (int) $inProgressTasks; ?>, label: 'In progress', meta: 'Active delivery work', url: 'task-allocation.php?evortix_auto=1' },
+            { icon: 'fa-user-plus', value: <?php echo (int) $unassignedTasks; ?>, label: 'Unassigned', meta: 'Waiting for an owner', url: 'task-allocation.php?evortix_auto=1' },
+            { icon: 'fa-triangle-exclamation', value: <?php echo (int) $overdueTasks; ?>, label: 'Overdue', meta: 'Needs immediate attention', overdue: true, url: 'task-allocation.php?evortix_auto=1' },
+            { icon: 'fa-diagram-project', value: <?php echo (int) $activeProjects; ?>, label: 'Active projects', meta: 'Current portfolio', url: 'resource-management.php' }
         ];
         const primaryMetric = metrics.find(metric => metric.overdue && metric.value > 0)
             || metrics.find(metric => metric.value > 0)
@@ -2365,10 +2365,11 @@ document.addEventListener('DOMContentLoaded', () => {
         speech.innerHTML = `
             <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">Live Overview</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
             <div class="evortix-role-summary-intro is-compact"><?php echo (int) $inProgressTasks; ?> in progress, <?php echo (int) $unassignedTasks; ?> unassigned, and <?php echo (int) $overdueTasks; ?> overdue.</div>
-            <div class="evortix-role-summary-item">
+            <a class="evortix-role-summary-item" href="${primaryMetric.url}">
                 <span class="evortix-role-summary-item-icon"><i class="fas ${primaryMetric.icon}"></i></span>
                 <span class="evortix-role-summary-item-copy"><strong class="evortix-role-summary-item-title">${primaryMetric.label}</strong><span class="evortix-role-summary-item-meta">${primaryMetric.value} · ${primaryMetric.meta}</span></span>
-            </div>`;
+                <i class="fas fa-arrow-right evortix-role-summary-item-arrow" aria-hidden="true"></i>
+            </a>`;
         window.chatBotWidgetRobot?.setMode?.('empty-bed');
         window.chatBotFloatRobot?.setMode?.('standing');
         float.hidden = false;

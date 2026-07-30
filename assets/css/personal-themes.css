@@ -1289,6 +1289,33 @@ html[data-theme="light"][data-app-theme="futuristic"] #page-content-wrapper::bef
     opacity: 0.36;
 }
 
+html[data-theme="dark"][data-app-theme="futuristic"] body {
+    background-color: #03182a;
+    background-image:
+        linear-gradient(rgba(2, 18, 33, 0.14), rgba(2, 14, 27, 0.44)),
+        url("../img/themes/futuristic-circuit-background-v2.png");
+    background-position: center top;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper {
+    background-color: rgba(2, 17, 31, 0.18);
+    background-image:
+        linear-gradient(180deg, rgba(2, 20, 36, 0.08), rgba(2, 13, 25, 0.42)),
+        url("../img/themes/futuristic-circuit-background-v2.png");
+    background-attachment: fixed;
+    background-position: center top;
+    background-repeat: no-repeat;
+    background-size: cover;
+    animation: none;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper::before {
+    background: none;
+    opacity: 0;
+}
+
 /* Richer light-mode surfaces so the themes do not wash out to plain white. */
 html[data-theme="light"][data-app-theme="tropical"] body {
     background-color: #dff6f8;
@@ -2088,4 +2115,21 @@ html[data-theme="dark"][data-app-theme="futuristic"] .chat-bot-speech.evortix-al
 ) {
     color: #dff3ff !important;
     opacity: 1 !important;
+}
+
+/* Keep page-level module fills from hiding the selected futuristic backdrop. */
+html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper > :is(
+    .container,
+    .container-fluid,
+    main,
+    .page-content,
+    .content-wrapper
+) {
+    background-color: transparent !important;
+    background-image: none !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper > .role-dashboard-shell {
+    background-color: transparent !important;
+    background-image: none !important;
 }

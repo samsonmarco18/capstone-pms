@@ -990,6 +990,91 @@ body.dark-mode .chat-bot-widget-speech span {
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-float-dismiss {
+    border: 0;
+    background: transparent;
+    color: #dff6ff;
+    box-shadow: none;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-float-dismiss:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-float-dismiss:focus-visible {
+    background: transparent;
+    color: #8ad2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech.evortix-allocation-bubble {
+    color: #eaf7ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech.evortix-allocation-bubble
+    .evortix-bubble-eyebrow {
+    color: #66d1ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech.evortix-allocation-bubble
+    .evortix-bubble-title {
+    color: #f4fbff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech.evortix-allocation-bubble
+    .evortix-bubble-task {
+    border-color: rgba(125, 211, 252, 0.24);
+    background: rgba(6, 27, 45, 0.78);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech.evortix-allocation-bubble
+    .evortix-bubble-task strong {
+    color: #f4fbff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech.evortix-allocation-bubble
+    .evortix-bubble-task span {
+    color: #8fdcff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech.evortix-allocation-bubble
+    .evortix-bubble-reason {
+    color: #bfd7e8 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech.evortix-allocation-bubble
+    .evortix-bubble-reason b {
+    color: #eaf7ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech.evortix-allocation-bubble
+    .evortix-bubble-warning {
+    color: #ffc463;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech.evortix-allocation-bubble
+    .evortix-bubble-close {
+    background: rgba(219, 240, 252, 0.14);
+    color: #dff6ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
+    .chat-bot-speech.evortix-allocation-bubble
+    .evortix-bubble-actions button:not(.is-accept) {
+    border-color: rgba(125, 211, 252, 0.34);
+    background: #eaf4f9;
+    color: #123f5d;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode)
     .chat-bot-speech:is(.evortix-role-dashboard-summary, .evortix-dashboard-summary) {
     --evortix-summary-heading: #f2f9ff;
     --evortix-summary-copy: #b8d2e6;
@@ -1082,6 +1167,7 @@ body.dark-mode .chat-bot-widget-speech span {
     :is(
         .evortix-role-summary-top i,
         .evortix-role-summary-item-icon,
+        .evortix-role-summary-item-arrow,
         .evortix-dashboard-summary-metric i,
         .evortix-live-action > i
     ) {
@@ -1187,11 +1273,33 @@ body.dark-mode .chat-input {
     border-color: rgba(138, 210, 255, 0.12);
 }
 
+html[data-theme="dark"] .chat-tabs,
+body[data-theme="dark"] .chat-tabs,
+body.dark-mode .chat-tabs {
+    background: #0d2236;
+    box-shadow: inset 0 0 0 1px rgba(138, 210, 255, 0.12);
+}
+
+html[data-theme="dark"] .chat-tab:not(.active),
+body[data-theme="dark"] .chat-tab:not(.active),
+body.dark-mode .chat-tab:not(.active) {
+    color: #a8c3d7;
+}
+
+html[data-theme="dark"] .chat-tab:not(.active):hover,
+body[data-theme="dark"] .chat-tab:not(.active):hover,
+body.dark-mode .chat-tab:not(.active):hover {
+    background: rgba(138, 210, 255, 0.08);
+    color: #e5f4ff;
+}
+
 html[data-theme="dark"] .chat-tab.active,
 body[data-theme="dark"] .chat-tab.active,
 body.dark-mode .chat-tab.active {
-    color: #bfe6ff;
-    border-bottom-color: #8fd3ff;
+    color: #ffffff;
+    background: linear-gradient(135deg, #155b86, #247eae);
+    border-bottom-color: transparent;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
 }
 
 html[data-theme="dark"] .conversation-item,
