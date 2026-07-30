@@ -148,7 +148,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_task'])) {
         $taskId
     );
 
-    $_SESSION['success'] = 'Feature merged to main and Sales notified.';
+    $_SESSION['success'] = ($mergeResult['merge_mode'] ?? '') === 'database_record'
+        ? 'Feature approved and recorded on main. Sales was notified. The managed Git files were unavailable, so repository history was updated from the stored branch records.'
+        : 'Feature merged to main and Sales notified.';
     header('Location: final-approval.php' . ($selectedProjectId > 0 ? '?project_id=' . $selectedProjectId : ''));
     exit();
 }

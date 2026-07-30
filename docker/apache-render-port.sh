@@ -2,6 +2,11 @@
 set -eu
 
 PORT="${PORT:-10000}"
+GIT_STORAGE_ROOT="${GIT_STORAGE_ROOT:-/var/data/git}"
+GIT_WORKSPACE_ROOT="${GIT_WORKSPACE_ROOT:-/var/data/git-workspaces}"
+
+mkdir -p "$GIT_STORAGE_ROOT" "$GIT_WORKSPACE_ROOT"
+chown -R www-data:www-data "$GIT_STORAGE_ROOT" "$GIT_WORKSPACE_ROOT"
 
 cd /var/www/html
 

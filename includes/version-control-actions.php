@@ -815,6 +815,7 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
                 'repository_id' => $repositoryId,
                 'merge_id' => $mergeId,
                 'commit_hash' => $mergeHash,
+                'merge_mode' => (string) ($gitMerge['merge_mode'] ?? 'git'),
                 'message' => 'Branches merged successfully.',
             ];
         } catch (Throwable $e) {
