@@ -19,7 +19,9 @@ $architectDssAssistantConfig = is_array($architectDssAssistantConfig ?? null) ? 
     width: min(380px, calc(100vw - 190px));
     min-width: 300px;
     max-height: min(520px, calc(100vh - 110px));
+    overflow-x: hidden;
     overflow-y: auto;
+    overflow-wrap: anywhere;
     padding: 1rem 1.05rem;
     border-radius: 22px 22px 8px 22px;
     pointer-events: auto;
@@ -36,12 +38,14 @@ $architectDssAssistantConfig = is_array($architectDssAssistantConfig ?? null) ? 
     margin-top: .6rem;
     font-size: .81rem;
     line-height: 1.45;
+    white-space: normal;
 }
 .chat-bot-speech.evortix-architect-dss .evortix-dss-points {
     margin: .55rem 0 0;
     padding-left: 1.1rem;
     font-size: .76rem;
     line-height: 1.4;
+    white-space: normal;
 }
 .chat-bot-speech.evortix-architect-dss .evortix-dss-points li + li { margin-top: .22rem; }
 .chat-bot-speech.evortix-architect-dss .evortix-dss-actions {

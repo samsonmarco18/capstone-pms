@@ -458,6 +458,20 @@ a.progress-step:hover {
     margin-bottom: 1.5rem;
 }
 
+.form-card:hover {
+    transform: none;
+    box-shadow: var(--shadow-sm);
+}
+
+#techForm > .form-card {
+    position: relative;
+    isolation: isolate;
+}
+
+#techForm > .form-card:first-of-type {
+    margin-bottom: 2.5rem;
+}
+
 .form-card .card-header {
     padding: 1.25rem 1.5rem;
     background: white;
@@ -616,6 +630,30 @@ a.progress-step:hover {
 
 .tech-item .form-check > .form-check-input {
     margin-left: 0;
+}
+
+.tech-logo {
+    display: inline-flex;
+    flex: 0 0 42px;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(31, 99, 146, 0.12);
+    border-radius: 12px;
+    background: #eef7fb;
+    color: var(--theme-primary);
+    overflow: hidden;
+}
+
+.tech-logo img {
+    width: 76%;
+    height: 76%;
+    object-fit: contain;
+}
+
+.tech-logo i {
+    font-size: 1.05rem;
 }
 
 .tech-title-wrap {
@@ -903,6 +941,12 @@ a.progress-step:hover {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-category {
     color: #9db6cf !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-logo {
+    border-color: rgba(138, 210, 255, 0.16);
+    background: rgba(13, 103, 134, 0.2);
+    color: #8fd3ff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .cost-table td {
@@ -1411,9 +1455,19 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                                         'selector' => '#tech_' . (int) $tech['id'],
                                     ];
                                 }
-                                // DSS recommendations remain suggestions until the architect explicitly accepts them.
-                                $isChecked = (bool) $savedRecommendation;
-                            ?>
+                                 // DSS recommendations remain suggestions until the architect explicitly accepts them.
+                                 $isChecked = (bool) $savedRecommendation;
+                                 $techLogoPath = trim((string) ($tech['logo_path'] ?? ''));
+                                 $techLogoUrl = $techLogoPath !== '' ? BASE_URL . ltrim($techLogoPath, '/') : '';
+                                 $techCategoryLower = strtolower((string) ($tech['category'] ?? ''));
+                                 $techFallbackIcon = str_contains($techCategoryLower, 'front') ? 'code'
+                                     : (str_contains($techCategoryLower, 'back') ? 'server'
+                                     : (str_contains($techCategoryLower, 'database') || str_contains($techCategoryLower, 'sql') ? 'database'
+                                     : (str_contains($techCategoryLower, 'cloud') || str_contains($techCategoryLower, 'host') ? 'cloud'
+                                     : (str_contains($techCategoryLower, 'security') ? 'shield-alt'
+                                     : (str_contains($techCategoryLower, 'integration') ? 'plug'
+                                     : (str_contains($techCategoryLower, 'mobile') ? 'mobile-alt' : 'layer-group'))))));
+                             ?>
                             <div class="tech-item" data-tech-category="<?php echo htmlspecialchars((string) ($tech['category'] ?? '')); ?>">
                                 <div class="row g-2">
                                     <div class="col-md-4">
@@ -1423,8 +1477,20 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                                                    value="<?php echo $tech['id']; ?>" 
                                                    id="tech_<?php echo $tech['id']; ?>"
                                                    data-template-recommended="<?php echo $templateRecommended ? '1' : '0'; ?>"
-                                                   data-template-name="<?php echo htmlspecialchars((string) $tech['name']); ?>"
-                                                   <?php echo $isChecked ? 'checked' : ''; ?>>
+                                                    data-template-name="<?php echo htmlspecialchars((string) $tech['name']); ?>"
+                                                    <?php echo $isChecked ? 'checked' : ''; ?>>
+                                            <span class="tech-logo" aria-hidden="true">
+                                                <?php if ($techLogoPath !== ''): ?>
+                                                <img
+                                                    src="<?php echo htmlspecialchars($techLogoUrl); ?>"
+                                                    alt=""
+                                                    loading="lazy"
+                                                    decoding="async"
+                                                    onerror="this.hidden=true; this.nextElementSibling.hidden=false;"
+                                                >
+                                                <?php endif; ?>
+                                                <i class="fas fa-<?php echo htmlspecialchars($techFallbackIcon); ?>" <?php echo $techLogoPath !== '' ? 'hidden' : ''; ?>></i>
+                                            </span>
                                             <div class="tech-title-wrap">
                                                 <div class="tech-title-line">
                                                     <label class="form-check-label" for="tech_<?php echo $tech['id']; ?>">

@@ -1,12 +1,136 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/file-storage.php';
 requireRole('admin');
 
 $conn = getConnection();
 $user = getCurrentUser();
 
+function technologyEnsureLogoSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
+{
+    if (!dbColumnExists($conn, 'technologies', 'logo_path')) {
+        $conn->query('ALTER TABLE technologies ADD COLUMN logo_path VARCHAR(500) NULL');
+    }
+}
+
+function technologySaveLogoUpload(?array $file): ?string
+{
+    if (!$file || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+
+    $uploadError = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($uploadError !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('The technology logo could not be uploaded.');
+    }
+
+    if ((int) ($file['size'] ?? 0) > 2 * 1024 * 1024) {
+        throw new RuntimeException('Technology logos must be 2MB or smaller.');
+    }
+
+    $temporaryPath = (string) ($file['tmp_name'] ?? '');
+    if ($temporaryPath === '' || !is_uploaded_file($temporaryPath)) {
+        throw new RuntimeException('The selected technology logo is not a valid upload.');
+    }
+
+    $mimeType = function_exists('mime_content_type') ? (string) mime_content_type($temporaryPath) : '';
+    $allowedMimeTypes = [
+        'image/png' => 'png',
+        'image/jpeg' => 'jpg',
+        'image/webp' => 'webp',
+    ];
+    if (!isset($allowedMimeTypes[$mimeType])) {
+        throw new RuntimeException('Use a PNG, JPG, or WEBP logo.');
+    }
+
+    $target = storageBuildUploadTarget('technology-logo.' . $allowedMimeTypes[$mimeType], 'technology-logos');
+    if (!move_uploaded_file($temporaryPath, $target['absolute_path'])) {
+        throw new RuntimeException('The technology logo could not be saved.');
+    }
+
+    return $target['relative_path'];
+}
+
+function technologyDeleteLogo(?string $relativePath): void
+{
+    $relativePath = trim((string) $relativePath);
+    if ($relativePath === '' || !str_starts_with($relativePath, 'uploads/technology-logos/')) {
+        return;
+    }
+
+    $absolutePath = storageResolveRelativePath($relativePath);
+    if ($absolutePath && is_file($absolutePath)) {
+        unlink($absolutePath);
+    }
+}
+
+technologyEnsureLogoSchema($conn);
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (isset($_POST['add_technology'])) {
+    if (isset($_POST['update_technology_logo'])) {
+        $id = (int) ($_POST['id'] ?? 0);
+        $oldData = null;
+        $oldStmt = $conn->prepare("SELECT * FROM technologies WHERE id = ? LIMIT 1");
+        if ($oldStmt !== false) {
+            $oldStmt->bind_param('i', $id);
+            $oldStmt->execute();
+            $oldData = $oldStmt->get_result()->fetch_assoc();
+            $oldStmt->close();
+        }
+
+        if ($id <= 0 || !$oldData) {
+            $_SESSION['error'] = 'Technology not found.';
+        } else {
+            $oldLogoPath = trim((string) ($oldData['logo_path'] ?? ''));
+            $uploadedLogoPath = null;
+            $removeLogo = isset($_POST['remove_logo']);
+            $logoUploadValid = true;
+
+            try {
+                $uploadedLogoPath = technologySaveLogoUpload($_FILES['logo'] ?? null);
+            } catch (RuntimeException $exception) {
+                $logoUploadValid = false;
+                $_SESSION['error'] = $exception->getMessage();
+            }
+
+            if ($logoUploadValid) {
+                if ($uploadedLogoPath === null && !$removeLogo) {
+                    $_SESSION['error'] = 'Choose a logo to upload or remove the current logo.';
+                } else {
+                    $logoPath = $uploadedLogoPath ?? null;
+                    $stmt = $conn->prepare("UPDATE technologies SET logo_path = ? WHERE id = ?");
+                    if ($stmt !== false) {
+                        $stmt->bind_param('si', $logoPath, $id);
+                        if ($stmt->execute()) {
+                            if ($oldLogoPath !== '' && $oldLogoPath !== $logoPath) {
+                                technologyDeleteLogo($oldLogoPath);
+                            }
+                            logActivity(
+                                $user['id'],
+                                'update_technology_logo',
+                                'technologies',
+                                $id,
+                                ['logo_path' => $oldLogoPath],
+                                ['logo_path' => $logoPath]
+                            );
+                            $_SESSION['success'] = $logoPath === null
+                                ? 'Technology logo removed successfully'
+                                : 'Technology logo updated successfully';
+                        } else {
+                            technologyDeleteLogo($uploadedLogoPath);
+                            $_SESSION['error'] = 'Unable to update the technology logo.';
+                        }
+                        $stmt->close();
+                    } else {
+                        technologyDeleteLogo($uploadedLogoPath);
+                        $_SESSION['error'] = 'Unable to prepare the technology logo update.';
+                    }
+                }
+            } else {
+                technologyDeleteLogo($uploadedLogoPath);
+            }
+        }
+    } elseif (isset($_POST['add_technology'])) {
         $name = trim((string) ($_POST['name'] ?? ''));
         $category = trim((string) ($_POST['category'] ?? ''));
         $price = (float) ($_POST['price'] ?? 0);
@@ -101,6 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $stmt->bind_param("i", $id);
                 
                 if ($stmt->execute()) {
+                    technologyDeleteLogo($oldData['logo_path'] ?? null);
                     logActivity($user['id'], 'delete_technology', 'technologies', $id, $oldData, null);
                     $_SESSION['success'] = "Technology deleted successfully";
                 } else {
@@ -160,6 +285,21 @@ $technologyCategoryResult = $conn->query("
 if ($technologyCategoryResult) {
     while ($technologyCategoryRow = $technologyCategoryResult->fetch_assoc()) {
         $technologyCategories[] = (string) $technologyCategoryRow['category'];
+    }
+}
+$technologyFormCategories = [
+    'Cloud Platform',
+    'Database',
+    'Storage',
+    'Networking',
+    'AI/ML',
+    'IoT',
+    'DevOps',
+    'Security',
+];
+foreach ($technologyCategories as $technologyCategory) {
+    if (!in_array($technologyCategory, $technologyFormCategories, true)) {
+        $technologyFormCategories[] = $technologyCategory;
     }
 }
 
@@ -761,9 +901,40 @@ include '../../includes/navbar.php';
     transition: all 0.2s ease;
 }
 
+.technology-logo-trigger {
+    position: relative;
+    flex: 0 0 56px;
+    padding: 0;
+    border: 0;
+    cursor: pointer;
+}
+
+.technology-logo-trigger:hover {
+    border-color: rgba(31, 99, 146, 0.3);
+    background: #ffffff;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.16);
+    transform: translateY(-2px);
+}
+
+.technology-logo-trigger:focus-visible {
+    outline: 3px solid rgba(31, 99, 146, 0.22);
+    outline-offset: 3px;
+}
+
 .icon-wrapper i {
     font-size: 28px;
     color: var(--theme-primary);
+}
+
+.icon-wrapper.has-logo {
+    border: 1px solid rgba(31, 99, 146, 0.12);
+    background: #ffffff;
+}
+
+.icon-wrapper img {
+    width: 72%;
+    height: 72%;
+    object-fit: contain;
 }
 
 .tech-info h4 {
@@ -977,6 +1148,130 @@ include '../../includes/navbar.php';
     padding: 1.5rem;
 }
 
+.technology-logo-help {
+    display: block;
+    margin-top: 0.4rem;
+    color: var(--tech-muted);
+    font-size: 0.72rem;
+}
+
+.technology-logo-current {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--tech-border);
+    border-radius: 11px;
+    background: var(--tech-surface-alt);
+    color: var(--tech-muted);
+    font-size: 0.78rem;
+}
+
+.technology-logo-current img {
+    width: 40px;
+    height: 40px;
+    padding: 4px;
+    border: 1px solid var(--tech-border);
+    border-radius: 9px;
+    background: #ffffff;
+    object-fit: contain;
+}
+
+.technology-logo-modal .modal-dialog {
+    max-width: 480px;
+}
+
+.technology-logo-modal__intro {
+    margin: 0 0 1rem;
+    color: var(--tech-muted);
+    font-size: 0.88rem;
+}
+
+.technology-logo-modal__name {
+    color: var(--tech-text);
+    font-weight: 700;
+}
+
+.technology-logo-modal__preview {
+    width: 56px;
+    height: 56px;
+}
+
+.technology-logo-modal__empty {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.85rem;
+    color: var(--tech-muted);
+    font-size: 0.8rem;
+}
+
+.technology-logo-modal__empty i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--tech-surface-alt);
+    color: var(--theme-primary);
+}
+
+.technology-logo-upload-field {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: stretch;
+    min-height: 48px;
+    border: 1px dashed rgba(31, 99, 146, 0.22);
+    border-radius: 12px;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.055), rgba(255, 255, 255, 0.94)),
+        #ffffff;
+    overflow: hidden;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.technology-logo-upload-field:hover,
+.technology-logo-upload-field:focus-within {
+    border-color: rgba(13, 103, 134, 0.42);
+    box-shadow: 0 10px 22px rgba(13, 103, 134, 0.12);
+}
+
+.technology-logo-upload-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 46px;
+    margin: 0;
+    padding: 0 0.9rem;
+    border-right: 1px solid rgba(31, 99, 146, 0.12);
+    background: rgba(226, 244, 250, 0.92);
+    color: #0d6786;
+    font-size: 0.86rem;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.18s ease, color 0.18s ease;
+}
+
+.technology-logo-upload-button:hover {
+    background: #0d6786;
+    color: #ffffff;
+}
+
+.technology-logo-upload-summary {
+    align-self: center;
+    min-width: 0;
+    padding: 0 0.85rem;
+    color: var(--tech-text);
+    font-size: 0.88rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .modal-modern .modal-footer {
     background: var(--tech-surface-alt);
     border-top: 1px solid var(--tech-border);
@@ -1069,6 +1364,31 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .tech-card-modern:hover {
     box-shadow: var(--tech-shadow-hover);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-logo-trigger:hover {
+    background: var(--tech-surface-alt);
+    border-color: rgba(143, 211, 255, 0.35);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-logo-upload-field {
+    background: rgba(10, 27, 44, 0.64);
+    border-color: rgba(138, 210, 255, 0.16);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-logo-upload-button {
+    border-color: rgba(138, 210, 255, 0.12);
+    background: rgba(13, 103, 134, 0.24);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-logo-upload-button:hover {
+    background: #0d6786;
+    color: #ffffff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-logo-upload-summary {
+    color: #d7e4f2;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .stat-card-mini .stat-number,
@@ -1424,6 +1744,10 @@ include '../../includes/navbar.php';
     <?php if($totalFilteredTechnologies > 0): ?>
         <div class="tech-grid">
             <?php while($tech = $technologies->fetch_assoc()): ?>
+            <?php
+            $techLogoPath = trim((string) ($tech['logo_path'] ?? ''));
+            $techLogoUrl = $techLogoPath !== '' ? BASE_URL . ltrim($techLogoPath, '/') : '';
+            ?>
             <div class="tech-card-modern">
                 <div class="status-corner">
                     <span class="status-dot <?php echo $tech['status']; ?>"></span>
@@ -1432,7 +1756,25 @@ include '../../includes/navbar.php';
                 
                 <!-- Card Header -->
                 <div class="card-header-modern">
-                    <div class="icon-wrapper">
+                    <button
+                        type="button"
+                        class="icon-wrapper technology-logo-trigger<?php echo $techLogoPath !== '' ? ' has-logo' : ''; ?>"
+                        data-tech-id="<?php echo (int) $tech['id']; ?>"
+                        data-tech-name="<?php echo htmlspecialchars($tech['name'], ENT_QUOTES); ?>"
+                        data-logo-path="<?php echo htmlspecialchars($techLogoPath, ENT_QUOTES); ?>"
+                        aria-label="Change <?php echo htmlspecialchars($tech['name'], ENT_QUOTES); ?> logo"
+                        title="Change logo"
+                        onclick="openTechnologyLogoModal(this)"
+                    >
+                        <?php if ($techLogoPath !== ''): ?>
+                        <img
+                            src="<?php echo htmlspecialchars($techLogoUrl); ?>"
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            onerror="this.hidden=true; this.nextElementSibling.hidden=false;"
+                        >
+                        <?php endif; ?>
                         <i class="fas fa-<?php 
                             echo $tech['category'] == 'Cloud Platform' ? 'cloud' : 
                                 ($tech['category'] == 'Database' ? 'database' : 
@@ -1440,9 +1782,9 @@ include '../../includes/navbar.php';
                                 ($tech['category'] == 'Networking' ? 'network-wired' : 
                                 ($tech['category'] == 'AI/ML' ? 'brain' : 
                                 ($tech['category'] == 'IoT' ? 'microchip' : 
-                                ($tech['category'] == 'DevOps' ? 'code-branch' : 'shield-alt')))))); 
-                        ?>"></i>
-                    </div>
+                                 ($tech['category'] == 'DevOps' ? 'code-branch' : 'shield-alt'))))));
+                        ?>" <?php echo $techLogoPath !== '' ? 'hidden' : ''; ?>></i>
+                    </button>
                     <div class="tech-info">
                         <h4><?php echo htmlspecialchars($tech['name']); ?></h4>
                         <span class="category"><?php echo htmlspecialchars($tech['category']); ?></span>
@@ -1480,7 +1822,7 @@ include '../../includes/navbar.php';
                 
                 <!-- Actions -->
                 <div class="card-actions-modern">
-                    <button class="btn-modern btn-outline-modern" onclick="editTechnology(<?php echo htmlspecialchars(json_encode($tech)); ?>)">
+                    <button class="btn-modern btn-outline-modern" onclick="editTechnology(<?php echo htmlspecialchars(json_encode($tech), ENT_QUOTES, 'UTF-8'); ?>)">
                         <i class="fas fa-edit me-1"></i> Edit
                     </button>
                     <button
@@ -1496,7 +1838,7 @@ include '../../includes/navbar.php';
                 
                 <?php if(in_array($tech['status'], ['expiring', 'expired'], true)): ?>
                 <div style="padding: 0 1.5rem 1.5rem;">
-                    <button class="btn-modern btn-success-modern w-100" onclick="openRenewTechnologyModal(<?php echo htmlspecialchars(json_encode($tech)); ?>)">
+                    <button class="btn-modern btn-success-modern w-100" onclick="openRenewTechnologyModal(<?php echo htmlspecialchars(json_encode($tech), ENT_QUOTES, 'UTF-8'); ?>)">
                         <i class="fas fa-sync-alt me-1"></i> Renew Subscription
                     </button>
                 </div>
@@ -1664,14 +2006,9 @@ include '../../includes/navbar.php';
                         <div class="col-md-6">
                             <label class="form-label">Category</label>
                             <select name="category" class="form-select" required>
-                                <option value="Cloud Platform">Cloud Platform</option>
-                                <option value="Database">Database</option>
-                                <option value="Storage">Storage</option>
-                                <option value="Networking">Networking</option>
-                                <option value="AI/ML">AI/ML</option>
-                                <option value="IoT">IoT</option>
-                                <option value="DevOps">DevOps</option>
-                                <option value="Security">Security</option>
+                                <?php foreach ($technologyFormCategories as $technologyCategory): ?>
+                                <option value="<?php echo htmlspecialchars($technologyCategory); ?>"><?php echo htmlspecialchars($technologyCategory); ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-md-6">
@@ -1713,14 +2050,9 @@ include '../../includes/navbar.php';
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Category</label>
                         <select name="category" id="edit_category" class="form-select" required>
-                            <option value="Cloud Platform">Cloud Platform</option>
-                            <option value="Database">Database</option>
-                            <option value="Storage">Storage</option>
-                            <option value="Networking">Networking</option>
-                            <option value="AI/ML">AI/ML</option>
-                            <option value="IoT">IoT</option>
-                            <option value="DevOps">DevOps</option>
-                            <option value="Security">Security</option>
+                            <?php foreach ($technologyFormCategories as $technologyCategory): ?>
+                            <option value="<?php echo htmlspecialchars($technologyCategory); ?>"><?php echo htmlspecialchars($technologyCategory); ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -1735,6 +2067,63 @@ include '../../includes/navbar.php';
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" name="update_technology" class="btn-primary-modern px-4">Update Technology</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Technology Logo Modal -->
+<div class="modal fade modal-modern technology-logo-modal" id="technologyLogoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <span class="modal-title-icon"><i class="fas fa-image"></i></span>
+                    Technology Logo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" enctype="multipart/form-data" data-app-loading data-loading-title="Updating logo" data-loading-text="Please wait while the logo is saved.">
+                <input type="hidden" name="id" id="logo_technology_id">
+                <div class="modal-body">
+                    <p class="technology-logo-modal__intro">
+                        Change the logo for <span class="technology-logo-modal__name" id="logo_technology_name"></span>.
+                    </p>
+                    <div class="technology-logo-current" id="logo_current" hidden>
+                        <img class="technology-logo-modal__preview" id="logo_preview" src="" alt="">
+                        <span>Current logo</span>
+                    </div>
+                    <div class="technology-logo-modal__empty" id="logo_empty">
+                        <i class="fas fa-image" aria-hidden="true"></i>
+                        <span>No custom logo uploaded</span>
+                    </div>
+                    <div>
+                        <label class="form-label" for="technology_logo_file">Choose Logo</label>
+                        <div class="technology-logo-upload-field">
+                            <label for="technology_logo_file" class="technology-logo-upload-button">
+                                <i class="fas fa-paperclip" aria-hidden="true"></i>
+                                <span>Choose File</span>
+                            </label>
+                            <span class="technology-logo-upload-summary" id="technology_logo_summary">No file chosen</span>
+                            <input
+                                type="file"
+                                name="logo"
+                                id="technology_logo_file"
+                                class="visually-hidden"
+                                accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                            >
+                        </div>
+                        <small class="technology-logo-help">PNG, JPG, or WEBP up to 2MB.</small>
+                    </div>
+                    <div class="form-check mt-3" id="logo_remove_wrap" hidden>
+                        <input class="form-check-input" type="checkbox" name="remove_logo" value="1" id="logo_remove">
+                        <label class="form-check-label" for="logo_remove">Remove current logo</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="modal-secondary-action" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="update_technology_logo" class="btn-primary-modern px-4">Save Logo</button>
                 </div>
             </form>
         </div>
@@ -1774,9 +2163,51 @@ function editTechnology(tech) {
     document.getElementById('edit_category').value = tech.category;
     document.getElementById('edit_price').value = tech.price;
     document.getElementById('edit_expiry_date').value = tech.expiry_date;
-    
+
     new bootstrap.Modal(document.getElementById('editTechnologyModal')).show();
 }
+
+function openTechnologyLogoModal(button) {
+    const technologyId = button.dataset.techId || '';
+    const technologyName = button.dataset.techName || 'this technology';
+    const logoPath = String(button.dataset.logoPath || '').replace(/^\/+/, '');
+    const logoInput = document.getElementById('technology_logo_file');
+    const logoCurrent = document.getElementById('logo_current');
+    const logoEmpty = document.getElementById('logo_empty');
+    const logoPreview = document.getElementById('logo_preview');
+    const removeLogoWrap = document.getElementById('logo_remove_wrap');
+    const removeLogo = document.getElementById('logo_remove');
+    const logoSummary = document.getElementById('technology_logo_summary');
+
+    document.getElementById('logo_technology_id').value = technologyId;
+    document.getElementById('logo_technology_name').textContent = technologyName;
+    logoInput.value = '';
+    logoSummary.textContent = 'No file chosen';
+    removeLogo.checked = false;
+    logoCurrent.hidden = logoPath === '';
+    logoEmpty.hidden = logoPath !== '';
+    removeLogoWrap.hidden = logoPath === '';
+    logoPreview.src = logoPath === '' ? '' : `${window.BASE_URL || '../../'}${logoPath}`;
+    logoPreview.alt = logoPath === '' ? '' : `${technologyName} logo`;
+
+    new bootstrap.Modal(document.getElementById('technologyLogoModal')).show();
+}
+
+document.getElementById('technology_logo_file')?.addEventListener('change', function () {
+    if (this.files?.length) {
+        const selectedFile = this.files[0];
+        const previewUrl = URL.createObjectURL(selectedFile);
+        const logoPreview = document.getElementById('logo_preview');
+
+        document.getElementById('logo_remove').checked = false;
+        document.getElementById('logo_remove_wrap').hidden = true;
+        document.getElementById('logo_empty').hidden = true;
+        document.getElementById('logo_current').hidden = false;
+        document.getElementById('technology_logo_summary').textContent = selectedFile.name;
+        logoPreview.src = previewUrl;
+        logoPreview.alt = 'Selected technology logo';
+    }
+});
 
 function openDeleteTechnologyModal(button) {
     const techId = button.getAttribute('data-tech-id') || '';
