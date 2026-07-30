@@ -641,7 +641,33 @@ function vcRestoreRepositorySnapshot(
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     if (!$row) {
-        return false;
+        /*
+         * The repository metadata may have survived in PostgreSQL while an
+         * older Render deployment kept the Git objects only on an ephemeral
+         * disk. Initialize an empty managed remote so a developer's intact
+         * local clone can recover it with `git push --all` and `git push
+         * --tags`. The post-receive hook will persist the recovered objects as
+         * a database-backed bundle after that first push.
+         */
+        vcEnsureDirectory(vcGetRepositoryStorageRoot());
+        $defaultBranch = trim((string) ($repository['default_branch_name'] ?? 'main'));
+        if ($defaultBranch === '') {
+            $defaultBranch = 'main';
+        }
+        try {
+            vcRunGitCommand(['init', '--bare', '--initial-branch=' . $defaultBranch, $barePath], APP_ROOT_PATH);
+            $token = (string) ($repository['webhook_token'] ?? '');
+            vcInstallServerRepositoryHooks(
+                $barePath,
+                rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode($token)
+            );
+            vcRunGitCommand(['--git-dir=' . $barePath, 'config', 'http.receivepack', 'true'], APP_ROOT_PATH);
+            vcRunGitCommand(['--git-dir=' . $barePath, 'update-server-info'], APP_ROOT_PATH);
+            return true;
+        } catch (Throwable $e) {
+            vcDeleteDirectoryRecursive($barePath);
+            throw $e;
+        }
     }
 
     $bundle = base64_decode((string) $row['bundle_base64'], true);

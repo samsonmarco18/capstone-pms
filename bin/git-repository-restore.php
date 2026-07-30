@@ -12,7 +12,7 @@ if ($slug === '') {
 try {
     $conn = getConnection();
     $stmt = $conn->prepare(
-        'SELECT id, slug, webhook_token, repository_status
+        'SELECT id, slug, webhook_token, repository_status, default_branch_name
          FROM project_repositories
          WHERE slug = ? AND repository_status = ?
          LIMIT 1'
