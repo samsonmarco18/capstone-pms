@@ -4,7 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/version-control.php';
 
-requireRole(['admin', 'architect', 'developer', 'sul', 'sales']);
+requireRole(['admin', 'architect', 'developer', 'sul', 'qa', 'sales']);
 
 $repositoryId = (int) ($_GET['repository_id'] ?? 0);
 $projectId = (int) ($_GET['project_id'] ?? 0);

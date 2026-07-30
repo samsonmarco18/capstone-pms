@@ -323,6 +323,9 @@ include '../../includes/navbar.php';
 :root{--theme-primary:#1f6392;--theme-dark:#184f73;--theme-soft:#eef6fb;--theme-line:rgba(31,99,146,.16);--gray-25:#fcfdff;--gray-50:#f8f9fa;--gray-100:#f1f5f9;--gray-200:#e9ecef;--gray-300:#d9e2ec;--gray-600:#6c757d;--gray-700:#475569;--gray-900:#212529;}
 body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .vc-shell{max-width:1440px;}
+.vc-shell{position:relative!important;z-index:10!important;pointer-events:auto!important;}
+.vc-shell *{pointer-events:auto;}
+.vc-shell :is(.vc-header,.vc-card,.project-picker,.repo-tile,.workspace-tools-card,.repository-access-panel){position:relative;}
 .vc-header,.vc-card{background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:24px;box-shadow:0 14px 34px rgba(15,23,42,.05);}
 .vc-header{padding:2rem;margin-bottom:1.5rem;background:linear-gradient(135deg,#19567f 0%,#1f6392 55%,#2f83b9 100%);color:#fff;position:relative;overflow:hidden;}
 .vc-header:before,.vc-header:after{content:'';position:absolute;border-radius:999px;background:rgba(255,255,255,.09);}
@@ -1306,7 +1309,30 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
     <?php endif; ?>
 
 <script>
+function recoverVersionControlInteractions() {
+    const loadingOverlay = document.getElementById('appGlobalLoadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.classList.remove('is-visible');
+        loadingOverlay.setAttribute('aria-hidden', 'true');
+    }
+
+    if (!document.querySelector('.modal.show')) {
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.remove());
+    }
+
+    if (window.matchMedia('(min-width: 993px)').matches) {
+        document.querySelector('.sidebar-overlay')?.classList.remove('active');
+    }
+}
+
+recoverVersionControlInteractions();
+window.addEventListener('pageshow', recoverVersionControlInteractions);
+
 document.addEventListener('DOMContentLoaded', function () {
+    recoverVersionControlInteractions();
     const nameInput = document.querySelector('input[name="repository_name"]');
     const slugInput = document.querySelector('input[name="repository_slug"]');
     const remoteUrlInput = document.getElementById('createRepositoryManagedUrl');
@@ -1410,6 +1436,18 @@ if (repositoryAccessBranch) {
     });
     updateRepositoryBranchActions();
 }
+
+document.querySelectorAll('a[href*="api/version-control/download-repository.php"]').forEach((downloadLink) => {
+    downloadLink.addEventListener('click', function (event) {
+        const targetUrl = downloadLink.href;
+        if (!targetUrl) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        window.location.assign(targetUrl);
+    });
+});
 
 document.querySelectorAll('.js-delete-repository-form').forEach((form) => {
     form.addEventListener('submit', async (event) => {
