@@ -490,6 +490,18 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
 
             <div class="chat-input">
+                <div id="chatComposerContext" class="chat-composer-context d-none" aria-live="polite">
+                    <span class="chat-composer-context-icon" id="chatComposerContextIcon">
+                        <i class="fas fa-reply" aria-hidden="true"></i>
+                    </span>
+                    <span class="chat-composer-context-copy">
+                        <strong id="chatComposerContextTitle">Replying</strong>
+                        <small id="chatComposerContextPreview"></small>
+                    </span>
+                    <button type="button" id="chatComposerContextClose" class="chat-composer-context-close" aria-label="Cancel message action">
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                    </button>
+                </div>
                 <div class="input-group input-group-sm">
                     <input type="text" id="chatMessageInput" class="form-control" placeholder="Type your message...">
                     <button class="btn btn-primary" type="button" id="sendMessageBtn">
@@ -554,6 +566,35 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" id="addGroupMemberSubmitBtn">Add Members</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade create-group-modal chat-forward-modal" id="chatForwardModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title">Forward Message</h5>
+                    <p class="create-group-subtitle mb-0">Choose a person or group conversation.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="chat-forward-search">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input type="text" id="chatForwardSearch" class="form-control" placeholder="Search conversations">
+                </div>
+                <div id="chatForwardTargets" class="chat-forward-targets">
+                    <div class="chat-list-empty">
+                        <i class="fas fa-comments" aria-hidden="true"></i>
+                        <div>Select a message to forward.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
             </div>
         </div>
     </div>

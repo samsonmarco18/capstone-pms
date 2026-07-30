@@ -1443,6 +1443,150 @@ body.dark-mode .message.received {
     color: #d8e6f3;
 }
 
+html[data-theme="dark"] .message-action-menu,
+body[data-theme="dark"] .message-action-menu,
+body.dark-mode .message-action-menu {
+    background: #0a1a29;
+    border-color: rgba(138, 210, 255, 0.14);
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.34);
+}
+
+html[data-theme="dark"] .message-action-menu button,
+body[data-theme="dark"] .message-action-menu button,
+body.dark-mode .message-action-menu button {
+    color: #c9dbea;
+}
+
+html[data-theme="dark"] .message-action-menu button:hover,
+html[data-theme="dark"] .message-action-menu button:focus-visible,
+body[data-theme="dark"] .message-action-menu button:hover,
+body[data-theme="dark"] .message-action-menu button:focus-visible,
+body.dark-mode .message-action-menu button:hover,
+body.dark-mode .message-action-menu button:focus-visible {
+    background: rgba(56, 189, 248, 0.1);
+    color: #8fd3ff;
+}
+
+html[data-theme="dark"] .message-action-menu button.is-danger,
+body[data-theme="dark"] .message-action-menu button.is-danger,
+body.dark-mode .message-action-menu button.is-danger {
+    color: #ff9ca5;
+}
+
+html[data-theme="dark"] .message-action-menu button.is-danger:hover,
+html[data-theme="dark"] .message-action-menu button.is-danger:focus-visible,
+body[data-theme="dark"] .message-action-menu button.is-danger:hover,
+body[data-theme="dark"] .message-action-menu button.is-danger:focus-visible,
+body.dark-mode .message-action-menu button.is-danger:hover,
+body.dark-mode .message-action-menu button.is-danger:focus-visible {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ffb8bf;
+}
+
+html[data-theme="dark"] .message-context,
+body[data-theme="dark"] .message-context,
+body.dark-mode .message-context,
+html[data-theme="dark"] .message-meta,
+body[data-theme="dark"] .message-meta,
+body.dark-mode .message-meta {
+    color: #7892a8;
+}
+
+html[data-theme="dark"] .message-reply-reference,
+body[data-theme="dark"] .message-reply-reference,
+body.dark-mode .message-reply-reference {
+    border-left-color: rgba(125, 211, 252, 0.34);
+}
+
+html[data-theme="dark"] .message-context-icon,
+body[data-theme="dark"] .message-context-icon,
+body.dark-mode .message-context-icon {
+    background: rgba(56, 189, 248, 0.1);
+    color: #7dd3fc;
+}
+
+html[data-theme="dark"] .message-reply-copy strong,
+body[data-theme="dark"] .message-reply-copy strong,
+body.dark-mode .message-reply-copy strong {
+    color: #a9c0d3;
+}
+
+html[data-theme="dark"] .message-reply-copy > span,
+body[data-theme="dark"] .message-reply-copy > span,
+body.dark-mode .message-reply-copy > span {
+    color: #7892a8;
+}
+
+html[data-theme="dark"] .message.sent.is-unsent,
+html[data-theme="dark"] .message.received.is-unsent,
+body[data-theme="dark"] .message.sent.is-unsent,
+body[data-theme="dark"] .message.received.is-unsent,
+body.dark-mode .message.sent.is-unsent,
+body.dark-mode .message.received.is-unsent {
+    background: rgba(14, 34, 52, 0.82);
+    border-color: rgba(138, 210, 255, 0.18);
+    color: #91a9bd;
+}
+
+html[data-theme="dark"] .chat-composer-context,
+body[data-theme="dark"] .chat-composer-context,
+body.dark-mode .chat-composer-context {
+    background: rgba(12, 35, 53, 0.94);
+    border-color: rgba(138, 210, 255, 0.12);
+}
+
+html[data-theme="dark"] .chat-composer-context-icon,
+body[data-theme="dark"] .chat-composer-context-icon,
+body.dark-mode .chat-composer-context-icon {
+    background: rgba(56, 189, 248, 0.12);
+    color: #8fd3ff;
+}
+
+html[data-theme="dark"] .chat-composer-context-copy strong,
+body[data-theme="dark"] .chat-composer-context-copy strong,
+body.dark-mode .chat-composer-context-copy strong {
+    color: #d8e6f3;
+}
+
+html[data-theme="dark"] .chat-composer-context-copy small,
+body[data-theme="dark"] .chat-composer-context-copy small,
+body.dark-mode .chat-composer-context-copy small,
+html[data-theme="dark"] .chat-composer-context-close,
+body[data-theme="dark"] .chat-composer-context-close,
+body.dark-mode .chat-composer-context-close {
+    color: #91a9bd;
+}
+
+html[data-theme="dark"] .chat-forward-search,
+body[data-theme="dark"] .chat-forward-search,
+body.dark-mode .chat-forward-search {
+    border-color: rgba(138, 210, 255, 0.16);
+}
+
+html[data-theme="dark"] .chat-forward-target,
+body[data-theme="dark"] .chat-forward-target,
+body.dark-mode .chat-forward-target {
+    color: #d8e6f3;
+}
+
+html[data-theme="dark"] .chat-forward-target:hover,
+html[data-theme="dark"] .chat-forward-target:focus-visible,
+body[data-theme="dark"] .chat-forward-target:hover,
+body[data-theme="dark"] .chat-forward-target:focus-visible,
+body.dark-mode .chat-forward-target:hover,
+body.dark-mode .chat-forward-target:focus-visible {
+    background: rgba(56, 189, 248, 0.1);
+}
+
+html[data-theme="dark"] .chat-forward-target-copy small,
+body[data-theme="dark"] .chat-forward-target-copy small,
+body.dark-mode .chat-forward-target-copy small,
+html[data-theme="dark"] .chat-forward-section-label,
+body[data-theme="dark"] .chat-forward-section-label,
+body.dark-mode .chat-forward-section-label {
+    color: #8ba4b9;
+}
+
 html[data-theme="dark"] .message.system,
 body[data-theme="dark"] .message.system,
 body.dark-mode .message.system {
@@ -1687,6 +1831,15 @@ html[data-theme="dark"] .group-member-search .form-control::placeholder,
 body[data-theme="dark"] .group-member-search .form-control::placeholder,
 body.dark-mode .group-member-search .form-control::placeholder {
     color: #90aeca !important;
+}
+
+html[data-theme="dark"] .chat-forward-modal .chat-forward-search .form-control,
+body[data-theme="dark"] .chat-forward-modal .chat-forward-search .form-control,
+body.dark-mode .chat-forward-modal .chat-forward-search .form-control {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
 }
 
 html[data-theme="dark"] .group-member-picker,

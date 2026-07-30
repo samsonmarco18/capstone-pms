@@ -48,7 +48,7 @@ function userPreferenceEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): v
 function userPreferencesFromUser(?array $user): array
 {
     $preferences = userPreferenceDefaults();
-    if (!$user || strtolower((string) ($user['role'] ?? '')) === 'admin') {
+    if (!$user) {
         return $preferences;
     }
 

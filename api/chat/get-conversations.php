@@ -23,6 +23,9 @@ try {
     if (!ensureChatGroupReadTracking($conn)) {
         throw new RuntimeException('Group message read tracking is unavailable.');
     }
+    if (!ensureChatMessageActions($conn)) {
+        throw new RuntimeException('Message actions are unavailable.');
+    }
 
     $usersStmt = $conn->prepare(
         'SELECT id, full_name, role, email
@@ -46,7 +49,7 @@ try {
     }
 
     $lastDirectMessageStmt = $conn->prepare(
-        'SELECT m.message, m.created_at
+        'SELECT m.message, m.created_at, m.deleted_at
          FROM messages m
          WHERE ((m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?))
          ORDER BY m.created_at DESC
@@ -90,7 +93,9 @@ try {
             'subtitle' => getRoleDisplayName((string) ($row['role'] ?? '')),
             'role' => (string) ($row['role'] ?? ''),
             'email' => (string) ($row['email'] ?? ''),
-            'last_message' => (string) ($lastMessageRow['message'] ?? 'No messages yet.'),
+            'last_message' => !empty($lastMessageRow['deleted_at'])
+                ? 'Message unsent'
+                : (string) ($lastMessageRow['message'] ?? 'No messages yet.'),
             'last_message_at' => $lastMessageRow['created_at'] ?? null,
             'unread_count' => (int) ($unreadRow['unread_count'] ?? 0),
         ];
@@ -121,7 +126,7 @@ try {
     }
 
     $lastGroupMessageStmt = $conn->prepare(
-        'SELECT message, created_at
+        'SELECT message, created_at, deleted_at
          FROM messages
          WHERE group_id = ?
          ORDER BY created_at DESC
@@ -181,7 +186,9 @@ try {
             'name' => (string) ($row['name'] ?? ''),
             'subtitle' => ((int) ($groupMemberCountRow['member_count'] ?? 0)) . ' members',
             'description' => (string) ($row['description'] ?? ''),
-            'last_message' => (string) ($lastGroupMessageRow['message'] ?? 'No group messages yet.'),
+            'last_message' => !empty($lastGroupMessageRow['deleted_at'])
+                ? 'Message unsent'
+                : (string) ($lastGroupMessageRow['message'] ?? 'No group messages yet.'),
             'last_message_at' => $lastGroupMessageRow['created_at'] ?? null,
             'member_count' => (int) ($groupMemberCountRow['member_count'] ?? 0),
             'unread_count' => (int) ($unreadGroupRow['unread_count'] ?? 0),
