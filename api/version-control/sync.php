@@ -305,6 +305,14 @@ try {
         $result = vcSyncHandleGenericPayload($conn, $repository, $payload);
     }
 
+    if (is_dir(vcGetRepositoryBarePath((string) ($repository['slug'] ?? '')))) {
+        vcSaveRepositorySnapshot(
+            $conn,
+            (int) $repository['id'],
+            (string) $repository['slug']
+        );
+    }
+
     vcSyncRespond(200, [
         'success' => true,
         'repository_id' => (int) $repository['id'],

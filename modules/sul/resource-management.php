@@ -60,11 +60,31 @@ $developers = sulQueryRows($conn, "
 
 // Get available developers (not already in SUL's team)
 $availableDevelopers = sulQueryRows($conn, "
-    SELECT u.id, u.full_name, u.email, u.department
+    SELECT u.id, u.full_name, u.email, u.department,
+           COALESCE(u.availability_status, 'available') AS availability_status,
+           COALESCE(u.max_concurrent_tasks, 5) AS max_concurrent_tasks
     FROM users u
     WHERE u.role = 'developer' AND u.status = 'active'{$resourceDepartmentFilter}
     ORDER BY u.full_name
 ", 'availableDevelopers');
+
+$reallocationTaskDepartmentFilter = projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true);
+$reallocationProjectDepartmentFilter = projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment);
+$reallocationUserDepartmentFilter = projectWorkflowUserDepartmentClause($conn, 'source_user', $sulDepartment);
+$reallocationTasks = sulQueryRows($conn, "
+    SELECT t.id, t.assigned_to, t.title, t.status, t.priority, t.deadline,
+           p.name AS project_name
+    FROM tasks t
+    INNER JOIN projects p ON p.id = t.project_id
+    INNER JOIN users source_user ON source_user.id = t.assigned_to
+    WHERE source_user.role = 'developer'
+      AND source_user.status = 'active'
+      AND {$reallocationUserDepartmentFilter}
+      AND {$reallocationTaskDepartmentFilter}
+      AND {$reallocationProjectDepartmentFilter}
+      AND t.status NOT IN ('completed', 'merged', 'ready_for_release')
+    ORDER BY source_user.full_name, p.name, t.priority DESC, t.deadline ASC, t.id ASC
+", 'reallocationTasks');
 
 // Handle resource updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -106,28 +126,154 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    if (isset($_POST['add_resource'])) {
-        $userId = (int) $_POST['user_id'];
-        $role = $_POST['role'];
+    if (isset($_POST['reallocate_resources'])) {
+        $sourceDeveloperId = (int) ($_POST['source_developer_id'] ?? 0);
+        $destinationDeveloperId = (int) ($_POST['destination_developer_id'] ?? 0);
+        $taskIds = array_values(array_unique(array_filter(
+            array_map('intval', (array) ($_POST['task_ids'] ?? [])),
+            static fn(int $taskId): bool => $taskId > 0
+        )));
 
-        if ($role !== 'developer') {
-            $_SESSION['error'] = "Invalid role selected";
-        } else {
-            // Check if user exists and is the correct role
-            $stmt = $conn->prepare("SELECT id, full_name, role FROM users WHERE id = ? AND role = ? AND status = 'active'{$resourceDepartmentWhere}");
-            $stmt->bind_param("is", $userId, $role);
-            $stmt->execute();
-            $existingUser = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-
-            if (!$existingUser) {
-                $_SESSION['error'] = "Selected user not found or not available";
-            } else {
-                // Check if user is already in SUL's team (you might want to add a team assignment table)
-                // For now, just log the assignment
-                logActivity($user['id'], 'assign_resource_to_team', 'users', $userId, null, ['assigned_by_sul' => $user['id'], 'role' => $role]);
-                $_SESSION['success'] = ucfirst($role) . " " . htmlspecialchars($existingUser['full_name']) . " has been assigned to your team";
+        try {
+            if ($sourceDeveloperId <= 0 || $destinationDeveloperId <= 0 || $sourceDeveloperId === $destinationDeveloperId) {
+                throw new RuntimeException('Choose different source and destination developers.');
             }
+            if ($taskIds === []) {
+                throw new RuntimeException('Select at least one task to reallocate.');
+            }
+
+            $developerStmt = $conn->prepare(
+                "SELECT id, full_name, COALESCE(availability_status, 'available') AS availability_status,
+                        COALESCE(max_concurrent_tasks, 5) AS max_concurrent_tasks
+                 FROM users
+                 WHERE id IN (?, ?) AND role = 'developer' AND status = 'active'{$resourceDepartmentWhere}"
+            );
+            $developerStmt->bind_param('ii', $sourceDeveloperId, $destinationDeveloperId);
+            $developerStmt->execute();
+            $developerRows = $developerStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $developerStmt->close();
+            $developersById = [];
+            foreach ($developerRows as $developerRow) {
+                $developersById[(int) $developerRow['id']] = $developerRow;
+            }
+            $sourceDeveloper = $developersById[$sourceDeveloperId] ?? null;
+            $destinationDeveloper = $developersById[$destinationDeveloperId] ?? null;
+            if (!$sourceDeveloper || !$destinationDeveloper) {
+                throw new RuntimeException('Both developers must be active members of your department.');
+            }
+            if (in_array((string) $destinationDeveloper['availability_status'], ['on_leave', 'sick', 'unavailable'], true)) {
+                throw new RuntimeException('The destination developer is currently unavailable.');
+            }
+
+            $taskIdList = implode(',', $taskIds);
+            $taskScopeUserFilter = projectWorkflowUserDepartmentClause($conn, 'source_user', $sulDepartment);
+            $taskRows = sulQueryRows($conn, "
+                SELECT t.id, t.title
+                FROM tasks t
+                INNER JOIN projects p ON p.id = t.project_id
+                INNER JOIN users source_user ON source_user.id = t.assigned_to
+                WHERE t.id IN ({$taskIdList})
+                  AND t.assigned_to = {$sourceDeveloperId}
+                  AND t.status NOT IN ('completed', 'merged', 'ready_for_release')
+                  AND {$taskScopeUserFilter}
+                  AND {$reallocationTaskDepartmentFilter}
+                  AND {$reallocationProjectDepartmentFilter}
+            ", 'reallocationValidation');
+            if (count($taskRows) !== count($taskIds)) {
+                throw new RuntimeException('One or more selected tasks are no longer eligible for reallocation.');
+            }
+
+            $capacityStmt = $conn->prepare(
+                "SELECT COUNT(*) AS active_tasks
+                 FROM tasks
+                 WHERE assigned_to = ? AND status NOT IN ('completed', 'merged', 'ready_for_release')"
+            );
+            $capacityStmt->bind_param('i', $destinationDeveloperId);
+            $capacityStmt->execute();
+            $destinationActiveTasks = (int) ($capacityStmt->get_result()->fetch_assoc()['active_tasks'] ?? 0);
+            $capacityStmt->close();
+            $destinationCapacity = max(1, (int) $destinationDeveloper['max_concurrent_tasks']);
+            if ($destinationActiveTasks + count($taskIds) > $destinationCapacity) {
+                throw new RuntimeException(
+                    $destinationDeveloper['full_name'] . ' only has capacity for '
+                    . max(0, $destinationCapacity - $destinationActiveTasks) . ' additional task(s).'
+                );
+            }
+
+            $conn->begin_transaction();
+            try {
+                $updateTaskStmt = $conn->prepare(
+                    'UPDATE tasks SET assigned_to = ?, assigned_by = ?, updated_at = NOW()
+                     WHERE id = ? AND assigned_to = ?'
+                );
+                foreach ($taskIds as $taskId) {
+                    $updateTaskStmt->bind_param(
+                        'iiii',
+                        $destinationDeveloperId,
+                        $user['id'],
+                        $taskId,
+                        $sourceDeveloperId
+                    );
+                    $updateTaskStmt->execute();
+                    if ($conn->affected_rows !== 1) {
+                        throw new RuntimeException('A selected task changed while reallocation was being saved.');
+                    }
+                }
+                $updateTaskStmt->close();
+
+                if (dbTableExists($conn, 'methodology_tasks') && dbColumnExists($conn, 'methodology_tasks', 'assigned_developer_id')) {
+                    $roadmapStmt = $conn->prepare(
+                        'UPDATE methodology_tasks
+                         SET assigned_developer_id = ?, updated_by = ?, updated_at = NOW()
+                         WHERE task_id = ?'
+                    );
+                    foreach ($taskIds as $taskId) {
+                        $roadmapStmt->bind_param('iii', $destinationDeveloperId, $user['id'], $taskId);
+                        $roadmapStmt->execute();
+                    }
+                    $roadmapStmt->close();
+                }
+
+                if (
+                    dbTableExists($conn, 'methodology_task_departments')
+                    && dbColumnExists($conn, 'methodology_task_departments', 'assigned_developer_id')
+                    && dbColumnExists($conn, 'methodology_task_departments', 'workflow_task_id')
+                ) {
+                    $departmentRoadmapStmt = $conn->prepare(
+                        'UPDATE methodology_task_departments
+                         SET assigned_developer_id = ?, updated_by = ?, updated_at = NOW()
+                         WHERE workflow_task_id = ?'
+                    );
+                    foreach ($taskIds as $taskId) {
+                        $departmentRoadmapStmt->bind_param('iii', $destinationDeveloperId, $user['id'], $taskId);
+                        $departmentRoadmapStmt->execute();
+                    }
+                    $departmentRoadmapStmt->close();
+                }
+
+                logActivity(
+                    $user['id'],
+                    'reallocate_developer_tasks',
+                    'tasks',
+                    $taskIds[0],
+                    ['assigned_to' => $sourceDeveloperId],
+                    [
+                        'assigned_to' => $destinationDeveloperId,
+                        'task_ids' => $taskIds,
+                        'source_developer' => $sourceDeveloper['full_name'],
+                        'destination_developer' => $destinationDeveloper['full_name'],
+                    ]
+                );
+                $conn->commit();
+            } catch (Throwable $transactionError) {
+                $conn->rollback();
+                throw $transactionError;
+            }
+
+            $_SESSION['success'] = count($taskIds) . ' task(s) reallocated from '
+                . $sourceDeveloper['full_name'] . ' to ' . $destinationDeveloper['full_name'] . '.';
+        } catch (Throwable $reallocationError) {
+            $_SESSION['error'] = $reallocationError->getMessage();
         }
         header('Location: resource-management.php');
         exit();
@@ -947,7 +1093,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                 </div>
             </div>
             <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#addDeveloperModal">
-                <i class="fas fa-user-plus" aria-hidden="true"></i>Assign Developer
+                <i class="fas fa-people-arrows" aria-hidden="true"></i>Reallocation
             </button>
         </div>
         <div class="card-body">
@@ -1030,35 +1176,59 @@ unset($_SESSION['success'], $_SESSION['error']);
 
 </div>
 
-<!-- Add Developer Modal -->
+<!-- Developer Reallocation Modal -->
 <div class="modal fade modal-modern" id="addDeveloperModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-code me-2"></i>Assign Developer to Team</h5>
+                <h5 class="modal-title"><i class="fas fa-people-arrows me-2"></i>Developer Reallocation</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" id="reallocationForm">
                 <div class="modal-body">
-                    <input type="hidden" name="role" value="developer">
                     <div class="mb-3">
-                        <label class="form-label">Select Developer</label>
-                            <select name="user_id" class="form-select" required>
-                                <option value="">Choose a developer...</option>
+                        <label class="form-label" for="reallocation_source">From Developer</label>
+                        <select name="source_developer_id" id="reallocation_source" class="form-select" required>
+                            <option value="">Choose the current developer...</option>
                             <?php foreach ($availableDevelopers as $dev): ?>
                                 <option value="<?php echo $dev['id']; ?>">
                                     <?php echo htmlspecialchars($dev['full_name']); ?> 
                                     (<?php echo htmlspecialchars($dev['email']); ?>)
-                                    <?php if($dev['department']): ?> - <?php echo htmlspecialchars($dev['department']); ?><?php endif; ?>
                                 </option>
                             <?php endforeach; ?>
-                            </select>
-                        <small class="text-muted">Only developers created by admin are available for assignment</small>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tasks to Reallocate</label>
+                        <div id="reallocation_task_list" class="border rounded p-3" style="max-height: 240px; overflow-y: auto;">
+                            <p class="text-muted mb-0">Select a source developer to view eligible tasks.</p>
+                        </div>
+                        <small class="text-muted"><span id="reallocation_task_count">0</span> task(s) selected</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="reallocation_destination">To Developer</label>
+                        <select name="destination_developer_id" id="reallocation_destination" class="form-select" required disabled>
+                            <option value="">Choose the destination developer...</option>
+                            <?php foreach ($availableDevelopers as $dev): ?>
+                                <option
+                                    value="<?php echo $dev['id']; ?>"
+                                    data-availability="<?php echo htmlspecialchars((string) $dev['availability_status']); ?>"
+                                    data-capacity="<?php echo (int) $dev['max_concurrent_tasks']; ?>"
+                                >
+                                    <?php echo htmlspecialchars($dev['full_name']); ?>
+                                    — <?php echo htmlspecialchars(ucwords(str_replace('_', ' ', (string) $dev['availability_status']))); ?>
+                                    (capacity <?php echo (int) $dev['max_concurrent_tasks']; ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="text-muted">Unavailable developers and the current owner cannot be selected.</small>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-secondary-modern" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="add_resource" class="btn-primary-modern">Assign Developer</button>
+                    <button type="submit" name="reallocate_resources" id="reallocation_submit" class="btn-primary-modern" disabled>
+                        Reallocate Selected Tasks
+                    </button>
                 </div>
             </form>
         </div>
@@ -1122,6 +1292,57 @@ unset($_SESSION['success'], $_SESSION['error']);
 </div>
 
 <script>
+const reallocationTasks = <?php echo json_encode($reallocationTasks, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+
+function refreshReallocationForm() {
+    const source = document.getElementById('reallocation_source');
+    const destination = document.getElementById('reallocation_destination');
+    const taskList = document.getElementById('reallocation_task_list');
+    const sourceId = Number(source.value || 0);
+    const eligibleTasks = reallocationTasks.filter(task => Number(task.assigned_to) === sourceId);
+
+    destination.disabled = sourceId <= 0;
+    destination.value = '';
+    Array.from(destination.options).forEach(option => {
+        if (!option.value) return;
+        const unavailable = ['on_leave', 'sick', 'unavailable'].includes(option.dataset.availability || '');
+        option.disabled = Number(option.value) === sourceId || unavailable;
+    });
+
+    if (sourceId <= 0) {
+        taskList.innerHTML = '<p class="text-muted mb-0">Select a source developer to view eligible tasks.</p>';
+    } else if (eligibleTasks.length === 0) {
+        taskList.innerHTML = '<p class="text-muted mb-0">This developer has no eligible active tasks.</p>';
+    } else {
+        taskList.innerHTML = eligibleTasks.map(task => {
+            const meta = [task.project_name, task.priority, String(task.status || '').replaceAll('_', ' ')].filter(Boolean).join(' • ');
+            return `
+                <label class="d-flex align-items-start gap-2 py-2 border-bottom">
+                    <input type="checkbox" class="form-check-input reallocation-task-checkbox" name="task_ids[]" value="${Number(task.id)}">
+                    <span>
+                        <strong class="d-block">${escapeHtml(task.title || '')}</strong>
+                        <small class="text-muted">${escapeHtml(meta)}</small>
+                    </span>
+                </label>
+            `;
+        }).join('');
+    }
+    refreshReallocationSelection();
+}
+
+function refreshReallocationSelection() {
+    const selectedCount = document.querySelectorAll('.reallocation-task-checkbox:checked').length;
+    const sourceId = Number(document.getElementById('reallocation_source').value || 0);
+    const destinationId = Number(document.getElementById('reallocation_destination').value || 0);
+    document.getElementById('reallocation_task_count').textContent = String(selectedCount);
+    document.getElementById('reallocation_submit').disabled =
+        selectedCount === 0 || sourceId <= 0 || destinationId <= 0 || sourceId === destinationId;
+}
+
+document.getElementById('reallocation_source').addEventListener('change', refreshReallocationForm);
+document.getElementById('reallocation_destination').addEventListener('change', refreshReallocationSelection);
+document.getElementById('reallocation_task_list').addEventListener('change', refreshReallocationSelection);
+
 function editAllocation(userId, userName, currentTasks) {
     document.getElementById('alloc_user_id').value = userId;
     document.getElementById('alloc_user_name').textContent = userName;
