@@ -189,6 +189,7 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
             throw new RuntimeException('Project not found.');
         }
 
+        vcEnsureRepositorySnapshotSchema($conn);
         $conn->begin_transaction();
         $managedRepository = null;
         try {
@@ -330,6 +331,7 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
 
             vcLogOperation($conn, $repositoryId, $branchId, null, (int) $user['id'], 'create_repository', null, null, ['project_id' => $projectId]);
             logActivity((int) $user['id'], 'create_repository', 'project_repositories', $repositoryId, null, ['project_id' => $projectId, 'name' => $name]);
+            vcSaveRepositorySnapshot($conn, $repositoryId, $slug);
             $conn->commit();
 
             return ['project_id' => $projectId, 'repository_id' => $repositoryId, 'message' => 'Repository and working folder created successfully.'];
@@ -696,6 +698,8 @@ function vcHandlePostAction(mysqli|PgsqlMysqliCompatConnection $conn, array $use
 
         $mergeTitle = $summary !== '' ? $summary : 'Merge ' . $sourceBranch['name'] . ' into ' . $targetBranch['name'];
         $gitMerge = vcMergeManagedBranches(
+            $conn,
+            $repository,
             (string) ($repository['slug'] ?? ''),
             (string) $sourceBranch['name'],
             (string) $targetBranch['name'],

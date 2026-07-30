@@ -4,6 +4,7 @@ set -eu
 GIT_HTTP_BACKEND_BIN="${GIT_HTTP_BACKEND_BIN:-/usr/lib/git-core/git-http-backend}"
 APP_ROOT="${APP_ROOT:-/var/www/html}"
 AUTH_HELPER="${APP_ROOT}/bin/git-http-auth.php"
+RESTORE_HELPER="${APP_ROOT}/bin/git-repository-restore.php"
 PATH_INFO_VALUE="${PATH_INFO:-}"
 QUERY_STRING_VALUE="${QUERY_STRING:-}"
 PROJECT_ROOT="${GIT_PROJECT_ROOT:-${APP_ROOT}/git}"
@@ -28,6 +29,9 @@ if [ -z "$repo_path_part" ] || [ -z "$repo_slug" ]; then
 fi
 
 repo_dir="${PROJECT_ROOT}/${repo_slug}.git"
+if [ ! -d "$repo_dir" ] && [ -f "$RESTORE_HELPER" ]; then
+    php "$RESTORE_HELPER" "$repo_slug" >/dev/null 2>&1 || true
+fi
 if [ ! -d "$repo_dir" ]; then
     echo "Status: 404 Not Found"
     echo "Content-Type: text/plain"
