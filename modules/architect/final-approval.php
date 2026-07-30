@@ -1145,7 +1145,14 @@ body.reopen-drawer-open {
         <?php elseif($readyTasks && $readyTaskCount > 0): ?>
             <div class="merge-task-list">
                 <?php while($task = $readyTasks->fetch_assoc()): ?>
-                    <form method="POST" class="merge-task-card" data-generic-draft-disabled="1" data-confirm-skip="1">
+                    <form
+                        method="POST"
+                        class="merge-task-card"
+                        data-generic-draft-disabled="1"
+                        data-confirm-skip="1"
+                        data-merge-title="<?php echo htmlspecialchars((string) $task['title']); ?>"
+                        data-merge-branch="<?php echo htmlspecialchars((string) ($task['branch_name'] ?? 'feature branch')); ?>"
+                    >
                         <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
                         <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
                         <div class="merge-task-summary">
@@ -1299,6 +1306,44 @@ document.addEventListener('DOMContentLoaded', function () {
             window.location.assign(url.toString());
         });
     }
+
+    document.querySelectorAll('.merge-task-card').forEach(function (form) {
+        form.addEventListener('submit', async function (event) {
+            if (form.dataset.mergeConfirmed === '1') {
+                form.dataset.mergeConfirmed = '0';
+                return;
+            }
+
+            event.preventDefault();
+            const submitButton = event.submitter || form.querySelector('button[name="merge_task"]');
+            const featureTitle = form.dataset.mergeTitle || 'this feature';
+            const branchName = form.dataset.mergeBranch || 'the feature branch';
+            const confirmed = typeof window.appConfirm === 'function'
+                ? await window.appConfirm({
+                    title: 'Confirm Merge to Main',
+                    subject: 'Merge “' + featureTitle + '”?',
+                    message: 'This will merge branch “' + branchName + '” into main, complete the task, and notify Sales and the developer.',
+                    icon: 'fas fa-code-merge fa-lg',
+                    confirmIcon: 'fas fa-code-merge',
+                    confirmText: 'Merge to Main',
+                    variant: 'success'
+                })
+                : window.confirm(
+                    'Merge “' + featureTitle + '” from “' + branchName + '” into main?'
+                );
+
+            if (!confirmed) {
+                return;
+            }
+
+            form.dataset.mergeConfirmed = '1';
+            if (submitButton && submitButton.form === form) {
+                form.requestSubmit(submitButton);
+            } else {
+                form.requestSubmit();
+            }
+        });
+    });
 
     const openDrawer = function () {
         if (!drawerShell || !drawer) return;
