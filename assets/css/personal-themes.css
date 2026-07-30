@@ -2191,3 +2191,72 @@ html[data-app-theme="futuristic"] #page-content-wrapper :is(#assignExpertModal, 
 ) {
     color: #eef3ff !important;
 }
+
+/* Default keeps the application's native component artwork but has no
+   full-page wallpaper. */
+html:not([data-app-theme]) body {
+    background-image: none !important;
+}
+
+html:not([data-app-theme]) body::before {
+    content: none !important;
+    background-image: none !important;
+}
+
+/* A visual theme must never create a stacking context around page modals.
+   Bootstrap dialogs in several role modules live inside this wrapper; an
+   isolated wrapper leaves them behind the body-level modal backdrop. */
+html[data-app-theme] #page-content-wrapper {
+    isolation: auto !important;
+}
+
+html[data-app-theme] #page-content-wrapper > :is(
+    .container,
+    .container-fluid,
+    main,
+    .page-content,
+    .content-wrapper
+) {
+    z-index: auto;
+}
+
+/* Use the purple/cyan neon artwork in both modes. The blue v2 image belongs
+   to the generic dark treatment and is not the Futuristic Neon skin. */
+html[data-theme="dark"][data-app-theme="futuristic"] body,
+html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper {
+    background-image:
+        linear-gradient(rgba(3, 8, 28, 0.34), rgba(5, 9, 31, 0.62)),
+        url("../img/themes/futuristic-circuit-background.png") !important;
+    background-position: center top !important;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] body::before {
+    content: none !important;
+    background-image: none !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #page-content-wrapper {
+    background-image:
+        linear-gradient(rgba(3, 23, 31, 0.72), rgba(4, 31, 39, 0.82)),
+        url("../img/themes/tropical-coast-background.png") !important;
+    background-position: center top !important;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] body::before {
+    content: none !important;
+    background-image: none !important;
+}
+
+/* Decorative theme layers never receive clicks. This remains deliberately
+   global so the same safeguard applies to every role dashboard and workflow. */
+html[data-app-theme] body::before,
+html[data-app-theme] #page-content-wrapper::before,
+html[data-app-theme] #page-content-wrapper::after,
+html[data-app-theme] .role-dashboard-hero::before,
+html[data-app-theme] .role-dashboard-hero::after {
+    pointer-events: none !important;
+}

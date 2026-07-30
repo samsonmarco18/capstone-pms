@@ -5,7 +5,7 @@ $appFaviconPath = __DIR__ . '/../assets/img/logoInside.png';
 $appFaviconVersion = file_exists($appFaviconPath) ? (string) filemtime($appFaviconPath) : '1';
 $headerUser = isset($user) && is_array($user) ? $user : (isLoggedIn() ? getCurrentUser() : null);
 $headerPreferences = userPreferencesFromUser($headerUser);
-$headerThemePreference = (string) ($headerPreferences['theme_preference'] ?? 'tropical');
+$headerThemePreference = (string) ($headerPreferences['theme_preference'] ?? 'default');
 $headerThemeAccentOptions = [
     'tropical' => [
         'primary' => '#0797b5',
@@ -42,10 +42,10 @@ $headerAccent = $headerThemeAccentOptions[$headerThemePreference]
             'dateFormat' => (string) $headerPreferences['date_format'],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
         (() => {
-            const savedThemePreference = window.APP_USER_PREFERENCES.theme || 'tropical';
+            const savedThemePreference = window.APP_USER_PREFERENCES.theme || 'default';
             const visualTheme = ['tropical', 'futuristic'].includes(savedThemePreference)
                 ? savedThemePreference
-                : 'tropical';
+                : '';
             let localColorMode = '';
             try {
                 const localTheme = window.localStorage.getItem('theme');

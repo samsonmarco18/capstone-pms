@@ -459,8 +459,8 @@ function setStoredSidebarValue(key, value) {
 function initDarkMode() {
     const root = $('html');
     const body = $('body');
-    const serverPreference = String(window.APP_USER_PREFERENCES?.theme || 'tropical');
-    const visualTheme = ['tropical', 'futuristic'].includes(serverPreference) ? serverPreference : 'tropical';
+    const serverPreference = String(window.APP_USER_PREFERENCES?.theme || 'default');
+    const visualTheme = ['tropical', 'futuristic'].includes(serverPreference) ? serverPreference : '';
     let colorMode = '';
 
     try {

@@ -4,7 +4,7 @@ declare(strict_types=1);
 function userPreferenceDefaults(): array
 {
     return [
-        'theme_preference' => 'tropical',
+        'theme_preference' => 'default',
         'accent_color' => 'blue',
         'evortix_enabled' => 1,
         'evortix_suggestions' => 1,
@@ -22,7 +22,7 @@ function userPreferenceDefaults(): array
 function userPreferenceEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
 {
     $columns = [
-        'theme_preference' => "VARCHAR(20) DEFAULT 'system'",
+        'theme_preference' => "VARCHAR(20) DEFAULT 'default'",
         'accent_color' => "VARCHAR(20) DEFAULT 'blue'",
         'evortix_enabled' => 'SMALLINT DEFAULT 1',
         'evortix_suggestions' => 'SMALLINT DEFAULT 1',
@@ -71,10 +71,10 @@ function userPreferencesFromUser(?array $user): array
         $preferences[$integerKey] = (int) $preferences[$integerKey];
     }
 
-    // Light/dark is controlled by the navbar. Migrate the retired appearance
-    // choices to the Tropical skin so every account has a real visual theme.
-    if (!in_array((string) $preferences['theme_preference'], ['tropical', 'futuristic'], true)) {
-        $preferences['theme_preference'] = 'tropical';
+    // Light/dark is controlled by the navbar. Retired appearance choices map
+    // to the wallpaper-free Default skin.
+    if (!in_array((string) $preferences['theme_preference'], ['default', 'tropical', 'futuristic'], true)) {
+        $preferences['theme_preference'] = 'default';
     }
 
     return $preferences;
@@ -83,6 +83,7 @@ function userPreferencesFromUser(?array $user): array
 function userPreferenceThemeOptions(): array
 {
     return [
+        'default' => 'Default',
         'tropical' => 'Tropical Coast',
         'futuristic' => 'Futuristic Neon',
     ];
