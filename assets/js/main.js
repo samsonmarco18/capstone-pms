@@ -459,8 +459,8 @@ function setStoredSidebarValue(key, value) {
 function initDarkMode() {
     const root = $('html');
     const body = $('body');
-    const serverPreference = String(window.APP_USER_PREFERENCES?.theme || 'system');
-    const visualTheme = ['tropical', 'futuristic'].includes(serverPreference) ? serverPreference : '';
+    const serverPreference = String(window.APP_USER_PREFERENCES?.theme || 'tropical');
+    const visualTheme = ['tropical', 'futuristic'].includes(serverPreference) ? serverPreference : 'tropical';
     let colorMode = '';
 
     try {
@@ -468,8 +468,7 @@ function initDarkMode() {
         if (localTheme === 'light' || localTheme === 'dark') {
             colorMode = localTheme;
         } else if (localTheme === 'tropical' || localTheme === 'futuristic') {
-            colorMode = localTheme === 'futuristic' ? 'dark' : 'light';
-            localStorage.setItem('theme', colorMode);
+            localStorage.removeItem('theme');
         }
     } catch (error) {
         // Use the saved server preference when browser storage is unavailable.
@@ -479,7 +478,7 @@ function initDarkMode() {
         if (preference === 'system') {
             return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
-        return ['dark', 'futuristic'].includes(preference) ? 'dark' : 'light';
+        return preference === 'dark' ? 'dark' : 'light';
     };
     const applyTheme = theme => {
         root.attr('data-theme', theme);

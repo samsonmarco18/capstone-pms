@@ -5,7 +5,7 @@ $appFaviconPath = __DIR__ . '/../assets/img/logoInside.png';
 $appFaviconVersion = file_exists($appFaviconPath) ? (string) filemtime($appFaviconPath) : '1';
 $headerUser = isset($user) && is_array($user) ? $user : (isLoggedIn() ? getCurrentUser() : null);
 $headerPreferences = userPreferencesFromUser($headerUser);
-$headerThemePreference = (string) ($headerPreferences['theme_preference'] ?? 'system');
+$headerThemePreference = (string) ($headerPreferences['theme_preference'] ?? 'tropical');
 $headerThemeAccentOptions = [
     'tropical' => [
         'primary' => '#0797b5',
@@ -42,18 +42,17 @@ $headerAccent = $headerThemeAccentOptions[$headerThemePreference]
             'dateFormat' => (string) $headerPreferences['date_format'],
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); ?>;
         (() => {
-            const savedThemePreference = window.APP_USER_PREFERENCES.theme || 'system';
+            const savedThemePreference = window.APP_USER_PREFERENCES.theme || 'tropical';
             const visualTheme = ['tropical', 'futuristic'].includes(savedThemePreference)
                 ? savedThemePreference
-                : '';
+                : 'tropical';
             let localColorMode = '';
             try {
                 const localTheme = window.localStorage.getItem('theme');
                 if (localTheme === 'light' || localTheme === 'dark') {
                     localColorMode = localTheme;
                 } else if (localTheme === 'tropical' || localTheme === 'futuristic') {
-                    localColorMode = localTheme === 'futuristic' ? 'dark' : 'light';
-                    window.localStorage.setItem('theme', localColorMode);
+                    window.localStorage.removeItem('theme');
                 }
             } catch (error) {
                 // Use the saved server preference when browser storage is unavailable.
@@ -61,7 +60,7 @@ $headerAccent = $headerThemeAccentOptions[$headerThemePreference]
             const resolvedTheme = localColorMode || (
                 savedThemePreference === 'system'
                     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-                    : (['dark', 'futuristic'].includes(savedThemePreference) ? 'dark' : 'light')
+                    : (savedThemePreference === 'dark' ? 'dark' : 'light')
             );
             document.documentElement.setAttribute('data-theme', resolvedTheme);
             if (visualTheme) {

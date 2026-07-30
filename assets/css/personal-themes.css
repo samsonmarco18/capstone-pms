@@ -2133,3 +2133,61 @@ html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper > .ro
     background-color: transparent !important;
     background-image: none !important;
 }
+
+/* Futuristic Neon is intentionally vivid. Keep this final override after
+   module-local dashboard rules so the selected skin cannot be flattened into
+   the application's default blue treatment. */
+html[data-app-theme="futuristic"] .role-dashboard-shell {
+    --role-dashboard-primary: #a98cff;
+    --role-dashboard-surface: rgba(7, 15, 45, 0.92);
+    --role-dashboard-head: rgba(14, 22, 61, 0.96);
+    --role-dashboard-border: rgba(126, 91, 255, 0.30);
+    --role-dashboard-border-strong: rgba(84, 205, 255, 0.48);
+    --role-dashboard-card-glow: rgba(109, 74, 255, 0.18);
+    --role-dashboard-card-tint: rgba(37, 184, 255, 0.08);
+}
+
+html[data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell > .row:first-child .role-dashboard-hero,
+html[data-app-theme="futuristic"] .sales-dashboard-hero {
+    background:
+        linear-gradient(96deg, rgba(7, 13, 43, 0.98), rgba(27, 20, 82, 0.90) 55%, rgba(91, 37, 174, 0.58)),
+        url("../img/themes/futuristic-circuit-background.png") center / cover no-repeat !important;
+    border-color: rgba(139, 101, 255, 0.46) !important;
+    box-shadow: 0 0 0 1px rgba(54, 205, 255, 0.10), 0 18px 46px rgba(30, 7, 91, 0.42), 0 0 32px rgba(117, 68, 255, 0.18) !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] .role-dashboard-shell.role-dashboard-shell :is(
+    .card.card:not(.role-dashboard-hero),
+    .stat-card.stat-card,
+    .stat-card-modern.stat-card-modern,
+    .qa-stat-card.qa-stat-card,
+    .admin-stat-card,
+    .dashboard-mini-stat.dashboard-mini-stat
+) {
+    background:
+        radial-gradient(circle at 94% 4%, rgba(53, 201, 255, 0.10), transparent 27%),
+        linear-gradient(145deg, rgba(11, 24, 67, 0.97), rgba(42, 21, 96, 0.91)) !important;
+    border-color: rgba(137, 97, 255, 0.34) !important;
+    box-shadow: 0 13px 34px rgba(7, 2, 37, 0.38), 0 0 22px rgba(89, 52, 220, 0.10) !important;
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper :is(#assignExpertModal, #assignDeveloperModal) .modal-header {
+    background:
+        linear-gradient(100deg, rgba(16, 21, 66, 0.98), rgba(76, 36, 157, 0.92)),
+        url("../img/themes/futuristic-circuit-background.png") center / cover no-repeat !important;
+    border-color: rgba(98, 211, 255, 0.28) !important;
+    box-shadow: inset 0 -1px rgba(145, 104, 255, 0.28), 0 0 24px rgba(109, 74, 255, 0.16);
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper :is(#assignExpertModal, #assignDeveloperModal) .assign-expert-intro {
+    background: linear-gradient(135deg, rgba(12, 27, 72, 0.96), rgba(37, 21, 87, 0.92)) !important;
+    border-color: rgba(102, 210, 255, 0.24) !important;
+    color: #eef3ff !important;
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper :is(#assignExpertModal, #assignDeveloperModal) :is(
+    .assign-expert-intro-label,
+    .assign-expert-intro-title
+) {
+    color: #eef3ff !important;
+}

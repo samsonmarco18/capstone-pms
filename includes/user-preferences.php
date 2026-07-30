@@ -4,7 +4,7 @@ declare(strict_types=1);
 function userPreferenceDefaults(): array
 {
     return [
-        'theme_preference' => 'system',
+        'theme_preference' => 'tropical',
         'accent_color' => 'blue',
         'evortix_enabled' => 1,
         'evortix_suggestions' => 1,
@@ -71,15 +71,18 @@ function userPreferencesFromUser(?array $user): array
         $preferences[$integerKey] = (int) $preferences[$integerKey];
     }
 
+    // Light/dark is controlled by the navbar. Migrate the retired appearance
+    // choices to the Tropical skin so every account has a real visual theme.
+    if (!in_array((string) $preferences['theme_preference'], ['tropical', 'futuristic'], true)) {
+        $preferences['theme_preference'] = 'tropical';
+    }
+
     return $preferences;
 }
 
 function userPreferenceThemeOptions(): array
 {
     return [
-        'system' => 'Use device setting',
-        'light' => 'Light',
-        'dark' => 'Dark',
         'tropical' => 'Tropical Coast',
         'futuristic' => 'Futuristic Neon',
     ];

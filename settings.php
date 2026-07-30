@@ -26,12 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_preferences']) &
     $timezoneOptions = userPreferenceTimezoneOptions();
     $dateFormatOptions = userPreferenceDateFormatOptions();
 
-    $themePreference = (string) ($_POST['theme_preference'] ?? 'system');
+    $themePreference = (string) ($_POST['theme_preference'] ?? 'tropical');
     $timezone = (string) ($_POST['timezone'] ?? 'Asia/Manila');
     $dateFormat = (string) ($_POST['date_format'] ?? 'M d, Y');
 
     if (!isset($themeOptions[$themePreference])) {
-        $themePreference = 'system';
+        $themePreference = 'tropical';
     }
     if (!isset($timezoneOptions[$timezone])) {
         $timezone = 'Asia/Manila';
@@ -400,7 +400,7 @@ include 'includes/navbar.php';
 .theme-preview-grid {
     display: grid;
     gap: .85rem;
-    grid-template-columns: repeat(5, minmax(116px, 1fr));
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
 }
 
 .theme-preview-option {
@@ -851,7 +851,7 @@ include 'includes/navbar.php';
                         <div class="settings-section-body">
                             <div class="settings-field settings-theme-field">
                                 <label class="form-label" id="themePreferenceLabel" for="themePreference">Interface theme</label>
-                                <small class="settings-field-note">Choose a preview that fits your workspace.</small>
+                                <small class="settings-field-note">Choose a visual skin. Use the moon button in the navbar to switch between light and dark mode.</small>
                                 <select class="visually-hidden" id="themePreference" name="theme_preference" aria-labelledby="themePreferenceLabel">
                                     <?php foreach ($themeOptions as $value => $label): ?>
                                         <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $preferences['theme_preference'] === $value ? 'selected' : ''; ?>>
@@ -875,7 +875,7 @@ include 'includes/navbar.php';
                                             </span>
                                             <span class="theme-preview-check"><i class="fas fa-check"></i></span>
                                         </span>
-                                        <span class="theme-preview-label"><?php echo htmlspecialchars($value === 'system' ? 'Auto' : $label); ?></span>
+                                        <span class="theme-preview-label"><?php echo htmlspecialchars($label); ?></span>
                                     </button>
                                     <?php endforeach; ?>
                                 </div>
@@ -1089,7 +1089,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     themePreviewOptions.forEach(function (option) {
         option.addEventListener('click', function () {
-            selectThemePreview(option.dataset.themePreview || 'system');
+            selectThemePreview(option.dataset.themePreview || 'tropical');
         });
     });
 
@@ -1156,21 +1156,13 @@ document.addEventListener('DOMContentLoaded', function () {
 <script>
 try {
     const savedThemePreference = <?php echo json_encode((string) $preferences['theme_preference']); ?>;
-    if (savedThemePreference === 'system') {
-        window.localStorage.removeItem('theme');
-    } else if (savedThemePreference === 'tropical') {
-        window.localStorage.setItem('theme', 'light');
-    } else if (savedThemePreference === 'futuristic') {
-        window.localStorage.setItem('theme', 'dark');
-    } else {
-        window.localStorage.setItem('theme', savedThemePreference);
-    }
     const visualTheme = ['tropical', 'futuristic'].includes(savedThemePreference)
         ? savedThemePreference
-        : '';
-    const appliedTheme = savedThemePreference === 'system'
-        ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
-        : (['dark', 'futuristic'].includes(savedThemePreference) ? 'dark' : 'light');
+        : 'tropical';
+    const storedColorMode = window.localStorage.getItem('theme');
+    const appliedTheme = ['light', 'dark'].includes(storedColorMode)
+        ? storedColorMode
+        : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     document.documentElement.setAttribute('data-theme', appliedTheme);
     document.body.setAttribute('data-theme', appliedTheme);
     if (visualTheme) {
