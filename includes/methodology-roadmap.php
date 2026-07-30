@@ -421,7 +421,8 @@ function methodologyRoadmapDistributeTemplatePhases(array $project, string $temp
     }
 
     $phaseDefinitions = $templates[$templateKey]['phases'];
-    $totalWeight = max(1, array_sum(array_map(static fn(array $phase): int => max(1, (int) ($phase['weight'] ?? 1)), $phaseDefinitions)));
+    $staffedPhaseDefinitions = array_slice($phaseDefinitions, 0, max(0, count($phaseDefinitions) - 1));
+    $totalWeight = max(1, array_sum(array_map(static fn(array $phase): int => max(1, (int) ($phase['weight'] ?? 1)), $staffedPhaseDefinitions)));
     $totalDays = ((int) $projectStart->diff($projectEnd)->format('%a')) + 1;
     $phaseDurationPlan = methodologyRoadmapPhaseDurationPlan($totalDays, count($phaseDefinitions));
     $remainingDays = $totalDays;
@@ -445,8 +446,9 @@ function methodologyRoadmapDistributeTemplatePhases(array $project, string $temp
         }
 
         $phaseDeveloperCount = 0;
-        if ($remainingCapacity > 0) {
-            $remainingPhaseSlots = $phaseCount - $index;
+        $isFinalPhase = $index === $phaseCount - 1;
+        if (!$isFinalPhase && $remainingCapacity > 0) {
+            $remainingPhaseSlots = ($phaseCount - 1) - $index;
             if ($remainingPhaseSlots === 1) {
                 $phaseDeveloperCount = $remainingCapacity;
             } else {

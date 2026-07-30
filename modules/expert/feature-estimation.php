@@ -517,16 +517,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
         projectCompilationRecord($conn, $projectId, (int) $user['id'], 'estimates');
         workflowNotifyRoles(
             $conn,
-            ['sul'],
+            ['sales'],
             'Project Estimation Ready for Review',
-            'An Expert Developer submitted a project cost estimation for SUL review.',
-            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
+            'An Expert Developer submitted a project cost estimation for Sales review.',
+            BASE_URL . 'modules/sales/estimation-approval.php',
             $projectId,
             'approval',
             'projects'
         );
         logActivity((int) $user['id'], 'submit_project_estimation', 'projects', $projectId, null, $_POST);
-        $_SESSION['success'] = 'Project estimation submitted to Expert SUL for review.';
+        $_SESSION['success'] = 'Project estimation submitted to Sales for review.';
     } else {
         $_SESSION['error'] = 'Failed to submit project estimation.';
     }
@@ -589,6 +589,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
     try {
         if ($projectId <= 0 || empty($taskIds)) {
             throw new RuntimeException('No feature estimates were provided.');
+        }
+
+        foreach ($taskIds as $reviewedTaskId) {
+            $reviewedValue = (string) ($postedEstimates[$reviewedTaskId]['reviewed'] ?? '');
+            if ($reviewedValue !== '1') {
+                throw new RuntimeException('Every feature must be checked as complete before final submission.');
+            }
+        }
+
+        $assignedTaskResult = $conn->query("
+            SELECT id
+            FROM tasks
+            WHERE project_id = {$projectId}
+              AND assigned_to = " . (int) $user['id'] . "
+              AND task_type = 'feature'
+              AND status = 'todo'
+        ");
+        $requiredTaskIds = [];
+        if ($assignedTaskResult) {
+            while ($assignedTask = $assignedTaskResult->fetch_assoc()) {
+                $requiredTaskIds[] = (int) $assignedTask['id'];
+            }
+        }
+        sort($requiredTaskIds);
+        $submittedTaskIds = $taskIds;
+        sort($submittedTaskIds);
+        if ($requiredTaskIds !== $submittedTaskIds) {
+            throw new RuntimeException('All assigned feature tasks must be completed and included in the final submission.');
         }
 
         $taskResult = $conn->query("
@@ -769,15 +797,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
         $conn->commit();
         workflowNotifyRoles(
             $conn,
-            ['sul'],
-            'Feature Estimations Ready for SUL Approval',
-            $savedCount . ' feature estimates were saved and are ready for SUL review.',
-            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
+            ['sales'],
+            'Feature Estimations Ready for Sales Approval',
+            $savedCount . ' completed feature estimates were submitted for Sales review.',
+            BASE_URL . 'modules/sales/estimation-approval.php',
             $projectId,
             'approval',
             'projects'
         );
-        $_SESSION['success'] = $savedCount . ' feature estimate' . ($savedCount === 1 ? '' : 's') . ' saved successfully.';
+        $_SESSION['success'] = $savedCount . ' feature estimate' . ($savedCount === 1 ? '' : 's') . ' submitted to Sales successfully.';
     } catch (Throwable $e) {
         try {
             $conn->rollback();
@@ -2330,13 +2358,14 @@ include '../../includes/navbar.php';
     z-index: 1;
 }
 
-.feature-bulk-table th:nth-child(1) { width: 19%; }
-.feature-bulk-table th:nth-child(2) { width: 26%; }
-.feature-bulk-table th:nth-child(3),
+.feature-bulk-table th:nth-child(1) { width: 8%; }
+.feature-bulk-table th:nth-child(2) { width: 18%; }
+.feature-bulk-table th:nth-child(3) { width: 25%; }
 .feature-bulk-table th:nth-child(4),
-.feature-bulk-table th:nth-child(5) { width: 7%; }
-.feature-bulk-table th:nth-child(6) { width: 22%; }
-.feature-bulk-table th:nth-child(7) { width: 12%; }
+.feature-bulk-table th:nth-child(5),
+.feature-bulk-table th:nth-child(6) { width: 7%; }
+.feature-bulk-table th:nth-child(7) { width: 20%; }
+.feature-bulk-table th:nth-child(8) { width: 8%; }
 
 .feature-bulk-table tbody tr:last-child td {
     border-bottom: 0;
@@ -2401,11 +2430,28 @@ include '../../includes/navbar.php';
     justify-content: center;
 }
 
-.feature-bulk-table th:nth-child(6),
 .feature-bulk-table th:nth-child(7),
-.feature-bulk-table td:nth-child(6),
-.feature-bulk-table td:nth-child(7) {
+.feature-bulk-table th:nth-child(8),
+.feature-bulk-table td:nth-child(1),
+.feature-bulk-table td:nth-child(7),
+.feature-bulk-table td:nth-child(8) {
     text-align: center;
+}
+
+.feature-bulk-review-check {
+    align-items: center;
+    cursor: pointer;
+    display: inline-flex;
+    flex-direction: column;
+    font-size: 0.66rem;
+    font-weight: 700;
+    gap: 0.28rem;
+}
+
+.feature-bulk-review-check input {
+    accent-color: var(--theme-primary);
+    height: 18px;
+    width: 18px;
 }
 
 .feature-bulk-table textarea,
@@ -3668,10 +3714,8 @@ textarea.form-control-custom {
                     <?php endif; ?>
                      
                     <?php if (!$isReadonly): ?>
-                        <div class="estimate-action-row">
-                            <button type="submit" class="btn-submit">
-                                <i class="fas fa-save"></i> Save Estimation
-                            </button>
+                        <div class="text-muted small">
+                            Complete this feature in the project estimation table, check it as reviewed, then use the single Final Submit button.
                         </div>
                     <?php else: ?>
                         <div class="text-muted small">This feature has been submitted to Sales.</div>
@@ -3778,6 +3822,12 @@ function mountFeatureEstimationEditors() {
                 data-evortix-suggestion="${escapeAttribute(JSON.stringify(evortixSuggestion))}"
             >
                 <td>
+                    <label class="feature-bulk-review-check">
+                        <input type="checkbox" name="feature_estimates[${escapeAttribute(taskId)}][reviewed]" value="1" required aria-label="Confirm ${escapeAttribute(title)} is complete and reviewed">
+                        <span>Checked</span>
+                    </label>
+                </td>
+                <td>
                     <span class="feature-bulk-name">${escapeHtml(title)}</span>
                     <span class="feature-bulk-phase">${escapeHtml(phase)}</span>
                 </td>
@@ -3854,6 +3904,7 @@ function mountFeatureEstimationEditors() {
             <table class="feature-bulk-table">
                 <thead>
                     <tr>
+                        <th scope="col">Reviewed</th>
                         <th scope="col">Feature</th>
                         <th scope="col">Expectation</th>
                         <th scope="col">Min</th>
@@ -3872,8 +3923,8 @@ function mountFeatureEstimationEditors() {
                 <span>Ask Evortix for suggestions</span>
             </button>
             <button type="submit" class="feature-bulk-save-button">
-                <i class="fas fa-floppy-disk" aria-hidden="true"></i>
-                <span>Save feature estimates</span>
+                <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                <span>Final Submit to Sales</span>
             </button>
         </div>
     `;
@@ -3888,6 +3939,7 @@ function mountFeatureEstimationEditors() {
         rows.forEach((row) => {
             const expectationInput = row.querySelector('textarea');
             const numberInputs = Array.from(row.querySelectorAll('input[type="number"]'));
+            const reviewedInput = row.querySelector('input[type="checkbox"][name$="[reviewed]"]');
             const [minInput, likelyInput, maxInput] = numberInputs;
             const expectation = expectationInput?.value.trim() || '';
             const minDays = Number(minInput?.value || 0);
@@ -3896,8 +3948,9 @@ function mountFeatureEstimationEditors() {
             const hasValidEstimate = minDays >= 1
                 && minDays <= likelyDays
                 && likelyDays <= maxDays;
-            const isReady = expectation !== '' && hasValidEstimate;
-            const isChanged = [expectationInput, ...numberInputs].some((input) => {
+            const isReady = expectation !== '' && hasValidEstimate && Boolean(reviewedInput?.checked);
+            const isChanged = [expectationInput, ...numberInputs, reviewedInput].some((input) => {
+                if (input?.type === 'checkbox') return Boolean(input.checked);
                 return input && input.value !== (input.dataset.original || '');
             });
             const pert = hasValidEstimate ? (minDays + (4 * likelyDays) + maxDays) / 6 : 0;
@@ -3946,7 +3999,7 @@ function mountFeatureEstimationEditors() {
         const firstIncomplete = bulkForm.querySelector('[data-feature-bulk-row].is-incomplete');
         if (firstIncomplete) {
             event.preventDefault();
-            firstIncomplete.querySelector('textarea:invalid, input:invalid, textarea, input')?.focus();
+            firstIncomplete.querySelector('textarea:invalid, input:invalid, input[type="checkbox"]:not(:checked), textarea, input')?.focus();
             return;
         }
 
@@ -3980,13 +4033,13 @@ function mountFeatureEstimationEditors() {
             const confirmModal = document.getElementById('appConfirmModal');
             confirmModal?.classList.add('feature-estimate-confirm-modal');
             const confirmation = window.appConfirm({
-                title: 'Confirm Feature Estimates',
+                title: 'Final Feature Estimation Submission',
                 titleIcon: 'fas fa-list-check',
-                subject: `Review ${rows.length} feature estimates before saving.`,
-                message: 'Confirm the values below to save the complete feature estimation table.',
+                subject: `Submit all ${rows.length} completed feature estimates to Sales?`,
+                message: 'Every task is complete and checked. This final submission locks the estimates and sends the entire project to Sales.',
                 icon: 'fas fa-table-list',
-                confirmIcon: 'fas fa-floppy-disk',
-                confirmText: 'Save Estimates',
+                confirmIcon: 'fas fa-paper-plane',
+                confirmText: 'Final Submit to Sales',
                 cancelText: 'Continue Editing'
             });
             const message = document.getElementById('appConfirmMessage');
@@ -4009,7 +4062,7 @@ function mountFeatureEstimationEditors() {
             confirmed = await confirmation;
             confirmModal?.classList.remove('feature-estimate-confirm-modal');
         } else {
-            confirmed = window.confirm(`Save all ${rows.length} feature estimates?`);
+            confirmed = window.confirm(`Final submit all ${rows.length} feature estimates to Sales?`);
         }
         if (!confirmed) return;
 

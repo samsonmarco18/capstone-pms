@@ -990,9 +990,6 @@ $pendingEstimationAssignmentCount = count($pendingEstimationAssignmentGroups);
 
 // Get tasks ready for review (expert has submitted estimation)
 $salesApprovalFilter = $hasSalesApproval ? " AND t.sales_approved = 1" : "";
-if ($hasSalesChoice) {
-    $salesApprovalFilter .= " AND t.sales_estimate_days IS NOT NULL";
-}
 $developerReadyApprovalFilter = ($hasSalesApproval ? " AND t.sales_approved = 1" : "") . ($hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "");
 $selectedDeveloperProjectFilter = $projectId > 0 ? " AND t.project_id = {$projectId}" : " AND 1 = 0";
 $reviewTasks = $conn->query("
@@ -1004,7 +1001,7 @@ $reviewTasks = $conn->query("
     JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
     LEFT JOIN feature_estimations fe ON t.id = fe.task_id AND fe.status = 'completed'
-    WHERE t.status = 'review'{$salesApprovalFilter}
+    WHERE t.status IN ('review', 'in_review'){$salesApprovalFilter}
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
       {$selectedExpertProjectFilter}
@@ -1017,7 +1014,7 @@ $projectEstimationReviews = $conn->query("
     JOIN projects p ON p.id = e.project_id
     JOIN clients c ON c.id = p.client_id
     JOIN users u ON u.id = e.expert_id
-    WHERE e.status = 'submitted'
+    WHERE e.status = 'sales_approved'
       AND {$sulProjectFilter}
       {$selectedExpertEstimationProjectFilter}
     ORDER BY e.submitted_at ASC, e.id ASC
@@ -1347,7 +1344,7 @@ if ($canManageExpertWorkflow) {
                 SELECT COUNT(DISTINCT e.id)
                 FROM expert_project_estimations e
                 WHERE e.project_id = p.id
-                  AND e.status = 'submitted'
+                  AND e.status = 'sales_approved'
             ) AS project_review_count
         FROM projects p
         WHERE p.status != 'completed'
@@ -2778,32 +2775,55 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             SELECT e.*, p.name AS project_name
             FROM expert_project_estimations e
             JOIN projects p ON p.id = e.project_id
-            WHERE e.id = {$estimationId} AND e.status = 'submitted'
+            WHERE e.id = {$estimationId} AND e.status = 'sales_approved'
             LIMIT 1
         ")->fetch_assoc() : null;
 
         if (!$estimation) {
-            $_SESSION['error'] = "Please select a submitted project estimation.";
+            $_SESSION['error'] = "Please select a Sales-approved project estimation.";
             header("Location: task-allocation.php");
             exit();
         }
 
-        $stmt = $conn->prepare("UPDATE expert_project_estimations SET status = 'sul_approved', sul_reviewed_by = ?, sul_reviewed_at = NOW(), sul_comment = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE expert_project_estimations SET status = 'sul_approved', sul_reviewed_by = ?, sul_reviewed_at = NOW(), sul_comment = ?, approved_at = NOW() WHERE id = ?");
         $stmt->bind_param('isi', $userId, $comment, $estimationId);
         $approvalSaved = $stmt->execute();
         if ($approvalSaved) {
+            $projectId = (int) $estimation['project_id'];
+            projectEstimationCompletePlanningPhase($conn, $projectId, $userId);
+            $conn->query("UPDATE projects SET status = 'in_development' WHERE id = {$projectId} AND status != 'completed'");
+            projectWorkflowSyncRoadmap($conn, $projectId);
             workflowNotifyRoles(
                 $conn,
-                ['sales'],
-                'Project Estimation Ready for Final Approval',
-                'Expert SUL approved a project cost estimation for Sales final approval.',
-                BASE_URL . 'modules/sales/estimation-approval.php',
-                (int) $estimation['project_id'],
+                ['architect'],
+                'Project Estimation Completed',
+                'SUL completed the project cost estimation review. Planning is complete and the next project phase is active.',
+                BASE_URL . 'modules/roadmap/methodology.php?project_id=' . $projectId,
+                $projectId,
                 'approval',
                 'projects'
             );
+            workflowNotifyRoles(
+                $conn,
+                ['sales'],
+                'Project Estimation Completed',
+                'SUL completed the final review of the Sales-approved project cost estimation.',
+                BASE_URL . 'modules/sales/estimation-approval.php',
+                $projectId,
+                'approval',
+                'projects'
+            );
+            createNotification(
+                (int) $estimation['expert_id'],
+                'Project Estimation Completed: ' . ($estimation['project_name'] ?? 'Project'),
+                'Sales and SUL approved the project cost estimation. The estimation workflow is complete.',
+                'approval',
+                'expert_project_estimations',
+                $estimationId,
+                BASE_URL . 'modules/expert/feature-estimation.php?project_estimation_id=' . $projectId
+            );
             logActivity($userId, 'sul_approve_project_estimation', 'expert_project_estimations', $estimationId, null, $_POST);
-            $_SESSION['success'] = ($estimation['project_name'] ?? 'Project') . " estimation approved and forwarded to Sales successfully.";
+            $_SESSION['success'] = ($estimation['project_name'] ?? 'Project') . " estimation completed successfully.";
         } else {
             $_SESSION['error'] = "Failed to approve project estimation.";
         }
@@ -2821,7 +2841,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             SELECT e.*, p.name AS project_name
             FROM expert_project_estimations e
             JOIN projects p ON p.id = e.project_id
-            WHERE e.id = {$estimationId} AND e.status = 'submitted'
+            WHERE e.id = {$estimationId} AND e.status = 'sales_approved'
             LIMIT 1
         ")->fetch_assoc() : null;
 
@@ -2872,16 +2892,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $approvalSql = $hasSalesApproval ? " AND t.sales_approved = 1" : "";
-        $choiceSql = $hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "";
         $taskCheck = $conn->prepare("
             SELECT t.id, t.project_id, t.title, p.name AS project_name
             FROM tasks t
             INNER JOIN projects p ON p.id = t.project_id
             INNER JOIN feature_estimations fe ON fe.task_id = t.id AND fe.status = 'completed'
             WHERE t.id = ?
-              AND t.status = 'review'
+              AND t.status IN ('review', 'in_review')
               AND {$sulProjectFilter}
-              {$approvalSql}{$choiceSql}
+              {$approvalSql}
         ");
         $taskCheck->bind_param("i", $taskId);
         $taskCheck->execute();
@@ -2889,7 +2908,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $taskCheck->close();
 
         if (!$validTask) {
-            $_SESSION['error'] = "Approval cannot proceed until Sales approval and selected days are complete.";
+            $_SESSION['error'] = "Approval cannot proceed until the feature estimation is approved by Sales.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -2975,7 +2994,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             INNER JOIN projects p ON p.id = t.project_id
             INNER JOIN feature_estimations fe ON fe.task_id = t.id AND fe.status = 'completed'
             WHERE t.id = ?
-              AND t.status = 'review'
+              AND t.status IN ('review', 'in_review')
               AND {$sulProjectFilter}
             LIMIT 1
         ");
@@ -7012,17 +7031,24 @@ include '../../includes/navbar.php';
                                     </div>
                                 </div>
 
+                                <div class="alert alert-info py-2 px-3 mb-3">
+                                    <strong>Sales review:</strong>
+                                    <?php echo !empty($estimate['sales_comment'])
+                                        ? htmlspecialchars((string) $estimate['sales_comment'])
+                                        : 'Sales approved this estimate without an additional note.'; ?>
+                                </div>
+
                                 <div class="project-review-decisions">
-                                    <form method="POST" class="project-review-decision is-approve" data-generic-draft-disabled="1" data-app-loading data-loading-title="Approving estimation" data-loading-text="Forwarding project estimation to Sales.">
+                                    <form method="POST" class="project-review-decision is-approve" data-generic-draft-disabled="1" data-app-loading data-loading-title="Completing estimation" data-loading-text="Completing the project estimation workflow.">
                                         <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
                                         <div class="project-review-decision-head">
                                             <i class="fas fa-circle-check" aria-hidden="true"></i>
-                                            <span><strong>Approve estimation</strong><span>Confirm the costing and forward it to Sales.</span></span>
+                                            <span><strong>Complete estimation</strong><span>Confirm the Sales-approved costing and finish the estimation workflow.</span></span>
                                         </div>
-                                        <label for="approvalNote<?php echo (int) $estimate['id']; ?>">Approval note <span>(optional)</span></label>
-                                        <textarea id="approvalNote<?php echo (int) $estimate['id']; ?>" name="review_comment" class="form-control-custom" rows="2" placeholder="Add a short note for Sales"></textarea>
+                                        <label for="approvalNote<?php echo (int) $estimate['id']; ?>">Completion note <span>(optional)</span></label>
+                                        <textarea id="approvalNote<?php echo (int) $estimate['id']; ?>" name="review_comment" class="form-control-custom" rows="2" placeholder="Add a short final review note"></textarea>
                                         <button type="submit" name="approve_project_estimation" class="btn-success-modern">
-                                            <i class="fas fa-check"></i> Approve &amp; Forward
+                                            <i class="fas fa-check"></i> Complete Estimation
                                         </button>
                                     </form>
                                     <form method="POST" class="project-review-decision is-revision" data-generic-draft-disabled="1" data-app-loading data-loading-title="Returning estimation" data-loading-text="Sending the estimation back for revision.">

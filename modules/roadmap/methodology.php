@@ -921,6 +921,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             roadmapReturnToEditor($postedProjectId, 'phase', 'Phase name, start date, and end date are required.', $_POST);
         }
 
+        $lastOtherPhaseResult = $conn->query("
+            SELECT COALESCE(MAX(sequence_no), 0) AS last_sequence
+            FROM methodology_phases
+            WHERE project_id = {$postedProjectId}
+              AND id <> {$phaseId}
+        ");
+        $lastOtherSequence = $lastOtherPhaseResult
+            ? max(0, (int) ($lastOtherPhaseResult->fetch_assoc()['last_sequence'] ?? 0))
+            : 0;
+        if ($sequenceNo >= $lastOtherSequence) {
+            // The final roadmap phase is completed by Architect merge-to-main,
+            // not by a staffed development assignment.
+            $developerCount = 0;
+        }
+
         $otherHeadcountResult = $conn->query("
             SELECT COALESCE(SUM(developer_count), 0) AS used_headcount
             FROM methodology_phases
@@ -993,6 +1008,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($canEditArchitecture) {
+            $finalTaskPhaseResult = $conn->query("
+                SELECT id
+                FROM methodology_phases
+                WHERE project_id = {$postedProjectId}
+                ORDER BY start_date DESC, sequence_no DESC, id DESC
+                LIMIT 1
+            ");
+            $finalTaskPhaseId = $finalTaskPhaseResult
+                ? (int) ($finalTaskPhaseResult->fetch_assoc()['id'] ?? 0)
+                : 0;
+            if ($taskId <= 0 && $phaseId === $finalTaskPhaseId) {
+                roadmapReturnToEditor(
+                    $postedProjectId,
+                    'task',
+                    'The final phase is completed automatically when the Architect merges to main and does not accept manual tasks.',
+                    $_POST
+                );
+            }
             if ($taskId <= 0 && (int) ($phase['developer_count'] ?? 0) < 1) {
                 roadmapReturnToEditor(
                     $postedProjectId,
@@ -5728,7 +5761,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                         $phaseToneClass = 'phase-tone phase-tone-' . (((int) $phaseIndex % 6) + 1);
                     ?>
                     <div
-                        class="roadmap-card phase-card-roadmap <?php echo htmlspecialchars($phaseToneClass); ?> phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?> <?php echo $canEditArchitecture ? ($phaseHasHeadcount ? '' : 'is-headcount-pending') : 'is-readonly'; ?>"
+                        class="roadmap-card phase-card-roadmap <?php echo htmlspecialchars($phaseToneClass); ?> phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?> <?php echo $canEditArchitecture ? (($phaseHasHeadcount || $isFinalPhase) ? '' : 'is-headcount-pending') : 'is-readonly'; ?>"
                         data-phase='<?php echo htmlspecialchars(json_encode($phase, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>'
                         data-phase-card-id="<?php echo (int) $phase['id']; ?>"
                         <?php echo ($canEditArchitecture && !$phaseHasHeadcount && !$isFinalPhase) ? 'title="Set a positive headcount in Edit Phase to enable task assignment"' : ''; ?>
@@ -5756,13 +5789,17 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                         <div class="phase-meta">
                             <?php $phaseDurationPercent = [1 => 15, 2 => 20, 3 => 35, 4 => 15, 5 => 15][(int) ($phase['sequence_no'] ?? 0)] ?? 0; ?>
                             <span><i class="fas fa-calendar-day"></i> <?php echo htmlspecialchars((string) $phase['start_date']); ?> to <?php echo htmlspecialchars((string) $phase['end_date']); ?> · <?php echo roadmapDaysBetween((string) $phase['start_date'], (string) $phase['end_date']); ?> days<?php echo $phaseDurationPercent > 0 ? ' · target ' . $phaseDurationPercent . '%' : ''; ?></span>
+                            <?php if (!$isFinalPhase): ?>
                             <span>
                                 <i class="fas fa-users" aria-hidden="true"></i>
                                 <strong>Headcount:</strong>
                                 <?php echo (int) $phase['developer_count']; ?> <?php echo (int) $phase['developer_count'] === 1 ? 'developer' : 'developers'; ?>
                             </span>
+                            <?php else: ?>
+                            <span><i class="fas fa-code-merge" aria-hidden="true"></i> Completed automatically when Architect merges to main</span>
+                            <?php endif; ?>
                             <span><i class="fas fa-list-check"></i> <?php echo count($phase['tasks'] ?? []); ?> tasks</span>
-                            <?php if ($canEditArchitecture && !$phaseHasHeadcount): ?>
+                            <?php if ($canEditArchitecture && !$phaseHasHeadcount && !$isFinalPhase): ?>
                                 <span class="phase-headcount-required-label">
                                     <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
                                     Set headcount in Edit Phase to enable Add Task
@@ -5867,6 +5904,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                             ? roadmapMonitoringPhaseIndicator($phase, true)
                             : roadmapPhaseIndicator((string) ($phase['status'] ?? 'planned'));
                         $phaseHasHeadcount = (int) ($phase['developer_count'] ?? 0) > 0;
+                        $isFinalPhase = (int) ($phase['id'] ?? 0) === $finalPhaseId;
                         $phaseToneClass = 'phase-tone phase-tone-' . (((int) $phaseIndex % 6) + 1);
                         $phaseOffset = max(0, (int) $timelineStart->diff(roadmapParseDate($phase['start_date']))->format('%r%a'));
                         $phaseDays = roadmapDaysBetween((string) $phase['start_date'], (string) $phase['end_date']);
@@ -5874,12 +5912,12 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                         $phaseWidth = max(2.5, ($phaseDays / $timelineTotalDays) * 100);
                     ?>
                     <div
-                        class="gantt-row <?php echo htmlspecialchars($phaseToneClass); ?> <?php echo ($canEditArchitecture && !$phaseHasHeadcount) ? 'is-headcount-pending' : ''; ?>"
+                        class="gantt-row <?php echo htmlspecialchars($phaseToneClass); ?> <?php echo ($canEditArchitecture && !$phaseHasHeadcount && !$isFinalPhase) ? 'is-headcount-pending' : ''; ?>"
                         data-gantt-phase-summary="<?php echo (int) $phase['id']; ?>"
                     >
                         <div class="gantt-label-cell">
                             <span class="gantt-label-title"><?php echo htmlspecialchars((string) $phase['name']); ?></span>
-                            <?php if ($canEditArchitecture && !$phaseHasHeadcount): ?>
+                            <?php if ($canEditArchitecture && !$phaseHasHeadcount && !$isFinalPhase): ?>
                                 <span class="gantt-label-sub gantt-headcount-required">
                                     <i class="fas fa-triangle-exclamation" aria-hidden="true"></i>
                                     Headcount required before adding tasks
@@ -5890,11 +5928,11 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                         </div>
                         <div class="gantt-track">
                             <div
-                            class="gantt-bar-roadmap gantt-bar-phase phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?> <?php echo ($canEditArchitecture && !$phaseHasHeadcount) ? 'is-headcount-pending' : ''; ?>"
+                            class="gantt-bar-roadmap gantt-bar-phase phase-state-<?php echo htmlspecialchars($phaseIndicator['key']); ?> <?php echo ($canEditArchitecture && !$phaseHasHeadcount && !$isFinalPhase) ? 'is-headcount-pending' : ''; ?>"
                                 style="left: <?php echo $phaseLeft; ?>%; width: <?php echo $phaseWidth; ?>%;"
-                                title="<?php echo htmlspecialchars((string) $phase['name'] . ' - ' . ($canEditArchitecture && !$phaseHasHeadcount ? 'Set phase headcount before adding tasks' : $phaseIndicator['label'])); ?>"
-                                aria-label="<?php echo htmlspecialchars((string) $phase['name'] . ': ' . ($canEditArchitecture && !$phaseHasHeadcount ? 'Task assignment disabled until phase headcount is set' : $phaseIndicator['label'])); ?>"
-                                <?php echo ($canEditArchitecture && !$phaseHasHeadcount) ? 'aria-disabled="true"' : ''; ?>
+                                title="<?php echo htmlspecialchars((string) $phase['name'] . ' - ' . ($isFinalPhase ? 'Automatically tracked from Architect merge to main' : ($canEditArchitecture && !$phaseHasHeadcount ? 'Set phase headcount before adding tasks' : $phaseIndicator['label']))); ?>"
+                                aria-label="<?php echo htmlspecialchars((string) $phase['name'] . ': ' . ($isFinalPhase ? 'Automatically tracked from Architect merge to main' : ($canEditArchitecture && !$phaseHasHeadcount ? 'Task assignment disabled until phase headcount is set' : $phaseIndicator['label']))); ?>"
+                                <?php echo ($canEditArchitecture && !$phaseHasHeadcount && !$isFinalPhase) ? 'aria-disabled="true"' : ''; ?>
                                 data-phase='<?php echo htmlspecialchars(json_encode($phase, JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>'
                                 onclick="<?php echo ($canEditArchitecture && $phaseHasHeadcount && (int) ($phase['id'] ?? 0) !== $finalPhaseId) ? 'openTaskModalFromBar(this)' : ''; ?>"
                             >
@@ -6302,10 +6340,13 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                     <select class="form-select" name="phase_id" id="taskPhaseId" <?php echo !$canEditArchitecture ? 'readonly' : ''; ?> required>
                         <?php foreach ($phases as $phase): ?>
                             <?php $phaseOptionHasHeadcount = (int) ($phase['developer_count'] ?? 0) > 0; ?>
+                            <?php $phaseOptionIsFinal = (int) ($phase['id'] ?? 0) === $finalPhaseId; ?>
                             <option
                                 value="<?php echo (int) $phase['id']; ?>"
-                                <?php echo ($canEditArchitecture && !$phaseOptionHasHeadcount) ? 'disabled' : ''; ?>
+                                <?php echo ($canEditArchitecture && (!$phaseOptionHasHeadcount || $phaseOptionIsFinal)) ? 'disabled' : ''; ?>
                             >
+                                <?php if ($phaseOptionIsFinal) { $phaseOptionHasHeadcount = true; } ?>
+                                <?php echo $phaseOptionIsFinal ? 'Architect Merge — ' : ''; ?>
                                 <?php echo htmlspecialchars((string) $phase['name']); ?><?php echo ($canEditArchitecture && !$phaseOptionHasHeadcount) ? ' — set headcount first' : ''; ?>
                             </option>
                         <?php endforeach; ?>
@@ -6515,7 +6556,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                                 $bulkPhaseDisabled = !$bulkPhaseHasHeadcount || $bulkPhaseId === $finalPhaseId;
                             ?>
                             <option value="<?php echo $bulkPhaseId; ?>" <?php echo $bulkPhaseDisabled ? 'disabled' : ''; ?>>
-                                <?php echo htmlspecialchars((string) $phase['name']); ?><?php echo !$bulkPhaseHasHeadcount ? ' — set headcount first' : ($bulkPhaseId === $finalPhaseId ? ' — reserved final phase' : ''); ?>
+                                <?php echo htmlspecialchars((string) $phase['name']); ?><?php echo $bulkPhaseId === $finalPhaseId ? ' — Architect merge to main (no headcount)' : (!$bulkPhaseHasHeadcount ? ' — set headcount first' : ''); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
