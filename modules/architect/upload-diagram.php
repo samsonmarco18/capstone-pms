@@ -373,18 +373,18 @@ a.progress-step:hover {
     font-size: 1.75rem;
     font-weight: 600;
     margin-bottom: 0.5rem;
-    color: white;
+    color: #ffffff !important;
 }
 
 .page-header-modern h2 i {
-    color: white;
+    color: #ffffff !important;
 }
 
 .page-header-modern p {
     opacity: 0.9;
     margin-bottom: 0;
     font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.9) !important;
 }
 
 /* Form Card */

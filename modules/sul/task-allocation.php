@@ -2151,9 +2151,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         || isset($_POST['qa_sul_route_revision'])
         || isset($_POST['qa_sul_request_retest'])
     ) {
+        $reviewReturnProjectId = (int) ($_POST['project_id'] ?? $projectId);
+        $reviewReturnLocation = $reviewReturnProjectId > 0
+            ? 'task-allocation.php?project_id=' . $reviewReturnProjectId . '#developer-review-panel'
+            : 'task-allocation.php#developer-review-panel';
+
         if (!$canManageDeveloperWorkflow) {
             $_SESSION['error'] = "Department review is available only for department SULs outside Expert Department.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
 
@@ -2167,13 +2172,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if ($hasQaOnlyDecision && !$isQaDepartmentSul) {
             $_SESSION['error'] = "Only the QA Department SUL can make QA pass, fail, or retest decisions.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
 
         if ($taskId <= 0 || (!$isApproval && $reviewComment === '')) {
             $_SESSION['error'] = $isApproval ? "Invalid task selected." : "Please provide revision comments.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
 
@@ -2194,16 +2199,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if (!$reviewTask) {
             $_SESSION['error'] = "Only tasks marked For Review can be reviewed by SUL.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
+
+        $reviewReturnProjectId = (int) ($reviewTask['project_id'] ?? $reviewReturnProjectId);
+        $reviewReturnLocation = 'task-allocation.php?project_id=' . $reviewReturnProjectId . '#developer-review-panel';
 
         if ($isQaDepartmentSul && $isApproval) {
             $projectForRouting = (int) ($reviewTask['project_id'] ?? 0);
             $currentQaRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $projectForRouting, $taskId, 'QA');
             if (!$currentQaRoadmapTask || projectWorkflowDepartmentLabel((string) ($currentQaRoadmapTask['department_label'] ?? '')) !== 'QA') {
                 $_SESSION['error'] = "This task is not the current QA roadmap item.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
 
@@ -2257,7 +2265,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $conn->rollback();
                 error_log('QA SUL pass failed: ' . $exception->getMessage());
                 $_SESSION['error'] = "Failed to save the QA pass decision.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
 
@@ -2276,7 +2284,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $taskId
             );
             $_SESSION['success'] = "QA passed the feature and sent it to Architect final approval.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
 
@@ -2313,7 +2321,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 if ($missingCascadeDepartments !== []) {
                     $_SESSION['error'] = 'UI/UX revision requires available UI/UX, Frontend, and Backend handlers. Missing: '
                         . implode(', ', $missingCascadeDepartments) . '.';
-                    header("Location: task-allocation.php");
+                    header('Location: ' . $reviewReturnLocation);
                     exit();
                 }
             }
@@ -2324,7 +2332,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             if ($selectedTargets === []) {
                 $_SESSION['error'] = "Select at least one responsible department for the failed QA result.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
 
@@ -2334,7 +2342,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $firstSulId = (int) ($firstTarget['responsible_sul_id'] ?? 0);
             if ($firstDeveloperId <= 0 || $firstSulId <= 0) {
                 $_SESSION['error'] = "The first revision department must have its original developer and an active SUL.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
 
@@ -2344,7 +2352,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $qaProgressId = (int) ($qaRoadmapTask['department_progress_id'] ?? 0);
             if ($qaProgressId <= 0) {
                 $_SESSION['error'] = "Unable to locate the QA roadmap lane for retesting.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
             $conn->begin_transaction();
@@ -2423,7 +2431,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $conn->rollback();
                 error_log('QA department revision routing failed: ' . $exception->getMessage());
                 $_SESSION['error'] = "Failed to create the QA department revision route.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
 
@@ -2467,7 +2475,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $taskId
             );
             $_SESSION['success'] = "QA failed the feature. Revision was assigned in order: {$routeLabel}.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
 
@@ -7752,8 +7760,9 @@ include '../../includes/navbar.php';
                                     </td>
                                     <td>
                                         <?php if ($isQaDepartmentSul): ?>
-                                            <form class="workflow-decision-form" method="POST" data-app-loading data-loading-title="Saving QA decision" data-loading-text="Please wait while the QA review decision is saved.">
+                                            <form class="workflow-decision-form" method="POST" data-generic-draft-disabled="1" data-app-loading data-loading-title="Saving QA decision" data-loading-text="Please wait while the QA review decision is saved.">
                                                 <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
+                                                <input type="hidden" name="project_id" value="<?php echo (int) $projectId; ?>">
                                                 <div class="workflow-action-row qa-primary-decision-actions">
                                                     <button type="submit" name="qa_sul_pass" class="btn-success-modern">
                                                         <i class="fas fa-check"></i> Pass
@@ -7839,7 +7848,7 @@ include '../../includes/navbar.php';
                                                 </div>
                                             </form>
                                         <?php else: ?>
-                                            <form class="workflow-decision-form" method="POST" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
+                                            <form class="workflow-decision-form" method="POST" data-generic-draft-disabled="1" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
                                                 <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
                                                 <textarea name="review_comment" class="form-control-custom" rows="2" placeholder="<?php echo $isUiUxDepartmentSul ? 'UI/UX approval note or revision feedback' : 'Approval note or revision comments'; ?>"></textarea>
                                                 <div class="workflow-action-row">

@@ -114,12 +114,17 @@ html[data-app-theme="tropical"] .role-dashboard-shell {
 }
 
 html[data-app-theme="tropical"] #page-content-wrapper :is(
+    .settings-page-header,
     .page-header-modern,
     .vc-header,
     .insights-hero,
+    .process-hero,
     .process-history-hero,
+    .roadmap-header,
+    .approval-header,
     .profile-hero,
-    .calendar-hero
+    .calendar-hero,
+    .dashboard-header
 ) {
     background-image:
         linear-gradient(100deg, rgba(6, 126, 153, 0.92), rgba(31, 178, 202, 0.76)),

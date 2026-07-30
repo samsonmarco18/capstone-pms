@@ -1121,7 +1121,7 @@ a.progress-step:hover {
 .architecture-summary-section__header {
     align-items: center;
     background: linear-gradient(135deg, #0d6786 0%, #0a5570 100%);
-    color: #ffffff;
+    color: #ffffff !important;
     display: flex;
     gap: 0.65rem;
     min-height: 46px;
@@ -1145,7 +1145,7 @@ a.progress-step:hover {
 }
 
 .architecture-summary-section__header h2 {
-    color: #ffffff;
+    color: #ffffff !important;
     font-size: 0.8rem;
     font-weight: 750;
     letter-spacing: 0.045em;
