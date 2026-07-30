@@ -2696,31 +2696,3 @@ html[data-app-theme="tropical"] #page-content-wrapper .role-dashboard-hero :is(
 ) {
     color: var(--skin-muted) !important;
 }
-
-/* Version Control controls must remain above decorative theme artwork and
-   retain normal pointer behavior in every theme. */
-#page-content-wrapper .vc-shell :is(
-    .project-picker,
-    .repository-branch-picker,
-    .repo-tile,
-    .workspace-tools-card,
-    .repository-access-panel,
-    .accordion,
-    button,
-    a,
-    select,
-    input
-) {
-    pointer-events: auto;
-}
-
-#page-content-wrapper .vc-shell :is(
-    .project-picker,
-    .repository-branch-picker,
-    .workspace-tools-card,
-    .repository-access-panel,
-    .accordion
-) {
-    position: relative;
-    z-index: 2;
-}

@@ -352,15 +352,6 @@ include '../../includes/navbar.php';
 :root{--theme-primary:#1f6392;--theme-dark:#184f73;--theme-soft:#eef6fb;--theme-line:rgba(31,99,146,.16);--gray-25:#fcfdff;--gray-50:#f8f9fa;--gray-100:#f1f5f9;--gray-200:#e9ecef;--gray-300:#d9e2ec;--gray-600:#6c757d;--gray-700:#475569;--gray-900:#212529;}
 body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .vc-shell{max-width:1440px;}
-.vc-shell{position:relative!important;z-index:1040!important;pointer-events:auto!important;}
-.vc-shell :is(a,button,input,select,textarea,label,[role="button"],.accordion-button){pointer-events:auto!important;}
-.vc-shell :is(.vc-header,.vc-card,.project-picker,.repo-tile,.workspace-tools-card,.repository-access-panel){position:relative;}
-body:has(.vc-shell) :is(.sidebar-overlay,.app-global-loading-overlay,.app-logout-loading-overlay){pointer-events:none!important;}
-body:has(.vc-shell) .modal-backdrop{pointer-events:none!important;}
-body:has(.vc-shell) .modal.show{pointer-events:auto!important;}
-body:has(.vc-shell) :is(.app-global-loading-overlay,.app-logout-loading-overlay):not(.is-visible),
-body:has(.vc-shell) .modal-backdrop:not(:has(+ .modal.show)){display:none!important;}
-body:has(.vc-shell):has(.modal.show) .vc-shell{z-index:auto!important;}
 .vc-header,.vc-card{background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:24px;box-shadow:0 14px 34px rgba(15,23,42,.05);}
 .vc-header{padding:2rem;margin-bottom:1.5rem;background:linear-gradient(135deg,#19567f 0%,#1f6392 55%,#2f83b9 100%);color:#fff;position:relative;overflow:hidden;}
 .vc-header:before,.vc-header:after{content:'';position:absolute;border-radius:999px;background:rgba(255,255,255,.09);}
@@ -628,7 +619,7 @@ body:has(.vc-shell):has(.modal.show) .vc-shell{z-index:auto!important;}
                     </div>
                 </div>
                 <div class="p-4">
-                    <form method="GET" action="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php'); ?>" class="row g-3 align-items-end project-picker" id="repositoryProjectPicker">
+                    <div class="row g-3 align-items-end project-picker" id="repositoryProjectPicker">
                         <div class="col-md-8">
                             <label class="form-label" for="repositoryProjectId">Project</label>
                             <select name="project_id" class="form-select" id="repositoryProjectId">
@@ -647,8 +638,14 @@ body:has(.vc-shell):has(.modal.show) .vc-shell{z-index:auto!important;}
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-md-4"><button class="btn btn-primary w-100" type="submit" id="loadRepositoryProject">Load Project</button></div>
-                    </form>
+                        <div class="col-md-4">
+                            <a
+                                class="btn btn-primary w-100"
+                                id="loadRepositoryProject"
+                                href="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php?project_id=' . $selectedProjectId); ?>"
+                            >Load Project</a>
+                        </div>
+                    </div>
 
                     <?php if (!$repositories): ?>
                     <div class="empty-box">
@@ -1007,9 +1004,7 @@ body:has(.vc-shell):has(.modal.show) .vc-shell{z-index:auto!important;}
                                 </div>
                             </div>
                             <div id="cloneFeedback" class="clone-feedback">Clone URL copied.</div>
-                            <form method="GET" action="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php#selectedRepositorySnapshot'); ?>" class="repository-branch-picker" id="repositoryBranchPicker">
-                                <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
-                                <input type="hidden" name="repository_id" value="<?php echo (int) $selectedRepositoryId; ?>">
+                            <div class="repository-branch-picker" id="repositoryBranchPicker">
                                 <label class="form-label" for="repositoryAccessBranch">Branch</label>
                                 <div class="input-group">
                                 <select class="form-select" id="repositoryAccessBranch" name="branch_id">
@@ -1026,13 +1021,18 @@ body:has(.vc-shell):has(.modal.show) .vc-shell{z-index:auto!important;}
                                     <?php endif; ?>
                                     <?php endforeach; ?>
                                 </select>
-                                <button class="btn btn-outline-primary" type="submit">
+                                <a
+                                    class="btn btn-outline-primary"
+                                    id="openRepositoryBranch"
+                                    data-open-base="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php?project_id=' . $selectedProjectId . '&repository_id=' . $selectedRepositoryId); ?>"
+                                    href="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php?project_id=' . $selectedProjectId . '&repository_id=' . $selectedRepositoryId . '&branch_id=' . $selectedBranchId . '#selectedRepositorySnapshot'); ?>"
+                                >
                                     <i class="fas fa-arrow-right me-1"></i>Open Branch
-                                </button>
+                                </a>
                                 </div>
-                            </form>
+                            </div>
                             <div class="clone-action-row">
-                                <button type="button" class="btn btn-primary" onclick="copyCloneUrl('<?php echo htmlspecialchars($selectedRepositoryDisplayRemoteUrl, ENT_QUOTES); ?>')">
+                                <button type="button" class="btn btn-primary" id="copyRepositoryCloneUrl" data-clone-url="<?php echo htmlspecialchars($selectedRepositoryDisplayRemoteUrl, ENT_QUOTES); ?>">
                                     <i class="fas fa-code-branch me-2"></i>Copy Clone URL
                                 </button>
                                 <a
@@ -1345,64 +1345,7 @@ body:has(.vc-shell):has(.modal.show) .vc-shell{z-index:auto!important;}
     <?php endif; ?>
 
 <script>
-document.documentElement.classList.add('version-control-page');
-
-function recoverVersionControlInteractions() {
-    const loadingOverlay = document.getElementById('appGlobalLoadingOverlay');
-    if (loadingOverlay) {
-        loadingOverlay.classList.remove('is-visible');
-        loadingOverlay.setAttribute('aria-hidden', 'true');
-    }
-
-    if (!document.querySelector('.modal.show')) {
-        document.body.classList.remove('modal-open');
-        document.body.style.removeProperty('overflow');
-        document.body.style.removeProperty('padding-right');
-        document.querySelectorAll('.modal-backdrop').forEach((backdrop) => backdrop.remove());
-    }
-
-    const sidebarOverlay = document.querySelector('.sidebar-overlay');
-    sidebarOverlay?.classList.remove('active');
-    sidebarOverlay?.setAttribute('aria-hidden', 'true');
-
-    document.querySelectorAll('.spinner-overlay').forEach((overlay) => {
-        const style = window.getComputedStyle(overlay);
-        if (style.visibility === 'hidden' || Number.parseFloat(style.opacity || '1') === 0) {
-            overlay.style.setProperty('display', 'none', 'important');
-            overlay.style.setProperty('pointer-events', 'none', 'important');
-        }
-    });
-}
-
-recoverVersionControlInteractions();
-window.addEventListener('pageshow', recoverVersionControlInteractions);
-
-/*
- * A stale theme/widget backdrop can remain above the workspace after browser
- * history restoration. If it receives a click that was physically over a
- * Version Control action, forward that click to the real control underneath.
- */
-document.addEventListener('click', function (event) {
-    const shell = document.querySelector('.vc-shell');
-    if (!shell || shell.contains(event.target)) {
-        return;
-    }
-
-    const control = document.elementsFromPoint(event.clientX, event.clientY)
-        .map((element) => element.closest?.('a,button,input,select,textarea,[role="button"]'))
-        .find((element) => element && shell.contains(element) && !element.disabled);
-
-    if (!control) {
-        return;
-    }
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    control.click();
-}, true);
-
 document.addEventListener('DOMContentLoaded', function () {
-    recoverVersionControlInteractions();
     const nameInput = document.querySelector('input[name="repository_name"]');
     const slugInput = document.querySelector('input[name="repository_slug"]');
     const remoteUrlInput = document.getElementById('createRepositoryManagedUrl');
@@ -1488,16 +1431,27 @@ function fallbackCopy(url, showFeedback) {
 
 const repositoryAccessBranch = document.getElementById('repositoryAccessBranch');
 const downloadRepositoryBranch = document.getElementById('downloadRepositoryBranch');
+const openRepositoryBranch = document.getElementById('openRepositoryBranch');
+const repositoryProjectId = document.getElementById('repositoryProjectId');
+const loadRepositoryProject = document.getElementById('loadRepositoryProject');
+const copyRepositoryCloneUrl = document.getElementById('copyRepositoryCloneUrl');
 
 function updateRepositoryBranchActions() {
-    if (!repositoryAccessBranch || !downloadRepositoryBranch) {
+    if (!repositoryAccessBranch) {
         return;
     }
 
     const selectedOption = repositoryAccessBranch.options[repositoryAccessBranch.selectedIndex];
+    const branchId = selectedOption?.value || '';
     const branchName = selectedOption?.dataset.branchName || '';
-    const downloadBase = downloadRepositoryBranch.dataset.downloadBase || '';
-    downloadRepositoryBranch.href = downloadBase + '&ref=' + encodeURIComponent(branchName);
+    if (downloadRepositoryBranch) {
+        const downloadBase = downloadRepositoryBranch.dataset.downloadBase || '';
+        downloadRepositoryBranch.href = downloadBase + '&ref=' + encodeURIComponent(branchName);
+    }
+    if (openRepositoryBranch) {
+        const openBase = openRepositoryBranch.dataset.openBase || '';
+        openRepositoryBranch.href = openBase + '&branch_id=' + encodeURIComponent(branchId) + '#selectedRepositorySnapshot';
+    }
 }
 
 if (repositoryAccessBranch) {
@@ -1507,17 +1461,18 @@ if (repositoryAccessBranch) {
     updateRepositoryBranchActions();
 }
 
-document.querySelectorAll('a[href*="api/version-control/download-repository.php"]').forEach((downloadLink) => {
-    downloadLink.addEventListener('click', function (event) {
-        const targetUrl = downloadLink.href;
-        if (!targetUrl) {
-            return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        window.location.assign(targetUrl);
+if (repositoryProjectId && loadRepositoryProject) {
+    repositoryProjectId.addEventListener('change', function () {
+        loadRepositoryProject.href = <?php echo json_encode(BASE_URL . 'modules/version-control/repositories.php?project_id='); ?>
+            + encodeURIComponent(repositoryProjectId.value);
     });
-});
+}
+
+if (copyRepositoryCloneUrl) {
+    copyRepositoryCloneUrl.addEventListener('click', function () {
+        copyCloneUrl(copyRepositoryCloneUrl.dataset.cloneUrl || '');
+    });
+}
 
 document.querySelectorAll('.js-delete-repository-form').forEach((form) => {
     form.addEventListener('submit', async (event) => {
