@@ -131,6 +131,35 @@ if ($selectedProjectId > 0) {
                 }
             }
         }
+
+        $selectedProjectRecord = null;
+        foreach ($accessibleProjects as $accessibleProject) {
+            if ((int) ($accessibleProject['id'] ?? 0) === $selectedProjectId) {
+                $selectedProjectRecord = $accessibleProject;
+                break;
+            }
+        }
+
+        if ($selectedProjectRecord && $otherAccessibleRepositories) {
+            $selectedProjectName = strtolower(trim((string) ($selectedProjectRecord['name'] ?? '')));
+            $selectedClientName = strtolower(trim((string) ($selectedProjectRecord['client_name'] ?? '')));
+            $matchingRepositories = array_values(array_filter(
+                $otherAccessibleRepositories,
+                static function (array $repository) use ($selectedProjectName, $selectedClientName): bool {
+                    return strtolower(trim((string) ($repository['project_name'] ?? ''))) === $selectedProjectName
+                        && strtolower(trim((string) ($repository['client_name'] ?? ''))) === $selectedClientName;
+                }
+            ));
+
+            if (count($matchingRepositories) === 1) {
+                $matchingRepository = $matchingRepositories[0];
+                header('Location: ' . vcPageUrl(
+                    (int) $matchingRepository['project_id'],
+                    (int) $matchingRepository['id']
+                ));
+                exit();
+            }
+        }
     }
 }
 
@@ -605,6 +634,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                         $project['name'] . ' - ' . $project['client_name']
                                         . ' (' . $repositoryCount . ' '
                                         . ($repositoryCount === 1 ? 'repository' : 'repositories') . ')'
+                                        . ' [Project #' . (int) $project['id'] . ']'
                                     );
                                     ?>
                                 </option>
