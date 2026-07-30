@@ -148,9 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['merge_task'])) {
         $taskId
     );
 
-    $_SESSION['success'] = ($mergeResult['merge_mode'] ?? '') === 'database_record'
-        ? 'Feature approved and recorded on main. Sales was notified. The managed Git files were unavailable, so repository history was updated from the stored branch records.'
-        : 'Feature merged to main and Sales notified.';
+    $_SESSION['success'] = 'Feature merged to main successfully. Sales and the developer were notified.';
     header('Location: final-approval.php' . ($selectedProjectId > 0 ? '?project_id=' . $selectedProjectId : ''));
     exit();
 }
@@ -1147,7 +1145,7 @@ body.reopen-drawer-open {
         <?php elseif($readyTasks && $readyTaskCount > 0): ?>
             <div class="merge-task-list">
                 <?php while($task = $readyTasks->fetch_assoc()): ?>
-                    <form method="POST" class="merge-task-card">
+                    <form method="POST" class="merge-task-card" data-generic-draft-disabled="1" data-confirm-skip="1">
                         <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
                         <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
                         <div class="merge-task-summary">

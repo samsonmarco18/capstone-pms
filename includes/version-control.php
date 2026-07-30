@@ -152,6 +152,9 @@ function vcGetGitBinary(): string
 function vcGetRepositoryStorageRoot(): string
 {
     $configuredRoot = trim((string) (getenv('GIT_STORAGE_ROOT') ?: ''));
+    if ($configuredRoot === '' && (bool) getenv('RENDER')) {
+        $configuredRoot = '/var/data/git';
+    }
 
     return $configuredRoot !== ''
         ? rtrim($configuredRoot, '/\\')
@@ -166,6 +169,9 @@ function vcGetRepositoryBarePath(string $slug): string
 function vcGetRepositoryWorkspaceRoot(): string
 {
     $configuredRoot = trim((string) (getenv('GIT_WORKSPACE_ROOT') ?: ''));
+    if ($configuredRoot === '' && (bool) getenv('RENDER')) {
+        $configuredRoot = '/var/data/git-workspaces';
+    }
 
     return $configuredRoot !== ''
         ? rtrim($configuredRoot, '/\\')
