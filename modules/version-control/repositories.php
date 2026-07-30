@@ -353,7 +353,7 @@ include '../../includes/navbar.php';
 body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .vc-shell{max-width:1440px;}
 .vc-shell{position:relative!important;z-index:10!important;pointer-events:auto!important;}
-.vc-shell *{pointer-events:auto;}
+.vc-shell :is(a,button,input,select,textarea,label,[role="button"],.accordion-button){pointer-events:auto!important;}
 .vc-shell :is(.vc-header,.vc-card,.project-picker,.repo-tile,.workspace-tools-card,.repository-access-panel){position:relative;}
 body:has(.vc-shell) :is(.sidebar-overlay,.app-global-loading-overlay,.app-logout-loading-overlay){pointer-events:none!important;}
 body:has(.vc-shell) .modal-backdrop{pointer-events:none!important;}
@@ -625,7 +625,7 @@ body:has(.vc-shell) .modal.show{pointer-events:auto!important;}
                     </div>
                 </div>
                 <div class="p-4">
-                    <form method="GET" action="repositories.php" class="row g-3 align-items-end project-picker" id="repositoryProjectPicker">
+                    <form method="GET" action="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php'); ?>" class="row g-3 align-items-end project-picker" id="repositoryProjectPicker">
                         <div class="col-md-8">
                             <label class="form-label" for="repositoryProjectId">Project</label>
                             <select name="project_id" class="form-select" id="repositoryProjectId">
@@ -661,7 +661,7 @@ body:has(.vc-shell) .modal.show{pointer-events:auto!important;}
                             <div class="d-grid gap-2">
                                 <?php foreach ($otherAccessibleRepositories as $otherRepository): ?>
                                 <a
-                                    class="btn btn-outline-primary d-flex align-items-center justify-content-between gap-3 text-start"
+                                    class="btn btn-outline-primary d-flex align-items-center justify-content-between gap-3 text-start vc-navigation-link"
                                     href="<?php echo htmlspecialchars(vcPageUrl((int) $otherRepository['project_id'], (int) $otherRepository['id'])); ?>"
                                 >
                                     <span>
@@ -690,7 +690,7 @@ body:has(.vc-shell) .modal.show{pointer-events:auto!important;}
                     <?php else: ?>
                     <div class="repo-grid">
                         <?php foreach ($repositories as $repo): ?>
-                        <a href="<?php echo htmlspecialchars(vcPageUrl($selectedProjectId, (int) $repo['id'])); ?>" class="repo-tile <?php echo (int) $repo['id'] === $selectedRepositoryId ? 'active' : ''; ?>">
+                        <a href="<?php echo htmlspecialchars(vcPageUrl($selectedProjectId, (int) $repo['id'])); ?>" class="repo-tile vc-navigation-link <?php echo (int) $repo['id'] === $selectedRepositoryId ? 'active' : ''; ?>">
                             <div class="repo-tile-top">
                                 <div>
                                     <div class="repo-title"><?php echo htmlspecialchars($repo['name']); ?></div>
@@ -1004,7 +1004,7 @@ body:has(.vc-shell) .modal.show{pointer-events:auto!important;}
                                 </div>
                             </div>
                             <div id="cloneFeedback" class="clone-feedback">Clone URL copied.</div>
-                            <form method="GET" action="repositories.php#selectedRepositorySnapshot" class="repository-branch-picker" id="repositoryBranchPicker">
+                            <form method="GET" action="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php#selectedRepositorySnapshot'); ?>" class="repository-branch-picker" id="repositoryBranchPicker">
                                 <input type="hidden" name="project_id" value="<?php echo (int) $selectedProjectId; ?>">
                                 <input type="hidden" name="repository_id" value="<?php echo (int) $selectedRepositoryId; ?>">
                                 <label class="form-label" for="repositoryAccessBranch">Branch</label>
