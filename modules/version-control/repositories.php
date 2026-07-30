@@ -10,6 +10,23 @@ $user = getCurrentUser();
 $accessibleProjects = vcGetAccessibleProjects($conn, $user);
 $execAvailable = vcIsExecAvailable();
 
+foreach ($accessibleProjects as &$accessibleProject) {
+    $accessibleProjectId = (int) ($accessibleProject['id'] ?? 0);
+    $accessibleProject['repository_count'] = 0;
+    if ($accessibleProjectId <= 0) {
+        continue;
+    }
+    $repositoryCountStmt = $conn->prepare(
+        'SELECT COUNT(*) AS repository_count FROM project_repositories WHERE project_id = ?'
+    );
+    $repositoryCountStmt->bind_param('i', $accessibleProjectId);
+    $repositoryCountStmt->execute();
+    $repositoryCountRow = $repositoryCountStmt->get_result()->fetch_assoc();
+    $repositoryCountStmt->close();
+    $accessibleProject['repository_count'] = (int) ($repositoryCountRow['repository_count'] ?? 0);
+}
+unset($accessibleProject);
+
 function vcPageUrl(int $projectId = 0, int $repositoryId = 0, int $commitId = 0, int $branchId = 0): string
 {
     $params = [];
@@ -62,6 +79,7 @@ $flashError = $_SESSION['error'] ?? null;
 unset($_SESSION['success'], $_SESSION['error']);
 
 $repositories = [];
+$otherAccessibleRepositories = [];
 if ($selectedProjectId > 0) {
     $repoStmt = $conn->prepare(
         "SELECT pr.*, parent_repo.name AS parent_repository_name,
@@ -87,6 +105,62 @@ if ($selectedProjectId > 0) {
     $repoStmt->execute();
     $repositories = $repoStmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $repoStmt->close();
+
+    if (!$repositories) {
+        $accessibleProjectIds = array_fill_keys(
+            array_map(static fn(array $project): int => (int) ($project['id'] ?? 0), $accessibleProjects),
+            true
+        );
+        $otherRepoResult = $conn->query(
+            "SELECT pr.id, pr.project_id, pr.name, pr.slug, pr.repository_status,
+                    p.name AS project_name, c.name AS client_name
+             FROM project_repositories pr
+             INNER JOIN projects p ON p.id = pr.project_id
+             INNER JOIN clients c ON c.id = p.client_id
+             ORDER BY COALESCE(pr.last_activity_at, pr.updated_at) DESC, pr.id DESC"
+        );
+        if ($otherRepoResult) {
+            while ($otherRepository = $otherRepoResult->fetch_assoc()) {
+                $otherProjectId = (int) ($otherRepository['project_id'] ?? 0);
+                if ($otherProjectId === $selectedProjectId || !isset($accessibleProjectIds[$otherProjectId])) {
+                    continue;
+                }
+                $otherAccessibleRepositories[] = $otherRepository;
+                if (count($otherAccessibleRepositories) >= 6) {
+                    break;
+                }
+            }
+        }
+
+        $selectedProjectRecord = null;
+        foreach ($accessibleProjects as $accessibleProject) {
+            if ((int) ($accessibleProject['id'] ?? 0) === $selectedProjectId) {
+                $selectedProjectRecord = $accessibleProject;
+                break;
+            }
+        }
+
+        if ($selectedProjectRecord && $otherAccessibleRepositories) {
+            $selectedProjectName = strtolower(trim((string) ($selectedProjectRecord['name'] ?? '')));
+            $selectedClientName = strtolower(trim((string) ($selectedProjectRecord['client_name'] ?? '')));
+            $matchingRepositories = array_values(array_filter(
+                $otherAccessibleRepositories,
+                static function (array $repository) use ($selectedProjectName, $selectedClientName): bool {
+                    return strtolower(trim((string) ($repository['project_name'] ?? ''))) === $selectedProjectName
+                        && strtolower(trim((string) ($repository['client_name'] ?? ''))) === $selectedClientName;
+                }
+            ));
+
+            $matchingRepository = $matchingRepositories[0] ?? $otherAccessibleRepositories[0] ?? null;
+            if ($matchingRepository) {
+                header('Location: ' . vcPageUrl(
+                    (int) $matchingRepository['project_id'],
+                    (int) $matchingRepository['id']
+                ));
+                exit();
+            }
+        }
+    }
 }
 
 if ($selectedRepositoryId <= 0 && $repositories) {
@@ -344,7 +418,11 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .workspace-tools-card .card-head{padding:1rem 1.15rem;background:#fbfdff;}
 .workspace-tools-card .card-head>div>div:last-child{color:var(--gray-900);font-size:1rem;font-weight:700;}
 .workspace-tools-body{padding:1.1rem;}
-.repository-access-panel{border-radius:14px;padding:1rem;background:#fff;}
+.repository-access-panel{border-radius:14px;padding:1rem;background:#fff;isolation:isolate;position:relative;transform:none!important;transform-style:flat!important;}
+.repository-access-panel::before,.repository-access-panel::after{pointer-events:none!important;}
+.repository-access-panel :is(.repository-branch-picker,.input-group,.clone-action-row,.repository-folder-action){position:relative;z-index:3;transform:none!important;transform-style:flat!important;}
+.repository-access-panel :is(a,button,select){position:relative;z-index:4;pointer-events:auto!important;touch-action:manipulation;cursor:pointer;}
+.vc-sidebar,.workspace-tools-card,.workspace-tools-body,.setup-stack{transform:none!important;transform-style:flat!important;}
 .repository-access-heading{display:flex;align-items:center;gap:.7rem;margin-bottom:1rem;}
 .repository-access-heading-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 34px;width:34px;height:34px;border-radius:9px;background:var(--theme-soft);color:var(--theme-primary);}
 .repository-access-heading h6{margin:0;color:var(--gray-900);font-size:.92rem;font-weight:700;}
@@ -545,25 +623,68 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                     </div>
                 </div>
                 <div class="p-4">
-                    <form method="GET" action="repositories.php" class="row g-3 align-items-end project-picker" id="repositoryProjectPicker">
+                    <div class="row g-3 align-items-end project-picker" id="repositoryProjectPicker">
                         <div class="col-md-8">
                             <label class="form-label" for="repositoryProjectId">Project</label>
                             <select name="project_id" class="form-select" id="repositoryProjectId">
                                 <?php foreach ($accessibleProjects as $project): ?>
                                 <option value="<?php echo (int) $project['id']; ?>" <?php echo (int) $project['id'] === $selectedProjectId ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($project['name'] . ' - ' . $project['client_name']); ?>
+                                    <?php
+                                    $repositoryCount = (int) ($project['repository_count'] ?? 0);
+                                    echo htmlspecialchars(
+                                        $project['name'] . ' - ' . $project['client_name']
+                                        . ' (' . $repositoryCount . ' '
+                                        . ($repositoryCount === 1 ? 'repository' : 'repositories') . ')'
+                                        . ' [Project #' . (int) $project['id'] . ']'
+                                    );
+                                    ?>
                                 </option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="col-md-4"><button class="btn btn-primary w-100" type="submit" id="loadRepositoryProject">Load Project</button></div>
-                    </form>
+                        <div class="col-md-4">
+                            <a
+                                class="btn btn-primary w-100"
+                                id="loadRepositoryProject"
+                                href="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php?project_id=' . $selectedProjectId); ?>"
+                            >Load Project</a>
+                        </div>
+                    </div>
 
                     <?php if (!$repositories): ?>
                     <div class="empty-box">
                         <i class="fas fa-code-branch d-block mb-2" aria-hidden="true"></i>
                         <strong>No repositories yet for this project.</strong>
-                        <div class="mt-1">The project loaded successfully. Create a repository below to start tracking branches and commits.</div>
+                        <div class="mt-1">
+                            The project loaded successfully, but no repository record is registered to this project.
+                            Repositories created for another project stay with that project.
+                        </div>
+                        <?php if ($otherAccessibleRepositories): ?>
+                        <div class="mt-4 text-start">
+                            <div class="section-kicker mb-2">Repositories in your other accessible projects</div>
+                            <div class="d-grid gap-2">
+                                <?php foreach ($otherAccessibleRepositories as $otherRepository): ?>
+                                <a
+                                    class="btn btn-outline-primary d-flex align-items-center justify-content-between gap-3 text-start vc-navigation-link"
+                                    href="<?php echo htmlspecialchars(vcPageUrl((int) $otherRepository['project_id'], (int) $otherRepository['id'])); ?>"
+                                >
+                                    <span>
+                                        <strong class="d-block"><?php echo htmlspecialchars((string) $otherRepository['name']); ?></strong>
+                                        <small><?php echo htmlspecialchars((string) $otherRepository['project_name'] . ' - ' . (string) $otherRepository['client_name']); ?></small>
+                                    </span>
+                                    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                                </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                        <a
+                            class="btn btn-outline-primary mt-3"
+                            href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?project_id=' . $selectedProjectId); ?>"
+                            download
+                        >
+                            <i class="fas fa-download me-1"></i>Download Stored Git History
+                        </a>
                         <?php if (in_array((string) ($user['role'] ?? ''), ['admin', 'architect'], true) && $execAvailable): ?>
                         <button class="btn btn-outline-primary mt-3" type="button" data-bs-toggle="collapse" data-bs-target="#repoAction" aria-controls="repoAction">
                             <i class="fas fa-plus me-1"></i>Create Repository
@@ -573,7 +694,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                     <?php else: ?>
                     <div class="repo-grid">
                         <?php foreach ($repositories as $repo): ?>
-                        <a href="<?php echo htmlspecialchars(vcPageUrl($selectedProjectId, (int) $repo['id'])); ?>" class="repo-tile <?php echo (int) $repo['id'] === $selectedRepositoryId ? 'active' : ''; ?>">
+                        <a href="<?php echo htmlspecialchars(vcPageUrl($selectedProjectId, (int) $repo['id'])); ?>" class="repo-tile vc-navigation-link <?php echo (int) $repo['id'] === $selectedRepositoryId ? 'active' : ''; ?>">
                             <div class="repo-tile-top">
                                 <div>
                                     <div class="repo-title"><?php echo htmlspecialchars($repo['name']); ?></div>
@@ -887,9 +1008,10 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </div>
                             </div>
                             <div id="cloneFeedback" class="clone-feedback">Clone URL copied.</div>
-                            <div class="repository-branch-picker">
+                            <div class="repository-branch-picker" id="repositoryBranchPicker">
                                 <label class="form-label" for="repositoryAccessBranch">Branch</label>
-                                <select class="form-select" id="repositoryAccessBranch">
+                                <div class="input-group">
+                                <select class="form-select" id="repositoryAccessBranch" name="branch_id">
                                     <?php foreach ($branches as $branch): ?>
                                     <?php if ((string) ($branch['branch_status'] ?? '') !== 'deleted'): ?>
                                     <option
@@ -903,9 +1025,18 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                     <?php endif; ?>
                                     <?php endforeach; ?>
                                 </select>
+                                <a
+                                    class="btn btn-outline-primary"
+                                    id="openRepositoryBranch"
+                                    data-open-base="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php?project_id=' . $selectedProjectId . '&repository_id=' . $selectedRepositoryId); ?>"
+                                    href="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php?project_id=' . $selectedProjectId . '&repository_id=' . $selectedRepositoryId . '&branch_id=' . $selectedBranchId . '#selectedRepositorySnapshot'); ?>"
+                                >
+                                    <i class="fas fa-arrow-right me-1"></i>Open Branch
+                                </a>
+                                </div>
                             </div>
                             <div class="clone-action-row">
-                                <button type="button" class="btn btn-primary" onclick="copyCloneUrl('<?php echo htmlspecialchars($selectedRepositoryDisplayRemoteUrl, ENT_QUOTES); ?>')">
+                                <button type="button" class="btn btn-primary" id="copyRepositoryCloneUrl" data-clone-url="<?php echo htmlspecialchars($selectedRepositoryDisplayRemoteUrl, ENT_QUOTES); ?>">
                                     <i class="fas fa-code-branch me-2"></i>Copy Clone URL
                                 </button>
                                 <a
@@ -1186,15 +1317,36 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                             </div></div>
                         </div>
                         <?php endif; ?>
-                        <?php endif; ?>
+                    <?php else: ?>
+                    <div class="setup-panel repository-access-panel">
+                        <div class="repository-access-heading">
+                            <span class="repository-access-heading-icon" aria-hidden="true"><i class="fas fa-code-branch"></i></span>
+                            <div>
+                                <h6>No registered repository</h6>
+                                <p>This project has no repository record to clone or archive.</p>
+                            </div>
+                        </div>
+                        <a
+                            class="btn btn-outline-primary w-100"
+                            href="<?php echo htmlspecialchars(BASE_URL . 'api/version-control/download-repository.php?project_id=' . $selectedProjectId); ?>"
+                            download
+                        >
+                            <i class="fas fa-download me-2"></i>Download Stored Git History
+                        </a>
+                        <div class="setup-note mt-3">
+                            This downloads the branch, commit, pull-request, and merge records retained by ERNI PMS.
+                            A source-code ZIP becomes available after an Architect or Admin registers the managed repository.
+                        </div>
+                    </div>
+                    <?php endif; ?>
                     </div>
                 </div>
             </div>
             </div>
-        </div>
-    </div>
+                            </div>
+                        </div>
+                </div>
     <?php endif; ?>
-</div>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -1281,62 +1433,49 @@ function fallbackCopy(url, showFeedback) {
     showFeedback(url);
 }
 
-const repositoryProjectPicker = document.getElementById('repositoryProjectPicker');
-const repositoryProjectSelect = document.getElementById('repositoryProjectId');
-const loadRepositoryProjectButton = document.getElementById('loadRepositoryProject');
-
-function loadRepositoryProject() {
-    const projectId = Number.parseInt(repositoryProjectSelect?.value || '0', 10);
-    if (projectId <= 0) {
-        return;
-    }
-
-    if (loadRepositoryProjectButton) {
-        loadRepositoryProjectButton.disabled = true;
-        loadRepositoryProjectButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
-    }
-
-    window.location.assign('repositories.php?project_id=' + encodeURIComponent(String(projectId)));
-}
-
-if (repositoryProjectPicker && repositoryProjectSelect) {
-    repositoryProjectPicker.addEventListener('submit', function (event) {
-        event.preventDefault();
-        loadRepositoryProject();
-    });
-    repositoryProjectSelect.addEventListener('change', loadRepositoryProject);
-}
-
 const repositoryAccessBranch = document.getElementById('repositoryAccessBranch');
 const downloadRepositoryBranch = document.getElementById('downloadRepositoryBranch');
+const openRepositoryBranch = document.getElementById('openRepositoryBranch');
+const repositoryProjectId = document.getElementById('repositoryProjectId');
+const loadRepositoryProject = document.getElementById('loadRepositoryProject');
+const copyRepositoryCloneUrl = document.getElementById('copyRepositoryCloneUrl');
 
 function updateRepositoryBranchActions() {
-    if (!repositoryAccessBranch || !downloadRepositoryBranch) {
+    if (!repositoryAccessBranch) {
         return;
     }
 
     const selectedOption = repositoryAccessBranch.options[repositoryAccessBranch.selectedIndex];
+    const branchId = selectedOption?.value || '';
     const branchName = selectedOption?.dataset.branchName || '';
-    const downloadBase = downloadRepositoryBranch.dataset.downloadBase || '';
-    downloadRepositoryBranch.href = downloadBase + '&ref=' + encodeURIComponent(branchName);
+    if (downloadRepositoryBranch) {
+        const downloadBase = downloadRepositoryBranch.dataset.downloadBase || '';
+        downloadRepositoryBranch.href = downloadBase + '&ref=' + encodeURIComponent(branchName);
+    }
+    if (openRepositoryBranch) {
+        const openBase = openRepositoryBranch.dataset.openBase || '';
+        openRepositoryBranch.href = openBase + '&branch_id=' + encodeURIComponent(branchId) + '#selectedRepositorySnapshot';
+    }
 }
 
 if (repositoryAccessBranch) {
     repositoryAccessBranch.addEventListener('change', function () {
         updateRepositoryBranchActions();
-        const branchId = Number.parseInt(repositoryAccessBranch.value || '0', 10);
-        if (branchId <= 0) {
-            return;
-        }
-        const url = new URL(window.location.href);
-        url.searchParams.set('project_id', '<?php echo (int) $selectedProjectId; ?>');
-        url.searchParams.set('repository_id', '<?php echo (int) $selectedRepositoryId; ?>');
-        url.searchParams.set('branch_id', String(branchId));
-        url.searchParams.delete('commit_id');
-        url.hash = 'selectedRepositorySnapshot';
-        window.location.assign(url.toString());
     });
     updateRepositoryBranchActions();
+}
+
+if (repositoryProjectId && loadRepositoryProject) {
+    repositoryProjectId.addEventListener('change', function () {
+        loadRepositoryProject.href = <?php echo json_encode(BASE_URL . 'modules/version-control/repositories.php?project_id='); ?>
+            + encodeURIComponent(repositoryProjectId.value);
+    });
+}
+
+if (copyRepositoryCloneUrl) {
+    copyRepositoryCloneUrl.addEventListener('click', function () {
+        copyCloneUrl(copyRepositoryCloneUrl.dataset.cloneUrl || '');
+    });
 }
 
 document.querySelectorAll('.js-delete-repository-form').forEach((form) => {

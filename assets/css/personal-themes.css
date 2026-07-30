@@ -2191,3 +2191,508 @@ html[data-app-theme="futuristic"] #page-content-wrapper :is(#assignExpertModal, 
 ) {
     color: #eef3ff !important;
 }
+
+/* Default keeps the application's native component artwork but has no
+   full-page wallpaper. */
+html:not([data-app-theme]) body {
+    background-image: none !important;
+}
+
+html:not([data-app-theme]) body::before {
+    content: none !important;
+    background-image: none !important;
+}
+
+/* A visual theme must never create a stacking context around page modals.
+   Bootstrap dialogs in several role modules live inside this wrapper; an
+   isolated wrapper leaves them behind the body-level modal backdrop. */
+html[data-app-theme] #page-content-wrapper {
+    isolation: auto !important;
+}
+
+html[data-app-theme] #page-content-wrapper > :is(
+    .container,
+    .container-fluid,
+    main,
+    .page-content,
+    .content-wrapper
+) {
+    z-index: auto;
+}
+
+/* Use the purple/cyan neon artwork in both modes. The blue v2 image belongs
+   to the generic dark treatment and is not the Futuristic Neon skin. */
+html[data-theme="dark"][data-app-theme="futuristic"] body,
+html[data-theme="dark"][data-app-theme="futuristic"] #page-content-wrapper {
+    background-image:
+        linear-gradient(rgba(3, 8, 28, 0.34), rgba(5, 9, 31, 0.62)),
+        url("../img/themes/futuristic-circuit-background.png") !important;
+    background-position: center top !important;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+}
+
+html[data-theme="dark"][data-app-theme="futuristic"] body::before {
+    content: none !important;
+    background-image: none !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] #page-content-wrapper {
+    background-image:
+        linear-gradient(rgba(3, 23, 31, 0.72), rgba(4, 31, 39, 0.82)),
+        url("../img/themes/tropical-coast-background.png") !important;
+    background-position: center top !important;
+    background-repeat: no-repeat !important;
+    background-size: cover !important;
+}
+
+html[data-theme="dark"][data-app-theme="tropical"] body::before {
+    content: none !important;
+    background-image: none !important;
+}
+
+/* Decorative theme layers never receive clicks. This remains deliberately
+   global so the same safeguard applies to every role dashboard and workflow. */
+html[data-app-theme] body::before,
+html[data-app-theme] #page-content-wrapper::before,
+html[data-app-theme] #page-content-wrapper::after,
+html[data-app-theme] .role-dashboard-hero::before,
+html[data-app-theme] .role-dashboard-hero::after {
+    pointer-events: none !important;
+}
+
+/* =====================================================
+   FINAL THEME COLOR CONTRACT
+   Shared components consume these tokens so module-local colors cannot mix
+   Default blue, Tropical teal, and Futuristic neon in the same interface.
+   ===================================================== */
+
+:root {
+    --skin-primary: #1f6392;
+    --skin-primary-hover: #174f76;
+    --skin-primary-soft: #e8f3fa;
+    --skin-primary-soft-hover: #d8ebf6;
+    --skin-accent: #1598c2;
+    --skin-surface: #ffffff;
+    --skin-surface-hover: #f5faff;
+    --skin-border: #cfe2ee;
+    --skin-text: #17324a;
+    --skin-heading: #0b2942;
+    --skin-muted: #5f788d;
+    --skin-on-primary: #ffffff;
+    --skin-focus: rgba(31, 99, 146, 0.25);
+}
+
+html[data-theme="dark"]:not([data-app-theme]) {
+    --skin-primary: #45b8ed;
+    --skin-primary-hover: #73ccf2;
+    --skin-primary-soft: #102c40;
+    --skin-primary-soft-hover: #173b53;
+    --skin-accent: #67d0f5;
+    --skin-surface: #0b1d2d;
+    --skin-surface-hover: #10283b;
+    --skin-border: rgba(91, 190, 232, 0.27);
+    --skin-text: #dce9f5;
+    --skin-heading: #f2f8ff;
+    --skin-muted: #a7bed2;
+    --skin-on-primary: #04131e;
+    --skin-focus: rgba(69, 184, 237, 0.30);
+}
+
+html[data-app-theme="tropical"] {
+    --skin-primary: #07879d;
+    --skin-primary-hover: #056b7c;
+    --skin-primary-soft: #ddf6f3;
+    --skin-primary-soft-hover: #c7eeea;
+    --skin-accent: #19aaa4;
+    --skin-surface: rgba(250, 255, 253, 0.96);
+    --skin-surface-hover: #effbf8;
+    --skin-border: rgba(7, 135, 157, 0.25);
+    --skin-text: #16445a;
+    --skin-heading: #08364d;
+    --skin-muted: #587989;
+    --skin-on-primary: #ffffff;
+    --skin-focus: rgba(7, 135, 157, 0.26);
+}
+
+html[data-app-theme="futuristic"] {
+    --skin-primary: #7657ff;
+    --skin-primary-hover: #947cff;
+    --skin-primary-soft: #171b4c;
+    --skin-primary-soft-hover: #252060;
+    --skin-accent: #39c9ff;
+    --skin-surface: rgba(7, 15, 45, 0.94);
+    --skin-surface-hover: rgba(18, 28, 72, 0.97);
+    --skin-border: rgba(125, 101, 255, 0.34);
+    --skin-text: #dfe7ff;
+    --skin-heading: #f5f3ff;
+    --skin-muted: #aebce0;
+    --skin-on-primary: #ffffff;
+    --skin-focus: rgba(94, 211, 255, 0.30);
+}
+
+#page-content-wrapper {
+    color: var(--skin-text);
+}
+
+#page-content-wrapper :is(
+    h1, h2, h3, h4, h5, h6,
+    .card-title, .modal-title, .accordion-header,
+    .section-title, .stat-number, .stat-value
+) {
+    color: var(--skin-heading);
+}
+
+#page-content-wrapper :is(
+    .text-muted, .text-secondary, .form-text, .card-subtitle,
+    .stat-label, .stat-sub
+) {
+    color: var(--skin-muted) !important;
+}
+
+#page-content-wrapper :is(
+    .page-header-modern, .vc-header, .insights-hero, .process-hero,
+    .roadmap-header, .approval-header, .profile-hero, .calendar-hero,
+    .role-dashboard-hero
+) :is(h1, h2, h3, h4, h5, h6, .card-title) {
+    color: #ffffff !important;
+}
+
+#page-content-wrapper :is(
+    .page-header-modern, .vc-header, .insights-hero, .process-hero,
+    .roadmap-header, .approval-header, .profile-hero, .calendar-hero
+) :is(p, small, .text-muted, .text-secondary) {
+    color: rgba(255, 255, 255, 0.84) !important;
+}
+
+#page-content-wrapper :is(
+    .card, .modal-content, .dropdown-menu, .accordion-item,
+    .list-group-item, .table-responsive
+) {
+    border-color: var(--skin-border) !important;
+}
+
+#page-content-wrapper :is(.card, .accordion-item, .list-group-item):hover {
+    border-color: color-mix(in srgb, var(--skin-primary) 58%, transparent) !important;
+}
+
+#page-content-wrapper :is(
+    .btn-primary, .btn-primary-custom, .btn-primary-modern,
+    .btn-action-primary, .app-confirm-submit
+) {
+    background: var(--skin-primary) !important;
+    border-color: var(--skin-primary) !important;
+    color: var(--skin-on-primary) !important;
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--skin-primary) 22%, transparent) !important;
+}
+
+#page-content-wrapper :is(
+    .btn-primary, .btn-primary-custom, .btn-primary-modern,
+    .btn-action-primary, .app-confirm-submit
+):is(:hover, :focus-visible, :active) {
+    background: var(--skin-primary-hover) !important;
+    border-color: var(--skin-primary-hover) !important;
+    color: var(--skin-on-primary) !important;
+    box-shadow: 0 0 0 3px var(--skin-focus), 0 10px 24px color-mix(in srgb, var(--skin-primary) 28%, transparent) !important;
+}
+
+#page-content-wrapper :is(
+    .btn-outline-primary, .btn-outline-secondary, .btn-secondary-action,
+    .btn-outline-modern, .schedule-calendar__open, .delay-action,
+    .evortix-role-planning-action, .evortix-project-notification-action
+) {
+    background: var(--skin-primary-soft) !important;
+    border-color: color-mix(in srgb, var(--skin-primary) 70%, transparent) !important;
+    color: var(--skin-primary) !important;
+}
+
+#page-content-wrapper :is(
+    .btn-outline-primary, .btn-outline-secondary, .btn-secondary-action,
+    .btn-outline-modern, .schedule-calendar__open, .delay-action,
+    .evortix-role-planning-action, .evortix-project-notification-action
+):is(:hover, :focus-visible, :active) {
+    background: var(--skin-primary-hover) !important;
+    border-color: var(--skin-primary-hover) !important;
+    color: var(--skin-on-primary) !important;
+    box-shadow: 0 0 0 3px var(--skin-focus) !important;
+}
+
+.app-navbar .nav-icon-link:is(:hover, :focus-visible),
+.app-navbar .nav-user-link:is(:hover, :focus-visible, .show) {
+    background: var(--skin-primary-soft) !important;
+    color: var(--skin-primary) !important;
+}
+
+#sidebar-wrapper .menu-item:is(:hover, :focus-visible, .active) {
+    background: var(--skin-primary-soft) !important;
+    border-color: var(--skin-primary) !important;
+    color: var(--skin-primary) !important;
+}
+
+#sidebar-wrapper .menu-item:is(:hover, :focus-visible, .active) .menu-icon {
+    color: var(--skin-primary) !important;
+}
+
+#page-content-wrapper :is(a, button, .btn, .menu-item, .nav-link):focus-visible {
+    outline: 3px solid var(--skin-focus) !important;
+    outline-offset: 2px;
+}
+
+html[data-app-theme="futuristic"] :is(
+    .app-navbar .nav-icon-link,
+    .app-navbar .nav-user-name,
+    .app-navbar .nav-user-role
+) {
+    color: var(--skin-text) !important;
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-item:is(:hover, :focus-visible, .active) {
+    background: linear-gradient(90deg, rgba(118, 87, 255, 0.24), rgba(57, 201, 255, 0.08)) !important;
+    color: #ffffff !important;
+    box-shadow: inset 3px 0 var(--skin-accent), 0 0 18px rgba(118, 87, 255, 0.13) !important;
+}
+
+html[data-app-theme="futuristic"] #sidebar-wrapper .menu-item:is(:hover, :focus-visible, .active) .menu-icon {
+    color: var(--skin-accent) !important;
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper :is(
+    .btn-outline-primary, .btn-outline-secondary, .btn-secondary-action,
+    .btn-outline-modern, .schedule-calendar__open, .delay-action
+) {
+    color: #9ce7ff !important;
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper :is(
+    .btn-outline-primary, .btn-outline-secondary, .btn-secondary-action,
+    .btn-outline-modern, .schedule-calendar__open, .delay-action
+):is(:hover, :focus-visible, :active) {
+    background: linear-gradient(135deg, #7657ff, #4935c4) !important;
+    color: #ffffff !important;
+}
+
+/* Default theme dashboard widgets. These components ship with page-local
+   white/near-black rules, so bind them explicitly to the active Default
+   light/dark palette instead of allowing mixed surfaces on hover. */
+html:not([data-app-theme]) #page-content-wrapper :is(
+    .agenda-summary, .agenda-today-badge, .agenda-date-group,
+    .agenda-item, .schedule-calendar__event
+) {
+    background: var(--skin-surface) !important;
+    border-color: var(--skin-border) !important;
+    color: var(--skin-text) !important;
+}
+
+html:not([data-app-theme]) #page-content-wrapper :is(
+    .card:not(.role-dashboard-hero), .modal-content, .dropdown-menu,
+    .accordion-item, .list-group-item
+) {
+    background-color: var(--skin-surface) !important;
+    border-color: var(--skin-border) !important;
+    color: var(--skin-text) !important;
+}
+
+html:not([data-app-theme]) #page-content-wrapper :is(
+    .card:not(.role-dashboard-hero), .list-group-item
+):hover {
+    background-color: var(--skin-surface-hover) !important;
+}
+
+html:not([data-app-theme]) #page-content-wrapper :is(
+    .agenda-item, .schedule-calendar__event
+):is(:hover, :focus-visible) {
+    background: var(--skin-surface-hover) !important;
+    border-color: var(--skin-primary) !important;
+    color: var(--skin-text) !important;
+    box-shadow: 0 8px 20px var(--skin-focus) !important;
+}
+
+html:not([data-app-theme]) #page-content-wrapper :is(
+    .agenda-title, .agenda-next-title, .agenda-date-label, .agenda-text,
+    .agenda-time, .schedule-calendar__event-title
+) {
+    color: var(--skin-heading) !important;
+}
+
+html:not([data-app-theme]) #page-content-wrapper :is(
+    .agenda-subtitle, .agenda-next-label, .agenda-next-meta, .agenda-kicker,
+    .schedule-calendar__event-time, .schedule-calendar__event-desc
+) {
+    color: var(--skin-muted) !important;
+}
+
+html:not([data-app-theme]) #page-content-wrapper :is(
+    .agenda-open-btn, .agenda-more-btn, .schedule-calendar__open
+) {
+    background: var(--skin-primary-soft) !important;
+    border-color: color-mix(in srgb, var(--skin-primary) 55%, transparent) !important;
+    color: var(--skin-primary) !important;
+}
+
+html:not([data-app-theme]) #page-content-wrapper :is(
+    .agenda-open-btn, .agenda-more-btn, .schedule-calendar__open
+):is(:hover, :focus-visible) {
+    background: var(--skin-primary) !important;
+    border-color: var(--skin-primary) !important;
+    color: var(--skin-on-primary) !important;
+}
+
+/* Evortix is appended directly to body and therefore sits outside the normal
+   page wrapper. Give its interactive summary controls the same theme contract. */
+.chat-bot-speech :is(
+    .evortix-role-summary-item, .evortix-project-link,
+    .evortix-project-status-tab, .evortix-role-summary-metric,
+    .evortix-role-planning-suggestion
+) {
+    background: var(--skin-surface) !important;
+    border-color: var(--skin-border) !important;
+    color: var(--skin-text) !important;
+}
+
+.chat-bot-speech :is(
+    .evortix-role-summary-item, .evortix-project-link,
+    .evortix-project-status-tab
+):is(:hover, :focus-visible, .is-active) {
+    background: var(--skin-surface-hover) !important;
+    border-color: var(--skin-primary) !important;
+    color: var(--skin-text) !important;
+    box-shadow: 0 0 0 3px var(--skin-focus) !important;
+}
+
+.chat-bot-speech :is(
+    .evortix-role-summary-title, .evortix-role-summary-item-title,
+    .evortix-role-planning-title, .evortix-project-link-copy strong
+) {
+    color: var(--skin-heading) !important;
+}
+
+.chat-bot-speech :is(
+    .evortix-role-summary-intro, .evortix-role-summary-item-meta,
+    .evortix-role-planning-copy, .evortix-project-link-copy small
+) {
+    color: var(--skin-muted) !important;
+}
+
+.chat-bot-speech :is(
+    .evortix-role-summary-item-icon, .evortix-role-summary-item-arrow,
+    .evortix-project-link > i, .evortix-project-status-tab i
+) {
+    color: var(--skin-primary) !important;
+}
+
+/* Role welcome banners are pale in Default and Tropical, but dark in
+   Futuristic. Do not apply the white headline treatment indiscriminately. */
+html:not([data-app-theme]) #page-content-wrapper .role-dashboard-hero :is(
+    h1, h2, h3, h4, h5, h6, .card-title
+),
+html[data-app-theme="tropical"] #page-content-wrapper .role-dashboard-hero :is(
+    h1, h2, h3, h4, h5, h6, .card-title
+) {
+    color: var(--skin-heading) !important;
+    opacity: 1 !important;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+html:not([data-app-theme]) #page-content-wrapper .role-dashboard-hero :is(
+    p, small, .text-muted, .text-secondary
+),
+html[data-app-theme="tropical"] #page-content-wrapper .role-dashboard-hero :is(
+    p, small, .text-muted, .text-secondary
+) {
+    color: var(--skin-muted) !important;
+    opacity: 1 !important;
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper .role-dashboard-hero :is(
+    h1, h2, h3, h4, h5, h6, .card-title
+) {
+    color: #ffffff !important;
+    opacity: 1 !important;
+    text-shadow: 0 2px 14px rgba(57, 201, 255, 0.18);
+}
+
+html[data-app-theme="futuristic"] #page-content-wrapper .role-dashboard-hero :is(
+    p, small, .text-muted, .text-secondary
+) {
+    color: #c7d8f7 !important;
+    opacity: 1 !important;
+}
+
+#page-content-wrapper :is(
+    .agenda-open-btn, .schedule-calendar__open,
+    .page-header-help-btn, .stat-icon
+) i {
+    color: currentColor !important;
+    opacity: 1 !important;
+}
+
+#page-content-wrapper :is(.agenda-open-btn, .schedule-calendar__open):is(:hover, :focus-visible) i {
+    color: var(--skin-on-primary) !important;
+}
+
+/* Preserve semantic badge contrast inside every welcome banner. */
+#page-content-wrapper .role-dashboard-hero :is(
+    .badge, [class*="overview-badge"]
+) {
+    background: var(--skin-primary) !important;
+    border-color: color-mix(in srgb, var(--skin-primary) 72%, white) !important;
+    color: var(--skin-on-primary) !important;
+}
+
+/* Saturated page banners always use a light foreground. Page-specific PHP
+   styles often assign a dark h1 color with higher specificity, so keep this
+   contract at the very end of the theme stylesheet. */
+#page-content-wrapper :is(
+    .settings-page-header,
+    .page-header-modern,
+    .vc-header,
+    .insights-hero,
+    .process-hero,
+    .process-history-hero,
+    .roadmap-header,
+    .approval-header,
+    .profile-hero,
+    .calendar-hero,
+    .dashboard-header
+) :is(h1, h2, h3, h4, h5, h6, .card-title, .modal-title) {
+    color: #ffffff !important;
+    opacity: 1 !important;
+    text-shadow: 0 1px 2px rgba(4, 31, 50, 0.16);
+}
+
+#page-content-wrapper :is(
+    .settings-page-header,
+    .page-header-modern,
+    .vc-header,
+    .insights-hero,
+    .process-hero,
+    .process-history-hero,
+    .roadmap-header,
+    .approval-header,
+    .profile-hero,
+    .calendar-hero,
+    .dashboard-header
+) :is(p, small, .text-muted, .text-secondary, .subtitle) {
+    color: rgba(255, 255, 255, 0.88) !important;
+    opacity: 1 !important;
+}
+
+/* The illustrated role hero is the exception: Default and Tropical are pale
+   and therefore retain the dark foreground established immediately above. */
+html:not([data-app-theme]) #page-content-wrapper .role-dashboard-hero :is(
+    h1, h2, h3, h4, h5, h6, p, small, .text-muted, .text-secondary
+),
+html[data-app-theme="tropical"] #page-content-wrapper .role-dashboard-hero :is(
+    h1, h2, h3, h4, h5, h6, p, small, .text-muted, .text-secondary
+) {
+    color: var(--skin-heading) !important;
+}
+
+html:not([data-app-theme]) #page-content-wrapper .role-dashboard-hero :is(
+    p, small, .text-muted, .text-secondary
+),
+html[data-app-theme="tropical"] #page-content-wrapper .role-dashboard-hero :is(
+    p, small, .text-muted, .text-secondary
+) {
+    color: var(--skin-muted) !important;
+}

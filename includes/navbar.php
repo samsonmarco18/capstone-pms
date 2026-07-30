@@ -6,6 +6,10 @@ $notifications = [];
 $unreadCount = 0;
 $inAppNotificationsEnabled = (int) ($user['in_app_notifications'] ?? 1) === 1;
 $preferredDateFormat = trim((string) ($user['date_format'] ?? 'M d, Y')) ?: 'M d, Y';
+$navbarThemePreference = (string) ($user['theme_preference'] ?? 'default');
+if (!in_array($navbarThemePreference, ['tropical', 'futuristic'], true)) {
+    $navbarThemePreference = 'default';
+}
 
 if ($user && $inAppNotificationsEnabled) {
     $unreadCount = getUnreadNotificationsCount((int) $user['id']);
@@ -123,11 +127,13 @@ $appUserContext = [
                     </a>
                 </li>
 
+                <?php if ($navbarThemePreference === 'default'): ?>
                 <li class="nav-item">
-                    <button class="btn btn-link nav-link nav-icon-link" id="darkModeToggle" type="button" title="Dark mode">
+                    <button class="btn btn-link nav-link nav-icon-link" id="darkModeToggle" type="button" title="Switch light or dark mode" aria-label="Switch light or dark mode">
                         <i class="fas fa-moon"></i>
                     </button>
                 </li>
+                <?php endif; ?>
 
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 nav-user-link" href="#" id="navbarUserMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">

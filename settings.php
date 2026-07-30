@@ -26,12 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_preferences']) &
     $timezoneOptions = userPreferenceTimezoneOptions();
     $dateFormatOptions = userPreferenceDateFormatOptions();
 
-    $themePreference = (string) ($_POST['theme_preference'] ?? 'tropical');
+    $themePreference = (string) ($_POST['theme_preference'] ?? 'default');
     $timezone = (string) ($_POST['timezone'] ?? 'Asia/Manila');
     $dateFormat = (string) ($_POST['date_format'] ?? 'M d, Y');
 
     if (!isset($themeOptions[$themePreference])) {
-        $themePreference = 'tropical';
+        $themePreference = 'default';
     }
     if (!isset($timezoneOptions[$timezone])) {
         $timezone = 'Asia/Manila';
@@ -400,7 +400,7 @@ include 'includes/navbar.php';
 .theme-preview-grid {
     display: grid;
     gap: .85rem;
-    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
 }
 
 .theme-preview-option {
@@ -495,6 +495,14 @@ include 'includes/navbar.php';
     --preview-bar: linear-gradient(90deg, #e7eef3 0 50%, #18334b 50% 100%);
     --preview-sidebar: linear-gradient(90deg, #cfe5f1 0 50%, #0d4e70 50% 100%);
     --preview-line: #7ba9bf;
+}
+
+.theme-preview-option[data-theme-preview="default"] .theme-preview-frame {
+    --preview-bg: #edf4f8;
+    --preview-window: #ffffff;
+    --preview-bar: #e7eef3;
+    --preview-sidebar: #cfe5f1;
+    --preview-line: #7895a6;
 }
 
 .theme-preview-option[data-theme-preview="light"] .theme-preview-frame {
@@ -851,7 +859,7 @@ include 'includes/navbar.php';
                         <div class="settings-section-body">
                             <div class="settings-field settings-theme-field">
                                 <label class="form-label" id="themePreferenceLabel" for="themePreference">Interface theme</label>
-                                <small class="settings-field-note">Choose a visual skin. Use the moon button in the navbar to switch between light and dark mode.</small>
+                                <small class="settings-field-note">Default includes the navbar light/dark switch. Tropical Coast stays light, and Futuristic Neon stays dark.</small>
                                 <select class="visually-hidden" id="themePreference" name="theme_preference" aria-labelledby="themePreferenceLabel">
                                     <?php foreach ($themeOptions as $value => $label): ?>
                                         <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $preferences['theme_preference'] === $value ? 'selected' : ''; ?>>
@@ -1089,7 +1097,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     themePreviewOptions.forEach(function (option) {
         option.addEventListener('click', function () {
-            selectThemePreview(option.dataset.themePreview || 'tropical');
+            selectThemePreview(option.dataset.themePreview || 'default');
         });
     });
 
@@ -1158,11 +1166,14 @@ try {
     const savedThemePreference = <?php echo json_encode((string) $preferences['theme_preference']); ?>;
     const visualTheme = ['tropical', 'futuristic'].includes(savedThemePreference)
         ? savedThemePreference
-        : 'tropical';
-    const storedColorMode = window.localStorage.getItem('theme');
-    const appliedTheme = ['light', 'dark'].includes(storedColorMode)
-        ? storedColorMode
-        : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        : '';
+    if (savedThemePreference !== 'default') {
+        window.localStorage.removeItem('theme');
+    }
+    const storedDefaultMode = window.localStorage.getItem('theme');
+    const appliedTheme = savedThemePreference === 'futuristic'
+        ? 'dark'
+        : (savedThemePreference === 'default' && storedDefaultMode === 'dark' ? 'dark' : 'light');
     document.documentElement.setAttribute('data-theme', appliedTheme);
     document.body.setAttribute('data-theme', appliedTheme);
     if (visualTheme) {

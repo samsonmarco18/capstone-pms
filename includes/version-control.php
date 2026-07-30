@@ -60,18 +60,46 @@ function vcGetAccessibleProjects(mysqli|PgsqlMysqliCompatConnection $conn, array
     }
 
     if ($role === 'developer') {
+        $departmentAssignmentJoin = '';
+        $departmentAssignmentCondition = '';
+        $hasDepartmentAssignmentAccess = false;
+
+        if (
+            dbTableExists($conn, 'methodology_task_departments')
+            && dbColumnExists($conn, 'methodology_task_departments', 'assigned_developer_id')
+        ) {
+            $departmentAssignmentJoin = "
+             LEFT JOIN methodology_task_departments mtd
+                ON mtd.project_id = p.id AND mtd.assigned_developer_id = ?";
+            $departmentAssignmentCondition = "
+                OR mtd.id IS NOT NULL";
+            $hasDepartmentAssignmentAccess = true;
+        }
+
         $stmt = $conn->prepare(
             "SELECT DISTINCT p.id, p.name, p.status, c.name AS client_name
              FROM projects p
              INNER JOIN clients c ON c.id = p.client_id
              LEFT JOIN tasks t ON t.project_id = p.id AND t.assigned_to = ?
+             LEFT JOIN methodology_tasks mt
+                ON mt.project_id = p.id AND mt.assigned_developer_id = ?
              LEFT JOIN developer_allocations da ON da.project_id = p.id
              LEFT JOIN developer_allocation_assignments daa
-                ON daa.allocation_id = da.id AND daa.developer_id = ?
-             WHERE t.id IS NOT NULL OR daa.id IS NOT NULL
+                ON daa.allocation_id = da.id AND daa.developer_id = ?"
+             . $departmentAssignmentJoin .
+            "
+             WHERE t.id IS NOT NULL
+                OR mt.id IS NOT NULL
+                OR daa.id IS NOT NULL"
+             . $departmentAssignmentCondition .
+            "
              ORDER BY p.name"
         );
-        $stmt->bind_param('ii', $userId, $userId);
+        if ($hasDepartmentAssignmentAccess) {
+            $stmt->bind_param('iiii', $userId, $userId, $userId, $userId);
+        } else {
+            $stmt->bind_param('iii', $userId, $userId, $userId);
+        }
         $stmt->execute();
         $projects = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();

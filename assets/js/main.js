@@ -459,27 +459,20 @@ function setStoredSidebarValue(key, value) {
 function initDarkMode() {
     const root = $('html');
     const body = $('body');
-    const serverPreference = String(window.APP_USER_PREFERENCES?.theme || 'tropical');
-    const visualTheme = ['tropical', 'futuristic'].includes(serverPreference) ? serverPreference : 'tropical';
-    let colorMode = '';
+    const serverPreference = String(window.APP_USER_PREFERENCES?.theme || 'default');
+    const visualTheme = ['tropical', 'futuristic'].includes(serverPreference) ? serverPreference : '';
+    let defaultColorMode = 'light';
 
     try {
-        const localTheme = localStorage.getItem('theme');
-        if (localTheme === 'light' || localTheme === 'dark') {
-            colorMode = localTheme;
-        } else if (localTheme === 'tropical' || localTheme === 'futuristic') {
+        if (serverPreference === 'default') {
+            defaultColorMode = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
+        } else {
             localStorage.removeItem('theme');
         }
     } catch (error) {
-        // Use the saved server preference when browser storage is unavailable.
+        // Theme selection still works when browser storage is unavailable.
     }
 
-    const resolveTheme = preference => {
-        if (preference === 'system') {
-            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        return preference === 'dark' ? 'dark' : 'light';
-    };
     const applyTheme = theme => {
         root.attr('data-theme', theme);
         body.attr('data-theme', theme);
@@ -490,40 +483,26 @@ function initDarkMode() {
             root.removeAttr('data-app-theme');
             body.removeAttr('data-app-theme');
         }
-        updateThemeIcon(theme);
+        const icon = $('#darkModeToggle i');
+        icon.removeClass('fa-moon fa-sun').addClass(theme === 'dark' ? 'fa-sun' : 'fa-moon');
     };
 
-    applyTheme(colorMode || resolveTheme(serverPreference));
+    applyTheme(serverPreference === 'futuristic'
+        ? 'dark'
+        : (serverPreference === 'default' ? defaultColorMode : 'light'));
 
-    $('#darkModeToggle').on('click', function (event) {
-        event.preventDefault();
-        const nextTheme = (root.attr('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
-        applyTheme(nextTheme);
-        try {
-            localStorage.setItem('theme', nextTheme);
-        } catch (error) {
-            // The toggle still works for the current page.
-        }
-    });
-
-    if (serverPreference === 'system') {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', event => {
-            let hasLocalOverride = false;
+    if (serverPreference === 'default') {
+        $('#darkModeToggle').on('click', function (event) {
+            event.preventDefault();
+            const nextTheme = (root.attr('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
+            applyTheme(nextTheme);
             try {
-                hasLocalOverride = ['light', 'dark'].includes(localStorage.getItem('theme'));
+                localStorage.setItem('theme', nextTheme);
             } catch (error) {
-                hasLocalOverride = false;
-            }
-            if (!hasLocalOverride) {
-                applyTheme(event.matches ? 'dark' : 'light');
+                // The mode still changes for the current page.
             }
         });
     }
-}
-
-function updateThemeIcon(theme) {
-    const icon = $('#darkModeToggle i');
-    icon.removeClass('fa-moon fa-sun').addClass(theme === 'dark' ? 'fa-sun' : 'fa-moon');
 }
 
 function initNotifications() {
