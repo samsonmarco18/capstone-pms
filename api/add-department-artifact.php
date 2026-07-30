@@ -50,6 +50,12 @@ if (!in_array($artifactType, $allowedTypes, true)) {
     $artifactType = 'department_handoff';
 }
 
+if ($artifactType === 'design_handoff' && $externalUrl === '') {
+    http_response_code(400);
+    echo json_encode(['error' => 'Wireframe link is required for a design handoff.']);
+    exit;
+}
+
 if ($externalUrl !== '' && filter_var($externalUrl, FILTER_VALIDATE_URL) === false) {
     http_response_code(400);
     echo json_encode(['error' => 'Please enter a valid link.']);
