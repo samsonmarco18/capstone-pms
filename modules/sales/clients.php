@@ -2302,6 +2302,11 @@ body:has(#addClientModal.show, #addProjectModal.show) #page-content-wrapper {
     isolation: auto !important;
 }
 
+body:has(#addClientModal.show, #addProjectModal.show) #page-content-wrapper > .app-navbar {
+    z-index: 1057;
+    pointer-events: auto;
+}
+
 #page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjectModal).modal-modern.add-client-modal {
     left: var(--shell-sidebar-collapsed-width);
     width: calc(100vw - var(--shell-sidebar-collapsed-width));
@@ -7152,7 +7157,7 @@ body:has(#page-content-wrapper.sidebar-collapsed :is(#addClientModal, #addProjec
 </div>
 
 <!-- Add Client Modal (same content as before) -->
-<div class="modal fade modal-modern add-client-modal" id="addClientModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+<div class="modal fade modal-modern add-client-modal" id="addClientModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false" data-bs-focus="false">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
@@ -7577,7 +7582,7 @@ Attendees:</textarea>
 </div>
 
 <!-- Add Project Modal -->
-<div class="modal fade modal-modern add-client-modal add-project-modal" id="addProjectModal" tabindex="-1">
+<div class="modal fade modal-modern add-client-modal add-project-modal" id="addProjectModal" tabindex="-1" data-bs-focus="false">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
