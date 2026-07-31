@@ -150,6 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 'file_name' => $originalFileName,
                             ]);
                             $_SESSION['success'] = 'Document uploaded successfully';
+                            $_SESSION['architecture_document_upload_succeeded'] = true;
                         } else {
                             $_SESSION['error'] = 'The document was uploaded, but it could not be saved to the document list.';
                         }
@@ -169,7 +170,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 $documentFlashSuccess = trim((string) ($_SESSION['success'] ?? ''));
 $documentFlashError = trim((string) ($_SESSION['error'] ?? ''));
-unset($_SESSION['success'], $_SESSION['error']);
+$documentUploadSucceeded = !empty($_SESSION['architecture_document_upload_succeeded']);
+unset($_SESSION['success'], $_SESSION['error'], $_SESSION['architecture_document_upload_succeeded']);
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -614,10 +616,15 @@ a.progress-step:hover {
 }
 
 .document-item__action--view:hover {
-    background: var(--theme-primary);
-    border-color: var(--theme-primary);
-    color: #ffffff;
+    background: linear-gradient(135deg, var(--theme-primary), var(--theme-dark));
+    border-color: var(--theme-dark);
+    box-shadow: 0 6px 14px rgba(31, 99, 146, 0.2);
+    color: #ffffff !important;
     transform: translateY(-1px);
+}
+
+.document-item__action--view:hover i {
+    color: inherit !important;
 }
 
 .document-item__action--delete {
@@ -641,7 +648,7 @@ a.progress-step:hover {
 /* Document form actions */
 .document-actions {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.7fr) minmax(0, 1.15fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.65rem;
     align-items: stretch;
     margin-top: 1.5rem;
@@ -688,10 +695,10 @@ a.progress-step:hover {
 }
 
 .document-actions .btn-success-modern {
-    background: linear-gradient(135deg, #10a977 0%, #07845e 100%);
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
     color: #ffffff !important;
     border: 1px solid transparent;
-    box-shadow: 0 5px 14px rgba(5, 150, 105, 0.2);
+    box-shadow: 0 5px 14px rgba(31, 99, 146, 0.2);
 }
 
 .document-actions .btn-success-modern :is(span, i) {
@@ -716,7 +723,7 @@ a.progress-step:hover {
 }
 
 .document-actions .btn-success-modern:hover {
-    box-shadow: 0 8px 18px rgba(5, 150, 105, 0.27);
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.3);
     color: #ffffff !important;
 }
 
@@ -726,9 +733,9 @@ a.progress-step:hover {
 }
 
 .document-actions .btn-success-modern.disabled {
-    background: var(--gray-200);
-    color: var(--gray-500) !important;
-    border-color: var(--gray-300);
+    background: #edf2f7;
+    color: #718096 !important;
+    border-color: #d5e0e8;
     box-shadow: none;
     cursor: not-allowed;
     opacity: 1;
@@ -1101,6 +1108,12 @@ a.progress-step:hover {
     color: #c4e6ff;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-actions .btn-success-modern.disabled {
+    background: #142235;
+    border-color: #29435a;
+    color: #7f98ad !important;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .document-feedback.success {
     background: rgba(22, 101, 58, .2);
     border-color: rgba(74, 222, 128, .34);
@@ -1201,10 +1214,10 @@ a.progress-step:hover {
                     </button>
                 </div>
                 <div class="card-body">
-                    <form method="POST" enctype="multipart/form-data" data-app-loading data-loading-title="Uploading document" data-loading-text="Please wait while the architecture document is uploaded.">
+                    <form method="POST" enctype="multipart/form-data" id="architectureDocumentUploadForm" autocomplete="off" <?php echo $documentUploadSucceeded ? 'data-generic-draft-disabled="true"' : ''; ?> data-app-loading data-loading-title="Uploading document" data-loading-text="Please wait while the architecture document is uploaded.">
                         <div class="mb-3">
                             <label class="form-label">Document Type</label>
-                            <select name="document_type" class="form-select-modern" required>
+                            <select id="architectureDocumentType" name="document_type" class="form-select-modern" required>
                                 <option value="architecture_plan">Architecture Plan</option>
                                 <option value="workflow_diagram">Workflow Diagram</option>
                                 <option value="system_flow">System Flow Diagram</option>
@@ -1215,7 +1228,7 @@ a.progress-step:hover {
                         
                         <div class="mb-3">
                             <label class="form-label">Description</label>
-                            <textarea name="description" class="form-control-modern" rows="3" required placeholder="Brief description of the document..."></textarea>
+                            <textarea id="architectureDocumentDescription" name="description" class="form-control-modern" rows="3" required placeholder="Brief description of the document..."></textarea>
                         </div>
                         
                         <div class="mb-3">
@@ -1241,7 +1254,12 @@ a.progress-step:hover {
                         
                         <div class="document-actions">
                             <button type="submit" class="btn-upload"><i class="fas fa-upload" aria-hidden="true"></i><span>Upload Document</span></button>
-                            <a href="summary.php?id=<?php echo $projectId; ?>" class="btn-success-modern <?php echo $checklistReadyForSummary ? '' : 'disabled'; ?>" <?php echo $checklistReadyForSummary ? '' : 'aria-disabled="true" tabindex="-1"'; ?>><span>Proceed to Summary</span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+                            <a
+                                href="summary.php?id=<?php echo $projectId; ?>"
+                                class="btn-success-modern <?php echo $checklistReadyForSummary ? '' : 'disabled'; ?>"
+                                title="<?php echo $checklistReadyForSummary ? 'Proceed to project summary' : 'Upload an Architecture Plan and Workflow Diagram to continue'; ?>"
+                                <?php echo $checklistReadyForSummary ? '' : 'aria-disabled="true" tabindex="-1"'; ?>
+                            ><span>Proceed to Summary</span><i class="fas fa-arrow-right" aria-hidden="true"></i></a>
                         </div>
                     </form>
                 </div>
@@ -1363,8 +1381,32 @@ a.progress-step:hover {
 <script>
 const summaryGateLink = document.querySelector('[data-summary-gate]');
 const documentInlineError = document.getElementById('documentInlineError');
+const architectureDocumentUploadForm = document.getElementById('architectureDocumentUploadForm');
+const architectureDocumentType = document.getElementById('architectureDocumentType');
+const architectureDocumentDescription = document.getElementById('architectureDocumentDescription');
 const architectDocumentFile = document.getElementById('architectDocumentFile');
 const architectDocumentFileSummary = document.getElementById('architectDocumentFileSummary');
+const documentUploadSucceeded = <?php echo $documentUploadSucceeded ? 'true' : 'false'; ?>;
+const architectureDocumentDraftKey = `erniPms.formDraft.${window.location.pathname}.architectureDocumentUploadForm`;
+
+const resetArchitectureDocumentForm = () => {
+    architectureDocumentUploadForm?.reset();
+    if (architectureDocumentType) architectureDocumentType.value = 'architecture_plan';
+    if (architectureDocumentDescription) architectureDocumentDescription.value = '';
+    if (architectDocumentFile) architectDocumentFile.value = '';
+    if (architectDocumentFileSummary) {
+        architectDocumentFileSummary.textContent = 'No file chosen';
+        architectDocumentFileSummary.removeAttribute('title');
+    }
+};
+
+if (documentUploadSucceeded) {
+    try {
+        window.localStorage.removeItem(architectureDocumentDraftKey);
+    } catch (error) {}
+    resetArchitectureDocumentForm();
+    window.addEventListener('pageshow', resetArchitectureDocumentForm, { once: true });
+}
 
 architectDocumentFile?.addEventListener('change', () => {
     const selectedFile = architectDocumentFile.files?.[0];
@@ -1413,7 +1455,22 @@ async function deleteDocument(id) {
         url: '../../api/delete-document.php',
         method: 'POST',
         data: { id: id },
-        success: function() { location.reload(); },
+        dataType: 'json',
+        success: function(response) {
+            if (!response?.success) {
+                window.appToast?.('Document not deleted', response?.error || 'Unable to delete this document.', 'error');
+                return;
+            }
+
+            location.reload();
+        },
+        error: function(xhr) {
+            window.appToast?.(
+                'Document not deleted',
+                xhr.responseJSON?.error || 'Unable to delete this document. Please try again.',
+                'error'
+            );
+        },
         complete: function() {
             if (window.appHideLoading) window.appHideLoading();
         }

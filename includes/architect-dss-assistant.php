@@ -94,17 +94,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const config = <?php echo json_encode($architectDssAssistantConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
     const allItems = Array.isArray(config.items) ? config.items : [];
     const persistDecisions = config.persistDecisions !== false;
+    const autoStart = config.autoStart !== false;
     const stateKey = config.stateKey || `evortix.dss.v2:${location.pathname}:${new URLSearchParams(location.search).get('id') || ''}:${config.title || 'review'}`;
     let savedDecisions = {};
     if (persistDecisions) {
         try { savedDecisions = JSON.parse(localStorage.getItem(stateKey) || '{}') || {}; } catch (error) { savedDecisions = {}; }
     }
     const itemDecisionKey = (item) => [item?.selector, item?.label, item?.value ?? '', item?.count ?? ''].join('|');
-    const items = allItems.filter((item) => !savedDecisions[itemDecisionKey(item)]);
+    let items = allItems.filter((item) => !savedDecisions[itemDecisionKey(item)]);
     let itemIndex = 0;
     let acceptedCount = 0;
     let skippedCount = 0;
-    let reviewCompleted = false;
+    let reviewCompleted = !autoStart;
     const replayTrigger = document.querySelector('[data-evortix-dss-replay]');
     const hideSourceControls = () => {
         document.querySelectorAll('.architect-dss-source-controls').forEach((controls) => {
@@ -256,6 +257,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const replay = event.target.closest('[data-evortix-dss-replay]');
         if (replay) {
             event.preventDefault();
+            if (!autoStart) {
+                items = [...allItems];
+                itemIndex = 0;
+                acceptedCount = 0;
+                skippedCount = 0;
+                reviewCompleted = items.length === 0;
+                if (!reviewCompleted) showDecision();
+                return;
+            }
             if (persistDecisions) try { localStorage.removeItem(stateKey); } catch (error) {}
             location.reload();
             return;
@@ -291,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.evortixAnnounceNotification?.(heading, message, '');
     }, true);
 
-    if (config.title && config.message && items.length > 0) {
+    if (autoStart && config.title && config.message && items.length > 0) {
         window.setTimeout(showDecision, Math.max(0, Number(config.startDelay ?? 650)));
     }
 });

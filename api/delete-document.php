@@ -2,6 +2,7 @@
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/file-storage.php';
 requireRole('architect');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -21,7 +22,7 @@ if ($documentId <= 0) {
 }
 
 $stmt = $conn->prepare("
-    SELECT ad.id, ad.project_id, ad.file_path, p.architect_id
+    SELECT ad.id, ad.project_id, ad.file_path, ad.uploaded_by, p.architect_id
     FROM architecture_documents ad
     INNER JOIN projects p ON p.id = ad.project_id
     WHERE ad.id = ?
@@ -38,7 +39,11 @@ if (!$document) {
     exit;
 }
 
-if ((int) ($document['architect_id'] ?? 0) !== (int) $user['id']) {
+$currentUserId = (int) ($user['id'] ?? 0);
+$isUploader = (int) ($document['uploaded_by'] ?? 0) === $currentUserId;
+$isAssignedArchitect = (int) ($document['architect_id'] ?? 0) === $currentUserId;
+
+if (!$isUploader && !$isAssignedArchitect) {
     http_response_code(403);
     echo json_encode(['success' => false, 'error' => 'You do not have permission to delete this document']);
     exit;
@@ -46,7 +51,8 @@ if ((int) ($document['architect_id'] ?? 0) !== (int) $user['id']) {
 
 $deleteStmt = $conn->prepare("DELETE FROM architecture_documents WHERE id = ?");
 $deleteStmt->bind_param('i', $documentId);
-$deleted = $deleteStmt->execute();
+$deleteExecuted = $deleteStmt->execute();
+$deleted = $deleteExecuted && (int) ($conn->affected_rows ?? 0) === 1;
 $deleteStmt->close();
 
 if (!$deleted) {
@@ -57,16 +63,13 @@ if (!$deleted) {
 
 $relativePath = trim((string) ($document['file_path'] ?? ''));
 if ($relativePath !== '') {
-    $absolutePath = realpath(__DIR__ . '/../');
-    if ($absolutePath !== false) {
-        $normalizedPath = $absolutePath . DIRECTORY_SEPARATOR . str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relativePath);
-        if (is_file($normalizedPath)) {
-            @unlink($normalizedPath);
-        }
+    $absolutePath = storageResolveRelativePath($relativePath);
+    if ($absolutePath !== null && is_file($absolutePath)) {
+        @unlink($absolutePath);
     }
 }
 
-logActivity((int) $user['id'], 'delete_architecture_document', 'architecture_documents', $documentId);
+logActivity($currentUserId, 'delete_architecture_document', 'architecture_documents', $documentId);
 
 echo json_encode(['success' => true]);
 ?>

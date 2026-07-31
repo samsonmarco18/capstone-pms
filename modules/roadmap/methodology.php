@@ -2710,6 +2710,44 @@ include '../../includes/navbar.php';
     line-height: 1.25;
 }
 
+.architect-roadmap-footer {
+    align-items: center;
+    display: flex;
+    justify-content: flex-end;
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--roadmap-line);
+    background: #fff;
+}
+
+.architect-roadmap-proceed {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+    gap: .5rem;
+    min-height: 40px;
+    padding: .55rem .9rem;
+    border: 0;
+    border-radius: 9px;
+    background: linear-gradient(135deg, var(--roadmap-primary) 0%, var(--roadmap-primary-dark) 100%);
+    box-shadow: 0 4px 12px rgba(31, 99, 146, .18);
+    color: #fff !important;
+    font-size: .78rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.architect-roadmap-proceed:hover,
+.architect-roadmap-proceed:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(31, 99, 146, .3);
+    color: #fff !important;
+}
+
+.architect-roadmap-proceed i {
+    color: inherit !important;
+}
+
 .architect-workspace-legend {
     margin: 0;
     padding: .75rem 1.25rem;
@@ -4602,6 +4640,11 @@ include '../../includes/navbar.php';
     box-shadow: 0 8px 18px rgba(0, 0, 0, .28);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .architect-roadmap-footer {
+    border-color: #263244;
+    background: #111827;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) :is(.architect-workspace-roadmap, .monitoring-workspace-roadmap) .phase-card-roadmap:hover {
     background: var(--phase-surface-dark) !important;
 }
@@ -5446,18 +5489,6 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                         </span>
                     </span>
                 </div>
-                <div class="roadmap-toolbar-actions" aria-label="Roadmap actions">
-                    <?php if ($canEditArchitecture): ?>
-                        <a
-                            class="btn btn-outline-primary"
-                            href="<?php echo BASE_URL; ?>modules/architect/upload-diagram.php?id=<?php echo (int) $selectedProjectId; ?>"
-                            data-gated-forward-link
-                            data-block-message="<?php echo htmlspecialchars($documentGateMessage); ?>"
-                        >
-                            Continue to Documents <i class="fas fa-arrow-right ms-2" aria-hidden="true"></i>
-                        </a>
-                    <?php endif; ?>
-                </div>
             </div>
         <?php else: ?>
             <form method="GET" class="row g-3 align-items-end">
@@ -6034,6 +6065,18 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
         <?php if ($isSulMonitoring): ?>
             </section>
         <?php elseif ($selectedProject): ?>
+            <?php if ($canEditArchitecture): ?>
+                <footer class="architect-roadmap-footer">
+                    <a
+                        class="architect-roadmap-proceed"
+                        href="<?php echo BASE_URL; ?>modules/architect/upload-diagram.php?id=<?php echo (int) $selectedProjectId; ?>"
+                        data-gated-forward-link
+                        data-block-message="<?php echo htmlspecialchars($documentGateMessage); ?>"
+                    >
+                        Proceed to Document <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                    </a>
+                </footer>
+            <?php endif; ?>
             </section>
         <?php endif; ?>
 
