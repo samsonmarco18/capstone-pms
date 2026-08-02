@@ -982,6 +982,123 @@ include '../../includes/navbar.php';
     color: white;
 }
 
+/* Verify Payment Modal */
+#verifyPaymentModal .modal-dialog {
+    max-width: 560px;
+}
+
+#verifyPaymentModal .modal-content {
+    border: 0;
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(15, 42, 64, 0.22);
+    overflow: hidden;
+}
+
+#verifyPaymentModal .receipt-payment-modal__header {
+    background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary-light) 100%) !important;
+    border: 0;
+    color: #fff;
+    padding: 1rem 1.25rem;
+}
+
+#verifyPaymentModal .receipt-payment-modal__header .modal-title,
+#verifyPaymentModal .receipt-payment-modal__header .modal-title i {
+    color: #fff !important;
+}
+
+#verifyPaymentModal .receipt-payment-modal__header .btn-close {
+    filter: brightness(0) invert(1);
+    opacity: 0.9;
+}
+
+#verifyPaymentModal .modal-body {
+    padding: 1.25rem;
+}
+
+#verifyPaymentModal .receipt-payment-modal__intro {
+    color: var(--gray-600);
+    font-size: 0.88rem;
+    line-height: 1.55;
+    margin: 0 0 1.15rem;
+}
+
+#verifyPaymentModal .receipt-payment-upload {
+    align-items: stretch;
+    background:
+        linear-gradient(135deg, rgba(31, 99, 146, 0.055), rgba(255, 255, 255, 0.96)),
+        #fff;
+    border: 1px dashed rgba(31, 99, 146, 0.28);
+    border-radius: 12px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: 48px;
+    overflow: hidden;
+    position: relative;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+#verifyPaymentModal .receipt-payment-upload:hover,
+#verifyPaymentModal .receipt-payment-upload:focus-within {
+    border-color: rgba(31, 99, 146, 0.58);
+    box-shadow: 0 8px 20px rgba(31, 99, 146, 0.12);
+}
+
+#verifyPaymentModal .receipt-payment-upload__button {
+    align-items: center;
+    background: #e8f3fa;
+    border-right: 1px solid rgba(31, 99, 146, 0.16);
+    color: var(--theme-primary);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.84rem;
+    font-weight: 700;
+    gap: 0.45rem;
+    justify-content: center;
+    margin: 0;
+    padding: 0 0.9rem;
+    transition: background 0.18s ease, color 0.18s ease;
+    white-space: nowrap;
+}
+
+#verifyPaymentModal .receipt-payment-upload__button:hover {
+    background: var(--theme-primary);
+    color: #fff;
+}
+
+#verifyPaymentModal .receipt-payment-upload__summary {
+    align-self: center;
+    color: #17324d;
+    font-size: 0.86rem;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 0.9rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#verifyPaymentModal .receipt-payment-upload__input {
+    height: 1px;
+    left: 0;
+    opacity: 0;
+    position: absolute;
+    top: 0;
+    width: 1px;
+}
+
+#verifyPaymentModal .receipt-payment-modal__footer {
+    background: #f8fbfd;
+    border-top: 1px solid var(--gray-200);
+    gap: 0.55rem;
+    padding: 0.9rem 1.25rem;
+}
+
+#verifyPaymentModal .receipt-payment-modal__footer .btn {
+    border-radius: 10px;
+    font-weight: 700;
+    min-height: 42px;
+    padding-inline: 1rem;
+}
+
 /* Empty State */
 .empty-state-modern {
     text-align: center;
@@ -1108,6 +1225,37 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .receipt-pagination__page.is-current {
     background: rgba(31, 99, 146, 0.24);
     color: #8cc7ff !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .modal-content,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .modal-body {
+    background: #071321;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .receipt-payment-modal__intro,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .form-text {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .receipt-payment-upload {
+    background: rgba(10, 27, 44, 0.72);
+    border-color: rgba(138, 210, 255, 0.2);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .receipt-payment-upload__button {
+    background: rgba(31, 99, 146, 0.24);
+    border-color: rgba(138, 210, 255, 0.16);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .receipt-payment-upload__summary {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #verifyPaymentModal .receipt-payment-modal__footer {
+    background: #0a1b2c;
+    border-color: rgba(138, 210, 255, 0.16);
 }
 
 /* Responsive */
@@ -1459,13 +1607,13 @@ include '../../includes/navbar.php';
 <div class="modal fade" id="verifyPaymentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <form method="POST" enctype="multipart/form-data" class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-file-circle-check me-2 text-primary"></i>Verify Payment</h5>
+            <div class="modal-header receipt-payment-modal__header">
+                <h5 class="modal-title"><i class="fas fa-file-circle-check me-2"></i>Verify Payment</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <input type="hidden" name="receipt_id" id="verify_receipt_id">
-                <p class="text-muted mb-3">
+                <p class="receipt-payment-modal__intro">
                     Attach the client email screenshot, payment slip, bank confirmation, or other proof before issuing the official paid receipt.
                 </p>
                 <div class="mb-3">
@@ -1473,12 +1621,19 @@ include '../../includes/navbar.php';
                     <input type="text" id="verify_receipt_number" class="form-control" readonly>
                 </div>
                 <div>
-                    <label class="form-label">Payment Proof</label>
-                    <input type="file" name="payment_proof" class="form-control" accept=".pdf,.png,.jpg,.jpeg,.webp" required>
+                    <label class="form-label" for="verifyPaymentProof">Payment Proof</label>
+                    <div class="receipt-payment-upload">
+                        <label class="receipt-payment-upload__button" for="verifyPaymentProof">
+                            <i class="fas fa-paperclip" aria-hidden="true"></i>
+                            <span>Choose File</span>
+                        </label>
+                        <span class="receipt-payment-upload__summary" id="verifyPaymentProofSummary">No file chosen</span>
+                        <input id="verifyPaymentProof" type="file" name="payment_proof" class="receipt-payment-upload__input" accept=".pdf,.png,.jpg,.jpeg,.webp" required>
+                    </div>
                     <div class="form-text">Accepted files: PDF, PNG, JPG, JPEG, WEBP.</div>
                 </div>
             </div>
-            <div class="modal-footer">
+            <div class="modal-footer receipt-payment-modal__footer">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" name="verify_payment" class="btn btn-primary">
                     <i class="fas fa-check me-1"></i> Verify and Mark Paid
@@ -1519,8 +1674,18 @@ function editReceipt(receipt) {
 function verifyPayment(id, receiptNumber) {
     document.getElementById('verify_receipt_id').value = id || '';
     document.getElementById('verify_receipt_number').value = receiptNumber || '';
+    const proofInput = document.getElementById('verifyPaymentProof');
+    const proofSummary = document.getElementById('verifyPaymentProofSummary');
+    if (proofInput) proofInput.value = '';
+    if (proofSummary) proofSummary.textContent = 'No file chosen';
     showReceiptModal('verifyPaymentModal');
 }
+
+document.getElementById('verifyPaymentProof')?.addEventListener('change', function () {
+    const summary = document.getElementById('verifyPaymentProofSummary');
+    if (!summary) return;
+    summary.textContent = this.files?.[0]?.name || 'No file chosen';
+});
 
 document.getElementById('receiptPageSize')?.addEventListener('change', function () {
     window.location.href = this.value;

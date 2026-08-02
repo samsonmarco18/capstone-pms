@@ -169,6 +169,26 @@ while($row = $allocResult->fetch_assoc()) {
     $existingAllocations[$normalizedRole] = $row;
 }
 
+$developerAllocationReviewCompleted = false;
+if (dbTableExists($conn, 'audit_logs')) {
+    $completionStmt = $conn->prepare(
+        "SELECT id
+         FROM audit_logs
+         WHERE action = 'developer_allocation'
+           AND table_name = 'projects'
+           AND record_id = ?
+           AND status = 'success'
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1"
+    );
+    if ($completionStmt !== false) {
+        $completionStmt->bind_param('i', $projectId);
+        $completionStmt->execute();
+        $developerAllocationReviewCompleted = (bool) $completionStmt->get_result()->fetch_assoc();
+        $completionStmt->close();
+    }
+}
+
 $includedDepartments = [];
 $includedDepartmentRaw = trim((string) ($project['included_departments'] ?? ''));
 if ($includedDepartmentRaw !== '') {
@@ -1999,6 +2019,7 @@ initAllocationTooltips();
         'message' => 'I calculated role headcounts from the feature workload, delivery schedule, specialist needs, and the tasks each role must handle. Review each allocation recommendation.',
         'stateKey' => 'evortix.dss.team.project.' . (int) $projectId,
         'persistDecisions' => false,
+        'autoStart' => !$developerAllocationReviewCompleted,
         'startDelay' => 100,
         'pointAtMessage' => true,
         'pointSide' => 'left',

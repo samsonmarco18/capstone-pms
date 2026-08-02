@@ -409,6 +409,7 @@ include 'includes/navbar.php';
     border: 0;
     background: transparent;
     color: var(--text-color);
+    cursor: pointer;
     font: inherit;
     text-align: center;
 }
@@ -419,16 +420,30 @@ include 'includes/navbar.php';
     --preview-bar: #e7eef3;
     --preview-sidebar: #cfe5f1;
     --preview-line: #9fb5c2;
+    --preview-shadow: rgba(20, 80, 108, .16);
     display: block;
     height: 92px;
     padding: 12px;
     position: relative;
+    isolation: isolate;
     overflow: hidden;
-    border: 2px solid transparent;
+    border: 2px solid rgba(31, 99, 146, .2);
     border-radius: 14px;
     background: var(--preview-bg);
-    box-shadow: inset 0 0 0 1px rgba(31, 99, 146, .1);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .72),
+        inset 0 0 0 1px rgba(31, 99, 146, .08),
+        0 8px 18px var(--preview-shadow);
     transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.theme-preview-frame::before {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(145deg, rgba(255, 255, 255, .42), transparent 48%, rgba(15, 76, 129, .07));
+    content: "";
+    pointer-events: none;
 }
 
 .theme-preview-window {
@@ -436,11 +451,16 @@ include 'includes/navbar.php';
     grid-template-columns: 24% 1fr;
     grid-template-rows: 17px 1fr;
     height: 100%;
+    position: relative;
+    z-index: 1;
     overflow: hidden;
     border: 1px solid rgba(15, 76, 129, .12);
     border-radius: 7px;
     background: var(--preview-window);
-    box-shadow: 0 6px 14px rgba(15, 76, 129, .12);
+    box-shadow:
+        0 7px 15px rgba(15, 76, 129, .16),
+        inset 0 1px 0 rgba(255, 255, 255, .58);
+    transform: translateY(-1px);
 }
 
 .theme-preview-topbar {
@@ -527,6 +547,7 @@ include 'includes/navbar.php';
     --preview-bar: #d9f5ef;
     --preview-sidebar: #33a79d;
     --preview-line: #23877f;
+    --preview-shadow: rgba(35, 145, 137, .2);
 }
 
 .theme-preview-option[data-theme-preview="futuristic"] .theme-preview-frame {
@@ -535,6 +556,7 @@ include 'includes/navbar.php';
     --preview-bar: #1a2a58;
     --preview-sidebar: #4c38a7;
     --preview-line: #66d9ff;
+    --preview-shadow: rgba(30, 38, 105, .3);
 }
 
 .theme-preview-check {
@@ -543,8 +565,9 @@ include 'includes/navbar.php';
     width: 21px;
     height: 21px;
     position: absolute;
-    bottom: 6px;
-    left: 6px;
+    top: 7px;
+    right: 7px;
+    z-index: 2;
     border: 2px solid #ffffff;
     border-radius: 50%;
     background: var(--primary-color);
@@ -570,8 +593,10 @@ include 'includes/navbar.php';
 .theme-preview-option:hover .theme-preview-frame,
 .theme-preview-option:focus-visible .theme-preview-frame {
     border-color: rgba(31, 111, 158, .45);
-    box-shadow: 0 9px 20px rgba(15, 76, 129, .12);
-    transform: translateY(-2px);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .78),
+        0 14px 26px var(--preview-shadow);
+    transform: translateY(-3px);
 }
 
 .theme-preview-option:focus-visible {
@@ -580,7 +605,10 @@ include 'includes/navbar.php';
 
 .theme-preview-option.is-selected .theme-preview-frame {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(31, 111, 158, .11), 0 10px 22px rgba(15, 76, 129, .13);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .78),
+        0 0 0 3px rgba(31, 111, 158, .11),
+        0 14px 28px var(--preview-shadow);
 }
 
 .theme-preview-option.is-selected .theme-preview-check {
@@ -594,7 +622,10 @@ include 'includes/navbar.php';
 }
 
 [data-theme="dark"] .theme-preview-frame {
-    box-shadow: inset 0 0 0 1px rgba(138, 210, 255, .12);
+    box-shadow:
+        inset 0 1px 0 rgba(138, 210, 255, .12),
+        inset 0 0 0 1px rgba(138, 210, 255, .08),
+        0 10px 22px rgba(0, 0, 0, .24);
 }
 
 [data-theme="dark"] .theme-preview-option:hover .theme-preview-frame,

@@ -526,6 +526,18 @@ unset($_SESSION['success'], $_SESSION['error']);
     padding: 0.55rem 0.85rem;
 }
 
+.resource-workload-header .resource-reallocation-btn {
+    color: #fff !important;
+}
+
+.resource-workload-header .resource-reallocation-icon {
+    display: block;
+    flex: 0 0 14px;
+    height: 14px;
+    stroke: #fff;
+    width: 14px;
+}
+
 .resource-workload-card .table-container {
     border-top: 1px solid var(--gray-200);
 }
@@ -1083,7 +1095,7 @@ unset($_SESSION['success'], $_SESSION['error']);
     <?php if ($flashError): ?><div class="alert alert-danger border-0"><?php echo htmlspecialchars($flashError); ?></div><?php endif; ?>
 
     <!-- Resource Details Table -->
-    <div class="card mb-4 resource-workload-card">
+    <div class="card mb-4 resource-workload-card" id="resource-workload">
         <div class="card-header resource-workload-header">
             <div class="resource-workload-heading">
                 <span class="resource-workload-heading-icon"><i class="fas fa-list" aria-hidden="true"></i></span>
@@ -1092,8 +1104,11 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <small class="text-muted"><?php echo count($developers); ?> active profile<?php echo count($developers) === 1 ? '' : 's'; ?> in <?php echo htmlspecialchars($sulDepartment); ?></small>
                 </div>
             </div>
-            <button class="btn-primary-modern" data-bs-toggle="modal" data-bs-target="#addDeveloperModal">
-                <i class="fas fa-people-arrows" aria-hidden="true"></i>Reallocation
+            <button class="btn-primary-modern resource-reallocation-btn" data-bs-toggle="modal" data-bs-target="#addDeveloperModal">
+                <svg class="resource-reallocation-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M7 7h11m0 0-3-3m3 3-3 3M17 17H6m0 0 3 3m-3-3 3-3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+                </svg>
+                <span>Reallocation</span>
             </button>
         </div>
         <div class="card-body">
@@ -1181,7 +1196,7 @@ unset($_SESSION['success'], $_SESSION['error']);
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-people-arrows me-2"></i>Developer Reallocation</h5>
+                <h5 class="modal-title"><i class="fas fa-right-left me-2"></i>Developer Reallocation</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" id="reallocationForm">
@@ -1342,6 +1357,21 @@ function refreshReallocationSelection() {
 document.getElementById('reallocation_source').addEventListener('change', refreshReallocationForm);
 document.getElementById('reallocation_destination').addEventListener('change', refreshReallocationSelection);
 document.getElementById('reallocation_task_list').addEventListener('change', refreshReallocationSelection);
+
+const requestedReallocationDeveloperId = Number(
+    new URLSearchParams(window.location.search).get('reallocate_developer_id') || 0
+);
+if (requestedReallocationDeveloperId > 0) {
+    const source = document.getElementById('reallocation_source');
+    const matchingOption = Array.from(source.options).find(
+        option => Number(option.value) === requestedReallocationDeveloperId
+    );
+    if (matchingOption) {
+        source.value = String(requestedReallocationDeveloperId);
+        refreshReallocationForm();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('addDeveloperModal')).show();
+    }
+}
 
 function editAllocation(userId, userName, currentTasks) {
     document.getElementById('alloc_user_id').value = userId;

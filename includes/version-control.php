@@ -242,7 +242,12 @@ function vcIsRenderEnvironment(): bool
     return (bool) getenv('RENDER');
 }
 
-function vcResolvePreferredWritableRemoteUrl(string $slug, ?string $externalRemoteUrl = null, bool $portableClient = false): ?string
+function vcResolvePreferredWritableRemoteUrl(
+    string $slug,
+    ?string $externalRemoteUrl = null,
+    bool $portableClient = false,
+    ?string $webhookToken = null
+): ?string
 {
     $externalRemoteUrl = vcNormalizeExternalRemoteUrl($externalRemoteUrl);
     if ($externalRemoteUrl !== null) {
@@ -251,9 +256,7 @@ function vcResolvePreferredWritableRemoteUrl(string $slug, ?string $externalRemo
 
     if ($portableClient) {
         if (vcIsRenderEnvironment()) {
-            // Downloaded repositories still need a readable origin on Render,
-            // even when pushes require configuring an external remote.
-            return vcGenerateRepositoryHttpCloneUrl($slug);
+            return vcGenerateRepositoryAuthenticatedHttpCloneUrl($slug, (string) $webhookToken);
         }
 
         return vcGenerateRepositoryFileCloneUrl($slug);
@@ -877,9 +880,15 @@ function vcConfigureLocalRepositoryRemote(
     string $slug,
     string $defaultBranch,
     ?string $externalRemoteUrl = null,
-    bool $portableClient = false
+    bool $portableClient = false,
+    ?string $webhookToken = null
 ): void {
-    $remoteUrl = vcResolvePreferredWritableRemoteUrl($slug, $externalRemoteUrl, $portableClient);
+    $remoteUrl = vcResolvePreferredWritableRemoteUrl(
+        $slug,
+        $externalRemoteUrl,
+        $portableClient,
+        $webhookToken
+    );
     $hasOrigin = vcTryGitCommand(['remote', 'get-url', 'origin'], $repositoryPath);
 
     if ($remoteUrl === null) {
@@ -898,6 +907,15 @@ function vcConfigureLocalRepositoryRemote(
     $defaultBranch = trim($defaultBranch);
     if ($defaultBranch !== '') {
         vcTryGitCommand(['branch', '--set-upstream-to=origin/' . $defaultBranch, $defaultBranch], $repositoryPath);
+    }
+
+    if ($portableClient) {
+        vcRunGitCommand(['config', 'push.autoSetupRemote', 'true'], $repositoryPath);
+        vcRunGitCommand(['config', 'push.default', 'current'], $repositoryPath);
+        vcRunGitCommand(['config', 'remote.pushDefault', 'origin'], $repositoryPath);
+        vcRunGitCommand(['config', 'fetch.prune', 'true'], $repositoryPath);
+        vcRunGitCommand(['config', 'checkout.defaultRemote', 'origin'], $repositoryPath);
+        vcRunGitCommand(['config', 'pull.rebase', 'false'], $repositoryPath);
     }
 }
 
@@ -1053,7 +1071,12 @@ function vcCreateManagedRepository(
     ];
 }
 
-function vcCreateRepositoryArchive(string $slug, string $refName, ?string $externalRemoteUrl = null): array
+function vcCreateRepositoryArchive(
+    string $slug,
+    string $refName,
+    ?string $externalRemoteUrl = null,
+    ?string $webhookToken = null
+): array
 {
     $bareRepositoryPath = vcGetRepositoryBarePath($slug);
     if (!is_dir($bareRepositoryPath)) {
@@ -1099,8 +1122,6 @@ function vcCreateRepositoryArchive(string $slug, string $refName, ?string $exter
                 ['clone', '--quiet', $repoPathForGit, $cloneTempDir],
                 $tempDir
             );
-            vcConfigureLocalRepositoryRemote($cloneTempDir, $slug, $refName, $externalRemoteUrl, true);
-            
             error_log('Git clone completed successfully');
         } catch (Throwable $gitError) {
             error_log('Git clone failed: ' . $gitError->getMessage());
@@ -1124,6 +1145,14 @@ function vcCreateRepositoryArchive(string $slug, string $refName, ?string $exter
                 ['checkout', $refName],
                 $cloneTempDir
             );
+            vcConfigureLocalRepositoryRemote(
+                $cloneTempDir,
+                $slug,
+                $refName,
+                $externalRemoteUrl,
+                true,
+                $webhookToken
+            );
             error_log('Checkout completed successfully');
         } catch (Throwable $checkoutError) {
             error_log('Checkout failed: ' . $checkoutError->getMessage());
@@ -1135,7 +1164,8 @@ function vcCreateRepositoryArchive(string $slug, string $refName, ?string $exter
         vcEnsureDirectory($hooksDir);
 
         // Create post-commit hook with sync functionality
-        $syncUrl = getenv('ERNI_PMS_SYNC_ENDPOINT') ?: rtrim(BASE_URL, '/') . '/api/version-control/sync.php';
+        $syncUrl = getenv('ERNI_PMS_SYNC_ENDPOINT')
+            ?: rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode((string) $webhookToken);
         $postCommitHook = vcGenerateLocalSyncHookScript($syncUrl);
         $postCommitPath = $hooksDir . DIRECTORY_SEPARATOR . 'post-commit';
         vcWriteTextFile($postCommitPath, $postCommitHook);
