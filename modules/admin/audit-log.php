@@ -1331,7 +1331,7 @@ include '../../includes/navbar.php';
                                     <i class="fas fa-eye text-white"></i>
                                 </button>
                                 <?php if(strpos($log['action'], 'delete') !== false && $log['old_data']): ?>
-                                <button class="btn-action-success" style="padding: 0.4rem 0.8rem;" onclick="restoreItem(<?php echo $log['id']; ?>, '<?php echo $log['table_name']; ?>', <?php echo $log['record_id']; ?>)">
+                                <button type="button" class="btn-action-success" style="padding: 0.4rem 0.8rem;" onclick="restoreItem(<?php echo $log['id']; ?>, '<?php echo $log['table_name']; ?>', <?php echo $log['record_id']; ?>)">
                                     <i class="fas fa-undo text-white"></i>
                                 </button>
                                 <?php endif; ?>
@@ -1542,7 +1542,7 @@ async function restoreItem(logId, tableName, recordId) {
             confirmIcon: 'fas fa-rotate-left',
             confirmText: 'Restore Item'
         })
-        : false;
+        : window.confirm('Restore this deleted item?');
 
     if (!confirmed) {
         return;
@@ -1551,13 +1551,13 @@ async function restoreItem(logId, tableName, recordId) {
     $.ajax({
         url: '../../api/restore-item.php',
         method: 'POST',
+        dataType: 'json',
         data: {
             log_id: logId,
             table_name: tableName,
             record_id: recordId
         },
-        success: function(response) {
-            const result = typeof response === 'string' ? JSON.parse(response) : response;
+        success: function(result) {
             if(result.success) {
                 window.appToast?.('Item restored', 'The deleted item was restored successfully.');
                 setTimeout(() => location.reload(), 1500);
