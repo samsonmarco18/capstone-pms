@@ -1937,6 +1937,13 @@ button.client-pagination__step {
     background: #fbfdff;
 }
 
+/* The expansion cell is also the row's last cell; undo the Actions-column
+   alignment so project details begin beneath the first (Client) column. */
+.client-table .project-expansion-row > td:last-child {
+    width: auto;
+    text-align: left;
+}
+
 .project-expansion-shell {
     max-height: 0;
     opacity: 0;
@@ -7553,7 +7560,7 @@ Attendees:</textarea>
                     <div class="modal-footer add-client-footer">
                         <span class="draft-status" data-draft-status>Draft not started</span>
                         <div class="add-client-actions">
-                            <button type="button" class="btn btn-outline-secondary add-client-close">Cancel</button>
+                            <button type="button" class="btn btn-outline-secondary add-client-close" data-bs-dismiss="modal" aria-label="Cancel and close Add New Client">Cancel</button>
                             <button type="button" class="btn btn-outline-secondary" data-client-prev hidden>Previous</button>
                             <button type="button" class="btn-add-modern" data-client-next>Next</button>
                             <button type="submit" name="add_client" class="btn-add-modern" data-client-submit hidden><i class="fas fa-paper-plane me-1"></i> Add &amp; Send to Architect</button>
@@ -8023,7 +8030,7 @@ Attendees:</textarea>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn-delete-cancel" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn-delete-confirm" id="deleteDraftConfirmBtn">
+                <button type="button" class="btn-delete-confirm" id="deleteDraftConfirmBtn" onclick="confirmDeleteClientDraft()">
                     <i class="fas fa-trash-alt me-1"></i> Yes, delete it
                 </button>
             </div>
@@ -10551,6 +10558,32 @@ function openDeleteDraftModal(draftId, draftLabel) {
     new bootstrap.Modal(deleteDraftModalElement).show();
 }
 
+function confirmDeleteClientDraft() {
+    if (!pendingDeleteDraftId) {
+        return;
+    }
+
+    const draftId = pendingDeleteDraftId;
+    const storageKey = 'erniPms.sales.addClientDrafts.v1';
+
+    try {
+        const storedDrafts = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        const remainingDrafts = Array.isArray(storedDrafts)
+            ? storedDrafts.filter((draft) => String(draft?.id || '') !== draftId)
+            : [];
+        localStorage.setItem(storageKey, JSON.stringify(remainingDrafts));
+        localStorage.removeItem('erniPms.sales.addClientDraft.v2');
+        localStorage.removeItem('erniPms.sales.addClientDraft');
+    } catch (error) {
+        window.appToast?.('Unable to delete draft', 'The saved draft could not be removed from this browser.', 'error');
+        return;
+    }
+
+    pendingDeleteDraftId = null;
+    bootstrap.Modal.getOrCreateInstance(deleteDraftModalElement).hide();
+    window.location.reload();
+}
+
 if (deleteClientConfirmBtn) {
     deleteClientConfirmBtn.addEventListener('click', function () {
         if (!pendingDeleteClientId) {
@@ -11515,13 +11548,25 @@ if (addClientModalElement && addClientForm) {
     }
 
     function isMeaningfulDraftValue(key, value) {
-        if (key.startsWith('_') || key === 'client_draft_id' || key === 'attachments[]') {
+        const systemFields = new Set(['add_client', 'client_draft_id', 'attachments[]']);
+        if (key.startsWith('_') || systemFields.has(key)) {
             return false;
         }
 
         const normalizedValue = String(value || '').trim();
         if (normalizedValue === '') {
             return false;
+        }
+
+        // The MOM textarea is prefilled with headings. Those headings alone are
+        // placeholders, not user-entered draft content.
+        if (key === 'mom') {
+            const momContent = normalizedValue
+                .replace(/^(Topic|Date|Company Name|Location|Attendees)\s*:\s*/gim, '')
+                .trim();
+            if (momContent === '') {
+                return false;
+            }
         }
 
         const defaultDraftValues = {
@@ -12202,13 +12247,17 @@ if (addClientModalElement && addClientForm) {
     }
 
     function requestAddClientClose() {
-        if (!formTouched || !hasDraftValues()) {
-            resetCurrentClientInput();
-            addClientModal.hide();
-            return;
+        window.clearTimeout(addClientForm._draftSaveTimer);
+
+        // The intake is auto-saved, so Cancel should always close the wizard.
+        // Flush the latest edit first to avoid losing input made immediately
+        // before the button was clicked.
+        if (hasDraftValues()) {
+            saveAddClientDraft(false);
         }
 
-        showUnsavedClosePanel();
+        resetCurrentClientInput();
+        addClientModal.hide();
     }
 
     addClientForm.addEventListener('input', (event) => {
@@ -12700,6 +12749,9 @@ if (addClientModalElement && addClientForm) {
 
     showClientStep(0);
     showClientTab('clients');
+    // Persist the normalized list once on startup so legacy/empty phantom
+    // drafts are removed from storage, not merely hidden from the table.
+    saveStoredDrafts(getStoredDrafts());
     removeStoredDraft(savedClientDraftId);
     renderDraftList();
     updateDraftStatus(hasStoredDraft());
