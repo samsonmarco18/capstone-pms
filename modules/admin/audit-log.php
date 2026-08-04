@@ -162,7 +162,7 @@ $auditLogCanRestore = static function (array $log) use ($conn, $auditQuoteIdenti
     }
 
     $quotedTableName = $auditQuoteIdentifier($tableName);
-    $existingStmt = $conn->prepare("SELECT id FROM {$quotedTableName} WHERE id = ? LIMIT 1");
+    $existingStmt = $conn->prepare("SELECT * FROM {$quotedTableName} WHERE id = ? LIMIT 1");
     if ($existingStmt === false) {
         return false;
     }
@@ -173,7 +173,11 @@ $auditLogCanRestore = static function (array $log) use ($conn, $auditQuoteIdenti
     $exists = $existingStmt->get_result()->fetch_assoc();
     $existingStmt->close();
 
-    return !$exists;
+    if (!$exists) {
+        return true;
+    }
+
+    return $tableName === 'clients' && (string) ($exists['status'] ?? '') === 'inactive';
 };
 
 // Get unique actions for filter
