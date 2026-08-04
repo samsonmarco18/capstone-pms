@@ -393,7 +393,7 @@ function vcResolveManagedRepositoryCreateUrl(string $slug): string
     return vcResolveManagedRepositoryDisplayUrl($slug);
 }
 
-function vcGenerateRepositoryAuthenticatedHttpCloneUrl(string $slug, string $webhookToken): string
+function vcGenerateRepositoryAuthenticatedHttpCloneUrl(string $slug, string $webhookToken, ?string $pushUsername = null): string
 {
     $webhookToken = trim($webhookToken);
     if ($webhookToken === '') {
@@ -409,13 +409,17 @@ function vcGenerateRepositoryAuthenticatedHttpCloneUrl(string $slug, string $web
     $host = (string) $parts['host'];
     $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
     $path = (string) ($parts['path'] ?? '');
-    $username = rawurlencode(vcGetManagedRepositoryPushUsername());
+    $resolvedUsername = trim((string) $pushUsername);
+    if ($resolvedUsername === '') {
+        $resolvedUsername = vcGetManagedRepositoryPushUsername();
+    }
+    $username = rawurlencode($resolvedUsername);
     $password = rawurlencode($webhookToken);
 
     return $scheme . '://' . $username . ':' . $password . '@' . $host . $port . $path;
 }
 
-function vcResolveRepositoryDisplayRemote(?string $externalRemoteUrl, string $slug, ?string $webhookToken = null): string
+function vcResolveRepositoryDisplayRemote(?string $externalRemoteUrl, string $slug, ?string $webhookToken = null, ?string $pushUsername = null): string
 {
     $externalRemoteUrl = vcNormalizeExternalRemoteUrl($externalRemoteUrl);
     if ($externalRemoteUrl !== null) {
@@ -423,7 +427,7 @@ function vcResolveRepositoryDisplayRemote(?string $externalRemoteUrl, string $sl
     }
 
     if (vcIsRenderEnvironment()) {
-        return vcGenerateRepositoryAuthenticatedHttpCloneUrl($slug, (string) $webhookToken);
+        return vcGenerateRepositoryAuthenticatedHttpCloneUrl($slug, (string) $webhookToken, $pushUsername);
     }
 
     return vcResolveManagedRepositoryDisplayUrl($slug);
@@ -838,7 +842,8 @@ function vcInstallServerRepositoryHooks(string $bareRepositoryPath, string $sync
         "  REMOTE_URL=\"" . vcGenerateRepositoryHttpCloneUrl(basename($bareRepositoryPath, '.git')) . "\"\n" .
         "  FILE_CHANGES_B64=\$(git show --pretty=\"\" --name-status \"\$NEW_REV\" | base64 | tr -d '\\n')\n" .
         "  FILE_STATS_B64=\$(git show --pretty=\"\" --numstat \"\$NEW_REV\" | base64 | tr -d '\\n')\n" .
-        "  PAYLOAD=\$(printf '{\"event_type\":\"push\",\"branch_name\":\"%s\",\"commit_hash\":\"%s\",\"commit_title\":\"%s\",\"commit_message\":\"%s\",\"author_name\":\"%s\",\"author_email\":\"%s\",\"remote_url\":\"%s\",\"platform\":\"server-git\",\"file_changes_b64\":\"%s\",\"file_stats_b64\":\"%s\"}' \"\$(json_escape \"\$BRANCH\")\" \"\$(json_escape \"\$NEW_REV\")\" \"\$(json_escape \"\$TITLE\")\" \"\$(json_escape \"\$BODY\")\" \"\$(json_escape \"\$AUTHOR_NAME\")\" \"\$(json_escape \"\$AUTHOR_EMAIL\")\" \"\$(json_escape \"\$REMOTE_URL\")\" \"\$(json_escape \"\$FILE_CHANGES_B64\")\" \"\$(json_escape \"\$FILE_STATS_B64\")\")\n" .
+        "  PUSH_USERNAME=\${REMOTE_USER:-}\n" .
+        "  PAYLOAD=\$(printf '{\"event_type\":\"push\",\"branch_name\":\"%s\",\"commit_hash\":\"%s\",\"commit_title\":\"%s\",\"commit_message\":\"%s\",\"author_name\":\"%s\",\"author_email\":\"%s\",\"pms_username\":\"%s\",\"remote_url\":\"%s\",\"platform\":\"server-git\",\"file_changes_b64\":\"%s\",\"file_stats_b64\":\"%s\"}' \"\$(json_escape \"\$BRANCH\")\" \"\$(json_escape \"\$NEW_REV\")\" \"\$(json_escape \"\$TITLE\")\" \"\$(json_escape \"\$BODY\")\" \"\$(json_escape \"\$AUTHOR_NAME\")\" \"\$(json_escape \"\$AUTHOR_EMAIL\")\" \"\$(json_escape \"\$PUSH_USERNAME\")\" \"\$(json_escape \"\$REMOTE_URL\")\" \"\$(json_escape \"\$FILE_CHANGES_B64\")\" \"\$(json_escape \"\$FILE_STATS_B64\")\")\n" .
         "  curl -s -X POST \"\$PMS_URL\" -H \"Content-Type: application/json\" -d \"\$PAYLOAD\" >/dev/null 2>&1\n" .
         "done\n";
 
@@ -2032,10 +2037,69 @@ function vcGetCommitFiles(mysqli|PgsqlMysqliCompatConnection $conn, int $commitI
     return $files;
 }
 
+function vcResolveExternalCommitUserId(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    array $payload,
+    int $fallbackUserId
+): int {
+    $username = trim((string) ($payload['pms_username'] ?? ''));
+    if ($username !== '') {
+        $stmt = $conn->prepare(
+            "SELECT id FROM users
+             WHERE LOWER(username) = LOWER(?) AND status = 'active'
+             LIMIT 1"
+        );
+        $stmt->bind_param('s', $username);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($row) {
+            return (int) $row['id'];
+        }
+    }
+
+    // Provider webhooks and older local hooks do not carry a PMS username.
+    // Match their Git identity to an active PMS account before using the
+    // repository creator as the final legacy fallback.
+    $authorEmail = trim((string) ($payload['author_email'] ?? ''));
+    if ($authorEmail !== '') {
+        $stmt = $conn->prepare(
+            "SELECT id FROM users
+             WHERE LOWER(email) = LOWER(?) AND status = 'active'
+             LIMIT 1"
+        );
+        $stmt->bind_param('s', $authorEmail);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($row) {
+            return (int) $row['id'];
+        }
+    }
+
+    $authorName = trim((string) ($payload['author_name'] ?? ''));
+    if ($authorName !== '') {
+        $stmt = $conn->prepare(
+            "SELECT id FROM users
+             WHERE LOWER(full_name) = LOWER(?) AND status = 'active'
+             LIMIT 1"
+        );
+        $stmt->bind_param('s', $authorName);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($row) {
+            return (int) $row['id'];
+        }
+    }
+
+    return max(1, $fallbackUserId);
+}
+
 function vcSyncExternalCommit(mysqli|PgsqlMysqliCompatConnection $conn, array $repository, array $payload): array
 {
     $repositoryId = (int) $repository['id'];
-    $systemUserId = (int) ($repository['created_by'] ?? 1);
+    $systemUserId = vcResolveExternalCommitUserId($conn, $payload, (int) ($repository['created_by'] ?? 1));
     $branchName = trim((string) ($payload['branch_name'] ?? $repository['default_branch_name'] ?? 'main'));
     $commitHash = trim((string) ($payload['commit_hash'] ?? ''));
     $commitTitle = trim((string) ($payload['commit_title'] ?? ''));

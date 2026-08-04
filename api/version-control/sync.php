@@ -70,6 +70,7 @@ function vcSyncHandleGenericPayload(mysqli|PgsqlMysqliCompatConnection $conn, ar
             'lines_removed' => (int) ($payload['lines_removed'] ?? 0),
             'author_name' => (string) ($payload['author_name'] ?? ''),
             'author_email' => (string) ($payload['author_email'] ?? ''),
+            'pms_username' => (string) ($payload['pms_username'] ?? ''),
             'remote_url' => (string) ($payload['remote_url'] ?? ''),
             'platform' => (string) ($payload['platform'] ?? ''),
             'provider' => (string) ($payload['provider'] ?? ''),

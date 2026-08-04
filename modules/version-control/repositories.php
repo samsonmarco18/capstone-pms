@@ -305,7 +305,8 @@ if ($selectedRepository) {
     $selectedRepositoryDisplayRemoteUrl = vcResolveRepositoryDisplayRemote(
         $selectedRepositoryExternalRemoteUrl,
         (string) $selectedRepository['slug'],
-        (string) ($selectedRepository['webhook_token'] ?? '')
+        (string) ($selectedRepository['webhook_token'] ?? ''),
+        (string) ($user['username'] ?? '')
     );
     $selectedRepositoryDisplayRemoteKind = vcGetRepositoryDisplayRemoteKind($selectedRepositoryExternalRemoteUrl);
 

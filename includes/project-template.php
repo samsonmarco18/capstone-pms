@@ -737,8 +737,16 @@ function projectTemplateCaptureProject(mysqli|PgsqlMysqliCompatConnection $conn,
             && trim((string) ($existing['tech_stack'] ?? '')) === $techStack
             && trim((string) ($existing['team_composition'] ?? '')) === $team
             && (float) ($existing['budget_min'] ?? 0) === $budgetMin
+            && (float) ($existing['budget_max'] ?? 0) === $budgetMax
+            && (int) ($existing['duration_min_weeks'] ?? 0) === $templateWeeks
             && (int) ($existing['duration_max_weeks'] ?? 0) === $templateWeeks
             && strtolower((string) ($existing['complexity_level'] ?? 'medium')) === $complexity;
+        foreach ($details as $detailField => $detailValue) {
+            if (trim((string) ($existing[$detailField] ?? '')) !== trim((string) $detailValue)) {
+                $unchanged = false;
+                break;
+            }
+        }
         if ($unchanged) {
             $templateId = (int) $existing['id'];
             $usageStmt = $conn->prepare('UPDATE project_templates SET usage_count = usage_count + 1, learned_from_project_id = ? WHERE id = ?');
