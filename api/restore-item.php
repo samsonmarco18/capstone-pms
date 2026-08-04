@@ -83,7 +83,9 @@ if (isset($restoreData['id'])) {
     $existingStmt->close();
 
     if ($exists) {
-        unset($restoreData['id']);
+        http_response_code(409);
+        echo json_encode(['success' => false, 'error' => 'This item has already been restored']);
+        exit();
     }
 }
 
@@ -106,7 +108,14 @@ if (!$insertStmt->execute()) {
 $newId = $insertStmt->insert_id;
 $insertStmt->close();
 
-logActivity((int) $admin['id'], 'restore_deleted_item', $tableName, $newId ?: (int) ($log['record_id'] ?? 0), null, $restoreData);
+logActivity(
+    (int) $admin['id'],
+    'restore_deleted_item',
+    $tableName,
+    $newId ?: (int) ($log['record_id'] ?? 0),
+    null,
+    array_merge($restoreData, ['restored_from_log_id' => $logId])
+);
 
 echo json_encode(['success' => true, 'id' => $newId]);
 ?>
