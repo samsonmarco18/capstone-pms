@@ -12,6 +12,43 @@ $forcePasswordChange = !empty($_SESSION['force_password_change']);
 $preferencesSaved = false;
 $profileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_profile_photo']) && $error === '') {
+    $currentProfilePic = trim((string) ($user['profile_pic'] ?? ''));
+
+    if ($currentProfilePic === '') {
+        $message = 'No profile photo to remove.';
+    } else {
+        $stmt = $conn->prepare('UPDATE users SET profile_pic = NULL WHERE id = ?');
+        if ($stmt === false) {
+            $error = 'Unable to prepare profile photo removal.';
+        } else {
+            $stmt->bind_param('i', $user['id']);
+            if ($stmt->execute()) {
+                $message = 'Profile photo removed.';
+                logActivity((int) $user['id'], 'remove_profile_photo', 'users', (int) $user['id']);
+
+                $normalizedProfilePic = ltrim(str_replace('\\', '/', $currentProfilePic), '/');
+                $profileUploadRoot = realpath(__DIR__ . '/uploads/profile-pictures');
+                $profilePhotoPath = realpath(__DIR__ . '/' . $normalizedProfilePic);
+                if (
+                    $profileUploadRoot !== false
+                    && $profilePhotoPath !== false
+                    && strpos($profilePhotoPath, $profileUploadRoot . DIRECTORY_SEPARATOR) === 0
+                    && is_file($profilePhotoPath)
+                ) {
+                    @unlink($profilePhotoPath);
+                }
+
+                $user = getCurrentUser();
+                $profileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
+            } else {
+                $error = 'Unable to remove your profile photo.';
+            }
+            $stmt->close();
+        }
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_profile_photo']) && $error === '') {
     $profileFile = $_FILES['profile_photo'] ?? null;
     $allowedProfileTypes = [
@@ -517,6 +554,7 @@ include 'includes/navbar.php';
 
 .settings-profile-actions {
     display: flex;
+    gap: .65rem;
     justify-content: flex-end;
     margin-top: 1rem;
     max-width: 560px;
@@ -1093,12 +1131,20 @@ include 'includes/navbar.php';
                             </div>
                             <small class="settings-field-note">Accepted formats: JPG, PNG, WEBP. Max 3MB.</small>
                             <div class="settings-profile-actions">
+                                <?php if ($profileImageUrl !== ''): ?>
+                                    <button type="submit" name="remove_profile_photo" form="removeProfilePhotoForm" class="btn btn-outline-danger">
+                                        <i class="fas fa-trash-alt me-1"></i> Remove photo
+                                    </button>
+                                <?php endif; ?>
                                 <button type="submit" name="upload_profile_photo" class="btn btn-primary">
                                     <i class="fas fa-upload me-1"></i> Upload photo
                                 </button>
                             </div>
                         </div>
                     </form>
+                    <?php if ($profileImageUrl !== ''): ?>
+                        <form method="POST" id="removeProfilePhotoForm" data-app-loading data-loading-title="Removing profile photo" data-loading-text="Please wait while your profile photo is removed."></form>
+                    <?php endif; ?>
                 </div>
             </section>
             <?php if (!$isAdmin): ?>
