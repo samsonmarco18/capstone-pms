@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/project-delay-insights.php';
 
 function di_float(mixed $value): float
 {
@@ -218,6 +219,40 @@ function di_load_attention_project_summaries(mysqli|PgsqlMysqliCompatConnection 
         ];
     }
 
+    foreach (di_load_accessible_projects($conn, $user) as $project) {
+        $projectId = (int) ($project['id'] ?? 0);
+        $projectStatus = strtolower(trim((string) ($project['status'] ?? '')));
+        if ($projectId <= 0 || in_array($projectStatus, ['completed', 'cancelled'], true)) {
+            continue;
+        }
+
+        $insight = delayInsightsBuildProjectInsight($conn, $projectId);
+        if ($insight === null || (string) ($insight['before']['risk_level'] ?? '') !== 'High') {
+            continue;
+        }
+
+        $summaries[$projectId] = array_replace([
+            'id' => $projectId,
+            'name' => (string) ($project['name'] ?? 'Project'),
+            'issue_count' => 1,
+            'blocked_count' => 0,
+            'revision_count' => 0,
+            'overdue_count' => 0,
+        ], $summaries[$projectId] ?? [], [
+            'risk_level' => 'High',
+            'delay_probability' => max(0, min(100, (int) ($insight['before']['delay_probability'] ?? 0))),
+        ]);
+    }
+
+    uasort($summaries, static function (array $left, array $right): int {
+        $leftRisk = (string) ($left['risk_level'] ?? '') === 'High' ? 1 : 0;
+        $rightRisk = (string) ($right['risk_level'] ?? '') === 'High' ? 1 : 0;
+
+        return ($rightRisk <=> $leftRisk)
+            ?: ((int) ($right['issue_count'] ?? 0) <=> (int) ($left['issue_count'] ?? 0))
+            ?: strcmp((string) ($left['name'] ?? ''), (string) ($right['name'] ?? ''));
+    });
+
     return $summaries;
 }
 
@@ -274,6 +309,10 @@ function di_render_project_attention_banner(mysqli|PgsqlMysqliCompatConnection $
     }
     if ((int) $summary['revision_count'] > 0) {
         $details[] = (int) $summary['revision_count'] . ' failed or revision';
+    }
+    if ((string) ($summary['risk_level'] ?? '') === 'High') {
+        $delayProbability = (int) ($summary['delay_probability'] ?? 0);
+        $details[] = $delayProbability > 0 ? $delayProbability . '% high risk' : 'high risk';
     }
     $detailText = $details === [] ? $issueCount . ' item needs attention' : implode(', ', $details);
     $title = trim((string) ($options['title'] ?? 'Project Insights needs attention'));

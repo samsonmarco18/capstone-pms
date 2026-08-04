@@ -1804,7 +1804,7 @@ include '../../includes/navbar.php';
             <div class="stat-number"><?php echo $inProgressTasks; ?></div>
             <div class="stat-sub"><?php echo $completedTasks; ?> completed</div>
         </div>
-        <div class="stat-card-modern">
+        <div class="stat-card-modern stat-overdue <?php echo (int) $overdueTasks > 0 ? 'is-overdue-alert' : ''; ?>">
             <i class="fas fa-exclamation-triangle stat-icon"></i>
             <div class="stat-label">Overdue Tasks</div>
             <div class="stat-number" style="color: #dc2626;"><?php echo $overdueTasks; ?></div>
