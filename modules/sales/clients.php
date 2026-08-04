@@ -828,11 +828,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['success'] = "Client updated successfully";
         }
     } elseif (isset($_POST['delete_client'])) {
-        $id = $_POST['id'];
+        $id = (int) $_POST['id'];
         $oldResult = salesClientsQuery($conn, "SELECT * FROM clients WHERE id = $id");
         $oldData = $oldResult ? $oldResult->fetch_assoc() : null;
         
-        $stmt = $conn->prepare("DELETE FROM clients WHERE id=?");
+        $stmt = $conn->prepare("UPDATE clients SET status = 'inactive' WHERE id=?");
         $stmt->bind_param("i", $id);
         
         if ($stmt->execute()) {
@@ -869,6 +869,8 @@ if ($search) {
 }
 if ($statusFilter) {
     $clientWhereSql .= " AND c.status = '$statusFilter'";
+} else {
+    $clientWhereSql .= " AND c.status != 'inactive'";
 }
 
 $totalFilteredClients = 0;

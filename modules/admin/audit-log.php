@@ -141,6 +141,45 @@ if ($auditTotalPages <= 5) {
     $auditPaginationPages = range($auditPaginationStart, $auditPaginationStart + 4);
 }
 
+$auditQuoteIdentifier = static function (string $identifier): string {
+    $identifierQuote = DB_DRIVER === 'pgsql' ? '"' : '`';
+    return $identifierQuote . str_replace($identifierQuote, $identifierQuote . $identifierQuote, $identifier) . $identifierQuote;
+};
+
+$auditLogCanRestore = static function (array $log) use ($conn, $auditQuoteIdentifier): bool {
+    if (stripos((string) ($log['action'] ?? ''), 'delete') === false || empty($log['old_data'])) {
+        return false;
+    }
+
+    $tableName = (string) ($log['table_name'] ?? '');
+    if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
+        return false;
+    }
+
+    $oldData = json_decode((string) $log['old_data'], true);
+    if (!is_array($oldData) || !isset($oldData['id'])) {
+        return false;
+    }
+
+    $quotedTableName = $auditQuoteIdentifier($tableName);
+    $existingStmt = $conn->prepare("SELECT * FROM {$quotedTableName} WHERE id = ? LIMIT 1");
+    if ($existingStmt === false) {
+        return false;
+    }
+
+    $existingId = (int) $oldData['id'];
+    $existingStmt->bind_param('i', $existingId);
+    $existingStmt->execute();
+    $exists = $existingStmt->get_result()->fetch_assoc();
+    $existingStmt->close();
+
+    if (!$exists) {
+        return true;
+    }
+
+    return $tableName === 'clients' && (string) ($exists['status'] ?? '') === 'inactive';
+};
+
 // Get unique actions for filter
 $actions = $conn->query("SELECT DISTINCT action FROM audit_logs ORDER BY action");
 $users = $conn->query("SELECT id, full_name FROM users ORDER BY full_name");
@@ -1089,6 +1128,21 @@ include '../../includes/navbar.php';
     background: transparent;
     border-color: rgba(138, 210, 255, 0.18);
     color: #d8e6f3;
+    color-scheme: dark;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select option,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__size option,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select option {
+    background-color: #071725;
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select option:checked,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__size option:checked,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select option:checked {
+    background-color: #1f6392;
+    color: #ffffff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input > i {
@@ -1297,6 +1351,7 @@ include '../../includes/navbar.php';
                 </thead>
                 <tbody>
                     <?php $displayRecordNumber = $totalFilteredLogs - $auditPageOffset; while($log = $logs->fetch_assoc()): ?>
+                    <?php $canRestoreLog = $auditLogCanRestore($log); ?>
                     <tr>
                         <td style="white-space: nowrap;">
                             <i class="far fa-clock me-1 text-muted"></i>
@@ -1330,7 +1385,7 @@ include '../../includes/navbar.php';
                                 <button class="btn-action-info" style="padding: 0.4rem 0.8rem;" onclick="viewDetails(<?php echo $log['id']; ?>)">
                                     <i class="fas fa-eye text-white"></i>
                                 </button>
-                                <?php if(strpos($log['action'], 'delete') !== false && $log['old_data']): ?>
+                                <?php if($canRestoreLog): ?>
                                 <button type="button" class="btn-action-success" style="padding: 0.4rem 0.8rem;" onclick="restoreItem(<?php echo $log['id']; ?>, '<?php echo $log['table_name']; ?>', <?php echo $log['record_id']; ?>)">
                                     <i class="fas fa-undo text-white"></i>
                                 </button>

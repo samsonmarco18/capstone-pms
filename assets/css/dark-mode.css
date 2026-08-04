@@ -736,6 +736,44 @@ html[data-theme="dark"] .chat-messages {
     color: #d8e6f3;
 }
 
+html[data-theme="dark"] select,
+body[data-theme="dark"] select,
+body.dark-mode select,
+html[data-theme="dark"] .form-select,
+body[data-theme="dark"] .form-select,
+body.dark-mode .form-select,
+html[data-theme="dark"] .form-select-modern,
+body[data-theme="dark"] .form-select-modern,
+body.dark-mode .form-select-modern {
+    color-scheme: dark;
+}
+
+html[data-theme="dark"] select option,
+body[data-theme="dark"] select option,
+body.dark-mode select option,
+html[data-theme="dark"] .form-select option,
+body[data-theme="dark"] .form-select option,
+body.dark-mode .form-select option,
+html[data-theme="dark"] .form-select-modern option,
+body[data-theme="dark"] .form-select-modern option,
+body.dark-mode .form-select-modern option {
+    background-color: #071725 !important;
+    color: #d8e6f3 !important;
+}
+
+html[data-theme="dark"] select option:checked,
+body[data-theme="dark"] select option:checked,
+body.dark-mode select option:checked,
+html[data-theme="dark"] .form-select option:checked,
+body[data-theme="dark"] .form-select option:checked,
+body.dark-mode .form-select option:checked,
+html[data-theme="dark"] .form-select-modern option:checked,
+body[data-theme="dark"] .form-select-modern option:checked,
+body.dark-mode .form-select-modern option:checked {
+    background-color: #1f6392 !important;
+    color: #ffffff !important;
+}
+
 html[data-theme="dark"] .message.received,
 html[data-theme="dark"] .hero-mini-card,
 html[data-theme="dark"] .dashboard-hero {

@@ -1549,6 +1549,19 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input input,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input select {
     border-color: var(--tech-border);
+    background-color: transparent;
+    color: var(--tech-text);
+    color-scheme: dark;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input select option {
+    background-color: #071725;
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input select option:checked {
+    background-color: #1f6392;
+    color: #ffffff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .technology-filter-input > i {
@@ -1676,7 +1689,7 @@ include '../../includes/navbar.php';
         </div>
         <div class="stat-card-mini">
             <div class="stat-label">Monthly Spend</div>
-            <div class="stat-number">$<?php echo number_format((float) $technologyStats['monthly_spend'], 0); ?></div>
+            <div class="stat-number">PHP <?php echo number_format((float) $technologyStats['monthly_spend'], 0); ?></div>
         </div>
     </div>
 
@@ -1793,7 +1806,7 @@ include '../../includes/navbar.php';
                 
                 <!-- Pricing Section -->
                 <div class="pricing-section">
-                    <span class="price-amount">$<?php echo number_format($tech['price'], 2); ?></span>
+                    <span class="price-amount">PHP <?php echo number_format($tech['price'], 2); ?></span>
                     <span class="price-period">/month</span>
                 </div>
                 
