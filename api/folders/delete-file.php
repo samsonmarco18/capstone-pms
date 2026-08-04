@@ -1,49 +1,44 @@
 <?php
-header('Content-Type: application/json');
-
-require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/folder-api.php';
 require_once __DIR__ . '/../../includes/file-storage.php';
+folderApiInitialize();
 
-if (!isLoggedIn()) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized']);
-    exit();
-}
-
-$user = getCurrentUser();
-$conn = getConnection();
-$fileId = (int) ($_POST['id'] ?? 0);
+$user = folderApiRequireUser();
+$fileId = (int) ($_POST['id'] ?? $_GET['id'] ?? 0);
 
 if ($fileId <= 0) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Invalid file.']);
-    exit();
+    folderApiRespond(['success' => false, 'error' => 'Invalid file.'], 400);
 }
 
-$stmt = $conn->prepare('SELECT * FROM files WHERE id = ?');
-$stmt->bind_param('i', $fileId);
-$stmt->execute();
-$file = $stmt->get_result()->fetch_assoc();
-$stmt->close();
+try {
+    $conn = getConnection();
+    $stmt = folderApiPrepare($conn, 'SELECT f.*, fo.role AS folder_role, fo.user_id AS folder_user_id FROM files f JOIN folders fo ON fo.id = f.folder_id WHERE f.id = ?');
+    $stmt->bind_param('i', $fileId);
+    folderApiExecute($stmt, $conn);
+    $file = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 
-if (!$file) {
-    http_response_code(404);
-    echo json_encode(['error' => 'File not found.']);
-    exit();
+    if (!$file) {
+        folderApiRespond(['success' => false, 'error' => 'File not found.'], 404);
+    }
+    if (!folderApiCanAccessFolder(['role' => $file['folder_role'] ?? null, 'user_id' => $file['folder_user_id'] ?? null], $user)) {
+        folderApiRespond(['success' => false, 'error' => 'You do not have access to this file.'], 403);
+    }
+
+    $absolutePath = storageResolveRelativePath((string) $file['file_path']);
+    if ($absolutePath !== null && is_file($absolutePath)) {
+        @unlink($absolutePath);
+    }
+
+    $deleteStmt = folderApiPrepare($conn, 'DELETE FROM files WHERE id = ?');
+    $deleteStmt->bind_param('i', $fileId);
+    folderApiExecute($deleteStmt, $conn);
+    $deleteStmt->close();
+
+    logActivity((int) $user['id'], 'delete_file', 'files', $fileId, $file, null);
+
+    folderApiRespond(['success' => true]);
+} catch (Throwable $e) {
+    folderApiError($e, 'Delete file API failed', 'Unable to delete this file right now.');
 }
-
-$absolutePath = storageResolveRelativePath((string) $file['file_path']);
-if ($absolutePath !== null && is_file($absolutePath)) {
-    @unlink($absolutePath);
-}
-
-$deleteStmt = $conn->prepare('DELETE FROM files WHERE id = ?');
-$deleteStmt->bind_param('i', $fileId);
-$deleteStmt->execute();
-$deleteStmt->close();
-
-logActivity((int) $user['id'], 'delete_file', 'files', $fileId, $file, null);
-
-echo json_encode(['success' => true]);
 ?>

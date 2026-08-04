@@ -16,10 +16,11 @@ if ($logId <= 0) {
 
 $stmt = $conn->prepare(
     'SELECT * FROM audit_logs
-     WHERE id = ? AND action LIKE "%delete%" AND old_data IS NOT NULL
+     WHERE id = ? AND LOWER(action) LIKE ? AND old_data IS NOT NULL
      LIMIT 1'
 );
-$stmt->bind_param('i', $logId);
+$deleteActionPattern = '%delete%';
+$stmt->bind_param('is', $logId, $deleteActionPattern);
 $stmt->execute();
 $log = $stmt->get_result()->fetch_assoc();
 $stmt->close();

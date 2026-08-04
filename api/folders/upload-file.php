@@ -1,62 +1,62 @@
 <?php
-header('Content-Type: application/json');
-
-require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/folder-api.php';
 require_once __DIR__ . '/../../includes/file-storage.php';
+folderApiInitialize();
 
-if (!isLoggedIn()) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized']);
-    exit();
-}
-
-$user = getCurrentUser();
-$conn = getConnection();
+$user = folderApiRequireUser();
 $folderId = (int) ($_POST['folder_id'] ?? 0);
 $file = $_FILES['file'] ?? null;
 
-if ($folderId <= 0 || !$file || $file['error'] !== UPLOAD_ERR_OK) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Invalid upload request.']);
-    exit();
+if ($folderId <= 0 || !$file || $file['error'] !== UPLOAD_ERR_OK || (int) $file['size'] <= 0 || (int) $file['size'] > UPLOAD_MAX_SIZE) {
+    folderApiRespond(['success' => false, 'error' => 'Invalid upload request or file size.'], 400);
 }
 
 try {
+    $conn = getConnection();
+    $folderStmt = folderApiPrepare($conn, 'SELECT * FROM folders WHERE id = ? LIMIT 1');
+    $folderStmt->bind_param('i', $folderId);
+    folderApiExecute($folderStmt, $conn);
+    $folderExists = $folderStmt->get_result()->fetch_assoc();
+    $folderStmt->close();
+    if (!$folderExists) {
+        folderApiRespond(['success' => false, 'error' => 'Upload folder not found.'], 404);
+    }
+    if (!folderApiCanAccessFolder($folderExists, $user)) {
+        folderApiRespond(['success' => false, 'error' => 'You do not have access to this folder.'], 403);
+    }
+
     $target = storageBuildUploadTarget((string) $file['name']);
 } catch (Throwable $e) {
-    http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
-    exit();
+    folderApiError($e, 'Upload target preparation failed', 'The upload directory is unavailable.');
 }
 
 if (!move_uploaded_file($file['tmp_name'], $target['absolute_path'])) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Unable to save uploaded file.']);
-    exit();
+    folderApiRespond(['success' => false, 'error' => 'Unable to save uploaded file.'], 500);
 }
 
-$extension = pathinfo($target['original_name'], PATHINFO_EXTENSION);
-$stmt = $conn->prepare(
-    'INSERT INTO files (folder_id, original_file_name, stored_file_name, file_type, file_size, file_path, uploaded_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?)'
-);
-$stmt->bind_param('isssisi', $folderId, $target['original_name'], $target['stored_name'], $extension, $file['size'], $target['relative_path'], $user['id']);
+try {
+    $extension = strtolower((string) pathinfo($target['original_name'], PATHINFO_EXTENSION));
+    $stmt = folderApiPrepare($conn,
+        'INSERT INTO files (folder_id, original_file_name, stored_file_name, file_type, file_size, file_path, uploaded_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)'
+    );
+    $fileSize = (int) $file['size'];
+    $userId = (int) $user['id'];
+    $stmt->bind_param('isssisi', $folderId, $target['original_name'], $target['stored_name'], $extension, $fileSize, $target['relative_path'], $userId);
 
-if (!$stmt->execute()) {
-    @unlink($target['absolute_path']);
-    http_response_code(500);
-    echo json_encode(['error' => 'Database error while saving file metadata.']);
-    exit();
-}
+    if (!$stmt->execute()) {
+        @unlink($target['absolute_path']);
+        throw new RuntimeException('Database operation failed: ' . ($conn->error ?: 'unknown error'));
+    }
 
 $fileId = $stmt->insert_id;
 $stmt->close();
 
 logActivity((int) $user['id'], 'upload_file', 'files', $fileId, null, ['folder_id' => $folderId, 'file' => $target['original_name']]);
 
-echo json_encode([
-    'success' => true,
-    'file_id' => $fileId,
-]);
+    folderApiRespond(['success' => true, 'file_id' => $fileId]);
+} catch (Throwable $e) {
+    @unlink($target['absolute_path']);
+    folderApiError($e, 'Upload file API failed', 'Unable to save the uploaded file right now.');
+}
 ?>

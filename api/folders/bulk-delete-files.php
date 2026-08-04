@@ -1,33 +1,34 @@
 <?php
-header('Content-Type: application/json');
-
-require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/folder-api.php';
 require_once __DIR__ . '/../../includes/file-storage.php';
+folderApiInitialize();
 
-if (!isLoggedIn()) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized']);
-    exit();
-}
-
-$user = getCurrentUser();
-$conn = getConnection();
+$user = folderApiRequireUser();
 $fileIds = array_map('intval', $_POST['file_ids'] ?? []);
+$fileIds = array_values(array_unique(array_filter($fileIds, static fn (int $id): bool => $id > 0)));
 
 if (!$fileIds) {
-    http_response_code(400);
-    echo json_encode(['error' => 'No files selected.']);
-    exit();
+    folderApiRespond(['success' => false, 'error' => 'No files selected.'], 400);
 }
 
-$placeholders = implode(',', array_fill(0, count($fileIds), '?'));
-$types = str_repeat('i', count($fileIds));
-$stmt = $conn->prepare("SELECT * FROM files WHERE id IN ($placeholders)");
-$stmt->bind_param($types, ...$fileIds);
-$stmt->execute();
-$files = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$stmt->close();
+try {
+    $conn = getConnection();
+    $placeholders = implode(',', array_fill(0, count($fileIds), '?'));
+    $types = str_repeat('i', count($fileIds));
+    $stmt = folderApiPrepare($conn, "SELECT f.*, fo.role AS folder_role, fo.user_id AS folder_user_id FROM files f JOIN folders fo ON fo.id = f.folder_id WHERE f.id IN ($placeholders)");
+    $stmt->bind_param($types, ...$fileIds);
+    folderApiExecute($stmt, $conn);
+    $files = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    if (count($files) !== count($fileIds)) {
+        folderApiRespond(['success' => false, 'error' => 'One or more selected files were not found.'], 404);
+    }
+    foreach ($files as $file) {
+        if (!folderApiCanAccessFolder(['role' => $file['folder_role'] ?? null, 'user_id' => $file['folder_user_id'] ?? null], $user)) {
+            folderApiRespond(['success' => false, 'error' => 'You do not have access to one or more selected files.'], 403);
+        }
+    }
 
 foreach ($files as $file) {
     $absolutePath = storageResolveRelativePath((string) $file['file_path']);
@@ -36,12 +37,15 @@ foreach ($files as $file) {
     }
 }
 
-$deleteStmt = $conn->prepare("DELETE FROM files WHERE id IN ($placeholders)");
-$deleteStmt->bind_param($types, ...$fileIds);
-$deleteStmt->execute();
-$deleteStmt->close();
+    $deleteStmt = folderApiPrepare($conn, "DELETE FROM files WHERE id IN ($placeholders)");
+    $deleteStmt->bind_param($types, ...$fileIds);
+    folderApiExecute($deleteStmt, $conn);
+    $deleteStmt->close();
 
 logActivity((int) $user['id'], 'bulk_delete_files', 'files', null, $files, ['file_ids' => $fileIds]);
 
-echo json_encode(['success' => true]);
+    folderApiRespond(['success' => true, 'deleted_count' => count($files)]);
+} catch (Throwable $e) {
+    folderApiError($e, 'Bulk delete files API failed', 'Unable to delete the selected files right now.');
+}
 ?>

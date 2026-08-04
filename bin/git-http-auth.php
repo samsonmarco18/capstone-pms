@@ -76,7 +76,24 @@ try {
         exit(1);
     }
 
-    fwrite(STDOUT, $username);
+    // The HTTP username must be a real, active PMS account. The repository
+    // token remains the per-repository password, while the username identifies
+    // the person performing the push for the post-receive audit record.
+    $userStmt = $conn->prepare(
+        "SELECT username
+         FROM users
+         WHERE LOWER(username) = LOWER(?) AND status = 'active'
+         LIMIT 1"
+    );
+    $userStmt->bind_param('s', $username);
+    $userStmt->execute();
+    $pushUser = $userStmt->get_result()->fetch_assoc() ?: null;
+    $userStmt->close();
+    if (!$pushUser) {
+        exit(1);
+    }
+
+    fwrite(STDOUT, (string) $pushUser['username']);
     exit(0);
 } catch (Throwable $e) {
     error_log('Git HTTP auth failed: ' . $e->getMessage());

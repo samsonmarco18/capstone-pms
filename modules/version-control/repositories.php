@@ -305,7 +305,8 @@ if ($selectedRepository) {
     $selectedRepositoryDisplayRemoteUrl = vcResolveRepositoryDisplayRemote(
         $selectedRepositoryExternalRemoteUrl,
         (string) $selectedRepository['slug'],
-        (string) ($selectedRepository['webhook_token'] ?? '')
+        (string) ($selectedRepository['webhook_token'] ?? ''),
+        (string) ($user['username'] ?? '')
     );
     $selectedRepositoryDisplayRemoteKind = vcGetRepositoryDisplayRemoteKind($selectedRepositoryExternalRemoteUrl);
 
@@ -365,10 +366,16 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .vc-card+.vc-card{margin-top:1.25rem;}
 .vc-card .card-head{padding:1.1rem 1.35rem;border-bottom:1px solid var(--gray-200);font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;}
 .section-kicker{font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-600);}
-.project-picker{padding:0 0 1.15rem;border:0;border-bottom:1px solid var(--gray-200);background:transparent;border-radius:0;margin-bottom:1.15rem;}
+.project-picker{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.85rem;padding:.85rem 1rem;border:1px solid var(--theme-line);background:var(--theme-soft);border-radius:14px;margin-bottom:1.15rem;}
 .project-picker>div{min-width:0;}
+.project-picker-icon{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;background:#fff;color:var(--theme-primary);box-shadow:0 4px 12px rgba(31,99,146,.1);}
+.project-picker-field{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:.8rem;}
+.project-picker-copy{min-width:125px;}
+.project-picker-copy .form-label{display:block;margin:0;color:var(--gray-900);font-size:.8rem;font-weight:800;}
+.project-picker-copy small{display:block;margin-top:.12rem;color:var(--gray-600);font-size:.68rem;}
 .vc-card .project-picker .form-select{width:100%;max-width:100%;min-height:48px;border:1px solid var(--gray-300);border-radius:12px;padding:.7rem 2.75rem .7rem .85rem;background-color:#fff;background-position:right .85rem center;box-shadow:none;}
 .vc-card .project-picker .form-select:focus{border-color:var(--theme-primary);box-shadow:0 0 0 .18rem rgba(31,99,146,.1);}
+.vc-card .project-picker .form-select.is-loading{color:var(--gray-600);cursor:wait;opacity:.72;}
 .repo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1rem;}
 .repo-tile{display:flex;flex-direction:column;gap:.8rem;text-decoration:none;color:inherit;border:1px solid var(--gray-200);border-radius:14px;padding:1rem 1.05rem;background:#fff;height:100%;transition:box-shadow .18s ease,border-color .18s ease,background .18s ease;}
 .repo-tile.active,.repo-tile:hover{border-color:rgba(31,99,146,.38);background:#fbfdff;box-shadow:0 8px 20px rgba(31,99,146,.09);}
@@ -492,9 +499,6 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 .vc-card .btn.btn-primary:hover{background:linear-gradient(135deg,var(--theme-dark),var(--theme-primary));}
 .vc-card .btn.btn-outline-primary{border-radius:14px;padding:.72rem .95rem;font-weight:700;border-color:rgba(31,99,146,.28);color:var(--theme-primary);}
 .vc-card .btn.btn-outline-primary:hover{background:var(--theme-primary);border-color:var(--theme-primary);color:#fff;}
-#loadRepositoryProject{display:inline-flex;align-items:center;justify-content:center;min-height:48px;color:#fff!important;background:linear-gradient(135deg,var(--theme-primary),var(--theme-dark))!important;border-color:transparent!important;box-shadow:0 5px 12px rgba(31,99,146,.16);cursor:pointer;transition:transform .18s ease,box-shadow .18s ease,background .18s ease;}
-#loadRepositoryProject:hover,#loadRepositoryProject:focus-visible{color:#fff!important;background:linear-gradient(135deg,#2f83b9,var(--theme-primary))!important;box-shadow:0 9px 18px rgba(31,99,146,.28);transform:translateY(-2px);}
-#loadRepositoryProject:active{box-shadow:0 3px 8px rgba(31,99,146,.2);transform:translateY(0);}
 .vc-repository-workspace{margin-top:1.15rem;padding-top:1.15rem;border-top:1px solid var(--gray-200);}
 .vc-repository-nav{display:flex;align-items:center;gap:.25rem;margin:0 0 .75rem;padding:.35rem;border:1px solid var(--gray-200);border-radius:12px;background:var(--gray-25);box-shadow:none;overflow-x:auto;}
 .vc-repository-nav .nav-link{display:inline-flex;align-items:center;gap:.45rem;min-height:40px;padding:.55rem .85rem;border:0;border-radius:10px;color:var(--gray-600);font-size:.82rem;font-weight:700;white-space:nowrap;}
@@ -559,13 +563,23 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
     border-color: rgba(31, 99, 146, 0.24) !important;
     color: #d7e4f2 !important;
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-icon {
+    background:#102a3f;
+    color:#8fd3ff;
+    box-shadow:none;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-copy .form-label { color:#e4eef7; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-copy small { color:#91abc3; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-repository-nav .nav-link {
-    color:#9db6cf;
+    background:transparent !important;
+    border-color:transparent !important;
+    color:#9db6cf !important;
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-repository-nav .nav-link:hover,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-repository-nav .nav-link.active {
-    background:#0a1b2c;
-    color:#8fd3ff;
+    background:#102a3f !important;
+    border-color:rgba(143,211,255,.18) !important;
+    color:#8fd3ff !important;
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-repository-nav .badge {
     background:rgba(157,182,207,.14);
@@ -619,6 +633,41 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item {
     border-left-color: rgba(31, 99, 146, 0.24);
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .table,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .table tbody,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .table tbody tr,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .table tbody td {
+    --bs-table-bg:transparent;
+    --bs-table-color:#d7e4f2;
+    --bs-table-border-color:rgba(31,99,146,.24);
+    background:#071321 !important;
+    border-color:rgba(31,99,146,.24) !important;
+    color:#d7e4f2 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .table tbody tr:hover td {
+    --bs-table-hover-bg:#0b2134;
+    background:#0b2134 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .branch-row-selected td {
+    --bs-table-accent-bg:#0d2b42;
+    background:#0d2b42 !important;
+    box-shadow:inset 3px 0 0 #3bb9ef;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .branch-row-selected .fw-semibold {
+    color:#8fd3ff !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.blue {
+    background:rgba(59,130,246,.2);
+    color:#93c5fd;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.green {
+    background:rgba(16,185,129,.18);
+    color:#6ee7b7;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.gray {
+    background:rgba(148,163,184,.16);
+    color:#cbd5e1;
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .diff-bar {
     background: rgba(157, 182, 207, 0.18);
@@ -674,6 +723,7 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 }
 @media (max-width: 1199.98px){.vc-sidebar{position:static;}.vc-repository-workspace{margin-top:1rem;}}
 @media (max-width: 575.98px){.clone-action-row{grid-template-columns:1fr;}}
+@media (max-width: 767.98px){.project-picker{grid-template-columns:1fr;}.project-picker-icon{display:none;}.project-picker-field{grid-template-columns:1fr;gap:.5rem;}.project-picker-copy{min-width:0;}}
 @media (max-width: 767.98px){.vc-header{padding:1.5rem;}.vc-header-title{font-size:1.6rem;}.repo-stats,.repo-summary-grid{grid-template-columns:1fr;}.repo-stat,.summary-tile{border-right:0;border-bottom:1px solid var(--gray-200);padding:.45rem 0;}.repo-stat:last-child,.summary-tile:last-child{border-bottom:0;}.vc-repository-section>.p-4{padding-top:1rem!important;}}
 </style>
 
@@ -713,9 +763,13 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                     </div>
                 </div>
                 <div class="p-4">
-                    <form method="GET" action="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php'); ?>" class="row g-3 align-items-end project-picker" id="repositoryProjectPicker" data-generic-draft-disabled="1">
-                        <div class="col-md-8">
-                            <label class="form-label" for="repositoryProjectId">Project</label>
+                    <form method="GET" action="<?php echo htmlspecialchars(BASE_URL . 'modules/version-control/repositories.php'); ?>" class="project-picker" id="repositoryProjectPicker" data-generic-draft-disabled="1">
+                        <span class="project-picker-icon" aria-hidden="true"><i class="fas fa-folder-tree"></i></span>
+                        <div class="project-picker-field">
+                            <div class="project-picker-copy">
+                                <label class="form-label" for="repositoryProjectId">Active project</label>
+                                <small>Changes load automatically</small>
+                            </div>
                             <select name="project_id" class="form-select" id="repositoryProjectId">
                                 <?php foreach ($accessibleProjects as $project): ?>
                                 <option value="<?php echo (int) $project['id']; ?>" <?php echo (int) $project['id'] === $selectedProjectId ? 'selected' : ''; ?>>
@@ -731,13 +785,6 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
                                 </option>
                                 <?php endforeach; ?>
                             </select>
-                        </div>
-                        <div class="col-md-4">
-                            <button
-                                type="submit"
-                                class="btn btn-primary w-100"
-                                id="loadRepositoryProject"
-                            >Load Project</button>
                         </div>
                     </form>
 
@@ -1523,6 +1570,19 @@ document.addEventListener('DOMContentLoaded', function () {
     nameInput.addEventListener('input', syncAutoUrl);
     slugInput.addEventListener('input', syncAutoUrl);
     syncAutoUrl();
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    const projectPicker = document.getElementById('repositoryProjectPicker');
+    const projectSelect = document.getElementById('repositoryProjectId');
+    if (!projectPicker || !projectSelect) return;
+
+    projectSelect.addEventListener('change', function () {
+        projectSelect.classList.add('is-loading');
+        projectSelect.setAttribute('aria-disabled', 'true');
+        projectPicker.setAttribute('aria-busy', 'true');
+        projectPicker.submit();
+    });
 });
 
 function copyCloneUrl(url) {

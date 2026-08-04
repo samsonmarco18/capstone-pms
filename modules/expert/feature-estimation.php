@@ -503,6 +503,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
         header('Location: feature-estimation.php');
         exit();
     }
+    if (
+        trim((string) ($project['name'] ?? '')) === ''
+        || trim((string) ($project['client_name'] ?? '')) === ''
+        || trim((string) ($project['timeline_start'] ?? '')) === ''
+        || trim((string) ($project['timeline_end'] ?? '')) === ''
+        || (float) ($project['sales_budget'] ?? 0) <= 0
+    ) {
+        $_SESSION['error'] = 'Project overview, timeline, and client budget must be complete before the final submission to Sales.';
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
+        exit();
+    }
+
+    if (empty($technologies)) {
+        $_SESSION['error'] = 'The technology stack must be completed before the final submission to Sales.';
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
+        exit();
+    }
+    if (empty($allocations) || empty($postedAllocations)) {
+        $_SESSION['error'] = 'Developer allocation and cost details must be completed before the final submission to Sales.';
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
+        exit();
+    }
+    $featureCompletion = $conn->query("
+        SELECT COUNT(DISTINCT t.id) AS total_features,
+               COUNT(DISTINCT CASE
+                   WHEN fe.status = 'completed'
+                    AND TRIM(COALESCE(fe.expectation_description, '')) <> ''
+                    AND fe.min_days >= 1
+                    AND fe.likely_days >= fe.min_days
+                    AND fe.max_days >= fe.likely_days
+                   THEN t.id ELSE NULL END) AS completed_features
+        FROM tasks t
+        LEFT JOIN feature_estimations fe
+          ON fe.task_id = t.id AND fe.expert_id = " . (int) $user['id'] . "
+        WHERE t.project_id = {$projectId}
+          AND t.assigned_to = " . (int) $user['id'] . "
+          AND t.task_type = 'feature'
+          AND t.status IN ('todo', 'in_review')
+    ")->fetch_assoc() ?: [];
+    $requiredFeatureCount = (int) ($featureCompletion['total_features'] ?? 0);
+    $completedFeatureCount = (int) ($featureCompletion['completed_features'] ?? 0);
+    if ($requiredFeatureCount <= 0 || $completedFeatureCount !== $requiredFeatureCount) {
+        $_SESSION['error'] = 'Every assigned feature must have an expectation and valid Minimum, Likely, and Maximum estimates before the final submission to Sales.';
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
+        exit();
+    }
 
     $durationMonths = projectEstimationDurationMonths($conn, $project);
     $techMonthlyCost = array_sum(array_map(static fn(array $row): float => (float) ($row['estimated_cost'] ?? 0), $technologies));
@@ -514,6 +560,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
     $additionalCosts = max(0.0, (float) ($_POST['additional_costs'] ?? 0));
 
     if (projectEstimationSave($conn, $projectId, (int) $user['id'], $allocations, $durationMonths, $techMonthlyCost, $additionalCosts, $complexity, $postedAllocations)) {
+        $salesReset = $hasSalesApproval ? ', sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL' : '';
+        $conn->query("UPDATE tasks SET status = 'in_review'{$salesReset} WHERE project_id = {$projectId} AND assigned_to = " . (int) $user['id'] . " AND task_type = 'feature'");
         projectCompilationRecord($conn, $projectId, (int) $user['id'], 'estimates');
         workflowNotifyRoles(
             $conn,
@@ -589,13 +637,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
     try {
         if ($projectId <= 0 || empty($taskIds)) {
             throw new RuntimeException('No feature estimates were provided.');
-        }
-
-        foreach ($taskIds as $reviewedTaskId) {
-            $reviewedValue = (string) ($postedEstimates[$reviewedTaskId]['reviewed'] ?? '');
-            if ($reviewedValue !== '1') {
-                throw new RuntimeException('Every feature must be checked as complete before final submission.');
-            }
         }
 
         $assignedTaskResult = $conn->query("
@@ -783,7 +824,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
 
             $salesColumns = $hasSalesApproval ? ', sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL' : '';
             $taskUpdate = $conn->prepare(
-                "UPDATE tasks SET status='in_review', started_at=?, deadline=?, estimated_days_min=?, estimated_days_likely=?, estimated_days_max=?{$salesColumns} WHERE id=?"
+                "UPDATE tasks SET status='todo', started_at=?, deadline=?, estimated_days_min=?, estimated_days_likely=?, estimated_days_max=?{$salesColumns} WHERE id=?"
             );
             $taskUpdate->bind_param('ssiiii', $plannedStart, $plannedEnd, $minDays, $likelyDays, $maxDays, $taskId);
             if (!$taskUpdate->execute()) {
@@ -795,17 +836,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
         }
 
         $conn->commit();
-        workflowNotifyRoles(
-            $conn,
-            ['sales'],
-            'Feature Estimations Ready for Sales Approval',
-            $savedCount . ' completed feature estimates were submitted for Sales review.',
-            BASE_URL . 'modules/sales/estimation-approval.php',
-            $projectId,
-            'approval',
-            'projects'
-        );
-        $_SESSION['success'] = $savedCount . ' feature estimate' . ($savedCount === 1 ? '' : 's') . ' submitted to Sales successfully.';
+        $_SESSION['success'] = $savedCount . ' feature estimate' . ($savedCount === 1 ? '' : 's') . ' saved. Complete the project cost summary for the final submission to Sales.';
     } catch (Throwable $e) {
         try {
             $conn->rollback();
@@ -1056,7 +1087,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     if($stmt->execute()) {
         // Save draft estimations without sending to Sales yet
         $salesColumns = $hasSalesApproval ? ", sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL" : "";
-        $taskStmt = $conn->prepare("UPDATE tasks SET status = 'in_review', started_at = ?, deadline = ?, estimated_days_min = ?, estimated_days_likely = ?, estimated_days_max = ?{$salesColumns} WHERE id = ?");
+        $taskStmt = $conn->prepare("UPDATE tasks SET status = 'todo', started_at = ?, deadline = ?, estimated_days_min = ?, estimated_days_likely = ?, estimated_days_max = ?{$salesColumns} WHERE id = ?");
         $taskStmt->bind_param("ssiiii", $plannedStart, $plannedEnd, $minDays, $likelyDays, $maxDays, $taskId);
         $taskStmt->execute();
         
@@ -1162,67 +1193,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
             }
         }
 
-        workflowNotifyRoles(
-            $conn,
-            ['sul'],
-            'Feature Estimation Ready for SUL Approval',
-            'An Expert Developer submitted a feature estimation for SUL approval.',
-            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
-            (int) $projectId,
-            'approval',
-            'projects'
-        );
-
-        $totalStmt = $conn->prepare("
-            SELECT COUNT(*) as total
-            FROM tasks
-            WHERE project_id = ? AND task_type = 'feature' AND assigned_to = ?
-        ");
-        $totalStmt->bind_param("ii", $projectId, $user['id']);
-        $totalStmt->execute();
-        $totalCount = (int) ($totalStmt->get_result()->fetch_assoc()['total'] ?? 0);
-        $totalStmt->close();
-
-        $doneStmt = $conn->prepare("
-            SELECT COUNT(*) as done
-            FROM feature_estimations fe
-            JOIN tasks t ON fe.task_id = t.id
-            WHERE t.project_id = ? AND t.task_type = 'feature' AND t.assigned_to = ?
-              AND fe.expert_id = ? AND fe.status = 'completed'
-        ");
-        $doneStmt->bind_param("iii", $projectId, $user['id'], $user['id']);
-        $doneStmt->execute();
-        $doneCount = (int) ($doneStmt->get_result()->fetch_assoc()['done'] ?? 0);
-        $doneStmt->close();
-
-        if ($totalCount > 0 && $doneCount === $totalCount) {
-            $salesColumns = $hasSalesApproval ? ", sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL" : "";
-            $submitStmt = $conn->prepare("
-                UPDATE tasks
-                SET status = 'in_review'{$salesColumns}
-                WHERE project_id = ? AND task_type = 'feature' AND assigned_to = ? AND status = 'todo'
-            ");
-            $submitStmt->bind_param("ii", $projectId, $user['id']);
-            $submitStmt->execute();
-            $submittedRows = (int) $submitStmt->affected_rows;
-            $submitStmt->close();
-
-            if ($submittedRows > 0) {
-                workflowNotifyRoles(
-                    $conn,
-                    ['sales'],
-                    'Estimations Ready for Approval',
-                    'Feature estimations are ready for sales approval.',
-                    BASE_URL . 'modules/sales/estimation-approval.php',
-                    (int) $projectId,
-                    'approval',
-                    'projects'
-                );
-            }
-        }
-
         logActivity($user['id'], 'submit_estimation', 'tasks', $taskId, null, $_POST);
-        $_SESSION['feature_estimation_submitted'] = 'Estimation sent to the Expert SUL for approval.';
+        $_SESSION['feature_estimation_submitted'] = 'Feature estimation saved. Use the Project Cost Summary for the final submission to Sales.';
     } else {
         $_SESSION['error'] = "Failed to save estimation: " . $conn->error;
     }
@@ -2334,7 +2306,7 @@ include '../../includes/navbar.php';
 .feature-bulk-table {
     border-collapse: separate;
     border-spacing: 0;
-    min-width: 900px;
+    min-width: 1040px;
     table-layout: fixed;
     width: 100%;
 }
@@ -2358,14 +2330,13 @@ include '../../includes/navbar.php';
     z-index: 1;
 }
 
-.feature-bulk-table th:nth-child(1) { width: 8%; }
-.feature-bulk-table th:nth-child(2) { width: 18%; }
-.feature-bulk-table th:nth-child(3) { width: 25%; }
+.feature-bulk-table th:nth-child(1) { width: 20%; }
+.feature-bulk-table th:nth-child(2) { width: 29%; }
+.feature-bulk-table th:nth-child(3),
 .feature-bulk-table th:nth-child(4),
-.feature-bulk-table th:nth-child(5),
-.feature-bulk-table th:nth-child(6) { width: 7%; }
-.feature-bulk-table th:nth-child(7) { width: 20%; }
-.feature-bulk-table th:nth-child(8) { width: 8%; }
+.feature-bulk-table th:nth-child(5) { width: 9%; }
+.feature-bulk-table th:nth-child(6) { width: 18%; }
+.feature-bulk-table th:nth-child(7) { width: 9%; }
 
 .feature-bulk-table tbody tr:last-child td {
     border-bottom: 0;
@@ -2430,28 +2401,14 @@ include '../../includes/navbar.php';
     justify-content: center;
 }
 
+.feature-bulk-table th:nth-child(6),
 .feature-bulk-table th:nth-child(7),
-.feature-bulk-table th:nth-child(8),
-.feature-bulk-table td:nth-child(1),
+.feature-bulk-table td:nth-child(6),
 .feature-bulk-table td:nth-child(7),
-.feature-bulk-table td:nth-child(8) {
+.feature-bulk-table td:nth-child(3),
+.feature-bulk-table td:nth-child(4),
+.feature-bulk-table td:nth-child(5) {
     text-align: center;
-}
-
-.feature-bulk-review-check {
-    align-items: center;
-    cursor: pointer;
-    display: inline-flex;
-    flex-direction: column;
-    font-size: 0.66rem;
-    font-weight: 700;
-    gap: 0.28rem;
-}
-
-.feature-bulk-review-check input {
-    accent-color: var(--theme-primary);
-    height: 18px;
-    width: 18px;
 }
 
 .feature-bulk-table textarea,
@@ -3150,6 +3107,7 @@ textarea.form-control-custom {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table th {
     background: #12263a;
+    color: #b9cee1;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table tbody tr.is-incomplete td {
@@ -3169,7 +3127,13 @@ textarea.form-control-custom {
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-name {
-    color: #d7e4f2;
+    color: #f1f7fc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-phase,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-schedule,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-pert {
+    color: #b5cbe0;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table textarea,
@@ -3715,7 +3679,7 @@ textarea.form-control-custom {
                      
                     <?php if (!$isReadonly): ?>
                         <div class="text-muted small">
-                            Complete this feature in the project estimation table, check it as reviewed, then use the single Final Submit button.
+                            Complete this feature in the project estimation table, then save all feature estimates before the final Sales submission.
                         </div>
                     <?php else: ?>
                         <div class="text-muted small">This feature has been submitted to Sales.</div>
@@ -3822,12 +3786,6 @@ function mountFeatureEstimationEditors() {
                 data-evortix-suggestion="${escapeAttribute(JSON.stringify(evortixSuggestion))}"
             >
                 <td>
-                    <label class="feature-bulk-review-check">
-                        <input type="checkbox" name="feature_estimates[${escapeAttribute(taskId)}][reviewed]" value="1" required aria-label="Confirm ${escapeAttribute(title)} is complete and reviewed">
-                        <span>Checked</span>
-                    </label>
-                </td>
-                <td>
                     <span class="feature-bulk-name">${escapeHtml(title)}</span>
                     <span class="feature-bulk-phase">${escapeHtml(phase)}</span>
                 </td>
@@ -3904,7 +3862,6 @@ function mountFeatureEstimationEditors() {
             <table class="feature-bulk-table">
                 <thead>
                     <tr>
-                        <th scope="col">Reviewed</th>
                         <th scope="col">Feature</th>
                         <th scope="col">Expectation</th>
                         <th scope="col">Min</th>
@@ -3923,8 +3880,8 @@ function mountFeatureEstimationEditors() {
                 <span>Ask Evortix for suggestions</span>
             </button>
             <button type="submit" class="feature-bulk-save-button">
-                <i class="fas fa-paper-plane" aria-hidden="true"></i>
-                <span>Final Submit to Sales</span>
+                <i class="fas fa-floppy-disk" aria-hidden="true"></i>
+                <span>Save Feature Estimates</span>
             </button>
         </div>
     `;
@@ -3939,7 +3896,6 @@ function mountFeatureEstimationEditors() {
         rows.forEach((row) => {
             const expectationInput = row.querySelector('textarea');
             const numberInputs = Array.from(row.querySelectorAll('input[type="number"]'));
-            const reviewedInput = row.querySelector('input[type="checkbox"][name$="[reviewed]"]');
             const [minInput, likelyInput, maxInput] = numberInputs;
             const expectation = expectationInput?.value.trim() || '';
             const minDays = Number(minInput?.value || 0);
@@ -3948,9 +3904,8 @@ function mountFeatureEstimationEditors() {
             const hasValidEstimate = minDays >= 1
                 && minDays <= likelyDays
                 && likelyDays <= maxDays;
-            const isReady = expectation !== '' && hasValidEstimate && Boolean(reviewedInput?.checked);
-            const isChanged = [expectationInput, ...numberInputs, reviewedInput].some((input) => {
-                if (input?.type === 'checkbox') return Boolean(input.checked);
+            const isReady = expectation !== '' && hasValidEstimate;
+            const isChanged = [expectationInput, ...numberInputs].some((input) => {
                 return input && input.value !== (input.dataset.original || '');
             });
             const pert = hasValidEstimate ? (minDays + (4 * likelyDays) + maxDays) / 6 : 0;
@@ -3999,7 +3954,7 @@ function mountFeatureEstimationEditors() {
         const firstIncomplete = bulkForm.querySelector('[data-feature-bulk-row].is-incomplete');
         if (firstIncomplete) {
             event.preventDefault();
-            firstIncomplete.querySelector('textarea:invalid, input:invalid, input[type="checkbox"]:not(:checked), textarea, input')?.focus();
+            firstIncomplete.querySelector('textarea:invalid, input:invalid, textarea, input')?.focus();
             return;
         }
 
@@ -4033,13 +3988,13 @@ function mountFeatureEstimationEditors() {
             const confirmModal = document.getElementById('appConfirmModal');
             confirmModal?.classList.add('feature-estimate-confirm-modal');
             const confirmation = window.appConfirm({
-                title: 'Final Feature Estimation Submission',
+                title: 'Save Feature Estimates',
                 titleIcon: 'fas fa-list-check',
-                subject: `Submit all ${rows.length} completed feature estimates to Sales?`,
-                message: 'Every task is complete and checked. This final submission locks the estimates and sends the entire project to Sales.',
+                subject: `Save all ${rows.length} completed feature estimates?`,
+                message: 'These estimates will be validated and saved. Use the Project Cost Summary for the final submission to Sales.',
                 icon: 'fas fa-table-list',
                 confirmIcon: 'fas fa-paper-plane',
-                confirmText: 'Final Submit to Sales',
+                confirmText: 'Save Estimates',
                 cancelText: 'Continue Editing'
             });
             const message = document.getElementById('appConfirmMessage');
@@ -4062,7 +4017,7 @@ function mountFeatureEstimationEditors() {
             confirmed = await confirmation;
             confirmModal?.classList.remove('feature-estimate-confirm-modal');
         } else {
-            confirmed = window.confirm(`Final submit all ${rows.length} feature estimates to Sales?`);
+            confirmed = window.confirm(`Save all ${rows.length} feature estimates?`);
         }
         if (!confirmed) return;
 

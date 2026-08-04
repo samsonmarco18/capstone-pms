@@ -1670,6 +1670,16 @@ body,
     box-shadow: 0 10px 22px rgba(31, 99, 146, 0.24);
 }
 
+/* Keep primary insight actions readable in the default light theme. Global
+   link/icon color rules load later and otherwise override the button label. */
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode) .insight-link,
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode) .insight-link:hover,
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode) .insight-link:focus,
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode) .insight-link:visited,
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode) .insight-link i {
+    color: #ffffff !important;
+}
+
 .delta-pill {
     display: inline-flex;
     align-items: center;

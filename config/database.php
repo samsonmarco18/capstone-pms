@@ -114,7 +114,7 @@ function getConnection(): mysqli|PgsqlMysqliCompatConnection
 
     try {
         if (DB_DRIVER === 'pgsql') {
-            $conn = new PgsqlMysqliCompatConnection(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+            $conn = new PgsqlMysqliCompatConnection(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT, DB_SSLMODE);
         } else {
             $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
         }
