@@ -22,6 +22,28 @@ function projectEstimationDeveloperLevel(string $value): string
 function projectEstimationEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
 {
     if (dbTableExists($conn, 'expert_project_estimations')) {
+        if (!dbColumnExists($conn, 'expert_project_estimations', 'workflow_version')) {
+            try {
+                $conn->query("ALTER TABLE expert_project_estimations ADD COLUMN workflow_version INT DEFAULT 1");
+            } catch (Throwable $e) {
+                error_log('Project estimation workflow migration column failed: ' . $e->getMessage());
+            }
+        }
+        if (dbColumnExists($conn, 'expert_project_estimations', 'workflow_version')) {
+            // Convert the previous Expert -> SUL -> Sales statuses once.
+            // Old sales_approved rows were complete; old sul_approved rows
+            // still need to enter the new Sales -> SUL review sequence.
+            $conn->query("
+                UPDATE expert_project_estimations
+                SET status = CASE
+                        WHEN status = 'sales_approved' THEN 'sul_approved'
+                        WHEN status = 'sul_approved' THEN 'submitted'
+                        ELSE status
+                    END,
+                    workflow_version = 2
+                WHERE COALESCE(workflow_version, 1) < 2
+            ");
+        }
         return;
     }
 
@@ -55,6 +77,7 @@ function projectEstimationEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn)
             sales_comment TEXT NULL,
             submitted_at {$dateType} NULL,
             approved_at {$dateType} NULL,
+            workflow_version INT DEFAULT 2,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" . (DB_DRIVER === 'pgsql' ? '' : ' ON UPDATE CURRENT_TIMESTAMP') . ",
             {$uniqueSql}
@@ -573,15 +596,15 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
 
     $statusLabels = [
         'draft' => 'Draft',
-        'submitted' => 'Submitted',
+        'submitted' => 'Awaiting Sales',
         'sul_rejected' => 'Changes Requested',
-        'sul_approved' => 'SUL Approved',
+        'sul_approved' => 'Completed',
         'sales_rejected' => 'Sales Changes Requested',
-        'sales_approved' => 'Sales Approved',
+        'sales_approved' => 'Awaiting SUL',
     ];
     $estimationStatusLabel = $statusLabels[$estimationStatus] ?? ucwords(str_replace('_', ' ', $estimationStatus));
-    $sulReviewComplete = in_array($estimationStatus, ['sul_approved', 'sales_approved'], true);
-    $salesReviewComplete = $estimationStatus === 'sales_approved';
+    $salesReviewComplete = in_array($estimationStatus, ['sales_approved', 'sul_approved'], true);
+    $sulReviewComplete = $estimationStatus === 'sul_approved';
     $featureProgressTotal = 0;
     $featureProgressEstimated = 0;
     if ($selectedProjectId > 0 && $project) {
@@ -589,7 +612,12 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             SELECT
                 COUNT(DISTINCT t.id) AS total_features,
                 COUNT(DISTINCT CASE
-                    WHEN fe.min_days > 0 AND fe.likely_days > 0 AND fe.max_days > 0 THEN t.id
+                    WHEN fe.status = 'completed'
+                     AND TRIM(COALESCE(fe.expectation_description, '')) <> ''
+                     AND fe.min_days >= 1
+                     AND fe.likely_days >= fe.min_days
+                     AND fe.max_days >= fe.likely_days
+                    THEN t.id
                     ELSE NULL
                 END) AS estimated_features
             FROM tasks t
@@ -626,13 +654,18 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     $technologyCostComplete = count($technologies) > 0;
     $developerAllocationComplete = $allocatedDeveloperCount > 0;
     $developerCostComplete = $developerAllocationComplete;
+    $finalSubmissionReady = $projectOverviewComplete
+        && $technologyCostComplete
+        && $developerAllocationComplete
+        && $developerCostComplete
+        && $featureProgressReady;
     $projectCostSummaryComplete = $estimationLockedForReview;
-    $reviewHeadline = 'Sent to Expert SUL for review';
-    $reviewMessage = 'Your estimate is safely submitted. Editing is locked while the Expert SUL checks the cost breakdown.';
-    if ($estimationStatus === 'sul_approved') {
-        $reviewHeadline = 'Approved by Expert SUL';
-        $reviewMessage = 'The SUL review is complete and the estimate has moved to Sales for the next decision.';
-    } elseif ($estimationStatus === 'sales_approved') {
+    $reviewHeadline = 'Sent to Sales for review';
+    $reviewMessage = 'Your estimate is safely submitted. Editing is locked while Sales checks the cost breakdown.';
+    if ($estimationStatus === 'sales_approved') {
+        $reviewHeadline = 'Approved by Sales';
+        $reviewMessage = 'The Sales review is complete and the estimate has moved to SUL for final completion.';
+    } elseif ($estimationStatus === 'sul_approved') {
         $reviewHeadline = 'Project estimation approved';
         $reviewMessage = 'The estimate completed both review stages. No further action is required from you.';
     }
@@ -1168,14 +1201,9 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                     </div>
                                     <a class="project-estimation-dashboard-link" href="<?php echo BASE_URL; ?>modules/expert/dashboard.php"><i class="fas fa-arrow-left" aria-hidden="true"></i>Back to Dashboard</a>
                                 <?php else: ?>
-                                    <div class="project-estimation-submit-note"><i class="fas fa-circle-info" aria-hidden="true"></i><span>Review all amounts before submitting. The estimate will be locked and sent to the Expert SUL.</span></div>
+                                    <div class="project-estimation-submit-note"><i class="fas fa-circle-info" aria-hidden="true"></i><span><?php echo $finalSubmissionReady ? 'All required sections are complete. The estimate will be locked and sent to Sales for final review.' : 'Complete the project overview, technology stack, developer allocation, costs, and every feature estimate before submitting to Sales.'; ?></span></div>
                                     <div class="project-estimation-action-buttons">
-                                        <span class="project-estimation-draft-status" data-project-estimation-draft-status aria-live="polite"></span>
-                                        <button type="button" class="project-estimation-draft" data-project-estimation-save-draft>
-                                            <i class="fas fa-floppy-disk" aria-hidden="true"></i>
-                                            <span>Save Draft</span>
-                                        </button>
-                                        <button type="submit" class="btn-save-phases project-estimation-submit" form="projectCostEstimationForm"><i class="fas fa-paper-plane"></i>Submit for SUL Review</button>
+                                        <button type="submit" class="btn-save-phases project-estimation-submit" form="projectCostEstimationForm" <?php echo $finalSubmissionReady ? '' : 'disabled aria-disabled="true"'; ?>><i class="fas fa-paper-plane"></i>Final Submit to Sales</button>
                                     </div>
                                 <?php endif; ?>
                             </div>
@@ -1197,9 +1225,8 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
         const estimationForm = document.getElementById('projectCostEstimationForm');
         const estimationModule = document.getElementById('projectEstimationModule');
         const submissionStatus = document.querySelector('[data-project-estimation-submitted]');
-        const draftButton = document.querySelector('[data-project-estimation-save-draft]');
-        const draftStatus = document.querySelector('[data-project-estimation-draft-status]');
         const draftKey = `erniPms.formDraft.${location.pathname}.projectCostEstimationForm`;
+        let draftSaveTimer = null;
 
         function readProjectEstimationDraft() {
             const data = {};
@@ -1226,7 +1253,6 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                         field.value = value;
                     }
                 });
-                if (draftStatus) draftStatus.textContent = 'Draft restored';
                 return true;
             } catch (error) {
                 localStorage.removeItem(draftKey);
@@ -1234,15 +1260,23 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             }
         }
 
-        draftButton?.addEventListener('click', () => {
+        function saveProjectEstimationDraft() {
             const data = readProjectEstimationDraft();
             try {
                 localStorage.setItem(draftKey, JSON.stringify({ savedAt: new Date().toISOString(), data }));
-                if (draftStatus) draftStatus.textContent = 'Draft saved';
             } catch (error) {
-                if (draftStatus) draftStatus.textContent = 'Draft could not be saved';
+                // Estimation remains usable when browser storage is unavailable.
             }
-        });
+        }
+
+        function queueProjectEstimationDraftSave() {
+            window.clearTimeout(draftSaveTimer);
+            draftSaveTimer = window.setTimeout(saveProjectEstimationDraft, 250);
+        }
+
+        estimationForm?.addEventListener('input', queueProjectEstimationDraftSave);
+        estimationForm?.addEventListener('change', queueProjectEstimationDraftSave);
+        window.addEventListener('pagehide', saveProjectEstimationDraft);
 
         estimationModule?.querySelectorAll('.estimation-section-toggle').forEach((toggle) => {
             toggle.addEventListener('click', () => {

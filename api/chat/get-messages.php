@@ -14,6 +14,12 @@ if (!isLoggedIn()) {
 $user = getCurrentUser();
 $conn = getConnection();
 
+if (!ensureChatMessageActions($conn)) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Message actions are unavailable.']);
+    exit();
+}
+
 $receiverId = isset($_GET['receiver_id']) ? (int) $_GET['receiver_id'] : 0;
 $groupId = isset($_GET['group_id']) ? (int) $_GET['group_id'] : 0;
 $limit = isset($_GET['limit']) ? max(1, (int) $_GET['limit']) : 50;
@@ -39,9 +45,18 @@ if ($groupId > 0) {
     }
 
     $stmt = $conn->prepare(
-        'SELECT m.id, m.sender_id, m.message, m.message_type, m.created_at, u.full_name AS sender_name
+        'SELECT m.id, m.sender_id, m.message, m.message_type, m.created_at,
+                m.reply_to_message_id, m.forwarded_from_message_id, m.edited_at, m.deleted_at,
+                u.full_name AS sender_name,
+                rm.message AS reply_message, rm.deleted_at AS reply_deleted_at,
+                rm.sender_id AS reply_sender_id, ru.full_name AS reply_sender_name,
+                fm.sender_id AS forwarded_sender_id, fu.full_name AS forwarded_sender_name
          FROM messages m
          INNER JOIN users u ON u.id = m.sender_id
+         LEFT JOIN messages rm ON rm.id = m.reply_to_message_id
+         LEFT JOIN users ru ON ru.id = rm.sender_id
+         LEFT JOIN messages fm ON fm.id = m.forwarded_from_message_id
+         LEFT JOIN users fu ON fu.id = fm.sender_id
          WHERE m.group_id = ?
          ORDER BY m.created_at DESC, m.id DESC
          LIMIT ?'
@@ -49,9 +64,18 @@ if ($groupId > 0) {
     $stmt->bind_param('ii', $groupId, $limit);
 } else {
     $stmt = $conn->prepare(
-        'SELECT m.id, m.sender_id, m.message, m.message_type, m.created_at, u.full_name AS sender_name
+        'SELECT m.id, m.sender_id, m.message, m.message_type, m.created_at,
+                m.reply_to_message_id, m.forwarded_from_message_id, m.edited_at, m.deleted_at,
+                u.full_name AS sender_name,
+                rm.message AS reply_message, rm.deleted_at AS reply_deleted_at,
+                rm.sender_id AS reply_sender_id, ru.full_name AS reply_sender_name,
+                fm.sender_id AS forwarded_sender_id, fu.full_name AS forwarded_sender_name
          FROM messages m
          INNER JOIN users u ON u.id = m.sender_id
+         LEFT JOIN messages rm ON rm.id = m.reply_to_message_id
+         LEFT JOIN users ru ON ru.id = rm.sender_id
+         LEFT JOIN messages fm ON fm.id = m.forwarded_from_message_id
+         LEFT JOIN users fu ON fu.id = fm.sender_id
          WHERE ((m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?))
          ORDER BY m.created_at ASC
          LIMIT ?'
@@ -66,6 +90,15 @@ $lastVisibleMessageId = 0;
 
 while ($row = $result->fetch_assoc()) {
     $row['is_mine'] = (int) $row['sender_id'] === (int) $user['id'];
+    $row['reply_is_mine'] = (int) ($row['reply_sender_id'] ?? 0) === (int) $user['id'];
+    $row['forwarded_is_mine'] = (int) ($row['forwarded_sender_id'] ?? 0) === (int) $user['id'];
+    $row['is_deleted'] = !empty($row['deleted_at']);
+    if ($row['is_deleted']) {
+        $row['message'] = '';
+    }
+    if (!empty($row['reply_deleted_at'])) {
+        $row['reply_message'] = '';
+    }
     $lastVisibleMessageId = max($lastVisibleMessageId, (int) ($row['id'] ?? 0));
     $messages[] = $row;
 }

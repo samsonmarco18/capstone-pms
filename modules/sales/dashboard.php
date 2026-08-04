@@ -105,6 +105,36 @@ $activeProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE sta
 $completedProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status = 'completed'")->fetch_assoc()['count'];
 $overdueProjects = $conn->query("SELECT COUNT(*) as count FROM projects WHERE timeline_end IS NOT NULL AND timeline_end < CURDATE() AND status NOT IN ('completed', 'cancelled')")->fetch_assoc()['count'];
 $insightProjectCount = $conn->query("SELECT COUNT(*) as count FROM projects WHERE status != 'cancelled'")->fetch_assoc()['count'];
+$fetchEvortixRows = static function ($result): array {
+    $rows = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $rows[] = $row;
+        }
+    }
+    return $rows;
+};
+$evortixPendingProjects = $fetchEvortixRows($conn->query("
+    SELECT p.id, p.client_id, p.name AS project_name, c.name AS client_name
+    FROM projects p
+    INNER JOIN clients c ON c.id = p.client_id
+    WHERE p.status = 'pending'
+    ORDER BY p.created_at ASC, p.id ASC
+"));
+$evortixInactiveClients = $fetchEvortixRows($conn->query("
+    SELECT id, name AS client_name FROM clients
+    WHERE status = 'inactive'
+    ORDER BY name ASC
+"));
+$evortixOverdueProjects = $fetchEvortixRows($conn->query("
+    SELECT p.id, p.client_id, p.name AS project_name, p.timeline_end, c.name AS client_name
+    FROM projects p
+    INNER JOIN clients c ON c.id = p.client_id
+    WHERE p.timeline_end IS NOT NULL
+      AND p.timeline_end < CURDATE()
+      AND p.status NOT IN ('completed', 'cancelled')
+    ORDER BY p.timeline_end ASC, p.id ASC
+"));
 
 // Get recent clients
 $recentClients = $conn->query("SELECT * FROM clients ORDER BY created_at DESC LIMIT 5");
@@ -801,20 +831,34 @@ include '../../includes/navbar.php';
 
 /* View Button */
 .btn-view {
+    align-items: center;
     background: rgba(31, 99, 146, 0.08);
     border: 1px solid rgba(31, 99, 146, 0.18);
     color: var(--theme-primary);
+    display: inline-flex;
+    gap: 0.35rem;
+    justify-content: center;
     padding: 0.38rem 0.85rem;
     border-radius: 10px;
     font-size: 0.72rem;
     font-weight: 600;
     text-decoration: none;
-    transition: background 0.2s ease, color 0.2s ease;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.btn-view:hover {
+.btn-view:hover,
+.btn-view:focus-visible {
     background: var(--theme-primary);
-    color: white;
+    border-color: var(--theme-primary);
+    box-shadow: 0 5px 12px rgba(31, 99, 146, 0.18);
+    color: #ffffff !important;
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+.btn-view:hover i,
+.btn-view:focus-visible i {
+    color: #ffffff !important;
 }
 
 /* Empty State */
@@ -873,12 +917,23 @@ include '../../includes/navbar.php';
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.18s ease, color 0.18s ease;
+    text-decoration: none;
+    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
-.agenda-open-btn:hover {
+.agenda-open-btn:hover,
+.agenda-open-btn:focus-visible {
     background: var(--theme-primary);
-    color: #ffffff;
+    border-color: var(--theme-primary);
+    box-shadow: 0 6px 14px rgba(31, 99, 146, 0.2);
+    color: #ffffff !important;
+    outline: none;
+    transform: translateY(-1px);
+}
+
+.agenda-open-btn:hover i,
+.agenda-open-btn:focus-visible i {
+    color: #ffffff !important;
 }
 
 .agenda-summary {
@@ -1965,6 +2020,18 @@ body.dark-mode .agenda-more-btn {
     box-shadow: none;
 }
 
+html[data-theme="dark"] .agenda-open-btn:hover,
+html[data-theme="dark"] .agenda-open-btn:focus-visible,
+body[data-theme="dark"] .agenda-open-btn:hover,
+body[data-theme="dark"] .agenda-open-btn:focus-visible,
+body.dark-mode .agenda-open-btn:hover,
+body.dark-mode .agenda-open-btn:focus-visible {
+    background: var(--theme-primary);
+    border-color: var(--theme-primary);
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.24);
+    color: #ffffff !important;
+}
+
 html[data-theme="dark"] .release-feature,
 body[data-theme="dark"] .release-feature,
 body.dark-mode .release-feature {
@@ -2156,19 +2223,7 @@ body.dark-mode .evortix-3d-platform {
         animation: none !important;
     }
 }
-/* Evortix login flight and live dashboard briefing. */
-.chat-bot-float.is-dashboard-welcome-tour {
-    z-index: 1096;
-    pointer-events: none;
-    will-change: transform, opacity;
-}
-
-.chat-bot-float.is-dashboard-welcome-tour .chat-bot-speech {
-    opacity: 0 !important;
-    visibility: hidden !important;
-    pointer-events: none !important;
-}
-
+/* Evortix live dashboard briefing. */
 .chat-bot-speech.evortix-dashboard-summary {
     top: 42%;
     right: calc(100% + 18px);
@@ -2226,6 +2281,63 @@ body.dark-mode .evortix-3d-platform {
     margin: .5rem 0 .7rem;
     color: #175f8f;
     font-size: .74rem;
+    font-weight: 700;
+}
+
+.evortix-live-actions {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    gap: .45rem;
+    max-height: 285px;
+    overflow-y: auto;
+}
+
+.evortix-live-action {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    min-width: 0;
+    padding: .65rem .75rem;
+    border: 1px solid rgba(8, 123, 185, .2);
+    border-radius: 13px;
+    background: rgba(255, 255, 255, .82);
+    color: #0b466d;
+    text-decoration: none;
+    box-shadow: 0 5px 14px rgba(15, 119, 183, .08);
+}
+
+.evortix-live-action:hover,
+.evortix-live-action:focus-visible {
+    border-color: rgba(8, 123, 185, .45);
+    background: #fff;
+    color: #083a5d;
+}
+
+.evortix-live-action > i {
+    flex: 0 0 auto;
+    color: #138ac1;
+}
+
+.evortix-live-action span {
+    display: grid;
+    min-width: 0;
+}
+
+.evortix-live-action strong,
+.evortix-live-action small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.evortix-live-action strong {
+    font-size: .75rem;
+}
+
+.evortix-live-action small {
+    color: #5b7f97;
+    font-size: .64rem;
     font-weight: 700;
 }
 
@@ -2792,32 +2904,10 @@ body.dark-mode .evortix-3d-platform {
 <script>
 const evortixDashboardWelcomeData = <?php echo json_encode([
     'enabled' => $showEvortixLoginWelcome,
-    'metrics' => [
-        [
-            'label' => 'Total Clients',
-            'value' => (int) $totalClients,
-            'meta' => (int) $activeClients . ' active clients',
-            'icon' => 'fa-users',
-        ],
-        [
-            'label' => 'Total Projects',
-            'value' => (int) $totalProjects,
-            'meta' => (int) $completedProjects . ' completed',
-            'icon' => 'fa-project-diagram',
-        ],
-        [
-            'label' => 'Active Projects',
-            'value' => (int) $activeProjects,
-            'meta' => 'Currently ongoing',
-            'icon' => 'fa-play-circle',
-        ],
-        [
-            'label' => 'Overdue',
-            'value' => (int) $overdueProjects,
-            'meta' => (int) $overdueProjects > 0 ? 'Needs immediate follow-up' : 'No overdue projects',
-            'icon' => 'fa-heart-pulse',
-            'overdue' => (int) $overdueProjects > 0,
-        ],
+    'actions' => [
+        'pending_projects' => $evortixPendingProjects,
+        'inactive_clients' => $evortixInactiveClients,
+        'overdue_projects' => $evortixOverdueProjects,
     ],
 ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); ?>;
 window.evortixDashboardWelcomeActive = Boolean(evortixDashboardWelcomeData.enabled);
@@ -2881,11 +2971,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, true);
 
         botFloat.classList.remove('is-leaving-bed', 'is-returning-bed', 'is-preparing-speech', 'is-speaking');
-        botFloat.classList.add('is-dashboard-welcome-tour');
         botFloat.hidden = false;
         botFloat.setAttribute('aria-hidden', 'false');
         speech.hidden = true;
-        robot?.wake?.();
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        robot?.setMode?.('standing');
         robot?.setEmotion?.('', 0);
 
         const botRect = botFloat.getBoundingClientRect();
@@ -2904,67 +2994,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         botFloat.style.right = 'auto';
         botFloat.style.bottom = 'auto';
 
-        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (!reduceMotion && typeof botFloat.animate === 'function') {
-            const finalCenterX = finalX + botRect.width / 2;
-            const finalCenterY = finalY + botRect.height / 2;
-            const radiusX = Math.min(640, Math.max(170, (window.innerWidth - botRect.width) * .43));
-            const radiusY = Math.max(70, Math.min(
-                220,
-                finalCenterY - 24,
-                window.innerHeight - finalCenterY - 24
-            ));
-            const orbitCenterX = finalCenterX - radiusX;
-            const flightFrames = [];
-            for (let step = 0; step <= 8; step++) {
-                const angle = -(Math.PI * 2 * step / 8);
-                const pointX = orbitCenterX + Math.cos(angle) * radiusX;
-                const pointY = finalCenterY + Math.sin(angle) * radiusY;
-                const tilt = step === 0 || step === 8 ? 0 : Math.sin(angle) * -7;
-                flightFrames.push({
-                    offset: step * .105,
-                    opacity: step === 0 ? 0 : 1,
-                    transform: `translate(${(pointX - finalCenterX).toFixed(1)}px, ${(pointY - finalCenterY).toFixed(1)}px) rotate(${tilt.toFixed(1)}deg) scale(${step === 0 ? '.72' : '1'})`
-                });
-            }
-            flightFrames.push({ offset:.94, opacity:1, transform:'translate(-12px, -5px) rotate(-2deg) scale(1.04)' });
-            flightFrames.push({ offset:1, opacity:1, transform:'translate(0, 0) rotate(0) scale(1)' });
-            const flight = botFloat.animate(flightFrames, {
-                duration:4400,
-                easing:'linear',
-                fill:'both'
-            });
-            await flight.finished.catch(() => undefined);
-            flight.cancel();
-        }
-
-        botFloat.classList.remove('is-dashboard-welcome-tour');
         speech.className = 'chat-bot-speech evortix-dashboard-summary';
         speech.hidden = false;
         speech.setAttribute('aria-hidden', 'false');
         speech.setAttribute('role', 'status');
         speech.style.pointerEvents = 'auto';
-        const metricsMarkup = evortixDashboardWelcomeData.metrics.map(metric => `
-            <div class="evortix-dashboard-summary-metric${metric.overdue ? ' is-overdue' : ''}">
-                <div class="evortix-dashboard-summary-metric-top">
-                    <i class="fas ${escapeSummaryHtml(metric.icon)}" aria-hidden="true"></i>
-                    <strong class="evortix-dashboard-summary-value">${escapeSummaryHtml(metric.value)}</strong>
-                </div>
-                <div class="evortix-dashboard-summary-label">${escapeSummaryHtml(metric.label)}</div>
-                <div class="evortix-dashboard-summary-meta">${escapeSummaryHtml(metric.meta)}</div>
-            </div>`).join('');
+        const actions = evortixDashboardWelcomeData.actions || {};
+        const pending = Array.isArray(actions.pending_projects) ? actions.pending_projects : [];
+        const inactive = Array.isArray(actions.inactive_clients) ? actions.inactive_clients : [];
+        const overdue = Array.isArray(actions.overdue_projects) ? actions.overdue_projects : [];
+        const actionItems = [
+            ...pending.map(item => ({
+                label: `Follow up: ${item.project_name}`,
+                meta: `${item.client_name} · Pending project`,
+                icon: 'fa-clock',
+                url: `clients.php?view=${encodeURIComponent(item.client_id)}&project=${encodeURIComponent(item.id)}`
+            })),
+            ...inactive.map(item => ({
+                label: `Send proposal: ${item.client_name}`,
+                meta: 'Inactive client',
+                icon: 'fa-paper-plane',
+                url: `clients.php?view=${encodeURIComponent(item.id)}`
+            })),
+            ...overdue.map(item => ({
+                label: `Review: ${item.project_name}`,
+                meta: `${item.client_name} · Due ${item.timeline_end}`,
+                icon: 'fa-triangle-exclamation',
+                url: `clients.php?view=${encodeURIComponent(item.client_id)}&project=${encodeURIComponent(item.id)}`
+            }))
+        ];
+        const actionsMarkup = actionItems.length
+            ? actionItems.slice(0, 8).map(item => `
+                <a class="evortix-live-action" href="${escapeSummaryHtml(item.url)}">
+                    <i class="fas ${escapeSummaryHtml(item.icon)}" aria-hidden="true"></i>
+                    <span><strong>${escapeSummaryHtml(item.label)}</strong><small>${escapeSummaryHtml(item.meta)}</small></span>
+                </a>`).join('')
+            : '<div class="evortix-dashboard-summary-intro">You are all caught up. No items need attention.</div>';
         speech.innerHTML = `
             <div class="evortix-dashboard-summary-head">
                 <div>
-                    <div class="evortix-dashboard-summary-eyebrow">Live overview</div>
-                    <strong class="evortix-dashboard-summary-title">Your sales dashboard snapshot</strong>
+                    <strong class="evortix-dashboard-summary-title">Live Overview</strong>
                 </div>
                 <button type="button" class="evortix-dashboard-summary-close" aria-label="Dismiss dashboard overview">
                     <i class="fas fa-xmark" aria-hidden="true"></i>
                 </button>
             </div>
-            <div class="evortix-dashboard-summary-intro">Here is what your summary cards are reporting right now.</div>
-            <div class="evortix-dashboard-summary-grid">${metricsMarkup}</div>`;
+            <div class="evortix-dashboard-summary-intro">${pending.length} pending, ${inactive.length} inactive, and ${overdue.length} overdue. Select an item to open it.</div>
+            <div class="evortix-live-actions">${actionsMarkup}</div>`;
 
         statsGrid?.classList.add('is-evortix-highlight');
         window.setTimeout(() => statsGrid?.classList.remove('is-evortix-highlight'), 3800);
@@ -2987,7 +3063,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         summaryTimer = window.setTimeout(dismissSummary, 15000);
     } catch (error) {
         console.warn('Evortix dashboard welcome could not complete:', error);
-        document.getElementById('chat-bot-float')?.classList.remove('is-dashboard-welcome-tour');
         signalWelcomeComplete();
     }
 });

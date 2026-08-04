@@ -46,6 +46,46 @@ $taskSummary = processHistoryTaskSummary($taskDurations);
 $slowestEvent = $summary['slowest_event'];
 $slowestTask = $taskSummary['slowest_task'];
 
+$historyPageSize = 10;
+$movementTotalItems = count($events);
+$durationTotalItems = count($taskDurations);
+$movementTotalPages = max(1, (int) ceil($movementTotalItems / $historyPageSize));
+$durationTotalPages = max(1, (int) ceil($durationTotalItems / $historyPageSize));
+$movementPage = min($movementTotalPages, max(1, (int) ($_GET['movement_page'] ?? 1)));
+$durationPage = min($durationTotalPages, max(1, (int) ($_GET['duration_page'] ?? 1)));
+$movementOffset = ($movementPage - 1) * $historyPageSize;
+$durationOffset = ($durationPage - 1) * $historyPageSize;
+$pagedEvents = array_slice($events, $movementOffset, $historyPageSize);
+$pagedTaskDurations = array_slice($taskDurations, $durationOffset, $historyPageSize);
+$movementPageStart = $movementTotalItems > 0 ? $movementOffset + 1 : 0;
+$movementPageEnd = min($movementOffset + $historyPageSize, $movementTotalItems);
+$durationPageStart = $durationTotalItems > 0 ? $durationOffset + 1 : 0;
+$durationPageEnd = min($durationOffset + $historyPageSize, $durationTotalItems);
+
+$historyPaginationPages = static function (int $currentPage, int $totalPages): array {
+    if ($totalPages <= 5) {
+        return range(1, $totalPages);
+    }
+
+    $startPage = max(1, min($currentPage - 2, $totalPages - 4));
+    return range($startPage, $startPage + 4);
+};
+
+$movementPaginationPages = $historyPaginationPages($movementPage, $movementTotalPages);
+$durationPaginationPages = $historyPaginationPages($durationPage, $durationTotalPages);
+$buildHistoryPageUrl = static function (string $tab, int $page) use ($selectedProjectId, $sort): string {
+    $params = [
+        'project_id' => $selectedProjectId,
+        'sort' => $sort,
+        'tab' => $tab,
+    ];
+    if ($page > 1) {
+        $params[$tab === 'durations' ? 'duration_page' : 'movement_page'] = $page;
+    }
+
+    return 'process-history.php?' . http_build_query($params) . '#processHistoryTabs';
+};
+
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
 include '../../includes/navbar.php';
@@ -54,31 +94,29 @@ include '../../includes/navbar.php';
 <style>
 .process-hero {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 1rem;
     position: relative;
-    margin-bottom: 1rem;
-    padding: 1.2rem 5rem 1.35rem 1.35rem;
-    border-radius: 8px;
-    background: #1f6392;
+    margin-bottom: 1.5rem;
+    padding: 2rem 5rem 2rem 2rem;
+    border-radius: 24px;
+    background: linear-gradient(135deg, #1f6392 0%, #184f73 100%);
     color: #fff;
-    box-shadow: 0 12px 28px rgba(31, 99, 146, 0.16);
 }
 .process-hero h2 {
     margin: 0;
     color: #fff;
-    font-size: 1.35rem;
-    font-weight: 800;
+    font-size: 1.8rem;
+    font-weight: 700;
 }
 .process-hero h2 i {
     color: #fff;
 }
 .process-hero p {
-    margin: 0.35rem 0 0;
-    max-width: 780px;
+    margin: 0.4rem 0 0;
     color: rgba(255, 255, 255, 0.86);
-    font-size: 0.9rem;
+    font-size: 0.95rem;
 }
 .process-hero.page-help-host .page-header-help-btn {
     position: absolute !important;
@@ -95,49 +133,78 @@ include '../../includes/navbar.php';
     background: #fff;
     color: #0f496e;
 }
-.process-filter-card,
-.process-tab-shell {
+.process-workspace {
     background: #fff;
     border: 1px solid #dfe8f1;
-    border-radius: 16px;
+    border-radius: 22px;
     box-shadow: 0 12px 30px rgba(15, 42, 64, 0.06);
+    overflow: hidden;
 }
-.process-filter-card { padding: 1.05rem; margin-bottom: 1rem; }
-.process-filter-card .row { min-width: 0; }
-.process-filter-card .form-select {
+.process-filter-card {
+    margin: 0;
+    padding: 1rem 1.5rem;
+    border: 0;
+    background: transparent;
+}
+#page-content-wrapper .process-filter-card.app-3d-surface,
+#page-content-wrapper .process-filter-card.app-3d-surface:hover,
+#page-content-wrapper .process-filter-card.app-3d-surface:focus-within {
+    box-shadow: none !important;
+    transform: none !important;
+}
+.process-filter-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 520px) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: center;
+}
+.process-filter-field {
+    position: relative;
     min-width: 0;
-    min-height: 46px;
-    border-color: #d8e4ee;
-    border-radius: 8px;
-    color: #172033;
+}
+.process-filter-field:last-child {
+    justify-self: end;
+    width: min(100%, 260px);
+}
+.process-filter-card .form-select {
+    width: 100%;
+    min-width: 0;
+    min-height: 42px;
+    padding: 0.52rem 2rem 0.52rem 1rem;
+    border: 0;
+    border-bottom: 1px solid #cbd8e3;
+    border-radius: 0;
+    background-color: transparent;
+    color: #344b61;
+    font-size: 0.82rem;
     text-overflow: ellipsis;
+    box-shadow: none;
 }
 .process-filter-card .form-select:focus {
     border-color: #1f6392;
-    box-shadow: 0 0 0 0.16rem rgba(31, 99, 146, 0.14);
+    box-shadow: 0 2px 0 rgba(31, 99, 146, 0.12);
 }
-.process-filter-card label { color: #64748b; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; }
 .process-tabs {
     display: flex;
     gap: 0.25rem;
-    margin-bottom: 1rem;
-    padding: 0.35rem;
-    width: fit-content;
+    margin: 0;
+    padding: 0.55rem 1.25rem;
+    width: 100%;
     max-width: 100%;
-    border: 1px solid #dfe8f1;
-    border-radius: 14px;
-    background: #fff;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     overflow-x: auto;
-    box-shadow: 0 8px 22px rgba(15, 42, 64, 0.05);
+    box-shadow: none;
 }
 .process-tabs .nav-link {
     border: 0;
-    border-radius: 10px;
+    border-radius: 9px;
     background: transparent;
     color: #475569;
     font-weight: 650;
-    min-height: 46px;
-    padding: 0.65rem 0.9rem;
+    min-height: 42px;
+    padding: 0.55rem 0.85rem;
     white-space: nowrap;
     transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
@@ -152,76 +219,61 @@ include '../../includes/navbar.php';
 }
 .process-tabs .badge {
     min-width: 30px;
-    padding: 0.38rem 0.5rem;
+    padding: 0.32rem 0.48rem;
     border-radius: 999px;
     background: #fff !important;
     color: #31516a !important;
     font-weight: 650;
 }
-.process-tab-shell { overflow: hidden; }
-.process-tab-head {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 1.15rem 1.3rem;
-    border-bottom: 1px solid #e5edf5;
-    background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+.process-tab-shell {
+    background: #fff;
+    overflow: hidden;
 }
-.process-tab-head > div { min-width: 0; }
-.process-tab-head h5 {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    margin: 0;
-    color: #172033;
-    font-size: 1rem;
-    font-weight: 700;
-}
-.process-tab-head h5 i {
-    display: inline-grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
-    margin-right: 0 !important;
-    border-radius: 10px;
-    background: #e8f3f9;
-    color: #17658e;
-    font-size: 0.88rem;
-}
-.process-tab-head p { margin: 0.35rem 0 0 2.65rem; color: #64748b; font-size: 0.82rem; overflow-wrap: anywhere; }
 .process-metric-strip {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 0;
-    padding: 0.65rem 1.2rem;
-    border-bottom: 1px solid #eef3f7;
-    background: #fff;
-}
-.process-metric {
-    display: grid;
-    grid-template-columns: 42px minmax(0, 1fr);
-    align-items: center;
-    gap: 0.75rem;
-    min-width: 0;
-    padding: 0.75rem 1rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+    margin: 0 0 2rem;
+    padding: 0;
     border: 0;
     background: transparent;
+    overflow: visible;
 }
-.process-metric + .process-metric { border-left: 1px solid #e5edf5; }
-.process-metric-icon {
-    display: inline-grid;
-    place-items: center;
-    width: 42px;
-    height: 42px;
+.process-metric {
+    display: block;
+    position: relative;
+    min-width: 0;
+    min-height: 70px;
+    padding: 0.85rem 3.75rem 0.8rem 1rem;
+    border: 1px solid rgba(31, 99, 146, 0.14);
     border-radius: 12px;
-    background: #edf6fb;
-    color: #17658e;
+    background: linear-gradient(135deg, #ffffff 0%, #fbfdff 58%, #edf9fc 100%);
+    box-shadow: 0 7px 0 rgba(31, 99, 146, 0.08), 0 0 18px rgba(34, 211, 238, 0.05);
+    transform: none !important;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.process-metric:hover {
+    border-color: rgba(31, 99, 146, 0.2);
+    box-shadow: 0 7px 0 rgba(31, 99, 146, 0.08), 0 0 18px rgba(34, 211, 238, 0.08);
+    transform: none !important;
+}
+.process-metric-icon {
+    position: absolute;
+    top: 0.75rem;
+    right: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: #e9f3f8;
+    color: #1f6392;
     font-size: 0.95rem;
 }
-.process-metric-copy { min-width: 0; }
-.process-metric-copy > span { display: block; color: #64748b; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.035em; text-transform: uppercase; }
-.process-metric strong { display: block; margin-top: 0.12rem; color: #172033; font-size: 1.08rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
-.process-metric small { display: block; margin-top: 0.14rem; color: #64748b; font-size: 0.76rem; overflow-wrap: anywhere; }
+.process-metric-copy { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.process-metric-copy > span { display: block; color: #64748b; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.55px; line-height: 1.2; text-transform: uppercase; }
+.process-metric strong { display: block; color: #1f6392; font-size: 1.4rem; font-weight: 600; line-height: 1; overflow-wrap: anywhere; }
 .process-list-header {
     display: grid;
     grid-template-columns: minmax(128px, 0.55fr) minmax(0, 1.7fr) minmax(220px, 0.95fr) minmax(150px, 0.62fr);
@@ -238,12 +290,10 @@ include '../../includes/navbar.php';
 .process-scroll-list {
     display: grid;
     gap: 0.7rem;
-    max-height: min(680px, 64vh);
-    overflow-y: auto;
+    overflow: visible;
     overflow-x: hidden;
     padding: 1rem;
     background: #f6f9fc;
-    scrollbar-gutter: stable;
 }
 .process-event {
     display: grid;
@@ -356,11 +406,79 @@ include '../../includes/navbar.php';
     overflow-wrap: anywhere;
 }
 .process-duration strong { display: block; margin-top: 0.14rem; color: #172033; font-size: 0.96rem; font-weight: 700; }
-.process-duration span { color: #64748b; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; overflow-wrap: anywhere; }
+.process-duration span { display: none; color: #64748b; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; overflow-wrap: anywhere; }
 .process-duration small { display: block; margin-top: 0.15rem; color: #7b8b9b; font-size: 0.72rem; overflow-wrap: anywhere; }
 .process-duration.is-slow strong { color: #b45309; }
 .process-empty { padding: 2rem; text-align: center; color: #64748b; }
 .process-empty i { display: block; margin-bottom: 0.7rem; color: #1f6392; font-size: 1.8rem; }
+.process-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.9rem 1.25rem;
+    border-top: 1px solid #e5edf5;
+    background: #fff;
+}
+.process-pagination-summary {
+    color: #64748b;
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+.process-pagination-controls,
+.process-pagination-pages {
+    display: flex;
+    align-items: center;
+}
+.process-pagination-controls {
+    gap: 0.55rem;
+}
+.process-pagination-pages {
+    overflow: hidden;
+    border: 1px solid #d8e2ea;
+    border-radius: 9px;
+    background: #fff;
+}
+.process-pagination-page,
+.process-pagination-step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    color: #475569 !important;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+.process-pagination-page {
+    min-width: 36px;
+    padding: 0 0.55rem;
+}
+.process-pagination-page:hover,
+.process-pagination-page.is-current {
+    background: #edf5fa;
+    color: #155f88 !important;
+}
+.process-pagination-page.is-current {
+    box-shadow: inset 0 0 0 1px #cfe1ec;
+    pointer-events: none;
+}
+.process-pagination-step {
+    min-width: 76px;
+    padding: 0 0.75rem;
+    border: 1px solid #d8e2ea;
+    border-radius: 9px;
+    background: #fff;
+}
+.process-pagination-step:hover {
+    border-color: #9bbdd1;
+    color: #155f88 !important;
+}
+.process-pagination-step.is-disabled {
+    background: #f6f8fa;
+    color: #a3afba !important;
+    pointer-events: none;
+}
 .developer-duration-header {
     display: grid;
     grid-template-columns: minmax(230px, 1.35fr) minmax(150px, 0.85fr) minmax(150px, 0.85fr) minmax(150px, 0.85fr) minmax(150px, 0.8fr) minmax(140px, 0.75fr);
@@ -459,15 +577,19 @@ include '../../includes/navbar.php';
 }
 .task-duration-value .task-duration-late { color: #b91c1c !important; font-weight: 800; }
 .task-duration-value .task-duration-ontrack { color: #166534 !important; font-weight: 800; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-workspace,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-filter-card,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-shell,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tabs,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-event,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-event-time,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-duration,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-duration-card { background: #0d1b2a; border-color: #20364a; }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-filter-card,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tabs {
+    border-color: #20364a;
+}
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-event {
     background: #0d1b2a;
 }
@@ -480,12 +602,13 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero p {
     color: rgba(255, 255, 255, 0.86);
 }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-filter-card .form-select {
-    color: #90aeca;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) #project-process-history .process-filter-card .form-select {
+    background-color: transparent;
+    border-color: #2a3b4f;
+    color: #d5e3ef;
 }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-filter-card .form-select {
-    background: #102235;
-    border-color: #20364a;
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric-copy > span {
+    color: #90aeca;
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tabs .nav-link {
     color: #b9cee2;
@@ -499,17 +622,26 @@ include '../../includes/navbar.php';
     background: #174d70;
     box-shadow: inset 0 0 0 1px #28688e;
 }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-head { background: #0d1b2a; border-color: #20364a; }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-head h5 i,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric-icon {
-    background: #102f45;
-    color: #7fc3e8;
+    background: rgba(90, 159, 196, 0.14);
+    color: #8ed4f5;
 }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric-strip { background: #0d1b2a; border-color: #20364a; }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric {
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric-strip {
     background: transparent;
+    border-color: transparent;
 }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric + .process-metric,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric {
+    background: #102437;
+    border-color: #2a3b4f;
+    box-shadow: 0 7px 0 rgba(0, 0, 0, 0.22), 0 0 18px rgba(34, 211, 238, 0.04);
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric:hover {
+    border-color: #36516b;
+    box-shadow: 0 7px 0 rgba(0, 0, 0, 0.22), 0 0 18px rgba(34, 211, 238, 0.08);
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric strong {
+    color: #8ed4f5;
+}
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-duration {
     border-color: #20364a;
 }
@@ -522,6 +654,26 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-scroll-list {
     background: #081727;
 }
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-pagination,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-pagination-pages,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-pagination-step {
+    background: #102435;
+    border-color: rgba(148, 163, 184, 0.24);
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-pagination-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-pagination-page,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-pagination-step {
+    color: #c9d9e6 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-pagination-page:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-pagination-page.is-current {
+    background: #173247;
+    color: #fff !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-pagination-step.is-disabled {
+    background: #0b1a28;
+    color: #6f8496 !important;
+}
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-event:hover,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-duration-card:hover {
     background: #102235;
@@ -533,9 +685,7 @@ include '../../includes/navbar.php';
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-muted {
     color: #90aeca;
 }
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-metric strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-hero h2,
-:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-tab-head h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-name strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-duration-value strong,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .process-event-time strong,
@@ -553,6 +703,7 @@ include '../../includes/navbar.php';
         border-left: 0;
         text-align: left;
     }
+    .process-duration span { display: block; }
     .process-meta { flex-direction: row; flex-wrap: wrap; }
     .task-duration-value small { display: block; margin-bottom: 0.15rem; }
 }
@@ -562,8 +713,26 @@ include '../../includes/navbar.php';
     .process-duration { text-align: left; }
 }
 @media (max-width: 767.98px) {
+    .process-hero {
+        padding: 1.5rem 4.5rem 1.5rem 1.5rem;
+    }
+    .process-hero h2 {
+        font-size: 1.55rem;
+    }
+    .process-filter-card {
+        padding: 1rem;
+    }
+    .process-filter-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0.75rem;
+    }
+    .process-filter-field:last-child {
+        justify-self: stretch;
+        width: 100%;
+    }
     .process-tabs {
         width: 100%;
+        padding: 0.5rem;
     }
     .process-tabs .nav-item {
         flex: 1 0 auto;
@@ -571,23 +740,45 @@ include '../../includes/navbar.php';
     .process-tabs .nav-link {
         width: 100%;
     }
-    .process-tab-head {
-        padding: 1rem;
-    }
-    .process-tab-head p {
-        margin-left: 0;
-    }
     .process-metric-strip {
         grid-template-columns: minmax(0, 1fr);
-        padding: 0.4rem 1rem;
+        gap: 0.55rem;
+        margin-bottom: 1.5rem;
+        padding: 0;
     }
-    .process-metric + .process-metric {
-        border-top: 1px solid #e5edf5;
-        border-left: 0;
+    .process-metric {
+        min-height: 62px;
+        padding: 0.7rem 3.5rem 0.7rem 0.85rem;
+    }
+    .process-metric-icon {
+        top: 0.65rem;
+        right: 0.85rem;
+        width: 34px;
+        height: 34px;
     }
     .process-scroll-list,
     .developer-duration-list {
         padding: 0.75rem;
+    }
+    .process-pagination {
+        align-items: stretch;
+        flex-direction: column;
+        padding: 0.9rem 1rem;
+    }
+    .process-pagination-summary {
+        text-align: center;
+    }
+    .process-pagination-controls {
+        justify-content: center;
+        min-width: 0;
+    }
+    .process-pagination-pages {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+    .process-pagination-step {
+        min-width: 40px;
+        padding: 0 0.65rem;
     }
 }
 </style>
@@ -596,17 +787,42 @@ include '../../includes/navbar.php';
         <section class="process-hero" data-page-header>
             <div>
                 <h2><i class="fas fa-clock-rotate-left me-2"></i>Process History</h2>
-                <p>Track project movements from planning to release, including task start-to-finish duration, approvals, revisions, QA decisions, and completion timing.</p>
+                <p>Project activity and delivery timing.</p>
             </div>
         </section>
 
+        <div class="process-metric-strip" aria-label="Process history summary">
+            <div class="process-metric">
+                <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-route"></i></span>
+                <div class="process-metric-copy">
+                    <span>Movements</span>
+                    <strong><?php echo (int) $summary['event_count']; ?></strong>
+                </div>
+            </div>
+            <div class="process-metric">
+                <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-hourglass-half"></i></span>
+                <div class="process-metric-copy">
+                    <span>Longest Gap</span>
+                    <strong><?php echo $slowestEvent ? htmlspecialchars(processHistoryFormatDuration((int) $slowestEvent['gap_seconds'])) : 'None'; ?></strong>
+                </div>
+            </div>
+            <div class="process-metric">
+                <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-diagram-project"></i></span>
+                <div class="process-metric-copy">
+                    <span>Projects</span>
+                    <strong><?php echo (int) $summary['project_count']; ?></strong>
+                </div>
+            </div>
+        </div>
+
+        <section class="process-workspace">
         <form class="process-filter-card" method="GET" id="processHistoryFilter">
             <input type="hidden" name="tab" id="processHistoryActiveTab" value="<?php echo htmlspecialchars($activeTab); ?>">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-6">
-                    <label for="project_id" class="form-label">Project</label>
+            <div class="process-filter-grid">
+                <div class="process-filter-field">
+                    <label for="project_id" class="visually-hidden">Project</label>
                     <select class="form-select" id="project_id" name="project_id" onchange="this.form.submit()">
-                        <option value="0">All accessible projects</option>
+                        <option value="0">All projects</option>
                         <?php foreach ($projects as $project): ?>
                             <?php $projectId = (int) ($project['id'] ?? 0); ?>
                             <option value="<?php echo $projectId; ?>" <?php echo $selectedProjectId === $projectId ? 'selected' : ''; ?>>
@@ -615,18 +831,15 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label for="sort" class="form-label">Sort</label>
+                <div class="process-filter-field">
+                    <label for="sort" class="visually-hidden">Sort</label>
                     <select class="form-select" id="sort" name="sort" onchange="this.form.submit()">
-                        <option value="recent" <?php echo $sort === 'recent' ? 'selected' : ''; ?>>Most recent movement first</option>
-                        <option value="longest_gap" <?php echo $sort === 'longest_gap' ? 'selected' : ''; ?>>Longest duration gap first</option>
-                        <option value="longest_task_duration" <?php echo $sort === 'longest_task_duration' ? 'selected' : ''; ?>>Longest developer duration first</option>
-                        <option value="project_asc" <?php echo $sort === 'project_asc' ? 'selected' : ''; ?>>Project A-Z, latest first</option>
-                        <option value="project_desc" <?php echo $sort === 'project_desc' ? 'selected' : ''; ?>>Project Z-A, latest first</option>
+                        <option value="recent" <?php echo $sort === 'recent' ? 'selected' : ''; ?>>Most recent</option>
+                        <option value="longest_gap" <?php echo $sort === 'longest_gap' ? 'selected' : ''; ?>>Longest gap</option>
+                        <option value="longest_task_duration" <?php echo $sort === 'longest_task_duration' ? 'selected' : ''; ?>>Longest task duration</option>
+                        <option value="project_asc" <?php echo $sort === 'project_asc' ? 'selected' : ''; ?>>Project A-Z</option>
+                        <option value="project_desc" <?php echo $sort === 'project_desc' ? 'selected' : ''; ?>>Project Z-A</option>
                     </select>
-                </div>
-                <div class="col-md-2">
-                    <div class="text-muted small pb-2">Changes apply automatically.</div>
                 </div>
             </div>
         </form>
@@ -634,13 +847,13 @@ include '../../includes/navbar.php';
         <ul class="nav process-tabs" id="processHistoryTabs" role="tablist">
             <li class="nav-item" role="presentation">
                 <button class="nav-link <?php echo $activeTab === 'movements' ? 'active' : ''; ?>" id="movements-tab" data-bs-toggle="tab" data-bs-target="#movements-panel" type="button" role="tab" aria-controls="movements-panel" aria-selected="<?php echo $activeTab === 'movements' ? 'true' : 'false'; ?>">
-                    <i class="fas fa-route me-1"></i> Latest Movements
+                    <i class="fas fa-route me-1"></i> Movements
                     <span class="badge bg-light text-dark ms-1"><?php echo (int) $summary['event_count']; ?></span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link <?php echo $activeTab === 'durations' ? 'active' : ''; ?>" id="developer-duration-tab" data-bs-toggle="tab" data-bs-target="#developer-duration-panel" type="button" role="tab" aria-controls="developer-duration-panel" aria-selected="<?php echo $activeTab === 'durations' ? 'true' : 'false'; ?>">
-                    <i class="fas fa-users-gear me-1"></i> Developer Durations
+                    <i class="fas fa-users-gear me-1"></i> Durations
                     <span class="badge bg-light text-dark ms-1"><?php echo (int) $taskSummary['task_count']; ?></span>
                 </button>
             </li>
@@ -648,53 +861,20 @@ include '../../includes/navbar.php';
 
         <div class="tab-content">
             <section class="tab-pane fade <?php echo $activeTab === 'movements' ? 'show active' : ''; ?> process-tab-shell" id="movements-panel" role="tabpanel" aria-labelledby="movements-tab">
-                <div class="process-tab-head">
-                    <div>
-                        <h5><i class="fas fa-route me-2"></i>Latest Process Movements</h5>
-                        <p>Newest actions are shown first. Each card includes the project, actor, item, status movement, and waiting time.</p>
-                    </div>
-                </div>
-                <div class="process-metric-strip">
-                    <div class="process-metric">
-                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-route"></i></span>
-                        <div class="process-metric-copy">
-                            <span>Movements</span>
-                            <strong><?php echo (int) $summary['event_count']; ?></strong>
-                            <small>Filtered timeline entries</small>
-                        </div>
-                    </div>
-                    <div class="process-metric">
-                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-diagram-project"></i></span>
-                        <div class="process-metric-copy">
-                            <span>Projects shown</span>
-                            <strong><?php echo (int) $summary['project_count']; ?></strong>
-                            <small><?php echo $selectedProjectId > 0 ? 'Selected project only' : 'Across accessible projects'; ?></small>
-                        </div>
-                    </div>
-                    <div class="process-metric">
-                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-hourglass-half"></i></span>
-                        <div class="process-metric-copy">
-                            <span>Longest gap</span>
-                            <strong><?php echo $slowestEvent ? htmlspecialchars(processHistoryFormatDuration((int) $slowestEvent['gap_seconds'])) : 'None'; ?></strong>
-                            <small><?php echo $slowestEvent ? htmlspecialchars($projectNames[(int) $slowestEvent['project_id']] ?? 'Project') : 'No movement gap yet'; ?></small>
-                        </div>
-                    </div>
-                </div>
                 <?php if (!$events): ?>
                     <div class="process-empty">
                         <i class="fas fa-folder-open"></i>
-                        <strong>No process movements found.</strong>
-                        <div>Try another project or complete a workflow action first.</div>
+                        <strong>No movements found.</strong>
                     </div>
                 <?php else: ?>
                     <div class="process-list-header" aria-hidden="true">
                         <span>Date &amp; time</span>
                         <span>Movement</span>
                         <span>Context</span>
-                        <span>Since previous</span>
+                        <span>Gap</span>
                     </div>
                     <div class="process-scroll-list">
-                        <?php foreach ($events as $event): ?>
+                        <?php foreach ($pagedEvents as $event): ?>
                         <?php
                             $projectName = $projectNames[(int) $event['project_id']] ?? 'Project';
                             $gapSeconds = $event['gap_seconds'];
@@ -729,54 +909,49 @@ include '../../includes/navbar.php';
                                 <span><i class="fas fa-tag me-1"></i><?php echo htmlspecialchars((string) $event['item']); ?></span>
                             </div>
                             <div class="process-duration <?php echo $isSlow ? 'is-slow' : ''; ?>">
-                                <span>Since previous</span>
+                                <span>Gap</span>
                                 <strong><?php echo htmlspecialchars(processHistoryFormatDuration($gapSeconds)); ?></strong>
                                 <small><?php echo htmlspecialchars(processHistoryFormatDuration((int) $event['since_start_seconds'])); ?> since first step</small>
                             </div>
                         </article>
                         <?php endforeach; ?>
                     </div>
+                    <?php if ($movementTotalPages > 1): ?>
+                    <div class="process-pagination" aria-label="Movement pagination">
+                        <span class="process-pagination-summary">
+                            <?php echo $movementPageStart; ?>–<?php echo $movementPageEnd; ?> of <?php echo $movementTotalItems; ?>
+                        </span>
+                        <nav class="process-pagination-controls" aria-label="Movement pages">
+                            <?php if ($movementPage > 1): ?>
+                                <a class="process-pagination-step" href="<?php echo htmlspecialchars($buildHistoryPageUrl('movements', $movementPage - 1)); ?>">Previous</a>
+                            <?php else: ?>
+                                <span class="process-pagination-step is-disabled" aria-disabled="true">Previous</span>
+                            <?php endif; ?>
+                            <span class="process-pagination-pages">
+                                <?php foreach ($movementPaginationPages as $pageNumber): ?>
+                                    <a
+                                        class="process-pagination-page<?php echo $pageNumber === $movementPage ? ' is-current' : ''; ?>"
+                                        href="<?php echo htmlspecialchars($buildHistoryPageUrl('movements', $pageNumber)); ?>"
+                                        <?php echo $pageNumber === $movementPage ? 'aria-current="page"' : ''; ?>
+                                    ><?php echo $pageNumber; ?></a>
+                                <?php endforeach; ?>
+                            </span>
+                            <?php if ($movementPage < $movementTotalPages): ?>
+                                <a class="process-pagination-step" href="<?php echo htmlspecialchars($buildHistoryPageUrl('movements', $movementPage + 1)); ?>">Next</a>
+                            <?php else: ?>
+                                <span class="process-pagination-step is-disabled" aria-disabled="true">Next</span>
+                            <?php endif; ?>
+                        </nav>
+                    </div>
+                    <?php endif; ?>
                 <?php endif; ?>
             </section>
 
             <section class="tab-pane fade <?php echo $activeTab === 'durations' ? 'show active' : ''; ?> process-tab-shell" id="developer-duration-panel" role="tabpanel" aria-labelledby="developer-duration-tab">
-                <div class="process-tab-head">
-                    <div>
-                        <h5><i class="fas fa-users-gear me-2"></i>Developer Task Start-To-Finish Duration</h5>
-                        <p>One row per developer assignment. Total duration includes planning time; developer duration starts from the first known developer movement.</p>
-                    </div>
-                </div>
-                <div class="process-metric-strip">
-                    <div class="process-metric">
-                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-list-check"></i></span>
-                        <div class="process-metric-copy">
-                            <span>Developer task rows</span>
-                            <strong><?php echo (int) $taskSummary['task_count']; ?></strong>
-                            <small>Developer-specific assignments</small>
-                        </div>
-                    </div>
-                    <div class="process-metric">
-                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
-                        <div class="process-metric-copy">
-                            <span>Completed developer work</span>
-                            <strong><?php echo (int) $taskSummary['completed_count']; ?></strong>
-                            <small>Average: <?php echo $taskSummary['average_completed_seconds'] !== null ? htmlspecialchars(processHistoryFormatDuration((int) $taskSummary['average_completed_seconds'])) : 'No completed work yet'; ?></small>
-                        </div>
-                    </div>
-                    <div class="process-metric">
-                        <span class="process-metric-icon" aria-hidden="true"><i class="fas fa-stopwatch"></i></span>
-                        <div class="process-metric-copy">
-                            <span>Longest developer duration</span>
-                            <strong><?php echo $slowestTask ? htmlspecialchars(processHistoryFormatDuration((int) $slowestTask['workflow_seconds'])) : 'None'; ?></strong>
-                            <small><?php echo $slowestTask ? htmlspecialchars((string) $slowestTask['assigned_to'] . ' - ' . (string) $slowestTask['title']) : 'No tasks found'; ?></small>
-                        </div>
-                    </div>
-                </div>
                 <?php if (!$taskDurations): ?>
                     <div class="process-empty">
                         <i class="fas fa-list"></i>
-                        <strong>No developer task durations found.</strong>
-                        <div>Choose another project or assign developers to workflow tasks first.</div>
+                        <strong>No durations found.</strong>
                     </div>
                 <?php else: ?>
                     <div class="developer-duration-header" aria-hidden="true">
@@ -788,7 +963,7 @@ include '../../includes/navbar.php';
                         <span>Deadline</span>
                     </div>
                     <div class="process-scroll-list developer-duration-list">
-                        <?php foreach ($taskDurations as $task): ?>
+                        <?php foreach ($pagedTaskDurations as $task): ?>
                             <?php
                                 $projectName = $projectNames[(int) $task['project_id']] ?? 'Project';
                                 $planningStartTs = processHistoryTimestamp($task['planning_start_at'] ?? null);
@@ -842,9 +1017,38 @@ include '../../includes/navbar.php';
                             </article>
                         <?php endforeach; ?>
                     </div>
+                    <?php if ($durationTotalPages > 1): ?>
+                    <div class="process-pagination" aria-label="Duration pagination">
+                        <span class="process-pagination-summary">
+                            <?php echo $durationPageStart; ?>–<?php echo $durationPageEnd; ?> of <?php echo $durationTotalItems; ?>
+                        </span>
+                        <nav class="process-pagination-controls" aria-label="Duration pages">
+                            <?php if ($durationPage > 1): ?>
+                                <a class="process-pagination-step" href="<?php echo htmlspecialchars($buildHistoryPageUrl('durations', $durationPage - 1)); ?>">Previous</a>
+                            <?php else: ?>
+                                <span class="process-pagination-step is-disabled" aria-disabled="true">Previous</span>
+                            <?php endif; ?>
+                            <span class="process-pagination-pages">
+                                <?php foreach ($durationPaginationPages as $pageNumber): ?>
+                                    <a
+                                        class="process-pagination-page<?php echo $pageNumber === $durationPage ? ' is-current' : ''; ?>"
+                                        href="<?php echo htmlspecialchars($buildHistoryPageUrl('durations', $pageNumber)); ?>"
+                                        <?php echo $pageNumber === $durationPage ? 'aria-current="page"' : ''; ?>
+                                    ><?php echo $pageNumber; ?></a>
+                                <?php endforeach; ?>
+                            </span>
+                            <?php if ($durationPage < $durationTotalPages): ?>
+                                <a class="process-pagination-step" href="<?php echo htmlspecialchars($buildHistoryPageUrl('durations', $durationPage + 1)); ?>">Next</a>
+                            <?php else: ?>
+                                <span class="process-pagination-step is-disabled" aria-disabled="true">Next</span>
+                            <?php endif; ?>
+                        </nav>
+                    </div>
+                    <?php endif; ?>
                 <?php endif; ?>
             </section>
         </div>
+        </section>
 </div>
 
 <script>

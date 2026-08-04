@@ -10,6 +10,10 @@ let currentGroupDetails = null;
 let groupUserOptions = [];
 let groupSelectedMemberIds = new Set();
 let groupAddMemberIds = new Set();
+let currentChatMessages = new Map();
+let chatReplyMessageId = null;
+let chatEditMessageId = null;
+let chatForwardMessageId = null;
 
 const chatStateKey = 'erni.chat.open';
 
@@ -68,6 +72,55 @@ function initChatWidget() {
         if (event.key === 'Enter') {
             event.preventDefault();
             sendMessage();
+        }
+    });
+    $('#chatMessageInput').on('keydown', function (event) {
+        if (event.key === 'Escape' && (chatReplyMessageId || chatEditMessageId)) {
+            clearChatComposerContext();
+        }
+    });
+
+    $('#chatMessages').on('click', '.message-action-toggle', function (event) {
+        event.stopPropagation();
+        const menu = $(this).siblings('.message-action-menu');
+        const willOpen = !menu.hasClass('is-open');
+        closeMessageActionMenus();
+        menu.toggleClass('is-open', willOpen);
+        $(this).attr('aria-expanded', String(willOpen));
+        if (willOpen) {
+            menu.removeClass('opens-up');
+            const menuRect = menu[0]?.getBoundingClientRect();
+            const messagesRect = document.getElementById('chatMessages')?.getBoundingClientRect();
+            if (menuRect && messagesRect && menuRect.bottom > messagesRect.bottom - 8) {
+                menu.addClass('opens-up');
+            }
+        }
+    });
+
+    $('#chatMessages').on('click', '[data-message-action]', function (event) {
+        event.stopPropagation();
+        handleMessageAction(
+            String($(this).data('messageAction') || ''),
+            Number($(this).closest('.message').data('messageId'))
+        );
+    });
+
+    $('#chatComposerContextClose').on('click', clearChatComposerContext);
+    $('#chatForwardSearch').on('input', debounce(renderChatForwardTargets, 120));
+    $('#chatForwardTargets').on('click', '[data-forward-target]', function () {
+        forwardChatMessage(
+            String($(this).data('forwardTarget')),
+            Number($(this).data('forwardTargetId'))
+        );
+    });
+    $('#chatForwardModal').on('hidden.bs.modal', function () {
+        chatForwardMessageId = null;
+        $('#chatForwardSearch').val('');
+    });
+
+    $(document).on('click', function (event) {
+        if (!$(event.target).closest('.message-action-toggle, .message-action-menu').length) {
+            closeMessageActionMenus();
         }
     });
 
@@ -262,6 +315,8 @@ function updateChatUnreadBadge(countOverride = null) {
 }
 
 function openConversation(type, id) {
+    clearChatComposerContext(true);
+    closeMessageActionMenus();
     currentChatUser = null;
     currentChatGroup = null;
     currentGroupDetails = null;
@@ -294,6 +349,8 @@ function openConversation(type, id) {
 }
 
 function showInboxView() {
+    clearChatComposerContext(true);
+    closeMessageActionMenus();
     $('#chatHeader').text('Messages');
     $('#chatInboxView').removeClass('d-none');
     $('#chatThreadView').addClass('d-none');
@@ -303,6 +360,7 @@ function showInboxView() {
     currentChatUser = null;
     currentChatGroup = null;
     currentGroupDetails = null;
+    currentChatMessages = new Map();
 }
 
 function showThreadView() {
@@ -719,6 +777,10 @@ function loadChatMessages() {
 
 function renderChatMessages(messages) {
     const container = $('#chatMessages');
+    currentChatMessages = new Map(
+        messages.map(message => [Number(message.id), message])
+    );
+
     if (!messages.length) {
         container.html(`
             <div class="text-center text-muted py-5">
@@ -745,19 +807,379 @@ function renderChatMessages(messages) {
         }
 
         const mineClass = message.is_mine ? 'sent' : 'received';
-        const sender = message.is_mine ? 'You' : escapeHtml(message.sender_name || 'User');
+        const senderName = message.is_mine ? 'You' : (message.sender_name || 'User');
+        const sender = escapeHtml(senderName);
+        const senderInitials = escapeHtml(getConversationInitials(senderName, 'user'));
+        const avatarMarkup = `<span class="message-avatar ${mineClass}" title="${sender}" aria-label="${sender}">${senderInitials}</span>`;
+        const isDeleted = Boolean(message.is_deleted || message.deleted_at);
+        const replySender = message.reply_is_mine ? 'You' : (message.reply_sender_name || 'Message');
+        const replyText = message.reply_deleted_at
+            ? 'Message unavailable'
+            : (message.reply_message || '');
+        const replyMarkup = Number(message.reply_to_message_id) > 0
+            ? `
+                <div class="message-reply-reference">
+                    <span class="message-context-icon"><i class="fas fa-reply" aria-hidden="true"></i></span>
+                    <span class="message-reply-copy">
+                        <strong>Replying to ${escapeHtml(replySender)}</strong>
+                        <span>${escapeHtml(truncateChatMessage(replyText || 'Message unavailable', 72))}</span>
+                    </span>
+                </div>
+            `
+            : '';
+        const forwardedSender = message.forwarded_is_mine ? 'You' : (message.forwarded_sender_name || '');
+        const forwardedMarkup = Number(message.forwarded_from_message_id) > 0
+            ? `
+                <div class="message-forwarded-label">
+                    <i class="fas fa-share" aria-hidden="true"></i>
+                    <span>Forwarded${forwardedSender ? ` from ${escapeHtml(forwardedSender)}` : ''}</span>
+                </div>
+            `
+            : '';
+        const actionMarkup = isDeleted
+            ? ''
+            : `
+                <button type="button" class="message-action-toggle" aria-label="Message actions" aria-expanded="false">
+                    <i class="fas fa-ellipsis" aria-hidden="true"></i>
+                </button>
+                <div class="message-action-menu" role="menu">
+                    <button type="button" data-message-action="reply" role="menuitem">
+                        <i class="fas fa-reply" aria-hidden="true"></i>
+                        <span>Reply</span>
+                    </button>
+                    <button type="button" data-message-action="forward" role="menuitem">
+                        <i class="fas fa-share" aria-hidden="true"></i>
+                        <span>Forward</span>
+                    </button>
+                    ${message.is_mine && Number(message.forwarded_from_message_id) <= 0 ? `
+                        <button type="button" data-message-action="edit" role="menuitem">
+                            <i class="fas fa-pen" aria-hidden="true"></i>
+                            <span>Edit</span>
+                        </button>
+                    ` : ''}
+                    ${message.is_mine ? `
+                        <button type="button" class="is-danger" data-message-action="unsend" role="menuitem">
+                            <i class="fas fa-rotate-left" aria-hidden="true"></i>
+                            <span>Unsend</span>
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+        const messageContent = isDeleted
+            ? `<div class="message-content is-deleted"><i class="fas fa-ban" aria-hidden="true"></i><span>Message unsent</span></div>`
+            : `<div class="message-content">${escapeHtml(message.message)}</div>`;
+        const editedMarkup = !isDeleted && message.edited_at
+            ? '<div class="message-edited-label"><i class="fas fa-pen" aria-hidden="true"></i><span>Edited</span></div>'
+            : '';
+        const contextMarkup = isDeleted
+            ? ''
+            : `
+                ${(forwardedMarkup || editedMarkup) ? `
+                    <div class="message-context-labels">
+                        ${forwardedMarkup}
+                        ${editedMarkup}
+                    </div>
+                ` : ''}
+                ${replyMarkup}
+            `;
 
         html += `
-            <div class="message ${mineClass}">
-                <div class="small fw-semibold mb-1">${sender}</div>
-                <div>${escapeHtml(message.message)}</div>
-                <div class="small text-muted mt-1">${escapeHtml(time)}</div>
+            <div class="message-row ${mineClass}">
+                ${message.is_mine ? '' : avatarMarkup}
+                <div class="message-stack">
+                    ${message.is_mine ? '' : `<div class="message-sender">${sender}</div>`}
+                    ${contextMarkup ? `<div class="message-context">${contextMarkup}</div>` : ''}
+                    <div class="message ${mineClass}${actionMarkup ? ' has-actions' : ''}${isDeleted ? ' is-unsent' : ''}" data-message-id="${Number(message.id)}">
+                        ${actionMarkup}
+                        ${messageContent}
+                    </div>
+                    <div class="message-meta"><span>${escapeHtml(time)}</span></div>
+                </div>
             </div>
         `;
     });
 
     container.html(html);
     container.scrollTop(container.prop('scrollHeight'));
+}
+
+function truncateChatMessage(message, limit = 72) {
+    const normalized = String(message || '').replace(/\s+/g, ' ').trim();
+    return normalized.length > limit
+        ? `${normalized.slice(0, Math.max(0, limit - 1)).trim()}…`
+        : normalized;
+}
+
+function closeMessageActionMenus() {
+    $('.message-action-menu').removeClass('is-open opens-up');
+    $('.message-action-toggle').attr('aria-expanded', 'false');
+}
+
+function handleMessageAction(action, messageId) {
+    const message = currentChatMessages.get(Number(messageId));
+    closeMessageActionMenus();
+
+    if (!message || !action) {
+        return;
+    }
+
+    if (action === 'reply') {
+        const wasEditing = Boolean(chatEditMessageId);
+        chatEditMessageId = null;
+        chatReplyMessageId = Number(message.id);
+        if (wasEditing) {
+            $('#chatMessageInput').val('');
+        }
+        setChatComposerContext(
+            'reply',
+            `Replying to ${message.is_mine ? 'your message' : (message.sender_name || 'message')}`,
+            message.message
+        );
+        return;
+    }
+
+    if (action === 'edit' && message.is_mine) {
+        chatReplyMessageId = null;
+        chatEditMessageId = Number(message.id);
+        $('#chatMessageInput').val(message.message || '');
+        setChatComposerContext('edit', 'Editing message', message.message);
+        return;
+    }
+
+    if (action === 'forward') {
+        openChatForwardModal(Number(message.id));
+        return;
+    }
+
+    if (action === 'unsend' && message.is_mine) {
+        unsendChatMessage(Number(message.id));
+    }
+}
+
+function setChatComposerContext(type, title, preview) {
+    const isEdit = type === 'edit';
+    $('#chatComposerContext')
+        .removeClass('d-none')
+        .attr('data-context-type', type);
+    $('#chatComposerContextIcon').html(
+        `<i class="fas ${isEdit ? 'fa-pen' : 'fa-reply'}" aria-hidden="true"></i>`
+    );
+    $('#chatComposerContextTitle').text(title);
+    $('#chatComposerContextPreview').text(truncateChatMessage(preview, 88));
+    $('#chatMessageInput')
+        .attr('placeholder', isEdit ? 'Update your message...' : 'Type your reply...')
+        .trigger('focus');
+    $('#sendMessageBtn')
+        .attr('aria-label', isEdit ? 'Save edited message' : 'Send reply')
+        .html(`<i class="fas ${isEdit ? 'fa-check' : 'fa-paper-plane'}"></i>`);
+}
+
+function clearChatComposerContext(clearInput = false) {
+    const wasEditing = Boolean(chatEditMessageId);
+    chatReplyMessageId = null;
+    chatEditMessageId = null;
+    $('#chatComposerContext')
+        .addClass('d-none')
+        .removeAttr('data-context-type');
+    $('#chatComposerContextTitle').text('Replying');
+    $('#chatComposerContextPreview').text('');
+    $('#chatMessageInput').attr('placeholder', 'Type your message...');
+    if (clearInput === true || wasEditing) {
+        $('#chatMessageInput').val('');
+    }
+    $('#sendMessageBtn')
+        .attr('aria-label', 'Send message')
+        .html('<i class="fas fa-paper-plane"></i>');
+}
+
+function saveEditedChatMessage(messageId, message) {
+    $.ajax({
+        url: `${BASE_URL}api/chat/message-action.php`,
+        method: 'POST',
+        contentType: 'application/json',
+        dataType: 'json',
+        data: JSON.stringify({
+            action: 'edit',
+            message_id: messageId,
+            message: message
+        }),
+        success: function (response) {
+            if (!response.success) {
+                showToast('Chat', response.error || 'Unable to edit the message.', 'error');
+                return;
+            }
+
+            $('#chatMessageInput').val('');
+            clearChatComposerContext();
+            loadChatMessages();
+            loadConversationData();
+            showToast('Chat', 'Message updated.', 'success');
+        },
+        error: function (xhr) {
+            showToast('Chat', xhr.responseJSON?.error || 'Unable to edit the message.', 'error');
+        }
+    });
+}
+
+async function unsendChatMessage(messageId) {
+    const confirmed = typeof window.appConfirm === 'function'
+        ? await window.appConfirm({
+            title: 'Unsend Message',
+            titleIcon: 'fas fa-rotate-left',
+            subject: 'Unsend this message?',
+            message: 'The message will be replaced with an unsent notice for everyone.',
+            icon: 'fas fa-rotate-left fa-lg',
+            confirmIcon: 'fas fa-rotate-left',
+            confirmText: 'Unsend',
+            cancelText: 'Keep Message',
+            variant: 'danger'
+        })
+        : window.confirm('Unsend this message?');
+
+    if (!confirmed) {
+        return;
+    }
+
+    $.ajax({
+        url: `${BASE_URL}api/chat/message-action.php`,
+        method: 'POST',
+        contentType: 'application/json',
+        dataType: 'json',
+        data: JSON.stringify({
+            action: 'unsend',
+            message_id: messageId
+        }),
+        success: function (response) {
+            if (!response.success) {
+                showToast('Chat', response.error || 'Unable to unsend the message.', 'error');
+                return;
+            }
+
+            if (chatEditMessageId === messageId || chatReplyMessageId === messageId) {
+                clearChatComposerContext();
+            }
+            loadChatMessages();
+            loadConversationData();
+            showToast('Chat', 'Message unsent.', 'success');
+        },
+        error: function (xhr) {
+            showToast('Chat', xhr.responseJSON?.error || 'Unable to unsend the message.', 'error');
+        }
+    });
+}
+
+function openChatForwardModal(messageId) {
+    if (!window.bootstrap || !document.getElementById('chatForwardModal')) {
+        showToast('Chat', 'The forward window is unavailable. Please refresh and try again.', 'warning');
+        return;
+    }
+
+    chatForwardMessageId = messageId;
+    $('#chatForwardSearch').val('');
+    renderChatForwardTargets();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('chatForwardModal')).show();
+    window.setTimeout(() => $('#chatForwardSearch').trigger('focus'), 180);
+}
+
+function renderChatForwardTargets() {
+    const container = $('#chatForwardTargets');
+    if (!container.length || !chatForwardMessageId) {
+        return;
+    }
+
+    const search = ($('#chatForwardSearch').val() || '').trim().toLowerCase();
+    const sections = [
+        {
+            label: 'People',
+            type: 'user',
+            items: chatData.conversations
+        },
+        {
+            label: 'Groups',
+            type: 'group',
+            items: chatData.groups
+        }
+    ];
+    let html = '';
+
+    sections.forEach(function (section) {
+        const items = (section.items || []).filter(function (item) {
+            return !search || [item.name, item.subtitle]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase()
+                .includes(search);
+        });
+
+        if (!items.length) {
+            return;
+        }
+
+        html += `<div class="chat-forward-section-label">${section.label}</div>`;
+        items.forEach(function (item) {
+            const initials = getConversationInitials(item.name, section.type);
+            html += `
+                <button type="button" class="chat-forward-target"
+                        data-forward-target="${section.type}"
+                        data-forward-target-id="${Number(item.id)}">
+                    <span class="conversation-avatar ${section.type === 'group' ? 'group' : ''}">${escapeHtml(initials)}</span>
+                    <span class="chat-forward-target-copy">
+                        <strong>${escapeHtml(item.name || 'Conversation')}</strong>
+                        <small>${escapeHtml(item.subtitle || '')}</small>
+                    </span>
+                    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                </button>
+            `;
+        });
+    });
+
+    container.html(html || `
+        <div class="chat-list-empty">
+            <i class="fas fa-search" aria-hidden="true"></i>
+            <div>No matching conversations.</div>
+        </div>
+    `);
+}
+
+function forwardChatMessage(targetType, targetId) {
+    if (!chatForwardMessageId || !targetId) {
+        return;
+    }
+
+    const targetButton = $(
+        `[data-forward-target="${targetType}"][data-forward-target-id="${targetId}"]`
+    );
+    targetButton.prop('disabled', true).find('> i').attr('class', 'fas fa-spinner fa-spin');
+
+    $.ajax({
+        url: `${BASE_URL}api/chat/message-action.php`,
+        method: 'POST',
+        contentType: 'application/json',
+        dataType: 'json',
+        data: JSON.stringify({
+            action: 'forward',
+            message_id: chatForwardMessageId,
+            target_type: targetType,
+            target_id: targetId
+        }),
+        success: function (response) {
+            if (!response.success) {
+                showToast('Chat', response.error || 'Unable to forward the message.', 'error');
+                return;
+            }
+
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('chatForwardModal')).hide();
+            loadConversationData();
+            loadChatMessages();
+            showToast('Chat', 'Message forwarded.', 'success');
+        },
+        error: function (xhr) {
+            showToast('Chat', xhr.responseJSON?.error || 'Unable to forward the message.', 'error');
+        },
+        complete: function () {
+            targetButton.prop('disabled', false).find('> i').attr('class', 'fas fa-arrow-right');
+        }
+    });
 }
 
 function sendMessage() {
@@ -773,7 +1195,15 @@ function sendMessage() {
         return;
     }
 
+    if (chatEditMessageId) {
+        saveEditedChatMessage(chatEditMessageId, message);
+        return;
+    }
+
     const payload = { message: message };
+    if (chatReplyMessageId) {
+        payload.reply_to_message_id = chatReplyMessageId;
+    }
     if (currentChatGroup) {
         payload.group_id = currentChatGroup;
     } else {
@@ -789,6 +1219,7 @@ function sendMessage() {
         success: function (response) {
             if (response.success) {
                 input.val('');
+                clearChatComposerContext();
                 loadChatMessages();
                 loadConversationData();
             } else {

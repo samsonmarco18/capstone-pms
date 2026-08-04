@@ -208,10 +208,7 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
             content: '';
             position: absolute;
             inset: 0;
-            background:
-                linear-gradient(90deg, transparent 0 40%, rgba(255, 255, 255, 0.03) 40% 41%, transparent 41%),
-                linear-gradient(0deg, transparent 0 58%, rgba(255, 255, 255, 0.035) 58% 59%, transparent 59%),
-                radial-gradient(circle at 75% 35%, rgba(255, 255, 255, 0.08), transparent 28%);
+            background: radial-gradient(circle at 75% 35%, rgba(255, 255, 255, 0.08), transparent 28%);
             pointer-events: none;
         }
 

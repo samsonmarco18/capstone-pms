@@ -990,9 +990,6 @@ $pendingEstimationAssignmentCount = count($pendingEstimationAssignmentGroups);
 
 // Get tasks ready for review (expert has submitted estimation)
 $salesApprovalFilter = $hasSalesApproval ? " AND t.sales_approved = 1" : "";
-if ($hasSalesChoice) {
-    $salesApprovalFilter .= " AND t.sales_estimate_days IS NOT NULL";
-}
 $developerReadyApprovalFilter = ($hasSalesApproval ? " AND t.sales_approved = 1" : "") . ($hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "");
 $selectedDeveloperProjectFilter = $projectId > 0 ? " AND t.project_id = {$projectId}" : " AND 1 = 0";
 $reviewTasks = $conn->query("
@@ -1004,7 +1001,7 @@ $reviewTasks = $conn->query("
     JOIN users u ON t.assigned_to = u.id
     JOIN projects p ON t.project_id = p.id
     LEFT JOIN feature_estimations fe ON t.id = fe.task_id AND fe.status = 'completed'
-    WHERE t.status = 'review'{$salesApprovalFilter}
+    WHERE t.status IN ('review', 'in_review'){$salesApprovalFilter}
       {$sulUserDepartmentFilter}
       AND {$sulProjectFilter}
       {$selectedExpertProjectFilter}
@@ -1017,7 +1014,7 @@ $projectEstimationReviews = $conn->query("
     JOIN projects p ON p.id = e.project_id
     JOIN clients c ON c.id = p.client_id
     JOIN users u ON u.id = e.expert_id
-    WHERE e.status = 'submitted'
+    WHERE e.status = 'sales_approved'
       AND {$sulProjectFilter}
       {$selectedExpertEstimationProjectFilter}
     ORDER BY e.submitted_at ASC, e.id ASC
@@ -1117,9 +1114,18 @@ if ($readyForDevTasks) {
                 'representative' => $readyDeveloperTask,
                 'features' => [],
                 'is_bulk' => false,
+                'required_count' => max(1, (int) ($currentRoadmapGroupTask['required_count'] ?? 1)),
                 'priority' => (string) ($readyDeveloperTask['priority'] ?? 'medium'),
                 'deadline' => $readyDeveloperTask['deadline'] ?? null,
             ];
+        } else {
+            // Every feature in an entity should have the same lane headcount. Use
+            // the lowest saved value if legacy data differs so we never assign
+            // more people than one of the grouped tasks permits.
+            $readyDeveloperAssignmentGroups[$groupKey]['required_count'] = min(
+                max(1, (int) ($readyDeveloperAssignmentGroups[$groupKey]['required_count'] ?? 1)),
+                max(1, (int) ($currentRoadmapGroupTask['required_count'] ?? 1))
+            );
         }
 
         $readyDeveloperAssignmentGroups[$groupKey]['features'][(int) $readyDeveloperTask['id']] = $readyDeveloperTask;
@@ -1338,7 +1344,7 @@ if ($canManageExpertWorkflow) {
                 SELECT COUNT(DISTINCT e.id)
                 FROM expert_project_estimations e
                 WHERE e.project_id = p.id
-                  AND e.status = 'submitted'
+                  AND e.status = 'sales_approved'
             ) AS project_review_count
         FROM projects p
         WHERE p.status != 'completed'
@@ -1381,18 +1387,6 @@ $developers = $conn->query("
              assigned_tasks ASC, u.full_name ASC
 ");
 $availableDeveloperCount = $developers ? $developers->num_rows : 0;
-$developerPlannedHeadcount = 1;
-if ($canManageDeveloperWorkflow && $projectId > 0) {
-    $plannedHeadcountResult = $conn->query("
-        SELECT COALESCE(SUM(required_count), 0) AS required_count
-        FROM developer_allocations
-        WHERE project_id = {$projectId}
-          AND role IN ({$sulDepartmentAliasesSql})
-    ");
-    if ($plannedHeadcountResult) {
-        $developerPlannedHeadcount = max(1, (int) ($plannedHeadcountResult->fetch_assoc()['required_count'] ?? 1));
-    }
-}
 
 $developerProjectOptions = [];
 if ($canManageDeveloperWorkflow) {
@@ -1529,6 +1523,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $projectId <= 0 && !$sulMissingDepar
 
 // Handle task operations
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if ($canManageExpertWorkflow && (isset($_POST['reject_project_estimation']) || isset($_POST['reject_estimation']))) {
+        $_SESSION['error'] = 'Expert estimations can only be completed after the client-approved Sales review.';
+        header('Location: task-allocation.php' . ($projectId > 0 ? '?project_id=' . (int) $projectId : ''));
+        exit();
+    }
+
     if (isset($_POST['sul_approve_reopen']) || isset($_POST['sul_reject_reopen'])) {
         if (!$canManageDeveloperWorkflow) {
             $_SESSION['error'] = "Only department SULs outside Expert Department can review developer reopen requests.";
@@ -1942,13 +1942,30 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $assignmentTaskIds = array_values(array_unique(array_map('intval', $assignmentTaskIds)));
         sort($assignmentTaskIds);
 
-        $plannedHeadcountRow = $conn->query("
-            SELECT COALESCE(SUM(required_count), 0) AS required_count
-            FROM developer_allocations
-            WHERE project_id = {$assignmentProjectId}
-              AND role IN ({$sulDepartmentAliasesSql})
-        ")->fetch_assoc();
-        $plannedHeadcount = max(1, (int) ($plannedHeadcountRow['required_count'] ?? 1));
+        $plannedHeadcount = 0;
+        if ($currentRoadmapTask) {
+            $entityHeadcounts = [];
+            foreach ($roadmapEntityRows as $roadmapEntityRow) {
+                $requiredCount = (int) ($roadmapEntityRow['required_count'] ?? 0);
+                if ($requiredCount > 0) {
+                    $entityHeadcounts[] = $requiredCount;
+                }
+            }
+            if ($entityHeadcounts !== []) {
+                // Be conservative with inconsistent legacy rows: a bulk group
+                // must respect the smallest headcount saved for any of its tasks.
+                $plannedHeadcount = min($entityHeadcounts);
+            }
+        }
+        if ($plannedHeadcount <= 0) {
+            $plannedHeadcountRow = $conn->query("
+                SELECT COALESCE(SUM(required_count), 0) AS required_count
+                FROM developer_allocations
+                WHERE project_id = {$assignmentProjectId}
+                  AND role IN ({$sulDepartmentAliasesSql})
+            ")->fetch_assoc();
+            $plannedHeadcount = max(1, (int) ($plannedHeadcountRow['required_count'] ?? 1));
+        }
         $teamLimit = min($plannedHeadcount, count($assignmentTaskIds));
 
         $teamRows = $conn->query("
@@ -2140,9 +2157,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         || isset($_POST['qa_sul_route_revision'])
         || isset($_POST['qa_sul_request_retest'])
     ) {
+        $reviewReturnProjectId = (int) ($_POST['project_id'] ?? $projectId);
+        $reviewReturnLocation = $reviewReturnProjectId > 0
+            ? 'task-allocation.php?project_id=' . $reviewReturnProjectId . '#developer-review-panel'
+            : 'task-allocation.php#developer-review-panel';
+
         if (!$canManageDeveloperWorkflow) {
             $_SESSION['error'] = "Department review is available only for department SULs outside Expert Department.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
 
@@ -2156,13 +2178,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if ($hasQaOnlyDecision && !$isQaDepartmentSul) {
             $_SESSION['error'] = "Only the QA Department SUL can make QA pass, fail, or retest decisions.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
 
         if ($taskId <= 0 || (!$isApproval && $reviewComment === '')) {
             $_SESSION['error'] = $isApproval ? "Invalid task selected." : "Please provide revision comments.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
 
@@ -2183,16 +2205,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if (!$reviewTask) {
             $_SESSION['error'] = "Only tasks marked For Review can be reviewed by SUL.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
+
+        $reviewReturnProjectId = (int) ($reviewTask['project_id'] ?? $reviewReturnProjectId);
+        $reviewReturnLocation = 'task-allocation.php?project_id=' . $reviewReturnProjectId . '#developer-review-panel';
 
         if ($isQaDepartmentSul && $isApproval) {
             $projectForRouting = (int) ($reviewTask['project_id'] ?? 0);
             $currentQaRoadmapTask = projectWorkflowCurrentRoadmapTask($conn, $projectForRouting, $taskId, 'QA');
             if (!$currentQaRoadmapTask || projectWorkflowDepartmentLabel((string) ($currentQaRoadmapTask['department_label'] ?? '')) !== 'QA') {
                 $_SESSION['error'] = "This task is not the current QA roadmap item.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
 
@@ -2235,7 +2260,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     throw new RuntimeException('Unable to prepare the QA decision.');
                 }
                 $passQaTask->bind_param("iii", $userId, $userId, $taskId);
-                if (!$passQaTask->execute() || $passQaTask->affected_rows !== 1) {
+                $passExecuted = $passQaTask->execute();
+                $passAffectedRows = (int) ($conn->affected_rows ?? 0);
+                if (!$passExecuted || $passAffectedRows !== 1) {
                     throw new RuntimeException('Unable to save the QA pass decision.');
                 }
                 $passQaTask->close();
@@ -2244,7 +2271,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $conn->rollback();
                 error_log('QA SUL pass failed: ' . $exception->getMessage());
                 $_SESSION['error'] = "Failed to save the QA pass decision.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
 
@@ -2263,7 +2290,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $taskId
             );
             $_SESSION['success'] = "QA passed the feature and sent it to Architect final approval.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
 
@@ -2300,7 +2327,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 if ($missingCascadeDepartments !== []) {
                     $_SESSION['error'] = 'UI/UX revision requires available UI/UX, Frontend, and Backend handlers. Missing: '
                         . implode(', ', $missingCascadeDepartments) . '.';
-                    header("Location: task-allocation.php");
+                    header('Location: ' . $reviewReturnLocation);
                     exit();
                 }
             }
@@ -2311,7 +2338,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
             if ($selectedTargets === []) {
                 $_SESSION['error'] = "Select at least one responsible department for the failed QA result.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
 
@@ -2321,7 +2348,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $firstSulId = (int) ($firstTarget['responsible_sul_id'] ?? 0);
             if ($firstDeveloperId <= 0 || $firstSulId <= 0) {
                 $_SESSION['error'] = "The first revision department must have its original developer and an active SUL.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
 
@@ -2331,7 +2358,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $qaProgressId = (int) ($qaRoadmapTask['department_progress_id'] ?? 0);
             if ($qaProgressId <= 0) {
                 $_SESSION['error'] = "Unable to locate the QA roadmap lane for retesting.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
             $conn->begin_transaction();
@@ -2399,7 +2426,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     throw new RuntimeException('Unable to prepare the task revision assignment.');
                 }
                 $routeRevision->bind_param("iiii", $firstDeveloperId, $firstSulId, $userId, $taskId);
-                if (!$routeRevision->execute() || $routeRevision->affected_rows !== 1) {
+                $revisionExecuted = $routeRevision->execute();
+                $revisionAffectedRows = (int) ($conn->affected_rows ?? 0);
+                if (!$revisionExecuted || $revisionAffectedRows !== 1) {
                     throw new RuntimeException('Unable to assign the first revision owner.');
                 }
                 $routeRevision->close();
@@ -2408,7 +2437,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $conn->rollback();
                 error_log('QA department revision routing failed: ' . $exception->getMessage());
                 $_SESSION['error'] = "Failed to create the QA department revision route.";
-                header("Location: task-allocation.php");
+                header('Location: ' . $reviewReturnLocation);
                 exit();
             }
 
@@ -2452,7 +2481,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $taskId
             );
             $_SESSION['success'] = "QA failed the feature. Revision was assigned in order: {$routeLabel}.";
-            header("Location: task-allocation.php");
+            header('Location: ' . $reviewReturnLocation);
             exit();
         }
 
@@ -2760,32 +2789,55 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             SELECT e.*, p.name AS project_name
             FROM expert_project_estimations e
             JOIN projects p ON p.id = e.project_id
-            WHERE e.id = {$estimationId} AND e.status = 'submitted'
+            WHERE e.id = {$estimationId} AND e.status = 'sales_approved'
             LIMIT 1
         ")->fetch_assoc() : null;
 
         if (!$estimation) {
-            $_SESSION['error'] = "Please select a submitted project estimation.";
+            $_SESSION['error'] = "Please select a Sales-approved project estimation.";
             header("Location: task-allocation.php");
             exit();
         }
 
-        $stmt = $conn->prepare("UPDATE expert_project_estimations SET status = 'sul_approved', sul_reviewed_by = ?, sul_reviewed_at = NOW(), sul_comment = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE expert_project_estimations SET status = 'sul_approved', sul_reviewed_by = ?, sul_reviewed_at = NOW(), sul_comment = ?, approved_at = NOW() WHERE id = ?");
         $stmt->bind_param('isi', $userId, $comment, $estimationId);
         $approvalSaved = $stmt->execute();
         if ($approvalSaved) {
+            $projectId = (int) $estimation['project_id'];
+            projectEstimationCompletePlanningPhase($conn, $projectId, $userId);
+            $conn->query("UPDATE projects SET status = 'in_development' WHERE id = {$projectId} AND status != 'completed'");
+            projectWorkflowSyncRoadmap($conn, $projectId);
             workflowNotifyRoles(
                 $conn,
-                ['sales'],
-                'Project Estimation Ready for Final Approval',
-                'Expert SUL approved a project cost estimation for Sales final approval.',
-                BASE_URL . 'modules/sales/estimation-approval.php',
-                (int) $estimation['project_id'],
+                ['architect'],
+                'Project Estimation Completed',
+                'SUL completed the project cost estimation review. Planning is complete and the next project phase is active.',
+                BASE_URL . 'modules/roadmap/methodology.php?project_id=' . $projectId,
+                $projectId,
                 'approval',
                 'projects'
             );
+            workflowNotifyRoles(
+                $conn,
+                ['sales'],
+                'Project Estimation Completed',
+                'SUL completed the final review of the Sales-approved project cost estimation.',
+                BASE_URL . 'modules/sales/estimation-approval.php',
+                $projectId,
+                'approval',
+                'projects'
+            );
+            createNotification(
+                (int) $estimation['expert_id'],
+                'Project Estimation Completed: ' . ($estimation['project_name'] ?? 'Project'),
+                'Sales and SUL approved the project cost estimation. The estimation workflow is complete.',
+                'approval',
+                'expert_project_estimations',
+                $estimationId,
+                BASE_URL . 'modules/expert/feature-estimation.php?project_estimation_id=' . $projectId
+            );
             logActivity($userId, 'sul_approve_project_estimation', 'expert_project_estimations', $estimationId, null, $_POST);
-            $_SESSION['success'] = ($estimation['project_name'] ?? 'Project') . " estimation approved and forwarded to Sales successfully.";
+            $_SESSION['success'] = ($estimation['project_name'] ?? 'Project') . " estimation completed successfully.";
         } else {
             $_SESSION['error'] = "Failed to approve project estimation.";
         }
@@ -2803,7 +2855,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             SELECT e.*, p.name AS project_name
             FROM expert_project_estimations e
             JOIN projects p ON p.id = e.project_id
-            WHERE e.id = {$estimationId} AND e.status = 'submitted'
+            WHERE e.id = {$estimationId} AND e.status = 'sales_approved'
             LIMIT 1
         ")->fetch_assoc() : null;
 
@@ -2854,16 +2906,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         $approvalSql = $hasSalesApproval ? " AND t.sales_approved = 1" : "";
-        $choiceSql = $hasSalesChoice ? " AND t.sales_estimate_days IS NOT NULL" : "";
         $taskCheck = $conn->prepare("
             SELECT t.id, t.project_id, t.title, p.name AS project_name
             FROM tasks t
             INNER JOIN projects p ON p.id = t.project_id
             INNER JOIN feature_estimations fe ON fe.task_id = t.id AND fe.status = 'completed'
             WHERE t.id = ?
-              AND t.status = 'review'
+              AND t.status IN ('review', 'in_review')
               AND {$sulProjectFilter}
-              {$approvalSql}{$choiceSql}
+              {$approvalSql}
         ");
         $taskCheck->bind_param("i", $taskId);
         $taskCheck->execute();
@@ -2871,7 +2922,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $taskCheck->close();
 
         if (!$validTask) {
-            $_SESSION['error'] = "Approval cannot proceed until Sales approval and selected days are complete.";
+            $_SESSION['error'] = "Approval cannot proceed until the feature estimation is approved by Sales.";
             header("Location: task-allocation.php");
             exit();
         }
@@ -2957,7 +3008,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             INNER JOIN projects p ON p.id = t.project_id
             INNER JOIN feature_estimations fe ON fe.task_id = t.id AND fe.status = 'completed'
             WHERE t.id = ?
-              AND t.status = 'review'
+              AND t.status IN ('review', 'in_review')
               AND {$sulProjectFilter}
             LIMIT 1
         ");
@@ -3875,6 +3926,17 @@ include '../../includes/navbar.php';
     gap: .45rem;
 }
 
+#developer-review-panel .qa-primary-decision-actions {
+    justify-content: center;
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+#developer-review-panel .qa-primary-decision-actions > button {
+    justify-content: center;
+    min-width: 72px;
+}
+
 .qa-primary-decision-actions[hidden],
 .qa-fail-routing-panel[hidden] {
     display: none !important;
@@ -4396,7 +4458,7 @@ include '../../includes/navbar.php';
 
 .project-review-decisions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 0;
 }
 
@@ -6983,29 +7045,24 @@ include '../../includes/navbar.php';
                                     </div>
                                 </div>
 
+                                <div class="alert alert-info py-2 px-3 mb-3">
+                                    <strong>Sales review:</strong>
+                                    <?php echo !empty($estimate['sales_comment'])
+                                        ? htmlspecialchars((string) $estimate['sales_comment'])
+                                        : 'Sales approved this estimate without an additional note.'; ?>
+                                </div>
+
                                 <div class="project-review-decisions">
-                                    <form method="POST" class="project-review-decision is-approve" data-generic-draft-disabled="1" data-app-loading data-loading-title="Approving estimation" data-loading-text="Forwarding project estimation to Sales.">
+                                    <form method="POST" class="project-review-decision is-approve" data-generic-draft-disabled="1" data-app-loading data-loading-title="Completing estimation" data-loading-text="Completing the project estimation workflow.">
                                         <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
                                         <div class="project-review-decision-head">
                                             <i class="fas fa-circle-check" aria-hidden="true"></i>
-                                            <span><strong>Approve estimation</strong><span>Confirm the costing and forward it to Sales.</span></span>
+                                            <span><strong>Complete estimation</strong><span>Confirm the Sales-approved costing and finish the estimation workflow.</span></span>
                                         </div>
-                                        <label for="approvalNote<?php echo (int) $estimate['id']; ?>">Approval note <span>(optional)</span></label>
-                                        <textarea id="approvalNote<?php echo (int) $estimate['id']; ?>" name="review_comment" class="form-control-custom" rows="2" placeholder="Add a short note for Sales"></textarea>
+                                        <label for="approvalNote<?php echo (int) $estimate['id']; ?>">Completion note <span>(optional)</span></label>
+                                        <textarea id="approvalNote<?php echo (int) $estimate['id']; ?>" name="review_comment" class="form-control-custom" rows="2" placeholder="Add a short final review note"></textarea>
                                         <button type="submit" name="approve_project_estimation" class="btn-success-modern">
-                                            <i class="fas fa-check"></i> Approve &amp; Forward
-                                        </button>
-                                    </form>
-                                    <form method="POST" class="project-review-decision is-revision" data-generic-draft-disabled="1" data-app-loading data-loading-title="Returning estimation" data-loading-text="Sending the estimation back for revision.">
-                                        <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
-                                        <div class="project-review-decision-head">
-                                            <i class="fas fa-rotate-left" aria-hidden="true"></i>
-                                            <span><strong>Request revision</strong><span>Return the estimate with clear changes for the Expert.</span></span>
-                                        </div>
-                                        <label for="revisionReason<?php echo (int) $estimate['id']; ?>">Revision reason <span>(required)</span></label>
-                                        <textarea id="revisionReason<?php echo (int) $estimate['id']; ?>" name="rejection_reason" class="form-control-custom" rows="2" required placeholder="Explain what needs to be revised"></textarea>
-                                        <button type="submit" name="reject_project_estimation" class="btn-warning-modern">
-                                            <i class="fas fa-rotate-left"></i> Request Revision
+                                            <i class="fas fa-check"></i> Complete Estimation
                                         </button>
                                     </form>
                                 </div>
@@ -7081,9 +7138,6 @@ include '../../includes/navbar.php';
                                                 <div class="allocation-table-actions" onclick="event.stopPropagation();">
                                                     <button class="btn-success-modern" type="button" onclick="approveEstimation(<?php echo (int) $task['id']; ?>)">
                                                         <i class="fas fa-check"></i> Approve
-                                                    </button>
-                                                    <button class="btn-warning-modern" type="button" onclick="openRejectModal(<?php echo (int) $task['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $task['title']), ENT_QUOTES, 'UTF-8'); ?>)">
-                                                        <i class="fas fa-times"></i> Reject
                                                     </button>
                                                 </div>
                                             </td>
@@ -7362,7 +7416,8 @@ include '../../includes/navbar.php';
                                         $groupRoadmapStart,
                                         $groupRoadmapEnd
                                     );
-                                    $distributionMemberCount = max(1, min($developerPlannedHeadcount, $availableDeveloperCount, $featureCount));
+                                    $groupRequiredCount = max(1, (int) ($assignmentGroup['required_count'] ?? 1));
+                                    $distributionMemberCount = max(1, min($groupRequiredCount, $availableDeveloperCount, $featureCount));
                                     $distributionCopy = $distributionMemberCount > 1
                                         ? "Choose up to {$distributionMemberCount} {$deliveryAssigneePluralLower}; tasks are divided evenly among those selected"
                                         : 'Ready for ' . $deliveryAssigneeLower . ' allocation';
@@ -7696,8 +7751,9 @@ include '../../includes/navbar.php';
                                     </td>
                                     <td>
                                         <?php if ($isQaDepartmentSul): ?>
-                                            <form class="workflow-decision-form" method="POST" data-app-loading data-loading-title="Saving QA decision" data-loading-text="Please wait while the QA review decision is saved.">
+                                            <form class="workflow-decision-form" method="POST" data-generic-draft-disabled="1" data-app-loading data-loading-title="Saving QA decision" data-loading-text="Please wait while the QA review decision is saved.">
                                                 <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
+                                                <input type="hidden" name="project_id" value="<?php echo (int) $projectId; ?>">
                                                 <div class="workflow-action-row qa-primary-decision-actions">
                                                     <button type="submit" name="qa_sul_pass" class="btn-success-modern">
                                                         <i class="fas fa-check"></i> Pass
@@ -7783,7 +7839,7 @@ include '../../includes/navbar.php';
                                                 </div>
                                             </form>
                                         <?php else: ?>
-                                            <form class="workflow-decision-form" method="POST" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
+                                            <form class="workflow-decision-form" method="POST" data-generic-draft-disabled="1" data-app-loading data-loading-title="Updating review" data-loading-text="Please wait while the review decision is saved.">
                                                 <input type="hidden" name="task_id" value="<?php echo (int) $task['id']; ?>">
                                                 <textarea name="review_comment" class="form-control-custom" rows="2" placeholder="<?php echo $isUiUxDepartmentSul ? 'UI/UX approval note or revision feedback' : 'Approval note or revision comments'; ?>"></textarea>
                                                 <div class="workflow-action-row">
@@ -8329,34 +8385,6 @@ include '../../includes/navbar.php';
 </div>
 <?php endif; ?>
 
-<!-- Reject Estimation Modal -->
-<?php if ($canManageExpertWorkflow): ?>
-<div class="modal fade modal-modern" id="rejectModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-times-circle me-2"></i>Reject Estimation</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" data-app-loading data-loading-title="Rejecting estimation" data-loading-text="Please wait while the estimation is returned to the expert.">
-                <div class="modal-body">
-                    <input type="hidden" name="task_id" id="rejectTaskId">
-                    <p><strong>Task:</strong> <span id="rejectTaskTitle"></span></p>
-                    <div class="mb-3">
-                        <label class="form-label">Reason for Rejection</label>
-                        <textarea name="rejection_reason" class="form-control-custom" rows="3" required placeholder="Please provide feedback for the expert..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="reject_estimation" class="btn-warning-modern">Reject Estimation</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
-
 <!-- Task Details Modal -->
 <div class="modal fade modal-modern" id="taskDetailsModal" tabindex="-1" aria-labelledby="taskDetailsModalTitle">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -8439,6 +8467,8 @@ function renderEvortixBubble() {
         ${evortixChangeImpactNotice ? `<div class="evortix-bubble-warning"><i class="fas fa-code-branch me-1"></i>Change impact: ${escapeHtml(evortixChangeImpactNotice.author)} updated ${escapeHtml(evortixChangeImpactNotice.areas.join(', '))}. Recheck this decision.</div>` : ''}
         ${reallocation ? `<div class="evortix-bubble-warning"><i class="fas fa-rotate me-1"></i>Reallocation watch: ${escapeHtml(reallocation.title)} may need a new owner.</div>` : ''}
         <div class="evortix-bubble-actions"><button type="button" data-evortix-action="skip">Skip</button><button type="button" data-evortix-action="adjust">Choose another</button><button class="is-accept" type="button" data-evortix-action="accept">Accept assignment</button></div>`;
+    window.chatBotWidgetRobot?.setMode?.('empty-bed');
+    window.chatBotFloatRobot?.setMode?.('standing');
     float.hidden = false;
     float.setAttribute('aria-hidden', 'false');
     window.chatBotFloatRobot?.point?.('left', 5000);
@@ -8513,6 +8543,8 @@ document.addEventListener('DOMContentLoaded', () => window.setTimeout(() => {
         speech.hidden = false;
         speech.setAttribute('aria-hidden', 'false');
         speech.innerHTML = `<div class="evortix-bubble-head"><div><div class="evortix-bubble-eyebrow">${completedAssignment ? 'Assignment saved' : 'Decision saved'}</div><strong class="evortix-bubble-title"><i class="fas fa-circle-check me-1"></i>Successful</strong></div></div><div class="evortix-bubble-task"><span>${escapeHtml(evortixAssignmentSuccess)}</span></div><div class="evortix-bubble-reason">Evortix refreshed the queue so completed assignments, reductions, approvals, and reallocations are not repeated.</div>`;
+        window.chatBotWidgetRobot?.setMode?.('empty-bed');
+        window.chatBotFloatRobot?.setMode?.('standing');
         float.hidden = false;
         float.setAttribute('aria-hidden', 'false');
     }
@@ -8937,12 +8969,6 @@ async function approveEstimation(taskId) {
     form.innerHTML = `<input type="hidden" name="approve_estimation" value="1"><input type="hidden" name="task_id" value="${taskId}">`;
     document.body.appendChild(form);
     form.submit();
-}
-
-function openRejectModal(taskId, taskTitle) {
-    document.getElementById('rejectTaskId').value = taskId;
-    document.getElementById('rejectTaskTitle').textContent = taskTitle;
-    new bootstrap.Modal(document.getElementById('rejectModal')).show();
 }
 
 function openReviseCompletedModal(taskId, taskTitle) {

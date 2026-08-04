@@ -169,6 +169,26 @@ while($row = $allocResult->fetch_assoc()) {
     $existingAllocations[$normalizedRole] = $row;
 }
 
+$developerAllocationReviewCompleted = false;
+if (dbTableExists($conn, 'audit_logs')) {
+    $completionStmt = $conn->prepare(
+        "SELECT id
+         FROM audit_logs
+         WHERE action = 'developer_allocation'
+           AND table_name = 'projects'
+           AND record_id = ?
+           AND status = 'success'
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1"
+    );
+    if ($completionStmt !== false) {
+        $completionStmt->bind_param('i', $projectId);
+        $completionStmt->execute();
+        $developerAllocationReviewCompleted = (bool) $completionStmt->get_result()->fetch_assoc();
+        $completionStmt->close();
+    }
+}
+
 $includedDepartments = [];
 $includedDepartmentRaw = trim((string) ($project['included_departments'] ?? ''));
 if ($includedDepartmentRaw !== '') {
@@ -1417,6 +1437,22 @@ body.allocation-review-drawer-open {
         transition: none;
     }
 }
+
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss .evortix-dss-heading {
+    color: #083a5d !important;
+    opacity: 1 !important;
+}
+
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss :is(
+        .evortix-dss-copy,
+        .evortix-dss-points,
+        .evortix-dss-points li
+    ) {
+    color: #175f8f !important;
+    opacity: 1 !important;
+}
 </style>
 
 <div class="container-fluid px-4 py-4">
@@ -1982,6 +2018,11 @@ initAllocationTooltips();
         'title' => 'Team recommendations ready',
         'message' => 'I calculated role headcounts from the feature workload, delivery schedule, specialist needs, and the tasks each role must handle. Review each allocation recommendation.',
         'stateKey' => 'evortix.dss.team.project.' . (int) $projectId,
+        'persistDecisions' => false,
+        'autoStart' => !$developerAllocationReviewCompleted,
+        'startDelay' => 100,
+        'pointAtMessage' => true,
+        'pointSide' => 'left',
         'items' => $architectDssItems,
         'completedTitle' => 'Team review complete',
     ];

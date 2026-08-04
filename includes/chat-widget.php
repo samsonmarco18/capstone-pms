@@ -82,15 +82,57 @@ if (
                     return 0;
                 }
             };
+            $summaryFirstId = static function (string $sql) use ($summaryConn): int {
+                try {
+                    $result = $summaryConn->query($sql);
+                    return $result ? (int) (($result->fetch_assoc()['id'] ?? 0)) : 0;
+                } catch (Throwable $e) {
+                    error_log('Evortix dashboard navigation unavailable: ' . $e->getMessage());
+                    return 0;
+                }
+            };
+            $adminPasswordRequests = 0;
+            $adminTechnologyCount = 0;
+            $adminUserCount = 0;
+            $adminSecurityReports = 0;
+            $adminOverviewItem = null;
+            if ($summaryRole === 'admin') {
+                $adminPasswordRequests = dbTableExists($summaryConn, 'password_reset_requests')
+                    ? $summaryCount("SELECT COUNT(*) AS count FROM password_reset_requests WHERE status = 'pending'")
+                    : 0;
+                $adminTechnologyCount = $summaryCount("SELECT COUNT(*) AS count FROM technologies");
+                $adminUserCount = $summaryCount("SELECT COUNT(*) AS count FROM users");
+                $adminSecurityReports = $summaryCount("SELECT COUNT(*) AS count FROM audit_logs WHERE action LIKE '%security%'");
+                if ($adminPasswordRequests > 0) {
+                    $adminOverviewItem = [
+                        'icon' => 'fa-heart-pulse',
+                        'title' => 'Review password requests',
+                        'meta' => "{$adminPasswordRequests} pending account recovery",
+                        'action_url' => BASE_URL . 'modules/admin/password-reset-requests.php',
+                    ];
+                } elseif ($adminSecurityReports > 0) {
+                    $adminOverviewItem = [
+                        'icon' => 'fa-shield-halved',
+                        'title' => 'Review security reports',
+                        'meta' => "{$adminSecurityReports} audit-backed security events",
+                        'action_url' => BASE_URL . 'modules/admin/audit-log.php?search=security#auditDirectory',
+                    ];
+                } else {
+                    $adminOverviewItem = [
+                        'icon' => 'fa-users',
+                        'title' => 'Open user directory',
+                        'meta' => "{$adminUserCount} users · Manage roles and access",
+                        'action_url' => BASE_URL . 'modules/admin/user-management.php',
+                    ];
+                }
+            }
             $roleSummaries = [
                 'admin' => [
-                    'title' => 'Your admin dashboard snapshot',
-                    'metrics' => [
-                        ['icon' => 'fa-users', 'label' => 'Active Users', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM users WHERE status = 'active'"), 'meta' => 'Enabled accounts'],
-                        ['icon' => 'fa-diagram-project', 'label' => 'Active Projects', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM projects WHERE status NOT IN ('completed','cancelled')"), 'meta' => 'Across the platform'],
-                        ['icon' => 'fa-key', 'label' => 'Pending Resets', 'value' => dbTableExists($summaryConn, 'password_reset_requests') ? $summaryCount("SELECT COUNT(*) AS count FROM password_reset_requests WHERE status = 'pending'") : 0, 'meta' => 'Awaiting review'],
-                        ['icon' => 'fa-shield-halved', 'label' => 'Security Events', 'value' => $summaryCount("SELECT COUNT(*) AS count FROM audit_logs WHERE action LIKE '%security%'"), 'meta' => 'Recorded events'],
-                    ],
+                    'variant' => 'compact',
+                    'title' => 'Live Overview',
+                    'intro' => "{$adminPasswordRequests} password requests, {$adminTechnologyCount} services, {$adminUserCount} users, and {$adminSecurityReports} security reports.",
+                    'item' => $adminOverviewItem,
+                    'metrics' => [],
                 ],
                 'architect' => [
                     'title' => 'Your architect dashboard snapshot',
@@ -129,6 +171,97 @@ if (
                     ],
                 ],
             ];
+            $compactMetricIndexesByRole = [
+                'architect' => [1, 2, 3],
+                'qa' => [0, 1, 3],
+                'expert' => [0, 1, 3],
+                'developer' => [1, 2, 3],
+            ];
+            $compactActionUrlsByRole = [
+                'qa' => BASE_URL . 'modules/qa/testing.php',
+            ];
+            foreach ($compactMetricIndexesByRole as $compactRole => $metricIndexes) {
+                $compactMetrics = array_values(array_filter(array_map(
+                    static fn(int $index): ?array => $roleSummaries[$compactRole]['metrics'][$index] ?? null,
+                    $metricIndexes
+                )));
+                $introParts = array_map(
+                    static fn(array $metric): string => (int) ($metric['value'] ?? 0)
+                        . ' '
+                        . strtolower((string) ($metric['label'] ?? 'items')),
+                    $compactMetrics
+                );
+                $lastIntroPart = array_pop($introParts);
+                $compactIntro = $lastIntroPart === null
+                    ? 'No dashboard items need attention.'
+                    : ($introParts === []
+                        ? $lastIntroPart . '.'
+                        : implode(', ', $introParts) . ', and ' . $lastIntroPart . '.');
+                $primaryMetric = null;
+                foreach ($compactMetrics as $metric) {
+                    if (!empty($metric['overdue']) && (int) ($metric['value'] ?? 0) > 0) {
+                        $primaryMetric = $metric;
+                        break;
+                    }
+                }
+                if ($primaryMetric === null) {
+                    foreach ($compactMetrics as $metric) {
+                        if ((int) ($metric['value'] ?? 0) > 0) {
+                            $primaryMetric = $metric;
+                            break;
+                        }
+                    }
+                }
+                $primaryMetric ??= $compactMetrics[0] ?? [
+                    'icon' => 'fa-circle-check',
+                    'label' => 'All clear',
+                    'value' => 0,
+                    'meta' => 'No action needed',
+                ];
+                $compactActionUrl = (string) ($compactActionUrlsByRole[$compactRole] ?? '');
+                if ((int) ($primaryMetric['value'] ?? 0) > 0 && $compactRole === 'expert') {
+                    $expertTaskCondition = match ((string) ($primaryMetric['label'] ?? '')) {
+                        'Overdue' => "deadline < NOW() AND status != 'completed'",
+                        'To Estimate' => "status = 'todo'",
+                        default => "status != 'completed'",
+                    };
+                    $expertTaskId = $summaryFirstId(
+                        "SELECT id FROM tasks
+                         WHERE assigned_to = {$summaryUserId}
+                           AND {$expertTaskCondition}
+                         ORDER BY CASE WHEN deadline IS NULL THEN 1 ELSE 0 END, deadline ASC, id ASC
+                         LIMIT 1"
+                    );
+                    $compactActionUrl = $expertTaskId > 0
+                        ? BASE_URL . 'modules/expert/feature-estimation.php?task_id=' . $expertTaskId
+                        : '';
+                } elseif ((int) ($primaryMetric['value'] ?? 0) > 0 && $compactRole === 'developer') {
+                    $developerTaskCondition = match ((string) ($primaryMetric['label'] ?? '')) {
+                        'Overdue' => "deadline < NOW() AND status != 'completed'",
+                        'Completed' => "status = 'completed'",
+                        default => "status = 'in_progress'",
+                    };
+                    $developerTaskId = $summaryFirstId(
+                        "SELECT id FROM tasks
+                         WHERE assigned_to = {$summaryUserId}
+                           AND {$developerTaskCondition}
+                         ORDER BY CASE WHEN deadline IS NULL THEN 1 ELSE 0 END, deadline ASC, id ASC
+                         LIMIT 1"
+                    );
+                    $compactActionUrl = $developerTaskId > 0
+                        ? BASE_URL . 'modules/developer/task.php?id=' . $developerTaskId
+                        : '';
+                }
+                $roleSummaries[$compactRole]['variant'] = 'compact';
+                $roleSummaries[$compactRole]['title'] = 'Live Overview';
+                $roleSummaries[$compactRole]['intro'] = $compactIntro;
+                $roleSummaries[$compactRole]['item'] = [
+                    'icon' => (string) ($primaryMetric['icon'] ?? 'fa-circle-info'),
+                    'title' => (string) ($primaryMetric['label'] ?? 'Current status'),
+                    'meta' => (int) ($primaryMetric['value'] ?? 0) . ' · ' . (string) ($primaryMetric['meta'] ?? ''),
+                    'action_url' => (int) ($primaryMetric['value'] ?? 0) > 0 ? $compactActionUrl : '',
+                ];
+            }
             $evortixRoleDashboardSummary = $roleSummaries[$summaryRole] ?? null;
             if ($summaryRole === 'architect' && $evortixRoleDashboardSummary) {
                 $planningResult = $summaryConn->query("
@@ -147,22 +280,18 @@ if (
                     $planningDeadline = !empty($planningProject['timeline_end'])
                         ? date('M d, Y', strtotime((string) $planningProject['timeline_end']))
                         : 'No target deadline';
-                    $evortixRoleDashboardSummary['suggestion'] = [
-                        'eyebrow' => 'Project planning suggestion',
-                        'title' => (string) $planningProject['name'] . ' needs architecture planning',
-                        'message' => ($planningStarted
-                            ? 'Continue the existing plan and validate features, technology, allocation, documents, and roadmap.'
-                            : 'Start with the Sales intake, validate requested features, then prepare the technical plan.')
-                            . ' Target: ' . $planningDeadline . '.',
-                        'action_label' => $planningStarted ? 'Continue planning' : 'Start project review',
+                    $evortixRoleDashboardSummary['item'] = [
+                        'icon' => 'fa-diagram-project',
+                        'title' => ($planningStarted ? 'Continue: ' : 'Start: ') . (string) $planningProject['name'],
+                        'meta' => ($planningStarted ? 'Planning underway' : 'Awaiting architecture review')
+                            . ' · Target ' . $planningDeadline,
                         'action_url' => BASE_URL . 'modules/architect/project-review.php?id=' . (int) $planningProject['id'],
                     ];
                 } else {
-                    $evortixRoleDashboardSummary['suggestion'] = [
-                        'eyebrow' => 'Project planning suggestion',
-                        'title' => 'No project is waiting for architecture planning',
-                        'message' => 'Your current planning intake is clear.',
-                        'action_label' => '',
+                    $evortixRoleDashboardSummary['item'] = [
+                        'icon' => 'fa-circle-check',
+                        'title' => 'Architecture queue clear',
+                        'meta' => 'No project is waiting for planning',
                         'action_url' => '',
                     ];
                 }
@@ -262,8 +391,40 @@ document.addEventListener('DOMContentLoaded', () => {
 .evortix-role-planning-copy { margin:.25rem 0 0; color:#426f8c; font-size:.66rem; line-height:1.45 }
 .evortix-role-planning-action { display:inline-flex; align-items:center; gap:.35rem; margin-top:.5rem; padding:.42rem .65rem; border-radius:9px; background:#137eb3; color:#fff !important; font-size:.67rem; font-weight:800; text-decoration:none }
 .evortix-role-summary-metric.is-overdue .evortix-role-summary-value,.evortix-role-summary-metric.is-overdue i { color:#c2413b }
+.chat-bot-speech.evortix-role-dashboard-summary.is-compact { width:min(360px,calc(100vw - 190px)); min-width:310px; padding:.9rem .95rem .95rem }
+.evortix-role-summary-head.is-compact { align-items:center }
+.chat-bot-speech .evortix-role-summary-head.is-compact .evortix-role-summary-title { font-size:1rem }
+.evortix-role-summary-intro.is-compact { margin:.65rem 0 .75rem; font-size:.73rem; line-height:1.45 }
+.evortix-role-summary-item { align-items:center; background:rgba(255,255,255,.82); border:1px solid rgba(8,123,185,.16); border-radius:13px; color:inherit; display:grid; gap:.68rem; grid-template-columns:32px minmax(0,1fr) auto; padding:.68rem .78rem; text-decoration:none; transition:transform .18s ease,background .18s ease,border-color .18s ease }
+.evortix-role-summary-item:hover { background:#fff; border-color:rgba(8,123,185,.3); color:inherit; transform:translateY(-1px) }
+.evortix-role-summary-item:focus-visible { border-color:rgba(8,123,185,.45); box-shadow:0 0 0 3px rgba(19,126,179,.14); outline:0 }
+.chat-bot-speech .evortix-role-summary-item-icon { align-items:center; align-self:center; background:#e4f4fb; border:1px solid rgba(8,123,185,.14); border-radius:9px; color:#157baa; display:inline-flex; font-size:.78rem; height:32px; justify-content:center; margin:0; padding:0; position:static; transform:none; width:32px }
+.chat-bot-speech .evortix-role-summary-item-icon i { color:inherit; font-size:.78rem; line-height:1; margin:0; position:static; transform:none }
+.evortix-role-summary-item-copy { min-width:0 }
+.evortix-role-summary-item-title { color:#083a5d; display:block; font-size:.75rem; font-weight:850; line-height:1.3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.evortix-role-summary-item-meta { color:#5b7f97; display:block; font-size:.65rem; font-weight:700; line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.evortix-role-summary-item-arrow { color:#157baa; font-size:.72rem }
+.chat-bot-speech.evortix-role-dashboard-summary.has-project-list { width:min(430px,calc(100vw - 190px)); min-width:380px }
+.evortix-project-status-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.38rem; margin-bottom:.68rem }
+.evortix-project-status-tab { align-items:center; background:rgba(255,255,255,.58); border:1px solid rgba(8,123,185,.14); border-radius:10px; color:#426f8c; display:grid; font-size:.6rem; font-weight:800; gap:.18rem; grid-template-columns:auto minmax(0,1fr) auto; min-width:0; padding:.46rem .48rem; text-align:left; transition:background .16s ease,border-color .16s ease,color .16s ease }
+.evortix-project-status-tab i { color:#1784b6; font-size:.61rem }
+.evortix-project-status-tab span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.evortix-project-status-tab strong { background:#e5f4fa; border-radius:999px; color:#0d668f; font-size:.58rem; min-width:20px; padding:.14rem .3rem; text-align:center }
+.evortix-project-status-tab:hover,.evortix-project-status-tab:focus-visible { background:rgba(255,255,255,.84); border-color:rgba(8,123,185,.3); color:#0b466d; outline:0 }
+.evortix-project-status-tab.is-active { background:#fff; border-color:rgba(8,123,185,.38); box-shadow:0 4px 12px rgba(15,119,183,.1); color:#083a5d }
+.evortix-project-list-head { align-items:center; color:#0b466d; display:flex; font-size:.64rem; justify-content:space-between; margin:0 .12rem .38rem }
+.evortix-project-list-head strong { font-size:.66rem; font-weight:850 }
+.evortix-project-list-head span { color:#66869b; font-weight:700 }
+.evortix-project-list { display:grid; gap:.34rem; max-height:190px; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; padding-right:.16rem; scrollbar-color:rgba(18,126,177,.44) transparent; scrollbar-width:thin }
+.evortix-project-link { align-items:center; background:rgba(255,255,255,.76); border:1px solid rgba(8,123,185,.14); border-radius:10px; color:inherit; display:grid; gap:.55rem; grid-template-columns:minmax(0,1fr) auto; padding:.52rem .62rem; text-decoration:none; transition:background .16s ease,border-color .16s ease,transform .16s ease }
+.evortix-project-link:hover,.evortix-project-link:focus-visible { background:#fff; border-color:rgba(8,123,185,.3); color:inherit; outline:0; transform:translateY(-1px) }
+.evortix-project-link-copy { min-width:0 }
+.evortix-project-link-copy strong { color:#083a5d; display:block; font-size:.67rem; font-weight:850; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.evortix-project-link-copy small { color:#5b7f97; display:block; font-size:.58rem; font-weight:700; margin-top:.1rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.evortix-project-link > i { color:#157baa; font-size:.63rem }
+.evortix-project-list-empty { background:rgba(255,255,255,.52); border:1px dashed rgba(8,123,185,.18); border-radius:10px; color:#5b7f97; font-size:.62rem; font-weight:700; padding:.7rem; text-align:center }
 @keyframes evortixRoleSummaryReveal { from { opacity:0; transform:translateY(-50%) translateX(18px) scale(.94) } to { opacity:1; transform:translateY(-50%) translateX(0) scale(1) } }
-@media(max-width:640px){.chat-bot-speech.evortix-role-dashboard-summary{right:calc(100% + 9px);width:min(270px,calc(100vw - 145px));min-width:220px}.evortix-role-summary-grid{grid-template-columns:1fr;max-height:238px;overflow-y:auto}}
+@media(max-width:640px){.chat-bot-speech.evortix-role-dashboard-summary,.chat-bot-speech.evortix-role-dashboard-summary.is-compact,.chat-bot-speech.evortix-role-dashboard-summary.has-project-list{right:calc(100% + 9px);width:min(290px,calc(100vw - 145px));min-width:230px}.evortix-role-summary-grid{grid-template-columns:1fr;max-height:238px;overflow-y:auto}.evortix-role-summary-item-title,.evortix-role-summary-item-meta{white-space:normal}.evortix-project-status-tab{grid-template-columns:minmax(0,1fr) auto;padding:.42rem .38rem}.evortix-project-status-tab i{display:none}.evortix-project-list{max-height:164px}}
 @keyframes evortixGuidancePulse {
     0%, 100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
     50% { box-shadow: 0 0 0 10px rgba(14, 165, 233, .16); }
@@ -282,7 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <button type="button" class="btn btn-link btn-sm text-white p-0 chat-icon-btn" data-bs-toggle="modal" data-bs-target="#createGroupModal" title="Create group">
                 <i class="fas fa-user-plus"></i>
             </button>
-            <button type="button" class="btn btn-link btn-sm text-white p-0 chat-icon-btn" id="toggleChatMinimize" title="Minimize chat" onclick="document.getElementById('chat-widget').style.display='none'; document.getElementById('chat-widget-minimized').style.display='block';">
+            <button type="button" class="btn btn-link btn-sm text-white p-0 chat-icon-btn" id="toggleChatMinimize" aria-label="Minimize chat" onclick="document.getElementById('chat-widget').style.display='none'; document.getElementById('chat-widget-minimized').style.display='block';">
                 <i class="fas fa-minus"></i>
             </button>
         </div>
@@ -329,6 +490,18 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
 
             <div class="chat-input">
+                <div id="chatComposerContext" class="chat-composer-context d-none" aria-live="polite">
+                    <span class="chat-composer-context-icon" id="chatComposerContextIcon">
+                        <i class="fas fa-reply" aria-hidden="true"></i>
+                    </span>
+                    <span class="chat-composer-context-copy">
+                        <strong id="chatComposerContextTitle">Replying</strong>
+                        <small id="chatComposerContextPreview"></small>
+                    </span>
+                    <button type="button" id="chatComposerContextClose" class="chat-composer-context-close" aria-label="Cancel message action">
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                    </button>
+                </div>
                 <div class="input-group input-group-sm">
                     <input type="text" id="chatMessageInput" class="form-control" placeholder="Type your message...">
                     <button class="btn btn-primary" type="button" id="sendMessageBtn">
@@ -398,6 +571,35 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
 </div>
 
+<div class="modal fade create-group-modal chat-forward-modal" id="chatForwardModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title">Forward Message</h5>
+                    <p class="create-group-subtitle mb-0">Choose a person or group conversation.</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="chat-forward-search">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input type="text" id="chatForwardSearch" class="form-control" placeholder="Search conversations">
+                </div>
+                <div id="chatForwardTargets" class="chat-forward-targets">
+                    <div class="chat-list-empty">
+                        <i class="fas fa-comments" aria-hidden="true"></i>
+                        <div>Select a message to forward.</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <button id="chat-bot-widget" class="chat-bot-widget" type="button" aria-label="Open chat" style="display: flex;">
     <span id="chatBotAnimation" class="chat-bot-animation" aria-hidden="true">
         <i class="fas fa-robot"></i>
@@ -405,6 +607,9 @@ document.addEventListener('DOMContentLoaded', () => {
 </button>
 
 <div id="chat-bot-float" class="chat-bot-float" hidden aria-hidden="true">
+    <button id="chatBotFloatDismiss" class="chat-bot-float-dismiss" type="button" aria-label="Return Evortix home" title="Return Evortix home">
+        <i class="fas fa-xmark" aria-hidden="true"></i>
+    </button>
     <div class="chat-bot-speech" aria-hidden="true">
         <strong data-chat-bot-type="title" data-chat-bot-text="Hi, good day!"></strong>
     </div>
@@ -414,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 
 <button id="chat-widget-minimized" class="chat-widget-minimized" type="button" title="Open chat" style="display: block;" onclick="document.getElementById('chat-widget').style.display='flex'; this.style.display='none';">
-    <i class="fas fa-comments"></i>
+    <span class="chat-launcher-glyph" aria-hidden="true"></span>
     <span id="chatUnreadBadge" class="chat-unread-badge d-none" aria-live="polite">0</span>
 </button>
 
@@ -430,6 +635,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const minimized = document.getElementById('chat-widget-minimized');
     const botWidget = document.getElementById('chat-bot-widget');
     const botFloat = document.getElementById('chat-bot-float');
+    const botFloatDismiss = document.getElementById('chatBotFloatDismiss');
     const minimizeBtn = document.getElementById('toggleChatMinimize');
     let botFloatPointer = null;
     let botTypeTimer = null;
@@ -615,9 +821,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const speech = botFloat.querySelector('.chat-bot-speech');
-        speech?.classList.remove('evortix-project-notification', 'evortix-dashboard-summary');
         if (speech) {
+            speech.className = 'chat-bot-speech';
             speech.hidden = false;
+            speech.setAttribute('aria-hidden', 'false');
             speech.style.pointerEvents = '';
             speech.removeAttribute('role');
             speech.removeAttribute('data-dashboard-summary-dismissed');
@@ -726,21 +933,36 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="evortix-role-summary-label">${escapeSummary(metric.label)}</div>
                     <div class="evortix-role-summary-meta">${escapeSummary(metric.meta)}</div>
                 </div>`).join('');
-            speech.className = 'chat-bot-speech evortix-role-dashboard-summary';
+            const isCompactSummary = evortixRoleDashboardSummary.variant === 'compact';
+            const compactItem = evortixRoleDashboardSummary.item || {};
+            const compactItemTag = compactItem.action_url ? 'a' : 'div';
+            const compactItemHref = compactItem.action_url ? ` href="${escapeSummary(compactItem.action_url)}"` : '';
+            speech.className = `chat-bot-speech evortix-role-dashboard-summary${isCompactSummary ? ' is-compact' : ''}`;
             speech.hidden = false;
             speech.style.pointerEvents = 'auto';
             speech.setAttribute('aria-hidden', 'false');
             speech.setAttribute('role', 'status');
-            speech.innerHTML = `
+            speech.innerHTML = isCompactSummary ? `
+                <div class="evortix-role-summary-head is-compact"><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
+                <div class="evortix-role-summary-intro is-compact">${escapeSummary(evortixRoleDashboardSummary.intro)}</div>
+                <${compactItemTag} class="evortix-role-summary-item"${compactItemHref}>
+                    <span class="evortix-role-summary-item-icon"><i class="fas ${escapeSummary(compactItem.icon || 'fa-circle-info')}"></i></span>
+                    <span class="evortix-role-summary-item-copy"><strong class="evortix-role-summary-item-title">${escapeSummary(compactItem.title)}</strong><span class="evortix-role-summary-item-meta">${escapeSummary(compactItem.meta)}</span></span>
+                    ${compactItem.action_url ? '<i class="fas fa-arrow-right evortix-role-summary-item-arrow" aria-hidden="true"></i>' : ''}
+                </${compactItemTag}>` : `
                 <div class="evortix-role-summary-head"><div><div class="evortix-role-summary-eyebrow">Live overview</div><strong class="evortix-role-summary-title">${escapeSummary(evortixRoleDashboardSummary.title)}</strong></div><button type="button" class="evortix-role-summary-close" aria-label="Dismiss dashboard overview"><i class="fas fa-xmark"></i></button></div>
                 <div class="evortix-role-summary-intro">Here is the information most relevant to your role right now.</div>
                 <div class="evortix-role-summary-grid">${metricMarkup}</div>
                 ${evortixRoleDashboardSummary.suggestion ? `<div class="evortix-role-planning-suggestion"><div class="evortix-role-planning-eyebrow">${escapeSummary(evortixRoleDashboardSummary.suggestion.eyebrow)}</div><strong class="evortix-role-planning-title">${escapeSummary(evortixRoleDashboardSummary.suggestion.title)}</strong><p class="evortix-role-planning-copy">${escapeSummary(evortixRoleDashboardSummary.suggestion.message)}</p>${evortixRoleDashboardSummary.suggestion.action_url ? `<a class="evortix-role-planning-action" href="${escapeSummary(evortixRoleDashboardSummary.suggestion.action_url)}"><i class="fas fa-arrow-right"></i>${escapeSummary(evortixRoleDashboardSummary.suggestion.action_label)}</a>` : ''}</div>` : ''}`;
+            window.chatBotWidgetRobot?.setMode?.('empty-bed');
+            window.chatBotFloatRobot?.setMode?.('standing');
             botFloat.hidden = false;
             botFloat.setAttribute('aria-hidden', 'false');
-            const metricSpeech = (evortixRoleDashboardSummary.metrics || [])
-                .map(metric => `${metric.label}: ${metric.value}. ${metric.meta || ''}`)
-                .join(' ');
+            const metricSpeech = isCompactSummary
+                ? `${evortixRoleDashboardSummary.intro || ''} ${compactItem.title || ''}. ${compactItem.meta || ''}`
+                : (evortixRoleDashboardSummary.metrics || [])
+                    .map(metric => `${metric.label}: ${metric.value}. ${metric.meta || ''}`)
+                    .join(' ');
             announceEvortixAudio(`${evortixRoleDashboardSummary.title}. ${metricSpeech}`);
             window.chatBotFloatRobot?.point?.('left', 6500);
             speech.querySelector('.evortix-role-summary-close')?.addEventListener('click', () => {
@@ -900,6 +1122,35 @@ document.addEventListener('DOMContentLoaded', function () {
         openChatMessages();
     });
 
+    const returnEvortixHome = function () {
+        clearTimeout(botTransitionTimer);
+        clearTimeout(botTypeTimer);
+        clearTimeout(evortixSpeechTimer);
+        window.speechSynthesis?.cancel?.();
+        botFloat?.classList.remove('is-leaving-bed', 'is-preparing-speech', 'is-speaking', 'is-dragging');
+        const speech = botFloat?.querySelector('.chat-bot-speech');
+        if (speech) {
+            speech.setAttribute('aria-hidden', 'true');
+        }
+        if (botFloat) {
+            botFloat.setAttribute('aria-hidden', 'true');
+            botFloat.classList.add('is-returning-bed');
+        }
+        window.chatBotWidgetRobot?.sleep?.();
+        botTransitionTimer = window.setTimeout(function () {
+            if (!botFloat) {
+                return;
+            }
+
+            botFloat.hidden = true;
+            botFloat.classList.remove('is-returning-bed');
+            botFloat.style.removeProperty('left');
+            botFloat.style.removeProperty('top');
+            botFloat.style.removeProperty('right');
+            botFloat.style.removeProperty('bottom');
+        }, 760);
+    };
+
     botWidget?.addEventListener('click', function () {
         if (!botFloat) {
             return;
@@ -927,15 +1178,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 }, 520);
             }, 760);
         } else {
-            botFloat.setAttribute('aria-hidden', 'true');
-            botFloat.classList.add('is-returning-bed');
-            window.chatBotWidgetRobot?.sleep?.();
-            clearTimeout(botTypeTimer);
-            botTransitionTimer = window.setTimeout(function () {
-                botFloat.hidden = true;
-                botFloat.classList.remove('is-returning-bed');
-            }, 660);
+            returnEvortixHome();
         }
+    });
+
+    botFloatDismiss?.addEventListener('pointerdown', function (event) {
+        event.stopPropagation();
+    });
+
+    botFloatDismiss?.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        returnEvortixHome();
     });
 
     const clampBotFloatPosition = function (x, y) {
@@ -948,7 +1202,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     botFloat?.addEventListener('pointerdown', function (event) {
-        if (event.target instanceof Element && event.target.closest('.chat-bot-speech')) {
+        if (event.target instanceof Element && event.target.closest('.chat-bot-speech, .chat-bot-float-dismiss')) {
             return;
         }
 

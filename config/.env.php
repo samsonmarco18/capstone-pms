@@ -62,6 +62,9 @@ function parseDatabaseUrl(?string $databaseUrl): array
         return [];
     }
 
+    $query = [];
+    parse_str((string) ($parts['query'] ?? ''), $query);
+
     return [
         'driver' => match (strtolower((string) ($parts['scheme'] ?? ''))) {
             'postgres', 'postgresql', 'pgsql' => 'pgsql',
@@ -72,6 +75,7 @@ function parseDatabaseUrl(?string $databaseUrl): array
         'user' => rawurldecode((string) ($parts['user'] ?? '')),
         'pass' => rawurldecode((string) ($parts['pass'] ?? '')),
         'name' => rawurldecode(ltrim((string) ($parts['path'] ?? ''), '/')),
+        'sslmode' => (string) ($query['sslmode'] ?? ''),
     ];
 }
 
@@ -111,6 +115,7 @@ if ($isRender) {
 }
 
 define('DB_PORT', (int) getEnvOrDefault('DB_PORT', $databaseUrlConfig['port'] ?? (DB_DRIVER === 'pgsql' ? 5432 : 3306)));
+define('DB_SSLMODE', (string) getEnvOrDefault('DB_SSLMODE', $databaseUrlConfig['sslmode'] ?? 'prefer'));
 
 // ==============================================
 // APPLICATION CONFIGURATION
@@ -165,7 +170,8 @@ define('UPLOAD_MAX_SIZE', (int) getEnvOrDefault('UPLOAD_MAX_SIZE', 52428800)); /
 // ==============================================
 
 define('APP_ROOT_PATH', $appRootPath);
-define('UPLOAD_PATH', APP_ROOT_PATH . '/uploads/');
+$configuredUploadPath = trim((string) getEnvOrDefault('UPLOAD_STORAGE_ROOT', ''));
+define('UPLOAD_PATH', rtrim($configuredUploadPath !== '' ? $configuredUploadPath : APP_ROOT_PATH . '/uploads', '/\\') . DIRECTORY_SEPARATOR);
 define('GIT_PATH', APP_ROOT_PATH . '/git/');
 define('GIT_WORKSPACES_PATH', APP_ROOT_PATH . '/git-workspaces/');
 
@@ -219,7 +225,7 @@ define('LOG_PATH', APP_ROOT_PATH . '/logs/');
 // Error Logging
 ini_set('display_errors', '0');
 ini_set('log_errors', '1');
-ini_set('error_log', APP_ROOT_PATH . '/logs/error.log');
+ini_set('error_log', APP_ENV === 'production' ? 'php://stderr' : APP_ROOT_PATH . '/logs/error.log');
 error_reporting(E_ALL);
 
 function renderFatalErrorResponse(Throwable|string $error): void
@@ -231,7 +237,27 @@ function renderFatalErrorResponse(Throwable|string $error): void
     error_log("Unhandled application error on {$requestUri}: {$message}" . ($trace !== '' ? PHP_EOL . $trace : ''));
 
     if (php_sapi_name() === 'cli') {
-        fwrite(STDERR, "Unhandled application error: {$message}" . PHP_EOL);
+        if (defined('STDERR')) {
+            fwrite(STDERR, "Unhandled application error: {$message}" . PHP_EOL);
+        } else {
+            error_log("Unhandled application error: {$message}");
+        }
+        return;
+    }
+
+    $normalizedRequestPath = str_replace('\\', '/', (string) parse_url($requestUri, PHP_URL_PATH));
+    $isApiRequest = str_contains($normalizedRequestPath, '/api/');
+
+    if ($isApiRequest) {
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=UTF-8');
+            header('Cache-Control: no-store');
+        }
+        echo json_encode([
+            'success' => false,
+            'error' => DEBUG_MODE ? $message : 'A server error occurred.',
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         return;
     }
 
@@ -273,5 +299,7 @@ date_default_timezone_set('Asia/Manila');
 @mkdir(UPLOAD_PATH, 0755, true);
 @mkdir(GIT_PATH, 0755, true);
 @mkdir(GIT_WORKSPACES_PATH, 0755, true);
-@mkdir(dirname(ini_get('error_log')), 0755, true);
+if (APP_ENV !== 'production') {
+    @mkdir(dirname((string) ini_get('error_log')), 0755, true);
+}
 ?>

@@ -326,6 +326,155 @@ include '../../includes/navbar.php';
     margin-bottom: 0;
 }
 
+.developer-git-card .card-body {
+    padding: 1rem 1.25rem 1.15rem;
+}
+
+.git-activity-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.85rem;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.git-activity-summary__label {
+    color: var(--gray-600);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.git-activity-summary__value {
+    margin-top: 0.15rem;
+    color: var(--theme-primary);
+    font-size: 1.55rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.git-activity-summary__icon,
+.git-activity-item__mark {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 10px;
+    background: #eaf4fa;
+    color: var(--theme-primary);
+}
+
+.git-activity-summary__icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    font-size: 1rem;
+}
+
+.git-activity-list {
+    display: grid;
+}
+
+.git-activity-item {
+    display: grid;
+    grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.78rem 0;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.git-activity-item:last-child {
+    border-bottom: 0;
+}
+
+.git-activity-item__mark {
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 0.78rem;
+}
+
+.git-activity-item__content {
+    min-width: 0;
+}
+
+.git-activity-item__top,
+.git-activity-item__detail,
+.git-activity-item__meta {
+    display: flex;
+    align-items: center;
+}
+
+.git-activity-item__top {
+    gap: 0.45rem;
+    min-width: 0;
+}
+
+.git-activity-item__title {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--gray-900);
+    font-size: 0.82rem;
+    font-weight: 650;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.git-activity-item__state {
+    flex: 0 0 auto;
+    padding: 0.18rem 0.45rem;
+    border-radius: 999px;
+    background: #eaf4fa;
+    color: var(--theme-primary);
+    font-size: 0.61rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.git-activity-item__detail,
+.git-activity-item__meta {
+    flex-wrap: wrap;
+    gap: 0.25rem 0.65rem;
+    margin-top: 0.24rem;
+    color: var(--gray-600);
+    font-size: 0.68rem;
+    line-height: 1.35;
+}
+
+.git-activity-item__detail code {
+    padding: 0.08rem 0.28rem;
+    border-radius: 4px;
+    background: var(--gray-100);
+    color: var(--gray-700);
+    font-size: 0.64rem;
+}
+
+.git-activity-open {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.32rem;
+    min-height: 32px;
+    padding: 0.42rem 0.6rem;
+    border: 1px solid rgba(31, 99, 146, 0.22);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--theme-primary);
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1;
+    text-decoration: none;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.git-activity-open:hover {
+    border-color: rgba(31, 99, 146, 0.36);
+    background: #edf7fb;
+    color: var(--theme-dark);
+}
+
 /* Table Styles */
 .table-responsive-custom {
     overflow-x: auto;
@@ -661,9 +810,45 @@ include '../../includes/navbar.php';
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .list-group-item-custom,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-summary,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-item,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table th,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .data-table td {
     border-color: rgba(31, 99, 146, 0.24) !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-item__title {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-summary__label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-item__detail,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-item__meta {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-summary__icon,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-item__mark,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-item__state {
+    background: rgba(31, 99, 146, 0.2);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-item__detail code {
+    background: rgba(157, 182, 207, 0.12);
+    color: #c5d8e9;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-open {
+    border-color: rgba(138, 210, 255, 0.18);
+    background: #0a1b2c;
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .git-activity-open:hover {
+    border-color: rgba(138, 210, 255, 0.34);
+    background: rgba(31, 99, 146, 0.2);
+    color: #d7e4f2;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-custom {
@@ -767,6 +952,25 @@ include '../../includes/navbar.php';
     
     .card-body {
         padding: 1.25rem;
+    }
+
+    .developer-git-card .card-body {
+        padding: 0.9rem 1rem 1rem;
+    }
+
+    .git-activity-item {
+        grid-template-columns: 2.1rem minmax(0, 1fr);
+        gap: 0.6rem;
+    }
+
+    .git-activity-item__mark {
+        width: 2.1rem;
+        height: 2.1rem;
+    }
+
+    .git-activity-open {
+        grid-column: 2;
+        justify-self: start;
     }
 }
 </style>
@@ -1000,17 +1204,19 @@ include '../../includes/navbar.php';
     <!-- Recent Completed Tasks -->
     <div class="row mt-4">
         <div class="col-xl-6">
-            <div class="card">
+            <div class="card developer-git-card">
                 <div class="card-header">
                     <h5><i class="fas fa-code-branch"></i> Recent Git Activity</h5>
                 </div>
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="git-activity-summary">
                         <div>
-                            <div class="text-muted text-uppercase small fw-semibold">Tracked Tasks</div>
-                            <div class="h3 mb-0" style="color: #1f6392;"><?php echo $trackedGitTasks; ?></div>
+                            <div class="git-activity-summary__label">Tracked Tasks</div>
+                            <div class="git-activity-summary__value"><?php echo $trackedGitTasks; ?></div>
                         </div>
-                        <i class="fas fa-code-branch" style="font-size: 2.25rem; color: var(--theme-primary); opacity: 0.65;"></i>
+                        <span class="git-activity-summary__icon" aria-hidden="true">
+                            <i class="fas fa-code-branch"></i>
+                        </span>
                     </div>
                     <?php
                     $gitActionLabels = [
@@ -1028,27 +1234,42 @@ include '../../includes/navbar.php';
                         'closed' => 'Closed',
                     ];
                     ?>
+                    <div class="git-activity-list">
                     <?php while($git = $recentGitActivity->fetch_assoc()): ?>
-                    <div class="timeline-item mb-3">
-                        <h6><?php echo htmlspecialchars($git['task_title']); ?></h6>
-                        <small>
+                    <?php
+                    $gitActionLabel = $gitActionLabels[$git['git_action']] ?? 'Git Update';
+                    $gitStatusLabel = $gitStatusLabels[$git['status']] ?? ucfirst($git['status']);
+                    $gitActivityLabel = strcasecmp($gitActionLabel, $gitStatusLabel) === 0
+                        ? $gitActionLabel
+                        : $gitActionLabel . ' / ' . $gitStatusLabel;
+                    ?>
+                    <article class="git-activity-item">
+                        <span class="git-activity-item__mark" aria-hidden="true">
                             <i class="fas fa-code-branch"></i>
-                            <?php echo htmlspecialchars($git['branch_name']); ?>
-                            <?php if (!empty($git['commit_hash'])): ?>
-                            | <code><?php echo htmlspecialchars(substr((string) ($git['commit_hash'] ?? ''), 0, 7)); ?></code>
-                            <?php endif; ?>
-                        </small>
-                        <p class="mb-1"><?php echo htmlspecialchars($gitActionLabels[$git['git_action']] ?? 'Git Update'); ?> | <?php echo htmlspecialchars($gitStatusLabels[$git['status']] ?? ucfirst($git['status'])); ?></p>
-                        <?php if (!empty($git['project_name'])): ?>
-                        <p class="mb-1">Project: <?php echo htmlspecialchars($git['project_name']); ?></p>
-                        <?php endif; ?>
-                        <small><i class="far fa-clock"></i> <?php echo !empty($git['created_at']) ? date('M d, Y h:i A', strtotime((string) $git['created_at'])) : 'No date'; ?></small>
-                        <div class="mt-2">
-                            <a href="task.php?id=<?php echo $git['task_id']; ?>" class="btn-view">
-                                <i class="fas fa-eye"></i> View Task
-                            </a>
+                        </span>
+                        <div class="git-activity-item__content">
+                            <div class="git-activity-item__top">
+                                <h6 class="git-activity-item__title"><?php echo htmlspecialchars($git['task_title']); ?></h6>
+                                <span class="git-activity-item__state"><?php echo htmlspecialchars($gitActivityLabel); ?></span>
+                            </div>
+                            <div class="git-activity-item__detail">
+                                <span><i class="fas fa-code-branch"></i> <?php echo htmlspecialchars($git['branch_name']); ?></span>
+                                <?php if (!empty($git['commit_hash'])): ?>
+                                <code><?php echo htmlspecialchars(substr((string) ($git['commit_hash'] ?? ''), 0, 7)); ?></code>
+                                <?php endif; ?>
+                            </div>
+                            <div class="git-activity-item__meta">
+                                <?php if (!empty($git['project_name'])): ?>
+                                <span><i class="fas fa-folder"></i> <?php echo htmlspecialchars($git['project_name']); ?></span>
+                                <?php endif; ?>
+                                <span><i class="far fa-clock"></i> <?php echo !empty($git['created_at']) ? date('M d, Y h:i A', strtotime((string) $git['created_at'])) : 'No date'; ?></span>
+                            </div>
                         </div>
-                    </div>
+                        <a href="task.php?id=<?php echo $git['task_id']; ?>" class="git-activity-open" aria-label="Open <?php echo htmlspecialchars($git['task_title']); ?>">
+                            <i class="fas fa-eye"></i>
+                            <span>Open</span>
+                        </a>
+                    </article>
                     <?php endwhile; ?>
                     <?php if($recentGitActivity->num_rows == 0): ?>
                     <div class="empty-state">
@@ -1056,6 +1277,7 @@ include '../../includes/navbar.php';
                         <p>No Git activity logged yet</p>
                     </div>
                     <?php endif; ?>
+                    </div>
                 </div>
             </div>
         </div>

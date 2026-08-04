@@ -16,12 +16,20 @@ services:
         value: https://erni-pms.onrender.com
       - key: AUTO_INIT_DB
         value: "1"
+      - key: GIT_STORAGE_ROOT
+        value: /tmp/erni-pms/git
+      - key: GIT_PROJECT_ROOT
+        value: /tmp/erni-pms/git
+      - key: GIT_WORKSPACE_ROOT
+        value: /tmp/erni-pms/git-workspaces
       - key: DB_DRIVER
         value: pgsql
       - key: DATABASE_URL
         fromDatabase:
           name: erni-pms-db
           property: connectionString
+      - key: UPLOAD_STORAGE_ROOT
+        value: /tmp/erni-pms/uploads
       - key: MAIL_ENABLED
         value: "1"
       - key: MAIL_DELIVERY_METHOD
@@ -52,7 +60,6 @@ services:
         sync: false
       - key: GMAIL_USER
         sync: false
-
 databases:
   - name: erni-pms-db
     plan: free

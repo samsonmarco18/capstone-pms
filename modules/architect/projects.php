@@ -18,6 +18,7 @@ function architectProjectNextStep(array $project): array
     $techCount = (int) ($project['tech_count'] ?? 0);
     $allocationCount = (int) ($project['allocation_count'] ?? 0);
     $roadmapCount = (int) ($project['roadmap_count'] ?? 0);
+    $scheduledRoadmapFeatureCount = (int) ($project['scheduled_roadmap_feature_count'] ?? 0);
     $documentCount = (int) ($project['document_count'] ?? 0);
     $expertAssignmentCount = (int) ($project['expert_assignment_count'] ?? 0);
 
@@ -40,7 +41,7 @@ function architectProjectNextStep(array $project): array
     if ($allocationCount <= 0) {
         return ['url' => 'developer-allocation.php?id=' . $projectId, 'label' => 'Continue Developers', 'step' => 'Step 4 of 7'];
     }
-    if ($roadmapCount <= 0) {
+    if ($roadmapCount <= 0 || $scheduledRoadmapFeatureCount < $featureCount) {
         return ['url' => '../roadmap/methodology.php?project_id=' . $projectId, 'label' => 'Continue Roadmap', 'step' => 'Step 5 of 7'];
     }
     if ($documentCount <= 0) {
@@ -57,6 +58,15 @@ $projects = $conn->query("
            (SELECT COUNT(*) FROM tech_recommendations tr WHERE tr.project_id = p.id) AS tech_count,
            (SELECT COUNT(*) FROM developer_allocations da WHERE da.project_id = p.id) AS allocation_count,
            (SELECT COUNT(*) FROM methodology_phases mp WHERE mp.project_id = p.id) AS roadmap_count,
+           (
+               SELECT COUNT(DISTINCT mt.task_id)
+               FROM methodology_tasks mt
+               INNER JOIN tasks roadmap_task
+                   ON roadmap_task.id = mt.task_id
+                  AND roadmap_task.project_id = p.id
+                  AND roadmap_task.task_type = 'feature'
+               WHERE mt.project_id = p.id
+           ) AS scheduled_roadmap_feature_count,
            (SELECT COUNT(*) FROM architecture_documents ad WHERE ad.project_id = p.id) AS document_count,
            (SELECT COUNT(*) FROM tasks ta WHERE ta.project_id = p.id AND ta.task_type = 'feature' AND ta.assigned_to IS NOT NULL AND ta.assigned_to != 0) AS expert_assignment_count
     FROM projects p 
@@ -565,7 +575,7 @@ include '../../includes/navbar.php';
 /* Action Button */
 .btn-review {
     background: linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-dark) 100%);
-    color: white;
+    color: #fff !important;
     border: none;
     min-height: 36px;
     padding: 0.42rem 0.78rem;
@@ -579,10 +589,14 @@ include '../../includes/navbar.php';
     text-decoration: none;
 }
 
+.btn-review i {
+    color: inherit !important;
+}
+
 .btn-review:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(31, 99, 146, 0.3);
-    color: white;
+    color: #fff !important;
 }
 
 .btn-secondary-action {

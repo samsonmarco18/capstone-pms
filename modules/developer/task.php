@@ -2474,6 +2474,14 @@ include '../../includes/navbar.php';
     text-align: right;
 }
 
+.task-summary-section__body--artifacts .artifact-table-head span:last-child {
+    text-align: center;
+}
+
+.task-summary-section__body--artifacts .artifact-item__actions {
+    justify-content: center;
+}
+
 .artifact-history-panel {
     display: flex;
     flex-direction: column;
@@ -3062,6 +3070,60 @@ body.artifact-drawer-open {
     margin-bottom: 0.45rem;
 }
 
+.developer-upload-field {
+    align-items: stretch;
+    background:
+        linear-gradient(135deg, rgba(13, 103, 134, 0.055), rgba(255, 255, 255, 0.94)),
+        #fff;
+    border: 1px dashed rgba(31, 99, 146, 0.22);
+    border-radius: 12px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-height: 44px;
+    overflow: hidden;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.developer-upload-field:hover,
+.developer-upload-field:focus-within {
+    border-color: rgba(13, 103, 134, 0.46);
+    box-shadow: 0 0 0 3px rgba(13, 103, 134, 0.08);
+}
+
+.developer-upload-button {
+    align-items: center;
+    background: rgba(226, 244, 250, 0.92);
+    border-right: 1px solid rgba(31, 99, 146, 0.16);
+    color: #0d6786;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 0.82rem;
+    font-weight: 700;
+    gap: 0.45rem;
+    justify-content: center;
+    margin: 0;
+    min-height: 42px;
+    padding: 0 0.85rem;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    white-space: nowrap;
+}
+
+.developer-upload-button:hover {
+    background: #0d6786;
+    color: #fff;
+}
+
+.developer-upload-summary {
+    align-self: center;
+    color: #28445f;
+    font-size: 0.84rem;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 0.85rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 @media (max-width: 767.98px) {
     .task-facts-grid,
     .process-guide__grid {
@@ -3088,6 +3150,13 @@ body.artifact-drawer-open {
         max-width: none;
         text-align: left;
         margin-top: 0.25rem;
+    }
+}
+
+@media (max-width: 420px) {
+    .developer-upload-button,
+    .developer-upload-summary {
+        padding-inline: 0.7rem;
     }
 }
 
@@ -3284,6 +3353,32 @@ body.artifact-drawer-open {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-board-toolbar,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-project-context {
     border-color: rgba(31, 99, 146, .24);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-upload-field {
+    background: rgba(10, 27, 44, 0.72);
+    border-color: rgba(138, 210, 255, 0.18);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-upload-field:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-upload-field:focus-within {
+    border-color: rgba(125, 211, 252, 0.5);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-upload-button {
+    background: rgba(13, 103, 134, 0.28);
+    border-color: rgba(138, 210, 255, 0.16);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-upload-button:hover {
+    background: #0d6786;
+    color: #fff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .developer-upload-summary {
+    color: #d7e4f2;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .task-project-context__inner {
@@ -4510,6 +4605,24 @@ document.addEventListener('click', (event) => {
     }
 });
 
+document.addEventListener('change', (event) => {
+    const fileInput = event.target.closest?.('[data-developer-file-input]');
+    if (!fileInput) {
+        return;
+    }
+
+    const summary = fileInput
+        .closest('.developer-upload-field')
+        ?.querySelector('[data-developer-file-summary]');
+    if (!summary) {
+        return;
+    }
+
+    const fileName = fileInput.files?.[0]?.name || 'No file chosen';
+    summary.textContent = fileName;
+    summary.title = fileInput.files?.[0]?.name || '';
+});
+
 function updateKanbanColumnCount(columnBody) {
     if (!columnBody) {
         return;
@@ -5670,7 +5783,14 @@ function buildDepartmentPanel(task, options = {}) {
                     ${escapeHtml(departmentProfile.file_label || 'Design picture')}
                     <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="Upload a JPG, PNG, GIF, or WEBP design image for the team to inspect."></i>
                 </label>
-                <input id="departmentArtifactFile" class="form-control form-control-sm" type="file" accept="image/*">
+                <div class="developer-upload-field">
+                    <label class="developer-upload-button" for="departmentArtifactFile">
+                        <i class="fas fa-paperclip" aria-hidden="true"></i>
+                        <span>Choose File</span>
+                    </label>
+                    <span class="developer-upload-summary" data-developer-file-summary aria-live="polite">No file chosen</span>
+                    <input id="departmentArtifactFile" class="visually-hidden" type="file" accept="image/*" data-developer-file-input>
+                </div>
            </div>`
         : '';
     const panelLabel = isUiUx ? 'Client Requirements' : 'Project Inputs';
@@ -5727,12 +5847,22 @@ function buildDepartmentPanel(task, options = {}) {
                     ${isUiUx ? `
                         <div class="col-md-6">
                             <label class="form-label" for="departmentArtifactFile">${escapeHtml(departmentProfile.file_label || 'Design picture')}</label>
-                            <input id="departmentArtifactFile" class="form-control" type="file" accept="image/*">
+                            <div class="developer-upload-field">
+                                <label class="developer-upload-button" for="departmentArtifactFile">
+                                    <i class="fas fa-paperclip" aria-hidden="true"></i>
+                                    <span>Choose File</span>
+                                </label>
+                                <span class="developer-upload-summary" data-developer-file-summary aria-live="polite">No file chosen</span>
+                                <input id="departmentArtifactFile" class="visually-hidden" type="file" accept="image/*" data-developer-file-input>
+                            </div>
                         </div>
                     ` : ''}
                     <div class="${isUiUx ? 'col-md-6' : 'col-12'}">
-                        <label class="form-label" for="departmentArtifactUrl">${escapeHtml(departmentProfile.link_label || 'Reference link')}</label>
-                        <input id="departmentArtifactUrl" class="form-control" type="url" placeholder="https://...">
+                        <label class="form-label" for="departmentArtifactUrl">
+                            ${escapeHtml(departmentProfile.link_label || 'Reference link')}
+                            ${isUiUx ? '<span class="text-danger" aria-hidden="true">*</span>' : ''}
+                        </label>
+                        <input id="departmentArtifactUrl" class="form-control" type="url" placeholder="https://..." ${isUiUx ? 'required aria-required="true"' : ''}>
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="departmentArtifactNotes">${escapeHtml(departmentProfile.notes_label || 'Handoff notes')}</label>
@@ -5783,13 +5913,14 @@ function buildDepartmentPanel(task, options = {}) {
                         <div class="mb-2">
                             <label class="form-label">
                                 ${escapeHtml(departmentProfile.link_label || 'Reference link')}
+                                ${isUiUx ? '<span class="text-danger" aria-hidden="true">*</span>' : ''}
                                 <i class="fas fa-circle-info tooltip-helper ms-1" data-bs-toggle="tooltip" title="${isUiUx
                                     ? 'Paste a Figma, FigJam, wireframe, or prototype link.'
                                     : (isQa
                                         ? 'Paste a test case, screenshot, recording, or defect reference link.'
                                         : 'Paste the reference link this department needs to hand off.')}"></i>
                             </label>
-                            <input id="departmentArtifactUrl" class="form-control form-control-sm" placeholder="https://...">
+                            <input id="departmentArtifactUrl" class="form-control form-control-sm" type="url" placeholder="https://..." ${isUiUx ? 'required aria-required="true"' : ''}>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">${escapeHtml(departmentProfile.notes_label || 'Notes')}</label>
@@ -6057,9 +6188,20 @@ function buildDepartmentArtifactFormData(taskId) {
 }
 
 function saveDepartmentArtifact(taskId, options = {}) {
-    const formData = buildDepartmentArtifactFormData(taskId);
     const reloadTask = options.reloadTask !== false;
     const silent = Boolean(options.silent);
+    const wireframeInput = document.getElementById('departmentArtifactUrl');
+    const wireframeUrl = String(wireframeInput?.value || '').trim();
+    if ((departmentProfile.artifact_type || '') === 'design_handoff' && wireframeUrl === '') {
+        const error = 'Wireframe link is required for a design handoff.';
+        wireframeInput?.focus();
+        if (!silent) {
+            showTaskNotice('Design Handoff', error, 'error');
+        }
+        return $.Deferred().reject({ responseJSON: { error } }).promise();
+    }
+
+    const formData = buildDepartmentArtifactFormData(taskId);
 
     return $.ajax({
         url: '../../api/add-department-artifact.php',

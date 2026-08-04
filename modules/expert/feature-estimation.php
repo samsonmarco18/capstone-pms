@@ -503,6 +503,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
         header('Location: feature-estimation.php');
         exit();
     }
+    if (
+        trim((string) ($project['name'] ?? '')) === ''
+        || trim((string) ($project['client_name'] ?? '')) === ''
+        || trim((string) ($project['timeline_start'] ?? '')) === ''
+        || trim((string) ($project['timeline_end'] ?? '')) === ''
+        || (float) ($project['sales_budget'] ?? 0) <= 0
+    ) {
+        $_SESSION['error'] = 'Project overview, timeline, and client budget must be complete before the final submission to Sales.';
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
+        exit();
+    }
+
+    if (empty($technologies)) {
+        $_SESSION['error'] = 'The technology stack must be completed before the final submission to Sales.';
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
+        exit();
+    }
+    if (empty($allocations) || empty($postedAllocations)) {
+        $_SESSION['error'] = 'Developer allocation and cost details must be completed before the final submission to Sales.';
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
+        exit();
+    }
+    $featureCompletion = $conn->query("
+        SELECT COUNT(DISTINCT t.id) AS total_features,
+               COUNT(DISTINCT CASE
+                   WHEN fe.status = 'completed'
+                    AND TRIM(COALESCE(fe.expectation_description, '')) <> ''
+                    AND fe.min_days >= 1
+                    AND fe.likely_days >= fe.min_days
+                    AND fe.max_days >= fe.likely_days
+                   THEN t.id ELSE NULL END) AS completed_features
+        FROM tasks t
+        LEFT JOIN feature_estimations fe
+          ON fe.task_id = t.id AND fe.expert_id = " . (int) $user['id'] . "
+        WHERE t.project_id = {$projectId}
+          AND t.assigned_to = " . (int) $user['id'] . "
+          AND t.task_type = 'feature'
+          AND t.status IN ('todo', 'in_review')
+    ")->fetch_assoc() ?: [];
+    $requiredFeatureCount = (int) ($featureCompletion['total_features'] ?? 0);
+    $completedFeatureCount = (int) ($featureCompletion['completed_features'] ?? 0);
+    if ($requiredFeatureCount <= 0 || $completedFeatureCount !== $requiredFeatureCount) {
+        $_SESSION['error'] = 'Every assigned feature must have an expectation and valid Minimum, Likely, and Maximum estimates before the final submission to Sales.';
+        header('Location: feature-estimation.php?project_estimation_id=' . $projectId);
+        exit();
+    }
 
     $durationMonths = projectEstimationDurationMonths($conn, $project);
     $techMonthlyCost = array_sum(array_map(static fn(array $row): float => (float) ($row['estimated_cost'] ?? 0), $technologies));
@@ -514,19 +560,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_project_estimati
     $additionalCosts = max(0.0, (float) ($_POST['additional_costs'] ?? 0));
 
     if (projectEstimationSave($conn, $projectId, (int) $user['id'], $allocations, $durationMonths, $techMonthlyCost, $additionalCosts, $complexity, $postedAllocations)) {
+        $salesReset = $hasSalesApproval ? ', sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL' : '';
+        $conn->query("UPDATE tasks SET status = 'in_review'{$salesReset} WHERE project_id = {$projectId} AND assigned_to = " . (int) $user['id'] . " AND task_type = 'feature'");
         projectCompilationRecord($conn, $projectId, (int) $user['id'], 'estimates');
         workflowNotifyRoles(
             $conn,
-            ['sul'],
+            ['sales'],
             'Project Estimation Ready for Review',
-            'An Expert Developer submitted a project cost estimation for SUL review.',
-            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
+            'An Expert Developer submitted a project cost estimation for Sales review.',
+            BASE_URL . 'modules/sales/estimation-approval.php',
             $projectId,
             'approval',
             'projects'
         );
         logActivity((int) $user['id'], 'submit_project_estimation', 'projects', $projectId, null, $_POST);
-        $_SESSION['success'] = 'Project estimation submitted to Expert SUL for review.';
+        $_SESSION['success'] = 'Project estimation submitted to Sales for review.';
     } else {
         $_SESSION['error'] = 'Failed to submit project estimation.';
     }
@@ -589,6 +637,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
     try {
         if ($projectId <= 0 || empty($taskIds)) {
             throw new RuntimeException('No feature estimates were provided.');
+        }
+
+        $assignedTaskResult = $conn->query("
+            SELECT id
+            FROM tasks
+            WHERE project_id = {$projectId}
+              AND assigned_to = " . (int) $user['id'] . "
+              AND task_type = 'feature'
+              AND status = 'todo'
+        ");
+        $requiredTaskIds = [];
+        if ($assignedTaskResult) {
+            while ($assignedTask = $assignedTaskResult->fetch_assoc()) {
+                $requiredTaskIds[] = (int) $assignedTask['id'];
+            }
+        }
+        sort($requiredTaskIds);
+        $submittedTaskIds = $taskIds;
+        sort($submittedTaskIds);
+        if ($requiredTaskIds !== $submittedTaskIds) {
+            throw new RuntimeException('All assigned feature tasks must be completed and included in the final submission.');
         }
 
         $taskResult = $conn->query("
@@ -755,7 +824,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
 
             $salesColumns = $hasSalesApproval ? ', sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL' : '';
             $taskUpdate = $conn->prepare(
-                "UPDATE tasks SET status='in_review', started_at=?, deadline=?, estimated_days_min=?, estimated_days_likely=?, estimated_days_max=?{$salesColumns} WHERE id=?"
+                "UPDATE tasks SET status='todo', started_at=?, deadline=?, estimated_days_min=?, estimated_days_likely=?, estimated_days_max=?{$salesColumns} WHERE id=?"
             );
             $taskUpdate->bind_param('ssiiii', $plannedStart, $plannedEnd, $minDays, $likelyDays, $maxDays, $taskId);
             if (!$taskUpdate->execute()) {
@@ -767,17 +836,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_save_feature_est
         }
 
         $conn->commit();
-        workflowNotifyRoles(
-            $conn,
-            ['sul'],
-            'Feature Estimations Ready for SUL Approval',
-            $savedCount . ' feature estimates were saved and are ready for SUL review.',
-            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
-            $projectId,
-            'approval',
-            'projects'
-        );
-        $_SESSION['success'] = $savedCount . ' feature estimate' . ($savedCount === 1 ? '' : 's') . ' saved successfully.';
+        $_SESSION['success'] = $savedCount . ' feature estimate' . ($savedCount === 1 ? '' : 's') . ' saved. Complete the project cost summary for the final submission to Sales.';
     } catch (Throwable $e) {
         try {
             $conn->rollback();
@@ -1028,7 +1087,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
     if($stmt->execute()) {
         // Save draft estimations without sending to Sales yet
         $salesColumns = $hasSalesApproval ? ", sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL" : "";
-        $taskStmt = $conn->prepare("UPDATE tasks SET status = 'in_review', started_at = ?, deadline = ?, estimated_days_min = ?, estimated_days_likely = ?, estimated_days_max = ?{$salesColumns} WHERE id = ?");
+        $taskStmt = $conn->prepare("UPDATE tasks SET status = 'todo', started_at = ?, deadline = ?, estimated_days_min = ?, estimated_days_likely = ?, estimated_days_max = ?{$salesColumns} WHERE id = ?");
         $taskStmt->bind_param("ssiiii", $plannedStart, $plannedEnd, $minDays, $likelyDays, $maxDays, $taskId);
         $taskStmt->execute();
         
@@ -1134,67 +1193,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['task_id']) && !isset($
             }
         }
 
-        workflowNotifyRoles(
-            $conn,
-            ['sul'],
-            'Feature Estimation Ready for SUL Approval',
-            'An Expert Developer submitted a feature estimation for SUL approval.',
-            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . $projectId,
-            (int) $projectId,
-            'approval',
-            'projects'
-        );
-
-        $totalStmt = $conn->prepare("
-            SELECT COUNT(*) as total
-            FROM tasks
-            WHERE project_id = ? AND task_type = 'feature' AND assigned_to = ?
-        ");
-        $totalStmt->bind_param("ii", $projectId, $user['id']);
-        $totalStmt->execute();
-        $totalCount = (int) ($totalStmt->get_result()->fetch_assoc()['total'] ?? 0);
-        $totalStmt->close();
-
-        $doneStmt = $conn->prepare("
-            SELECT COUNT(*) as done
-            FROM feature_estimations fe
-            JOIN tasks t ON fe.task_id = t.id
-            WHERE t.project_id = ? AND t.task_type = 'feature' AND t.assigned_to = ?
-              AND fe.expert_id = ? AND fe.status = 'completed'
-        ");
-        $doneStmt->bind_param("iii", $projectId, $user['id'], $user['id']);
-        $doneStmt->execute();
-        $doneCount = (int) ($doneStmt->get_result()->fetch_assoc()['done'] ?? 0);
-        $doneStmt->close();
-
-        if ($totalCount > 0 && $doneCount === $totalCount) {
-            $salesColumns = $hasSalesApproval ? ", sales_approved = 0, sales_approved_by = NULL, sales_approved_at = NULL" : "";
-            $submitStmt = $conn->prepare("
-                UPDATE tasks
-                SET status = 'in_review'{$salesColumns}
-                WHERE project_id = ? AND task_type = 'feature' AND assigned_to = ? AND status = 'todo'
-            ");
-            $submitStmt->bind_param("ii", $projectId, $user['id']);
-            $submitStmt->execute();
-            $submittedRows = (int) $submitStmt->affected_rows;
-            $submitStmt->close();
-
-            if ($submittedRows > 0) {
-                workflowNotifyRoles(
-                    $conn,
-                    ['sales'],
-                    'Estimations Ready for Approval',
-                    'Feature estimations are ready for sales approval.',
-                    BASE_URL . 'modules/sales/estimation-approval.php',
-                    (int) $projectId,
-                    'approval',
-                    'projects'
-                );
-            }
-        }
-
         logActivity($user['id'], 'submit_estimation', 'tasks', $taskId, null, $_POST);
-        $_SESSION['feature_estimation_submitted'] = 'Estimation sent to the Expert SUL for approval.';
+        $_SESSION['feature_estimation_submitted'] = 'Feature estimation saved. Use the Project Cost Summary for the final submission to Sales.';
     } else {
         $_SESSION['error'] = "Failed to save estimation: " . $conn->error;
     }
@@ -2306,7 +2306,7 @@ include '../../includes/navbar.php';
 .feature-bulk-table {
     border-collapse: separate;
     border-spacing: 0;
-    min-width: 900px;
+    min-width: 1040px;
     table-layout: fixed;
     width: 100%;
 }
@@ -2330,13 +2330,13 @@ include '../../includes/navbar.php';
     z-index: 1;
 }
 
-.feature-bulk-table th:nth-child(1) { width: 19%; }
-.feature-bulk-table th:nth-child(2) { width: 26%; }
+.feature-bulk-table th:nth-child(1) { width: 20%; }
+.feature-bulk-table th:nth-child(2) { width: 29%; }
 .feature-bulk-table th:nth-child(3),
 .feature-bulk-table th:nth-child(4),
-.feature-bulk-table th:nth-child(5) { width: 7%; }
-.feature-bulk-table th:nth-child(6) { width: 22%; }
-.feature-bulk-table th:nth-child(7) { width: 12%; }
+.feature-bulk-table th:nth-child(5) { width: 9%; }
+.feature-bulk-table th:nth-child(6) { width: 18%; }
+.feature-bulk-table th:nth-child(7) { width: 9%; }
 
 .feature-bulk-table tbody tr:last-child td {
     border-bottom: 0;
@@ -2404,7 +2404,10 @@ include '../../includes/navbar.php';
 .feature-bulk-table th:nth-child(6),
 .feature-bulk-table th:nth-child(7),
 .feature-bulk-table td:nth-child(6),
-.feature-bulk-table td:nth-child(7) {
+.feature-bulk-table td:nth-child(7),
+.feature-bulk-table td:nth-child(3),
+.feature-bulk-table td:nth-child(4),
+.feature-bulk-table td:nth-child(5) {
     text-align: center;
 }
 
@@ -3104,6 +3107,7 @@ textarea.form-control-custom {
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table th {
     background: #12263a;
+    color: #b9cee1;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table tbody tr.is-incomplete td {
@@ -3123,7 +3127,13 @@ textarea.form-control-custom {
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-name {
-    color: #d7e4f2;
+    color: #f1f7fc;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-phase,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-schedule,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-pert {
+    color: #b5cbe0;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-bulk-table textarea,
@@ -3668,10 +3678,8 @@ textarea.form-control-custom {
                     <?php endif; ?>
                      
                     <?php if (!$isReadonly): ?>
-                        <div class="estimate-action-row">
-                            <button type="submit" class="btn-submit">
-                                <i class="fas fa-save"></i> Save Estimation
-                            </button>
+                        <div class="text-muted small">
+                            Complete this feature in the project estimation table, then save all feature estimates before the final Sales submission.
                         </div>
                     <?php else: ?>
                         <div class="text-muted small">This feature has been submitted to Sales.</div>
@@ -3873,7 +3881,7 @@ function mountFeatureEstimationEditors() {
             </button>
             <button type="submit" class="feature-bulk-save-button">
                 <i class="fas fa-floppy-disk" aria-hidden="true"></i>
-                <span>Save feature estimates</span>
+                <span>Save Feature Estimates</span>
             </button>
         </div>
     `;
@@ -3980,12 +3988,12 @@ function mountFeatureEstimationEditors() {
             const confirmModal = document.getElementById('appConfirmModal');
             confirmModal?.classList.add('feature-estimate-confirm-modal');
             const confirmation = window.appConfirm({
-                title: 'Confirm Feature Estimates',
+                title: 'Save Feature Estimates',
                 titleIcon: 'fas fa-list-check',
-                subject: `Review ${rows.length} feature estimates before saving.`,
-                message: 'Confirm the values below to save the complete feature estimation table.',
+                subject: `Save all ${rows.length} completed feature estimates?`,
+                message: 'These estimates will be validated and saved. Use the Project Cost Summary for the final submission to Sales.',
                 icon: 'fas fa-table-list',
-                confirmIcon: 'fas fa-floppy-disk',
+                confirmIcon: 'fas fa-paper-plane',
                 confirmText: 'Save Estimates',
                 cancelText: 'Continue Editing'
             });
@@ -4591,6 +4599,7 @@ function closeEvortixFeatureSpeech() {
     speech.hidden = true;
     speech.setAttribute('aria-hidden', 'true');
     speech.style.pointerEvents = 'none';
+    window.chatBotFloatRobot?.setEmotion?.('', 0);
 }
 
 function showEvortixFeatureDecision() {
@@ -4684,8 +4693,9 @@ function showEvortixFeatureDecision() {
     bot.setAttribute('aria-hidden', 'false');
     bot.classList.remove('is-returning-bed', 'is-preparing-speech');
     bot.classList.add('is-speaking');
-    window.chatBotFloatRobot?.wake?.();
-    window.chatBotFloatRobot?.setEmotion?.('thinking', 0);
+    window.chatBotWidgetRobot?.setMode?.('empty-bed');
+    window.chatBotFloatRobot?.setMode?.('standing');
+    window.chatBotFloatRobot?.point?.('left', 0);
 }
 
 function startEvortixFeatureReview(projectId, replay = false) {
@@ -5489,6 +5499,18 @@ body.expert-feature-estimation-page .chat-bot-speech.evortix-architect-dss::afte
     top: auto;
     bottom: 48px;
     transform: rotate(45deg);
+}
+
+html:not([data-theme="dark"]) body.expert-feature-estimation-page:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss .evortix-dss-heading {
+    color: #083a5d !important;
+    opacity: 1 !important;
+}
+
+html:not([data-theme="dark"]) body.expert-feature-estimation-page:not([data-theme="dark"]):not(.dark-mode)
+    .chat-bot-speech.evortix-architect-dss .evortix-feature-message-intro {
+    color: #175f8f !important;
+    opacity: 1 !important;
 }
 
 body.expert-feature-estimation-page .evortix-feature-message-title {

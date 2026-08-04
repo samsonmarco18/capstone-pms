@@ -231,9 +231,7 @@ function initGenericFormDrafts() {
 
         const formId = form.id || form.getAttribute('name') || `form-${formIndex}`;
         const draftKey = `erniPms.formDraft.${location.pathname}.${formId}`;
-        const $submit = $form.find('button[type="submit"], input[type="submit"]').last();
-        const $draftButton = $('<button type="button" class="btn btn-outline-primary btn-sm ms-2" data-generic-save-draft><i class="fas fa-save me-1"></i> Save Draft</button>');
-        const $draftStatus = $('<span class="text-muted small ms-2" data-generic-draft-status></span>');
+        let saveTimer = null;
 
         function readFormData() {
             const data = {};
@@ -243,28 +241,27 @@ function initGenericFormDrafts() {
                 if (!name || field.type === 'file' || field.type === 'password' || field.type === 'hidden') {
                     return;
                 }
-                if (field.type === 'checkbox' || field.type === 'radio') {
-                    data[name] = field.checked ? field.value : '';
-                    return;
-                }
-                data[name] = $(field).val();
+                if (!data[name]) data[name] = [];
+                data[name].push({
+                    value: $(field).val(),
+                    checked: field.type === 'checkbox' || field.type === 'radio' ? field.checked : null
+                });
             });
             return data;
         }
 
-        function hasDraftData(data) {
-            return Object.values(data).some((value) => String(value || '').trim() !== '');
-        }
-
         function saveDraft() {
             const data = readFormData();
-            if (!hasDraftData(data)) {
-                localStorage.removeItem(draftKey);
-                $draftStatus.text('Draft cleared');
-                return;
+            try {
+                localStorage.setItem(draftKey, JSON.stringify({ savedAt: new Date().toISOString(), data }));
+            } catch (error) {
+                // Forms must remain usable when browser storage is unavailable.
             }
-            localStorage.setItem(draftKey, JSON.stringify({ savedAt: new Date().toISOString(), data }));
-            $draftStatus.text('Draft saved');
+        }
+
+        function queueSave() {
+            window.clearTimeout(saveTimer);
+            saveTimer = window.setTimeout(saveDraft, 250);
         }
 
         function loadDraft() {
@@ -274,33 +271,33 @@ function initGenericFormDrafts() {
             }
             try {
                 const payload = JSON.parse(raw);
-                Object.entries(payload.data || {}).forEach(([name, value]) => {
+                Object.entries(payload.data || {}).forEach(([name, savedFields]) => {
                     const fields = form.elements[name];
                     if (!fields) return;
                     const list = fields instanceof RadioNodeList ? Array.from(fields) : [fields];
-                    list.forEach((field) => {
+                    const values = Array.isArray(savedFields) ? savedFields : [{ value: savedFields, checked: null }];
+                    list.forEach((field, index) => {
+                        const saved = values[index] || values.find((item) => String(item.value) === String(field.value));
+                        if (!saved) return;
                         if (field.type === 'checkbox' || field.type === 'radio') {
-                            field.checked = String(field.value) === String(value);
+                            field.checked = saved.checked === null
+                                ? String(field.value) === String(saved.value)
+                                : Boolean(saved.checked);
                         } else {
-                            field.value = value;
+                            $(field).val(saved.value);
                         }
                     });
                 });
-                $draftStatus.text('Draft restored');
             } catch (error) {
                 localStorage.removeItem(draftKey);
             }
         }
 
-        if ($submit.length) {
-            $submit.after($draftStatus).after($draftButton);
-        } else {
-            $form.append($('<div class="mt-3"></div>').append($draftButton, $draftStatus));
-        }
-
-        $draftButton.on('click', saveDraft);
+        $form.on('input.genericDraft change.genericDraft', 'input, textarea, select', queueSave);
+        window.addEventListener('pagehide', saveDraft);
         $form.on('submit', function () {
             if (form.dataset.confirmedSubmit === '1' || form.id === 'addClientForm') {
+                window.clearTimeout(saveTimer);
                 localStorage.removeItem(draftKey);
             }
         });
@@ -459,28 +456,20 @@ function setStoredSidebarValue(key, value) {
 function initDarkMode() {
     const root = $('html');
     const body = $('body');
-    const serverPreference = String(window.APP_USER_PREFERENCES?.theme || 'system');
+    const serverPreference = String(window.APP_USER_PREFERENCES?.theme || 'default');
     const visualTheme = ['tropical', 'futuristic'].includes(serverPreference) ? serverPreference : '';
-    let colorMode = '';
+    let defaultColorMode = 'light';
 
     try {
-        const localTheme = localStorage.getItem('theme');
-        if (localTheme === 'light' || localTheme === 'dark') {
-            colorMode = localTheme;
-        } else if (localTheme === 'tropical' || localTheme === 'futuristic') {
-            colorMode = localTheme === 'futuristic' ? 'dark' : 'light';
-            localStorage.setItem('theme', colorMode);
+        if (serverPreference === 'default') {
+            defaultColorMode = localStorage.getItem('theme') === 'dark' ? 'dark' : 'light';
+        } else {
+            localStorage.removeItem('theme');
         }
     } catch (error) {
-        // Use the saved server preference when browser storage is unavailable.
+        // Theme selection still works when browser storage is unavailable.
     }
 
-    const resolveTheme = preference => {
-        if (preference === 'system') {
-            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        return ['dark', 'futuristic'].includes(preference) ? 'dark' : 'light';
-    };
     const applyTheme = theme => {
         root.attr('data-theme', theme);
         body.attr('data-theme', theme);
@@ -491,40 +480,26 @@ function initDarkMode() {
             root.removeAttr('data-app-theme');
             body.removeAttr('data-app-theme');
         }
-        updateThemeIcon(theme);
+        const icon = $('#darkModeToggle i');
+        icon.removeClass('fa-moon fa-sun').addClass(theme === 'dark' ? 'fa-sun' : 'fa-moon');
     };
 
-    applyTheme(colorMode || resolveTheme(serverPreference));
+    applyTheme(serverPreference === 'futuristic'
+        ? 'dark'
+        : (serverPreference === 'default' ? defaultColorMode : 'light'));
 
-    $('#darkModeToggle').on('click', function (event) {
-        event.preventDefault();
-        const nextTheme = (root.attr('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
-        applyTheme(nextTheme);
-        try {
-            localStorage.setItem('theme', nextTheme);
-        } catch (error) {
-            // The toggle still works for the current page.
-        }
-    });
-
-    if (serverPreference === 'system') {
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', event => {
-            let hasLocalOverride = false;
+    if (serverPreference === 'default') {
+        $('#darkModeToggle').on('click', function (event) {
+            event.preventDefault();
+            const nextTheme = (root.attr('data-theme') || 'light') === 'dark' ? 'light' : 'dark';
+            applyTheme(nextTheme);
             try {
-                hasLocalOverride = ['light', 'dark'].includes(localStorage.getItem('theme'));
+                localStorage.setItem('theme', nextTheme);
             } catch (error) {
-                hasLocalOverride = false;
-            }
-            if (!hasLocalOverride) {
-                applyTheme(event.matches ? 'dark' : 'light');
+                // The mode still changes for the current page.
             }
         });
     }
-}
-
-function updateThemeIcon(theme) {
-    const icon = $('#darkModeToggle i');
-    icon.removeClass('fa-moon fa-sun').addClass(theme === 'dark' ? 'fa-sun' : 'fa-moon');
 }
 
 function initNotifications() {

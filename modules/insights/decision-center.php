@@ -705,12 +705,16 @@ body,
 
 .toolbar-button.primary {
     background: linear-gradient(135deg, var(--insight-primary) 0%, var(--insight-dark) 100%);
-    color: #fff;
+    color: #fff !important;
     border-color: transparent;
 }
 
+.toolbar-button.primary :is(i, span) {
+    color: inherit !important;
+}
+
 .toolbar-button.primary:hover {
-    color: #fff;
+    color: #fff !important;
 }
 
 .filter-card .card-body {
@@ -1664,6 +1668,16 @@ body,
     color: #fff;
     transform: translateY(-1px);
     box-shadow: 0 10px 22px rgba(31, 99, 146, 0.24);
+}
+
+/* Keep primary insight actions readable in the default light theme. Global
+   link/icon color rules load later and otherwise override the button label. */
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode) .insight-link,
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode) .insight-link:hover,
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode) .insight-link:focus,
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode) .insight-link:visited,
+html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode) .insight-link i {
+    color: #ffffff !important;
 }
 
 .delta-pill {

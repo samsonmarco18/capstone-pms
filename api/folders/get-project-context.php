@@ -1,18 +1,10 @@
 <?php
-header('Content-Type: application/json');
-
-require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/folder-api.php';
 require_once __DIR__ . '/../../includes/project-folder-context.php';
+folderApiInitialize();
 
-if (!isLoggedIn()) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized']);
-    exit();
-}
-
+$user = folderApiRequireUser();
 $conn = getConnection();
-$user = getCurrentUser();
 $projectId = isset($_GET['project_id']) ? (int) $_GET['project_id'] : 0;
 $folderId = isset($_GET['folder_id']) ? (int) $_GET['folder_id'] : 0;
 
@@ -38,15 +30,12 @@ try {
         $projectContext = fetchProjectContext($conn, $projectId, $user);
     }
 
-    echo json_encode([
+    folderApiRespond([
+        'success' => true,
         'project_context' => $projectContext,
         'project_details' => $projectContext,
         'project_id' => $projectId > 0 ? $projectId : null,
     ]);
 } catch (Throwable $e) {
-    error_log('Folder project context API failed: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode([
-        'error' => 'Unable to load project details right now.',
-    ]);
+    folderApiError($e, 'Folder project context API failed', 'Unable to load project details right now.');
 }

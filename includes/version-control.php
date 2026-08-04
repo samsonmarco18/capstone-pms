@@ -60,18 +60,46 @@ function vcGetAccessibleProjects(mysqli|PgsqlMysqliCompatConnection $conn, array
     }
 
     if ($role === 'developer') {
+        $departmentAssignmentJoin = '';
+        $departmentAssignmentCondition = '';
+        $hasDepartmentAssignmentAccess = false;
+
+        if (
+            dbTableExists($conn, 'methodology_task_departments')
+            && dbColumnExists($conn, 'methodology_task_departments', 'assigned_developer_id')
+        ) {
+            $departmentAssignmentJoin = "
+             LEFT JOIN methodology_task_departments mtd
+                ON mtd.project_id = p.id AND mtd.assigned_developer_id = ?";
+            $departmentAssignmentCondition = "
+                OR mtd.id IS NOT NULL";
+            $hasDepartmentAssignmentAccess = true;
+        }
+
         $stmt = $conn->prepare(
             "SELECT DISTINCT p.id, p.name, p.status, c.name AS client_name
              FROM projects p
              INNER JOIN clients c ON c.id = p.client_id
              LEFT JOIN tasks t ON t.project_id = p.id AND t.assigned_to = ?
+             LEFT JOIN methodology_tasks mt
+                ON mt.project_id = p.id AND mt.assigned_developer_id = ?
              LEFT JOIN developer_allocations da ON da.project_id = p.id
              LEFT JOIN developer_allocation_assignments daa
-                ON daa.allocation_id = da.id AND daa.developer_id = ?
-             WHERE t.id IS NOT NULL OR daa.id IS NOT NULL
+                ON daa.allocation_id = da.id AND daa.developer_id = ?"
+             . $departmentAssignmentJoin .
+            "
+             WHERE t.id IS NOT NULL
+                OR mt.id IS NOT NULL
+                OR daa.id IS NOT NULL"
+             . $departmentAssignmentCondition .
+            "
              ORDER BY p.name"
         );
-        $stmt->bind_param('ii', $userId, $userId);
+        if ($hasDepartmentAssignmentAccess) {
+            $stmt->bind_param('iiii', $userId, $userId, $userId, $userId);
+        } else {
+            $stmt->bind_param('iii', $userId, $userId, $userId);
+        }
         $stmt->execute();
         $projects = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $stmt->close();
@@ -151,7 +179,14 @@ function vcGetGitBinary(): string
 
 function vcGetRepositoryStorageRoot(): string
 {
-    return APP_ROOT_PATH . DIRECTORY_SEPARATOR . 'git';
+    $configuredRoot = trim((string) (getenv('GIT_STORAGE_ROOT') ?: ''));
+    if ($configuredRoot === '' && (bool) getenv('RENDER')) {
+        $configuredRoot = sys_get_temp_dir() . '/erni-pms/git';
+    }
+
+    return $configuredRoot !== ''
+        ? rtrim($configuredRoot, '/\\')
+        : APP_ROOT_PATH . DIRECTORY_SEPARATOR . 'git';
 }
 
 function vcGetRepositoryBarePath(string $slug): string
@@ -161,7 +196,14 @@ function vcGetRepositoryBarePath(string $slug): string
 
 function vcGetRepositoryWorkspaceRoot(): string
 {
-    return APP_ROOT_PATH . DIRECTORY_SEPARATOR . 'git-workspaces';
+    $configuredRoot = trim((string) (getenv('GIT_WORKSPACE_ROOT') ?: ''));
+    if ($configuredRoot === '' && (bool) getenv('RENDER')) {
+        $configuredRoot = sys_get_temp_dir() . '/erni-pms/git-workspaces';
+    }
+
+    return $configuredRoot !== ''
+        ? rtrim($configuredRoot, '/\\')
+        : APP_ROOT_PATH . DIRECTORY_SEPARATOR . 'git-workspaces';
 }
 
 function vcGetRepositoryWorkspacePath(string $slug): string
@@ -200,7 +242,12 @@ function vcIsRenderEnvironment(): bool
     return (bool) getenv('RENDER');
 }
 
-function vcResolvePreferredWritableRemoteUrl(string $slug, ?string $externalRemoteUrl = null, bool $portableClient = false): ?string
+function vcResolvePreferredWritableRemoteUrl(
+    string $slug,
+    ?string $externalRemoteUrl = null,
+    bool $portableClient = false,
+    ?string $webhookToken = null
+): ?string
 {
     $externalRemoteUrl = vcNormalizeExternalRemoteUrl($externalRemoteUrl);
     if ($externalRemoteUrl !== null) {
@@ -209,9 +256,7 @@ function vcResolvePreferredWritableRemoteUrl(string $slug, ?string $externalRemo
 
     if ($portableClient) {
         if (vcIsRenderEnvironment()) {
-            // Downloaded repositories still need a readable origin on Render,
-            // even when pushes require configuring an external remote.
-            return vcGenerateRepositoryHttpCloneUrl($slug);
+            return vcGenerateRepositoryAuthenticatedHttpCloneUrl($slug, (string) $webhookToken);
         }
 
         return vcGenerateRepositoryFileCloneUrl($slug);
@@ -348,7 +393,7 @@ function vcResolveManagedRepositoryCreateUrl(string $slug): string
     return vcResolveManagedRepositoryDisplayUrl($slug);
 }
 
-function vcGenerateRepositoryAuthenticatedHttpCloneUrl(string $slug, string $webhookToken): string
+function vcGenerateRepositoryAuthenticatedHttpCloneUrl(string $slug, string $webhookToken, ?string $pushUsername = null): string
 {
     $webhookToken = trim($webhookToken);
     if ($webhookToken === '') {
@@ -364,13 +409,17 @@ function vcGenerateRepositoryAuthenticatedHttpCloneUrl(string $slug, string $web
     $host = (string) $parts['host'];
     $port = isset($parts['port']) ? ':' . (int) $parts['port'] : '';
     $path = (string) ($parts['path'] ?? '');
-    $username = rawurlencode(vcGetManagedRepositoryPushUsername());
+    $resolvedUsername = trim((string) $pushUsername);
+    if ($resolvedUsername === '') {
+        $resolvedUsername = vcGetManagedRepositoryPushUsername();
+    }
+    $username = rawurlencode($resolvedUsername);
     $password = rawurlencode($webhookToken);
 
     return $scheme . '://' . $username . ':' . $password . '@' . $host . $port . $path;
 }
 
-function vcResolveRepositoryDisplayRemote(?string $externalRemoteUrl, string $slug, ?string $webhookToken = null): string
+function vcResolveRepositoryDisplayRemote(?string $externalRemoteUrl, string $slug, ?string $webhookToken = null, ?string $pushUsername = null): string
 {
     $externalRemoteUrl = vcNormalizeExternalRemoteUrl($externalRemoteUrl);
     if ($externalRemoteUrl !== null) {
@@ -378,7 +427,7 @@ function vcResolveRepositoryDisplayRemote(?string $externalRemoteUrl, string $sl
     }
 
     if (vcIsRenderEnvironment()) {
-        return vcGenerateRepositoryAuthenticatedHttpCloneUrl($slug, (string) $webhookToken);
+        return vcGenerateRepositoryAuthenticatedHttpCloneUrl($slug, (string) $webhookToken, $pushUsername);
     }
 
     return vcResolveManagedRepositoryDisplayUrl($slug);
@@ -509,15 +558,165 @@ function vcTryGitCommand(array $arguments, ?string $workingDirectory = null): bo
     }
 }
 
+function vcEnsureRepositorySnapshotSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
+{
+    static $initialized = false;
+    if ($initialized) {
+        return;
+    }
+
+    $id = DB_DRIVER === 'pgsql'
+        ? 'INTEGER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY'
+        : 'INT PRIMARY KEY AUTO_INCREMENT';
+    $bundleType = DB_DRIVER === 'pgsql' ? 'TEXT' : 'LONGTEXT';
+    $sql = "
+        CREATE TABLE IF NOT EXISTS repository_git_snapshots (
+            id {$id},
+            repository_id INT NOT NULL UNIQUE,
+            bundle_base64 {$bundleType} NOT NULL,
+            bundle_size INT NOT NULL DEFAULT 0,
+            head_hash VARCHAR(64) NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (repository_id) REFERENCES project_repositories(id) ON DELETE CASCADE
+        )
+    ";
+    if ($conn->query($sql) === false) {
+        throw new RuntimeException('Failed to prepare durable Git snapshot storage.');
+    }
+    $initialized = true;
+}
+
+function vcSaveRepositorySnapshot(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    int $repositoryId,
+    string $repositorySlug
+): void {
+    $barePath = vcGetRepositoryBarePath($repositorySlug);
+    if ($repositoryId <= 0 || !is_dir($barePath)) {
+        return;
+    }
+
+    vcEnsureRepositorySnapshotSchema($conn);
+    $bundlePath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'erni-pms-' . bin2hex(random_bytes(8)) . '.bundle';
+    try {
+        vcRunGitCommand(['--git-dir=' . $barePath, 'bundle', 'create', $bundlePath, '--all'], APP_ROOT_PATH);
+        $bundle = file_get_contents($bundlePath);
+        if ($bundle === false) {
+            throw new RuntimeException('Failed to read the Git snapshot bundle.');
+        }
+        $encoded = base64_encode($bundle);
+        $size = strlen($bundle);
+        $headResult = vcRunProcess([vcGetGitBinary(), '--git-dir=' . $barePath, 'rev-parse', 'HEAD'], APP_ROOT_PATH);
+        $headHash = (int) ($headResult['exit_code'] ?? 1) === 0
+            ? trim((string) ($headResult['stdout'] ?? ''))
+            : null;
+
+        $delete = $conn->prepare('DELETE FROM repository_git_snapshots WHERE repository_id = ?');
+        $delete->bind_param('i', $repositoryId);
+        $delete->execute();
+        $delete->close();
+
+        $insert = $conn->prepare(
+            'INSERT INTO repository_git_snapshots (repository_id, bundle_base64, bundle_size, head_hash, updated_at)
+             VALUES (?, ?, ?, ?, NOW())'
+        );
+        $insert->bind_param('isis', $repositoryId, $encoded, $size, $headHash);
+        $insert->execute();
+        $insert->close();
+    } finally {
+        @unlink($bundlePath);
+    }
+}
+
+function vcRestoreRepositorySnapshot(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    array $repository
+): bool {
+    $repositoryId = (int) ($repository['id'] ?? 0);
+    $slug = vcGenerateSlug((string) ($repository['slug'] ?? ''));
+    $barePath = vcGetRepositoryBarePath($slug);
+    if (is_dir($barePath)) {
+        return true;
+    }
+
+    vcEnsureRepositorySnapshotSchema($conn);
+    $stmt = $conn->prepare(
+        'SELECT bundle_base64 FROM repository_git_snapshots WHERE repository_id = ? LIMIT 1'
+    );
+    $stmt->bind_param('i', $repositoryId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$row) {
+        /*
+         * The repository metadata may have survived in PostgreSQL while an
+         * older Render deployment kept the Git objects only on an ephemeral
+         * disk. Initialize an empty managed remote so a developer's intact
+         * local clone can recover it with `git push --all` and `git push
+         * --tags`. The post-receive hook will persist the recovered objects as
+         * a database-backed bundle after that first push.
+         */
+        vcEnsureDirectory(vcGetRepositoryStorageRoot());
+        $defaultBranch = trim((string) ($repository['default_branch_name'] ?? 'main'));
+        if ($defaultBranch === '') {
+            $defaultBranch = 'main';
+        }
+        try {
+            vcRunGitCommand(['init', '--bare', '--initial-branch=' . $defaultBranch, $barePath], APP_ROOT_PATH);
+            $token = (string) ($repository['webhook_token'] ?? '');
+            vcInstallServerRepositoryHooks(
+                $barePath,
+                rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode($token)
+            );
+            vcRunGitCommand(['--git-dir=' . $barePath, 'config', 'http.receivepack', 'true'], APP_ROOT_PATH);
+            vcRunGitCommand(['--git-dir=' . $barePath, 'update-server-info'], APP_ROOT_PATH);
+            return true;
+        } catch (Throwable $e) {
+            vcDeleteDirectoryRecursive($barePath);
+            throw $e;
+        }
+    }
+
+    $bundle = base64_decode((string) $row['bundle_base64'], true);
+    if ($bundle === false) {
+        throw new RuntimeException('The stored Git snapshot is invalid.');
+    }
+
+    vcEnsureDirectory(vcGetRepositoryStorageRoot());
+    $bundlePath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'erni-pms-restore-' . bin2hex(random_bytes(8)) . '.bundle';
+    try {
+        if (file_put_contents($bundlePath, $bundle) === false) {
+            throw new RuntimeException('Failed to stage the Git snapshot for restore.');
+        }
+        vcRunGitCommand(['clone', '--bare', $bundlePath, $barePath], APP_ROOT_PATH);
+        $token = (string) ($repository['webhook_token'] ?? '');
+        vcInstallServerRepositoryHooks(
+            $barePath,
+            rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode($token)
+        );
+        vcRunGitCommand(['--git-dir=' . $barePath, 'update-server-info'], APP_ROOT_PATH);
+        return true;
+    } catch (Throwable $e) {
+        vcDeleteDirectoryRecursive($barePath);
+        throw $e;
+    } finally {
+        @unlink($bundlePath);
+    }
+}
+
 function vcMergeManagedBranches(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    array $repository,
     string $repositorySlug,
     string $sourceBranch,
     string $targetBranch,
     string $mergeTitle
 ): array {
     $bareRepositoryPath = vcGetRepositoryBarePath($repositorySlug);
-    if (!is_dir($bareRepositoryPath)) {
-        throw new RuntimeException('The managed Git repository is unavailable on this server.');
+    if (!is_dir($bareRepositoryPath) && !vcRestoreRepositorySnapshot($conn, $repository)) {
+        throw new RuntimeException(
+            'The Git repository has no durable snapshot and cannot be merged safely. Push or recreate the repository first.'
+        );
     }
 
     $workingPath = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'erni-pms-merge-' . bin2hex(random_bytes(6));
@@ -557,6 +756,7 @@ function vcMergeManagedBranches(
         $mergeHash = trim((string) vcRunGitCommand(['rev-parse', 'HEAD'], $workingPath)['stdout']);
         vcRunGitCommand(['push', 'origin', 'HEAD:refs/heads/' . $targetBranch], $workingPath);
         vcRunGitCommand(['--git-dir=' . $bareRepositoryPath, 'update-server-info'], APP_ROOT_PATH);
+        vcSaveRepositorySnapshot($conn, (int) ($repository['id'] ?? 0), $repositorySlug);
 
         $nameStatus = vcRunGitCommand(['show', '--pretty=', '--name-status', $mergeHash], $workingPath);
         $numstat = vcRunGitCommand(['show', '--pretty=', '--numstat', $mergeHash], $workingPath);
@@ -642,7 +842,8 @@ function vcInstallServerRepositoryHooks(string $bareRepositoryPath, string $sync
         "  REMOTE_URL=\"" . vcGenerateRepositoryHttpCloneUrl(basename($bareRepositoryPath, '.git')) . "\"\n" .
         "  FILE_CHANGES_B64=\$(git show --pretty=\"\" --name-status \"\$NEW_REV\" | base64 | tr -d '\\n')\n" .
         "  FILE_STATS_B64=\$(git show --pretty=\"\" --numstat \"\$NEW_REV\" | base64 | tr -d '\\n')\n" .
-        "  PAYLOAD=\$(printf '{\"event_type\":\"push\",\"branch_name\":\"%s\",\"commit_hash\":\"%s\",\"commit_title\":\"%s\",\"commit_message\":\"%s\",\"author_name\":\"%s\",\"author_email\":\"%s\",\"remote_url\":\"%s\",\"platform\":\"server-git\",\"file_changes_b64\":\"%s\",\"file_stats_b64\":\"%s\"}' \"\$(json_escape \"\$BRANCH\")\" \"\$(json_escape \"\$NEW_REV\")\" \"\$(json_escape \"\$TITLE\")\" \"\$(json_escape \"\$BODY\")\" \"\$(json_escape \"\$AUTHOR_NAME\")\" \"\$(json_escape \"\$AUTHOR_EMAIL\")\" \"\$(json_escape \"\$REMOTE_URL\")\" \"\$(json_escape \"\$FILE_CHANGES_B64\")\" \"\$(json_escape \"\$FILE_STATS_B64\")\")\n" .
+        "  PUSH_USERNAME=\${REMOTE_USER:-}\n" .
+        "  PAYLOAD=\$(printf '{\"event_type\":\"push\",\"branch_name\":\"%s\",\"commit_hash\":\"%s\",\"commit_title\":\"%s\",\"commit_message\":\"%s\",\"author_name\":\"%s\",\"author_email\":\"%s\",\"pms_username\":\"%s\",\"remote_url\":\"%s\",\"platform\":\"server-git\",\"file_changes_b64\":\"%s\",\"file_stats_b64\":\"%s\"}' \"\$(json_escape \"\$BRANCH\")\" \"\$(json_escape \"\$NEW_REV\")\" \"\$(json_escape \"\$TITLE\")\" \"\$(json_escape \"\$BODY\")\" \"\$(json_escape \"\$AUTHOR_NAME\")\" \"\$(json_escape \"\$AUTHOR_EMAIL\")\" \"\$(json_escape \"\$PUSH_USERNAME\")\" \"\$(json_escape \"\$REMOTE_URL\")\" \"\$(json_escape \"\$FILE_CHANGES_B64\")\" \"\$(json_escape \"\$FILE_STATS_B64\")\")\n" .
         "  curl -s -X POST \"\$PMS_URL\" -H \"Content-Type: application/json\" -d \"\$PAYLOAD\" >/dev/null 2>&1\n" .
         "done\n";
 
@@ -684,9 +885,15 @@ function vcConfigureLocalRepositoryRemote(
     string $slug,
     string $defaultBranch,
     ?string $externalRemoteUrl = null,
-    bool $portableClient = false
+    bool $portableClient = false,
+    ?string $webhookToken = null
 ): void {
-    $remoteUrl = vcResolvePreferredWritableRemoteUrl($slug, $externalRemoteUrl, $portableClient);
+    $remoteUrl = vcResolvePreferredWritableRemoteUrl(
+        $slug,
+        $externalRemoteUrl,
+        $portableClient,
+        $webhookToken
+    );
     $hasOrigin = vcTryGitCommand(['remote', 'get-url', 'origin'], $repositoryPath);
 
     if ($remoteUrl === null) {
@@ -705,6 +912,15 @@ function vcConfigureLocalRepositoryRemote(
     $defaultBranch = trim($defaultBranch);
     if ($defaultBranch !== '') {
         vcTryGitCommand(['branch', '--set-upstream-to=origin/' . $defaultBranch, $defaultBranch], $repositoryPath);
+    }
+
+    if ($portableClient) {
+        vcRunGitCommand(['config', 'push.autoSetupRemote', 'true'], $repositoryPath);
+        vcRunGitCommand(['config', 'push.default', 'current'], $repositoryPath);
+        vcRunGitCommand(['config', 'remote.pushDefault', 'origin'], $repositoryPath);
+        vcRunGitCommand(['config', 'fetch.prune', 'true'], $repositoryPath);
+        vcRunGitCommand(['config', 'checkout.defaultRemote', 'origin'], $repositoryPath);
+        vcRunGitCommand(['config', 'pull.rebase', 'false'], $repositoryPath);
     }
 }
 
@@ -860,7 +1076,12 @@ function vcCreateManagedRepository(
     ];
 }
 
-function vcCreateRepositoryArchive(string $slug, string $refName, ?string $externalRemoteUrl = null): array
+function vcCreateRepositoryArchive(
+    string $slug,
+    string $refName,
+    ?string $externalRemoteUrl = null,
+    ?string $webhookToken = null
+): array
 {
     $bareRepositoryPath = vcGetRepositoryBarePath($slug);
     if (!is_dir($bareRepositoryPath)) {
@@ -906,8 +1127,6 @@ function vcCreateRepositoryArchive(string $slug, string $refName, ?string $exter
                 ['clone', '--quiet', $repoPathForGit, $cloneTempDir],
                 $tempDir
             );
-            vcConfigureLocalRepositoryRemote($cloneTempDir, $slug, $refName, $externalRemoteUrl, true);
-            
             error_log('Git clone completed successfully');
         } catch (Throwable $gitError) {
             error_log('Git clone failed: ' . $gitError->getMessage());
@@ -931,6 +1150,14 @@ function vcCreateRepositoryArchive(string $slug, string $refName, ?string $exter
                 ['checkout', $refName],
                 $cloneTempDir
             );
+            vcConfigureLocalRepositoryRemote(
+                $cloneTempDir,
+                $slug,
+                $refName,
+                $externalRemoteUrl,
+                true,
+                $webhookToken
+            );
             error_log('Checkout completed successfully');
         } catch (Throwable $checkoutError) {
             error_log('Checkout failed: ' . $checkoutError->getMessage());
@@ -942,7 +1169,8 @@ function vcCreateRepositoryArchive(string $slug, string $refName, ?string $exter
         vcEnsureDirectory($hooksDir);
 
         // Create post-commit hook with sync functionality
-        $syncUrl = getenv('ERNI_PMS_SYNC_ENDPOINT') ?: rtrim(BASE_URL, '/') . '/api/version-control/sync.php';
+        $syncUrl = getenv('ERNI_PMS_SYNC_ENDPOINT')
+            ?: rtrim(BASE_URL, '/') . '/api/version-control/sync.php?token=' . urlencode((string) $webhookToken);
         $postCommitHook = vcGenerateLocalSyncHookScript($syncUrl);
         $postCommitPath = $hooksDir . DIRECTORY_SEPARATOR . 'post-commit';
         vcWriteTextFile($postCommitPath, $postCommitHook);
@@ -1809,10 +2037,69 @@ function vcGetCommitFiles(mysqli|PgsqlMysqliCompatConnection $conn, int $commitI
     return $files;
 }
 
+function vcResolveExternalCommitUserId(
+    mysqli|PgsqlMysqliCompatConnection $conn,
+    array $payload,
+    int $fallbackUserId
+): int {
+    $username = trim((string) ($payload['pms_username'] ?? ''));
+    if ($username !== '') {
+        $stmt = $conn->prepare(
+            "SELECT id FROM users
+             WHERE LOWER(username) = LOWER(?) AND status = 'active'
+             LIMIT 1"
+        );
+        $stmt->bind_param('s', $username);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($row) {
+            return (int) $row['id'];
+        }
+    }
+
+    // Provider webhooks and older local hooks do not carry a PMS username.
+    // Match their Git identity to an active PMS account before using the
+    // repository creator as the final legacy fallback.
+    $authorEmail = trim((string) ($payload['author_email'] ?? ''));
+    if ($authorEmail !== '') {
+        $stmt = $conn->prepare(
+            "SELECT id FROM users
+             WHERE LOWER(email) = LOWER(?) AND status = 'active'
+             LIMIT 1"
+        );
+        $stmt->bind_param('s', $authorEmail);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($row) {
+            return (int) $row['id'];
+        }
+    }
+
+    $authorName = trim((string) ($payload['author_name'] ?? ''));
+    if ($authorName !== '') {
+        $stmt = $conn->prepare(
+            "SELECT id FROM users
+             WHERE LOWER(full_name) = LOWER(?) AND status = 'active'
+             LIMIT 1"
+        );
+        $stmt->bind_param('s', $authorName);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc() ?: null;
+        $stmt->close();
+        if ($row) {
+            return (int) $row['id'];
+        }
+    }
+
+    return max(1, $fallbackUserId);
+}
+
 function vcSyncExternalCommit(mysqli|PgsqlMysqliCompatConnection $conn, array $repository, array $payload): array
 {
     $repositoryId = (int) $repository['id'];
-    $systemUserId = (int) ($repository['created_by'] ?? 1);
+    $systemUserId = vcResolveExternalCommitUserId($conn, $payload, (int) ($repository['created_by'] ?? 1));
     $branchName = trim((string) ($payload['branch_name'] ?? $repository['default_branch_name'] ?? 'main'));
     $commitHash = trim((string) ($payload['commit_hash'] ?? ''));
     $commitTitle = trim((string) ($payload['commit_title'] ?? ''));

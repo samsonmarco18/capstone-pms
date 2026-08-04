@@ -68,6 +68,7 @@ $nextMonth = (clone $calendarStart)->modify('+1 month')->format('Y-m');
 $firstCalendarDay = (clone $calendarStart)->modify('-' . (int) $calendarStart->format('w') . ' days');
 $lastCalendarDay = (clone $calendarEnd)->modify('+' . (6 - (int) $calendarEnd->format('w')) . ' days');
 $leadingBlanks = (int) $calendarStart->format('w');
+$trailingBlanks = 6 - (int) $calendarEnd->format('w');
 $hasProjectStartTime = dbColumnExists($conn, 'projects', 'timeline_start_time');
 $hasProjectEndTime = dbColumnExists($conn, 'projects', 'timeline_end_time');
 
@@ -275,21 +276,15 @@ include __DIR__ . '/includes/navbar.php';
     color: #172033;
     --calendar-primary: #1f6392;
     --calendar-primary-dark: #184f73;
-    --calendar-surface: rgba(255, 255, 255, 0.94);
-    --calendar-head: rgba(248, 252, 255, 0.96);
-    --calendar-border: rgba(31, 99, 146, 0.14);
-    --calendar-border-strong: rgba(34, 211, 238, 0.22);
-    --calendar-shadow: 0 10px 24px rgba(15, 76, 129, 0.07);
-    --calendar-shadow-hover: 0 14px 30px rgba(15, 76, 129, 0.10);
-    --calendar-card-bg:
-        radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.12), transparent 34%),
-        linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0) 38%, rgba(31, 99, 146, 0.055) 100%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.42), transparent 56%),
-        var(--calendar-surface);
-    --calendar-day-bg:
-        linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.82) 58%, rgba(31, 99, 146, 0.035) 100%);
-    --calendar-grid-bg:
-        linear-gradient(180deg, rgba(248, 252, 255, 0.94) 0%, rgba(255, 255, 255, 0.98) 100%);
+    --calendar-surface: #ffffff;
+    --calendar-head: #ffffff;
+    --calendar-border: #e4eaf0;
+    --calendar-border-strong: #ccd9e4;
+    --calendar-shadow: 0 12px 32px rgba(23, 50, 77, 0.07);
+    --calendar-shadow-hover: 0 14px 34px rgba(23, 50, 77, 0.09);
+    --calendar-card-bg: var(--calendar-surface);
+    --calendar-day-bg: #ffffff;
+    --calendar-grid-bg: #ffffff;
 }
 
 .calendar-shell > *,
@@ -306,7 +301,7 @@ include __DIR__ . '/includes/navbar.php';
     gap: 1rem;
     padding: 1.45rem 1.55rem;
     border-radius: 18px;
-    background: linear-gradient(135deg, #1f6392 0%, #184f73 100%);
+    background: linear-gradient(135deg, #19567f 0%, #1f6392 55%, #2f83b9 100%);
     color: #fff;
     box-shadow: 0 20px 45px rgba(31, 99, 146, 0.2);
 }
@@ -350,6 +345,19 @@ include __DIR__ . '/includes/navbar.php';
     transition: background 0.18s ease, border-color 0.18s ease;
 }
 
+.calendar-hero .page-header-help-btn {
+    border-color: rgba(255, 255, 255, 0.88);
+    background: linear-gradient(145deg, #ffffff 0%, #e8f5fb 100%);
+    color: #15567f;
+    box-shadow: 0 8px 20px rgba(5, 32, 55, 0.24);
+}
+
+.calendar-hero .page-header-help-btn:hover,
+.calendar-hero .page-header-help-btn:focus-visible {
+    background: #ffffff;
+    color: #0f496e;
+}
+
 .calendar-nav a:hover {
     background: rgba(255, 255, 255, 0.18);
     border-color: rgba(255, 255, 255, 0.28);
@@ -362,20 +370,37 @@ include __DIR__ . '/includes/navbar.php';
 }
 
 .calendar-stat {
+    position: relative;
     padding: 1rem 1.1rem;
-    border-radius: 12px;
+    padding-right: 4.5rem;
     border: 1px solid var(--calendar-border);
-    background: var(--calendar-card-bg);
+    border-radius: 12px;
+    background: linear-gradient(145deg, #ffffff 0%, #ffffff 68%, #eef9fd 100%);
     box-shadow: var(--calendar-shadow), 0 0 18px rgba(34, 211, 238, 0.05);
 }
 
-.calendar-stat span {
+.calendar-stat__label {
     display: block;
     color: #6c757d;
     font-size: 0.74rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+}
+
+.calendar-stat__icon {
+    position: absolute;
+    top: 0.9rem;
+    right: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.65rem;
+    height: 2.65rem;
+    border-radius: 11px;
+    background: linear-gradient(145deg, #f4fbff 0%, #dfeff7 100%);
+    color: #1f6392;
+    font-size: 1rem;
 }
 
 .calendar-stat strong {
@@ -387,20 +412,19 @@ include __DIR__ . '/includes/navbar.php';
 }
 
 .calendar-card {
-    border: 0;
-    border-radius: 16px;
+    border: 1px solid var(--calendar-border);
+    border-radius: 20px;
     background: var(--calendar-card-bg);
     overflow: hidden;
-    box-shadow: var(--calendar-shadow), inset 0 0 0 1px var(--calendar-border);
+    box-shadow: var(--calendar-shadow);
 }
 
 .calendar-card__header {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    justify-content: space-between;
     gap: 1rem;
-    padding: 1.2rem 1.4rem;
-    border-bottom: 1px solid rgba(31, 99, 146, 0.10);
+    padding: 1.15rem 1.3rem 1rem;
     background: var(--calendar-head);
 }
 
@@ -410,6 +434,52 @@ include __DIR__ . '/includes/navbar.php';
     color: #184f73;
     font-size: 1rem;
     font-weight: 800;
+}
+
+.calendar-card__month-nav {
+    align-items: center;
+    display: flex;
+    gap: .65rem;
+    grid-column: 2;
+}
+
+.calendar-month-button {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    color: #6d7b8a;
+    display: inline-flex;
+    height: 34px;
+    justify-content: center;
+    text-decoration: none;
+    transition: background .18s ease, border-color .18s ease, color .18s ease;
+    width: 34px;
+}
+
+.calendar-month-button:hover {
+    background: #f3f7fa;
+    border-color: var(--calendar-border);
+    color: var(--calendar-primary);
+}
+
+.calendar-card__tools {
+    align-items: center;
+    display: flex;
+    gap: .55rem;
+    grid-column: 3;
+    justify-self: end;
+}
+
+.calendar-mode-pill {
+    background: #edf5fa;
+    border: 1px solid #d8e7f0;
+    border-radius: 999px;
+    color: var(--calendar-primary-dark);
+    display: inline-flex;
+    font-size: .72rem;
+    font-weight: 800;
+    padding: .38rem .72rem;
 }
 
 .calendar-scroll-hint {
@@ -424,23 +494,35 @@ include __DIR__ . '/includes/navbar.php';
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 0.5rem;
-    padding: 1.4rem;
+    gap: 0;
+    padding: 0 1.3rem 1.3rem;
     background: var(--calendar-grid-bg);
 }
 
 .calendar-weekday {
-    color: #6c757d;
-    font-size: 0.72rem;
-    font-weight: 700;
+    border-bottom: 1px solid var(--calendar-border);
+    border-right: 1px solid var(--calendar-border);
+    color: #667484;
+    font-size: 0.73rem;
+    font-weight: 650;
+    padding: .75rem .6rem .85rem;
     text-align: center;
-    text-transform: uppercase;
 }
 
 .calendar-day,
 .calendar-blank {
-    min-height: 6.25rem;
-    border-radius: 12px;
+    min-height: 8rem;
+    border-bottom: 1px solid var(--calendar-border);
+    border-right: 1px solid var(--calendar-border);
+    border-radius: 0;
+}
+
+.calendar-blank {
+    background: #fbfcfd;
+}
+
+.calendar-grid > :nth-child(7n + 1) {
+    border-left: 1px solid var(--calendar-border);
 }
 
 .calendar-day {
@@ -448,42 +530,42 @@ include __DIR__ . '/includes/navbar.php';
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
-    padding: 0.55rem;
-    border: 1px solid rgba(31, 99, 146, 0.11);
+    padding: 0.65rem 0.7rem;
+    border-top: 0;
     background: var(--calendar-day-bg);
-    color: #184f73;
+    color: #263648;
     text-decoration: none;
-    transition: box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+    transition: background 0.16s ease, box-shadow 0.16s ease;
 }
 
 .calendar-day:hover {
-    border-color: rgba(31, 99, 146, 0.3);
-    box-shadow: 0 10px 20px rgba(31, 99, 146, 0.08);
+    background: #f7fafc;
+    box-shadow: inset 0 0 0 1px rgba(31, 99, 146, .12);
+    z-index: 1;
 }
 
 .calendar-day.is-muted {
-    opacity: 0.45;
+    color: #9ca8b4;
 }
 
 .calendar-day.is-today {
-    border-color: #1f6392;
-    box-shadow: inset 0 0 0 1px #1f6392;
+    box-shadow: inset 0 3px 0 var(--calendar-primary);
 }
 
 .calendar-day.is-selected {
-    background: linear-gradient(180deg, rgba(31, 99, 146, 0.08), rgba(31, 99, 146, 0.04));
-    border-color: rgba(31, 99, 146, 0.35);
+    background: #f4f9fc;
+    box-shadow: inset 0 3px 0 #4ea4dc;
 }
 
 .calendar-date {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 1.8rem;
-    height: 1.8rem;
-    border-radius: 8px;
-    font-size: 0.88rem;
-    font-weight: 800;
+    width: 1.65rem;
+    height: 1.65rem;
+    border-radius: 50%;
+    font-size: 0.86rem;
+    font-weight: 700;
 }
 
 .calendar-day.is-today .calendar-date {
@@ -492,7 +574,8 @@ include __DIR__ . '/includes/navbar.php';
 }
 
 .calendar-day.is-selected .calendar-date {
-    background: rgba(31, 99, 146, 0.14);
+    background: transparent;
+    color: #2d8bc8;
 }
 
 .calendar-day.is-today.is-selected .calendar-date {
@@ -501,7 +584,7 @@ include __DIR__ . '/includes/navbar.php';
 }
 
 .calendar-dots {
-    display: flex;
+    display: none;
     flex-wrap: wrap;
     gap: 0.25rem;
 }
@@ -521,7 +604,7 @@ include __DIR__ . '/includes/navbar.php';
 }
 
 .calendar-event-count {
-    display: inline-flex;
+    display: none;
     align-items: center;
     justify-content: center;
     min-width: 1.45rem;
@@ -541,35 +624,51 @@ include __DIR__ . '/includes/navbar.php';
 }
 
 .calendar-mini-event {
+    align-items: center;
     display: block;
     overflow: hidden;
-    padding: 0.22rem 0.35rem;
-    border-radius: 6px;
-    background: #f7fafc;
-    color: #293548;
-    font-size: 0.72rem;
-    font-weight: 700;
-    line-height: 1.2;
+    padding: 0.2rem 0.2rem 0.2rem 0.85rem;
+    border-radius: 0;
+    background: transparent;
+    color: #38495b;
+    font-size: 0.68rem;
+    font-weight: 650;
+    line-height: 1.28;
+    position: relative;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+.calendar-mini-event::before {
+    background: var(--event-color, #1f6392);
+    border-radius: 50%;
+    content: "";
+    height: .38rem;
+    left: .18rem;
+    position: absolute;
+    top: .48rem;
+    width: .38rem;
+}
+
 .calendar-more {
-    color: #6c757d;
-    font-size: 0.7rem;
-    font-weight: 700;
+    color: #8793a0;
+    font-size: 0.65rem;
+    font-weight: 650;
+    padding-left: .85rem;
 }
 
 .calendar-side {
     display: grid;
     gap: 1rem;
+    align-content: start;
 }
 
 .calendar-panel {
-    border-radius: 16px;
+    border-radius: 18px;
     border: 1px solid var(--calendar-border);
     background: var(--calendar-card-bg);
-    box-shadow: var(--calendar-shadow), 0 0 18px rgba(34, 211, 238, 0.05);
+    box-shadow: var(--calendar-shadow);
+    overflow: hidden;
 }
 
 .calendar-panel__header {
@@ -605,14 +704,39 @@ include __DIR__ . '/includes/navbar.php';
 }
 
 .calendar-panel__body {
-    padding: 1rem 1.25rem 1.15rem;
+    padding: 0.35rem 1rem 0.55rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: rgba(31, 99, 146, 0.28) transparent;
+    scrollbar-width: thin;
+}
+
+.calendar-panel--selected .calendar-panel__body {
+    max-height: 19rem;
+}
+
+.calendar-panel--deadlines .calendar-panel__body {
+    max-height: 25rem;
+}
+
+.calendar-panel__body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.calendar-panel__body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.calendar-panel__body::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(31, 99, 146, 0.25);
 }
 
 .calendar-event {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 0.75rem;
-    padding: 0.85rem 0;
+    gap: 0.65rem;
+    padding: 0.72rem 0;
 }
 
 .calendar-event + .calendar-event {
@@ -620,19 +744,24 @@ include __DIR__ . '/includes/navbar.php';
 }
 
 .calendar-event__marker {
-    width: 0.78rem;
-    height: 0.78rem;
-    margin-top: 0.3rem;
+    width: 0.62rem;
+    height: 0.62rem;
+    margin-top: 0.35rem;
     border-radius: 999px;
     background: var(--event-color, #1f6392);
     box-shadow: 0 0 0 4px rgba(31, 99, 146, 0.12);
 }
 
 .calendar-event__title {
+    display: -webkit-box;
+    overflow: hidden;
     margin: 0;
     color: #184f73;
-    font-size: 0.94rem;
+    font-size: 0.86rem;
     font-weight: 800;
+    line-height: 1.35;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
 .calendar-event__title-row {
@@ -663,11 +792,12 @@ include __DIR__ . '/includes/navbar.php';
 .calendar-event__meta {
     margin-top: 0.2rem;
     color: #6c757d;
-    font-size: 0.8rem;
+    font-size: 0.74rem;
+    line-height: 1.4;
 }
 
 .calendar-empty {
-    padding: 1rem 0;
+    padding: 1.1rem 0.1rem;
     color: #6c757d;
     font-size: 0.92rem;
 }
@@ -685,7 +815,7 @@ include __DIR__ . '/includes/navbar.php';
     }
 
     .calendar-grid {
-        gap: 0.4rem;
+        gap: 0;
     }
 }
 
@@ -713,7 +843,14 @@ include __DIR__ . '/includes/navbar.php';
     }
 
     .calendar-card__header {
+        grid-template-columns: 1fr;
         padding: 1rem;
+    }
+
+    .calendar-card__month-nav,
+    .calendar-card__tools {
+        grid-column: 1;
+        justify-self: center;
     }
 
     .calendar-panel__header,
@@ -764,7 +901,7 @@ include __DIR__ . '/includes/navbar.php';
     .calendar-scroll .calendar-grid {
         width: 46rem;
         min-width: 46rem;
-        padding: 1rem;
+        padding: 0 1rem 1rem;
     }
 
     .calendar-day,
@@ -779,21 +916,15 @@ include __DIR__ . '/includes/navbar.php';
 
 html[data-theme="dark"] .calendar-shell {
     color: #d8e6f3;
-    --calendar-surface: rgba(10, 22, 35, 0.88);
-    --calendar-head: rgba(12, 31, 49, 0.96);
-    --calendar-border: rgba(138, 210, 255, 0.10);
-    --calendar-border-strong: rgba(138, 210, 255, 0.20);
+    --calendar-surface: #0b1d2e;
+    --calendar-head: #0b1d2e;
+    --calendar-border: rgba(138, 210, 255, 0.12);
+    --calendar-border-strong: rgba(138, 210, 255, 0.22);
     --calendar-shadow: 0 14px 32px rgba(0, 0, 0, 0.30);
     --calendar-shadow-hover: 0 18px 40px rgba(0, 0, 0, 0.36);
-    --calendar-card-bg:
-        radial-gradient(circle at 100% 0%, rgba(76, 184, 255, 0.14), transparent 34%),
-        linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 38%, rgba(76, 184, 255, 0.08) 100%),
-        linear-gradient(180deg, rgba(138, 210, 255, 0.055), transparent 56%),
-        var(--calendar-surface);
-    --calendar-day-bg:
-        linear-gradient(135deg, rgba(12, 31, 49, 0.92) 0%, rgba(10, 22, 35, 0.88) 58%, rgba(76, 184, 255, 0.055) 100%);
-    --calendar-grid-bg:
-        linear-gradient(180deg, rgba(12, 31, 49, 0.94) 0%, rgba(8, 20, 32, 0.98) 100%);
+    --calendar-card-bg: #0b1d2e;
+    --calendar-day-bg: #0b1d2e;
+    --calendar-grid-bg: #0b1d2e;
 }
 
 html[data-theme="dark"] .calendar-hero {
@@ -823,6 +954,11 @@ html[data-theme="dark"] .calendar-panel {
     background: var(--calendar-card-bg);
 }
 
+html[data-theme="dark"] .calendar-stat__icon {
+    background: linear-gradient(145deg, rgba(31, 99, 146, 0.3), rgba(31, 99, 146, 0.16));
+    color: #8cc7ff;
+}
+
 html[data-theme="dark"] .calendar-card__header,
 html[data-theme="dark"] .calendar-panel__header {
     background: var(--calendar-head);
@@ -830,6 +966,10 @@ html[data-theme="dark"] .calendar-panel__header {
 
 html[data-theme="dark"] .calendar-day {
     background: var(--calendar-day-bg);
+}
+
+html[data-theme="dark"] .calendar-blank {
+    background: #091827;
 }
 
 html[data-theme="dark"] .calendar-stat strong {
@@ -846,8 +986,8 @@ html[data-theme="dark"] .calendar-grid {
 }
 
 html[data-theme="dark"] .calendar-day:hover {
-    border-color: rgba(138, 210, 255, 0.18);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.20);
+    background: #10263a;
+    box-shadow: inset 0 0 0 1px rgba(138, 210, 255, 0.14);
 }
 
 html[data-theme="dark"] .calendar-day.is-today {
@@ -875,9 +1015,28 @@ html[data-theme="dark"] .calendar-event-count {
 }
 
 html[data-theme="dark"] .calendar-mini-event {
-    background: rgba(12, 31, 49, 0.96);
+    background: transparent;
     color: #d8e6f3;
-    border-left-color: var(--event-color, #8cc7ff);
+}
+
+html[data-theme="dark"] .calendar-day.is-muted .calendar-date {
+    color: #70869b;
+}
+
+html[data-theme="dark"] .calendar-month-button {
+    color: #90aeca;
+}
+
+html[data-theme="dark"] .calendar-month-button:hover {
+    background: rgba(138, 210, 255, .08);
+    border-color: rgba(138, 210, 255, .14);
+    color: #d8e6f3;
+}
+
+html[data-theme="dark"] .calendar-mode-pill {
+    background: rgba(31, 99, 146, .2);
+    border-color: rgba(138, 210, 255, .16);
+    color: #8cc7ff;
 }
 
 html[data-theme="dark"] .calendar-dot {
@@ -897,6 +1056,14 @@ html[data-theme="dark"] .calendar-event {
 
 html[data-theme="dark"] .calendar-event__marker {
     box-shadow: 0 0 0 4px rgba(31, 99, 146, 0.18);
+}
+
+html[data-theme="dark"] .calendar-panel__body {
+    scrollbar-color: rgba(140, 199, 255, 0.28) transparent;
+}
+
+html[data-theme="dark"] .calendar-panel__body::-webkit-scrollbar-thumb {
+    background: rgba(140, 199, 255, 0.24);
 }
 
 html[data-theme="dark"] .calendar-event__link {
@@ -938,56 +1105,53 @@ html[data-theme="dark"] .btn-outline-primary.calendar-today-btn:hover {
 </style>
 
 <div class="container-fluid calendar-shell">
-    <div class="calendar-hero">
+    <div class="calendar-hero" data-page-header>
         <div>
-            <h1><?php echo htmlspecialchars($calendarStart->format('F Y')); ?></h1>
+            <h1>Calendar</h1>
             <p><?php echo htmlspecialchars($selectedDay->format('l, F j')); ?> selected</p>
-        </div>
-
-        <div class="calendar-hero__meta">
-            <div class="calendar-nav" aria-label="Calendar navigation">
-                <a href="calendar.php?calendar_month=<?php echo urlencode($previousMonth); ?>" aria-label="Previous month">
-                    <i class="fas fa-chevron-left"></i>
-                </a>
-                <a href="calendar.php?calendar_month=<?php echo urlencode(date('Y-m')); ?>&day=<?php echo urlencode(date('Y-m-d')); ?>" aria-label="Current month">
-                    <i class="fas fa-circle"></i>
-                </a>
-                <a href="calendar.php?calendar_month=<?php echo urlencode($nextMonth); ?>" aria-label="Next month">
-                    <i class="fas fa-chevron-right"></i>
-                </a>
-            </div>
         </div>
     </div>
 
     <div class="calendar-stats">
         <div class="calendar-stat">
-            <span>Today</span>
+            <span class="calendar-stat__label">Today</span>
             <strong><?php echo $todayEventCount; ?></strong>
+            <span class="calendar-stat__icon" aria-hidden="true"><i class="fas fa-calendar-day"></i></span>
         </div>
         <div class="calendar-stat">
-            <span>This Week</span>
+            <span class="calendar-stat__label">This Week</span>
             <strong><?php echo $weekEventCount; ?></strong>
+            <span class="calendar-stat__icon" aria-hidden="true"><i class="fas fa-calendar-week"></i></span>
         </div>
         <div class="calendar-stat">
-            <span>This Month</span>
+            <span class="calendar-stat__label">This Month</span>
             <strong><?php echo $currentMonthEventCount; ?></strong>
+            <span class="calendar-stat__icon" aria-hidden="true"><i class="far fa-calendar-alt"></i></span>
         </div>
         <div class="calendar-stat">
-            <span>Deadlines</span>
+            <span class="calendar-stat__label">Deadlines</span>
             <strong><?php echo count($deadlineEvents); ?></strong>
+            <span class="calendar-stat__icon" aria-hidden="true"><i class="fas fa-hourglass-half"></i></span>
         </div>
     </div>
 
     <div class="row g-4">
-        <div class="col-xl-8">
+        <div class="col-xl-9">
             <div class="calendar-card">
                 <div class="calendar-card__header">
-                    <div>
+                    <div class="calendar-card__month-nav" aria-label="Calendar navigation">
+                        <a class="calendar-month-button" href="calendar.php?calendar_month=<?php echo urlencode($previousMonth); ?>" aria-label="Previous month">
+                            <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                        </a>
                         <h2><?php echo htmlspecialchars($calendarStart->format('F Y')); ?></h2>
+                        <a class="calendar-month-button" href="calendar.php?calendar_month=<?php echo urlencode($nextMonth); ?>" aria-label="Next month">
+                            <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                        </a>
                     </div>
-                    <a class="btn btn-sm btn-outline-primary calendar-today-btn" href="calendar.php?calendar_month=<?php echo urlencode(date('Y-m')); ?>&day=<?php echo urlencode(date('Y-m-d')); ?>">
-                        Today
-                    </a>
+                    <div class="calendar-card__tools">
+                        <span class="calendar-mode-pill">Month</span>
+                        <a class="btn btn-sm btn-outline-primary calendar-today-btn" href="calendar.php?calendar_month=<?php echo urlencode(date('Y-m')); ?>&day=<?php echo urlencode(date('Y-m-d')); ?>">Today</a>
+                    </div>
                 </div>
 
                 <div class="calendar-scroll-hint" aria-hidden="true">
@@ -997,7 +1161,7 @@ html[data-theme="dark"] .btn-outline-primary.calendar-today-btn:hover {
 
                 <div class="calendar-scroll" role="region" aria-label="Monthly calendar. Scroll horizontally to view all days on smaller screens." tabindex="0">
                     <div class="calendar-grid">
-                        <?php foreach (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as $weekday): ?>
+                        <?php foreach (['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as $weekday): ?>
                             <div class="calendar-weekday"><?php echo $weekday; ?></div>
                         <?php endforeach; ?>
 
@@ -1046,14 +1210,18 @@ html[data-theme="dark"] .btn-outline-primary.calendar-today-btn:hover {
                                 <?php endif; ?>
                             </a>
                         <?php endfor; ?>
+
+                        <?php for ($blank = 0; $blank < $trailingBlanks; $blank++): ?>
+                            <div class="calendar-blank" aria-hidden="true"></div>
+                        <?php endfor; ?>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-xl-4">
+        <div class="col-xl-3">
             <div class="calendar-side">
-                <div class="calendar-panel">
+                <div class="calendar-panel calendar-panel--selected">
                     <div class="calendar-panel__header">
                         <h3><?php echo htmlspecialchars($selectedDay->format('F j, Y')); ?></h3>
                         <span class="badge calendar-count-badge"><?php echo count($selectedEvents); ?></span>
@@ -1088,7 +1256,7 @@ html[data-theme="dark"] .btn-outline-primary.calendar-today-btn:hover {
                     </div>
                 </div>
 
-                <div class="calendar-panel">
+                <div class="calendar-panel calendar-panel--deadlines">
                     <div class="calendar-panel__header">
                         <h3>Upcoming Deadlines</h3>
                         <span class="badge calendar-count-badge"><?php echo count($deadlineEvents); ?></span>

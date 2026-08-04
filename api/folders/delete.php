@@ -1,43 +1,42 @@
 <?php
-header('Content-Type: application/json');
+require_once __DIR__ . '/../../includes/folder-api.php';
+folderApiInitialize();
 
-require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../includes/auth.php';
-
-if (!isLoggedIn()) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized']);
-    exit();
-}
-
-$user = getCurrentUser();
-$conn = getConnection();
+$user = folderApiRequireUser();
 $folderId = (int) ($_POST['id'] ?? 0);
 
 if ($folderId <= 0) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Invalid folder.']);
-    exit();
+    folderApiRespond(['success' => false, 'error' => 'Invalid folder.'], 400);
 }
 
-$stmt = $conn->prepare('SELECT * FROM folders WHERE id = ?');
-$stmt->bind_param('i', $folderId);
-$stmt->execute();
-$folder = $stmt->get_result()->fetch_assoc();
-$stmt->close();
+try {
+    $conn = getConnection();
+    $stmt = folderApiPrepare($conn, 'SELECT * FROM folders WHERE id = ?');
+    $stmt->bind_param('i', $folderId);
+    folderApiExecute($stmt, $conn);
+    $folder = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 
-if (!$folder) {
-    http_response_code(404);
-    echo json_encode(['error' => 'Folder not found.']);
-    exit();
+    if (!$folder) {
+        folderApiRespond(['success' => false, 'error' => 'Folder not found.'], 404);
+    }
+    if (!folderApiCanAccessFolder($folder, $user)) {
+        folderApiRespond(['success' => false, 'error' => 'You do not have access to this folder.'], 403);
+    }
+
+    if (in_array((string) ($folder['folder_type'] ?? ''), ['client', 'project'], true)) {
+        folderApiRespond(['success' => false, 'error' => 'Client and shared project root folders cannot be deleted here.'], 403);
+    }
+
+    $deleteStmt = folderApiPrepare($conn, 'DELETE FROM folders WHERE id = ?');
+    $deleteStmt->bind_param('i', $folderId);
+    folderApiExecute($deleteStmt, $conn);
+    $deleteStmt->close();
+
+    logActivity((int) $user['id'], 'delete_folder', 'folders', $folderId, $folder, null);
+
+    folderApiRespond(['success' => true]);
+} catch (Throwable $e) {
+    folderApiError($e, 'Delete folder API failed', 'Unable to delete this folder right now.');
 }
-
-$deleteStmt = $conn->prepare('DELETE FROM folders WHERE id = ?');
-$deleteStmt->bind_param('i', $folderId);
-$deleteStmt->execute();
-$deleteStmt->close();
-
-logActivity((int) $user['id'], 'delete_folder', 'folders', $folderId, $folder, null);
-
-echo json_encode(['success' => true]);
 ?>

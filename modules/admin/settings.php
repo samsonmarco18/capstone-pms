@@ -2,11 +2,14 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/app-settings.php';
 require_once '../../includes/mailer.php';
+require_once '../../includes/user-preferences.php';
 requireRole('admin');
 
 $conn = getConnection();
 $user = getCurrentUser();
 $generalSettings = getAppSettings(['company_name', 'notification_email', 'timezone']);
+$themeOptions = userPreferenceThemeOptions();
+$userPreferences = userPreferencesFromUser($user);
 
 function getSettingValue($conn, string $key, string $default = ''): string
 {
@@ -261,6 +264,30 @@ function backupSendDualFormatDownload(mysqli|PgsqlMysqliCompatConnection $conn, 
 
 // Handle settings updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['update_appearance'])) {
+        $themePreference = (string) ($_POST['theme_preference'] ?? 'tropical');
+        if (!isset($themeOptions[$themePreference])) {
+            $themePreference = 'tropical';
+        }
+
+        $stmt = $conn->prepare('UPDATE users SET theme_preference = ? WHERE id = ?');
+        if ($stmt === false) {
+            $_SESSION['error'] = 'Unable to update the interface theme';
+        } else {
+            $stmt->bind_param('si', $themePreference, $user['id']);
+            if ($stmt->execute()) {
+                logActivity($user['id'], 'update_theme_preference', 'users', $user['id'], null, [
+                    'theme_preference' => $themePreference,
+                ]);
+                $_SESSION['success'] = 'Interface theme updated successfully';
+            } else {
+                $_SESSION['error'] = 'Unable to update the interface theme';
+            }
+            $stmt->close();
+        }
+        $_SESSION['settings_active_tab'] = 'appearance';
+    }
+
     if (isset($_POST['update_general'])) {
         $siteName = $_POST['site_name'];
         $timezone = $_POST['timezone'];
@@ -447,7 +474,7 @@ $settingsActiveTab = (string) ($_SESSION['settings_active_tab'] ?? 'general');
 $settingsFlashSuccess = (string) ($_SESSION['success'] ?? '');
 $settingsFlashError = (string) ($_SESSION['error'] ?? '');
 unset($_SESSION['settings_active_tab'], $_SESSION['success'], $_SESSION['error']);
-if (!in_array($settingsActiveTab, ['general', 'mail', 'notifications', 'security', 'maintenance'], true)) {
+if (!in_array($settingsActiveTab, ['appearance', 'general', 'mail', 'notifications', 'security', 'maintenance'], true)) {
     $settingsActiveTab = 'general';
 }
 $databaseVersion = 'Unavailable';
@@ -626,6 +653,150 @@ include '../../includes/navbar.php';
     margin-top: 1.5rem;
     display: flex;
     justify-content: flex-end;
+}
+
+.admin-theme-intro {
+    color: var(--gray-600);
+    font-size: 0.86rem;
+    margin: 0 0 1rem;
+}
+
+.admin-theme-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 760px;
+}
+
+.admin-theme-option {
+    background: transparent;
+    border: 0;
+    color: var(--gray-900);
+    cursor: pointer;
+    min-width: 0;
+    padding: 0;
+    text-align: left;
+}
+
+.admin-theme-preview {
+    --preview-bg: #e9f7f5;
+    --preview-bar: #d7f0ec;
+    --preview-sidebar: #2ca79e;
+    --preview-surface: #ffffff;
+    --preview-line: #7daaa8;
+    background: var(--preview-bg);
+    border: 2px solid transparent;
+    border-radius: 16px;
+    box-shadow: inset 0 0 0 1px rgba(31, 99, 146, 0.12);
+    display: block;
+    height: 124px;
+    overflow: hidden;
+    padding: 14px;
+    position: relative;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.admin-theme-window {
+    background: var(--preview-surface);
+    border: 1px solid rgba(15, 74, 110, 0.12);
+    border-radius: 9px;
+    box-shadow: 0 8px 18px rgba(15, 74, 110, 0.12);
+    display: grid;
+    grid-template-columns: 24% 1fr;
+    grid-template-rows: 22px 1fr;
+    height: 100%;
+    overflow: hidden;
+}
+
+.admin-theme-topbar {
+    background: var(--preview-bar);
+    grid-column: 1 / -1;
+}
+
+.admin-theme-sidebar {
+    background: var(--preview-sidebar);
+}
+
+.admin-theme-content {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 13px 12px;
+}
+
+.admin-theme-content i {
+    background: var(--preview-line);
+    border-radius: 999px;
+    display: block;
+    height: 5px;
+    opacity: 0.66;
+    width: 82%;
+}
+
+.admin-theme-content i:nth-child(2) {
+    width: 58%;
+}
+
+.admin-theme-content i:nth-child(3) {
+    width: 70%;
+}
+
+.admin-theme-option[data-theme-preview="futuristic"] .admin-theme-preview {
+    --preview-bg:
+        linear-gradient(rgba(0, 204, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 204, 255, 0.08) 1px, transparent 1px),
+        #061b2e;
+    --preview-bar: #102f49;
+    --preview-sidebar: #07567a;
+    --preview-surface: #0b2236;
+    --preview-line: #45c7e8;
+    background-size: 18px 18px;
+}
+
+.admin-theme-check {
+    align-items: center;
+    background: var(--theme-primary);
+    border: 3px solid #fff;
+    border-radius: 50%;
+    color: #fff;
+    display: none;
+    height: 28px;
+    justify-content: center;
+    position: absolute;
+    right: 9px;
+    top: 9px;
+    width: 28px;
+}
+
+.admin-theme-name {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding-top: 0.6rem;
+    text-align: center;
+}
+
+.admin-theme-option:hover .admin-theme-preview,
+.admin-theme-option:focus-visible .admin-theme-preview {
+    border-color: rgba(31, 99, 146, 0.45);
+    transform: translateY(-2px);
+}
+
+.admin-theme-option:focus-visible {
+    outline: none;
+}
+
+.admin-theme-option.is-selected .admin-theme-preview {
+    border-color: var(--theme-primary);
+    box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
+}
+
+.admin-theme-option.is-selected .admin-theme-check {
+    display: inline-flex;
+}
+
+.admin-theme-option.is-selected .admin-theme-name {
+    color: var(--theme-primary);
 }
 
 .settings-status {
@@ -939,6 +1110,10 @@ input:checked + .switch-slider:before {
         grid-template-columns: 1fr;
     }
 
+    .admin-theme-grid {
+        grid-template-columns: 1fr;
+    }
+
     .settings-nav-card .nav {
         grid-template-columns: 1fr;
     }
@@ -997,8 +1172,17 @@ input:checked + .switch-slider:before {
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .card-header-modern h5,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .switch-info label,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .info-value,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .admin-theme-name,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
     color: #d8e6f3 !important;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .admin-theme-intro {
+    color: #90aeca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .admin-theme-option.is-selected .admin-theme-name {
+    color: #74d8ff !important;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control-modern,
@@ -1083,6 +1267,9 @@ input:checked + .switch-slider:before {
     <div class="settings-layout">
         <aside class="settings-nav-card">
             <div class="nav flex-column nav-pills" id="settingsTabs" role="tablist" aria-orientation="vertical">
+                <button class="nav-link <?php echo $settingsActiveTab === 'appearance' ? 'active' : ''; ?>" id="appearance-tab" data-bs-toggle="pill" data-bs-target="#appearance-panel" type="button" role="tab" aria-controls="appearance-panel" aria-selected="<?php echo $settingsActiveTab === 'appearance' ? 'true' : 'false'; ?>">
+                    <i class="fas fa-palette"></i> <span>Appearance</span>
+                </button>
                 <button class="nav-link <?php echo $settingsActiveTab === 'general' ? 'active' : ''; ?>" id="general-tab" data-bs-toggle="pill" data-bs-target="#general-panel" type="button" role="tab" aria-controls="general-panel" aria-selected="<?php echo $settingsActiveTab === 'general' ? 'true' : 'false'; ?>">
                     <i class="fas fa-globe"></i> <span>General</span>
                 </button>
@@ -1103,6 +1290,53 @@ input:checked + .switch-slider:before {
         </aside>
 
         <div class="settings-content tab-content" id="settingsTabContent">
+        <!-- Appearance Settings -->
+        <div class="tab-pane fade <?php echo $settingsActiveTab === 'appearance' ? 'show active' : ''; ?>" id="appearance-panel" role="tabpanel" aria-labelledby="appearance-tab">
+        <div class="settings-card">
+            <div class="card-header-modern">
+                <i class="fas fa-palette"></i>
+                <h5>Interface Theme</h5>
+            </div>
+            <div class="card-body-modern">
+                <form method="POST" data-generic-draft-disabled="true">
+                    <p class="admin-theme-intro">Choose the visual style used throughout your workspace. Light and dark mode remain available in the navbar.</p>
+                    <select class="visually-hidden" id="adminThemePreference" name="theme_preference" aria-label="Interface theme">
+                        <?php foreach ($themeOptions as $value => $label): ?>
+                            <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $userPreferences['theme_preference'] === $value ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($label); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <div class="admin-theme-grid" role="group" aria-label="Interface theme">
+                        <?php foreach ($themeOptions as $value => $label): ?>
+                        <button
+                            type="button"
+                            class="admin-theme-option<?php echo $userPreferences['theme_preference'] === $value ? ' is-selected' : ''; ?>"
+                            data-theme-preview="<?php echo htmlspecialchars($value); ?>"
+                            aria-pressed="<?php echo $userPreferences['theme_preference'] === $value ? 'true' : 'false'; ?>"
+                        >
+                            <span class="admin-theme-preview" aria-hidden="true">
+                                <span class="admin-theme-window">
+                                    <span class="admin-theme-topbar"></span>
+                                    <span class="admin-theme-sidebar"></span>
+                                    <span class="admin-theme-content"><i></i><i></i><i></i></span>
+                                </span>
+                                <span class="admin-theme-check"><i class="fas fa-check"></i></span>
+                            </span>
+                            <span class="admin-theme-name"><?php echo htmlspecialchars($label); ?></span>
+                        </button>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="settings-actions">
+                        <button type="submit" name="update_appearance" class="btn-primary-modern">
+                            <i class="fas fa-save"></i> Save Theme
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        </div>
+
         <!-- General Settings -->
         <div class="tab-pane fade <?php echo $settingsActiveTab === 'general' ? 'show active' : ''; ?>" id="general-panel" role="tabpanel" aria-labelledby="general-tab">
         <div class="settings-card">
@@ -1116,7 +1350,6 @@ input:checked + .switch-slider:before {
                     <div class="form-group">
                         <label class="form-label">Site Name</label>
                         <input type="text" name="site_name" class="form-control-modern" value="<?php echo htmlspecialchars($siteName); ?>" required>
-                        <input type="text" name="site_name" class="form-control-modern" value="<?php echo htmlspecialchars($generalSettings['company_name'] ?? 'ERNI PMS'); ?>" required>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Site Email</label>
@@ -1401,6 +1634,21 @@ input:checked + .switch-slider:before {
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const themePreference = document.getElementById('adminThemePreference');
+    const themeOptions = Array.from(document.querySelectorAll('.admin-theme-option'));
+
+    themeOptions.forEach(function (option) {
+        option.addEventListener('click', function () {
+            const selectedTheme = option.dataset.themePreview || 'tropical';
+            themePreference.value = selectedTheme;
+            themeOptions.forEach(function (themeOption) {
+                const isSelected = themeOption === option;
+                themeOption.classList.toggle('is-selected', isSelected);
+                themeOption.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+            });
+        });
+    });
+
     const backupForm = document.getElementById('backupDatabaseForm');
     if (!backupForm) {
         return;

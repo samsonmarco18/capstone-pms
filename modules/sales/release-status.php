@@ -12,6 +12,18 @@ workflowEnsureSchema($conn);
 $selectedTaskId = (int) ($_GET['task_id'] ?? 0);
 $selectedClientId = (int) ($_GET['client_id'] ?? 0);
 $selectedProjectId = (int) ($_GET['project_id'] ?? 0);
+$selectedReleaseStatus = strtolower(trim((string) ($_GET['status'] ?? 'all')));
+$selectedReleaseTimeline = strtolower(trim((string) ($_GET['timeline'] ?? 'all')));
+
+$allowedReleaseStatuses = ['all', 'not_started', 'in_progress', 'complete'];
+$allowedReleaseTimelines = ['all', 'overdue', 'next_7_days', 'next_30_days', 'no_target_date'];
+
+if (!in_array($selectedReleaseStatus, $allowedReleaseStatuses, true)) {
+    $selectedReleaseStatus = 'all';
+}
+if (!in_array($selectedReleaseTimeline, $allowedReleaseTimelines, true)) {
+    $selectedReleaseTimeline = 'all';
+}
 
 function releaseChecklistIsComplete(array $task): bool
 {
@@ -41,6 +53,51 @@ function releaseChecklistStatusLabel(array $task): string
     }
 
     return ucfirst(str_replace('_', ' ', $status));
+}
+
+function releaseChecklistMatchesFilters(array $task, string $statusFilter, string $timelineFilter): bool
+{
+    $isComplete = !empty($task['is_complete']);
+    $taskStatus = strtolower(trim((string) ($task['status'] ?? 'todo')));
+
+    if ($statusFilter === 'complete' && !$isComplete) {
+        return false;
+    }
+    if ($statusFilter === 'not_started' && ($isComplete || !in_array($taskStatus, ['todo', 'pending'], true))) {
+        return false;
+    }
+    if ($statusFilter === 'in_progress' && ($isComplete || in_array($taskStatus, ['todo', 'pending'], true))) {
+        return false;
+    }
+
+    if ($timelineFilter === 'all') {
+        return true;
+    }
+
+    $deadline = trim((string) ($task['effective_deadline'] ?? ''));
+    if ($timelineFilter === 'no_target_date') {
+        return $deadline === '';
+    }
+    if ($deadline === '') {
+        return false;
+    }
+
+    $deadlineTimestamp = strtotime($deadline);
+    if ($deadlineTimestamp === false) {
+        return false;
+    }
+
+    $todayTimestamp = strtotime('today');
+    $deadlineDayTimestamp = strtotime(date('Y-m-d', $deadlineTimestamp));
+
+    if ($timelineFilter === 'overdue') {
+        return !$isComplete && $deadlineDayTimestamp < $todayTimestamp;
+    }
+
+    $windowDays = $timelineFilter === 'next_7_days' ? 7 : 30;
+    $windowEndTimestamp = strtotime('+' . $windowDays . ' days', $todayTimestamp);
+
+    return $deadlineDayTimestamp >= $todayTimestamp && $deadlineDayTimestamp <= $windowEndTimestamp;
 }
 
 $taskProjectLookup = null;
@@ -101,6 +158,25 @@ if ($projectOptionsStmt !== false) {
     }
     $projectOptionsStmt->close();
 }
+
+$clientOptionsById = [];
+foreach ($projectOptions as $projectOption) {
+    $clientId = (int) ($projectOption['client_id'] ?? 0);
+    if ($clientId <= 0) {
+        continue;
+    }
+
+    if (!isset($clientOptionsById[$clientId])) {
+        $clientOptionsById[$clientId] = [
+            'id' => $clientId,
+            'name' => (string) ($projectOption['client_name'] ?? 'Client'),
+            'project_count' => 0,
+        ];
+    }
+
+    $clientOptionsById[$clientId]['project_count']++;
+}
+$clientOptions = array_values($clientOptionsById);
 
 if ($selectedProjectId <= 0 && $selectedClientId > 0) {
     foreach ($projectOptions as $projectOption) {
@@ -245,6 +321,20 @@ $projectAdditionalCount = count($additionalItems);
 $projectTotalCount = $projectFeatureCount + $projectAdditionalCount;
 $projectCompleteCount = $featureCompleteCount + $additionalCompleteCount;
 $projectProgress = $projectTotalCount > 0 ? (int) round(($projectCompleteCount / $projectTotalCount) * 100) : 0;
+$filteredFeatureItems = array_values(array_filter(
+    $featureItems,
+    static fn(array $item): bool => releaseChecklistMatchesFilters($item, $selectedReleaseStatus, $selectedReleaseTimeline)
+));
+$filteredAdditionalItems = array_values(array_filter(
+    $additionalItems,
+    static fn(array $item): bool => releaseChecklistMatchesFilters($item, $selectedReleaseStatus, $selectedReleaseTimeline)
+));
+$activeReleaseFilterCount = ($selectedReleaseStatus !== 'all' ? 1 : 0)
+    + ($selectedReleaseTimeline !== 'all' ? 1 : 0);
+$clearReleaseFiltersUrl = 'release-status.php?' . http_build_query(array_filter([
+    'client_id' => $selectedClientId > 0 ? $selectedClientId : null,
+    'project_id' => $selectedProjectId > 0 ? $selectedProjectId : null,
+]));
 
 if ($selectedProject) {
     $isProjectReleaseComplete = (string) ($selectedProject['status'] ?? '') === 'completed'
@@ -381,44 +471,163 @@ include '../../includes/navbar.php';
     background: transparent;
 }
 
-.project-select-control {
-    width: min(100%, 900px);
+.release-filter-grid {
+    display: grid;
+    grid-template-columns:
+        minmax(175px, 0.8fr)
+        minmax(230px, 1.05fr)
+        minmax(160px, 0.68fr)
+        minmax(150px, 0.62fr)
+        auto;
+    gap: 0.85rem;
+    width: 100%;
+    align-items: end;
+}
+
+.release-filter-field {
+    min-width: 0;
+}
+
+.release-filter-field .form-label {
+    display: flex;
+    align-items: center;
+    gap: 0.42rem;
+    margin-bottom: 0.45rem;
+    color: #526275;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+}
+
+.release-filter-field .form-label i {
+    color: var(--theme-primary);
+    font-size: 0.72rem;
+}
+
+.release-filter-field .filter-optional {
+    color: #8a97a6;
+    font-size: 0.64rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.release-filter-field .form-select {
+    min-height: 46px;
+    border-color: #d4e0ea;
+    border-radius: 10px;
+    color: #26384b;
+    box-shadow: none;
+}
+
+.release-filter-field .form-select:focus {
+    border-color: #7eb2d2;
+    box-shadow: 0 0 0 3px rgba(30, 111, 160, 0.1);
+}
+
+.release-filter-actions {
+    display: flex;
+    min-height: 46px;
+    align-items: center;
+    gap: 0.8rem;
+    padding-bottom: 1px;
+    white-space: nowrap;
+}
+
+.release-clear-filters {
+    display: inline-flex;
+    min-height: 42px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid #d1dbe5;
+    border-radius: 9px;
+    background: #fff;
+    color: #435366;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.release-clear-filters:hover {
+    border-color: #91b7cf;
+    background: #f5faff;
+    color: var(--theme-primary);
+}
+
+.release-clear-filters.is-disabled {
+    pointer-events: none;
+    opacity: 0.48;
+}
+
+.release-active-filter-count {
+    color: #728095;
+    font-size: 0.76rem;
+}
+
+.release-active-filter-count strong {
+    color: #34475a;
+    font-weight: 600;
 }
 
 .summary-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0;
-    margin: 0;
-    border-bottom: 1px solid var(--gray-200);
+    gap: 0.85rem;
+    margin: 0 0 1.5rem;
+    padding: 0;
+    background: transparent;
+    border: 0;
 }
 
 .release-metric {
+    position: relative;
     min-width: 0;
-    padding: 1.05rem 1.35rem;
-    border: 0;
-    border-right: 1px solid var(--gray-200);
-    border-radius: 0;
-    background: #fbfdff;
-    box-shadow: none;
+    min-height: 76px;
+    padding: 0.9rem 3.75rem 0.85rem 1rem;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 12px;
+    background: linear-gradient(135deg, #ffffff 0%, #fbfdff 58%, #edf9fc 100%);
+    box-shadow: 0 7px 0 rgba(31, 99, 146, 0.08), 0 0 18px rgba(34, 211, 238, 0.05);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.release-metric:last-child {
-    border-right: 0;
+.release-metric:hover {
+    border-color: rgba(31, 99, 146, 0.2);
+    box-shadow: 0 7px 0 rgba(31, 99, 146, 0.08), 0 0 18px rgba(34, 211, 238, 0.08);
+}
+
+.release-metric-icon {
+    position: absolute;
+    top: 0.8rem;
+    right: 0.95rem;
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    background: #e9f3f8;
+    color: var(--theme-primary);
+    font-size: 0.95rem;
 }
 
 .summary-label {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--gray-500);
-    font-weight: 700;
-    margin-bottom: 0.35rem;
+    letter-spacing: 0.55px;
+    color: var(--gray-600);
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    line-height: 1.2;
 }
 
 .summary-value {
-    font-size: 1.55rem;
-    font-weight: 700;
+    font-size: 1.4rem;
+    font-weight: 600;
     color: var(--theme-primary);
     line-height: 1;
 }
@@ -825,8 +1034,26 @@ include '../../includes/navbar.php';
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .release-metric {
-    background: #081827;
+    background: linear-gradient(135deg, #0a1b2c 0%, #081827 100%);
     border-color: rgba(31, 99, 146, 0.24);
+    box-shadow: 0 7px 0 rgba(2, 11, 20, 0.5), 0 0 18px rgba(34, 211, 238, 0.04);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-grid {
+    background: transparent;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .release-metric-icon {
+    background: rgba(31, 99, 146, 0.2);
+    color: #8fd3ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-label {
+    color: #90aeca;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .summary-value {
+    color: #8fd3ff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .feature-list-head,
@@ -897,6 +1124,27 @@ include '../../includes/navbar.php';
     box-shadow: 0 0 0 3px rgba(31, 99, 146, 0.12);
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .release-filter-field .form-label,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .release-active-filter-count {
+    color: #9db6cf;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .release-active-filter-count strong {
+    color: #d7e4f2;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .release-clear-filters {
+    background: #0a1b2c;
+    border-color: rgba(31, 99, 146, 0.28);
+    color: #b7c9da;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .release-clear-filters:hover {
+    background: #0c2033;
+    border-color: rgba(31, 99, 146, 0.5);
+    color: #d7e4f2;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .progress-track {
     background: rgba(157, 182, 207, 0.18);
 }
@@ -923,17 +1171,21 @@ include '../../includes/navbar.php';
     color: var(--theme-primary);
 }
 
-@media (max-width: 992px) {
-    .summary-grid {
+@media (max-width: 1280px) {
+    .release-filter-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .release-metric:nth-child(2) {
-        border-right: 0;
+    .release-filter-actions {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
     }
+}
 
-    .release-metric:nth-child(-n + 2) {
-        border-bottom: 1px solid var(--gray-200);
+@media (max-width: 992px) {
+    .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.7rem;
     }
 
     .feature-list-head,
@@ -950,16 +1202,31 @@ include '../../includes/navbar.php';
 
     .summary-grid {
         grid-template-columns: 1fr;
+        gap: 0.55rem;
+        margin-bottom: 1.25rem;
+        padding: 0;
     }
 
-    .release-metric,
-    .release-metric:nth-child(2) {
-        border-right: 0;
-        border-bottom: 1px solid var(--gray-200);
+    .release-filter-grid {
+        grid-template-columns: 1fr;
     }
 
-    .release-metric:last-child {
-        border-bottom: 0;
+    .release-filter-actions {
+        grid-column: auto;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .release-metric {
+        min-height: 68px;
+        padding: 0.75rem 3.5rem 0.75rem 0.85rem;
+    }
+
+    .release-metric-icon {
+        top: 0.7rem;
+        right: 0.8rem;
+        width: 34px;
+        height: 34px;
     }
 
     .checklist-body {
@@ -1012,52 +1279,130 @@ include '../../includes/navbar.php';
         <p class="mb-0">Track approved features through final release.</p>
     </div>
 
+    <?php if ($selectedProject): ?>
+    <div class="summary-grid" aria-label="Release summary">
+        <div class="release-metric">
+            <span class="release-metric-icon" aria-hidden="true"><i class="fas fa-circle-check"></i></span>
+            <div class="summary-label">Completed</div>
+            <div class="summary-value"><?php echo $projectCompleteCount; ?></div>
+            <div class="summary-sub">Checklist items finished</div>
+        </div>
+        <div class="release-metric">
+            <span class="release-metric-icon" aria-hidden="true"><i class="fas fa-hourglass-half"></i></span>
+            <div class="summary-label">Pending</div>
+            <div class="summary-value"><?php echo max(0, $projectTotalCount - $projectCompleteCount); ?></div>
+            <div class="summary-sub">Still waiting for release</div>
+        </div>
+        <div class="release-metric">
+            <span class="release-metric-icon" aria-hidden="true"><i class="fas fa-list-check"></i></span>
+            <div class="summary-label">Additional Requirements</div>
+            <div class="summary-value"><?php echo $projectAdditionalCount; ?></div>
+            <div class="summary-sub">Architect enhancement items</div>
+        </div>
+        <div class="release-metric">
+            <span class="release-metric-icon" aria-hidden="true"><i class="fas fa-chart-line"></i></span>
+            <div class="summary-label">Checklist Progress</div>
+            <div class="summary-value"><?php echo $projectProgress; ?>%</div>
+            <div class="summary-sub">Architect checklist completion</div>
+        </div>
+    </div>
+    <?php endif; ?>
+
     <section class="release-workspace">
         <form method="GET" class="filter-card">
-            <div class="row">
-                <div class="col-12">
-                    <div class="project-select-control">
-                        <label class="form-label fw-semibold">Project</label>
-                        <select name="project_id" class="form-select" onchange="this.form.submit()">
-                            <?php if ($projectOptions): ?>
-                                <?php foreach ($projectOptions as $project): ?>
-                                    <option value="<?php echo (int) $project['id']; ?>" <?php echo (int) $project['id'] === (int) $selectedProjectId ? 'selected' : ''; ?>>
-                                        <?php echo htmlspecialchars($project['name'] . ' — ' . $project['client_name']); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <option value="">No projects available</option>
-                            <?php endif; ?>
-                        </select>
-                    </div>
+            <div class="release-filter-grid">
+                <div class="release-filter-field">
+                    <label for="releaseClientFilter" class="form-label">
+                        <i class="fas fa-users" aria-hidden="true"></i>
+                        Client
+                    </label>
+                    <select
+                        id="releaseClientFilter"
+                        name="client_id"
+                        class="form-select"
+                        onchange="this.form.elements.project_id.value = ''; this.form.submit();"
+                    >
+                        <?php if ($clientOptions): ?>
+                            <?php foreach ($clientOptions as $client): ?>
+                                <option value="<?php echo (int) $client['id']; ?>" <?php echo (int) $client['id'] === (int) $selectedClientId ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($client['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <option value="">No clients available</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+
+                <div class="release-filter-field">
+                    <label for="releaseProjectFilter" class="form-label">
+                        <i class="fas fa-briefcase" aria-hidden="true"></i>
+                        Project
+                    </label>
+                    <select id="releaseProjectFilter" name="project_id" class="form-select" onchange="this.form.submit()">
+                        <?php
+                        $hasClientProjects = false;
+                        foreach ($projectOptions as $project):
+                            if ((int) $project['client_id'] !== (int) $selectedClientId) {
+                                continue;
+                            }
+                            $hasClientProjects = true;
+                        ?>
+                            <option value="<?php echo (int) $project['id']; ?>" <?php echo (int) $project['id'] === (int) $selectedProjectId ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($project['name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                        <?php if (!$hasClientProjects): ?>
+                            <option value="">No projects available for this client</option>
+                        <?php endif; ?>
+                    </select>
+                </div>
+
+                <div class="release-filter-field">
+                    <label for="releaseStatusFilter" class="form-label">
+                        <i class="fas fa-filter" aria-hidden="true"></i>
+                        Status <span class="filter-optional">(Optional)</span>
+                    </label>
+                    <select id="releaseStatusFilter" name="status" class="form-select" onchange="this.form.submit()">
+                        <option value="all" <?php echo $selectedReleaseStatus === 'all' ? 'selected' : ''; ?>>All statuses</option>
+                        <option value="not_started" <?php echo $selectedReleaseStatus === 'not_started' ? 'selected' : ''; ?>>Not started</option>
+                        <option value="in_progress" <?php echo $selectedReleaseStatus === 'in_progress' ? 'selected' : ''; ?>>In progress</option>
+                        <option value="complete" <?php echo $selectedReleaseStatus === 'complete' ? 'selected' : ''; ?>>Complete</option>
+                    </select>
+                </div>
+
+                <div class="release-filter-field">
+                    <label for="releaseTimelineFilter" class="form-label">
+                        <i class="fas fa-calendar-alt" aria-hidden="true"></i>
+                        Timeline <span class="filter-optional">(Optional)</span>
+                    </label>
+                    <select id="releaseTimelineFilter" name="timeline" class="form-select" onchange="this.form.submit()">
+                        <option value="all" <?php echo $selectedReleaseTimeline === 'all' ? 'selected' : ''; ?>>All Time</option>
+                        <option value="overdue" <?php echo $selectedReleaseTimeline === 'overdue' ? 'selected' : ''; ?>>Overdue</option>
+                        <option value="next_7_days" <?php echo $selectedReleaseTimeline === 'next_7_days' ? 'selected' : ''; ?>>Next 7 days</option>
+                        <option value="next_30_days" <?php echo $selectedReleaseTimeline === 'next_30_days' ? 'selected' : ''; ?>>Next 30 days</option>
+                        <option value="no_target_date" <?php echo $selectedReleaseTimeline === 'no_target_date' ? 'selected' : ''; ?>>No target date</option>
+                    </select>
+                </div>
+
+                <div class="release-filter-actions">
+                    <a
+                        href="<?php echo htmlspecialchars($clearReleaseFiltersUrl); ?>"
+                        class="release-clear-filters <?php echo $activeReleaseFilterCount === 0 ? 'is-disabled' : ''; ?>"
+                        <?php echo $activeReleaseFilterCount === 0 ? 'aria-disabled="true"' : ''; ?>
+                    >
+                        Clear Filters
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                    </a>
+                    <span class="release-active-filter-count">
+                        <strong><?php echo $activeReleaseFilterCount; ?></strong>
+                        Active Filter<?php echo $activeReleaseFilterCount === 1 ? '' : 's'; ?>
+                    </span>
                 </div>
             </div>
         </form>
 
     <?php if ($selectedProject): ?>
-        <div class="summary-grid">
-            <div class="release-metric">
-                <div class="summary-label">Completed</div>
-                <div class="summary-value"><?php echo $projectCompleteCount; ?></div>
-                <div class="summary-sub">Checklist items finished</div>
-            </div>
-            <div class="release-metric">
-                <div class="summary-label">Pending</div>
-                <div class="summary-value"><?php echo max(0, $projectTotalCount - $projectCompleteCount); ?></div>
-                <div class="summary-sub">Still waiting for release</div>
-            </div>
-            <div class="release-metric">
-                <div class="summary-label">Additional Requirements</div>
-                <div class="summary-value"><?php echo $projectAdditionalCount; ?></div>
-                <div class="summary-sub">Architect enhancement items</div>
-            </div>
-            <div class="release-metric">
-                <div class="summary-label">Checklist Progress</div>
-                <div class="summary-value"><?php echo $projectProgress; ?>%</div>
-                <div class="summary-sub">Architect checklist completion</div>
-            </div>
-        </div>
-
         <div class="checklist-card" id="insight-task-problems">
             <?php if (
                 ($selectedProjectReceipt && (int) ($selectedProjectReceipt['receipt_id'] ?? 0) > 0)
@@ -1092,9 +1437,13 @@ include '../../includes/navbar.php';
                 <div class="checklist-section">
                     <div class="section-title">
                         <h6>Features from Architect</h6>
-                        <small><?php echo count($featureItems); ?> features</small>
+                        <small>
+                            <?php echo count($filteredFeatureItems); ?>
+                            <?php echo $activeReleaseFilterCount > 0 ? 'of ' . count($featureItems) : ''; ?>
+                            features
+                        </small>
                     </div>
-                    <?php if ($featureItems): ?>
+                    <?php if ($filteredFeatureItems): ?>
                         <div class="feature-list">
                             <div class="feature-list-head" aria-hidden="true">
                                 <span>Feature</span>
@@ -1102,7 +1451,7 @@ include '../../includes/navbar.php';
                                 <span>Deadline</span>
                                 <span>Status</span>
                             </div>
-                            <?php foreach ($featureItems as $feature): ?>
+                            <?php foreach ($filteredFeatureItems as $feature): ?>
                                 <?php
                                 $featureDescription = trim((string) ($feature['description'] ?? ''));
                                 $showFeatureDescription = $featureDescription !== ''
@@ -1137,8 +1486,12 @@ include '../../includes/navbar.php';
                         </div>
                     <?php else: ?>
                         <div class="empty-state">
-                            <i class="fas fa-clipboard-list"></i>
-                            <p class="mb-0">No architect features have been defined for this project yet.</p>
+                            <i class="fas <?php echo $activeReleaseFilterCount > 0 ? 'fa-filter' : 'fa-clipboard-list'; ?>"></i>
+                            <p class="mb-0">
+                                <?php echo $activeReleaseFilterCount > 0
+                                    ? 'No features match the selected status and timeline filters.'
+                                    : 'No architect features have been defined for this project yet.'; ?>
+                            </p>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -1147,16 +1500,21 @@ include '../../includes/navbar.php';
                     <div class="checklist-section">
                         <div class="section-title">
                             <h6>Additional Requirements from Architect</h6>
-                            <small><?php echo count($additionalItems); ?> items</small>
+                            <small>
+                                <?php echo count($filteredAdditionalItems); ?>
+                                <?php echo $activeReleaseFilterCount > 0 ? 'of ' . count($additionalItems) : ''; ?>
+                                items
+                            </small>
                         </div>
-                        <div class="feature-list">
-                            <div class="feature-list-head" aria-hidden="true">
-                                <span>Requirement</span>
-                                <span>Owner</span>
-                                <span>Deadline</span>
-                                <span>Status</span>
-                            </div>
-                            <?php foreach ($additionalItems as $feature): ?>
+                        <?php if ($filteredAdditionalItems): ?>
+                            <div class="feature-list">
+                                <div class="feature-list-head" aria-hidden="true">
+                                    <span>Requirement</span>
+                                    <span>Owner</span>
+                                    <span>Deadline</span>
+                                    <span>Status</span>
+                                </div>
+                            <?php foreach ($filteredAdditionalItems as $feature): ?>
                                 <?php
                                 $featureDescription = trim((string) ($feature['description'] ?? ''));
                                 $showFeatureDescription = $featureDescription !== ''
@@ -1188,7 +1546,13 @@ include '../../includes/navbar.php';
                                     </span>
                                 </div>
                             <?php endforeach; ?>
-                        </div>
+                            </div>
+                        <?php else: ?>
+                            <div class="empty-state">
+                                <i class="fas fa-filter"></i>
+                                <p class="mb-0">No additional requirements match the selected filters.</p>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
 

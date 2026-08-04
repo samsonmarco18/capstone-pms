@@ -4,7 +4,7 @@ declare(strict_types=1);
 function userPreferenceDefaults(): array
 {
     return [
-        'theme_preference' => 'system',
+        'theme_preference' => 'default',
         'accent_color' => 'blue',
         'evortix_enabled' => 1,
         'evortix_suggestions' => 1,
@@ -22,7 +22,7 @@ function userPreferenceDefaults(): array
 function userPreferenceEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
 {
     $columns = [
-        'theme_preference' => "VARCHAR(20) DEFAULT 'system'",
+        'theme_preference' => "VARCHAR(20) DEFAULT 'default'",
         'accent_color' => "VARCHAR(20) DEFAULT 'blue'",
         'evortix_enabled' => 'SMALLINT DEFAULT 1',
         'evortix_suggestions' => 'SMALLINT DEFAULT 1',
@@ -48,7 +48,7 @@ function userPreferenceEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): v
 function userPreferencesFromUser(?array $user): array
 {
     $preferences = userPreferenceDefaults();
-    if (!$user || strtolower((string) ($user['role'] ?? '')) === 'admin') {
+    if (!$user) {
         return $preferences;
     }
 
@@ -71,15 +71,19 @@ function userPreferencesFromUser(?array $user): array
         $preferences[$integerKey] = (int) $preferences[$integerKey];
     }
 
+    // Light/dark is controlled by the navbar. Retired appearance choices map
+    // to the wallpaper-free Default skin.
+    if (!in_array((string) $preferences['theme_preference'], ['default', 'tropical', 'futuristic'], true)) {
+        $preferences['theme_preference'] = 'default';
+    }
+
     return $preferences;
 }
 
 function userPreferenceThemeOptions(): array
 {
     return [
-        'system' => 'Use device setting',
-        'light' => 'Light',
-        'dark' => 'Dark',
+        'default' => 'Default',
         'tropical' => 'Tropical Coast',
         'futuristic' => 'Futuristic Neon',
     ];
