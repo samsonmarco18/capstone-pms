@@ -73,4 +73,21 @@ function storageResolveRelativePath(string $relativePath): ?string
 
     return $absolutePath;
 }
+
+function storagePublicUrl(string $relativePath): string
+{
+    $relativePath = ltrim(trim(str_replace('\\', '/', $relativePath)), '/');
+    if ($relativePath === '') {
+        return '';
+    }
+
+    $webRootUploads = rtrim(str_replace('\\', '/', APP_ROOT_PATH . '/uploads'), '/') . '/';
+    $storageRoot = rtrim(str_replace('\\', '/', storageRootPath()), '/') . '/';
+
+    if ($storageRoot === $webRootUploads) {
+        return BASE_URL . $relativePath;
+    }
+
+    return BASE_URL . 'api/uploads/view.php?path=' . rawurlencode($relativePath);
+}
 ?>
