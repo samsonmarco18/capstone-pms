@@ -571,12 +571,15 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-copy .form-label { color:#e4eef7; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .project-picker-copy small { color:#91abc3; }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-repository-nav .nav-link {
-    color:#9db6cf;
+    background:transparent !important;
+    border-color:transparent !important;
+    color:#9db6cf !important;
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-repository-nav .nav-link:hover,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-repository-nav .nav-link.active {
-    background:#0a1b2c;
-    color:#8fd3ff;
+    background:#102a3f !important;
+    border-color:rgba(143,211,255,.18) !important;
+    color:#8fd3ff !important;
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .vc-repository-nav .badge {
     background:rgba(157,182,207,.14);
@@ -630,6 +633,41 @@ body{background:linear-gradient(180deg,#f5f8fb 0%,#edf3f7 100%);}
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .timeline-item {
     border-left-color: rgba(31, 99, 146, 0.24);
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .table,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .table tbody,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .table tbody tr,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .table tbody td {
+    --bs-table-bg:transparent;
+    --bs-table-color:#d7e4f2;
+    --bs-table-border-color:rgba(31,99,146,.24);
+    background:#071321 !important;
+    border-color:rgba(31,99,146,.24) !important;
+    color:#d7e4f2 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .table tbody tr:hover td {
+    --bs-table-hover-bg:#0b2134;
+    background:#0b2134 !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .table-shell .branch-row-selected td {
+    --bs-table-accent-bg:#0d2b42;
+    background:#0d2b42 !important;
+    box-shadow:inset 3px 0 0 #3bb9ef;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .branch-row-selected .fw-semibold {
+    color:#8fd3ff !important;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.blue {
+    background:rgba(59,130,246,.2);
+    color:#93c5fd;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.green {
+    background:rgba(16,185,129,.18);
+    color:#6ee7b7;
+}
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .pill.gray {
+    background:rgba(148,163,184,.16);
+    color:#cbd5e1;
 }
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .diff-bar {
     background: rgba(157, 182, 207, 0.18);
