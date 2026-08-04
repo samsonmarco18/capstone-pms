@@ -134,7 +134,17 @@ function salesClientsScopeAdjustedComplexity(?string $timelineStart, ?string $ti
 {
     $base = strtolower(projectWorkflowClassifyComplexity($timelineStart, $timelineEnd, $budget, $priority));
     $featureCount = count(array_filter(array_map('trim', preg_split('/\R/', $requestedFeatures) ?: [])));
-    if ($featureCount >= 13) $base = 'high';
+    $workingDays = 0;
+    if ($timelineStart && $timelineEnd) {
+        $start = DateTimeImmutable::createFromFormat('!Y-m-d', $timelineStart);
+        $end = DateTimeImmutable::createFromFormat('!Y-m-d', $timelineEnd);
+        if ($start && $end && $end >= $start) {
+            for ($date = $start; $date <= $end; $date = $date->modify('+1 day')) {
+                if ((int) $date->format('N') <= 5) $workingDays++;
+            }
+        }
+    }
+    if ($featureCount >= 13 || ($featureCount > 0 && $workingDays > 0 && $workingDays < ($featureCount * 3))) $base = 'high';
     elseif ($featureCount >= 8 && in_array($base, ['low', 'simple'], true)) $base = 'medium';
     return salesClientsProjectComplexityValue($base);
 }
@@ -520,8 +530,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $salesNotes = trim((string) ($_POST['sales_notes'] ?? ''));
         $salesBudgetInput = trim((string) ($_POST['sales_budget'] ?? ''));
         $salesBudget = parseSalesBudgetInput($salesBudgetInput);
-        $timelineStart = $_POST['timeline_start'] ?: null;
-        $timelineEnd = $_POST['timeline_end'] ?: ($deadline ?: null);
+        $timelineStart = parseSalesDateInput((string) ($_POST['timeline_start'] ?? ''));
+        $timelineEnd = parseSalesDateInput((string) ($_POST['timeline_end'] ?? '')) ?: parseSalesDateInput((string) $deadline);
         $timelineStartTimeInput = trim((string) ($_POST['timeline_start_time'] ?? ''));
         $timelineEndTimeInput = trim((string) ($_POST['timeline_end_time'] ?? ''));
         $timelineStartTime = parseSalesTimeInput($timelineStartTimeInput);
@@ -545,6 +555,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             $_SESSION['error'] = 'Timeline start time must be valid.';
         } elseif ($timelineEndTimeInput !== '' && $timelineEndTime === null) {
             $_SESSION['error'] = 'Project deadline time must be valid.';
+        } elseif ($timelineStart !== null && $timelineEnd !== null && $timelineEnd < $timelineStart) {
+            $_SESSION['error'] = 'Project deadline cannot be earlier than the timeline start date.';
+        } elseif ($timelineStart !== null && $timelineEnd !== null && $timelineStart === $timelineEnd
+            && $timelineStartTime !== null && $timelineEndTime !== null && $timelineEndTime <= $timelineStartTime) {
+            $_SESSION['error'] = 'Project deadline time must be later than the start time when both dates are the same.';
         } else {
             $deadline = $deadline ?: $timelineEnd;
             $conn->begin_transaction();
@@ -705,6 +720,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $_SESSION['error'] = 'Timeline start time must be valid.';
             } elseif ($timelineEndTimeInput !== '' && $timelineEndTime === null) {
                 $_SESSION['error'] = 'Project deadline time must be valid.';
+            } elseif ($timelineStart !== null && $timelineEnd !== null && $timelineEnd < $timelineStart) {
+                $_SESSION['error'] = 'Project deadline cannot be earlier than the timeline start date.';
+            } elseif ($timelineStart !== null && $timelineEnd !== null && $timelineStart === $timelineEnd
+                && $timelineStartTime !== null && $timelineEndTime !== null && $timelineEndTime <= $timelineStartTime) {
+                $_SESSION['error'] = 'Project deadline time must be later than the start time when both dates are the same.';
             } else {
                 $conn->begin_transaction();
 
@@ -9814,12 +9834,16 @@ function getAddProjectComplexityAssessment() {
     const featureCount = getAddProjectFeatureValues().length;
     const budget = Number(budgetRaw);
     let days = 0;
+    let workingDays = 0;
 
     if (startValue && endValue) {
         const startDate = new Date(startValue + 'T00:00:00');
         const endDate = new Date(endValue + 'T00:00:00');
         if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime()) && endDate >= startDate) {
             days = Math.floor((endDate - startDate) / 86400000) + 1;
+            for (const date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+                if (date.getDay() !== 0 && date.getDay() !== 6) workingDays++;
+            }
         }
     }
 
@@ -9835,11 +9859,15 @@ function getAddProjectComplexityAssessment() {
         + ({ low: 0, medium: 1, high: 2, critical: 2 }[String(priorityValue).toLowerCase()] ?? 1)
         + (featureCount >= 13 ? 2 : (featureCount >= 8 ? 1 : 0))
     );
-    const level = featureCount >= 13 || score >= 6 ? 'High' : (score >= 3 ? 'Medium' : 'Low');
+    const scheduleIsCompressed = featureCount > 0 && workingDays > 0 && workingDays < (featureCount * 3);
+    const level = featureCount >= 13 || scheduleIsCompressed || score >= 6 ? 'High' : (score >= 3 ? 'Medium' : 'Low');
     const budgetLabel = ({ low: 'Low budget', medium: 'Medium budget', high: 'High budget' }[budgetBand] || 'Medium budget');
     const timelineLabel = ({ long: 'Long timeline', moderate: 'Moderate timeline', short: 'Short timeline' }[timelineBand] || 'Moderate timeline');
     const priorityLabel = getAddProjectPriorityMarkup(priorityValue).label + ' priority';
-    const reason = `${level} complexity based on ${featureCount} requested features, ${budgetLabel.toLowerCase()}, ${timelineLabel.toLowerCase()}, and ${priorityLabel.toLowerCase()} for a score of ${score}/8.`;
+    const scheduleReason = featureCount > 0 && workingDays > 0
+        ? ` The schedule provides ${workingDays} working day${workingDays === 1 ? '' : 's'} against an estimated ${featureCount * 3}–${featureCount * 5} working days for the selected features.`
+        : '';
+    const reason = `${level} complexity based on ${featureCount} requested features, ${budgetLabel.toLowerCase()}, ${timelineLabel.toLowerCase()}, and ${priorityLabel.toLowerCase()} for a score of ${score}/8.${scheduleReason}`;
 
     return { level, reason, score };
 }
@@ -9996,6 +10024,14 @@ function prepareAddProjectTimelineValidation(shouldReport = true) {
 
     endDateField.setCustomValidity('');
     endTimeField.setCustomValidity('');
+    endDateField.min = startDateField.value || '';
+    if (startDateField.value && endDateField.value && endDateField.value < startDateField.value) {
+        endDateField.setCustomValidity('Project deadline cannot be earlier than the timeline start date.');
+        if (shouldReport) {
+            endDateField.reportValidity();
+        }
+        return false;
+    }
     if (!startDateField.value || !startTimeField.value || !endDateField.value || !endTimeField.value) {
         return true;
     }
@@ -10124,6 +10160,9 @@ if (addProjectFormElement) {
         if (['timeline_start', 'timeline_start_time', 'timeline_end', 'timeline_end_time', 'sales_budget', 'priority'].includes(event.target?.name || '')) {
             addProjectFormElement.elements.timeline_end?.setCustomValidity('');
             addProjectFormElement.elements.timeline_end_time?.setCustomValidity('');
+            if (addProjectFormElement.elements.timeline_end) {
+                addProjectFormElement.elements.timeline_end.min = addProjectFormElement.elements.timeline_start?.value || '';
+            }
             updateAddProjectGeneratedComplexity();
         }
     });
@@ -11435,12 +11474,16 @@ if (addClientModalElement && addClientForm) {
         const featureCount = getRequestedFeatureValues().length;
         const budget = Number(budgetValue);
         let days = 0;
+        let workingDays = 0;
 
         if (startValue && endValue) {
             const startDate = new Date(startValue + 'T00:00:00');
             const endDate = new Date(endValue + 'T00:00:00');
             if (!Number.isNaN(startDate.getTime()) && !Number.isNaN(endDate.getTime()) && endDate >= startDate) {
                 days = Math.floor((endDate - startDate) / 86400000) + 1;
+                for (const date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+                    if (date.getDay() !== 0 && date.getDay() !== 6) workingDays++;
+                }
             }
         }
 
@@ -11456,11 +11499,15 @@ if (addClientModalElement && addClientForm) {
             + ({ low: 0, medium: 1, high: 2, critical: 2 }[priorityValue] ?? 1)
             + (featureCount >= 13 ? 2 : (featureCount >= 8 ? 1 : 0))
         );
-        const level = featureCount >= 13 || score >= 6 ? 'High' : (score >= 3 ? 'Medium' : 'Low');
+        const scheduleIsCompressed = featureCount > 0 && workingDays > 0 && workingDays < (featureCount * 3);
+        const level = featureCount >= 13 || scheduleIsCompressed || score >= 6 ? 'High' : (score >= 3 ? 'Medium' : 'Low');
         const budgetLabel = ({ low: 'Low budget', medium: 'Medium budget', high: 'High budget' }[budgetBand] || 'Medium budget');
         const timelineLabel = ({ long: 'Long timeline', moderate: 'Moderate timeline', short: 'Short timeline' }[timelineBand] || 'Moderate timeline');
         const priorityLabel = getPriorityMarkup(priorityValue).label + ' priority';
-        const reason = `${level} complexity based on ${featureCount} requested features, ${budgetLabel.toLowerCase()}, ${timelineLabel.toLowerCase()}, and ${priorityLabel.toLowerCase()} for a score of ${score}/8. ${
+        const scheduleReason = featureCount > 0 && workingDays > 0
+            ? ` The schedule provides ${workingDays} working day${workingDays === 1 ? '' : 's'} against an estimated ${featureCount * 3}–${featureCount * 5} working days for the selected features.`
+            : '';
+        const reason = `${level} complexity based on ${featureCount} requested features, ${budgetLabel.toLowerCase()}, ${timelineLabel.toLowerCase()}, and ${priorityLabel.toLowerCase()} for a score of ${score}/8.${scheduleReason} ${
             level === 'High'
                 ? 'Tighter deadline pressure, higher budget scope, or urgent priority increases delivery coordination and effort.'
                 : (level === 'Medium'
@@ -12169,6 +12216,11 @@ if (addClientModalElement && addClientForm) {
 
         endDateField.setCustomValidity('');
         endTimeField.setCustomValidity('');
+        endDateField.min = startDateField.value || '';
+        if (startDateField.value && endDateField.value && endDateField.value < startDateField.value) {
+            endDateField.setCustomValidity('Project deadline cannot be earlier than the timeline start date.');
+            return false;
+        }
         if (!startDateField.value || !startTimeField.value || !endDateField.value || !endTimeField.value) {
             return true;
         }
@@ -12550,6 +12602,9 @@ if (addClientModalElement && addClientForm) {
         addClientForm.elements[fieldName]?.addEventListener('input', () => {
             addClientForm.elements.timeline_end?.setCustomValidity('');
             addClientForm.elements.timeline_end_time?.setCustomValidity('');
+            if (addClientForm.elements.timeline_end) {
+                addClientForm.elements.timeline_end.min = addClientForm.elements.timeline_start?.value || '';
+            }
         });
     });
 
