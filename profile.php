@@ -3,6 +3,7 @@ require_once 'includes/auth.php';
 requireLogin();
 
 $user = getCurrentUser();
+$profileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
 
 include 'includes/header.php';
 include 'includes/sidebar.php';
@@ -74,11 +75,23 @@ include 'includes/navbar.php';
     margin: 0;
     border: 3px solid #e4f2f9;
     box-shadow: 0 8px 18px rgba(31, 99, 146, 0.16);
+    overflow: hidden;
 }
 
 .profile-avatar i {
     font-size: 1.8rem;
     color: white;
+}
+
+.profile-avatar img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.profile-avatar.has-profile-image i {
+    display: none;
 }
 
 .profile-identity {
@@ -401,7 +414,10 @@ include 'includes/navbar.php';
     <div class="profile-card">
         <!-- Profile Header with Avatar -->
         <div class="profile-header">
-            <div class="profile-avatar">
+            <div class="profile-avatar <?php echo $profileImageUrl !== '' ? 'has-profile-image' : ''; ?>">
+                <?php if ($profileImageUrl !== ''): ?>
+                    <img src="<?php echo htmlspecialchars($profileImageUrl); ?>" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.remove('has-profile-image');">
+                <?php endif; ?>
                 <i class="fas fa-user"></i>
             </div>
             <div class="profile-identity">

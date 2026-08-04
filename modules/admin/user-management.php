@@ -611,6 +611,45 @@ include '../../includes/navbar.php';
     color: var(--panel-muted);
 }
 
+.user-directory-profile {
+    align-items: center;
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.user-directory-avatar {
+    align-items: center;
+    background: linear-gradient(145deg, #dff1fb 0%, #c8e4f4 100%);
+    border: 1px solid #bedcec;
+    border-radius: 50%;
+    color: var(--theme-primary);
+    display: inline-flex;
+    flex: 0 0 38px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    height: 38px;
+    justify-content: center;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    width: 38px;
+}
+
+.user-directory-avatar img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.user-directory-avatar.has-profile-image span {
+    display: none;
+}
+
+.user-directory-copy {
+    min-width: 0;
+}
+
 /* Badges */
 .badge-role {
     display: inline-block;
@@ -1023,6 +1062,12 @@ include '../../includes/navbar.php';
     color: var(--panel-text) !important;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .user-directory-avatar {
+    background: #102a40;
+    border-color: #214764;
+    color: #8cc7ff;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .modal-modern .modal-title {
     color: #ffffff !important;
 }
@@ -1394,10 +1439,24 @@ include '../../includes/navbar.php';
                 </thead>
                 <tbody>
                     <?php while($row = $users->fetch_assoc()): ?>
+                    <?php
+                        $rowProfileImageUrl = getUserProfileImageUrl($row['profile_pic'] ?? null);
+                        $rowInitials = getUserInitials($row['full_name'] ?? 'User');
+                    ?>
                     <tr>
                         <td>
-                            <div class="user-name"><?php echo htmlspecialchars($row['full_name']); ?></div>
-                            <div class="user-email"><?php echo htmlspecialchars($row['email']); ?></div>
+                            <div class="user-directory-profile">
+                                <span class="user-directory-avatar <?php echo $rowProfileImageUrl !== '' ? 'has-profile-image' : ''; ?>" aria-hidden="true">
+                                    <?php if ($rowProfileImageUrl !== ''): ?>
+                                        <img src="<?php echo htmlspecialchars($rowProfileImageUrl); ?>" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.remove('has-profile-image');">
+                                    <?php endif; ?>
+                                    <span><?php echo htmlspecialchars($rowInitials); ?></span>
+                                </span>
+                                <div class="user-directory-copy">
+                                    <div class="user-name"><?php echo htmlspecialchars($row['full_name']); ?></div>
+                                    <div class="user-email"><?php echo htmlspecialchars($row['email']); ?></div>
+                                </div>
+                            </div>
                         </td>
                         <td><?php echo htmlspecialchars($row['department'] ?: '—'); ?></td>
                         <td>

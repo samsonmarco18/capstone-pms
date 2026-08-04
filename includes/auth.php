@@ -43,6 +43,35 @@ function getCurrentUser(): ?array
     return $user;
 }
 
+function getUserProfileImageUrl(?string $profilePic): string
+{
+    $profilePic = trim((string) $profilePic);
+    if ($profilePic === '') {
+        return '';
+    }
+
+    if (preg_match('#^https?://#i', $profilePic)) {
+        return $profilePic;
+    }
+
+    return BASE_URL . ltrim(str_replace('\\', '/', $profilePic), '/');
+}
+
+function getUserInitials(?string $name): string
+{
+    $parts = preg_split('/\s+/', trim((string) $name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if ($parts === []) {
+        return '?';
+    }
+
+    $substring = function_exists('mb_substr') ? 'mb_substr' : 'substr';
+    $uppercase = function_exists('mb_strtoupper') ? 'mb_strtoupper' : 'strtoupper';
+    $first = $substring((string) $parts[0], 0, 1);
+    $last = count($parts) > 1 ? $substring((string) $parts[count($parts) - 1], 0, 1) : '';
+
+    return $uppercase($first . $last);
+}
+
 function hasRole(array|string $roles): bool
 {
     $user = getCurrentUser();

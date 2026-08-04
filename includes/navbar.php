@@ -59,6 +59,7 @@ $appUserContext = [
     'id' => (int) ($user['id'] ?? 0),
     'role' => (string) ($user['role'] ?? ''),
 ];
+$navbarProfileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
 ?>
 
 <script>
@@ -137,7 +138,10 @@ $appUserContext = [
 
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center gap-2 nav-user-link" href="#" id="navbarUserMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <div class="user-profile-pic d-flex align-items-center justify-content-center text-white">
+                        <div class="user-profile-pic <?php echo $navbarProfileImageUrl !== '' ? 'has-profile-image ' : ''; ?>d-flex align-items-center justify-content-center text-white">
+                            <?php if ($navbarProfileImageUrl !== ''): ?>
+                                <img src="<?php echo htmlspecialchars($navbarProfileImageUrl); ?>" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.remove('has-profile-image');">
+                            <?php endif; ?>
                             <i class="fas fa-user"></i>
                         </div>
                         <div class="d-none d-md-flex flex-column text-start">

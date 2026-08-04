@@ -650,7 +650,19 @@ unset($_SESSION['success'], $_SESSION['error']);
     height: 36px;
     justify-content: center;
     letter-spacing: 0.03em;
+    overflow: hidden;
     width: 36px;
+}
+
+.resource-profile-avatar img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.resource-profile-avatar.has-profile-image span {
+    display: none;
 }
 
 .resource-profile-copy {
@@ -1139,6 +1151,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                                         if (count($resourceNameParts) > 1) {
                                             $resourceInitials .= $resourceInitial((string) end($resourceNameParts));
                                         }
+                                        $resourceProfileImageUrl = getUserProfileImageUrl($resource['profile_pic'] ?? null);
                                         $resourceActiveTasks = (int) ($resource['active_tasks'] ?? 0);
                                         $workloadPercent = (int) round(min(100, ($resourceActiveTasks / 5) * 100));
                                         $statusClass = $resourceActiveTasks >= 5 ? 'overloaded' : ($resourceActiveTasks >= 3 ? 'busy' : ($resourceActiveTasks > 0 ? 'available' : 'free'));
@@ -1147,7 +1160,12 @@ unset($_SESSION['success'], $_SESSION['error']);
                                     <tr>
                                         <td>
                                             <div class="resource-profile">
-                                                <span class="resource-profile-avatar" aria-hidden="true"><?php echo htmlspecialchars($resourceInitials); ?></span>
+                                                <span class="resource-profile-avatar <?php echo $resourceProfileImageUrl !== '' ? 'has-profile-image' : ''; ?>" aria-hidden="true">
+                                                    <?php if ($resourceProfileImageUrl !== ''): ?>
+                                                        <img src="<?php echo htmlspecialchars($resourceProfileImageUrl); ?>" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.remove('has-profile-image');">
+                                                    <?php endif; ?>
+                                                    <span><?php echo htmlspecialchars($resourceInitials); ?></span>
+                                                </span>
                                                 <div class="resource-profile-copy">
                                                     <p class="resource-profile-name"><?php echo htmlspecialchars($resourceName); ?></p>
                                                     <span class="resource-profile-email" title="<?php echo htmlspecialchars((string) $resource['email']); ?>"><?php echo htmlspecialchars((string) $resource['email']); ?></span>

@@ -10,6 +10,70 @@ $message = '';
 $error = '';
 $forcePasswordChange = !empty($_SESSION['force_password_change']);
 $preferencesSaved = false;
+$profileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_profile_photo']) && $error === '') {
+    $profileFile = $_FILES['profile_photo'] ?? null;
+    $allowedProfileTypes = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+    ];
+    $maxProfileBytes = 3 * 1024 * 1024;
+
+    if (!is_array($profileFile) || ($profileFile['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        $error = 'Choose a profile photo before uploading.';
+    } elseif (($profileFile['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        $error = 'Unable to read the selected profile photo.';
+    } elseif ((int) ($profileFile['size'] ?? 0) > $maxProfileBytes) {
+        $error = 'Profile photo must be 3MB or smaller.';
+    } elseif (!is_uploaded_file((string) ($profileFile['tmp_name'] ?? ''))) {
+        $error = 'Profile photo upload was not accepted.';
+    } else {
+        $mimeType = '';
+        if (class_exists('finfo')) {
+            $fileInfo = new finfo(FILEINFO_MIME_TYPE);
+            $mimeType = (string) $fileInfo->file((string) $profileFile['tmp_name']);
+        } elseif (function_exists('mime_content_type')) {
+            $mimeType = (string) mime_content_type((string) $profileFile['tmp_name']);
+        }
+
+        if (!isset($allowedProfileTypes[$mimeType])) {
+            $error = 'Profile photo must be JPG, PNG, or WEBP.';
+        } else {
+            $uploadDir = __DIR__ . '/uploads/profile-pictures';
+            if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true)) {
+                $error = 'Unable to prepare profile photo storage.';
+            } else {
+                $fileName = 'user-' . (int) $user['id'] . '-' . bin2hex(random_bytes(8)) . '.' . $allowedProfileTypes[$mimeType];
+                $relativePath = 'uploads/profile-pictures/' . $fileName;
+                $targetPath = $uploadDir . DIRECTORY_SEPARATOR . $fileName;
+
+                if (!move_uploaded_file((string) $profileFile['tmp_name'], $targetPath)) {
+                    $error = 'Unable to save the profile photo.';
+                } else {
+                    $stmt = $conn->prepare('UPDATE users SET profile_pic = ? WHERE id = ?');
+                    if ($stmt === false) {
+                        @unlink($targetPath);
+                        $error = 'Unable to prepare profile photo update.';
+                    } else {
+                        $stmt->bind_param('si', $relativePath, $user['id']);
+                        if ($stmt->execute()) {
+                            $message = 'Profile photo updated.';
+                            logActivity((int) $user['id'], 'update_profile_photo', 'users', (int) $user['id']);
+                            $user = getCurrentUser();
+                            $profileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
+                        } else {
+                            @unlink($targetPath);
+                            $error = 'Unable to update your profile photo.';
+                        }
+                        $stmt->close();
+                    }
+                }
+            }
+        }
+    }
+}
 
 if (!$isAdmin) {
     try {
@@ -369,6 +433,93 @@ include 'includes/navbar.php';
 
 .settings-section-body {
     padding: 1.15rem 1.65rem 1.55rem;
+}
+
+.settings-profile-form {
+    align-items: center;
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    max-width: 820px;
+}
+
+.settings-profile-preview {
+    align-items: center;
+    background: linear-gradient(135deg, #42a9d8 0%, #1f6392 100%);
+    border: 3px solid #e4f2f9;
+    border-radius: 50%;
+    box-shadow: 0 12px 24px rgba(31, 99, 146, .16);
+    color: #fff;
+    display: flex;
+    flex: 0 0 88px;
+    height: 88px;
+    justify-content: center;
+    overflow: hidden;
+    width: 88px;
+}
+
+.settings-profile-preview img {
+    display: block;
+    height: 100%;
+    object-fit: cover;
+    width: 100%;
+}
+
+.settings-profile-preview.has-profile-image i {
+    display: none;
+}
+
+.settings-profile-preview i {
+    font-size: 2.2rem;
+}
+
+.settings-profile-copy {
+    min-width: 0;
+}
+
+.settings-upload-field {
+    align-items: stretch;
+    border: 1px dashed #bcd6e8;
+    border-radius: 12px;
+    display: flex;
+    max-width: 560px;
+    overflow: hidden;
+}
+
+.settings-upload-button {
+    align-items: center;
+    background: #edf8fd;
+    border-right: 1px solid #cfe4ef;
+    color: #075b76;
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-weight: 700;
+    gap: .45rem;
+    margin: 0;
+    padding: .8rem 1rem;
+}
+
+.settings-upload-button:hover {
+    background: #dff2fb;
+}
+
+.settings-upload-summary {
+    align-items: center;
+    color: var(--text-color);
+    display: flex;
+    min-width: 0;
+    overflow: hidden;
+    padding: .8rem 1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.settings-profile-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1rem;
+    max-width: 560px;
 }
 
 .settings-field {
@@ -757,6 +908,29 @@ include 'includes/navbar.php';
     background: rgba(8, 35, 55, .5);
 }
 
+[data-theme="dark"] .settings-profile-preview {
+    border-color: rgba(197, 235, 255, .32);
+    box-shadow: 0 12px 28px rgba(2, 15, 27, .28);
+}
+
+[data-theme="dark"] .settings-upload-field {
+    border-color: rgba(138, 210, 255, .26);
+}
+
+[data-theme="dark"] .settings-upload-button {
+    background: rgba(31, 99, 146, .22);
+    border-right-color: rgba(138, 210, 255, .18);
+    color: #aee2ff;
+}
+
+[data-theme="dark"] .settings-upload-button:hover {
+    background: rgba(31, 99, 146, .34);
+}
+
+[data-theme="dark"] .settings-upload-summary {
+    color: #d7e4f2;
+}
+
 @media (max-width: 991.98px) {
     .settings-workspace {
         grid-template-columns: 1fr;
@@ -803,6 +977,11 @@ include 'includes/navbar.php';
 
     .settings-section-body {
         padding: 1rem 1.1rem 1.2rem;
+    }
+
+    .settings-profile-form {
+        align-items: flex-start;
+        grid-template-columns: 1fr;
     }
 
     .settings-regional-grid {
@@ -862,14 +1041,15 @@ include 'includes/navbar.php';
     <div class="settings-workspace">
         <nav class="settings-navigation" aria-label="Settings sections">
             <span class="settings-navigation-label">Your preferences</span>
+            <a class="settings-nav-link is-active" href="#settingsProfile" data-settings-target="settingsProfile" aria-controls="settingsProfile" aria-current="page"><i class="fas fa-user-circle"></i><span>Profile</span></a>
             <?php if (!$isAdmin): ?>
-                <a class="settings-nav-link is-active" href="#settingsAppearance" data-settings-target="settingsAppearance" aria-controls="settingsAppearance" aria-current="page"><i class="fas fa-palette"></i><span>Appearance</span></a>
+                <a class="settings-nav-link" href="#settingsAppearance" data-settings-target="settingsAppearance" aria-controls="settingsAppearance"><i class="fas fa-palette"></i><span>Appearance</span></a>
                 <a class="settings-nav-link" href="#settingsEvortix" data-settings-target="settingsEvortix" aria-controls="settingsEvortix"><i class="fas fa-robot"></i><span>Evortix</span></a>
                 <a class="settings-nav-link" href="#settingsNotifications" data-settings-target="settingsNotifications" aria-controls="settingsNotifications"><i class="fas fa-bell"></i><span>Notifications</span></a>
                 <a class="settings-nav-link" href="#settingsRegional" data-settings-target="settingsRegional" aria-controls="settingsRegional"><i class="fas fa-globe"></i><span>Regional</span></a>
                 <div class="settings-navigation-separator"></div>
             <?php endif; ?>
-            <a class="settings-nav-link<?php echo $isAdmin ? ' is-active' : ''; ?>" href="#settingsSecurity" data-settings-target="settingsSecurity" aria-controls="settingsSecurity"<?php echo $isAdmin ? ' aria-current="page"' : ''; ?>><i class="fas fa-lock"></i><span>Security</span></a>
+            <a class="settings-nav-link" href="#settingsSecurity" data-settings-target="settingsSecurity" aria-controls="settingsSecurity"><i class="fas fa-lock"></i><span>Security</span></a>
             <?php if ($isAdmin): ?>
                 <div class="settings-navigation-separator"></div>
                 <a href="<?php echo BASE_URL; ?>modules/admin/settings.php"><i class="fas fa-screwdriver-wrench"></i><span>System settings</span></a>
@@ -877,9 +1057,53 @@ include 'includes/navbar.php';
         </nav>
 
         <main class="settings-content">
+            <section class="settings-section" id="settingsProfile" data-settings-panel>
+                <div class="settings-section-header">
+                    <span class="settings-section-icon"><i class="fas fa-user-circle"></i></span>
+                    <div>
+                        <h2>Profile photo</h2>
+                        <p>Upload a photo for your account avatar across the workspace.</p>
+                    </div>
+                </div>
+                <div class="settings-section-body">
+                    <form method="POST" enctype="multipart/form-data" class="settings-profile-form" data-app-loading data-loading-title="Uploading profile photo" data-loading-text="Please wait while your profile photo is saved.">
+                        <div class="settings-profile-preview <?php echo $profileImageUrl !== '' ? 'has-profile-image' : ''; ?>">
+                            <?php if ($profileImageUrl !== ''): ?>
+                                <img src="<?php echo htmlspecialchars($profileImageUrl); ?>" alt="" loading="lazy" onerror="this.remove(); this.parentElement.classList.remove('has-profile-image');">
+                            <?php endif; ?>
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div class="settings-profile-copy">
+                            <label class="form-label" for="profilePhoto">Profile photo</label>
+                            <div class="settings-upload-field">
+                                <label for="profilePhoto" class="settings-upload-button">
+                                    <i class="fas fa-paperclip" aria-hidden="true"></i>
+                                    <span>Choose File</span>
+                                </label>
+                                <span class="settings-upload-summary" id="profilePhotoSummary">No file chosen</span>
+                                <input
+                                    id="profilePhoto"
+                                    type="file"
+                                    name="profile_photo"
+                                    class="visually-hidden"
+                                    accept=".jpg,.jpeg,.png,.webp"
+                                    aria-describedby="profilePhotoSummary"
+                                    required
+                                >
+                            </div>
+                            <small class="settings-field-note">Accepted formats: JPG, PNG, WEBP. Max 3MB.</small>
+                            <div class="settings-profile-actions">
+                                <button type="submit" name="upload_profile_photo" class="btn btn-primary">
+                                    <i class="fas fa-upload me-1"></i> Upload photo
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </section>
             <?php if (!$isAdmin): ?>
-                <form method="POST" id="personalPreferencesForm">
-                    <section class="settings-section" id="settingsAppearance" data-settings-panel>
+                <form method="POST" id="personalPreferencesForm" hidden>
+                    <section class="settings-section" id="settingsAppearance" data-settings-panel hidden>
                         <div class="settings-section-header">
                             <span class="settings-section-icon"><i class="fas fa-palette"></i></span>
                             <div>
@@ -1021,7 +1245,7 @@ include 'includes/navbar.php';
                 </form>
             <?php endif; ?>
 
-            <section class="settings-section" id="settingsSecurity" data-settings-panel<?php echo !$isAdmin ? ' hidden' : ''; ?>>
+            <section class="settings-section" id="settingsSecurity" data-settings-panel hidden>
                 <div class="settings-section-header">
                     <span class="settings-section-icon"><i class="fas fa-lock"></i></span>
                     <div>
@@ -1102,6 +1326,16 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    const profilePhotoInput = document.getElementById('profilePhoto');
+    const profilePhotoSummary = document.getElementById('profilePhotoSummary');
+    if (profilePhotoInput && profilePhotoSummary) {
+        profilePhotoInput.addEventListener('change', function () {
+            profilePhotoSummary.textContent = profilePhotoInput.files && profilePhotoInput.files.length
+                ? profilePhotoInput.files[0].name
+                : 'No file chosen';
+        });
+    }
+
     const navigationItems = Array.from(workspace.querySelectorAll('[data-settings-target]'));
     const panels = Array.from(workspace.querySelectorAll('[data-settings-panel]'));
     const preferenceForm = document.getElementById('personalPreferencesForm');
@@ -1134,9 +1368,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const serverSelectedPanel = <?php
         echo json_encode(
-            ($isAdmin || isset($_POST['password']) || isset($_POST['logout_other_sessions']))
+            (isset($_POST['password']) || isset($_POST['logout_other_sessions']))
                 ? 'settingsSecurity'
-                : ''
+                : (isset($_POST['save_preferences']) ? 'settingsAppearance' : 'settingsProfile')
         );
     ?>;
 
