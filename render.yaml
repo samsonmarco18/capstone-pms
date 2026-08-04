@@ -25,9 +25,7 @@ services:
       - key: DB_DRIVER
         value: pgsql
       - key: DATABASE_URL
-        fromDatabase:
-          name: erni-pms-db
-          property: connectionString
+        sync: false
       - key: UPLOAD_STORAGE_ROOT
         value: /tmp/erni-pms/uploads
       - key: MAIL_ENABLED
@@ -60,9 +58,3 @@ services:
         sync: false
       - key: GMAIL_USER
         sync: false
-databases:
-  - name: erni-pms-db
-    plan: free
-    region: oregon
-    databaseName: erni_pms
-    user: erni_user
