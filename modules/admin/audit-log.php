@@ -1124,6 +1124,21 @@ include '../../includes/navbar.php';
     background: transparent;
     border-color: rgba(138, 210, 255, 0.18);
     color: #d8e6f3;
+    color-scheme: dark;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select option,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__size option,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select option {
+    background-color: #071725;
+    color: #d8e6f3;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input select option:checked,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .audit-pagination__size option:checked,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select option:checked {
+    background-color: #1f6392;
+    color: #ffffff;
 }
 
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .filter-input > i {
