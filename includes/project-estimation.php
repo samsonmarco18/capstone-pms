@@ -612,7 +612,12 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
             SELECT
                 COUNT(DISTINCT t.id) AS total_features,
                 COUNT(DISTINCT CASE
-                    WHEN fe.min_days > 0 AND fe.likely_days > 0 AND fe.max_days > 0 THEN t.id
+                    WHEN fe.status = 'completed'
+                     AND TRIM(COALESCE(fe.expectation_description, '')) <> ''
+                     AND fe.min_days >= 1
+                     AND fe.likely_days >= fe.min_days
+                     AND fe.max_days >= fe.likely_days
+                    THEN t.id
                     ELSE NULL
                 END) AS estimated_features
             FROM tasks t
@@ -649,6 +654,11 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
     $technologyCostComplete = count($technologies) > 0;
     $developerAllocationComplete = $allocatedDeveloperCount > 0;
     $developerCostComplete = $developerAllocationComplete;
+    $finalSubmissionReady = $projectOverviewComplete
+        && $technologyCostComplete
+        && $developerAllocationComplete
+        && $developerCostComplete
+        && $featureProgressReady;
     $projectCostSummaryComplete = $estimationLockedForReview;
     $reviewHeadline = 'Sent to Sales for review';
     $reviewMessage = 'Your estimate is safely submitted. Editing is locked while Sales checks the cost breakdown.';
@@ -1191,9 +1201,9 @@ function projectEstimationRenderExpertModule(mysqli|PgsqlMysqliCompatConnection 
                                     </div>
                                     <a class="project-estimation-dashboard-link" href="<?php echo BASE_URL; ?>modules/expert/dashboard.php"><i class="fas fa-arrow-left" aria-hidden="true"></i>Back to Dashboard</a>
                                 <?php else: ?>
-                                    <div class="project-estimation-submit-note"><i class="fas fa-circle-info" aria-hidden="true"></i><span>Review all amounts before submitting. The estimate will be locked and sent to the Expert SUL.</span></div>
+                                    <div class="project-estimation-submit-note"><i class="fas fa-circle-info" aria-hidden="true"></i><span><?php echo $finalSubmissionReady ? 'All required sections are complete. The estimate will be locked and sent to Sales for final review.' : 'Complete the project overview, technology stack, developer allocation, costs, and every feature estimate before submitting to Sales.'; ?></span></div>
                                     <div class="project-estimation-action-buttons">
-                                        <button type="submit" class="btn-save-phases project-estimation-submit" form="projectCostEstimationForm"><i class="fas fa-paper-plane"></i>Submit for SUL Review</button>
+                                        <button type="submit" class="btn-save-phases project-estimation-submit" form="projectCostEstimationForm" <?php echo $finalSubmissionReady ? '' : 'disabled aria-disabled="true"'; ?>><i class="fas fa-paper-plane"></i>Final Submit to Sales</button>
                                     </div>
                                 <?php endif; ?>
                             </div>

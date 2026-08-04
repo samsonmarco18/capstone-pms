@@ -1523,6 +1523,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && $projectId <= 0 && !$sulMissingDepar
 
 // Handle task operations
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if ($canManageExpertWorkflow && (isset($_POST['reject_project_estimation']) || isset($_POST['reject_estimation']))) {
+        $_SESSION['error'] = 'Expert estimations can only be completed after the client-approved Sales review.';
+        header('Location: task-allocation.php' . ($projectId > 0 ? '?project_id=' . (int) $projectId : ''));
+        exit();
+    }
+
     if (isset($_POST['sul_approve_reopen']) || isset($_POST['sul_reject_reopen'])) {
         if (!$canManageDeveloperWorkflow) {
             $_SESSION['error'] = "Only department SULs outside Expert Department can review developer reopen requests.";
@@ -4452,7 +4458,7 @@ include '../../includes/navbar.php';
 
 .project-review-decisions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 0;
 }
 
@@ -7059,18 +7065,6 @@ include '../../includes/navbar.php';
                                             <i class="fas fa-check"></i> Complete Estimation
                                         </button>
                                     </form>
-                                    <form method="POST" class="project-review-decision is-revision" data-generic-draft-disabled="1" data-app-loading data-loading-title="Returning estimation" data-loading-text="Sending the estimation back for revision.">
-                                        <input type="hidden" name="estimation_id" value="<?php echo (int) $estimate['id']; ?>">
-                                        <div class="project-review-decision-head">
-                                            <i class="fas fa-rotate-left" aria-hidden="true"></i>
-                                            <span><strong>Request revision</strong><span>Return the estimate with clear changes for the Expert.</span></span>
-                                        </div>
-                                        <label for="revisionReason<?php echo (int) $estimate['id']; ?>">Revision reason <span>(required)</span></label>
-                                        <textarea id="revisionReason<?php echo (int) $estimate['id']; ?>" name="rejection_reason" class="form-control-custom" rows="2" required placeholder="Explain what needs to be revised"></textarea>
-                                        <button type="submit" name="reject_project_estimation" class="btn-warning-modern">
-                                            <i class="fas fa-rotate-left"></i> Request Revision
-                                        </button>
-                                    </form>
                                 </div>
                             </div>
                         </article>
@@ -7144,9 +7138,6 @@ include '../../includes/navbar.php';
                                                 <div class="allocation-table-actions" onclick="event.stopPropagation();">
                                                     <button class="btn-success-modern" type="button" onclick="approveEstimation(<?php echo (int) $task['id']; ?>)">
                                                         <i class="fas fa-check"></i> Approve
-                                                    </button>
-                                                    <button class="btn-warning-modern" type="button" onclick="openRejectModal(<?php echo (int) $task['id']; ?>, <?php echo htmlspecialchars(json_encode((string) $task['title']), ENT_QUOTES, 'UTF-8'); ?>)">
-                                                        <i class="fas fa-times"></i> Reject
                                                     </button>
                                                 </div>
                                             </td>
@@ -8394,34 +8385,6 @@ include '../../includes/navbar.php';
 </div>
 <?php endif; ?>
 
-<!-- Reject Estimation Modal -->
-<?php if ($canManageExpertWorkflow): ?>
-<div class="modal fade modal-modern" id="rejectModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="fas fa-times-circle me-2"></i>Reject Estimation</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" data-app-loading data-loading-title="Rejecting estimation" data-loading-text="Please wait while the estimation is returned to the expert.">
-                <div class="modal-body">
-                    <input type="hidden" name="task_id" id="rejectTaskId">
-                    <p><strong>Task:</strong> <span id="rejectTaskTitle"></span></p>
-                    <div class="mb-3">
-                        <label class="form-label">Reason for Rejection</label>
-                        <textarea name="rejection_reason" class="form-control-custom" rows="3" required placeholder="Please provide feedback for the expert..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn-outline-modern" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="reject_estimation" class="btn-warning-modern">Reject Estimation</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-<?php endif; ?>
-
 <!-- Task Details Modal -->
 <div class="modal fade modal-modern" id="taskDetailsModal" tabindex="-1" aria-labelledby="taskDetailsModalTitle">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -9006,12 +8969,6 @@ async function approveEstimation(taskId) {
     form.innerHTML = `<input type="hidden" name="approve_estimation" value="1"><input type="hidden" name="task_id" value="${taskId}">`;
     document.body.appendChild(form);
     form.submit();
-}
-
-function openRejectModal(taskId, taskTitle) {
-    document.getElementById('rejectTaskId').value = taskId;
-    document.getElementById('rejectTaskTitle').textContent = taskTitle;
-    new bootstrap.Modal(document.getElementById('rejectModal')).show();
 }
 
 function openReviseCompletedModal(taskId, taskTitle) {
