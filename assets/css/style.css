@@ -3598,6 +3598,28 @@ body {
     background: linear-gradient(145deg, #438fc6 0%, #285f9e 100%);
 }
 
+.conversation-avatar.has-profile-image,
+.chat-thread-avatar.has-profile-image,
+.chat-group-info-hero-avatar.has-profile-image,
+.chat-group-member-avatar.has-profile-image,
+.group-member-avatar.has-profile-image,
+.message-avatar.has-profile-image {
+    overflow: hidden;
+}
+
+.conversation-avatar img,
+.chat-thread-avatar img,
+.chat-group-info-hero-avatar img,
+.chat-group-member-avatar img,
+.group-member-avatar img,
+.message-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    border-radius: inherit;
+}
+
 .conversation-main {
     flex: 1 1 auto;
     min-width: 0;

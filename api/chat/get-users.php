@@ -14,7 +14,7 @@ $user = getCurrentUser();
 $conn = getConnection();
 
 $stmt = $conn->prepare("
-    SELECT id, full_name, role, email 
+    SELECT id, full_name, role, email, profile_pic
     FROM users 
     WHERE id != ? AND status = 'active'
     ORDER BY full_name
@@ -25,6 +25,8 @@ $result = $stmt->get_result();
 
 $users = [];
 while($row = $result->fetch_assoc()) {
+    $row['profile_url'] = getUserProfileImageUrl($row['profile_pic'] ?? null);
+    unset($row['profile_pic']);
     $users[] = $row;
 }
 

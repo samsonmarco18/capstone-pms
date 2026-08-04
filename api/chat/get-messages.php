@@ -47,10 +47,10 @@ if ($groupId > 0) {
     $stmt = $conn->prepare(
         'SELECT m.id, m.sender_id, m.message, m.message_type, m.created_at,
                 m.reply_to_message_id, m.forwarded_from_message_id, m.edited_at, m.deleted_at,
-                u.full_name AS sender_name,
+                u.full_name AS sender_name, u.profile_pic AS sender_profile_pic,
                 rm.message AS reply_message, rm.deleted_at AS reply_deleted_at,
-                rm.sender_id AS reply_sender_id, ru.full_name AS reply_sender_name,
-                fm.sender_id AS forwarded_sender_id, fu.full_name AS forwarded_sender_name
+                rm.sender_id AS reply_sender_id, ru.full_name AS reply_sender_name, ru.profile_pic AS reply_sender_profile_pic,
+                fm.sender_id AS forwarded_sender_id, fu.full_name AS forwarded_sender_name, fu.profile_pic AS forwarded_sender_profile_pic
          FROM messages m
          INNER JOIN users u ON u.id = m.sender_id
          LEFT JOIN messages rm ON rm.id = m.reply_to_message_id
@@ -66,10 +66,10 @@ if ($groupId > 0) {
     $stmt = $conn->prepare(
         'SELECT m.id, m.sender_id, m.message, m.message_type, m.created_at,
                 m.reply_to_message_id, m.forwarded_from_message_id, m.edited_at, m.deleted_at,
-                u.full_name AS sender_name,
+                u.full_name AS sender_name, u.profile_pic AS sender_profile_pic,
                 rm.message AS reply_message, rm.deleted_at AS reply_deleted_at,
-                rm.sender_id AS reply_sender_id, ru.full_name AS reply_sender_name,
-                fm.sender_id AS forwarded_sender_id, fu.full_name AS forwarded_sender_name
+                rm.sender_id AS reply_sender_id, ru.full_name AS reply_sender_name, ru.profile_pic AS reply_sender_profile_pic,
+                fm.sender_id AS forwarded_sender_id, fu.full_name AS forwarded_sender_name, fu.profile_pic AS forwarded_sender_profile_pic
          FROM messages m
          INNER JOIN users u ON u.id = m.sender_id
          LEFT JOIN messages rm ON rm.id = m.reply_to_message_id
@@ -92,6 +92,10 @@ while ($row = $result->fetch_assoc()) {
     $row['is_mine'] = (int) $row['sender_id'] === (int) $user['id'];
     $row['reply_is_mine'] = (int) ($row['reply_sender_id'] ?? 0) === (int) $user['id'];
     $row['forwarded_is_mine'] = (int) ($row['forwarded_sender_id'] ?? 0) === (int) $user['id'];
+    $row['sender_profile_url'] = getUserProfileImageUrl($row['sender_profile_pic'] ?? null);
+    $row['reply_sender_profile_url'] = getUserProfileImageUrl($row['reply_sender_profile_pic'] ?? null);
+    $row['forwarded_sender_profile_url'] = getUserProfileImageUrl($row['forwarded_sender_profile_pic'] ?? null);
+    unset($row['sender_profile_pic'], $row['reply_sender_profile_pic'], $row['forwarded_sender_profile_pic']);
     $row['is_deleted'] = !empty($row['deleted_at']);
     if ($row['is_deleted']) {
         $row['message'] = '';
