@@ -7776,7 +7776,7 @@ restoreRoadmapEditor(roadmapEditorState);
             'title' => 'Methodology recommendation ready',
             'message' => $methodologyDetail,
             'stateKey' => 'evortix.dss.methodology.project.' . (int) ($selectedProject['id'] ?? 0),
-            'persistDecisions' => false,
+            'persistDecisions' => true,
             'startDelay' => 100,
             'pointAtMessage' => true,
             'pointSide' => 'left',
