@@ -28,6 +28,8 @@ services:
         fromDatabase:
           name: erni-pms-db
           property: connectionString
+      - key: UPLOAD_STORAGE_ROOT
+        value: /tmp/erni-pms/uploads
       - key: MAIL_ENABLED
         value: "1"
       - key: MAIL_DELIVERY_METHOD

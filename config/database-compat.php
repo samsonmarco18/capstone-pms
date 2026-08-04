@@ -130,9 +130,12 @@ final class PgsqlMysqliCompatConnection
     public int $insert_id = 0;
     public int $affected_rows = 0;
 
-    public function __construct(string $host, string $user, string $pass, string $database, int $port = 5432)
+    public function __construct(string $host, string $user, string $pass, string $database, int $port = 5432, string $sslMode = 'prefer')
     {
-        $dsn = sprintf('pgsql:host=%s;port=%d;dbname=%s', $host, $port, $database);
+        $safeSslMode = in_array(strtolower($sslMode), ['disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'], true)
+            ? strtolower($sslMode)
+            : 'prefer';
+        $dsn = sprintf('pgsql:host=%s;port=%d;dbname=%s;sslmode=%s', $host, $port, $database, $safeSslMode);
 
         try {
             $this->pdo = new PDO($dsn, $user, $pass, [

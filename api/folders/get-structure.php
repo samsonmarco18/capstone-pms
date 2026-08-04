@@ -1,13 +1,9 @@
 <?php
-header('Content-Type: application/json');
+require_once __DIR__ . '/../../includes/folder-api.php';
+folderApiInitialize();
 
-require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../includes/auth.php';
-
-requireLogin();
-
+$user = folderApiRequireUser();
 $conn = getConnection();
-$user = getCurrentUser();
 $roleFilter = trim((string) ($_GET['role'] ?? $user['role']));
 
 function ensureClientRootFolders(mysqli|PgsqlMysqliCompatConnection $conn, int $createdBy): void
@@ -252,16 +248,13 @@ try {
     $recentFiles = $recentStmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $recentStmt->close();
 
-    echo json_encode([
+    folderApiRespond([
+        'success' => true,
         'folders' => $folders,
         'recent_files' => $recentFiles,
         'user_role' => $user['role'],
     ]);
 } catch (Throwable $e) {
-    error_log('Folder tree API failed: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode([
-        'error' => 'Unable to load folders right now.',
-    ]);
+    folderApiError($e, 'Folder tree API failed', 'Unable to load folders right now.');
 }
 ?>

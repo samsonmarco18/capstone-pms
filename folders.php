@@ -1,5 +1,5 @@
 ﻿<?php
-require_once 'includes/auth.php';
+require_once __DIR__ . '/includes/auth.php';
 requireLogin();
 $user = getCurrentUser();
 $conn = getConnection();
@@ -947,6 +947,7 @@ let currentBreadcrumb = [];
 let sharedFolderRoots = [];
 const SHARED_FOLDERS_ID = 'shared-folders';
 const CURRENT_USER_ROLE = '<?php echo htmlspecialchars($user['role'] ?? '', ENT_QUOTES, 'UTF-8'); ?>';
+const FOLDER_API_BASE = new URL('api/folders/', window.location.href).toString();
 
 // Initialize folders page
 $(document).ready(function() {
@@ -1035,7 +1036,7 @@ function showProjectPanel(projectContext, folderId, projectId) {
         : `folder_id=${folderId}`;
 
     $.ajax({
-        url: `<?php echo BASE_URL; ?>api/folders/get-project-context.php?${query}`,
+        url: `${FOLDER_API_BASE}get-project-context.php?${query}`,
         dataType: 'json',
         success: function(data) {
             if (data && data.error) {
@@ -1050,6 +1051,10 @@ function showProjectPanel(projectContext, folderId, projectId) {
             const message = xhr.responseJSON && xhr.responseJSON.error
                 ? xhr.responseJSON.error
                 : 'Unable to load project details right now.';
+            if (xhr.status === 401) {
+                handleFolderApiError(xhr, message);
+                return;
+            }
             $('#projectDetailsPanel').html(`<div class="alert alert-warning mb-0">${escapeHtml(message)}</div>`);
             $('#projectDetailsCard').addClass('is-visible');
         }
@@ -1069,7 +1074,7 @@ function loadSharedFolders() {
     $('#currentFolderTitle').html('<i class="fas fa-folder-open me-2"></i>Shared Projects');
 
     $.ajax({
-        url: `<?php echo BASE_URL; ?>api/folders/get-tree.php?folder_id=0&role=${encodeURIComponent(CURRENT_USER_ROLE)}`,
+        url: `${FOLDER_API_BASE}get-tree.php?folder_id=0&role=${encodeURIComponent(CURRENT_USER_ROLE)}`,
         dataType: 'json',
         success: function(data) {
             if (data && data.error) {
@@ -1091,6 +1096,10 @@ function loadSharedFolders() {
             const message = xhr.responseJSON && xhr.responseJSON.error
                 ? xhr.responseJSON.error
                 : 'Failed to load shared projects.';
+            if (xhr.status === 401) {
+                handleFolderApiError(xhr, message);
+                return;
+            }
             showFolderLoadError(message);
         }
     });
@@ -1223,7 +1232,7 @@ function loadFolderContents(folderId) {
     currentFolderId = folderId;
     
     $.ajax({
-        url: `<?php echo BASE_URL; ?>api/folders/get-files.php?folder_id=${folderId}`,
+        url: `${FOLDER_API_BASE}get-files.php?folder_id=${folderId}`,
         dataType: 'json',
         success: function(data) {
             hideLoading();
@@ -1269,6 +1278,10 @@ function loadFolderContents(folderId) {
             const message = xhr.responseJSON && xhr.responseJSON.error
                 ? xhr.responseJSON.error
                 : 'Failed to load folder contents.';
+            if (xhr.status === 401) {
+                handleFolderApiError(xhr, message);
+                return;
+            }
             $('#fileTableBody').html(`<tr><td colspan="7" class="text-center text-muted py-5">${escapeHtml(message)}</td></tr>`);
         }
     });
@@ -1331,7 +1344,7 @@ function renderProjectEntries(folders, files) {
                 <td>
                     <div class="d-flex align-items-center">
                         <i class="${icon} me-2" style="font-size: 18px;"></i>
-                        <a href="<?php echo BASE_URL; ?>${file.file_path}" target="_blank" class="file-link">${escapeHtml(file.original_file_name)}</a>
+                        <a href="${getFolderDownloadUrl(file.id)}" target="_blank" rel="noopener" class="file-link">${escapeHtml(file.original_file_name)}</a>
                     </div>
                 </td>
                 <td>${size}</td>
@@ -1340,7 +1353,7 @@ function renderProjectEntries(folders, files) {
                 <td><span class="badge-file">${file.file_type || 'File'}</span></td>
                 <td>
                     <div class="btn-group btn-group-sm">
-                        <a href="<?php echo BASE_URL; ?>${file.file_path}" class="btn-outline-modern" download title="Download" style="padding: 0.2rem 0.5rem;">
+                        <a href="${getFolderDownloadUrl(file.id)}" class="btn-outline-modern" download title="Download" style="padding: 0.2rem 0.5rem;">
                             <i class="fas fa-download"></i>
                         </a>
                         <button class="btn-outline-modern" onclick="deleteFile(${file.id})" title="Delete" style="padding: 0.2rem 0.5rem;">
@@ -1444,7 +1457,7 @@ function updateBulkSelection() {
     }).get();
     
     if (selectedFiles.length > 0) {
-        $('#bulkActionsModal').modal('show');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('bulkActionsModal')).show();
     }
 }
 
@@ -1462,6 +1475,28 @@ function showFolderNotice(title, message, type = 'success') {
     console[type === 'error' ? 'error' : 'log'](`${title}: ${message}`);
 }
 
+function getFolderDownloadUrl(fileId) {
+    return `${FOLDER_API_BASE}download.php?id=${encodeURIComponent(String(fileId))}`;
+}
+
+function handleFolderApiError(xhr, fallbackMessage) {
+    const response = xhr && xhr.responseJSON ? xhr.responseJSON : null;
+    const message = response && (response.error || response.message)
+        ? (response.error || response.message)
+        : fallbackMessage;
+
+    if (xhr && xhr.status === 401) {
+        showFolderNotice('Session expired', message, 'error');
+        const loginUrl = response && response.login_url
+            ? response.login_url
+            : new URL('login.php', window.location.href).toString();
+        window.setTimeout(() => window.location.assign(loginUrl), 500);
+        return;
+    }
+
+    showFolderNotice('Folders', message, 'error');
+}
+
 async function bulkDelete() {
     const confirmed = typeof window.appConfirm === 'function'
         ? await window.appConfirm({
@@ -1473,32 +1508,33 @@ async function bulkDelete() {
             confirmText: 'Delete Files',
             variant: 'danger'
         })
-        : false;
+        : window.confirm(`Delete ${selectedFiles.length} file(s)? This cannot be undone.`);
 
     if (!confirmed) {
         return;
     }
 
     $.ajax({
-        url: `<?php echo BASE_URL; ?>api/folders/bulk-delete-files.php`,
+        url: `${FOLDER_API_BASE}bulk-delete-files.php`,
         method: 'POST',
+        dataType: 'json',
         data: { file_ids: selectedFiles },
         success: function() {
             bootstrap.Modal.getInstance(document.getElementById('bulkActionsModal'))?.hide();
             loadFolderContents(currentFolderId);
             showFolderNotice('Folders', `${selectedFiles.length} files deleted`);
         },
-        error: function() {
-            showFolderNotice('Folders', 'Unable to delete selected files.', 'error');
+        error: function(xhr) {
+            handleFolderApiError(xhr, 'Unable to delete selected files.');
         }
     });
 }
 
 function bulkDownload() {
     selectedFiles.forEach(id => {
-        window.open(`<?php echo BASE_URL; ?>api/folders/download.php?id=${id}`, '_blank');
+        window.open(getFolderDownloadUrl(id), '_blank', 'noopener');
     });
-    bootstrap.Modal.getInstance(document.getElementById('bulkActionsModal')).hide();
+    bootstrap.Modal.getInstance(document.getElementById('bulkActionsModal'))?.hide();
 }
 
 function bulkMove() {
@@ -1516,17 +1552,19 @@ async function deleteFile(fileId) {
             confirmText: 'Delete File',
             variant: 'danger'
         })
-        : false;
+        : window.confirm('Delete this file?');
 
     if (!confirmed) {
         return;
     }
 
     $.ajax({
-        url: `<?php echo BASE_URL; ?>api/folders/delete-file.php?id=${fileId}`,
+        url: `${FOLDER_API_BASE}delete-file.php`,
         method: 'POST',
+        dataType: 'json',
+        data: { id: fileId },
         success: () => loadFolderContents(currentFolderId),
-        error: () => showFolderNotice('Folders', 'Unable to delete this file.', 'error')
+        error: xhr => handleFolderApiError(xhr, 'Unable to delete this file.')
     });
 }
 
@@ -1544,18 +1582,19 @@ async function createFolderInCurrent() {
             confirmIcon: 'fas fa-folder-plus',
             confirmText: 'Create'
         })
-        : null;
+        : window.prompt('Folder name:');
 
     if (!name || !name.trim()) {
         return;
     }
 
     $.ajax({
-        url: `<?php echo BASE_URL; ?>api/folders/create.php`,
+        url: `${FOLDER_API_BASE}create.php`,
         method: 'POST',
+        dataType: 'json',
         data: { name: name.trim(), parent_id: currentFolderId },
         success: () => currentFolderId > 0 ? loadFolderContents(currentFolderId) : loadRootFolders(),
-        error: () => showFolderNotice('Folders', 'Unable to create this folder.', 'error')
+        error: xhr => handleFolderApiError(xhr, 'Unable to create this folder.')
     });
 }
 
@@ -1574,12 +1613,19 @@ function uploadToCurrentFolder() {
         formData.append('folder_id', currentFolderId);
         
         $.ajax({
-            url: `<?php echo BASE_URL; ?>api/folders/bulk-upload.php`,
+            url: `${FOLDER_API_BASE}bulk-upload.php`,
             method: 'POST',
+            dataType: 'json',
             data: formData,
             processData: false,
             contentType: false,
-            success: () => loadFolderContents(currentFolderId)
+            success: data => {
+                loadFolderContents(currentFolderId);
+                if (Array.isArray(data.failed_files) && data.failed_files.length > 0) {
+                    showFolderNotice('Folders', `${data.failed_files.length} file(s) could not be uploaded.`, 'warning');
+                }
+            },
+            error: xhr => handleFolderApiError(xhr, 'Unable to upload the selected files.')
         });
     };
     input.click();

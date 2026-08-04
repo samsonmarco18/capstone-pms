@@ -1,28 +1,20 @@
 <?php
-header('Content-Type: application/json');
-
-require_once __DIR__ . '/../../config/database.php';
-require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/folder-api.php';
 require_once __DIR__ . '/../../includes/project-folder-context.php';
+folderApiInitialize();
 
-if (!isLoggedIn()) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized']);
-    exit();
-}
-
+$user = folderApiRequireUser();
 $conn = getConnection();
-$user = getCurrentUser();
 $folderId = isset($_GET['folder_id']) ? (int) $_GET['folder_id'] : 0;
 
 if ($folderId <= 0) {
-    echo json_encode([
+    folderApiRespond([
+        'success' => true,
         'folders' => [],
         'files' => [],
         'current_folder' => null,
         'breadcrumb' => [],
     ]);
-    exit();
 }
 
 function getFolderBreadcrumb(mysqli|PgsqlMysqliCompatConnection $conn, int $folderId): array
@@ -77,9 +69,10 @@ try {
     $currentFolderStmt->close();
 
     if (!$currentFolder) {
-        http_response_code(404);
-        echo json_encode(['error' => 'Folder not found']);
-        exit();
+        folderApiRespond(['success' => false, 'error' => 'Folder not found'], 404);
+    }
+    if (!folderApiCanAccessFolder($currentFolder, $user)) {
+        folderApiRespond(['success' => false, 'error' => 'You do not have access to this folder.'], 403);
     }
 
     $folderStmt = $conn->prepare(
@@ -122,7 +115,8 @@ try {
         $projectContext = fetchProjectContext($conn, $projectId, $user);
     }
 
-    echo json_encode([
+    folderApiRespond([
+        'success' => true,
         'folders' => $folders,
         'files' => $files,
         'current_folder' => $currentFolder,
@@ -132,9 +126,5 @@ try {
         'project_id' => $projectId > 0 ? $projectId : null,
     ]);
 } catch (Throwable $e) {
-    error_log('Folder contents API failed: ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode([
-        'error' => 'Unable to load this folder right now.',
-    ]);
+    folderApiError($e, 'Folder contents API failed', 'Unable to load this folder right now.');
 }

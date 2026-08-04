@@ -35,9 +35,13 @@ table_exists="$(psql "$DATABASE_URL" -tAc "SELECT to_regclass('public.users') IS
 
 if [ "$table_exists" = "t" ]; then
     echo "Postgres schema already present. Skipping import."
-    exit 0
+else
+    echo "Importing database.postgres.sql..."
+    psql "$DATABASE_URL" -1 -v ON_ERROR_STOP=1 -f database.postgres.sql
+    echo "Postgres bootstrap completed."
 fi
 
-echo "Importing database.postgres.sql..."
-psql "$DATABASE_URL" -1 -v ON_ERROR_STOP=1 -f database.postgres.sql
-echo "Postgres bootstrap completed."
+if [ -f "bin/migrations/postgres-folders.sql" ]; then
+    echo "Applying folder-management compatibility migration..."
+    psql "$DATABASE_URL" -1 -v ON_ERROR_STOP=1 -f bin/migrations/postgres-folders.sql
+fi
