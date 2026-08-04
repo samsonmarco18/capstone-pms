@@ -222,7 +222,7 @@ function di_load_attention_project_summaries(mysqli|PgsqlMysqliCompatConnection 
     foreach (di_load_accessible_projects($conn, $user) as $project) {
         $projectId = (int) ($project['id'] ?? 0);
         $projectStatus = strtolower(trim((string) ($project['status'] ?? '')));
-        if ($projectId <= 0 || in_array($projectStatus, ['completed', 'cancelled'], true)) {
+        if ($projectId <= 0 || $projectStatus === 'cancelled') {
             continue;
         }
 

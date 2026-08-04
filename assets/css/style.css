@@ -4937,6 +4937,9 @@ body {
     }
 }
 
+.stat-overdue.has-alert,
+.stat-overdue.is-overdue-alert,
+.dashboard-overdue-card.is-overdue-alert,
 .role-dashboard-shell.role-dashboard-shell :is(.stat-overdue, .dashboard-overdue-card).is-overdue-alert {
     --role-stat-color: #dc2626;
     --role-stat-glow: rgba(220, 38, 38, 0.18);
@@ -4951,11 +4954,17 @@ body {
     outline: 0 solid rgba(220, 38, 38, 0);
 }
 
+.stat-overdue.has-alert :is(.stat-icon, .stat-number, .h1, .fa-exclamation-triangle),
+.stat-overdue.is-overdue-alert :is(.stat-icon, .stat-number, .h1, .fa-exclamation-triangle),
+.dashboard-overdue-card.is-overdue-alert :is(.stat-icon, .stat-number, .h1, .fa-exclamation-triangle),
 .role-dashboard-shell.role-dashboard-shell :is(.stat-overdue, .dashboard-overdue-card).is-overdue-alert :is(.stat-icon, .stat-number, .h1, .fa-exclamation-triangle) {
     color: #dc2626 !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .stat-overdue.has-alert,
+    .stat-overdue.is-overdue-alert,
+    .dashboard-overdue-card.is-overdue-alert,
     .role-dashboard-shell.role-dashboard-shell :is(.stat-overdue, .dashboard-overdue-card).is-overdue-alert {
         animation: none;
     }
