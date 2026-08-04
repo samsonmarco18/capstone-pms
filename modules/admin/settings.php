@@ -127,6 +127,15 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
     if ($targetDriver === 'pgsql') {
         $lines[] = 'BEGIN;';
         $lines[] = 'SET standard_conforming_strings = on;';
+        if ($tables !== []) {
+            $truncateTables = implode(', ', array_map(
+                static fn(string $table): string => backupSqlIdentifier($table, $targetDriver),
+                array_filter($tables, static fn(string $table): bool => preg_match('/^[a-zA-Z0-9_]+$/', $table) === 1)
+            ));
+            if ($truncateTables !== '') {
+                $lines[] = 'TRUNCATE TABLE ' . $truncateTables . ' RESTART IDENTITY CASCADE;';
+            }
+        }
     } else {
         $lines[] = 'SET FOREIGN_KEY_CHECKS=0;';
         $lines[] = 'START TRANSACTION;';
@@ -153,13 +162,17 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         $rows = backupFetchRows($conn, 'SELECT * FROM ' . $sourceTable);
 
         $lines[] = '-- Table: ' . $table;
+        $targetTable = backupSqlIdentifier($table, $targetDriver);
+        if ($targetDriver === 'mysql') {
+            $lines[] = 'DELETE FROM ' . $targetTable . ';';
+        }
+
         if ($rows === []) {
             $lines[] = '-- No rows';
             $lines[] = '';
             continue;
         }
 
-        $targetTable = backupSqlIdentifier($table, $targetDriver);
         $targetColumns = implode(', ', array_map(
             static fn(string $column): string => backupSqlIdentifier($column, $targetDriver),
             $columnNames

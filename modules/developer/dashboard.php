@@ -1057,7 +1057,7 @@ include '../../includes/navbar.php';
         </div>
         
         <div class="col-xl-3 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
+            <div class="card border-0 shadow-sm h-100 dashboard-overdue-card <?php echo (int) $overdueTasks > 0 ? 'is-overdue-alert' : ''; ?>">
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="flex-grow-1">

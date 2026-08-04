@@ -124,21 +124,13 @@ if (!$isAdmin) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_preferences']) && !$isAdmin && $error === '') {
     $themeOptions = userPreferenceThemeOptions();
-    $timezoneOptions = userPreferenceTimezoneOptions();
-    $dateFormatOptions = userPreferenceDateFormatOptions();
 
     $themePreference = (string) ($_POST['theme_preference'] ?? 'default');
-    $timezone = (string) ($_POST['timezone'] ?? 'Asia/Manila');
-    $dateFormat = (string) ($_POST['date_format'] ?? 'M d, Y');
+    $timezone = (string) ($user['timezone'] ?? 'Asia/Manila');
+    $dateFormat = (string) ($user['date_format'] ?? 'M d, Y');
 
     if (!isset($themeOptions[$themePreference])) {
         $themePreference = 'default';
-    }
-    if (!isset($timezoneOptions[$timezone])) {
-        $timezone = 'Asia/Manila';
-    }
-    if (!isset($dateFormatOptions[$dateFormat])) {
-        $dateFormat = 'M d, Y';
     }
 
     $evortixEnabled = isset($_POST['evortix_enabled']) ? 1 : 0;
@@ -254,8 +246,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['logout_other_sessions
 
 $preferences = userPreferencesFromUser($user);
 $themeOptions = userPreferenceThemeOptions();
-$timezoneOptions = userPreferenceTimezoneOptions();
-$dateFormatOptions = userPreferenceDateFormatOptions();
 
 include 'includes/header.php';
 include 'includes/sidebar.php';
@@ -1050,7 +1040,7 @@ include 'includes/navbar.php';
     <header class="settings-page-header">
         <div>
             <h1>Settings</h1>
-            <p><?php echo $isAdmin ? 'Manage account security and access system-wide configuration.' : 'Manage your appearance, assistant, notification, regional, and security preferences.'; ?></p>
+            <p><?php echo $isAdmin ? 'Manage account security and access system-wide configuration.' : 'Manage your appearance, assistant, notification, and security preferences.'; ?></p>
         </div>
     </header>
 
@@ -1084,7 +1074,6 @@ include 'includes/navbar.php';
                 <a class="settings-nav-link" href="#settingsAppearance" data-settings-target="settingsAppearance" aria-controls="settingsAppearance"><i class="fas fa-palette"></i><span>Appearance</span></a>
                 <a class="settings-nav-link" href="#settingsEvortix" data-settings-target="settingsEvortix" aria-controls="settingsEvortix"><i class="fas fa-robot"></i><span>Evortix</span></a>
                 <a class="settings-nav-link" href="#settingsNotifications" data-settings-target="settingsNotifications" aria-controls="settingsNotifications"><i class="fas fa-bell"></i><span>Notifications</span></a>
-                <a class="settings-nav-link" href="#settingsRegional" data-settings-target="settingsRegional" aria-controls="settingsRegional"><i class="fas fa-globe"></i><span>Regional</span></a>
                 <div class="settings-navigation-separator"></div>
             <?php endif; ?>
             <a class="settings-nav-link" href="#settingsSecurity" data-settings-target="settingsSecurity" aria-controls="settingsSecurity"><i class="fas fa-lock"></i><span>Security</span></a>
@@ -1250,36 +1239,6 @@ include 'includes/navbar.php';
                                     </div>
                                 </div>
                             <?php endforeach; ?>
-                        </div>
-                    </section>
-
-                    <section class="settings-section" id="settingsRegional" data-settings-panel hidden>
-                        <div class="settings-section-header">
-                            <span class="settings-section-icon"><i class="fas fa-globe"></i></span>
-                            <div>
-                                <h2>Regional preferences</h2>
-                                <p>Set how dates and local time appear across the system.</p>
-                            </div>
-                        </div>
-                        <div class="settings-section-body">
-                            <div class="settings-regional-grid">
-                                <div>
-                                    <label class="form-label" for="timezone">Timezone</label>
-                                    <select class="form-select" id="timezone" name="timezone">
-                                        <?php foreach ($timezoneOptions as $value => $label): ?>
-                                            <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $preferences['timezone'] === $value ? 'selected' : ''; ?>><?php echo htmlspecialchars($label); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="form-label" for="dateFormat">Date format</label>
-                                    <select class="form-select" id="dateFormat" name="date_format">
-                                        <?php foreach ($dateFormatOptions as $value => $label): ?>
-                                            <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $preferences['date_format'] === $value ? 'selected' : ''; ?>><?php echo htmlspecialchars($label); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                            </div>
                         </div>
                     </section>
 

@@ -83,6 +83,30 @@ if (isset($restoreData['id'])) {
     $existingStmt->close();
 
     if ($exists) {
+        if ($tableName === 'clients') {
+            $restoreStatus = (string) ($restoreData['status'] ?? 'active');
+            if (!in_array($restoreStatus, ['active', 'inactive', 'suspended', 'pending'], true)) {
+                $restoreStatus = 'active';
+            }
+
+            $restoreStmt = $conn->prepare("UPDATE {$quotedTableName} SET status = ? WHERE id = ? AND status = 'inactive'");
+            $restoreStmt->bind_param('si', $restoreStatus, $existingId);
+            if ($restoreStmt->execute() && $restoreStmt->affected_rows > 0) {
+                $restoreStmt->close();
+                logActivity(
+                    (int) $admin['id'],
+                    'restore_deleted_item',
+                    $tableName,
+                    $existingId,
+                    null,
+                    array_merge($restoreData, ['restored_from_log_id' => $logId, 'soft_restored' => true])
+                );
+                echo json_encode(['success' => true, 'id' => $existingId]);
+                exit();
+            }
+            $restoreStmt->close();
+        }
+
         http_response_code(409);
         echo json_encode(['success' => false, 'error' => 'This item has already been restored']);
         exit();
