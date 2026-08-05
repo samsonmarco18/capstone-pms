@@ -1487,12 +1487,12 @@ include '../../includes/navbar.php';
                         <td><?php echo date('M d, Y', strtotime($row['created_at'])); ?></td>
                         <td>
                             <div class="action-buttons">
-                                <button class="btn-icon view" onclick="viewUser(<?php echo $row['id']; ?>)">
+                                <a class="btn-icon view" href="view-user.php?id=<?php echo (int) $row['id']; ?>" aria-label="View <?php echo htmlspecialchars($row['full_name'], ENT_QUOTES); ?>">
                                     <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="btn-icon edit" onclick="editUser(<?php echo $row['id']; ?>)">
+                                </a>
+                                <a class="btn-icon edit" href="edit-user.php?id=<?php echo (int) $row['id']; ?>" aria-label="Edit <?php echo htmlspecialchars($row['full_name'], ENT_QUOTES); ?>">
                                     <i class="fas fa-edit"></i>
-                                </button>
+                                </a>
                                 <button
                                     type="button"
                                     class="btn-icon delete"
