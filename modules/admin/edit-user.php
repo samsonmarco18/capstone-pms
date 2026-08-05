@@ -6,13 +6,29 @@ requireRole('admin');
 $conn = getConnection();
 workflowEnsureSchema($conn);
 $admin = getCurrentUser();
-$userId = $_SERVER['REQUEST_METHOD'] === 'POST'
-    ? (int) ($_POST['id'] ?? 0)
-    : (int) ($_GET['id'] ?? 0);
+$isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
+$routeUserId = (int) ($_GET['id'] ?? 0);
+$postedUserId = (int) ($_POST['id'] ?? 0);
+$userId = $routeUserId > 0 ? $routeUserId : $postedUserId;
 $departments = getDepartmentOptions();
 $errors = [];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId > 0) {
+$stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+$stmt->bind_param('i', $userId);
+$stmt->execute();
+$selectedUser = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if (!$selectedUser) {
+    header('Location: user-management.php');
+    exit();
+}
+
+if ($isPost && $userId > 0) {
+    if ($postedUserId !== $userId) {
+        $errors[] = 'The selected account changed while editing. Please reopen the user and try again.';
+    }
+
     $fullName = trim((string) ($_POST['full_name'] ?? ''));
     $username = trim((string) ($_POST['username'] ?? ''));
     $email = trim((string) ($_POST['email'] ?? ''));
@@ -77,17 +93,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId > 0) {
         header('Location: view-user.php?id=' . $userId);
         exit();
     }
-}
-
-$stmt = $conn->prepare('SELECT * FROM users WHERE id = ?');
-$stmt->bind_param('i', $userId);
-$stmt->execute();
-$selectedUser = $stmt->get_result()->fetch_assoc();
-$stmt->close();
-
-if (!$selectedUser) {
-    header('Location: user-management.php');
-    exit();
+    $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $selectedUser = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 }
 
 include '../../includes/header.php';
@@ -109,7 +119,12 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <form method="POST">
+                <div class="alert alert-info">
+                    Editing account #<?php echo (int) $selectedUser['id']; ?>:
+                    <strong><?php echo htmlspecialchars((string) $selectedUser['full_name']); ?></strong>
+                    (<?php echo htmlspecialchars(getRoleDisplayName((string) $selectedUser['role'])); ?>)
+                </div>
+                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off">
                     <input type="hidden" name="id" value="<?php echo (int) $selectedUser['id']; ?>">
                     <div class="row g-3">
                         <div class="col-md-6">

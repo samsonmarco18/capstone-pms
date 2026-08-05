@@ -1684,14 +1684,6 @@ userPageSize?.addEventListener('change', function() {
     window.location.href = 'user-management.php?' + params.toString() + '#userDirectory';
 });
 
-function viewUser(id) {
-    window.location.href = 'view-user.php?id=' + id;
-}
-
-function editUser(id) {
-    window.location.href = 'edit-user.php?id=' + id;
-}
-
 function openDeleteUserModal(button) {
     const userId = button.getAttribute('data-user-id') || '';
     const userName = button.getAttribute('data-user-name') || 'this user';
