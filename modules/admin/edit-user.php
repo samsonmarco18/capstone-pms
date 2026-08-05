@@ -6,13 +6,30 @@ requireRole('admin');
 $conn = getConnection();
 workflowEnsureSchema($conn);
 $admin = getCurrentUser();
-$userId = $_SERVER['REQUEST_METHOD'] === 'POST'
-    ? (int) ($_POST['id'] ?? 0)
-    : (int) ($_GET['id'] ?? 0);
+$isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
+$routeUserId = (int) ($_GET['id'] ?? 0);
+$postedUserId = (int) ($_POST['id'] ?? 0);
+$userId = $routeUserId > 0 ? $routeUserId : $postedUserId;
 $departments = getDepartmentOptions();
 $errors = [];
+$formValues = [];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId > 0) {
+$stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+$stmt->bind_param('i', $userId);
+$stmt->execute();
+$selectedUser = $stmt->get_result()->fetch_assoc();
+$stmt->close();
+
+if (!$selectedUser) {
+    header('Location: user-management.php');
+    exit();
+}
+
+if ($isPost && $userId > 0) {
+    if ($postedUserId !== $userId) {
+        $errors[] = 'The selected account changed while editing. Please reopen the user and try again.';
+    }
+
     $fullName = trim((string) ($_POST['full_name'] ?? ''));
     $username = trim((string) ($_POST['username'] ?? ''));
     $email = trim((string) ($_POST['email'] ?? ''));
@@ -77,18 +94,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $userId > 0) {
         header('Location: view-user.php?id=' . $userId);
         exit();
     }
+    $stmt = $conn->prepare('SELECT * FROM users WHERE id = ? LIMIT 1');
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $selectedUser = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 }
 
-$stmt = $conn->prepare('SELECT * FROM users WHERE id = ?');
-$stmt->bind_param('i', $userId);
-$stmt->execute();
-$selectedUser = $stmt->get_result()->fetch_assoc();
-$stmt->close();
-
-if (!$selectedUser) {
-    header('Location: user-management.php');
-    exit();
-}
+$usePostedValues = $isPost && $postedUserId === $userId && $errors !== [];
+$formValues = [
+    'full_name' => (string) ($usePostedValues ? ($_POST['full_name'] ?? '') : ($selectedUser['full_name'] ?? '')),
+    'username' => (string) ($usePostedValues ? ($_POST['username'] ?? '') : ($selectedUser['username'] ?? '')),
+    'email' => (string) ($usePostedValues ? ($_POST['email'] ?? '') : ($selectedUser['email'] ?? '')),
+    'department' => (string) ($usePostedValues ? ($_POST['department'] ?? '') : ($selectedUser['department'] ?? '')),
+    'role' => (string) ($usePostedValues ? ($_POST['role'] ?? '') : ($selectedUser['role'] ?? '')),
+    'status' => (string) ($usePostedValues ? ($_POST['status'] ?? '') : ($selectedUser['status'] ?? '')),
+    'designation' => (string) ($usePostedValues ? ($_POST['designation'] ?? '') : ($selectedUser['designation'] ?? '')),
+];
 
 include '../../includes/header.php';
 include '../../includes/sidebar.php';
@@ -109,26 +131,26 @@ include '../../includes/navbar.php';
                         <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
-                <form method="POST">
+                <form method="POST" action="edit-user.php?id=<?php echo (int) $selectedUser['id']; ?>" autocomplete="off" data-selected-user-form data-restore-server-values="<?php echo $usePostedValues ? '0' : '1'; ?>">
                     <input type="hidden" name="id" value="<?php echo (int) $selectedUser['id']; ?>">
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label">Full Name</label>
-                            <input type="text" name="full_name" class="form-control" value="<?php echo htmlspecialchars($_POST['full_name'] ?? $selectedUser['full_name']); ?>" required>
+                            <input type="text" name="full_name" class="form-control" value="<?php echo htmlspecialchars($formValues['full_name']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['full_name'], ENT_QUOTES); ?>" autocomplete="new-password" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Username</label>
-                            <input type="text" name="username" class="form-control" value="<?php echo htmlspecialchars($_POST['username'] ?? $selectedUser['username']); ?>" required>
+                            <input type="text" name="username" class="form-control" value="<?php echo htmlspecialchars($formValues['username']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['username'], ENT_QUOTES); ?>" autocomplete="new-password" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Email Address</label>
-                            <input type="email" name="email" class="form-control" value="<?php echo htmlspecialchars($_POST['email'] ?? $selectedUser['email']); ?>" required>
+                            <input type="email" name="email" class="form-control" value="<?php echo htmlspecialchars($formValues['email']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['email'], ENT_QUOTES); ?>" autocomplete="new-password" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Department</label>
                             <select name="department" class="form-select">
                                 <option value="">Select department</option>
-                                <?php $selectedDepartment = (string) ($_POST['department'] ?? $selectedUser['department']); ?>
+                                <?php $selectedDepartment = $formValues['department']; ?>
                                 <?php foreach ($departments as $department): ?>
                                     <option value="<?php echo htmlspecialchars($department); ?>" <?php echo $selectedDepartment === $department ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars($department); ?>
@@ -144,7 +166,7 @@ include '../../includes/navbar.php';
                         <div class="col-md-6">
                             <label class="form-label">Role</label>
                             <select name="role" class="form-select">
-                                <?php $selectedRole = (string) ($_POST['role'] ?? $selectedUser['role']); ?>
+                                <?php $selectedRole = $formValues['role']; ?>
                                 <?php foreach (['admin', 'sales', 'architect', 'sul', 'qa', 'expert', 'developer'] as $role): ?>
                                     <option value="<?php echo $role; ?>" <?php echo $selectedRole === $role ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars(getRoleDisplayName($role)); ?>
@@ -155,7 +177,7 @@ include '../../includes/navbar.php';
                         <div class="col-md-6">
                             <label class="form-label">Status</label>
                             <select name="status" class="form-select">
-                                <?php $selectedStatus = (string) ($_POST['status'] ?? $selectedUser['status']); ?>
+                                <?php $selectedStatus = $formValues['status']; ?>
                                 <?php foreach (['active', 'inactive', 'suspended'] as $status): ?>
                                     <option value="<?php echo $status; ?>" <?php echo $selectedStatus === $status ? 'selected' : ''; ?>>
                                         <?php echo htmlspecialchars(ucfirst($status)); ?>
@@ -165,7 +187,7 @@ include '../../includes/navbar.php';
                         </div>
                         <div class="col-12">
                             <label class="form-label">Designation</label>
-                            <input type="text" name="designation" class="form-control" value="<?php echo htmlspecialchars($_POST['designation'] ?? $selectedUser['designation']); ?>">
+                            <input type="text" name="designation" class="form-control" value="<?php echo htmlspecialchars($formValues['designation']); ?>" data-server-value="<?php echo htmlspecialchars($formValues['designation'], ENT_QUOTES); ?>" autocomplete="new-password">
                         </div>
                     </div>
                     <div class="mt-4">
@@ -177,5 +199,24 @@ include '../../includes/navbar.php';
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.querySelector('[data-selected-user-form]');
+    if (!form || form.dataset.restoreServerValues !== '1') {
+        return;
+    }
+
+    const restoreServerValues = function () {
+        form.querySelectorAll('[data-server-value]').forEach(function (field) {
+            field.value = field.dataset.serverValue || '';
+        });
+    };
+
+    restoreServerValues();
+    window.setTimeout(restoreServerValues, 100);
+    window.setTimeout(restoreServerValues, 500);
+});
+</script>
 
 <?php include '../../includes/footer.php'; ?>
