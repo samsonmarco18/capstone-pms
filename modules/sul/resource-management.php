@@ -725,19 +725,51 @@ unset($_SESSION['success'], $_SESSION['error']);
 
 .resource-actions {
     display: inline-flex;
-    gap: 0.4rem;
+    gap: 0.55rem;
     justify-content: flex-end;
     white-space: nowrap;
 }
 
 .resource-action-btn {
     align-items: center;
-    border-radius: 8px;
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 12px;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.12);
     display: inline-flex;
-    height: 34px;
+    font-size: 0.88rem;
+    height: 42px;
     justify-content: center;
     padding: 0;
-    width: 34px;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+    width: 42px;
+}
+
+.resource-action-btn:hover,
+.resource-action-btn:focus-visible {
+    transform: translateY(-1px);
+}
+
+.resource-action-edit {
+    background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+    color: #062236;
+}
+
+.resource-action-edit:hover,
+.resource-action-edit:focus-visible {
+    box-shadow: 0 12px 24px rgba(14, 165, 233, 0.24);
+    color: #031a2b;
+}
+
+.resource-action-view {
+    background: #f8fbff;
+    color: #1f6f9e;
+}
+
+.resource-action-view:hover,
+.resource-action-view:focus-visible {
+    background: #edf7ff;
+    box-shadow: 0 12px 24px rgba(31, 111, 158, 0.16);
+    color: #155b84;
 }
 
 /* Progress Bar */
@@ -807,6 +839,39 @@ unset($_SESSION['success'], $_SESSION['error']);
 
 .btn-secondary-modern:hover {
     background: var(--gray-300);
+}
+
+.resource-action-btn.resource-action-btn {
+    border: 1px solid rgba(31, 99, 146, 0.14);
+    border-radius: 12px;
+    box-shadow: 0 8px 18px rgba(31, 99, 146, 0.12);
+    font-size: 0.88rem;
+    height: 42px;
+    padding: 0;
+    width: 42px;
+}
+
+.resource-action-edit.resource-action-edit {
+    background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+    color: #062236;
+}
+
+.resource-action-edit.resource-action-edit:hover,
+.resource-action-edit.resource-action-edit:focus-visible {
+    box-shadow: 0 12px 24px rgba(14, 165, 233, 0.24);
+    color: #031a2b;
+}
+
+.resource-action-view.resource-action-view {
+    background: #f8fbff;
+    color: #1f6f9e;
+}
+
+.resource-action-view.resource-action-view:hover,
+.resource-action-view.resource-action-view:focus-visible {
+    background: #edf7ff;
+    box-shadow: 0 12px 24px rgba(31, 111, 158, 0.16);
+    color: #155b84;
 }
 
 /* Keep the navbar burger neutral on this page */
@@ -1006,6 +1071,35 @@ unset($_SESSION['success'], $_SESSION['error']);
     color: #9db6cf;
 }
 
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-btn {
+    border-color: rgba(125, 211, 252, 0.16);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-edit {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.96) 0%, rgba(14, 165, 233, 0.9) 100%);
+    color: #031626;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-edit:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-edit:focus-visible {
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.14), 0 14px 28px rgba(14, 165, 233, 0.26);
+    color: #031626;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-view {
+    background: rgba(15, 38, 57, 0.88);
+    color: #aee2ff;
+}
+
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-view:hover,
+:is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .resource-action-view:focus-visible {
+    background: rgba(31, 99, 146, 0.38);
+    border-color: rgba(125, 211, 252, 0.3);
+    box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.1), 0 14px 28px rgba(0, 0, 0, 0.28);
+    color: #e7f6ff;
+}
+
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-control,
 :is(html[data-theme="dark"], body[data-theme="dark"], body.dark-mode) .form-select {
     background-color: #071321;
@@ -1188,10 +1282,10 @@ unset($_SESSION['success'], $_SESSION['error']);
                                         <td><span class="badge-status-<?php echo $statusClass; ?>"><?php echo $statusText; ?></span></td>
                                         <td>
                                             <div class="resource-actions">
-                                                <button type="button" class="btn-primary-modern resource-action-btn" title="Edit allocation" aria-label="Edit allocation for <?php echo htmlspecialchars($resourceName); ?>" onclick="editAllocation(<?php echo (int) $resource['id']; ?>, <?php echo htmlspecialchars(json_encode($resourceName), ENT_QUOTES, 'UTF-8'); ?>, <?php echo $resourceActiveTasks; ?>)">
+                                                <button type="button" class="btn-primary-modern resource-action-btn resource-action-edit" title="Edit allocation" aria-label="Edit allocation for <?php echo htmlspecialchars($resourceName); ?>" onclick="editAllocation(<?php echo (int) $resource['id']; ?>, <?php echo htmlspecialchars(json_encode($resourceName), ENT_QUOTES, 'UTF-8'); ?>, <?php echo $resourceActiveTasks; ?>)">
                                                     <i class="fas fa-sliders-h" aria-hidden="true"></i>
                                                 </button>
-                                                <button type="button" class="btn-secondary-modern resource-action-btn" title="View assigned tasks" aria-label="View tasks for <?php echo htmlspecialchars($resourceName); ?>" onclick="viewResourceTasks(<?php echo (int) $resource['id']; ?>)">
+                                                <button type="button" class="btn-secondary-modern resource-action-btn resource-action-view" title="View assigned tasks" aria-label="View tasks for <?php echo htmlspecialchars($resourceName); ?>" onclick="viewResourceTasks(<?php echo (int) $resource['id']; ?>)">
                                                     <i class="fas fa-list-check" aria-hidden="true"></i>
                                                 </button>
                                             </div>

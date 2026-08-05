@@ -11,6 +11,32 @@ if (!in_array($navbarThemePreference, ['tropical', 'futuristic'], true)) {
     $navbarThemePreference = 'default';
 }
 
+if (!function_exists('navbarResolveNotificationActionUrl')) {
+    function navbarResolveNotificationActionUrl(?string $actionUrl, array $notification = []): string
+    {
+        $url = trim((string) $actionUrl);
+        if ($url === '') {
+            return BASE_URL . 'notifications.php';
+        }
+
+        $resolvedUrl = preg_match('#^https?://#i', $url)
+            ? $url
+            : BASE_URL . ltrim($url, '/');
+
+        $text = strtolower((string) ($notification['title'] ?? '') . ' ' . (string) ($notification['message'] ?? ''));
+        $isSulReviewNotification = str_contains($text, 'for review')
+            || str_contains($text, 'sul review')
+            || str_contains($text, 'test results submitted')
+            || str_contains($text, 'design submitted');
+
+        if ($isSulReviewNotification && str_contains($resolvedUrl, 'modules/sul/task-allocation.php') && !str_contains($resolvedUrl, '#')) {
+            $resolvedUrl .= '#developer-review-panel';
+        }
+
+        return $resolvedUrl;
+    }
+}
+
 if ($user && $inAppNotificationsEnabled) {
     $unreadCount = getUnreadNotificationsCount((int) $user['id']);
 
@@ -98,7 +124,7 @@ $navbarProfileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
                                 <?php foreach ($notifications as $notification): ?>
                                     <li>
                                         <a class="dropdown-item py-2 <?php echo !$notification['is_read'] ? 'bg-light' : ''; ?>"
-                                           href="<?php echo htmlspecialchars($notification['action_url'] ?: BASE_URL . 'notifications.php'); ?>"
+                                           href="<?php echo htmlspecialchars(navbarResolveNotificationActionUrl($notification['action_url'] ?? '', $notification)); ?>"
                                            onclick="markNotificationRead(<?php echo (int) $notification['id']; ?>)">
                                             <div class="notification-item-title fw-semibold small"><?php echo htmlspecialchars($notification['title']); ?></div>
                                             <div class="notification-item-message text-muted small"><?php echo htmlspecialchars($notification['message']); ?></div>

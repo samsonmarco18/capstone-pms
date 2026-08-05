@@ -167,11 +167,22 @@ if ($isPullRequestSubmission) {
         'Pull Request submitted for SUL review' . ($pullRequestUrl ? ': ' . $pullRequestUrl : '.')
     );
 
+    $reviewActionUrl = BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($task['project_id'] ?? 0) . '&task_id=' . $taskId . '#developer-review-panel';
     $recipientIds = [];
     if (!empty($task['assigned_by'])) {
         $recipientIds[] = (int) $task['assigned_by'];
     } elseif (!empty($task['sul_id'])) {
         $recipientIds[] = (int) $task['sul_id'];
+    }
+    $submitterDepartment = projectWorkflowDepartmentLabel((string) ($user['department'] ?? ''));
+    if ($submitterDepartment !== '') {
+        $departmentSulWhere = projectWorkflowUserDepartmentClause($conn, 'u', $submitterDepartment);
+        $departmentSulRows = $conn->query("SELECT u.id FROM users u WHERE u.role = 'sul' AND u.status = 'active' AND {$departmentSulWhere}");
+        if ($departmentSulRows) {
+            while ($departmentSul = $departmentSulRows->fetch_assoc()) {
+                $recipientIds[] = (int) ($departmentSul['id'] ?? 0);
+            }
+        }
     }
 
     foreach (array_unique(array_filter($recipientIds)) as $recipientId) {
@@ -180,7 +191,7 @@ if ($isPullRequestSubmission) {
             'Pull Request For Review: ' . ($task['title'] ?? 'Developer task'),
             'Developer ' . ($user['full_name'] ?? 'Developer') . ' submitted a Pull Request'
                 . (!empty($task['project_name']) ? ' for ' . $task['project_name'] : '') . '.',
-            BASE_URL . 'modules/sul/task-allocation.php?task_id=' . $taskId,
+            $reviewActionUrl,
             $taskId
         );
     }

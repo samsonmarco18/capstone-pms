@@ -3937,6 +3937,11 @@ include '../../includes/navbar.php';
     min-width: 72px;
 }
 
+#developer-review-panel tr.is-notification-target {
+    box-shadow: inset 4px 0 0 #38bdf8;
+    background: rgba(56, 189, 248, .1);
+}
+
 .qa-primary-decision-actions[hidden],
 .qa-fail-routing-panel[hidden] {
     display: none !important;
@@ -7703,7 +7708,7 @@ include '../../includes/navbar.php';
                                     static fn(array $target): bool => !empty($target['is_available'])
                                 ));
                             ?>
-                                <tr class="is-static-row">
+                                <tr class="is-static-row" data-review-task-id="<?php echo (int) ($task['id'] ?? 0); ?>">
                                     <td>
                                         <span class="task-priority priority-<?php echo htmlspecialchars($priority); ?>"><?php echo htmlspecialchars(ucfirst($priority)); ?></span>
                                     </td>
@@ -9464,6 +9469,25 @@ function activateSulHashTab() {
 }
 
 activateSulHashTab();
+
+function focusSulReviewNotificationTarget() {
+    const taskId = new URLSearchParams(window.location.search).get('task_id');
+    if (!taskId || window.location.hash !== '#developer-review-panel') {
+        return;
+    }
+
+    window.setTimeout(() => {
+        const row = Array.from(document.querySelectorAll('[data-review-task-id]')).find((item) => item.dataset.reviewTaskId === taskId);
+        if (!row) {
+            return;
+        }
+        row.classList.add('is-notification-target');
+        row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        window.setTimeout(() => row.classList.remove('is-notification-target'), 6500);
+    }, 250);
+}
+
+focusSulReviewNotificationTarget();
 
 document.querySelectorAll('#expertWorkflowTabs [data-bs-toggle="tab"]').forEach((tab) => {
     tab.addEventListener('shown.bs.tab', () => {
