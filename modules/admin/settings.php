@@ -117,144 +117,10 @@ function backupGetColumns(mysqli|PgsqlMysqliCompatConnection $conn, string $tabl
     return backupFetchRows($conn, $sql);
 }
 
-function backupTargetSchemaPath(string $targetDriver): string
-{
-    return __DIR__ . '/../../' . ($targetDriver === 'pgsql' ? 'database.postgres.sql' : 'database.sql');
-}
-
-function backupTargetSchemaSql(string $targetDriver): string
-{
-    $schemaPath = backupTargetSchemaPath($targetDriver);
-    if (!is_file($schemaPath)) {
-        return '';
-    }
-
-    return (string) file_get_contents($schemaPath);
-}
-
-function backupParseTargetSchemaColumns(string $targetDriver): array
-{
-    $schemaSql = backupTargetSchemaSql($targetDriver);
-    preg_match_all('/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?([a-zA-Z0-9_]+)[`"]?\s*\((.*?)\)\s*;/is', $schemaSql, $matches, PREG_SET_ORDER);
-
-    $tables = [];
-    foreach ($matches as $match) {
-        $tableName = (string) $match[1];
-        $definition = (string) $match[2];
-        $columns = [];
-
-        foreach (preg_split('/\R/', $definition) ?: [] as $line) {
-            $line = trim($line);
-            if ($line === '' || preg_match('/^(PRIMARY|FOREIGN|UNIQUE|KEY|INDEX|CONSTRAINT|CHECK)\b/i', $line) === 1) {
-                continue;
-            }
-
-            if (preg_match('/^[`"]?([a-zA-Z0-9_]+)[`"]?\s+/i', $line, $columnMatch) === 1) {
-                $columns[(string) $columnMatch[1]] = true;
-            }
-        }
-
-        if ($columns !== []) {
-            $tables[$tableName] = $columns;
-        }
-    }
-
-    return $tables;
-}
-
-function backupParseMysqlSchemaStatements(): array
-{
-    $schemaSql = backupTargetSchemaSql('mysql');
-    preg_match_all('/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?`?([a-zA-Z0-9_]+)`?\s*\((.*?)\)\s*ENGINE\s*=\s*InnoDB[^;]*;/is', $schemaSql, $matches, PREG_SET_ORDER);
-
-    $tables = [];
-    foreach ($matches as $match) {
-        $tableName = (string) $match[1];
-        $createSql = trim((string) $match[0]);
-        $createSql = preg_replace('/CREATE\s+TABLE\s+`?' . preg_quote($tableName, '/') . '`?/i', 'CREATE TABLE IF NOT EXISTS `' . $tableName . '`', $createSql, 1) ?? $createSql;
-        $definition = (string) $match[2];
-        $columns = [];
-
-        foreach (preg_split('/\R/', $definition) ?: [] as $line) {
-            $line = rtrim(trim($line), ',');
-            if ($line === '' || preg_match('/^(PRIMARY|FOREIGN|UNIQUE|KEY|INDEX|CONSTRAINT|CHECK)\b/i', $line) === 1) {
-                continue;
-            }
-
-            if (preg_match('/^`?([a-zA-Z0-9_]+)`?\s+(.*)$/i', $line, $columnMatch) === 1) {
-                $columnName = (string) $columnMatch[1];
-                $columns[$columnName] = '`' . $columnName . '` ' . trim((string) $columnMatch[2]);
-            }
-        }
-
-        $tables[$tableName] = [
-            'create_sql' => $createSql,
-            'columns' => $columns,
-        ];
-    }
-
-    return $tables;
-}
-
-function backupBuildMysqlCreateTableStatements(array $tables): array
-{
-    $schemaTables = backupParseMysqlSchemaStatements();
-    if ($schemaTables === []) {
-        return [];
-    }
-
-    $lines = [
-        '-- Ensure MySQL target schema exists before loading data',
-    ];
-
-    foreach ($tables as $table) {
-        if (!isset($schemaTables[$table]) || !preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
-            continue;
-        }
-
-        $lines[] = (string) $schemaTables[$table]['create_sql'];
-    }
-
-    $lines[] = '';
-
-    return $lines;
-}
-
-function backupBuildMysqlColumnRepairStatements(string $table): array
-{
-    $schemaTables = backupParseMysqlSchemaStatements();
-    if (!isset($schemaTables[$table]) || !preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
-        return [];
-    }
-
-    $lines = [];
-    foreach ($schemaTables[$table]['columns'] as $columnName => $columnDefinition) {
-        if (!preg_match('/^[a-zA-Z0-9_]+$/', (string) $columnName)) {
-            continue;
-        }
-
-        $tableLiteral = backupSqlStringLiteral($table, 'mysql');
-        $columnLiteral = backupSqlStringLiteral((string) $columnName, 'mysql');
-        $alterSql = 'ALTER TABLE ' . backupSqlIdentifier($table, 'mysql') . ' ADD COLUMN ' . $columnDefinition;
-        $lines[] = 'SET @erni_pms_schema_sql = IF(EXISTS (SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ' . $tableLiteral . ') AND NOT EXISTS (SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ' . $tableLiteral . ' AND COLUMN_NAME = ' . $columnLiteral . '), ' . backupSqlStringLiteral($alterSql, 'mysql') . ', \'SELECT 1\');';
-        $lines[] = 'PREPARE erni_pms_schema_stmt FROM @erni_pms_schema_sql;';
-        $lines[] = 'EXECUTE erni_pms_schema_stmt;';
-        $lines[] = 'DEALLOCATE PREPARE erni_pms_schema_stmt;';
-    }
-
-    return $lines;
-}
-
 function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $targetDriver): string
 {
     $timestamp = date('Y-m-d H:i:s P');
-    $sourceTables = backupGetTables($conn);
-    $targetSchemaColumns = backupParseTargetSchemaColumns($targetDriver);
-    $sourceTableLookup = array_fill_keys($sourceTables, true);
-    $tables = $targetSchemaColumns === []
-        ? $sourceTables
-        : array_values(array_filter(array_keys($targetSchemaColumns), static fn(string $table): bool => isset($sourceTableLookup[$table])));
-    $skippedTables = array_values(array_diff($sourceTables, $tables));
+    $tables = backupGetTables($conn);
     $lines = [
         '-- ERNI PMS database data backup',
         '-- Source driver: ' . DB_DRIVER,
@@ -262,11 +128,6 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         '-- Generated at: ' . $timestamp,
         '',
     ];
-
-    if ($skippedTables !== []) {
-        $lines[] = '-- Skipped tables not present in target schema: ' . implode(', ', $skippedTables);
-        $lines[] = '';
-    }
 
     if ($targetDriver === 'pgsql') {
         $lines[] = 'BEGIN;';
@@ -282,7 +143,6 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         }
     } else {
         $lines[] = 'SET FOREIGN_KEY_CHECKS=0;';
-        $lines = array_merge($lines, backupBuildMysqlCreateTableStatements($tables));
         $lines[] = 'START TRANSACTION;';
     }
     $lines[] = '';
@@ -293,19 +153,6 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         }
 
         $columns = backupGetColumns($conn, $table);
-        if (isset($targetSchemaColumns[$table])) {
-            $sourceColumnNames = array_map(static fn(array $column): string => (string) $column['column_name'], $columns);
-            $columns = array_values(array_filter(
-                $columns,
-                static fn(array $column): bool => isset($targetSchemaColumns[$table][(string) $column['column_name']])
-            ));
-            $targetColumnNames = array_map(static fn(array $column): string => (string) $column['column_name'], $columns);
-            $skippedColumns = array_values(array_diff($sourceColumnNames, $targetColumnNames));
-            if ($skippedColumns !== []) {
-                $lines[] = '-- Skipped columns in ' . $table . ' not present in target schema: ' . implode(', ', $skippedColumns);
-            }
-        }
-
         if ($columns === []) {
             continue;
         }
@@ -322,8 +169,7 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         $lines[] = '-- Table: ' . $table;
         $targetTable = backupSqlIdentifier($table, $targetDriver);
         if ($targetDriver === 'mysql') {
-            $lines[] = 'TRUNCATE TABLE ' . $targetTable . ';';
-            $lines = array_merge($lines, backupBuildMysqlColumnRepairStatements($table));
+            $lines[] = 'truncate table ' . $targetTable . ';';
         }
 
         if ($rows === []) {
@@ -355,13 +201,6 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
             }
 
             $columns = backupGetColumns($conn, $table);
-            if (isset($targetSchemaColumns[$table])) {
-                $columns = array_values(array_filter(
-                    $columns,
-                    static fn(array $column): bool => isset($targetSchemaColumns[$table][(string) $column['column_name']])
-                ));
-            }
-
             foreach ($columns as $column) {
                 $columnName = (string) ($column['column_name'] ?? '');
                 $columnType = strtolower((string) ($column['data_type'] ?? ''));

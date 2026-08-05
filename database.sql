@@ -47,6 +47,28 @@ CREATE TABLE users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- PASSWORD RESET REQUESTS TABLE
+-- =====================================================
+CREATE TABLE password_reset_requests (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    requested_email VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    request_source VARCHAR(50) NOT NULL DEFAULT 'login',
+    admin_note TEXT,
+    last_error TEXT,
+    processed_by INT NULL,
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_at DATETIME NULL,
+    temp_password_sent_at DATETIME NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_password_reset_requests_user_id (user_id),
+    INDEX idx_password_reset_requests_status (status),
+    INDEX idx_password_reset_requests_requested_at (requested_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- TECHNOLOGIES AND SERVICES TABLE
 -- =====================================================
 CREATE TABLE technologies (
@@ -58,6 +80,7 @@ CREATE TABLE technologies (
     expiry_date DATE,
     renewal_cost DECIMAL(12, 2),
     description TEXT,
+    logo_path VARCHAR(500) NULL,
     created_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
