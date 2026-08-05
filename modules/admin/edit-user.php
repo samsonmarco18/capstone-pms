@@ -6,7 +6,9 @@ requireRole('admin');
 $conn = getConnection();
 workflowEnsureSchema($conn);
 $admin = getCurrentUser();
-$userId = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);
+$userId = $_SERVER['REQUEST_METHOD'] === 'POST'
+    ? (int) ($_POST['id'] ?? 0)
+    : (int) ($_GET['id'] ?? 0);
 $departments = getDepartmentOptions();
 $errors = [];
 
