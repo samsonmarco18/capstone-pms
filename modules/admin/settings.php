@@ -80,6 +80,11 @@ function backupSqlValue(mixed $value, string $type, string $driver): string
     ]) . "'";
 }
 
+function backupSqlStringLiteral(string $value, string $driver): string
+{
+    return backupSqlValue($value, 'text', $driver);
+}
+
 function backupFetchRows(mysqli|PgsqlMysqliCompatConnection $conn, string $sql): array
 {
     $result = $conn->query($sql);
@@ -164,7 +169,7 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         $lines[] = '-- Table: ' . $table;
         $targetTable = backupSqlIdentifier($table, $targetDriver);
         if ($targetDriver === 'mysql') {
-            $lines[] = 'DELETE FROM ' . $targetTable . ';';
+            $lines[] = 'TRUNCATE TABLE ' . $targetTable . ';';
         }
 
         if ($rows === []) {
@@ -190,6 +195,25 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
     }
 
     if ($targetDriver === 'pgsql') {
+        foreach ($tables as $table) {
+            if (!preg_match('/^[a-zA-Z0-9_]+$/', $table)) {
+                continue;
+            }
+
+            $columns = backupGetColumns($conn, $table);
+            foreach ($columns as $column) {
+                $columnName = (string) ($column['column_name'] ?? '');
+                $columnType = strtolower((string) ($column['data_type'] ?? ''));
+                if (!in_array($columnType, ['integer', 'bigint', 'smallint'], true)) {
+                    continue;
+                }
+
+                $tableLiteral = backupSqlStringLiteral($table, $targetDriver);
+                $columnLiteral = backupSqlStringLiteral($columnName, $targetDriver);
+                $targetColumn = backupSqlIdentifier($columnName, $targetDriver);
+                $lines[] = 'SELECT setval(pg_get_serial_sequence(' . $tableLiteral . ', ' . $columnLiteral . '), COALESCE((SELECT MAX(' . $targetColumn . ') FROM ' . backupSqlIdentifier($table, $targetDriver) . '), 0) + 1, false) WHERE pg_get_serial_sequence(' . $tableLiteral . ', ' . $columnLiteral . ') IS NOT NULL;';
+            }
+        }
         $lines[] = 'COMMIT;';
     } else {
         $lines[] = 'COMMIT;';
