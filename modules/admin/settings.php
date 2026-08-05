@@ -117,10 +117,55 @@ function backupGetColumns(mysqli|PgsqlMysqliCompatConnection $conn, string $tabl
     return backupFetchRows($conn, $sql);
 }
 
+function backupTargetSchemaPath(string $targetDriver): string
+{
+    return __DIR__ . '/../../' . ($targetDriver === 'pgsql' ? 'database.postgres.sql' : 'database.sql');
+}
+
+function backupParseTargetSchemaColumns(string $targetDriver): array
+{
+    $schemaPath = backupTargetSchemaPath($targetDriver);
+    if (!is_file($schemaPath)) {
+        return [];
+    }
+
+    $schemaSql = (string) file_get_contents($schemaPath);
+    preg_match_all('/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`"]?([a-zA-Z0-9_]+)[`"]?\s*\((.*?)\)\s*;/is', $schemaSql, $matches, PREG_SET_ORDER);
+
+    $tables = [];
+    foreach ($matches as $match) {
+        $tableName = (string) $match[1];
+        $definition = (string) $match[2];
+        $columns = [];
+
+        foreach (preg_split('/\R/', $definition) ?: [] as $line) {
+            $line = trim($line);
+            if ($line === '' || preg_match('/^(PRIMARY|FOREIGN|UNIQUE|KEY|INDEX|CONSTRAINT|CHECK)\b/i', $line) === 1) {
+                continue;
+            }
+
+            if (preg_match('/^[`"]?([a-zA-Z0-9_]+)[`"]?\s+/i', $line, $columnMatch) === 1) {
+                $columns[(string) $columnMatch[1]] = true;
+            }
+        }
+
+        if ($columns !== []) {
+            $tables[$tableName] = $columns;
+        }
+    }
+
+    return $tables;
+}
+
 function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $targetDriver): string
 {
     $timestamp = date('Y-m-d H:i:s P');
-    $tables = backupGetTables($conn);
+    $sourceTables = backupGetTables($conn);
+    $targetSchemaColumns = backupParseTargetSchemaColumns($targetDriver);
+    $tables = $targetSchemaColumns === []
+        ? $sourceTables
+        : array_values(array_filter($sourceTables, static fn(string $table): bool => isset($targetSchemaColumns[$table])));
+    $skippedTables = array_values(array_diff($sourceTables, $tables));
     $lines = [
         '-- ERNI PMS database data backup',
         '-- Source driver: ' . DB_DRIVER,
@@ -128,6 +173,11 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         '-- Generated at: ' . $timestamp,
         '',
     ];
+
+    if ($skippedTables !== []) {
+        $lines[] = '-- Skipped tables not present in target schema: ' . implode(', ', $skippedTables);
+        $lines[] = '';
+    }
 
     if ($targetDriver === 'pgsql') {
         $lines[] = 'BEGIN;';
@@ -153,6 +203,19 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
         }
 
         $columns = backupGetColumns($conn, $table);
+        if (isset($targetSchemaColumns[$table])) {
+            $sourceColumnNames = array_map(static fn(array $column): string => (string) $column['column_name'], $columns);
+            $columns = array_values(array_filter(
+                $columns,
+                static fn(array $column): bool => isset($targetSchemaColumns[$table][(string) $column['column_name']])
+            ));
+            $targetColumnNames = array_map(static fn(array $column): string => (string) $column['column_name'], $columns);
+            $skippedColumns = array_values(array_diff($sourceColumnNames, $targetColumnNames));
+            if ($skippedColumns !== []) {
+                $lines[] = '-- Skipped columns in ' . $table . ' not present in target schema: ' . implode(', ', $skippedColumns);
+            }
+        }
+
         if ($columns === []) {
             continue;
         }
@@ -201,6 +264,13 @@ function backupBuildDataDump(mysqli|PgsqlMysqliCompatConnection $conn, string $t
             }
 
             $columns = backupGetColumns($conn, $table);
+            if (isset($targetSchemaColumns[$table])) {
+                $columns = array_values(array_filter(
+                    $columns,
+                    static fn(array $column): bool => isset($targetSchemaColumns[$table][(string) $column['column_name']])
+                ));
+            }
+
             foreach ($columns as $column) {
                 $columnName = (string) ($column['column_name'] ?? '');
                 $columnType = strtolower((string) ($column['data_type'] ?? ''));
