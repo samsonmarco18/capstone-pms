@@ -129,6 +129,15 @@ if ($file && (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE
         exit;
     }
 
+    try {
+        storagePersistFile($target['relative_path'], $target['absolute_path'], $target['original_name'], (string) ($file['type'] ?? ''));
+    } catch (Throwable $e) {
+        @unlink($target['absolute_path']);
+        http_response_code(500);
+        echo json_encode(['error' => 'Unable to save uploaded design permanently.']);
+        exit;
+    }
+
     $fileType = $extension;
 }
 
@@ -149,7 +158,7 @@ $stmt = $conn->prepare(
 );
 if ($stmt === false) {
     if (($target['relative_path'] ?? '') !== '') {
-        @unlink((string) ($target['absolute_path'] ?? ''));
+        storageDeleteFile((string) ($target['relative_path'] ?? ''));
     }
     http_response_code(500);
     echo json_encode(['error' => 'Unable to prepare handoff save.']);
@@ -178,7 +187,7 @@ $stmt->bind_param(
 
 if (!$stmt->execute()) {
     if ($relativePath !== '') {
-        @unlink((string) ($target['absolute_path'] ?? ''));
+        storageDeleteFile($relativePath);
     }
     http_response_code(500);
     echo json_encode(['error' => 'Unable to save department handoff.']);

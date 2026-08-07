@@ -27,6 +27,7 @@ $sulTaskDepartmentClause = $sulDepartment !== ''
 $sulResourceProjectDepartmentClause = $sulDepartment !== ''
     ? projectWorkflowProjectDepartmentClause($conn, 'p_resource', $sulDepartment)
     : '1 = 0';
+$sulAssignableRoleSql = $isExpertDepartmentSul ? "'expert'" : "'developer'";
 
 function sulDashboardFetchCount($conn, string $sql): int
 {
@@ -56,7 +57,7 @@ function sulDashboardProfileUrl(?string $profilePic): string
         return $profilePic;
     }
 
-    return BASE_URL . ltrim(str_replace('\\', '/', $profilePic), '/');
+    return storagePublicUrl($profilePic);
 }
 
 function sulDashboardInitials(?string $name): string
@@ -119,8 +120,8 @@ $projectEndTimeSql = $hasProjectEndTime ? "COALESCE(p.timeline_end_time, '17:00:
 $bulkEntityCountSelect = sulDashboardBulkEntityCountSelect('t');
 
 // Get statistics
-$totalExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users u WHERE u.role IN ('expert', 'developer') AND {$sulUserDepartmentClause}");
-$availableExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users u WHERE u.role IN ('expert', 'developer') AND u.status = 'active' AND {$sulUserDepartmentClause}");
+$totalExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users u WHERE u.role IN ({$sulAssignableRoleSql}) AND {$sulUserDepartmentClause}");
+$availableExperts = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM users u WHERE u.role IN ({$sulAssignableRoleSql}) AND u.status = 'active' AND {$sulUserDepartmentClause}");
 $totalTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks");
 $overdueTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE deadline < NOW() AND status != 'completed'");
 $unassignedTasks = sulDashboardFetchCount($conn, "SELECT COUNT(*) as count FROM tasks WHERE assigned_to IS NULL OR assigned_to = 0");
@@ -248,8 +249,16 @@ $expertAvailability = sulDashboardQuery($conn, "
            COUNT(t.id) as assigned_tasks,
            SUM(CASE WHEN t.status != 'completed' THEN 1 ELSE 0 END) as active_tasks
     FROM users u
-    LEFT JOIN tasks t ON u.id = t.assigned_to
-    WHERE u.role IN ('expert', 'developer')
+    LEFT JOIN tasks t
+        ON u.id = t.assigned_to
+       AND {$sulTaskDepartmentClause}
+       AND EXISTS (
+           SELECT 1
+           FROM projects p_resource
+           WHERE p_resource.id = t.project_id
+             AND {$sulResourceProjectDepartmentClause}
+       )
+    WHERE u.role IN ({$sulAssignableRoleSql})
       AND u.status = 'active'
       AND {$sulUserDepartmentClause}
     GROUP BY u.id
@@ -2145,12 +2154,11 @@ include '../../includes/navbar.php';
                     <select id="assignToUser" class="form-select">
                         <option value="">Select a team member</option>
                         <?php
-                        $assignableRoleSql = $isExpertDepartmentSul ? "'expert'" : "'developer'";
                         $assignableDepartmentSql = $sulDepartment !== '' ? ' AND ' . projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment) : ' AND 1 = 0';
                         $availableUsers = sulDashboardQuery($conn, "
                             SELECT u.id, u.full_name, u.role
                             FROM users u
-                            WHERE u.role IN ({$assignableRoleSql})
+                            WHERE u.role IN ({$sulAssignableRoleSql})
                               AND u.status = 'active'
                               {$assignableDepartmentSql}
                             ORDER BY u.full_name

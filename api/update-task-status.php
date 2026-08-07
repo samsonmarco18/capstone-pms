@@ -130,11 +130,21 @@ if ($newStatus === 'for_review') {
             ? 'QA Developer submitted test results for QA SUL review.'
             : 'UI/UX submitted design work for SUL review.'
     );
+    $reviewActionUrl = BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($task['project_id'] ?? 0) . '&task_id=' . $taskId . '#developer-review-panel';
     $reviewerIds = array_values(array_filter([(int) ($task['assigned_by'] ?? 0)]));
     if ($reviewerIds === [] && (int) ($task['sul_id'] ?? 0) > 0) {
         $reviewerIds[] = (int) $task['sul_id'];
     }
-    foreach ($reviewerIds as $reviewerId) {
+    if ($userDepartmentCanonical !== '') {
+        $departmentSulWhere = projectWorkflowUserDepartmentClause($conn, 'u', $userDepartmentCanonical);
+        $departmentSulRows = $conn->query("SELECT u.id FROM users u WHERE u.role = 'sul' AND u.status = 'active' AND {$departmentSulWhere}");
+        if ($departmentSulRows) {
+            while ($departmentSul = $departmentSulRows->fetch_assoc()) {
+                $reviewerIds[] = (int) ($departmentSul['id'] ?? 0);
+            }
+        }
+    }
+    foreach (array_unique(array_filter($reviewerIds)) as $reviewerId) {
         workflowNotifyUser(
             (int) $reviewerId,
             ($isQaSubmission ? 'QA Test Results Submitted: ' : 'Design Submitted for Review: ')
@@ -142,7 +152,7 @@ if ($newStatus === 'for_review') {
             $isQaSubmission
                 ? 'A QA Developer submitted testing notes and evidence for QA SUL review.'
                 : 'UI/UX submitted design files or references for review.',
-            BASE_URL . 'modules/sul/task-allocation.php?project_id=' . (int) ($task['project_id'] ?? 0),
+            $reviewActionUrl,
             $taskId
         );
     }

@@ -31,10 +31,7 @@ try {
     }
 
 foreach ($files as $file) {
-    $absolutePath = storageResolveRelativePath((string) $file['file_path']);
-    if ($absolutePath !== null && is_file($absolutePath)) {
-        @unlink($absolutePath);
-    }
+    storageDeleteFile((string) $file['file_path']);
 }
 
     $deleteStmt = folderApiPrepare($conn, "DELETE FROM files WHERE id IN ($placeholders)");

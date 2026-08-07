@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/file-storage.php';
 require_once __DIR__ . '/app-settings.php';
 require_once __DIR__ . '/mailer.php';
 
@@ -54,7 +55,7 @@ function getUserProfileImageUrl(?string $profilePic): string
         return $profilePic;
     }
 
-    return BASE_URL . ltrim(str_replace('\\', '/', $profilePic), '/');
+    return storagePublicUrl($profilePic);
 }
 
 function getUserInitials(?string $name): string

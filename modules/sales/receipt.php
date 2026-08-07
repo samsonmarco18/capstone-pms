@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/file-storage.php';
 requireRole('sales');
 
 $conn = getConnection();
@@ -167,21 +168,15 @@ function salesReceiptSavePaymentProof(array $file): ?array
         throw new RuntimeException('Payment proof must be a PDF or image file.');
     }
 
-    $relativeDir = 'uploads/payment-proofs/' . date('Y/m/d');
-    $uploadDir = __DIR__ . '/../../' . $relativeDir;
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0775, true);
-    }
-
-    $fileName = uniqid('proof_', true) . '.' . $extension;
-    $targetPath = $uploadDir . '/' . $fileName;
-    if (!move_uploaded_file((string) ($file['tmp_name'] ?? ''), $targetPath)) {
+    $target = storageBuildUploadTarget('payment-proof.' . $extension, 'payment-proofs/' . date('Y/m/d'));
+    if (!move_uploaded_file((string) ($file['tmp_name'] ?? ''), $target['absolute_path'])) {
         throw new RuntimeException('Unable to save payment proof attachment.');
     }
+    storagePersistFile($target['relative_path'], $target['absolute_path'], $target['original_name'], (string) ($file['type'] ?? ''));
 
     return [
         'name' => $originalName,
-        'path' => $relativeDir . '/' . $fileName,
+        'path' => $target['relative_path'],
     ];
 }
 
@@ -1438,7 +1433,7 @@ include '../../includes/navbar.php';
                                 <?php echo htmlspecialchars(salesReceiptStatusLabel($receiptStatus)); ?>
                             </span>
                             <?php if ($proofPath !== ''): ?>
-                                <a class="proof-link" href="<?php echo htmlspecialchars(BASE_URL . $proofPath); ?>" target="_blank" rel="noopener">
+                                <a class="proof-link" href="<?php echo htmlspecialchars(storagePublicUrl($proofPath)); ?>" target="_blank" rel="noopener">
                                     <i class="fas fa-paperclip"></i>
                                     <?php echo htmlspecialchars($proofName !== '' ? $proofName : 'Payment proof'); ?>
                                 </a>

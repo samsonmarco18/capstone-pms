@@ -47,6 +47,7 @@ function technologySaveLogoUpload(?array $file): ?string
     if (!move_uploaded_file($temporaryPath, $target['absolute_path'])) {
         throw new RuntimeException('The technology logo could not be saved.');
     }
+    storagePersistFile($target['relative_path'], $target['absolute_path'], $target['original_name'], $mimeType);
 
     return $target['relative_path'];
 }
@@ -58,10 +59,7 @@ function technologyDeleteLogo(?string $relativePath): void
         return;
     }
 
-    $absolutePath = storageResolveRelativePath($relativePath);
-    if ($absolutePath && is_file($absolutePath)) {
-        unlink($absolutePath);
-    }
+    storageDeleteFile($relativePath);
 }
 
 technologyEnsureLogoSchema($conn);

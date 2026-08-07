@@ -47,6 +47,28 @@ CREATE TABLE users (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
+-- PASSWORD RESET REQUESTS TABLE
+-- =====================================================
+CREATE TABLE password_reset_requests (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    requested_email VARCHAR(100) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    request_source VARCHAR(50) NOT NULL DEFAULT 'login',
+    admin_note TEXT,
+    last_error TEXT,
+    processed_by INT NULL,
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed_at DATETIME NULL,
+    temp_password_sent_at DATETIME NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (processed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_password_reset_requests_user_id (user_id),
+    INDEX idx_password_reset_requests_status (status),
+    INDEX idx_password_reset_requests_requested_at (requested_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
 -- TECHNOLOGIES AND SERVICES TABLE
 -- =====================================================
 CREATE TABLE technologies (
@@ -58,6 +80,7 @@ CREATE TABLE technologies (
     expiry_date DATE,
     renewal_cost DECIMAL(12, 2),
     description TEXT,
+    logo_path VARCHAR(500) NULL,
     created_by INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -118,6 +141,10 @@ CREATE TABLE projects (
     storage_requirements VARCHAR(255),
     additional_services TEXT,
     complexity_level ENUM('simple', 'medium', 'complex') DEFAULT 'medium',
+    priority VARCHAR(30) NULL,
+    sales_notes TEXT NULL,
+    sales_attachments LONGTEXT NULL,
+    workflow_status VARCHAR(60) NULL,
     created_by INT NOT NULL,
     architect_id INT,
     sul_id INT,
@@ -130,6 +157,26 @@ CREATE TABLE projects (
     INDEX idx_status (status),
     INDEX idx_client_id (client_id),
     INDEX idx_architect_id (architect_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- PROJECT COMPILATIONS TABLE
+-- =====================================================
+CREATE TABLE project_compilations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    project_id INT NOT NULL,
+    compilation_no INT NOT NULL,
+    fingerprint VARCHAR(64) NOT NULL,
+    snapshot_json LONGTEXT NOT NULL,
+    change_source VARCHAR(80) NULL,
+    impact_json LONGTEXT NULL,
+    created_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    UNIQUE KEY uq_project_compilation_no (project_id, compilation_no),
+    INDEX idx_project_compilations_project (project_id),
+    INDEX idx_project_compilations_created_by (created_by)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -385,6 +432,8 @@ CREATE TABLE tasks (
     architect_reviewed_at DATETIME NULL,
     merged_at DATETIME NULL,
     release_notified_at DATETIME NULL,
+    parent_task_id INT NULL,
+    department_scope VARCHAR(100) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
@@ -394,6 +443,36 @@ CREATE TABLE tasks (
     INDEX idx_assigned_to (assigned_to),
     INDEX idx_project_id (project_id),
     INDEX idx_project_status_assigned (project_id, status, assigned_to)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- TASK REOPEN REQUESTS TABLE
+-- =====================================================
+CREATE TABLE task_reopen_requests (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    task_id INT NOT NULL,
+    project_id INT NOT NULL,
+    requested_by INT NOT NULL,
+    severity VARCHAR(20) NOT NULL DEFAULT 'minor',
+    reason TEXT NOT NULL,
+    status VARCHAR(40) NOT NULL DEFAULT 'pending_sul',
+    sul_reviewed_by INT NULL,
+    sul_reviewed_at DATETIME NULL,
+    sul_comment TEXT NULL,
+    architect_reviewed_by INT NULL,
+    architect_reviewed_at DATETIME NULL,
+    architect_comment TEXT NULL,
+    reopened_scope VARCHAR(20) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (sul_reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (architect_reviewed_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_task_reopen_task (task_id),
+    INDEX idx_task_reopen_project (project_id),
+    INDEX idx_task_reopen_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================
@@ -944,6 +1023,19 @@ CREATE TABLE project_repositories (
     INDEX idx_project_id (project_id),
     INDEX idx_created_by (created_by),
     INDEX idx_repo_status (repository_status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =====================================================
+-- REPOSITORY GIT SNAPSHOTS TABLE
+-- =====================================================
+CREATE TABLE repository_git_snapshots (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    repository_id INT NOT NULL UNIQUE,
+    bundle_base64 LONGTEXT NOT NULL,
+    bundle_size INT NOT NULL DEFAULT 0,
+    head_hash VARCHAR(64) NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (repository_id) REFERENCES project_repositories(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- =====================================================

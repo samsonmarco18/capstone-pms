@@ -1,5 +1,6 @@
 <?php
 require_once '../../includes/auth.php';
+require_once '../../includes/file-storage.php';
 require_once '../../includes/project-progress.php';
 require_once '../../includes/workflow.php';
 require_once '../../includes/project-workflow.php';
@@ -399,25 +400,29 @@ function salesClientsSaveAttachments(array $files): array
         return $saved;
     }
 
-    $relativeDir = 'uploads/sales-intake/' . date('Y/m/d');
-    $uploadDir = __DIR__ . '/../../' . $relativeDir;
-    if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0775, true);
-    }
-
     foreach ($files['name'] as $index => $name) {
         if (($files['error'][$index] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             continue;
         }
 
         $originalName = basename((string) $name);
-        $extension = pathinfo($originalName, PATHINFO_EXTENSION);
-        $fileName = uniqid('sales_', true) . ($extension ? '.' . $extension : '');
-        $targetPath = $uploadDir . '/' . $fileName;
-        if (move_uploaded_file((string) $files['tmp_name'][$index], $targetPath)) {
+        try {
+            $target = storageBuildUploadTarget($originalName, 'sales-intake/' . date('Y/m/d'));
+        } catch (Throwable $e) {
+            continue;
+        }
+
+        if (move_uploaded_file((string) $files['tmp_name'][$index], $target['absolute_path'])) {
+            try {
+                storagePersistFile($target['relative_path'], $target['absolute_path'], $target['original_name'], (string) ($files['type'][$index] ?? ''));
+            } catch (Throwable $e) {
+                @unlink($target['absolute_path']);
+                continue;
+            }
+
             $saved[] = [
                 'name' => $originalName,
-                'path' => $relativeDir . '/' . $fileName,
+                'path' => $target['relative_path'],
                 'type' => (string) ($files['type'][$index] ?? ''),
                 'size' => (int) ($files['size'][$index] ?? 0),
             ];
