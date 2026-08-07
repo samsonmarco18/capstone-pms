@@ -96,9 +96,21 @@ $navbarProfileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
                                 <li><span class="dropdown-item text-muted">In-app notifications are paused.</span></li>
                             <?php elseif ($notifications): ?>
                                 <?php foreach ($notifications as $notification): ?>
+                                    <?php
+                                        $notificationActionUrl = trim((string) ($notification['action_url'] ?? ''));
+                                        if ($notificationActionUrl === '') {
+                                            $notificationActionUrl = BASE_URL . 'notifications.php';
+                                        } elseif (
+                                            !preg_match('#^(?:https?:)?//#i', $notificationActionUrl)
+                                            && !str_starts_with($notificationActionUrl, '/')
+                                            && !str_starts_with($notificationActionUrl, '#')
+                                        ) {
+                                            $notificationActionUrl = BASE_URL . ltrim($notificationActionUrl, '/');
+                                        }
+                                    ?>
                                     <li>
                                         <a class="dropdown-item py-2 <?php echo !$notification['is_read'] ? 'bg-light' : ''; ?>"
-                                           href="<?php echo htmlspecialchars($notification['action_url'] ?: BASE_URL . 'notifications.php'); ?>"
+                                           href="<?php echo htmlspecialchars($notificationActionUrl); ?>"
                                            onclick="markNotificationRead(<?php echo (int) $notification['id']; ?>)">
                                             <div class="notification-item-title fw-semibold small"><?php echo htmlspecialchars($notification['title']); ?></div>
                                             <div class="notification-item-message text-muted small"><?php echo htmlspecialchars($notification['message']); ?></div>

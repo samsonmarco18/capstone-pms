@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/file-storage.php';
 require_once __DIR__ . '/project-workflow.php';
 
 function departmentArtifactEnsureSchema(mysqli|PgsqlMysqliCompatConnection $conn): void
@@ -278,7 +279,7 @@ function departmentArtifactFetchForTask(mysqli|PgsqlMysqliCompatConnection $conn
     $artifacts = [];
     while ($row = $result->fetch_assoc()) {
         $filePath = trim((string) ($row['file_path'] ?? ''));
-        $row['file_url'] = $filePath !== '' ? BASE_URL . ltrim($filePath, '/') : '';
+        $row['file_url'] = $filePath !== '' ? storagePublicUrl($filePath) : '';
         $artifacts[] = $row;
     }
     $stmt->close();
@@ -338,7 +339,7 @@ function departmentArtifactFetchVisibleForTask(mysqli|PgsqlMysqliCompatConnectio
         }
         $seen[$artifactId] = true;
         $filePath = trim((string) ($row['file_path'] ?? ''));
-        $row['file_url'] = $filePath !== '' ? BASE_URL . ltrim($filePath, '/') : '';
+        $row['file_url'] = $filePath !== '' ? storagePublicUrl($filePath) : '';
         $row['is_project_design_reference'] = (int) ($row['task_id'] ?? 0) !== $taskId
             && (string) ($row['artifact_type'] ?? '') === 'design_handoff';
         $artifacts[] = $row;

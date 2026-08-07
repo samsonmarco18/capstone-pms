@@ -218,7 +218,7 @@ function notifyAdminsAboutPasswordResetRequest(int $requestId, array $requesting
         $name = trim((string) ($requestingUser['full_name'] ?? 'A user'));
         $email = trim((string) ($requestingUser['email'] ?? ''));
         $message = $name . ' (' . $email . ') requested a password reset.';
-        $actionUrl = 'modules/admin/password-reset-requests.php?request_id=' . $requestId;
+        $actionUrl = BASE_URL . 'modules/admin/password-reset-requests.php?request_id=' . $requestId;
 
         foreach ($admins as $adminId) {
             if ($adminId <= 0) {

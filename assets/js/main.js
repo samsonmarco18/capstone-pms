@@ -579,7 +579,7 @@ function updateNotificationList(notifications) {
         const unreadClass = Number(notification.is_read) ? '' : 'bg-light';
         const safeTitle = escapeHtml(notification.title || 'Notification');
         const safeMessage = escapeHtml(notification.message || '');
-        const actionUrl = escapeHtml(notification.action_url || `${BASE_URL}notifications.php`);
+        const actionUrl = escapeHtml(normalizeNotificationActionUrl(notification.action_url));
         const safeTimeAgo = escapeHtml(notification.time_ago || 'just now');
         const safeCreatedAt = escapeHtml(notification.formatted_created_at || notification.created_at || '');
 
@@ -595,6 +595,19 @@ function updateNotificationList(notifications) {
             </li>
         `);
     });
+}
+
+function normalizeNotificationActionUrl(actionUrl) {
+    const rawUrl = String(actionUrl || '').trim();
+    if (!rawUrl) {
+        return `${BASE_URL}notifications.php`;
+    }
+
+    if (/^(?:https?:)?\/\//i.test(rawUrl) || rawUrl.startsWith('/') || rawUrl.startsWith('#')) {
+        return rawUrl;
+    }
+
+    return `${BASE_URL}${rawUrl.replace(/^\/+/, '')}`;
 }
 
 function markNotificationRead(id) {
