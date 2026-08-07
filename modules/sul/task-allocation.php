@@ -121,7 +121,7 @@ function sulTaskAllocationProfileUrl(?string $profilePic): string
         return $profilePic;
     }
 
-    return BASE_URL . ltrim(str_replace('\\', '/', $profilePic), '/');
+    return storagePublicUrl($profilePic);
 }
 
 function sulTaskAllocationInitials(?string $name): string

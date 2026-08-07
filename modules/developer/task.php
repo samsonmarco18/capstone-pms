@@ -5163,7 +5163,8 @@ function openPullRequestModal(taskId) {
             const pullRequestValue = latestGit.pull_request_url || '';
             const statusLabel = String(task.status || 'in progress').replaceAll('_', ' ');
             const isUiUxSubmission = currentDepartmentCanonical === 'UI/UX';
-            const submissionHandoff = buildDepartmentPanel(task, { submission: true });
+            const needsSubmissionHandoff = isUiUxSubmission;
+            const submissionHandoff = needsSubmissionHandoff ? buildDepartmentPanel(task, { submission: true }) : '';
             const modalTitle = document.getElementById('pullRequestModalTitle');
             modalTitle.innerHTML = isUiUxSubmission
                 ? '<i class="fas fa-pen-ruler me-2"></i>Submit Design Handoff'
@@ -5213,7 +5214,7 @@ function openPullRequestModal(taskId) {
                     <div class="pr-form-body">
                         <div class="pr-form-intro">
                             <strong>${isUiUxSubmission ? 'Prepare the design package for review' : 'Send your completed work for review'}</strong>
-                            <span>The eye view remains a clean summary. Save the handoff and add the reviewer context here.</span>
+                            <span>${isUiUxSubmission ? 'The eye view remains a clean summary. Save the handoff and add the reviewer context here.' : 'Choose the implementation branch and paste the pull request for SUL review.'}</span>
                         </div>
                         ${submissionHandoff}
                         ${versionControlFields}

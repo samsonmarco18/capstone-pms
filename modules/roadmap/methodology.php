@@ -374,7 +374,7 @@ function roadmapMonitoringProfileUrl(?string $profilePic): string
         return $profilePic;
     }
 
-    return BASE_URL . ltrim(str_replace('\\', '/', $profilePic), '/');
+    return storagePublicUrl($profilePic);
 }
 
 function roadmapMonitoringInitials(?string $name): string

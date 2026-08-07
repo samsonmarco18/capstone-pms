@@ -27,17 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['remove_profile_photo'
                 $message = 'Profile photo removed.';
                 logActivity((int) $user['id'], 'remove_profile_photo', 'users', (int) $user['id']);
 
-                $normalizedProfilePic = ltrim(str_replace('\\', '/', $currentProfilePic), '/');
-                $profileUploadRoot = realpath(__DIR__ . '/uploads/profile-pictures');
-                $profilePhotoPath = realpath(__DIR__ . '/' . $normalizedProfilePic);
-                if (
-                    $profileUploadRoot !== false
-                    && $profilePhotoPath !== false
-                    && strpos($profilePhotoPath, $profileUploadRoot . DIRECTORY_SEPARATOR) === 0
-                    && is_file($profilePhotoPath)
-                ) {
-                    @unlink($profilePhotoPath);
-                }
+                storageDeleteFile($currentProfilePic);
 
                 $user = getCurrentUser();
                 $profileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
@@ -83,20 +73,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_profile_photo'
         } elseif ($imageSize === false || (int) ($imageSize[0] ?? 0) < $minProfileDimension || (int) ($imageSize[1] ?? 0) < $minProfileDimension) {
             $error = 'Profile photo must be at least 256 x 256 pixels.';
         } else {
-            $uploadDir = __DIR__ . '/uploads/profile-pictures';
-            if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true)) {
+            try {
+                $target = storageBuildUploadTarget(
+                    'user-' . (int) $user['id'] . '.' . $allowedProfileTypes[$mimeType],
+                    'profile-pictures'
+                );
+            } catch (Throwable $e) {
                 $error = 'Unable to prepare profile photo storage.';
-            } else {
-                $fileName = 'user-' . (int) $user['id'] . '-' . bin2hex(random_bytes(8)) . '.' . $allowedProfileTypes[$mimeType];
-                $relativePath = 'uploads/profile-pictures/' . $fileName;
-                $targetPath = $uploadDir . DIRECTORY_SEPARATOR . $fileName;
+            }
+
+            if ($error === '') {
+                $relativePath = $target['relative_path'];
+                $targetPath = $target['absolute_path'];
 
                 if (!move_uploaded_file((string) $profileFile['tmp_name'], $targetPath)) {
                     $error = 'Unable to save the profile photo.';
                 } else {
+                    try {
+                        storagePersistFile($relativePath, $targetPath, $target['original_name'] ?? null, $mimeType);
+                    } catch (Throwable $e) {
+                        @unlink($targetPath);
+                        $error = 'Unable to save the profile photo permanently.';
+                    }
+                }
+
+                if ($error === '') {
                     $stmt = $conn->prepare('UPDATE users SET profile_pic = ? WHERE id = ?');
                     if ($stmt === false) {
-                        @unlink($targetPath);
+                        storageDeleteFile($relativePath);
                         $error = 'Unable to prepare profile photo update.';
                     } else {
                         $stmt->bind_param('si', $relativePath, $user['id']);
@@ -106,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_profile_photo'
                             $user = getCurrentUser();
                             $profileImageUrl = getUserProfileImageUrl($user['profile_pic'] ?? null);
                         } else {
-                            @unlink($targetPath);
+                            storageDeleteFile($relativePath);
                             $error = 'Unable to update your profile photo.';
                         }
                         $stmt->close();

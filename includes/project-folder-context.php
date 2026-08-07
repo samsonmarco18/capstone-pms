@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/project-progress.php';
+require_once __DIR__ . '/file-storage.php';
 
 function resolveFolderProjectId(mysqli|PgsqlMysqliCompatConnection $conn, array $folder): int
 {
@@ -389,14 +390,14 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
 
     $documents = array_map(static function (array $document): array {
         if (!empty($document['file_path']) && !str_starts_with((string) $document['file_path'], 'http')) {
-            $document['file_url'] = BASE_URL . ltrim((string) $document['file_path'], '/');
+            $document['file_url'] = storagePublicUrl((string) $document['file_path']);
         }
         return $document;
     }, $documents);
 
     $receipts = array_map(static function (array $receipt): array {
         if (!empty($receipt['file_path']) && !str_starts_with((string) $receipt['file_path'], 'http')) {
-            $receipt['file_url'] = BASE_URL . ltrim((string) $receipt['file_path'], '/');
+            $receipt['file_url'] = storagePublicUrl((string) $receipt['file_path']);
         }
         return $receipt;
     }, $receipts);
@@ -451,7 +452,7 @@ function fetchProjectContext(mysqli|PgsqlMysqliCompatConnection $conn, int $proj
 
     $project['shared_folder_files'] = array_map(static function (array $file): array {
         if (!empty($file['file_path']) && !str_starts_with((string) $file['file_path'], 'http')) {
-            $file['file_url'] = BASE_URL . ltrim((string) $file['file_path'], '/');
+            $file['file_url'] = storagePublicUrl((string) $file['file_path']);
         }
         return $file;
     }, $sharedFolderFiles);

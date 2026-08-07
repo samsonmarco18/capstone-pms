@@ -32,15 +32,28 @@ if (class_exists('finfo')) {
     $mimeType = (string) mime_content_type($absolutePath);
 }
 
-$allowedImageTypes = [
+$viewableTypes = [
     'image/jpeg',
     'image/png',
     'image/webp',
     'image/gif',
     'image/svg+xml',
+    'application/pdf',
+    'text/plain',
+    'text/csv',
 ];
 
-if (!in_array($mimeType, $allowedImageTypes, true)) {
+$downloadableTypes = [
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/zip',
+];
+
+if (!in_array($mimeType, array_merge($viewableTypes, $downloadableTypes), true)) {
     http_response_code(415);
     exit('Unsupported file type.');
 }
@@ -51,6 +64,7 @@ $etag = '"' . sha1($relativePath . '|' . $lastModified . '|' . filesize($absolut
 header('Content-Type: ' . $mimeType);
 header('Content-Length: ' . (string) filesize($absolutePath));
 header('Cache-Control: private, max-age=3600');
+header('Content-Disposition: ' . (in_array($mimeType, $viewableTypes, true) ? 'inline' : 'attachment') . '; filename="' . str_replace(["\r", "\n", '"'], '', basename($absolutePath)) . '"');
 header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $lastModified) . ' GMT');
 header('ETag: ' . $etag);
 header('X-Content-Type-Options: nosniff');
