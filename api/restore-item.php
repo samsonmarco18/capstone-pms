@@ -16,16 +16,15 @@ if ($logId <= 0) {
 
 $stmt = $conn->prepare(
     'SELECT * FROM audit_logs
-     WHERE id = ? AND LOWER(action) LIKE ? AND old_data IS NOT NULL
+     WHERE id = ? AND old_data IS NOT NULL
      LIMIT 1'
 );
-$deleteActionPattern = '%delete%';
-$stmt->bind_param('is', $logId, $deleteActionPattern);
+$stmt->bind_param('i', $logId);
 $stmt->execute();
 $log = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-if (!$log) {
+if (!$log || !restoreItemIsDeleteAction((string) ($log['action'] ?? ''))) {
     http_response_code(404);
     echo json_encode(['success' => false, 'error' => 'Restorable audit record not found']);
     exit();
@@ -55,6 +54,22 @@ function restoreItemNormalizeRowKeys(array $row): array
     }
 
     return $normalized;
+}
+
+function restoreItemIsDeleteAction(string $action): bool
+{
+    $normalized = strtolower(trim($action));
+
+    return str_starts_with($normalized, 'delete_')
+        || str_starts_with($normalized, 'bulk_delete_')
+        || str_starts_with($normalized, 'deleted_');
+}
+
+function restoreItemAffectedRows(mysqli_stmt|PgsqlMysqliCompatStatement $stmt, mysqli|PgsqlMysqliCompatConnection $conn): int
+{
+    return property_exists($stmt, 'affected_rows')
+        ? (int) $stmt->affected_rows
+        : (int) $conn->affected_rows;
 }
 
 function restoreItemSoftRestoreConfig(): array
@@ -157,7 +172,10 @@ if (!$columnsResult) {
 
 $columns = [];
 while ($column = $columnsResult->fetch_assoc()) {
-    $columns[] = (string) $column['Field'];
+    $columnName = (string) ($column['Field'] ?? $column['field'] ?? $column['column_name'] ?? '');
+    if ($columnName !== '') {
+        $columns[] = $columnName;
+    }
 }
 
 $identifierQuote = DB_DRIVER === 'pgsql' ? '"' : '`';
@@ -181,7 +199,8 @@ if (!$restoreData && isset($softRestoreStatuses[$tableName])) {
         $restoreStmt = $conn->prepare("UPDATE {$quotedTableName} SET status = ? WHERE id = ? AND status = ?");
         if ($restoreStmt !== false) {
             $restoreStmt->bind_param('sis', $restoreStatus, $fallbackId, $deletedStatus);
-            if ($restoreStmt->execute() && $restoreStmt->affected_rows > 0) {
+            $restoreExecuted = $restoreStmt->execute();
+            if ($restoreExecuted && restoreItemAffectedRows($restoreStmt, $conn) > 0) {
                 $restoreStmt->close();
                 if ($tableName === 'clients') {
                     restoreItemRelatedClientProjects($conn, $quoteIdentifier, $fallbackId, $oldData, $softRestoreStatuses);
@@ -233,7 +252,8 @@ if (isset($restoreData['id'])) {
             $deletedStatus = $softRestoreConfig['deleted_status'];
             $restoreStmt = $conn->prepare("UPDATE {$quotedTableName} SET status = ? WHERE id = ? AND status = ?");
             $restoreStmt->bind_param('sis', $restoreStatus, $existingId, $deletedStatus);
-            if ($restoreStmt->execute() && $restoreStmt->affected_rows > 0) {
+            $restoreExecuted = $restoreStmt->execute();
+            if ($restoreExecuted && restoreItemAffectedRows($restoreStmt, $conn) > 0) {
                 $restoreStmt->close();
                 if ($tableName === 'clients') {
                     restoreItemRelatedClientProjects($conn, $quoteIdentifier, $existingId, $oldData, $softRestoreStatuses);
