@@ -170,8 +170,16 @@ $auditLogNormalizeRowKeys = static function (array $row): array {
     return $normalized;
 };
 
-$auditLogCanRestore = static function (array $log) use ($conn, $auditQuoteIdentifier, $auditLogNormalizeTableName, $auditLogNormalizeRowKeys): bool {
-    if (stripos((string) ($log['action'] ?? ''), 'delete') === false || empty($log['old_data'])) {
+$auditLogIsDeleteAction = static function (string $action): bool {
+    $normalized = strtolower(trim($action));
+
+    return str_starts_with($normalized, 'delete_')
+        || str_starts_with($normalized, 'bulk_delete_')
+        || str_starts_with($normalized, 'deleted_');
+};
+
+$auditLogCanRestore = static function (array $log) use ($conn, $auditQuoteIdentifier, $auditLogNormalizeTableName, $auditLogNormalizeRowKeys, $auditLogIsDeleteAction): bool {
+    if (!$auditLogIsDeleteAction((string) ($log['action'] ?? '')) || empty($log['old_data'])) {
         return false;
     }
 
