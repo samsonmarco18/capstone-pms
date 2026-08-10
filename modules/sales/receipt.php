@@ -85,7 +85,7 @@ function salesReceiptRenderHtml(array $receipt, bool $official = false): string
 
     $html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt #' . htmlspecialchars((string) $receipt['receipt_number']) . '</title>';
     $html .= '<style>body{font-family:Arial,sans-serif;color:#1f2937;padding:40px}.wrap{max-width:760px;margin:auto}.head{border-bottom:3px solid #1f6392;padding-bottom:20px;margin-bottom:28px}.brand{font-size:24px;font-weight:700;color:#1f6392}.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}.box{border:1px solid #d1d5db;border-radius:8px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{border:1px solid #d1d5db;padding:12px;text-align:left}th{background:#f3f4f6}.total{font-size:20px;font-weight:700;color:#1f6392}.notice{padding:12px 14px;background:#eef6ff;border:1px solid #bfdbfe;border-radius:8px;margin:18px 0}</style>';
-    $html .= '</head><body><div class="wrap"><div class="head"><div class="brand">ERNI Development Center Philippines Inc.</div><h1>' . htmlspecialchars($title) . '</h1><p>Receipt # ' . htmlspecialchars((string) $receipt['receipt_number']) . '</p><p>Status: ' . htmlspecialchars(salesReceiptStatusLabel((string) $receipt['status'])) . '</p></div>';
+    $html .= '</head><body><div class="wrap"><div class="head"><div class="brand">EVORTIX</div><h1>' . htmlspecialchars($title) . '</h1><p>Receipt # ' . htmlspecialchars((string) $receipt['receipt_number']) . '</p><p>Status: ' . htmlspecialchars(salesReceiptStatusLabel((string) $receipt['status'])) . '</p></div>';
     if (!$official) {
         $html .= '<div class="notice">Please review this billing receipt and send your payment confirmation or proof of payment to Sales. The official paid receipt will be issued after Sales verifies the payment.</div>';
     }
@@ -132,7 +132,7 @@ function salesReceiptSendToClient(mysqli|PgsqlMysqliCompatConnection $conn, int 
 
     $receiptHtml = salesReceiptRenderHtml($receipt, false);
     $receiptNumber = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($receipt['receipt_number'] ?? 'receipt'));
-    $subject = 'ERNI PMS Billing Receipt #' . (string) ($receipt['receipt_number'] ?? '');
+    $subject = 'EVORTIX PMS Billing Receipt #' . (string) ($receipt['receipt_number'] ?? '');
     $body = '<div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;">'
         . '<h2 style="color:#1f6392;">Billing receipt for review</h2>'
         . '<p>Good day,</p>'

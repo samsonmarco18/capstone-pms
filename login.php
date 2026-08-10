@@ -716,7 +716,7 @@ $faviconVersion = file_exists($faviconPath) ? (string) filemtime($faviconPath) :
                 <img class="brand-logo" src="assets/img/erniLogo_white.png?v=<?php echo rawurlencode($loginLogoVersion); ?>" alt="ERNI logo">
                 <div class="brand-lockup">
                     <div class="brand-name"><strong>EVORTIX</strong></div>
-                    <div class="brand-subtitle">Development<br>Center&nbsp;&nbsp;Philippines, Inc.</div>
+
                 </div>
                 <div class="brand-system">Decision-Driven Project Management Support System</div>
             </div>
