@@ -390,7 +390,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $mailUsername = trim((string) ($_POST['mail_username'] ?? ''));
         $mailPassword = trim((string) ($_POST['mail_password'] ?? ''));
         $mailFromEmail = trim((string) ($_POST['mail_from_email'] ?? $mailUsername));
-        $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'ERNI PMS'));
+        $mailFromName = trim((string) ($_POST['mail_from_name'] ?? 'EVORTIX PMS'));
         $gmailClientId = trim((string) ($_POST['gmail_client_id'] ?? ''));
         $gmailClientSecret = trim((string) ($_POST['gmail_client_secret'] ?? ''));
         $gmailRefreshToken = trim((string) ($_POST['gmail_refresh_token'] ?? ''));
@@ -458,9 +458,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $testEmail = trim((string) ($_POST['test_email'] ?? (string) ($user['email'] ?? '')));
         $result = sendSystemEmail(
             $testEmail,
-            'ERNI PMS Gmail Integration Test',
-            '<div style="font-family:Arial,sans-serif;padding:24px;"><h2 style="color:#1f6392;">ERNI PMS Gmail Test</h2><p>Your Gmail SMTP integration is working.</p><p>This message confirms the system can now send email through your configured Google account.</p></div>',
-            "ERNI PMS Gmail Test\n\nYour Gmail SMTP integration is working."
+            'EVORTIX PMS Gmail Integration Test',
+            '<div style="font-family:Arial,sans-serif;padding:24px;"><h2 style="color:#1f6392;">EVORTIX PMS Gmail Test</h2><p>Your Gmail SMTP integration is working.</p><p>This message confirms the system can now send email through your configured Google account.</p></div>',
+            "EVORTIX PMS Gmail Test\n\nYour Gmail SMTP integration is working."
         );
         $errorDetail = trim((string) ($result['error'] ?? ''));
         if (!$result['success'] && $errorDetail === '') {
@@ -1509,7 +1509,7 @@ input:checked + .switch-slider:before {
                     </div>
                     <div class="form-group">
                         <label class="form-label">From Name</label>
-                        <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'ERNI PMS'); ?>" required>
+                        <input type="text" name="mail_from_name" class="form-control-modern" value="<?php echo htmlspecialchars($activeMailConfig['from_name'] ?? 'EVORTIX PMS'); ?>" required>
                     </div>
                     <div class="form-group full-span">
                         <hr style="margin: 0.25rem 0;">
