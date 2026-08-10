@@ -34,6 +34,8 @@ if (!$project) {
     exit();
 }
 
+projectWorkflowNormalizePreSubmitFeatureTasks($conn, $projectId);
+
 $featureCountRow = $conn->query("SELECT COUNT(*) AS total FROM tasks WHERE project_id = $projectId AND task_type = 'feature'")->fetch_assoc();
 $featureCount = (int) ($featureCountRow['total'] ?? 0);
 $expertAssignmentCountRow = $conn->query("

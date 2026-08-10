@@ -19,13 +19,13 @@ $sulUserDepartmentClause = $sulDepartment !== ''
     ? projectWorkflowUserDepartmentClause($conn, 'u', $sulDepartment)
     : '1 = 0';
 $sulProjectDepartmentClause = $sulDepartment !== ''
-    ? projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment)
+    ? '(' . projectWorkflowProjectDepartmentClause($conn, 'p', $sulDepartment) . ") AND p.workflow_status = 'architect_submitted'"
     : '1 = 0';
 $sulTaskDepartmentClause = $sulDepartment !== ''
     ? projectWorkflowTaskDepartmentClause($conn, 't', $sulDepartment, true)
     : '1 = 0';
 $sulResourceProjectDepartmentClause = $sulDepartment !== ''
-    ? projectWorkflowProjectDepartmentClause($conn, 'p_resource', $sulDepartment)
+    ? '(' . projectWorkflowProjectDepartmentClause($conn, 'p_resource', $sulDepartment) . ") AND p_resource.workflow_status = 'architect_submitted'"
     : '1 = 0';
 $sulAssignableRoleSql = $isExpertDepartmentSul ? "'expert'" : "'developer'";
 

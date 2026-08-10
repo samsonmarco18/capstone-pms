@@ -2,10 +2,12 @@
 require_once '../../includes/auth.php';
 require_once '../../includes/project-template.php';
 require_once '../../includes/project-compilation.php';
+require_once '../../includes/project-workflow.php';
 requireRole('architect');
 
 $conn = getConnection();
 $user = getCurrentUser();
+projectWorkflowEnsureSchema($conn);
 projectTemplateEnsureSchema($conn);
 $projectId = isset($_GET['id']) ? (int) $_GET['id'] : 0;
 $pageError = null;
@@ -70,6 +72,9 @@ $project = $projectResult ? $projectResult->fetch_assoc() : null;
 if (!$project && $pageError === null) {
     header('Location: projects.php');
     exit();
+}
+if ($project) {
+    projectWorkflowNormalizePreSubmitFeatureTasks($conn, $projectId);
 }
 
 $projectTemplate = null;
@@ -1006,7 +1011,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
 
     <?php if (count($salesRequestedFeatures) > 0): ?>
     <div class="architect-dss-source-controls">
-        <div><strong><i class="fas fa-robot me-1"></i> DSS feature review</strong><br><span>The assistant found <?php echo count($salesRequestedFeatures); ?> intake feature(s). Accept or skip them before saving; none are added automatically.</span></div>
+        <div><strong><i class="fas fa-robot me-1"></i> DSS feature review</strong><br><span>The assistant found <?php echo count($salesRequestedFeatures); ?> intake feature(s). They are included by default; uncheck only the items you want to skip.</span></div>
         <div class="d-flex gap-2"><button type="button" class="btn btn-primary btn-sm" data-dss-feature-decision="accept">Accept suggestions</button><button type="button" class="btn btn-outline-secondary btn-sm" data-dss-feature-decision="skip">Skip suggestions</button></div>
     </div>
     <?php endif; ?>
@@ -1100,6 +1105,7 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                                 id="salesFeature<?php echo $index; ?>"
                                 data-sales-feature-toggle
                                 data-recommended-feature="<?php echo htmlspecialchars($salesFeature); ?>"
+                                checked
                             >
                             <label class="form-check-label" for="salesFeature<?php echo $index; ?>">
                                 <span class="sales-requested-title"><?php echo htmlspecialchars($salesFeature); ?></span>
@@ -1111,14 +1117,12 @@ html:not([data-theme="dark"]) body:not([data-theme="dark"]):not(.dark-mode)
                             name="new_features[<?php echo $index; ?>][title]"
                             value="<?php echo htmlspecialchars($salesFeature); ?>"
                             data-sales-feature-field
-                                <?php echo isset($existingFeatureLookup[architectFeatureNormalizeTitle($salesFeature)]) ? '' : 'disabled'; ?>
                         >
                         <input
                             type="hidden"
                             name="new_features[<?php echo $index; ?>][description]"
                             value="Requested by Sales during client intake."
                             data-sales-feature-field
-                                <?php echo isset($existingFeatureLookup[architectFeatureNormalizeTitle($salesFeature)]) ? '' : 'disabled'; ?>
                         >
                     </div>
                 <?php endforeach; ?>
