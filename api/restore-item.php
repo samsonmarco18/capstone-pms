@@ -31,7 +31,33 @@ if (!$log) {
     exit();
 }
 
-$tableName = strtolower((string) ($log['table_name'] ?? ''));
+function restoreItemNormalizeTableName(string $tableName): string
+{
+    $normalized = strtolower(trim($tableName));
+    $normalized = preg_replace('/[^a-z0-9_]+/', '_', $normalized) ?? '';
+    $normalized = trim($normalized, '_');
+
+    $aliases = [
+        'client' => 'clients',
+        'clients' => 'clients',
+        'project' => 'projects',
+        'projects' => 'projects',
+    ];
+
+    return $aliases[$normalized] ?? $normalized;
+}
+
+function restoreItemNormalizeRowKeys(array $row): array
+{
+    $normalized = [];
+    foreach ($row as $key => $value) {
+        $normalized[strtolower((string) $key)] = $value;
+    }
+
+    return $normalized;
+}
+
+$tableName = restoreItemNormalizeTableName((string) ($log['table_name'] ?? ''));
 if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'error' => 'Invalid table name']);
@@ -44,6 +70,7 @@ if (!is_array($oldData) || !$oldData) {
     echo json_encode(['success' => false, 'error' => 'Deleted item data is not available']);
     exit();
 }
+$oldData = restoreItemNormalizeRowKeys($oldData);
 
 $escapedTableName = $conn->real_escape_string($tableName);
 $columnsSql = DB_DRIVER === 'pgsql'

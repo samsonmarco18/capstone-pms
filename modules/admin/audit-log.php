@@ -146,17 +146,42 @@ $auditQuoteIdentifier = static function (string $identifier): string {
     return $identifierQuote . str_replace($identifierQuote, $identifierQuote . $identifierQuote, $identifier) . $identifierQuote;
 };
 
-$auditLogCanRestore = static function (array $log) use ($conn, $auditQuoteIdentifier): bool {
+$auditLogNormalizeTableName = static function (string $tableName): string {
+    $normalized = strtolower(trim($tableName));
+    $normalized = preg_replace('/[^a-z0-9_]+/', '_', $normalized) ?? '';
+    $normalized = trim($normalized, '_');
+
+    $aliases = [
+        'client' => 'clients',
+        'clients' => 'clients',
+        'project' => 'projects',
+        'projects' => 'projects',
+    ];
+
+    return $aliases[$normalized] ?? $normalized;
+};
+
+$auditLogNormalizeRowKeys = static function (array $row): array {
+    $normalized = [];
+    foreach ($row as $key => $value) {
+        $normalized[strtolower((string) $key)] = $value;
+    }
+
+    return $normalized;
+};
+
+$auditLogCanRestore = static function (array $log) use ($conn, $auditQuoteIdentifier, $auditLogNormalizeTableName, $auditLogNormalizeRowKeys): bool {
     if (stripos((string) ($log['action'] ?? ''), 'delete') === false || empty($log['old_data'])) {
         return false;
     }
 
-    $tableName = strtolower((string) ($log['table_name'] ?? ''));
+    $tableName = $auditLogNormalizeTableName((string) ($log['table_name'] ?? ''));
     if (!preg_match('/^[a-zA-Z0-9_]+$/', $tableName)) {
         return false;
     }
 
     $oldData = json_decode((string) $log['old_data'], true);
+    $oldData = is_array($oldData) ? $auditLogNormalizeRowKeys($oldData) : null;
     if (!is_array($oldData) || !isset($oldData['id'])) {
         return false;
     }
